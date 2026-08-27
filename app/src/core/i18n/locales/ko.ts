@@ -114,13 +114,12 @@ export const ko: Translation = {
     "dec.unknownName": "(알 수 없음)",
     "dec.comments": "논의", "dec.reasonPh": "이유(선택, 마크다운)…",
     "dec.revisit": "다음 결정들이 이것을 근거로 삼고 있습니다. 기각한다면 이것들도 다시 보세요:",
-    "dec.filterAll": "전체",
     "dec.searchFailed": "검색을 실행할 수 없습니다",
     "dec.searchPh": "제목 / 본문 / 댓글 / AMB-D-<n> 검색",
     "dec.sort": "정렬",
     "dec.sort.numberDesc": "번호, 최신순", "dec.sort.numberAsc": "번호, 오래된순",
     "dec.sort.decidedDesc": "결정일, 최신순", "dec.sort.decidedAsc": "결정일, 오래된순",
-    "board.filter": "필터:", "board.group": "묶음:",
+    "board.group": "묶음:",
     "board.filters": "필터",
     "filter.dim.status": "상태", "filter.dim.assignee": "담당", "filter.dim.priority": "우선순위",
     "filter.opt.assignee.none": "담당 없음", "filter.opt.assignee.me": "나", "filter.opt.assignee.meAi": "내 AI",
@@ -249,6 +248,11 @@ export const ko: Translation = {
     "nudge.autostart.yes": "예, 로그인할 때 엽니다 (권장)",
     "nudge.autostart.no": "아니요",
     "nudge.autostart.hint": "설정 › 시작에서 언제든지 바꿀 수 있습니다.",
+    "settings.files": "파일",
+    "settings.trashAsk": "휴지통에 넣기 전에 확인",
+    "settings.trashAskOn": "확인",
+    "settings.trashAskOff": "확인 안 함",
+    "settings.trashAskNote": "파일 패널은 행을 휴지통에 넣기 전에 확인합니다. 확인 안에서는 끄기만 할 수 있으니, 되돌리는 곳은 여기입니다.",
     "settings.updates": "업데이트",
     "settings.updateCheck": "업데이트 확인",
     "settings.updateCheckOn": "켬",
@@ -588,6 +592,11 @@ export const ko: Translation = {
     "files.save": "저장",
     "files.saving": "저장하는 중…",
     "files.saved": "저장했습니다",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "이 파일은 여기서 연 뒤에 누군가 고쳤습니다.",
+    "files.readAgain": "다시 읽기",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "이 파일에는 줄바꿈이 두 가지 섞여 있습니다. 저장하면 한 가지로 맞춰집니다.",
@@ -746,6 +755,10 @@ export const ko: Translation = {
     window_failed: "그 창을 열 수 없습니다: {reason}",
     talk_blank: "그 창은 열렸지만 아무것도 그려지지 않아, 터미널을 이 창으로 되돌렸습니다.",
     clip_refused: "클립보드에 올리지 못했습니다: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "이것은 다른 파일을 가리키는 링크이며, Amenbo는 링크를 따라가지 않습니다. 가리키는 곳이 이 프로젝트의 폴더 밖일 수 있습니다.",
     folder_taken: "{name}은(는) 이미 있습니다.",
     folder_name: "이 기기는 {name}을(를) 이름으로 받지 않습니다.",
     folder_make: "{name}을(를) 만들지 못했습니다: {reason}",
@@ -754,6 +767,9 @@ export const ko: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "이 파일을 저장하지 못했습니다: {reason}",
     folder_unwritable_character: "“{character}”는 {encoding}에서 쓸 수 없어서 아무것도 저장하지 않았습니다.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "이 파일은 여기서 읽은 뒤에 누군가 고쳤기 때문에, 아무것도 저장하지 않았습니다.",
 
     already_reserved: "{ref}은(는) ‘할 일’이 아니어서 맡을 수 없습니다. 다른 세션이 이미 진행 중일 수 있습니다.",
     not_ready: "{ref}은(는) 아직 맡을 수 없습니다: {reasons}",

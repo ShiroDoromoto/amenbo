@@ -117,13 +117,12 @@ export const th: Translation = {
     "dec.unknownName": "(ไม่ทราบ)",
     "dec.comments": "การถกกัน", "dec.reasonPh": "เหตุผล (ไม่บังคับ, Markdown)…",
     "dec.revisit": "การตัดสินใจเหล่านี้ตั้งอยู่บนอันนี้ — ถ้าคุณตีตกมัน ให้ทบทวนพวกนี้ด้วย:",
-    "dec.filterAll": "ทั้งหมด",
     "dec.searchFailed": "การค้นหาทำงานไม่ได้",
     "dec.searchPh": "ค้นชื่อเรื่อง / เนื้อหา / ความเห็น / AMB-D-<n>",
     "dec.sort": "เรียงลำดับ",
     "dec.sort.numberDesc": "เลขที่ ใหม่ก่อน", "dec.sort.numberAsc": "เลขที่ เก่าก่อน",
     "dec.sort.decidedDesc": "วันที่ตัดสิน ใหม่ก่อน", "dec.sort.decidedAsc": "วันที่ตัดสิน เก่าก่อน",
-    "board.filter": "กรอง:", "board.group": "จัดกลุ่ม:",
+    "board.group": "จัดกลุ่ม:",
     "board.filters": "ตัวกรอง",
     "filter.dim.status": "สถานะ", "filter.dim.assignee": "ผู้รับผิดชอบ", "filter.dim.priority": "ความสำคัญ",
     "filter.opt.assignee.none": "ยังไม่มอบหมาย", "filter.opt.assignee.me": "ฉัน", "filter.opt.assignee.meAi": "AI ของฉัน",
@@ -252,6 +251,11 @@ export const th: Translation = {
     "nudge.autostart.yes": "ใช่ เปิดตอนเข้าสู่ระบบ (แนะนำ)",
     "nudge.autostart.no": "ไม่เป็นไร",
     "nudge.autostart.hint": "เปลี่ยนได้ทุกเมื่อที่ ตั้งค่า › การเริ่มทำงาน",
+    "settings.files": "ไฟล์",
+    "settings.trashAsk": "ถามก่อนย้ายลงถังขยะ",
+    "settings.trashAskOn": "ถาม",
+    "settings.trashAskOff": "ไม่ต้องถาม",
+    "settings.trashAskNote": "แผงไฟล์จะถามก่อนย้ายแถวลงถังขยะ ในคำถามนั้นปิดได้อย่างเดียว ที่นี่คือที่ที่เปิดกลับ",
     "settings.updates": "การอัปเดต",
     "settings.updateCheck": "การตรวจหาอัปเดต",
     "settings.updateCheckOn": "เปิด",
@@ -592,6 +596,11 @@ export const th: Translation = {
     "files.save": "บันทึก",
     "files.saving": "กำลังบันทึก…",
     "files.saved": "บันทึกแล้ว",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "มีคนเขียนทับไฟล์นี้หลังจากที่เปิดไว้ตรงนี้",
+    "files.readAgain": "อ่านใหม่อีกครั้ง",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "ไฟล์นี้มีการขึ้นบรรทัดใหม่ทั้งสองแบบ ถ้าบันทึกจะกลายเป็นแบบเดียวกันทั้งหมด",
@@ -750,6 +759,10 @@ export const th: Translation = {
     window_failed: "ไม่สามารถเปิดหน้าต่างนั้นได้: {reason}",
     talk_blank: "หน้าต่างนั้นเปิดขึ้นแต่ไม่มีอะไรถูกวาดเลย จึงนำเทอร์มินัลกลับมาไว้ที่หน้าต่างนี้",
     clip_refused: "วางไฟล์ลงคลิปบอร์ดไม่ได้: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "นี่คือลิงก์ไปยังไฟล์อื่น และ Amenbo จะไม่ตามลิงก์นั้น เพราะสิ่งที่มันชี้ไปอาจอยู่นอกโฟลเดอร์ของโปรเจกต์นี้",
     folder_taken: "มี {name} อยู่แล้ว",
     folder_name: "เครื่องนี้ไม่รับ {name} เป็นชื่อ",
     folder_make: "สร้าง {name} ไม่ได้: {reason}",
@@ -758,6 +771,9 @@ export const th: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "บันทึกไฟล์นี้ไม่ได้: {reason}",
     folder_unwritable_character: "“{character}” เขียนใน {encoding} ไม่ได้ จึงไม่ได้บันทึกอะไรเลย",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "มีคนเขียนทับไฟล์นี้หลังจากที่อ่านไว้ตรงนี้ จึงไม่ได้บันทึกอะไรเลย",
 
     already_reserved: "{ref} ไม่ได้อยู่ในสถานะ “รอทำ” จึงจองไม่ได้ — อาจมีเซสชันอื่นถืออยู่แล้ว",
     not_ready: "{ref} ยังจองไม่ได้: {reasons}",

@@ -114,13 +114,12 @@ export const nl: Translation = {
     "dec.unknownName": "(onbekend)",
     "dec.comments": "Discussie", "dec.reasonPh": "Reden (optioneel, Markdown)…",
     "dec.revisit": "Deze besluiten staan op dit besluit — kijk ze na als je het afwijst:",
-    "dec.filterAll": "Alle",
     "dec.searchFailed": "De zoekopdracht kon niet worden uitgevoerd",
     "dec.searchPh": "Zoek in titel / tekst / opmerkingen / AMB-D-<n>",
     "dec.sort": "Sorteren",
     "dec.sort.numberDesc": "Nummer, nieuwste eerst", "dec.sort.numberAsc": "Nummer, oudste eerst",
     "dec.sort.decidedDesc": "Besloten, nieuwste eerst", "dec.sort.decidedAsc": "Besloten, oudste eerst",
-    "board.filter": "Filter:", "board.group": "Groep:",
+    "board.group": "Groep:",
     "board.filters": "Filters",
     "filter.dim.status": "Status", "filter.dim.assignee": "Verantwoordelijke", "filter.dim.priority": "Prioriteit",
     "filter.opt.assignee.none": "Niet toegewezen", "filter.opt.assignee.me": "Ik", "filter.opt.assignee.meAi": "Mijn AI",
@@ -249,6 +248,11 @@ export const nl: Translation = {
     "nudge.autostart.yes": "Ja, openen bij aanmelden (aanbevolen)",
     "nudge.autostart.no": "Nee, bedankt",
     "nudge.autostart.hint": "Bij Instellingen › Opstarten kun je dit altijd wijzigen.",
+    "settings.files": "Bestanden",
+    "settings.trashAsk": "Vragen voor de prullenbak",
+    "settings.trashAskOn": "Vragen",
+    "settings.trashAskOff": "Niet vragen",
+    "settings.trashAskNote": "Het bestandenpaneel vraagt voordat het een regel in de prullenbak legt. In de vraag zelf kan hij alleen uit; hier gaat hij weer aan.",
     "settings.updates": "Updates",
     "settings.updateCheck": "Controle op updates",
     "settings.updateCheckOn": "Aan",
@@ -589,6 +593,11 @@ export const nl: Translation = {
     "files.save": "Opslaan",
     "files.saving": "Bezig met opslaan…",
     "files.saved": "Opgeslagen",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Iemand heeft naar dit bestand geschreven nadat het hier is geopend.",
+    "files.readAgain": "Opnieuw inlezen",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Dit bestand bevat beide soorten regeleinde. Bij het opslaan worden ze allemaal gelijk.",
@@ -748,6 +757,10 @@ export const nl: Translation = {
     window_failed: "Dat venster kon niet worden geopend: {reason}",
     talk_blank: "Dat venster ging open maar tekende niets, dus de terminal staat weer in dit venster.",
     clip_refused: "De bestanden konden niet op het klembord worden gezet: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Dit is een koppeling naar een ander bestand, en Amenbo volgt die niet — waar hij naar wijst, kan buiten de mappen van dit project liggen.",
     folder_taken: "{name} bestaat al.",
     folder_name: "Deze machine accepteert {name} niet als naam.",
     folder_make: "{name} kon niet worden aangemaakt: {reason}",
@@ -756,6 +769,9 @@ export const nl: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Dit bestand kon niet worden opgeslagen: {reason}",
     folder_unwritable_character: "‘{character}’ kan niet in {encoding} worden geschreven, dus er is niets opgeslagen.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Iemand heeft naar dit bestand geschreven nadat het hier is gelezen, dus er is niets opgeslagen.",
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",

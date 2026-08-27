@@ -114,13 +114,12 @@ export const tr: Translation = {
     "dec.unknownName": "(bilinmiyor)",
     "dec.comments": "Tartışma", "dec.reasonPh": "Gerekçe (isteğe bağlı, Markdown)…",
     "dec.revisit": "Şu kararlar buna dayanıyor — bunu reddederseniz onları da gözden geçirin:",
-    "dec.filterAll": "Hepsi",
     "dec.searchFailed": "Arama çalıştırılamadı",
     "dec.searchPh": "Başlık / gövde / yorum / AMB-D-<n> ara",
     "dec.sort": "Sırala",
     "dec.sort.numberDesc": "Numara, yeniden eskiye", "dec.sort.numberAsc": "Numara, eskiden yeniye",
     "dec.sort.decidedDesc": "Karar tarihi, yeniden eskiye", "dec.sort.decidedAsc": "Karar tarihi, eskiden yeniye",
-    "board.filter": "Süz:", "board.group": "Grupla:",
+    "board.group": "Grupla:",
     "board.filters": "Süzgeçler",
     "filter.dim.status": "Durum", "filter.dim.assignee": "Sorumlu", "filter.dim.priority": "Öncelik",
     "filter.opt.assignee.none": "Sorumlusuz", "filter.opt.assignee.me": "Ben", "filter.opt.assignee.meAi": "Yapay zekâm",
@@ -249,6 +248,11 @@ export const tr: Translation = {
     "nudge.autostart.yes": "Evet, oturum açarken açılsın (önerilir)",
     "nudge.autostart.no": "Hayır, teşekkürler",
     "nudge.autostart.hint": "Ayarlar › Başlangıç bölümünden istediğiniz zaman değiştirebilirsiniz.",
+    "settings.files": "Dosyalar",
+    "settings.trashAsk": "Çöp kutusuna atmadan önce sor",
+    "settings.trashAskOn": "Sor",
+    "settings.trashAskOff": "Sorma",
+    "settings.trashAskNote": "Dosya paneli bir satırı çöp kutusuna atmadan önce sorar. Sorunun içinde yalnızca kapatılabilir; geri açmanın yeri burasıdır.",
     "settings.updates": "Güncellemeler",
     "settings.updateCheck": "Güncelleme denetimi",
     "settings.updateCheckOn": "Açık",
@@ -589,6 +593,11 @@ export const tr: Translation = {
     "files.save": "Kaydet",
     "files.saving": "Kaydediliyor…",
     "files.saved": "Kaydedildi",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Bu dosya burada açıldıktan sonra biri ona yazdı.",
+    "files.readAgain": "Yeniden oku",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Bu dosyada iki tür satır sonu birlikte var. Kaydedince hepsi aynı olur.",
@@ -748,6 +757,10 @@ export const tr: Translation = {
     window_failed: "O pencere açılamadı: {reason}",
     talk_blank: "O pencere açıldı ama içine hiçbir şey çizilmedi; terminal yeniden bu pencereye alındı.",
     clip_refused: "Dosyalar panoya konulamadı: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Bu, başka bir dosyaya giden bir bağlantı ve Amenbo onu izlemez — gösterdiği yer bu projenin klasörlerinin dışında olabilir.",
     folder_taken: "{name} zaten var.",
     folder_name: "Bu makine {name} adını kabul etmiyor.",
     folder_make: "{name} oluşturulamadı: {reason}",
@@ -756,6 +769,9 @@ export const tr: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Bu dosya kaydedilemedi: {reason}",
     folder_unwritable_character: "“{character}” {encoding} ile yazılamıyor, bu yüzden hiçbir şey kaydedilmedi.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Bu dosya burada okunduktan sonra biri ona yazdı, bu yüzden hiçbir şey kaydedilmedi.",
 
     already_reserved:
       "{ref} “Yapılacak” durumunda değil, bu yüzden üstlenilemez — başka bir oturum onu çoktan almış olabilir.",

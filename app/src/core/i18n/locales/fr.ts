@@ -117,13 +117,12 @@ export const fr: Translation = {
     "dec.unknownName": "(inconnu)",
     "dec.comments": "Discussion", "dec.reasonPh": "Raison (facultatif, Markdown)…",
     "dec.revisit": "Ces décisions s'appuient sur celle-ci — revoyez-les si vous la rejetez :",
-    "dec.filterAll": "Toutes",
     "dec.searchFailed": "La recherche n'a pas pu s'exécuter",
     "dec.searchPh": "Chercher dans titre / corps / commentaires / AMB-D-<n>",
     "dec.sort": "Tri",
     "dec.sort.numberDesc": "Numéro, du plus récent", "dec.sort.numberAsc": "Numéro, du plus ancien",
     "dec.sort.decidedDesc": "Décision, du plus récent", "dec.sort.decidedAsc": "Décision, du plus ancien",
-    "board.filter": "Filtre :", "board.group": "Grouper :",
+    "board.group": "Grouper :",
     "board.filters": "Filtres",
     "filter.dim.status": "Statut", "filter.dim.assignee": "Responsable", "filter.dim.priority": "Priorité",
     "filter.opt.assignee.none": "Sans responsable", "filter.opt.assignee.me": "Moi", "filter.opt.assignee.meAi": "Mon IA",
@@ -255,6 +254,11 @@ export const fr: Translation = {
     "nudge.autostart.yes": "Oui, l’ouvrir à la connexion (recommandé)",
     "nudge.autostart.no": "Non merci",
     "nudge.autostart.hint": "Réglages › Démarrage permet de revenir en arrière à tout moment.",
+    "settings.files": "Fichiers",
+    "settings.trashAsk": "Demander avant la corbeille",
+    "settings.trashAskOn": "Demander",
+    "settings.trashAskOff": "Ne pas demander",
+    "settings.trashAskNote": "Le panneau de fichiers demande avant de mettre une ligne à la corbeille. Depuis la question, on ne peut que la désactiver ; c’est ici qu’on la réactive.",
     "settings.updates": "Mises à jour",
     "settings.updateCheck": "Vérification des mises à jour",
     "settings.updateCheckOn": "Oui",
@@ -610,6 +614,11 @@ export const fr: Translation = {
     "files.save": "Enregistrer",
     "files.saving": "Enregistrement…",
     "files.saved": "Enregistré",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Quelqu'un a écrit dans ce fichier après son ouverture ici.",
+    "files.readAgain": "Relire le fichier",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Ce fichier contient les deux sortes de saut de ligne. L'enregistrer les rendra toutes identiques.",
@@ -776,6 +785,10 @@ export const fr: Translation = {
     window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
     talk_blank: "Cette fenêtre s'est ouverte sans rien afficher : le terminal a été remis dans celle-ci.",
     clip_refused: "Les fichiers n’ont pas pu être placés dans le presse-papiers : {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Ceci est un lien vers un autre fichier, et Amenbo ne le suit pas : ce qu'il désigne peut se trouver hors des dossiers de ce projet.",
     folder_taken: "{name} existe déjà.",
     folder_name: "Cette machine n’accepte pas {name} comme nom.",
     folder_make: "{name} n’a pas pu être créé : {reason}",
@@ -784,6 +797,9 @@ export const fr: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Ce fichier n'a pas pu être enregistré : {reason}",
     folder_unwritable_character: "« {character} » ne peut pas s'écrire en {encoding}, donc rien n'a été enregistré.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Quelqu'un a écrit dans ce fichier après sa lecture ici, donc rien n'a été enregistré.",
 
     already_reserved:
       "{ref} n'est pas « À faire », donc impossible de la réserver — une autre session la tient peut-être déjà.",

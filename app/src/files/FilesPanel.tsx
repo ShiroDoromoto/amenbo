@@ -48,7 +48,7 @@ import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
 import { fileUrl } from "../core/fileUrl";
-import { errText, formatNumber, t, tf } from "../core/i18n";
+import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
 import { pushNotice } from "../core/notice";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
@@ -437,6 +437,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
           onEdit={setEdit}
           onRead={(path) => { setEdit(null); setReading({ root: one.path, path }); }}
           onMenu={(path, dir, x, y) => setMenu({ root: one.path, path, dir, x, y })}
+          onTrash={(path) => askTrash(one.path, path)}
         />
       ))}
       {menu !== null && (
@@ -489,7 +490,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
  * tree below, so they stand beside the heading, above it.
  */
 function FolderSection({
-  projectId, root, label, bound, landing, edit, onEdit, onRead, onMenu,
+  projectId, root, label, bound, landing, edit, onEdit, onRead, onMenu, onTrash,
 }: {
   projectId: number;
   root: string;
@@ -506,6 +507,8 @@ function FolderSection({
   onEdit: (edit: Edit | null) => void;
   onRead: (path: string[]) => void;
   onMenu: (path: string[], dir: boolean, x: number, y: number) => void;
+  /** Put one row of this folder in the machine's bin. */
+  onTrash: (path: string[]) => void;
 }) {
   const [changes, setChanges] = useState<FolderChangesDto>(
     { root, capped: false, unwatched: false, gone: false },
@@ -518,6 +521,10 @@ function FolderSection({
   // than per level, because opening one is also something the section does on a reader's behalf: a
   // name being made in a folder that is folded shut would be typed where nobody could see it.
   const [open, setOpen] = useState<string[]>([]);
+  // Which row holds this tree's stop in the tab order. Nothing until a reader has been on one, and
+  // then the first row is the stop — which is what puts the cursor somewhere the moment the panel
+  // is drawn, rather than leaving a reader to Tab through the tree to find out where they are.
+  const [cursor, setCursor] = useState<string | null>(null);
   const gone = !bound || changes.gone;
 
   const naming: Naming = {
@@ -659,6 +666,9 @@ function FolderSection({
             naming={naming}
             onRead={onRead}
             onMenu={onMenu}
+            onTrash={onTrash}
+            cursor={cursor}
+            onCursor={setCursor}
           />
         )}
       </section>
@@ -714,19 +724,54 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: 
     // would sit over rows it is no longer about. Inside is the opposite — a press on an item is the
     // first half of choosing it, and closing there unmounts the button before the click can land on
     // it, so the item never fires at all.
-    const close = (event: Event) => {
+    const away = (event: Event) => {
       if (event.target instanceof Node && box.current?.contains(event.target)) return;
       onClose();
     };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", close);
-    window.addEventListener("blur", close);
+    // **Escape and nothing else.** This listened for every key once, which read as "any key means
+    // move on" and worked only while no key meant anything else — the moment the rows answered to
+    // the arrows, every press meant to walk the tree shut the menu on the way past (`AMB-D-780`).
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", key);
+    window.addEventListener("blur", away);
     return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", close);
-      window.removeEventListener("blur", close);
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", key);
+      window.removeEventListener("blur", away);
     };
   }, [onClose]);
+
+  // The first item, once there is one. A menu opened from a row the arrows reached is a menu the
+  // arrows have to be able to walk, and a list nothing is standing on is one every key falls out of.
+  //
+  // **And the row it was opened on, once it closes.** Focus left where the menu used to be is a
+  // reader standing on nothing: the next arrow reaches no tree and the panel goes quiet, which is
+  // the same dead end as never having taken the focus at all.
+  const from = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    from.current ??= document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    box.current?.querySelector<HTMLElement>(".files__menuitem")?.focus();
+    // Given back only where the menu going is what left the focus nowhere. A reader who clicked
+    // away has already said where they are, and taking them back to the row would be undoing it.
+    return () => {
+      if (document.activeElement === null || document.activeElement === document.body) {
+        from.current?.focus();
+      }
+    };
+  }, [apps]);
+
+  /** Up and down the items. The pattern a menu is read by, and the reason the blanket key handler
+   *  above had to go: these presses are the menu's own, not a way out of it. */
+  const walk = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const items = [...e.currentTarget.querySelectorAll<HTMLElement>(".files__menuitem")];
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const step = e.key === "ArrowDown" ? 1 : -1;
+    // Round, because a menu is short and a reader who has walked to the end of one means to go on.
+    items[(at + step + items.length) % items.length]?.focus();
+  };
 
   const act = (go: () => Promise<void>) => {
     onClose();
@@ -751,7 +796,13 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: 
   };
 
   return (
-    <div className="files__menu" style={{ left: at.x, top: at.y }} role="menu" ref={box}>
+    <div
+      className="files__menu"
+      style={{ left: at.x, top: at.y }}
+      role="menu"
+      ref={box}
+      onKeyDown={walk}
+    >
       {apps === null ? (
         <>
           {naming !== undefined && dir && (
@@ -869,6 +920,7 @@ function rowClass(base: string, ignored: boolean, mark: GitMark | null): string 
 /** One folder's worth of names, and whatever of it has been opened. */
 function Level({
   projectId, root, path, landing, marks, moved, open, onOpen, naming, onRead, onMenu,
+  onTrash, cursor, onCursor,
 }: {
   projectId: number;
   root: string;
@@ -895,9 +947,82 @@ function Level({
   naming: Naming;
   onRead: (path: string[]) => void;
   onMenu: (path: string[], dir: boolean, x: number, y: number) => void;
+  /** Put one row in the machine's bin — what Delete means on a row. */
+  onTrash: (path: string[]) => void;
+  /**
+   * Which row holds the tree's one stop in the tab order, as its path joined — or nothing, before a
+   * reader has been on any of them, when the stop is the first row of the whole tree.
+   *
+   * **One stop for the tree, not one per row.** Every row used to be a button, so a folder of a
+   * thousand names was a thousand presses of Tab on the way past it — and nothing caps what a level
+   * answers with (`crate::folder`). What a reader wants of a tree is to reach it once and then walk
+   * it with the arrows, which is the pattern this is half of (roving tabindex).
+   */
+  cursor: string | null;
+  onCursor: (key: string) => void;
 }) {
   const [names, setNames] = useState<FolderEntryDto[]>([]);
   const making = makingIn(naming.edit, root, path);
+  const top = path.length === 0;
+
+  /**
+   * Walking the tree with the keys the tree pattern names, and no others (`AMB-D-780`).
+   *
+   * **Read off the drawn rows rather than off the names held here.** What is next below an open
+   * folder is its first child, which is another level's list and not this one's — the document
+   * already holds them in the one order a reader sees, so the walk asks it instead of rebuilding
+   * that order out of state spread across every level.
+   *
+   * A key with a modifier on it is not this tree's: the panel around it hears undo (`FilesPanel`),
+   * and what the reader means by ⌘ or Ctrl is the machine's word, never a row's.
+   */
+  const onKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const tree = e.currentTarget;
+    const row = (e.target as HTMLElement).closest<HTMLElement>('[role="treeitem"]');
+    if (row === null || !tree.contains(row)) return;
+    const rows = [...tree.querySelectorAll<HTMLElement>('[role="treeitem"]')];
+    const at = rows.indexOf(row);
+    const key = row.dataset.key ?? "";
+    const here = key === "" ? [] : key.split("/");
+    // A folder is the row that says whether it is open; a file never carries the word at all.
+    const folded = row.getAttribute("aria-expanded");
+    const go = (to: HTMLElement | undefined) => to?.focus();
+    switch (e.key) {
+      case "ArrowDown": e.preventDefault(); go(rows[at + 1]); break;
+      case "ArrowUp": e.preventDefault(); go(rows[at - 1]); break;
+      case "Home": e.preventDefault(); go(rows[0]); break;
+      case "End": e.preventDefault(); go(rows[rows.length - 1]); break;
+      // Into the folder: open it where it is shut, and step to what is inside where it is already
+      // open. A shut one does not also move — what was asked for is to see inside, and the rows to
+      // move onto are not read off the disk yet.
+      case "ArrowRight":
+        e.preventDefault();
+        if (folded === "false") onOpen(key);
+        else if (folded === "true") go(rows[at + 1]);
+        break;
+      // And out of it: shut an open folder, or leave a row for the folder holding it.
+      case "ArrowLeft":
+        e.preventDefault();
+        if (folded === "true") onOpen(key);
+        else go(row.parentElement?.closest<HTMLElement>('[role="treeitem"]') ?? undefined);
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (folded === null) onRead(here);
+        else onOpen(key);
+        break;
+      // Both keys, because which one a keyboard calls "delete" is the keyboard's answer: a Mac's
+      // large one sends Backspace, and what it means on a row is the same thing either way. The bin
+      // is what happens, and the question before it is the panel's (`FilesPanel`).
+      case "Delete":
+      case "Backspace":
+        e.preventDefault();
+        onTrash(here);
+        break;
+      default: break;
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -909,12 +1034,20 @@ function Level({
   }, [projectId, root, path.join("/"), moved]);
 
   return (
-    <ul className="files__list files__list--tree">
+    <ul
+      className="files__list files__list--tree"
+      // The tree is the outermost list; every list inside one is a group of the row above it. The
+      // pair is what tells a reader being read to that they are in a tree at all, and how deep — the
+      // nesting a sighted reader takes off the indent (`AMB-D-780`).
+      role={top ? "tree" : "group"}
+      aria-label={top ? t("files.tree") : undefined}
+      onKeyDown={top ? onKey : undefined}
+    >
       {/* The name being made, at the top of the folder it is being made in. Above the names rather
           than among them: where it would sort is decided by what is typed, and a box that moved as
           the letters arrived would be a box nobody could read what they had written in. */}
       {making !== null && (
-        <li>
+        <li role="none">
           <NameBox
             initial=""
             onName={(name) => folderMake(projectId, root, [...path, name], making.dir)}
@@ -922,7 +1055,7 @@ function Level({
           />
         </li>
       )}
-      {names.map((one) => {
+      {names.map((one, i) => {
         // A folder answers for a drop, and what it answers for is everything drawn under it — which
         // is the row itself and, once it is open, the level inside it. That is why the mark sits on
         // the item and not on the button: a file row inside a folder resolves upwards to that
@@ -938,7 +1071,7 @@ function Level({
         // would leave a reader wondering which one they were about to keep.
         if (renaming(naming.edit, root, here)) {
           return (
-            <li key={one.name}>
+            <li key={one.name} role="none">
               <NameBox
                 initial={one.name}
                 onName={(name) => folderRename(projectId, root, here, name)}
@@ -947,27 +1080,50 @@ function Level({
             </li>
           );
         }
+        // The row is the item, and the name inside it is what is drawn. They are two elements
+        // because a folder's item also holds the level under it: one element being both the line
+        // and the box around the lines below would lay the two out side by side.
         return (
           <li
             key={one.name}
+            role="treeitem"
+            data-key={key}
             data-root={root}
             data-into={into}
-            className={landed(landing, root, into) ? "files__into" : undefined}
+            // Depth, length and place. All three because this tree is read a level at a time: what
+            // is not on the screen is not in the document either, so nothing but these says how far
+            // down a row is or how many it stands among.
+            aria-level={path.length + 1}
+            aria-setsize={names.length}
+            aria-posinset={i + 1}
+            aria-expanded={one.isDir ? open.includes(key) : undefined}
+            tabIndex={(cursor === null ? top && i === 0 : cursor === key) ? 0 : -1}
+            className={`files__item${landed(landing, root, into) ? " files__into" : ""}`}
+            // Stopped at each row, because an item inside an open folder is an item inside this one
+            // too: left to bubble, one press would open the row and every folder above it.
+            onClick={(e) => {
+              e.stopPropagation();
+              if (one.isDir) onOpen(key);
+              else onRead(here);
+            }}
+            // Stood on before the menu opens, because the row a menu is about is the row a reader
+            // comes back to when it closes — and a right-click is not a press the browser moves the
+            // focus for.
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.focus();
+              onMenu(here, one.isDir, e.clientX, e.clientY);
+            }}
+            // Where the tab stop follows to, however the row was reached — the arrows move the
+            // focus and this is what moves the stop after it, so tabbing away and back returns to
+            // the row a reader was on rather than to the top of the tree.
+            onFocus={(e) => { if (e.target === e.currentTarget) onCursor(key); }}
           >
             {one.isDir
               ? (
                 <>
-                  <button
-                    className={rowClass("files__dir", one.ignored, mark)}
-                    aria-expanded={open.includes(key)}
-                    onClick={() => onOpen(key)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      onMenu(here, true, e.clientX, e.clientY);
-                    }}
-                  >
-                    {one.name}
-                  </button>
+                  <span className={rowClass("files__dir", one.ignored, mark)}>{one.name}</span>
                   {open.includes(key) && (
                     <Level
                       projectId={projectId}
@@ -981,21 +1137,17 @@ function Level({
                       naming={naming}
                       onRead={onRead}
                       onMenu={onMenu}
+                      onTrash={onTrash}
+                      cursor={cursor}
+                      onCursor={onCursor}
                     />
                   )}
                 </>
               )
               : (
-                <button
-                  className={rowClass("files__file", one.ignored, mark)}
-                  onClick={() => onRead(here)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    onMenu(here, false, e.clientX, e.clientY);
-                  }}
-                >
+                <span className={rowClass("files__file", one.ignored, mark)}>
                   <span className="files__name">{one.name}</span>
-                </button>
+                </span>
               )}
           </li>
         );
@@ -1097,6 +1249,17 @@ function NameBox({ initial, onName, onEnd }: {
   );
 }
 
+/**
+ * Whether a refusal is the host saying the file moved under the reader (`crate::folder_save`).
+ *
+ * It is the one save refusal the panel acts on rather than prints: every other is a sentence and a
+ * reader who can try again, where this one has an answer of its own to offer (`AMB-D-784`).
+ */
+function changedUnderneath(e: unknown): boolean {
+  return typeof e === "object" && e !== null
+    && (e as { code?: unknown }).code === "folder_changed_underneath";
+}
+
 /** One file, as far as a panel can show it. */
 function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKey, close, aside }: {
   projectId: number;
@@ -1116,7 +1279,11 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
   aside: ReactNode;
 }) {
   const [file, setFile] = useState<FolderFileDto | null>(null);
-  const [failed, setFailed] = useState(false);
+  // Why the file did not open, in the reader's own language. A link is not a broken file: the host
+  // refuses one on purpose (`AMB-D-782`), and a person sharing a `CLAUDE.md` between projects that
+  // way is the first to meet it — so that refusal is drawn in its own words and everything else
+  // keeps the one sentence there is nothing finer to say than.
+  const [failed, setFailed] = useState<string | null>(null);
   // The encoding the reader named, once they have. Nothing until then: the host's guess is right
   // for 644 files in 645, and asking for one up front would be putting the question to everybody
   // to catch the one (`AMB-D-773`).
@@ -1137,6 +1304,9 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
   // Which newline to write. A file with one kind keeps it; a file with both has none until the
   // reader picks, and the save waits for that rather than guessing.
   const [newline, setNewline] = useState<Newline>(null);
+  // Whether the file moved under a reader who has typed. Nothing of theirs is taken away by it —
+  // reading the file again is a thing they ask for, and this is the asking (`AMB-D-784`).
+  const [stale, setStale] = useState(false);
   // Where a picture too large to draw was handed on to the machine from. The same menu the list
   // rows open, opened here because this is the one state a reader reaches it from with no row under
   // the pointer.
@@ -1154,24 +1324,86 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
   // carrying it to the next one would open that one in an encoding nobody chose for it.
   useEffect(() => setAsked(undefined), [projectId, root, path.join("/")]);
 
+  // What the file was as it was last read, and whether there is anything of the reader's to lose by
+  // replacing it. Held in a ref rather than read out of the effect below: that effect is subscribed
+  // once per file, and taking these as reasons to re-subscribe would install a fresh watch over the
+  // folder the first time somebody typed.
+  const held = useRef({ edited, digest: file?.digest });
+  held.current = { edited, digest: file?.digest };
+
+  // One file as it has just been read. The newline travels with the text because a file read again
+  // is a file whose lines may end differently than they did — and both kinds in one file is the one
+  // answer this side cannot act on by itself.
+  const take = (one: FolderFileDto) => {
+    setFile(one);
+    setNewline(one.lineEnding === "mixed" ? null : one.lineEnding);
+  };
+
   useEffect(() => {
     let alive = true;
     setFile(null);
-    setFailed(false);
+    setFailed(null);
     setAsText(false);
     setEdited(false);
     setRefused(null);
     setNewline(null);
+    setStale(false);
     void folderRead(projectId, root, path, asked)
-      .then((one) => {
-        if (!alive) return;
-        setFile(one);
-        // Both kinds in one file is the only answer this side cannot act on by itself.
-        setNewline(one.lineEnding === "mixed" ? null : one.lineEnding);
-      })
-      .catch(() => { if (alive) setFailed(true); });
+      .then((one) => { if (alive) take(one); })
+      .catch((e) => {
+        if (alive) setFailed(isErr(e, "folder_link") ? errText(e) : t("files.unreadable"));
+      });
     return () => { alive = false; };
   }, [projectId, root, path.join("/"), asked]);
+
+  // The file moving under the reader while they have it open.
+  //
+  // **This face watches the folder itself**, because the tree that was watching it is not on the
+  // page while a file is being read — the panel draws one or the other. What arrives says only that
+  // the folder moved (`AMB-D-785`), so the answer is to read the file again and compare the mark:
+  // the same mark is this file standing still while something else in the folder changed, which is
+  // most of what arrives here and draws nothing at all.
+  //
+  // **A reader who has typed nothing is simply shown what the file says now.** This panel sits
+  // beside an agent that edits the same files, and a reader looking at what it changed an hour ago
+  // reads it as the agent having done nothing (`AMB-D-784`).
+  const tracked = file?.digest !== undefined;
+  useEffect(() => {
+    if (!tracked) return;
+    let alive = true;
+    const look = () => {
+      // In the encoding the reader named, where they named one: a file read again in a guess they
+      // had already overruled would put the panel back where they started (`AMB-D-773`).
+      void folderRead(projectId, root, path, asked)
+        .then((fresh) => {
+          if (!alive || fresh.digest === undefined || fresh.digest === held.current.digest) return;
+          if (held.current.edited) setStale(true);
+          else take(fresh);
+        })
+        // A read that did not answer leaves what is drawn where it is. The file may be being
+        // written this very instant, and taking a reader's text off the screen for a moment of the
+        // disk's is worse than being a moment out of date — a file that has really gone is what the
+        // save then says, to somebody who asked for it.
+        .catch(() => {});
+    };
+    // Subscribed before the watch is asked for, the same order the tree takes: the first thing the
+    // folder does could happen while the host is still walking it.
+    const listening = onFolderChanged((changes) => { if (alive && changes.root === root) look(); });
+    void folderWatch(projectId, root).catch(() => {});
+    return () => {
+      alive = false;
+      void listening.then((stop) => stop());
+      void folderUnwatch(root);
+    };
+  }, [projectId, root, path.join("/"), tracked, asked]);
+
+  // Taking what is on the disk now, over what the reader has typed. It is the one thing here that
+  // loses somebody's work, which is why nothing does it on their behalf (`AMB-D-784`).
+  const readAgain = () => {
+    void folderRead(projectId, root, path, asked)
+      .then((fresh) => { take(fresh); setEdited(false); setStale(false); setRefused(null); })
+      .catch((e) => setFailed(isErr(e, "folder_link") ? errText(e) : t("files.unreadable")));
+  };
 
   // Whether this file is one the panel can write back at all. The host says so before a reader has
   // typed a character: a file cut at the read cap, or one whose bytes and text do not round-trip,
@@ -1188,18 +1420,26 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
 
   const save = async () => {
     const read = typed.current;
-    if (!savable || keeping || file?.encoding === undefined || read === null || newline === null) return;
+    if (!savable || keeping || file?.encoding === undefined || file.digest === undefined
+      || read === null || newline === null) return;
     setKeeping(true);
     setRefused(null);
     try {
-      await folderSave(projectId, root, path, read(), file.encoding, file.bom, newline);
+      const kept = await folderSave(
+        projectId, root, path, read(), file.encoding, file.bom, newline, file.digest,
+      );
       setEdited(false);
-      // What is on the disk now has one kind of newline, so the question is not asked again. The
-      // text is left where it is: replacing it would be handing the editor its own document back
-      // and moving the caret to the top for the trouble.
-      setFile({ ...file, lineEnding: newline });
+      // What is on the disk now has one kind of newline, so the question is not asked again, and it
+      // is the mark this save came back with — without taking that, the panel's next look at the
+      // folder would find its own writing and read it as somebody else's (`AMB-D-784`). The text is
+      // left where it is: replacing it would be handing the editor its own document back and moving
+      // the caret to the top for the trouble.
+      setFile({ ...file, lineEnding: newline, digest: kept });
     } catch (e) {
-      setRefused(errText(e));
+      // The one refusal that is not a sentence to read and be done with: the file moved under the
+      // reader, and what that wants is the offer below rather than a line of prose.
+      if (changedUnderneath(e)) setStale(true);
+      else setRefused(errText(e));
     } finally {
       setKeeping(false);
     }
@@ -1223,54 +1463,78 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
   // leaves this face: what a record opens on is the ledger.
   const nav = useLedgerNav(onOpenLedger);
 
+  // What the row under the name has on it. Named here rather than asked three times in the markup,
+  // because whether the row exists at all is the same question as whether anything would be on it.
+  const switchable = file?.text !== undefined && markdown;
+  const readAs = file?.text !== undefined && file.encoding !== undefined;
+
   return (
     <div className="files files--reading" tabIndex={-1} onKeyDown={onKey}>
+      {/* **The name has a row to itself, and what to do with the file has another.** The two used to
+          share one, and the name was the only thing on it that could give way — every control beside
+          it is as wide as its own words — so the name is what disappeared: `run.sh` came up as
+          `r...` on a panel of ordinary width, which leaves a reader unable to say which file they
+          are looking at. It got that way one control at a time, and no one of them was the mistake
+          (`AMB-T-3866` measured the state the three arrived at).
+
+          The split is by what a control is for, not by what fits: leaving and closing are the frame's
+          and stay with the name, and the ones that act on the file stand together under it. The
+          second row is drawn only where there is something to put on it, so a picture — which has
+          nothing to switch, nothing to reopen and nothing to save — costs no line at all.
+
+          The bin stays up here though it acts on the file, because it is a mark and not a word: an
+          icon is the same narrow width whatever the reader's language, which is exactly what the
+          three that moved were not. */}
       <div className="files__bar">
         <button className="files__back" onClick={onBack}>{t("files.back")}</button>
         <span className="files__name" title={path.join("/")}>{name}</span>
-        {/* Drawn for a Markdown file and for nothing else: every other file has one way to be shown,
-            and a switch with nowhere to switch to is a control that answers nothing. What it says is
-            where it goes rather than where it is — the reader can see where they are, and the name
-            beside it is what has to stay legible on a panel this narrow. */}
-        {file?.text !== undefined && markdown && (
-          <button className="files__view" onClick={() => setAsText((was) => !was)}>
-            {t(asText ? "files.read" : "files.edit")}
-          </button>
-        )}
-        {/* What the bytes were read as, said on the row the file is named on. The guess reports no
-            confidence and breaks nothing visible when it is wrong, so the reader is the only one
-            who can catch it — and they can only catch it if they are told what was guessed
-            (`AMB-D-773`). Text only: a picture has no encoding to be wrong about. */}
-        {file?.text !== undefined && file.encoding !== undefined && (
-          <button
-            className="files__encoding"
-            title={t("files.reopenWith")}
-            onClick={(e) => setPicking({ x: e.clientX, y: e.clientY })}
-          >
-            {file.encoding}
-            {" · "}
-            {file.lineEnding === "mixed" ? t("files.lineEndingMixed") : file.lineEnding.toUpperCase()}
-          </button>
-        )}
-        {/* One control saying which of three things is true, rather than a button and a word
-            somewhere else for a reader to find the answer in. */}
-        {savable && (
-          <button
-            className="files__keep"
-            disabled={!edited || keeping || newline === null}
-            onClick={() => { void save(); }}
-          >
-            {keeping ? t("files.saving") : edited ? t("files.save") : t("files.saved")}
-          </button>
-        )}
         <button className="files__trash" title={t("files.trash")} onClick={onTrash}>
           <Icon name="trash" />
         </button>
         {close}
       </div>
+      {(switchable || readAs || savable) && (
+        <div className="files__tools">
+          {/* Drawn for a Markdown file and for nothing else: every other file has one way to be
+              shown, and a switch with nowhere to switch to is a control that answers nothing. What
+              it says is where it goes rather than where it is — the reader can see where they
+              are. */}
+          {switchable && (
+            <button className="files__view" onClick={() => setAsText((was) => !was)}>
+              {t(asText ? "files.read" : "files.edit")}
+            </button>
+          )}
+          {/* What the bytes were read as. The guess reports no confidence and breaks nothing visible
+              when it is wrong, so the reader is the only one who can catch it — and they can only
+              catch it if they are told what was guessed (`AMB-D-773`). Text only: a picture has no
+              encoding to be wrong about. */}
+          {file?.text !== undefined && file.encoding !== undefined && (
+            <button
+              className="files__encoding"
+              title={t("files.reopenWith")}
+              onClick={(e) => setPicking({ x: e.clientX, y: e.clientY })}
+            >
+              {file.encoding}
+              {" · "}
+              {file.lineEnding === "mixed" ? t("files.lineEndingMixed") : file.lineEnding.toUpperCase()}
+            </button>
+          )}
+          {/* One control saying which of three things is true, rather than a button and a word
+              somewhere else for a reader to find the answer in. */}
+          {savable && (
+            <button
+              className="files__keep"
+              disabled={!edited || keeping || newline === null}
+              onClick={() => { void save(); }}
+            >
+              {keeping ? t("files.saving") : edited ? t("files.save") : t("files.saved")}
+            </button>
+          )}
+        </div>
+      )}
       {aside}
       <div className="files__body">
-        {failed && <p className="files__none">{t("files.unreadable")}</p>}
+        {failed !== null && <p className="files__none">{failed}</p>}
         {/* The picture is fetched rather than carried: `folderRead` says only that there is one
             and what type it is, and the door that hands out a file by its path is addressed with
             the same project, folder and path this reader was opened on (`AMB-D-783`). It draws
@@ -1316,6 +1580,15 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
               <option value="lf">{t("files.newlineLf")}</option>
               <option value="crlf">{t("files.newlineCrlf")}</option>
             </select>
+          </div>
+        )}
+        {/* The file moved under the reader while they were typing in it. What is said is the fact
+            and nothing else, and what is offered is the one thing this panel can do about it:
+            lining the two texts up is the work of the agent in the pane (`AMB-D-784`). */}
+        {stale && (
+          <div className="files__changed">
+            <p className="files__none">{t("files.changedUnderneath")}</p>
+            <button className="files__reread" onClick={readAgain}>{t("files.readAgain")}</button>
           </div>
         )}
         {refused !== null && <p className="files__none">{refused}</p>}

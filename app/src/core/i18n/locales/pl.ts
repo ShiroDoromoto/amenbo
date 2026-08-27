@@ -117,13 +117,12 @@ export const pl: Translation = {
     "dec.unknownName": "(nieznane)",
     "dec.comments": "Dyskusja", "dec.reasonPh": "Powód (opcjonalnie, Markdown)…",
     "dec.revisit": "Te decyzje opierają się na tej — jeśli ją odrzucisz, przejrzyj je ponownie:",
-    "dec.filterAll": "Wszystkie",
     "dec.searchFailed": "Nie udało się uruchomić wyszukiwania",
     "dec.searchPh": "Szukaj w tytule / treści / komentarzach / AMB-D-<n>",
     "dec.sort": "Sortuj",
     "dec.sort.numberDesc": "Numer, od najnowszych", "dec.sort.numberAsc": "Numer, od najstarszych",
     "dec.sort.decidedDesc": "Data decyzji, od najnowszych", "dec.sort.decidedAsc": "Data decyzji, od najstarszych",
-    "board.filter": "Filtr:", "board.group": "Grupuj:",
+    "board.group": "Grupuj:",
     "board.filters": "Filtry",
     "filter.dim.status": "Status", "filter.dim.assignee": "Odpowiedzialny", "filter.dim.priority": "Priorytet",
     "filter.opt.assignee.none": "Bez przypisania", "filter.opt.assignee.me": "Ja", "filter.opt.assignee.meAi": "Moja SI",
@@ -256,6 +255,11 @@ export const pl: Translation = {
     "nudge.autostart.yes": "Tak, otwieraj przy logowaniu (zalecane)",
     "nudge.autostart.no": "Nie, dziękuję",
     "nudge.autostart.hint": "W Ustawieniach › Uruchamianie można to zmienić w każdej chwili.",
+    "settings.files": "Pliki",
+    "settings.trashAsk": "Pytaj przed wyrzuceniem do kosza",
+    "settings.trashAskOn": "Pytaj",
+    "settings.trashAskOff": "Nie pytaj",
+    "settings.trashAskNote": "Panel plików pyta, zanim przeniesie wiersz do kosza. W samym pytaniu można je tylko wyłączyć; tutaj włącza się je z powrotem.",
     "settings.updates": "Aktualizacje",
     "settings.updateCheck": "Sprawdzanie aktualizacji",
     "settings.updateCheckOn": "Włączone",
@@ -615,6 +619,11 @@ export const pl: Translation = {
     "files.save": "Zapisz",
     "files.saving": "Zapisywanie…",
     "files.saved": "Zapisano",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Ktoś zapisał ten plik po tym, jak został tutaj otwarty.",
+    "files.readAgain": "Wczytaj ponownie",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Ten plik ma oba rodzaje końca wiersza. Po zapisaniu wszystkie będą takie same.",
@@ -785,6 +794,10 @@ export const pl: Translation = {
     window_failed: "Nie udało się otworzyć tego okna: {reason}",
     talk_blank: "Tamto okno otworzyło się, ale nic w nim nie narysowano, więc terminal wrócił do tego okna.",
     clip_refused: "Nie udało się umieścić plików w schowku: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "To jest odnośnik do innego pliku, a Amenbo za nim nie podąża — to, na co wskazuje, może leżeć poza folderami tego projektu.",
     folder_taken: "{name} już tam jest.",
     folder_name: "Ta maszyna nie przyjmuje nazwy {name}.",
     folder_make: "Nie udało się utworzyć {name}: {reason}",
@@ -793,6 +806,9 @@ export const pl: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Nie udało się zapisać tego pliku: {reason}",
     folder_unwritable_character: "„{character}” nie da się zapisać w {encoding}, więc nic nie zostało zapisane.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Ktoś zapisał ten plik po tym, jak został tutaj odczytany, więc nic nie zostało zapisane.",
 
     already_reserved:
       "{ref} nie ma statusu „Do zrobienia”, więc nie można go zarezerwować — być może trzyma go już inna sesja.",

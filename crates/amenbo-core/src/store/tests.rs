@@ -788,6 +788,56 @@ fn a_board_reads_only_its_own_project_and_only_the_axis_it_asked_for() {
     fs::remove_dir_all(&dir).ok();
 }
 
+/// The decisions tab narrows by classification out of one query per axis
+/// (`project_decision_dimension_assignments`), so it owes the same two guarantees the board's does: the
+/// axis asked for and no other, the project asked for and no other. Either one wrong and the SQL still
+/// runs — the list just quietly narrows by someone else's rows.
+#[test]
+fn the_decision_list_reads_only_its_own_project_and_only_the_axis_it_asked_for() {
+    let (mut s, dir) = fresh_store("decision-assignments");
+    let p = s.project_add(project("こちら")).unwrap();
+    let other = s.project_add(project("よそ")).unwrap();
+
+    let axis = s
+        .dimension_add(p.id, crate::ops::dimension::NewDimension { name: "テーマ".into(), ..Default::default() })
+        .unwrap();
+    let main = s.dimension_value_add(axis.id, "メイン", None, None).unwrap();
+    // A second axis in the same project — it must not bleed in.
+    let sibling = s
+        .dimension_add(p.id, crate::ops::dimension::NewDimension { name: "区分".into(), ..Default::default() })
+        .unwrap();
+    let infra = s.dimension_value_add(sibling.id, "基盤", None, None).unwrap();
+    let d = s.add_decision(new_decision("こちらの決定", p.id)).unwrap();
+    s.set_decision_dimension_value(d.id, main.id).unwrap();
+    s.set_decision_dimension_value(d.id, infra.id).unwrap();
+
+    // Pin a decision from the *other* project onto **this** project's axis value, at the truth source:
+    // `ops` refuses to write a classification across projects, and what is under test is the reader's
+    // project filter — the last thing standing should such a row ever exist (an older store, a restore).
+    let far = s.add_decision(new_decision("よその決定", other.id)).unwrap();
+    s.engine
+        .conn()
+        .execute(
+            "INSERT INTO decision_dimension_value (decision_id, dimension_id, value_id, created_at, updated_at) \
+             VALUES (?1, ?2, ?3, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+            rusqlite::params![far.id, axis.id, main.id],
+        )
+        .unwrap();
+
+    let rows = crate::store_engine::read::project_decision_dimension_assignments(
+        s.engine.conn(),
+        p.id,
+        axis.id,
+    )
+    .unwrap();
+    assert_eq!(
+        rows,
+        vec![(d.id, main.id)],
+        "only the requested axis and project's assignments (no neighboring axis, no other project mixed in)"
+    );
+    fs::remove_dir_all(&dir).ok();
+}
+
 /// A task's own page names what it is filed under, in words (`task_classification`). Two things have to
 /// hold for that to read straight: the pairs come back by **axis** order rather than by the order the
 /// filings happened in, and a filing whose value has since been deleted names nothing and so is not

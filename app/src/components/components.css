@@ -87,7 +87,12 @@
 .due--future { color: var(--c-due-future); }
 
 /* ---------- board ---------- */
-.board { display: flex; gap: var(--s-4); padding: var(--s-5); align-items: flex-start; overflow-x: auto; flex: 1; }
+/* The columns stretch rather than sitting at the top, because a column **is** its own drop target and a
+   target has to be where the reader aims. Left to size themselves, an empty column was as tall as its
+   heading plus the 72px floor below, while its neighbours ran the height of their cards — and since a
+   column draws no frame, the empty one reads as being just as tall as the rest. Aiming at the middle of
+   what looks like the column then lands below the target, and the card goes back with nothing said. */
+.board { display: flex; gap: var(--s-4); padding: var(--s-5); align-items: stretch; overflow-x: auto; flex: 1; }
 /* Every toolbar row folds rather than crushes. A row that has lost width — any of them, once the detail
    pane opens beside it — would otherwise squeeze whatever is still shrinkable until it breaks a
    character at a time. The label that names the chips beside it is a name, so it holds its line too. */
@@ -144,8 +149,10 @@
   background: var(--c-surface); color: var(--c-text-muted); cursor: pointer; line-height: 1;
 }
 .column__addbtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
+/* Not a column, so it does not stretch with them — it is a button, and one run down the whole board
+   would read as an empty column rather than as a control. */
 .board__addcol {
-  width: 200px; flex: none;
+  width: 200px; flex: none; align-self: flex-start;
   text-align: left; font-size: var(--fs-sm); color: var(--c-text-faint);
   border: 1px dashed var(--c-border-strong); background: none; border-radius: var(--r-md); padding: var(--s-2) var(--s-3);
 }
@@ -154,8 +161,8 @@
 .board__addcolinput { width: 200px; flex: none; align-self: flex-start; }
 
 /* ---------- drag & drop (moving between the status board's columns) ---------- */
-/* A droppable column keeps a grabbable area even when empty, and highlights its frame with
-   a dashed outline while a drag is in flight. */
+/* A droppable column keeps a grabbable area even when the board is too short for the stretch above to
+   give it one, and highlights its frame with a dashed outline while a drag is in flight. */
 /* The way out of a done column that has hit its cap: see the done items as a list (the
    done archive). */
 .column__seeall {

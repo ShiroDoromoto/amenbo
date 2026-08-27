@@ -114,13 +114,12 @@ export const ja: Translation = {
     "dec.unknownName": "(不明)",
     "dec.comments": "この決定への議論", "dec.reasonPh": "理由（任意・Markdown 可）を書く…",
     "dec.revisit": "この決定の上に立つ決定です。却下するなら見直してください:",
-    "dec.filterAll": "すべて",
     "dec.searchFailed": "検索できなかった",
     "dec.searchPh": "タイトル・本文・コメント・AMB-D-<n> を検索",
     "dec.sort": "並び替え",
     "dec.sort.numberDesc": "番号が新しい順", "dec.sort.numberAsc": "番号が古い順",
     "dec.sort.decidedDesc": "決定日が新しい順", "dec.sort.decidedAsc": "決定日が古い順",
-    "board.filter": "フィルタ:", "board.group": "グループ:",
+    "board.group": "グループ:",
     "board.filters": "フィルタ",
     "filter.dim.status": "ステータス", "filter.dim.assignee": "担当", "filter.dim.priority": "優先度",
     "filter.opt.assignee.none": "未割り当て", "filter.opt.assignee.me": "自分", "filter.opt.assignee.meAi": "自分の AI",
@@ -254,6 +253,11 @@ export const ja: Translation = {
     "nudge.autostart.yes": "はい、ログイン時に開く（推奨）",
     "nudge.autostart.no": "いいえ",
     "nudge.autostart.hint": "あとから 設定 › 起動 でいつでも切り替えられます。",
+    "settings.files": "ファイル",
+    "settings.trashAsk": "ゴミ箱へ入れる前に確認",
+    "settings.trashAskOn": "確認する",
+    "settings.trashAskOff": "確認しない",
+    "settings.trashAskNote": "ファイルパネルは行をゴミ箱へ入れる前に確認します。確認の中で切ると戻す場所がないので、戻すのはここです。",
     "settings.updates": "更新",
     "settings.updateCheck": "更新チェック",
     "settings.updateCheckOn": "オン",
@@ -601,6 +605,11 @@ export const ja: Translation = {
     "files.save": "保存",
     "files.saving": "保存しています…",
     "files.saved": "保存しました",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "このファイルは、ここで開いたあとに誰かが書き換えました。",
+    "files.readAgain": "読み直す",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "このファイルは改行が2種類まざっています。保存すると、どちらかにそろいます。",
@@ -770,6 +779,10 @@ export const ja: Translation = {
     window_failed: "その窓を開けませんでした: {reason}",
     talk_blank: "別ウィンドウは開きましたが何も描かれなかったので、ターミナルをこの窓に戻しました。",
     clip_refused: "クリップボードに載せられませんでした: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "これは別のファイルへのリンクです。リンクの先はこのプロジェクトのフォルダの外かもしれないので、Amenbo はたどりません。",
     folder_taken: "{name} は既にあります。",
     folder_name: "この機械は {name} という名前を受け付けません。",
     folder_make: "{name} を作れませんでした: {reason}",
@@ -778,6 +791,9 @@ export const ja: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "このファイルを保存できませんでした: {reason}",
     folder_unwritable_character: "「{character}」は {encoding} では書けないので、何も保存していません。",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "このファイルは、ここで読んだあとに誰かが書き換えました。何も保存していません。",
 
     already_reserved: "{ref} は「未着手」ではないため予約できません。別のセッションが着手済みかもしれません。",
     not_ready: "{ref} はまだ予約できません: {reasons}",

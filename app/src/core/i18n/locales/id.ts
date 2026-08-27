@@ -117,13 +117,12 @@ export const id: Translation = {
     "dec.unknownName": "(tidak diketahui)",
     "dec.comments": "Diskusi", "dec.reasonPh": "Alasan (opsional, Markdown)…",
     "dec.revisit": "Keputusan-keputusan ini berdiri di atas yang ini — tinjau ulang jika Anda menolaknya:",
-    "dec.filterAll": "Semua",
     "dec.searchFailed": "Pencarian tidak bisa dijalankan",
     "dec.searchPh": "Cari judul / isi / komentar / AMB-D-<n>",
     "dec.sort": "Urutkan",
     "dec.sort.numberDesc": "Nomor, terbaru dulu", "dec.sort.numberAsc": "Nomor, terlama dulu",
     "dec.sort.decidedDesc": "Diputuskan, terbaru dulu", "dec.sort.decidedAsc": "Diputuskan, terlama dulu",
-    "board.filter": "Saring:", "board.group": "Kelompok:",
+    "board.group": "Kelompok:",
     "board.filters": "Saringan",
     "filter.dim.status": "Status", "filter.dim.assignee": "Penanggung jawab", "filter.dim.priority": "Prioritas",
     "filter.opt.assignee.none": "Belum ada penanggung jawab", "filter.opt.assignee.me": "Saya", "filter.opt.assignee.meAi": "AI saya",
@@ -252,6 +251,11 @@ export const id: Translation = {
     "nudge.autostart.yes": "Ya, buka saat login (disarankan)",
     "nudge.autostart.no": "Tidak, terima kasih",
     "nudge.autostart.hint": "Pengaturan › Saat mulai bisa mengubahnya kapan saja.",
+    "settings.files": "Berkas",
+    "settings.trashAsk": "Tanya sebelum memindahkan ke tempat sampah",
+    "settings.trashAskOn": "Tanya",
+    "settings.trashAskOff": "Jangan tanya",
+    "settings.trashAskNote": "Panel berkas bertanya sebelum memindahkan baris ke tempat sampah. Di dalam pertanyaan itu hanya bisa dimatikan; di sinilah cara menyalakannya lagi.",
     "settings.updates": "Pembaruan",
     "settings.updateCheck": "Pemeriksaan pembaruan",
     "settings.updateCheckOn": "Nyala",
@@ -592,6 +596,11 @@ export const id: Translation = {
     "files.save": "Simpan",
     "files.saving": "Menyimpan…",
     "files.saved": "Tersimpan",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Seseorang menulis ke berkas ini setelah dibuka di sini.",
+    "files.readAgain": "Baca ulang",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Berkas ini memuat dua macam pemisah baris. Menyimpannya akan menyamakan semuanya.",
@@ -750,6 +759,10 @@ export const id: Translation = {
     window_failed: "Jendela itu tidak dapat dibuka: {reason}",
     talk_blank: "Jendela itu terbuka tetapi tidak menggambar apa pun, jadi terminal dikembalikan ke jendela ini.",
     clip_refused: "Berkasnya tidak bisa ditaruh di papan klip: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Ini adalah tautan ke berkas lain, dan Amenbo tidak mengikutinya — yang ditunjuknya bisa berada di luar folder proyek ini.",
     folder_taken: "{name} sudah ada.",
     folder_name: "Mesin ini tidak menerima {name} sebagai nama.",
     folder_make: "{name} tidak bisa dibuat: {reason}",
@@ -758,6 +771,9 @@ export const id: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Berkas ini tidak bisa disimpan: {reason}",
     folder_unwritable_character: "“{character}” tidak bisa ditulis dalam {encoding}, jadi tidak ada yang disimpan.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Seseorang menulis ke berkas ini setelah dibaca di sini, jadi tidak ada yang disimpan.",
 
     already_reserved:
       "{ref} tidak berstatus “Akan dikerjakan”, jadi tidak bisa diambil — mungkin sesi lain sudah memegangnya.",

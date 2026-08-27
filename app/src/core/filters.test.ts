@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { filterDimensions, parseRefQuery, passesFilters, selectionKey } from "./filters";
+import { decisionFilterDimensions, filterDimensions, parseRefQuery, passesFilters, selectionKey } from "./filters";
+import type { DecisionDto } from "../bindings/bindings";
 import type { TaskCard } from "../mock/types";
 
 describe("filters: user-defined classifications (unified dimension)", () => {
@@ -102,5 +103,48 @@ describe("parseRefQuery: recognizing ref numbers in the search box", () => {
     expect(parseRefQuery("#12a")).toBeNull();
     expect(parseRefQuery("fix #12")).toBeNull();
     expect(parseRefQuery("D-")).toBeNull();
+  });
+});
+
+describe("filters: the decisions tab narrows the same way the board does", () => {
+  const dim = {
+    id: 1, name: "テーマ", notes: "", role: "none" as const, ordered: false, showOnCard: false, required: false,
+    appliesTo: "both" as const,
+    values: [{ id: 11, name: "メイン" }, { id: 12, name: "会話の窓" }],
+  };
+  const assign = { 1: { 1: 11 }, 2: { 1: 12 } };
+  const dims = decisionFilterDimensions([dim], assign);
+  const decision = (id: number, status: string, supersededBy: unknown[] = []) =>
+    ({ id, status, supersededBy }) as unknown as DecisionDto;
+
+  it("offers the status axis, then the project's own axes", () => {
+    expect(dims.map((d) => d.id)).toEqual(["status", "dim:1"]);
+    expect(dims[0].options.map((o) => o.value)).toEqual(["proposed", "accepted", "rejected", "superseded"]);
+  });
+
+  it("narrows by classification, and an axis with nothing chosen narrows nothing", () => {
+    const mine = decision(1, "accepted");
+    const theirs = decision(2, "accepted");
+    const unfiled = decision(3, "accepted");
+    expect(passesFilters(mine, dims, { "dim:1": ["11"] })).toBe(true);
+    expect(passesFilters(theirs, dims, { "dim:1": ["11"] })).toBe(false);
+    expect(passesFilters(unfiled, dims, { "dim:1": ["11"] })).toBe(false);
+    expect(passesFilters(unfiled, dims, {})).toBe(true);
+    expect(passesFilters(unfiled, dims, { "dim:1": [] })).toBe(true);
+  });
+
+  it("reads superseded off the edge and not off the status, and ANDs the two axes", () => {
+    const overturned = decision(1, "accepted", [{ id: 9, name: null }]);
+    const standing = decision(2, "accepted");
+    expect(passesFilters(overturned, dims, { status: ["superseded"] })).toBe(true);
+    expect(passesFilters(standing, dims, { status: ["superseded"] })).toBe(false);
+    // The two axes are ANDed: the overturned one is filed under the first value, so it survives that
+    // pairing and drops out of the other.
+    expect(passesFilters(overturned, dims, { status: ["superseded"], "dim:1": ["11"] })).toBe(true);
+    expect(passesFilters(overturned, dims, { status: ["superseded"], "dim:1": ["12"] })).toBe(false);
+  });
+
+  it("does not surface an axis with no values (nothing to narrow)", () => {
+    expect(decisionFilterDimensions([{ ...dim, id: 2, values: [] }], {}).map((d) => d.id)).toEqual(["status"]);
   });
 });

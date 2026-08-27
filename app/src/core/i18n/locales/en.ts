@@ -126,13 +126,12 @@ const ui = {
   "dec.unknownName": "(unknown)",
   "dec.comments": "Discussion", "dec.reasonPh": "Reason (optional, Markdown)…",
   "dec.revisit": "These decisions stand on this one — revisit them if you reject it:",
-  "dec.filterAll": "All",
   "dec.searchFailed": "The search could not run",
   "dec.searchPh": "Search title / body / comments / AMB-D-<n>",
   "dec.sort": "Sort",
   "dec.sort.numberDesc": "Number, newest first", "dec.sort.numberAsc": "Number, oldest first",
   "dec.sort.decidedDesc": "Decided, newest first", "dec.sort.decidedAsc": "Decided, oldest first",
-  "board.filter": "Filter:", "board.group": "Group:",
+  "board.group": "Group:",
   "board.filters": "Filters",
   "filter.dim.status": "Status", "filter.dim.assignee": "Assignee", "filter.dim.priority": "Priority",
   "filter.opt.assignee.none": "Unassigned", "filter.opt.assignee.me": "Me", "filter.opt.assignee.meAi": "My AI",
@@ -270,6 +269,13 @@ const ui = {
   "nudge.autostart.yes": "Yes, open it at login (recommended)",
   "nudge.autostart.no": "No thanks",
   "nudge.autostart.hint": "Settings › Startup switches it back whenever you like.",
+  // The file panel's own question, and the only place it can be turned back on: the checkbox
+  // that turns it off is drawn inside the question it silences (`AMB-D-777`).
+  "settings.files": "Files",
+  "settings.trashAsk": "Ask before binning",
+  "settings.trashAskOn": "Ask",
+  "settings.trashAskOff": "Do not ask",
+  "settings.trashAskNote": "The file panel asks before it moves a row to the bin. Turning the question off inside it is one-way; this is the way back.",
   "settings.updates": "Updates",
   "settings.updateCheck": "Update check",
   "settings.updateCheckOn": "On",
@@ -669,6 +675,11 @@ const ui = {
   "files.save": "Save",
   "files.saving": "Saving…",
   "files.saved": "Saved",
+  // The file moving under a reader who has typed into it. What is said is the fact and
+  // nothing else — which of the two texts is right is the pane's agent's to settle, not
+  // this panel's (`AMB-D-784`).
+  "files.changedUnderneath": "Somebody wrote to this file after it was opened here.",
+  "files.readAgain": "Read it again",
   // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
   // line of the other, so the reader is told and asked (`AMB-D-773`).
   "files.newlinesMixed": "This file has both kinds of line break. Saving makes them all the same.",
@@ -864,6 +875,10 @@ const err: Partial<Record<ErrorCode, string>> = {
   window_failed: "That window could not be opened: {reason}",
   talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
   clip_refused: "The files could not be put on the clipboard: {reason}",
+  // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+  // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+  // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+  folder_link: "This is a link to another file, and Amenbo does not follow one — what it points at can be outside this project's folders.",
   folder_taken: "{name} is already there.",
   folder_name: "This machine will not take {name} as a name.",
   folder_make: "{name} could not be made: {reason}",
@@ -872,6 +887,9 @@ const err: Partial<Record<ErrorCode, string>> = {
   // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
   folder_not_saved: "This file could not be saved: {reason}",
   folder_unwritable_character: "“{character}” cannot be written in {encoding}, so nothing was saved.",
+  // And the save the panel does not make: the file moved between the read and the save,
+  // so what the editor holds is older than the file (`AMB-D-784`).
+  folder_changed_underneath: "Somebody wrote to this file after it was read here, so nothing was saved.",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

@@ -114,13 +114,12 @@ export const de: Translation = {
     "dec.unknownName": "(unbekannt)",
     "dec.comments": "Diskussion", "dec.reasonPh": "Begründung (optional, Markdown)…",
     "dec.revisit": "Diese Entscheidungen bauen auf dieser auf — sieh sie dir noch einmal an, wenn du sie ablehnst:",
-    "dec.filterAll": "Alle",
     "dec.searchFailed": "Die Suche konnte nicht laufen",
     "dec.searchPh": "Titel / Text / Kommentare / AMB-D-<n> durchsuchen",
     "dec.sort": "Sortierung",
     "dec.sort.numberDesc": "Nummer, neueste zuerst", "dec.sort.numberAsc": "Nummer, älteste zuerst",
     "dec.sort.decidedDesc": "Entscheidung, neueste zuerst", "dec.sort.decidedAsc": "Entscheidung, älteste zuerst",
-    "board.filter": "Filter:", "board.group": "Gruppieren:",
+    "board.group": "Gruppieren:",
     "board.filters": "Filter",
     "filter.dim.status": "Status", "filter.dim.assignee": "Zuständig", "filter.dim.priority": "Priorität",
     "filter.opt.assignee.none": "Niemand", "filter.opt.assignee.me": "Ich", "filter.opt.assignee.meAi": "Meine KI",
@@ -251,6 +250,11 @@ export const de: Translation = {
     "nudge.autostart.yes": "Ja, beim Anmelden öffnen (empfohlen)",
     "nudge.autostart.no": "Nein, danke",
     "nudge.autostart.hint": "Unter Einstellungen › Systemstart lässt sich das jederzeit ändern.",
+    "settings.files": "Dateien",
+    "settings.trashAsk": "Vor dem Papierkorb fragen",
+    "settings.trashAskOn": "Fragen",
+    "settings.trashAskOff": "Nicht fragen",
+    "settings.trashAskNote": "Die Dateiliste fragt, bevor sie eine Zeile in den Papierkorb legt. In der Frage selbst lässt sie sich nur abschalten; hier lässt sie sich wieder einschalten.",
     "settings.updates": "Aktualisierungen",
     "settings.updateCheck": "Auf Aktualisierungen prüfen",
     "settings.updateCheckOn": "Ein",
@@ -599,6 +603,11 @@ export const de: Translation = {
     "files.save": "Speichern",
     "files.saving": "Wird gespeichert …",
     "files.saved": "Gespeichert",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Jemand hat in diese Datei geschrieben, nachdem sie hier geöffnet wurde.",
+    "files.readAgain": "Neu einlesen",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Diese Datei hat beide Arten von Zeilenumbruch. Beim Speichern werden alle gleich.",
@@ -761,6 +770,10 @@ export const de: Translation = {
     window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
     talk_blank: "Das Fenster wurde geöffnet, hat aber nie etwas gezeichnet — das Terminal ist wieder in diesem Fenster.",
     clip_refused: "Die Dateien konnten nicht in die Zwischenablage gelegt werden: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Dies ist ein Link auf eine andere Datei, und Amenbo folgt ihm nicht – wohin er zeigt, kann außerhalb der Ordner dieses Projekts liegen.",
     folder_taken: "{name} ist schon da.",
     folder_name: "Dieser Rechner nimmt {name} nicht als Namen an.",
     folder_make: "{name} konnte nicht angelegt werden: {reason}",
@@ -769,6 +782,9 @@ export const de: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Diese Datei konnte nicht gespeichert werden: {reason}",
     folder_unwritable_character: "„{character}“ lässt sich in {encoding} nicht schreiben, deshalb wurde nichts gespeichert.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Jemand hat in diese Datei geschrieben, nachdem sie hier gelesen wurde, deshalb wurde nichts gespeichert.",
 
     already_reserved:
       "{ref} ist nicht „Offen“ und lässt sich deshalb nicht übernehmen — vielleicht hat eine andere Sitzung sie schon.",

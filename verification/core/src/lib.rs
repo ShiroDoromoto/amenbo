@@ -370,6 +370,13 @@ const REGISTRY: &[OpSpec] = &[
     // the one thing a road can be written in.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "choose-filter", required: &["axis", "value"], refs: &[], strings: &["axis", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "close-filters", required: &[], refs: &[], strings: &[], binds: false },
+    // The same three on the decisions tab, which has the same panel over a different list. They are
+    // separate entries rather than one shared with the board's because a road has to say which of the
+    // two tabs it is standing on — a step that named neither could be walked on either and would prove
+    // whichever the operator happened to be looking at.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "open-filters", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "choose-filter", required: &["axis", "value"], refs: &[], strings: &["axis", "value"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "close-filters", required: &[], refs: &[], strings: &[], binds: false },
     // Pressing a hit through to the record it points at. The excerpt beside a hit is cut to say where
     // the words are written and never to be read in place of the record, so the press is what the hit
     // is for. The words are named here because a hit has to be standing before there is one to press,
@@ -663,6 +670,12 @@ const REGISTRY: &[OpSpec] = &[
     // reachable by writing inside it. Left out, the file lands in the run's own folder.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path", "dir"], binds: false },
+    // And a name in that folder that is a link rather than a file. `path` is the name, `to` is what
+    // it points at, read in the run's own folder — which is outside every folder a `folder` step
+    // binds, so the link a road makes is the one people really make: a file kept in one place and
+    // pointed at from a project. A link is what its own name is, not what it leads to, so nothing
+    // has to be lying at `to` for the road to walk.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "symlink", required: &["path", "to"], refs: &[], strings: &["path", "to", "dir"], binds: false },
     // `git-init` takes the same `dir`, and for a reason of its own: what git says about a folder is
     // drawn on the file face of the folder a project is *bound* to, so a road reading those colours
     // needs the repository to be that folder and not the one the run stands in.
@@ -1095,6 +1108,14 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-answer", required: &["name", "label", "value"], refs: &[], strings: &["name", "label", "value"], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
+    // A listing that is **turned away** rather than answered. It is a verdict of its own and not a
+    // `refused:` on the line above, for the reason `refused` is an action's word: a listing already
+    // comes back with an answer, and "refused" is not one of the answers it can come back with. The
+    // two say different things — an empty page is "nobody carries that value", a refusal is "that
+    // question does not run here" — and a road that could only write the first could not tell them
+    // apart. `code` is the error code the refusal has to carry, so a line written against one guard
+    // cannot pass on another's.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "filter-refused", required: &["filter", "code"], refs: &[], strings: &["filter", "code"], binds: false },
     // Where a word is written. Separate from `listed` because the question is a different one: a
     // listing answers which records match, and this answers which *places* carry the word — so the
     // step names the face it expects to be found on, which a listing has no way to say. The side is
@@ -1164,6 +1185,15 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "pane", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
+    // The row the panel left standing, and the fold it folded into — the decision-side twins of the
+    // board's `narrowed` / `filters-folded`, and separate for the same reason the moves are. `listed`
+    // above is the terminal's answer to the same question: it carries the narrowing as a `--filter`
+    // line, where this one is read off the list a press already narrowed.
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "narrowed", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "filters-folded", required: &["axes"], refs: &[], strings: &[], binds: false },
+    // The same verdict on the other face, and the one the pair is most often written for: an axis
+    // narrowed to tasks is refused here, and an axis narrowed to decisions is refused there.
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "filter-refused", required: &["filter", "code"], refs: &[], strings: &["filter", "code"], binds: false },
     // Whether one decision points at another, named by the side the edge is read from (`supersedes`
     // / `superseded_by` / `builds_on` / `built_on_by` / `amends` / `amended_by`). A `field` path can
     // say an edge is *there*; only this can say it is gone, which is the whole of `unlink`.
@@ -2361,18 +2391,45 @@ const REGISTRY: &[OpSpec] = &[
     // that means to prove the bytes landed leaves the file and opens it again, which is the app
     // reading the disk, and the only reading that could not have come from what was on the screen.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "save", required: &[], refs: &[], strings: &[], binds: false },
+    // The offer beside the line about the file having moved: take what is on the disk now, and lose
+    // what was typed. It is the panel's whole answer to a file written under a reader — lining two
+    // texts up is the pane's agent's work and not this face's — so it is one press and takes no args.
+    //
+    // **What it proves is the disk.** The editor holds what somebody typed until this is pressed, so
+    // a reading taken after it is a reading of the bytes, and it is how a road tells a save that was
+    // refused from one that went through without leaving the file and opening it again.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "read-again", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── putting a row in the bin, and taking it back ──────────────────────────────────────────────
+    // Where the file face's own settings row stands: whether the panel asks before it bins a row.
+    // The face has one setting, so the row is not named — the way the tick's is not.
+    //
+    // **This is what lets the question be walked at all.** Whether it is asked is a habit of the
+    // machine the run is on, and the checkbox that turns it off is drawn inside the question it
+    // silences — so the settings row is the only thing that puts the question back. A road that can
+    // move it can put the machine where it needs it and then walk the question, instead of pressing
+    // the bin and covering both endings.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "setting", required: &["position"], refs: &[], strings: &["position"], binds: false },
+    // And moving it. `asks` puts the question back, `quiet` takes it away. The positions are named by
+    // what each does rather than by the word drawn on the row, since the words are the interface's own
+    // and the run's language is whatever the machine is set to.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "set", required: &["position"], refs: &[], strings: &["position"], binds: false },
     // The bin pressed on the file that is open. It takes no args for the reason `save` does: what goes
     // is the file on the screen, and where the machine keeps what it deleted is not a road's to say.
     //
-    // **The question the panel puts first is inside this one step rather than a step of its own.**
-    // Whether it is asked at all is a habit of the machine the run is walked on — a reader who once
-    // ticked "do not ask again" turned it off there for good — so a road that pressed the bin and then
-    // asserted a question would come out red for something somebody did on that Mac months ago, and
-    // green on the next one. The instruction covers both endings, and what is read afterwards is the
-    // row.
+    // **The press is the whole of this step, and the question is the next one.** Where a road put the
+    // row in `asks`, the panel puts a question here and this step leaves it standing; `answer` is what
+    // decides it. Where the row is in `quiet` there is no question and the row goes on the press. Both
+    // are the same press, which is why they are the same op — what differs is whether a road wrote a
+    // step after it.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "trash", required: &[], refs: &[], strings: &[], binds: false },
+    // The question the bin put, answered. `yes` bins the file and `no` leaves it where it is — and
+    // both are a road's to walk, since what the question is for is the second one.
+    //
+    // **The checkbox in it is not this op's.** Ticking it would turn the question off for every run
+    // walked on this machine afterwards, which is the state this pair exists to stop being permanent;
+    // a road that wants the panel quiet says so with `set`.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "answer", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
     // And taking it back, which on this face means the last press of the bin and nothing else. What
     // does it is the key the machine already undoes with rather than a control Amenbo drew, so the
     // line says the key — and says where to be standing, because the column beside this one hears the
@@ -2502,6 +2559,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // project has to have a decision standing in another to leave out, and which project a decision
     // was filed under is nothing such a road proves — recording one is a road of its own.
     (Domain::Decision, "create"),
+    // And one of those already settled, where a road opens on a corpus a reader is separating rather
+    // than on one they are ruling over. Settling is a road of its own (`read-whether-a-decision-still-holds`),
+    // so a screen road that walked it to arrange its world would prove that road twice and its own not
+    // at all — while a store holding both a standing policy and somebody's open suggestion is exactly
+    // the world anyone narrowing decisions is standing in.
+    (Domain::Decision, "accept"),
     // A device that has been used for a while. It is the one premise no amount of doing reaches: what
     // it stands up is the passage of time itself — launches tallied across days written on — which a
     // road can only be given, never earn.
@@ -2526,6 +2589,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // And the same file when its bytes cannot be written down in a scenario — one that is
     // deliberately not text, which is a world no amount of YAML reaches.
     (Domain::Repo, "copy-fixture"),
+    // And one of those names being a link instead of a file. Amenbo makes no link and has no command
+    // that would — a face that refuses to follow one is all it ever does about them — so the world a
+    // road about that refusal opens on is one no face reaches.
+    (Domain::Repo, "symlink"),
     // And the folder being a git repository, which is the world every road about what git says has to
     // open on. Amenbo makes no repository and has no command that would — it only ever reads one — so
     // no road reaches this state whichever face is walking it. It is a step as well, on the roads where

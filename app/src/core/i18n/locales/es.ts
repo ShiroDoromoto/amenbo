@@ -117,13 +117,12 @@ export const es: Translation = {
     "dec.unknownName": "(desconocido)",
     "dec.comments": "Discusión", "dec.reasonPh": "Motivo (opcional, Markdown)…",
     "dec.revisit": "Estas decisiones se apoyan en esta; revísalas si la rechazas:",
-    "dec.filterAll": "Todas",
     "dec.searchFailed": "La búsqueda no se pudo ejecutar",
     "dec.searchPh": "Buscar en título / cuerpo / comentarios / AMB-D-<n>",
     "dec.sort": "Orden",
     "dec.sort.numberDesc": "Número, más recientes primero", "dec.sort.numberAsc": "Número, más antiguos primero",
     "dec.sort.decidedDesc": "Decisión, más recientes primero", "dec.sort.decidedAsc": "Decisión, más antiguas primero",
-    "board.filter": "Filtro:", "board.group": "Agrupar:",
+    "board.group": "Agrupar:",
     "board.filters": "Filtros",
     "filter.dim.status": "Estado", "filter.dim.assignee": "Responsable", "filter.dim.priority": "Prioridad",
     "filter.opt.assignee.none": "Sin asignar", "filter.opt.assignee.me": "Yo", "filter.opt.assignee.meAi": "Mi IA",
@@ -255,6 +254,11 @@ export const es: Translation = {
     "nudge.autostart.yes": "Sí, ábrelo al iniciar sesión (recomendado)",
     "nudge.autostart.no": "No, gracias",
     "nudge.autostart.hint": "Puedes cambiarlo cuando quieras en Ajustes › Inicio.",
+    "settings.files": "Archivos",
+    "settings.trashAsk": "Preguntar antes de enviar a la papelera",
+    "settings.trashAskOn": "Preguntar",
+    "settings.trashAskOff": "No preguntar",
+    "settings.trashAskNote": "El panel de archivos pregunta antes de enviar una fila a la papelera. Dentro de la pregunta solo se puede desactivar; aquí se vuelve a activar.",
     "settings.updates": "Actualizaciones",
     "settings.updateCheck": "Comprobar actualizaciones",
     "settings.updateCheckOn": "Sí",
@@ -610,6 +614,11 @@ export const es: Translation = {
     "files.save": "Guardar",
     "files.saving": "Guardando…",
     "files.saved": "Guardado",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Alguien escribió en este archivo después de abrirlo aquí.",
+    "files.readAgain": "Volver a leerlo",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Este archivo tiene los dos tipos de salto de línea. Al guardarlo, todos quedarán iguales.",
@@ -776,6 +785,10 @@ export const es: Translation = {
     window_failed: "No se pudo abrir esa ventana: {reason}",
     talk_blank: "Esa ventana se abrió pero nunca dibujó nada, así que la terminal volvió a esta.",
     clip_refused: "No se pudieron poner los archivos en el portapapeles: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Esto es un enlace a otro archivo y Amenbo no lo sigue: lo que señala puede estar fuera de las carpetas de este proyecto.",
     folder_taken: "{name} ya está ahí.",
     folder_name: "Esta máquina no admite {name} como nombre.",
     folder_make: "No se pudo crear {name}: {reason}",
@@ -784,6 +797,9 @@ export const es: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "No se pudo guardar este archivo: {reason}",
     folder_unwritable_character: "«{character}» no se puede escribir en {encoding}, así que no se guardó nada.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Alguien escribió en este archivo después de leerlo aquí, así que no se guardó nada.",
 
     already_reserved:
       "{ref} no está en “Pendiente”, así que no se puede reservar: puede que otra sesión ya la tenga.",

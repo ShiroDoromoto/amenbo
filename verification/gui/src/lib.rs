@@ -725,6 +725,7 @@ impl Instructor {
             | (Domain::Task, "narrowed")
             | (Domain::Task, "view-lists")
             | (Domain::Task, "found")
+            | (Domain::Decision, "narrowed")
             | (Domain::Decision, "found") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
@@ -985,9 +986,25 @@ impl Instructor {
             // can see which value it names. What is already chosen there is said out loud: each value is
             // a switch, so a press that cleared its neighbours would be a different move.
             (Domain::Task, "choose-filter") => format!(
-                "In the values now open, press the one the CLI writes as `{}:{}`, and leave whatever is already chosen on that axis chosen.",
-                req(with, "axis")?,
-                req(with, "value")?
+                "In the values now open, press the one the CLI writes as `{}`, and leave whatever is already chosen on that axis chosen.",
+                filter_pair(req(with, "axis")?, req(with, "value")?)
+            ),
+            // The same three moves on the decisions tab. They are written out rather than shared with the
+            // board's, for the reason the decision's own comment is (above): the control sits over the
+            // decisions and not over the columns, and a road that did not say which of the two tabs the
+            // operator is standing on could be walked on either. What the lines ask for is the same act —
+            // the panel is one panel — so the wording is kept parallel and only the screen differs.
+            (Domain::Decision, "open-filters") => {
+                "On the decisions tab, open the values to narrow by, from the control beside the search box that says how many axes are narrowing."
+                    .to_string()
+            }
+            (Domain::Decision, "close-filters") => {
+                "Fold the values away again from that same control, so the decisions have back the room they were taking."
+                    .to_string()
+            }
+            (Domain::Decision, "choose-filter") => format!(
+                "In the values now open, press the one the CLI writes as `{}`, and leave whatever is already chosen on that axis chosen.",
+                filter_pair(req(with, "axis")?, req(with, "value")?)
             ),
             // Onto the face that searches across the records, and through the hit standing on it. The
             // asking is part of the move rather than a step of its own: a hit cannot be pressed before
@@ -1855,13 +1872,43 @@ impl Instructor {
             (Domain::Files, "save") =>
                 "In the row above the text — beside the file's name — press the way the panel offers to keep what was typed."
                     .to_string(),
-            // The bin, and the question that may or may not stand between the press and the row going.
-            // Which of the two happens is a habit of this machine rather than anything about the build,
-            // so the line covers both — and it says to leave the checkbox alone, because ticking it
-            // would change that habit for every run walked here afterwards.
-            (Domain::Files, "trash") =>
-                "In the row above the file — at its right-hand end, past the file's name — press the bin. If the panel asks whether to move the file to the bin, agree; leave the box about not asking again unticked."
+            // And the offer that comes with the line about the file having moved. It is named by what
+            // it does — take the disk, drop the typing — because the words on it are the interface's
+            // own, and it is said where it is, since it stands with that line rather than in the row
+            // the saving is in.
+            (Domain::Files, "read-again") =>
+                "Beside the line saying somebody wrote to this file after it was opened, press the offer to read it again — what is on the disk now replaces what is in the editor."
                     .to_string(),
+            // The file face's own settings row moved. The move and what it writes are one instruction,
+            // the way the tick's is: a row read in its new position with nothing written behind it
+            // would be evidence of an answer nothing kept.
+            (Domain::Files, "set") => match req(with, "position")? {
+                "asks" => "In Amenbo's own settings, under the section about files, move the row for the question before binning to the position that has the panel ask."
+                    .to_string(),
+                "quiet" => "In Amenbo's own settings, under the section about files, move the row for the question before binning to the position that has the panel not ask."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `set` does not know the position `{other}`"))
+                }
+            },
+            // The bin. The press and nothing after it: where a road put the row in `asks`, the panel
+            // puts its question here and the step leaves it standing, because deciding it is
+            // `answer`'s. The line says to leave the checkbox alone whatever happens — ticking it
+            // would turn the question off on this machine for every run walked here afterwards.
+            (Domain::Files, "trash") =>
+                "In the row above the file — at its right-hand end, past the file's name — press the bin. If the panel asks whether to move the file to the bin, leave the question standing and answer nothing; leave the box about not asking again unticked."
+                    .to_string(),
+            // And answering it. The two are named by what each does rather than by the words on the
+            // buttons, which are the interface's own.
+            (Domain::Files, "answer") => match req(with, "answer")? {
+                "yes" => "In the question the panel put about binning the file, press the answer that goes ahead and bins it. Leave the box about not asking again unticked."
+                    .to_string(),
+                "no" => "In the question the panel put about binning the file, press the answer that keeps the file where it is. Leave the box about not asking again unticked."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `answer` does not know the answer `{other}`"))
+                }
+            },
             // And taking it back. The key is the machine's own, and the line says where to be standing:
             // the terminal beside this column hears the same key as meaning something of its own.
             (Domain::Files, "undo") =>
@@ -1991,6 +2038,20 @@ impl Instructor {
                 with.get("axes")
                     .map(show)
                     .ok_or_else(|| "arg `axes` must say how many axes are narrowing".to_string())?
+            ),
+            (Domain::Decision, "filters-folded") => format!(
+                "Confirm the values are off the screen — the decisions have their room back — and that the control they folded into says {} axes are narrowing.",
+                with.get("axes")
+                    .map(show)
+                    .ok_or_else(|| "arg `axes` must say how many axes are narrowing".to_string())?
+            ),
+            // The row the narrowing left, on the decisions tab. It names no narrowing of its own for the
+            // reason the board's twin does not: the move in front of it is what did the narrowing, and
+            // saying it twice is what would let the two disagree.
+            (Domain::Decision, "narrowed") => format!(
+                "On the list the narrowing left, confirm the decision \"{}\" is {} the rows.",
+                self.target_label(with),
+                if present(with) { "among" } else { "not among" }
             ),
             // Which record the press opened. Both halves name the phrase rather than the record's title:
             // whatever row led here is carrying the title too — a hit, or the question the terminal face
@@ -2689,6 +2750,17 @@ impl Instructor {
                     return Err(format!("assert `setting` does not know the position `{other}`"))
                 }
             },
+            // Where the file face's own settings row stands. The positions are named by what each
+            // does rather than by the word drawn on the row, since the words are the interface's own.
+            (Domain::Files, "setting") => match req(with, "position")? {
+                "asks" => "In Amenbo's own settings, under the section about files, confirm the row for the question before binning stands in the position that has the panel ask."
+                    .to_string(),
+                "quiet" => "In Amenbo's own settings, under the section about files, confirm the row for the question before binning stands in the position that has the panel not ask."
+                    .to_string(),
+                other => {
+                    return Err(format!("assert `setting` does not know the position `{other}`"))
+                }
+            },
             // The key that field is holding, read back. It is the one line on these roads whose word is
             // neither the interface's nor a title — a key is what a reader types for somewhere outside
             // Amenbo — so it is on the shot exactly once, in the field it was typed into.
@@ -2993,6 +3065,16 @@ pub fn instructions(scenario: &Scenario) -> Result<Vec<String>, String> {
     let mut instructor = Instructor::new();
     instructor.learn(&scenario.given);
     scenario.steps(Driver::Gui).iter().map(|s| instructor.render(s)).collect()
+}
+
+/// One axis and one value, written the way the `--filter` grammar writes them — which is the one
+/// name a chip and a terminal share, since the chip itself reads in whatever language the app was
+/// started in. The two builtin keys join with a colon (`status:todo`); a classification axis is
+/// already a `dim:`-prefixed key and takes its value after `=` (`dim:theme=main`), because the axis
+/// there is the user's own word and the grammar needs the two halves told apart.
+fn filter_pair(axis: &str, value: &str) -> String {
+    let sep = if axis.starts_with("dim:") { '=' } else { ':' };
+    format!("{axis}{sep}{value}")
 }
 
 fn unmapped(domain: Domain, op: &str) -> String {
@@ -3327,10 +3409,21 @@ fn note(with: &Args) -> Result<&'static str, String> {
         ),
         Some("cut") => Ok("that only the beginning of the file is shown"),
         Some("unreadable") => Ok("that the file could not be read"),
+        // Told apart from the line above on purpose: a link is refused because it is a link, and
+        // saying the file could not be read sends the one reader most likely to meet it — somebody
+        // keeping one file in one place and pointing several projects at it — looking for damage.
+        Some("link") => Ok("that this name is a link, which is not followed out of the project's folders"),
         Some("partial") => Ok("that some of the folder is not being watched"),
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),
         Some("folder-gone") => Ok("that this folder is not there any more"),
+        // The file written under a reader who was typing in it. One line covers both ways it is
+        // reached — the watch noticing while they type, and a save turned away for the same reason —
+        // because the panel draws one state for them: what it says is the fact, and beside it is the
+        // one thing it can do about it.
+        Some("changed-underneath") => {
+            Ok("that somebody wrote to this file after it was opened here")
+        }
         // The two refusals a name comes back with, read under the box the name was typed into rather
         // than among the lines the column stands with. They are named by what the machine answered —
         // the name is in the folder already, or it is not a name this machine will hold — and not by
@@ -4642,6 +4735,87 @@ steps_gui:
         assert!(
             ins.expectation(&steps[3]).is_none(),
             "an absence and a bare number are closed by an eye, not by a reading"
+        );
+    }
+
+    /// The same panel on the other tab. What is asked of it is that the road says which of the two the
+    /// operator is standing on: the board's line and this one describe the same act, so a line that did
+    /// not name its screen could be walked on either tab and would prove neither.
+    #[test]
+    fn the_decisions_tab_has_the_same_values_and_says_it_is_the_decisions_tab() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: decision
+    op: open-filters
+  - type: action
+    domain: decision
+    op: choose-filter
+    with: { axis: dim:theme, value: main }
+  - type: action
+    domain: decision
+    op: close-filters
+  - type: assert
+    domain: decision
+    op: filters-folded
+    with: { axes: 1 }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("On the decisions tab"), "got: {}", lines[0]);
+        assert!(lines[0].contains("how many axes are narrowing"), "got: {}", lines[0]);
+        // The pair as the grammar writes it: a classification axis is a `dim:` key and takes `=`,
+        // where the two builtin keys take a colon. A chip pressed off the wrong spelling is a chip
+        // an operator has to guess at.
+        assert!(lines[1].contains("`dim:theme=main`"), "got: {}", lines[1]);
+        assert!(lines[2].contains("the decisions have back the room"), "got: {}", lines[2]);
+        assert!(lines[3].contains("says 1 axes are narrowing"), "got: {}", lines[3]);
+        assert!(
+            ins.expectation(&steps[3]).is_none(),
+            "an absence and a bare number are closed by an eye, not by a reading"
+        );
+    }
+
+    /// The row the narrowing left. It is read off the shot by the decision's own title, both ways round:
+    /// a row that should have gone and one that should have stayed are the same screen until the title
+    /// is looked for, and the line names no narrowing of its own because the press before it did that.
+    #[test]
+    fn a_decision_row_is_read_against_the_list_the_narrowing_left() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: decision
+    op: create
+    with: { title: SCENARIO — the retention window }
+    as: retention
+steps_gui:
+  - type: action
+    domain: decision
+    op: choose-filter
+    with: { axis: status, value: accepted }
+  - type: assert
+    domain: decision
+    op: narrowed
+    with: { target: retention, present: false }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let steps = s.steps(Driver::Gui);
+        let line = ins.render(&steps[1]).unwrap();
+        assert!(line.contains("the list the narrowing left"), "got: {line}");
+        assert!(line.contains("not among"), "got: {line}");
+        assert!(!line.contains("search"), "got: {line}");
+        let e = ins.expectation(&steps[1]).expect("a row that went is read off the shot");
+        assert_eq!(
+            e,
+            Expectation { text: "SCENARIO — the retention window".into(), present: false }
         );
     }
 

@@ -108,6 +108,18 @@ pub struct DecisionDimensionAssignmentDto {
     pub(crate) value_id: i64,
 }
 
+/// The per-decision assigned value for one project × dimension (`decisionId`→`valueId`) — the decision
+/// side of [`DimensionTaskValueDto`]. The decisions tab uses it to narrow its list by classification.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct DimensionDecisionValueDto {
+    #[ts(type = "number")]
+    pub(crate) decision_id: i64,
+    #[ts(type = "number")]
+    pub(crate) value_id: i64,
+}
+
 /// The per-task assigned value for one project × dimension (`taskId`→`valueId`). The board uses it
 /// to bundle tasks by value on the chosen dimension (browsing/grouping).
 #[derive(Serialize, TS)]
@@ -2468,7 +2480,7 @@ pub struct FolderChangesDto {
     /// the caller is what has to match it against a folder it is already drawing.
     pub(crate) root: String,
     /// Whether the walk stopped at its cap before it reached the end of the folder
-    /// ([`crate::folder::Scan::capped`]). What was never walked is not watched either, and it is
+    /// ([`crate::folder_walk::Scan::capped`]). What was never walked is not watched either, and it is
     /// the size of the folder that decided which part that is.
     pub(crate) capped: bool,
     /// Whether the kernel refused a watch this folder needs — its per-user limit, which the
@@ -2545,6 +2557,20 @@ pub struct FolderFileDto {
     /// clean — cut at the cap, not wholly decodable, or in an encoding nothing here writes — is one
     /// to read and not to save.
     pub(crate) clean: bool,
+    /// The short mark of the bytes this was read from, for a file that is text
+    /// (`crate::folder_bytes::digest`).
+    ///
+    /// **It is what the panel knows the file by while it has it open** (`AMB-D-784`). The folder
+    /// says it moved and the panel reads again: a mark that came back the same is this file
+    /// standing still, and one that came back different is somebody having written to it. The same
+    /// mark travels back into the save, which refuses to write over a file that moved since — this
+    /// side remembers nothing between the two calls, so what remembers is the panel.
+    ///
+    /// Absent where there are no text bytes to mark: a picture is drawn from a door of its own and
+    /// a binary is not drawn at all.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) digest: Option<String>,
 }
 
 /// A picture the panel would not carry, and what it was measured against (`AMB-D-783`).

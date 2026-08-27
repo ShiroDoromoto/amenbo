@@ -614,14 +614,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__none { margin: 0; color: var(--c-text-muted); }
 .files__list { list-style: none; margin: 0; padding: 0; }
 .files__list--tree { padding-left: var(--s-3); }
+/* One row of the tree, and the box holding the level under it where it is a folder. It carries the
+   role and the one tab stop the whole tree has; what is drawn on the line is the element inside it
+   (`app/src/files/FilesPanel.tsx`). */
+.files__item { cursor: pointer; }
+.files__item:focus-visible, .files__item:focus {
+  outline: 1px solid var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
+}
 /* A row is one line and never wraps: the name is what is read, and a path that folded would push
    the next row off the panel. */
 .files__file, .files__dir {
   display: flex; align-items: baseline; gap: var(--s-2);
   width: 100%; padding: 0; border: 0; background: none;
-  color: var(--c-text); text-align: left; cursor: pointer;
+  color: var(--c-text); text-align: left;
 }
-.files__file:hover, .files__dir:hover { color: var(--c-accent); }
+.files__item:hover > .files__file, .files__item:hover > .files__dir { color: var(--c-accent); }
 /* One that has been opened. It stays on the list — what was pointed at was pointed at — and says
    for itself that it has been seen (`app/src/files/pointed.ts`). */
 .files__file--read .files__name { color: var(--c-text-muted); }
@@ -648,8 +655,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   outline: 1px solid var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
 }
 .files__dir::before { content: "▸ "; color: var(--c-text-muted); }
-.files__dir[aria-expanded="true"]::before { content: "▾ "; }
+.files__item[aria-expanded="true"] > .files__dir::before { content: "▾ "; }
 .files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* On the reading bar the name takes what the two controls beside it leave, which is the whole row.
+   A name longer than that is still cut — there is no width that fits every name — but what it is cut
+   to is now a name somebody can read. */
+.files--reading .files__name { flex: 1 1 auto; }
 /* What git says about the row (`AMB-D-785`). The colour is the whole mark — no letter beside the
    name — because the row is one line and the name is what is read on it; a badge would take the
    width the name needs, on every row, to say what three hues already say. */
@@ -659,9 +670,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__file--git-untracked, .files__dir--git-untracked { --git: var(--c-git-untracked); }
 /* The pointer still wins, said again here because these rules come after the hover above and a
    row whose colour did not move under the pointer reads as a row that cannot be pressed. */
-.files__file--git:hover .files__name, .files__dir--git:hover { color: var(--c-accent); }
+.files__item:hover > .files__file--git .files__name,
+.files__item:hover > .files__dir--git { color: var(--c-accent); }
 /* Reading one file: the way back, the name, and whatever the file turned out to be. */
 .files--reading { gap: var(--s-2); }
+/* The name's own row — the way out on either side of it and nothing else between. Every control on
+   this bar is as wide as its own words, so the name was the only thing that could give way when
+   they shared a row, and on a panel of ordinary width it gave way to almost nothing: `run.sh` came
+   up as `r...`. What acts on the file stands under it instead (`.files__tools`). */
 .files__bar { display: flex; align-items: baseline; gap: var(--s-2); }
 .files__back {
   flex: none; padding: 0; border: 0; background: none;
@@ -676,15 +692,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); cursor: pointer;
 }
 .files__view:hover { color: var(--c-text); }
-/* What the bytes were read as, and how the lines end. Muted and last on the row: it is the answer
-   to a question almost nobody asks, put where the one reader who does asks it (`AMB-D-773`). */
+/* What the bytes were read as, and how the lines end. Muted: it is the answer to a question almost
+   nobody asks, put where the one reader who does asks it (`AMB-D-773`). */
 .files__encoding {
   flex: none; padding: 0; border: 0; background: none;
   color: var(--c-text-muted); font-size: var(--fs-xs); white-space: nowrap; cursor: pointer;
 }
 .files__encoding:hover { color: var(--c-text); }
-/* Saving what was typed. It sits at the far end of the bar, past the name, because it is the one
-   control there that changes the file rather than the view of it (`../files/FilesPanel`). */
+/* The row under the name: what can be done with the file, as against the frame's own way in and out
+   above it. It wraps rather than squeezing, because everything on it is a word and a word that has
+   been squeezed is a word nobody can read — and it is drawn only where something would be on it, so
+   a picture costs no line here at all (`../files/FilesPanel`). */
+.files__tools {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-2);
+  min-width: 0;
+}
+/* Saving what was typed. It sits at the far end of its row because it is the one control there that
+   changes the file rather than the view of it (`../files/FilesPanel`). */
 .files__keep {
   flex: none; margin-left: auto; padding: 0; border: 0; background: none;
   color: var(--c-accent-text); cursor: pointer;
@@ -699,6 +723,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text); font-size: var(--fs-xs);
   background: none; border: 1px solid var(--c-border); border-radius: var(--r-sm);
 }
+/* The file having moved under a reader who has typed in it, and the one thing the panel can do
+   about it. Drawn as a sentence with its own next step under it, the same shape the refused picture
+   takes — it is news to read and act on, not a state the face is in (`AMB-D-784`). */
+.files__changed { display: flex; flex-direction: column; gap: var(--s-1); }
+.files__reread {
+  align-self: start; padding: 0; border: 0; background: none;
+  color: var(--c-accent-text); cursor: pointer;
+}
+.files__reread:hover { text-decoration: underline; }
 .files__body { min-height: 0; overflow-y: auto; }
 .files__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; }
 /* The editor a file's text is drawn in (`../files/FileEditor`). It brings its own type and colours

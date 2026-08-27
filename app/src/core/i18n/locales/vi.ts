@@ -117,13 +117,12 @@ export const vi: Translation = {
     "dec.unknownName": "(không rõ)",
     "dec.comments": "Thảo luận", "dec.reasonPh": "Lý do (không bắt buộc, Markdown)…",
     "dec.revisit": "Những quyết định sau dựa trên cái này — nếu bạn bác nó thì hãy xem lại chúng:",
-    "dec.filterAll": "Tất cả",
     "dec.searchFailed": "Không chạy được tìm kiếm",
     "dec.searchPh": "Tìm tiêu đề / nội dung / bình luận / AMB-D-<n>",
     "dec.sort": "Sắp xếp",
     "dec.sort.numberDesc": "Số, mới trước", "dec.sort.numberAsc": "Số, cũ trước",
     "dec.sort.decidedDesc": "Ngày quyết, mới trước", "dec.sort.decidedAsc": "Ngày quyết, cũ trước",
-    "board.filter": "Lọc:", "board.group": "Nhóm:",
+    "board.group": "Nhóm:",
     "board.filters": "Bộ lọc",
     "filter.dim.status": "Trạng thái", "filter.dim.assignee": "Người phụ trách", "filter.dim.priority": "Mức ưu tiên",
     "filter.opt.assignee.none": "Chưa giao", "filter.opt.assignee.me": "Tôi", "filter.opt.assignee.meAi": "AI của tôi",
@@ -252,6 +251,11 @@ export const vi: Translation = {
     "nudge.autostart.yes": "Có, mở khi đăng nhập (khuyên dùng)",
     "nudge.autostart.no": "Không, cảm ơn",
     "nudge.autostart.hint": "Cài đặt › Khởi động cho phép đổi lại bất cứ lúc nào.",
+    "settings.files": "Tệp",
+    "settings.trashAsk": "Hỏi trước khi bỏ vào thùng rác",
+    "settings.trashAskOn": "Hỏi",
+    "settings.trashAskOff": "Không hỏi",
+    "settings.trashAskNote": "Bảng tệp hỏi trước khi chuyển một dòng vào thùng rác. Trong chính câu hỏi chỉ tắt được; bật lại là ở đây.",
     "settings.updates": "Cập nhật",
     "settings.updateCheck": "Kiểm tra cập nhật",
     "settings.updateCheckOn": "Bật",
@@ -592,6 +596,11 @@ export const vi: Translation = {
     "files.save": "Lưu",
     "files.saving": "Đang lưu…",
     "files.saved": "Đã lưu",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Ai đó đã ghi vào tệp này sau khi nó được mở ở đây.",
+    "files.readAgain": "Đọc lại",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Tệp này có cả hai kiểu xuống dòng. Khi lưu, tất cả sẽ thành một kiểu.",
@@ -750,6 +759,10 @@ export const vi: Translation = {
     window_failed: "Không thể mở cửa sổ đó: {reason}",
     talk_blank: "Cửa sổ đó đã mở nhưng không vẽ gì cả, nên terminal được đưa về cửa sổ này.",
     clip_refused: "Không đưa được tệp lên khay nhớ tạm: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Đây là một liên kết tới tệp khác, và Amenbo không đi theo nó — nơi nó trỏ tới có thể nằm ngoài các thư mục của dự án này.",
     folder_taken: "{name} đã có ở đó.",
     folder_name: "Máy này không nhận {name} làm tên.",
     folder_make: "Không tạo được {name}: {reason}",
@@ -758,6 +771,9 @@ export const vi: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Không lưu được tệp này: {reason}",
     folder_unwritable_character: "“{character}” không viết được trong {encoding}, nên không có gì được lưu.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Ai đó đã ghi vào tệp này sau khi nó được đọc ở đây, nên không có gì được lưu.",
 
     already_reserved: "{ref} không ở trạng thái “Cần làm” nên không thể nhận — có thể một phiên khác đã giữ nó.",
     not_ready: "{ref} chưa thể nhận: {reasons}",

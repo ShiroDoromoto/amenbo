@@ -115,13 +115,12 @@ export const zhHant: Translation = {
     "dec.unknownName": "（未知）",
     "dec.comments": "討論", "dec.reasonPh": "理由（選填，Markdown）…",
     "dec.revisit": "以下決策建立在這一則之上——否決它之後請重新檢視它們：",
-    "dec.filterAll": "全部",
     "dec.searchFailed": "搜尋無法執行",
     "dec.searchPh": "搜尋標題／內文／留言／AMB-D-<n>",
     "dec.sort": "排序",
     "dec.sort.numberDesc": "依編號，由新到舊", "dec.sort.numberAsc": "依編號，由舊到新",
     "dec.sort.decidedDesc": "依決定日期，由新到舊", "dec.sort.decidedAsc": "依決定日期，由舊到新",
-    "board.filter": "篩選：", "board.group": "分組：",
+    "board.group": "分組：",
     "board.filters": "篩選",
     "filter.dim.status": "狀態", "filter.dim.assignee": "負責人", "filter.dim.priority": "優先度",
     "filter.opt.assignee.none": "未指派", "filter.opt.assignee.me": "我", "filter.opt.assignee.meAi": "我的 AI",
@@ -250,6 +249,11 @@ export const zhHant: Translation = {
     "nudge.autostart.yes": "好，登入時開啟（推薦）",
     "nudge.autostart.no": "不用了",
     "nudge.autostart.hint": "在 設定 › 啟動 中隨時可以更改。",
+    "settings.files": "檔案",
+    "settings.trashAsk": "放入垃圾桶前詢問",
+    "settings.trashAskOn": "詢問",
+    "settings.trashAskOff": "不詢問",
+    "settings.trashAskNote": "檔案面板在把一列放入垃圾桶前會詢問。在詢問裡只能關掉，重新開啟在這裡。",
     "settings.updates": "更新",
     "settings.updateCheck": "檢查更新",
     "settings.updateCheckOn": "開",
@@ -589,6 +593,11 @@ export const zhHant: Translation = {
     "files.save": "儲存",
     "files.saving": "正在儲存…",
     "files.saved": "已儲存",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "這個檔案在這裡開啟之後，有人寫過它。",
+    "files.readAgain": "重新讀取",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "這個檔案裡兩種換行都有。儲存後會統一成一種。",
@@ -747,6 +756,10 @@ export const zhHant: Translation = {
     window_failed: "無法開啟該視窗：{reason}",
     talk_blank: "那個視窗已開啟，但始終沒有繪製任何內容，因此終端機已放回這個視窗。",
     clip_refused: "無法把檔案放到剪貼簿：{reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "這是指向另一個檔案的連結，Amenbo 不會跟隨它——它指向的位置可能在本專案的資料夾之外。",
     folder_taken: "{name} 已經存在。",
     folder_name: "這台機器不接受 {name} 作為名稱。",
     folder_make: "無法建立 {name}：{reason}",
@@ -755,6 +768,9 @@ export const zhHant: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "無法儲存這個檔案：{reason}",
     folder_unwritable_character: "「{character}」在 {encoding} 裡寫不出來，所以什麼都沒儲存。",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "這個檔案在這裡讀取之後，有人寫過它，所以什麼都沒儲存。",
 
     already_reserved: "{ref} 不是「待辦」，無法認領；可能已有另一個工作階段在處理。",
     not_ready: "{ref} 還不能認領：{reasons}",

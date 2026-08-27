@@ -27,7 +27,17 @@ mod error;
 mod fileproto;
 /// What a folder holds, which the door above refuses to say: the names inside it, what changed in it
 /// lately, and what one file has to show. Rooted at a folder the project is bound to (`AMB-T-3602`).
+/// The three questions behind that are a module each — the fence, the walk and the bytes.
 mod folder;
+/// What one file has to show, read off its bytes rather than its name: the text it holds, the
+/// picture it is, or the reason it is neither (`AMB-T-3547`).
+mod folder_bytes;
+/// How far a name may reach: the folders a project is bound to, and the one path under them a
+/// caller's segments are allowed to mean (`AMB-D-782`).
+mod folder_fence;
+/// What is in a folder, read by walking it: the names directly inside one, and the folders under it
+/// a reader would call theirs rather than a build's (`AMB-D-786`).
+mod folder_walk;
 /// What git says about that folder, for the colour of a tree row and for nothing else: one status
 /// per bound folder, and the front git puts on every path taken back off (`AMB-D-774`).
 mod folder_git;
@@ -423,6 +433,7 @@ pub fn run() {
       commands::decision_unset_dimension_value,
       commands::decision_dimensions,
       commands::project_dimension_assignments,
+      commands::project_decision_dimension_assignments,
       commands::task_assign,
       commands::config_set_language,
       commands::config_set_perf_log,
@@ -530,8 +541,8 @@ pub fn run() {
       windows::show_pane,
       folder::folder_entries,
       folder_git::folder_git_status,
-      folder::folder_read,
-      folder::folder_encodings,
+      folder_bytes::folder_read,
+      folder_bytes::folder_encodings,
       folder::folder_open_file,
       folder::folder_reveal_file,
       dropped::drop_effect,

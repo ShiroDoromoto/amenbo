@@ -35,7 +35,7 @@ use std::sync::Mutex;
 
 use crate::dto::{FolderRestoredDto, FolderStopDto, FolderStoppedDto, FolderTrashedDto};
 use crate::error::CmdError;
-use crate::folder::{gone, rooted, under};
+use crate::folder_fence::{gone, rooted, under};
 
 /// Why one row would not go, or would not come back.
 ///

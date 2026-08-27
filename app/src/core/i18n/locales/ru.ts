@@ -117,13 +117,12 @@ export const ru: Translation = {
     "dec.unknownName": "(неизвестно)",
     "dec.comments": "Обсуждение", "dec.reasonPh": "Причина (необязательно, Markdown)…",
     "dec.revisit": "Эти решения опираются на это — пересмотрите их, если отклоните его:",
-    "dec.filterAll": "Все",
     "dec.searchFailed": "Поиск не удалось выполнить",
     "dec.searchPh": "Поиск по заголовку / тексту / комментариям / AMB-D-<n>",
     "dec.sort": "Сортировка",
     "dec.sort.numberDesc": "По номеру, сначала новые", "dec.sort.numberAsc": "По номеру, сначала старые",
     "dec.sort.decidedDesc": "По дате решения, сначала новые", "dec.sort.decidedAsc": "По дате решения, сначала старые",
-    "board.filter": "Фильтр:", "board.group": "Группировка:",
+    "board.group": "Группировка:",
     "board.filters": "Фильтры",
     "filter.dim.status": "Статус", "filter.dim.assignee": "Ответственный", "filter.dim.priority": "Приоритет",
     "filter.opt.assignee.none": "Без ответственного", "filter.opt.assignee.me": "Я", "filter.opt.assignee.meAi": "Мой ИИ",
@@ -256,6 +255,11 @@ export const ru: Translation = {
     "nudge.autostart.yes": "Да, открывать при входе (рекомендуется)",
     "nudge.autostart.no": "Нет, спасибо",
     "nudge.autostart.hint": "В разделе Настройки › Запуск это можно изменить в любой момент.",
+    "settings.files": "Файлы",
+    "settings.trashAsk": "Спрашивать перед корзиной",
+    "settings.trashAskOn": "Спрашивать",
+    "settings.trashAskOff": "Не спрашивать",
+    "settings.trashAskNote": "Панель файлов спрашивает, прежде чем отправить строку в корзину. В самом вопросе его можно только выключить; включить обратно — здесь.",
     "settings.updates": "Обновления",
     "settings.updateCheck": "Проверка обновлений",
     "settings.updateCheckOn": "Вкл.",
@@ -618,6 +622,11 @@ export const ru: Translation = {
     "files.save": "Сохранить",
     "files.saving": "Сохранение…",
     "files.saved": "Сохранено",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Кто-то записал в этот файл после того, как он был здесь открыт.",
+    "files.readAgain": "Прочитать заново",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "В этом файле оба вида переноса строк. При сохранении все станут одинаковыми.",
@@ -788,6 +797,10 @@ export const ru: Translation = {
     window_failed: "Не удалось открыть это окно: {reason}",
     talk_blank: "То окно открылось, но ничего в нём так и не отрисовалось, поэтому терминал вернулся в это окно.",
     clip_refused: "Не удалось поместить файлы в буфер обмена: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Это ссылка на другой файл, и Amenbo по ней не переходит: то, на что она указывает, может быть за пределами папок этого проекта.",
     folder_taken: "{name} уже есть.",
     folder_name: "Эта машина не принимает {name} как имя.",
     folder_make: "Не удалось создать {name}: {reason}",
@@ -796,6 +809,9 @@ export const ru: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Не удалось сохранить этот файл: {reason}",
     folder_unwritable_character: "«{character}» нельзя записать в {encoding}, поэтому ничего не сохранено.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Кто-то записал в этот файл после того, как он был здесь прочитан, поэтому ничего не сохранено.",
 
     already_reserved:
       "{ref} не в состоянии «К выполнению», поэтому взять её нельзя — возможно, ею уже занят другой сеанс.",

@@ -2961,6 +2961,20 @@ pub fn project_dimension_assignments(project_id: i64, dimension_id: i64) -> Resu
         .collect())
 }
 
+/// Every decision assignment (`decisionId`→`valueId`) for one project on one dimension, in a single
+/// read — [`project_dimension_assignments`] on the decision side. The decisions tab holds the whole
+/// project's decisions already, so its filters narrow what it has rather than asking core per chip.
+#[tauri::command]
+pub fn project_decision_dimension_assignments(project_id: i64, dimension_id: i64) -> Result<Vec<DimensionDecisionValueDto>, CmdError> {
+    let store = open_store_read()?;
+    let read_model = store.read_model();
+    let rows = amenbo_core::store_engine::read::project_decision_dimension_assignments(read_model.conn(), project_id, dimension_id)?;
+    Ok(rows
+        .into_iter()
+        .map(|(decision_id, value_id)| DimensionDecisionValueDto { decision_id, value_id })
+        .collect())
+}
+
 /// Assign the task to a facet (`kind=Some("ai")` means the person's AI — it lands in the mailbox),
 /// or clear it (`kind=None`). Assignment is on the facet alone. Idempotent — same facet is a no-op —
 /// because `set_task_assignee` commits in a transaction of its own, so calling it with an unchanged

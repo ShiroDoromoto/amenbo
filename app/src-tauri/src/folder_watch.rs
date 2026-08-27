@@ -23,7 +23,7 @@
 //!    was held. The path is the exception: where one watch covers the tree, the kernel reports the
 //!    build output the walk prunes away — 100% of what a 47-second build fired (`AMB-T-3752`) — and
 //!    pruning it is now something this does on arrival rather than by declining to watch it
-//!    ([`crate::folder::pruned`]). ⚠ That has to stay cheap: 50 µs an event took Windows from 0.1%
+//!    ([`crate::folder_walk::pruned`]). ⚠ That has to stay cheap: 50 µs an event took Windows from 0.1%
 //!    of events missed to 69% (`AMB-T-3753`).
 //! 3. **A kernel that dropped events says so, and that is not a burst to settle.** FSEvents'
 //!    `MustScanSubDirs` and inotify's `Q_OVERFLOW` do not mean "something moved" but "what moved is
@@ -34,7 +34,7 @@
 //!    to walk.** The kernel's watch limit is per user (inotify's `max_user_watches`), and hitting
 //!    it does not stop the ones already installed: the answer is a real but partial watch, and a
 //!    face that drew it as a whole one would be telling the reader that nothing has changed in the
-//!    half nobody is looking at. A walk that stopped at its own cap ([`crate::folder::scan`])
+//!    half nobody is looking at. A walk that stopped at its own cap ([`crate::folder_walk::scan`])
 //!    leaves the same half unwatched for a different reason, and the two are carried apart
 //!    (`AMB-D-778`): one is answered by pointing the app at less, the other by giving the machine
 //!    more watches, and one sentence covering both sends the reader down neither road.
@@ -91,7 +91,7 @@ enum Wake {
 /// **The key is the folder as the caller named it, not what the filesystem calls it.** Taking a
 /// watch down has to work for a folder that has since been removed, and a canonical spelling is
 /// something only a folder that is still there has. The fence is not weakened by that: what is
-/// watched is what [`crate::folder::root_of`] answered for the same name.
+/// watched is what [`crate::folder_fence::root_of`] answered for the same name.
 #[derive(Default)]
 pub struct FolderWatches(Mutex<HashMap<String, Live>>);
 
@@ -126,8 +126,8 @@ pub fn folder_watch(
     project_id: i64,
     root: String,
 ) -> Result<FolderChangesDto, CmdError> {
-    let dir = crate::folder::root_of(project_id, &root)?;
-    let scan = crate::folder::scan(&dir);
+    let dir = crate::folder_fence::root_of(project_id, &root)?;
+    let scan = crate::folder_walk::scan(&dir);
     let first = FolderChangesDto {
         root: root.clone(),
         // Nothing has been installed yet, so what is reported here is only what the walk itself hit.
@@ -189,7 +189,7 @@ fn run(
     // Where one watch covers the tree, the root is the whole of what gets watched however many
     // folders the walk found under it.
     let whole = [root.to_path_buf()];
-    let mut scan = crate::folder::scan(root);
+    let mut scan = crate::folder_walk::scan(root);
     let mut watched = HashSet::new();
     let mut unwatched = install(&mut watcher, laid_over(&whole, &scan), &mut watched);
     watch_repo(&mut watcher, repo.as_deref());
@@ -217,7 +217,7 @@ fn run(
             watch_repo(&mut watcher, repo.as_deref());
         }
         present = here;
-        scan = crate::folder::scan(root);
+        scan = crate::folder_walk::scan(root);
         // Where a folder needs a watch of its own, one made while the watch was up gets it here,
         // and one that is gone takes its watch with it — the walk is the only place either fact is
         // learned, since what the events said was never read. Where one watch covers the tree there
@@ -291,7 +291,7 @@ fn watch_repo(watcher: &mut impl Watcher, repo: Option<&Path>) {
 
 /// The folders the watch is laid over: the root alone where one watch covers what is under it, and
 /// every folder the walk found where it does not.
-fn laid_over<'a>(whole: &'a [PathBuf], scan: &'a crate::folder::Scan) -> &'a [PathBuf] {
+fn laid_over<'a>(whole: &'a [PathBuf], scan: &'a crate::folder_walk::Scan) -> &'a [PathBuf] {
     if RECURSIVE { whole } else { &scan.dirs }
 }
 
@@ -368,7 +368,7 @@ fn handler(
         }
         // A rename carries both names; either one being a name a reader would see is reason enough.
         if !event.paths.is_empty()
-            && event.paths.iter().all(|path| crate::folder::pruned(&root, path))
+            && event.paths.iter().all(|path| crate::folder_walk::pruned(&root, path))
         {
             return;
         }
@@ -489,7 +489,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel::<Wake>();
         let mut watcher =
             notify::recommended_watcher(handler(tx, root.clone(), None)).expect("a watcher");
-        let scan = crate::folder::scan(&root);
+        let scan = crate::folder_walk::scan(&root);
         let whole = [root.clone()];
         let mut watched = HashSet::new();
         assert!(!install(&mut watcher, laid_over(&whole, &scan), &mut watched));
@@ -728,7 +728,7 @@ mod tests {
         let root = dir.path();
         std::fs::create_dir_all(root.join("src/deep")).expect("a folder");
         let whole = [root.to_path_buf()];
-        let scan = crate::folder::scan(root);
+        let scan = crate::folder_walk::scan(root);
         assert!(scan.dirs.len() > 1);
 
         let over = laid_over(&whole, &scan);

@@ -117,13 +117,12 @@ export const uk: Translation = {
     "dec.unknownName": "(невідомо)",
     "dec.comments": "Обговорення", "dec.reasonPh": "Причина (необов'язково, Markdown)…",
     "dec.revisit": "Ці рішення спираються на це — якщо ви його відхилите, перегляньте їх:",
-    "dec.filterAll": "Усі",
     "dec.searchFailed": "Пошук не вдалося виконати",
     "dec.searchPh": "Пошук у заголовку / тексті / коментарях / AMB-D-<n>",
     "dec.sort": "Сортування",
     "dec.sort.numberDesc": "Номер, від новіших", "dec.sort.numberAsc": "Номер, від старіших",
     "dec.sort.decidedDesc": "Дата рішення, від новіших", "dec.sort.decidedAsc": "Дата рішення, від старіших",
-    "board.filter": "Фільтр:", "board.group": "Групувати:",
+    "board.group": "Групувати:",
     "board.filters": "Фільтри",
     "filter.dim.status": "Статус", "filter.dim.assignee": "Відповідальний", "filter.dim.priority": "Пріоритет",
     "filter.opt.assignee.none": "Без відповідального", "filter.opt.assignee.me": "Я", "filter.opt.assignee.meAi": "Мій ШІ",
@@ -256,6 +255,11 @@ export const uk: Translation = {
     "nudge.autostart.yes": "Так, відкривати після входу (рекомендовано)",
     "nudge.autostart.no": "Ні, дякую",
     "nudge.autostart.hint": "У розділі Налаштування › Запуск це можна змінити будь-коли.",
+    "settings.files": "Файли",
+    "settings.trashAsk": "Питати перед кошиком",
+    "settings.trashAskOn": "Питати",
+    "settings.trashAskOff": "Не питати",
+    "settings.trashAskNote": "Панель файлів питає, перш ніж перенести рядок до кошика. У самому запитанні його можна лише вимкнути; увімкнути назад — тут.",
     "settings.updates": "Оновлення",
     "settings.updateCheck": "Перевірка оновлень",
     "settings.updateCheckOn": "Увімкнено",
@@ -615,6 +619,11 @@ export const uk: Translation = {
     "files.save": "Зберегти",
     "files.saving": "Збереження…",
     "files.saved": "Збережено",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Хтось записав у цей файл після того, як його тут відкрили.",
+    "files.readAgain": "Прочитати знову",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "У цьому файлі обидва види переносу рядків. Після збереження всі стануть однаковими.",
@@ -785,6 +794,10 @@ export const uk: Translation = {
     window_failed: "Не вдалося відкрити це вікно: {reason}",
     talk_blank: "Те вікно відкрилося, але нічого в ньому так і не з’явилося, тому термінал повернувся в це вікно.",
     clip_refused: "Не вдалося помістити файли в буфер обміну: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Це посилання на інший файл, і Amenbo за ним не переходить: те, на що воно вказує, може бути поза теками цього проєкту.",
     folder_taken: "{name} уже є.",
     folder_name: "Ця машина не приймає {name} як ім’я.",
     folder_make: "Не вдалося створити {name}: {reason}",
@@ -793,6 +806,9 @@ export const uk: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Не вдалося зберегти цей файл: {reason}",
     folder_unwritable_character: "«{character}» не можна записати в {encoding}, тому нічого не збережено.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Хтось записав у цей файл після того, як його тут прочитали, тому нічого не збережено.",
 
     already_reserved:
       "{ref} не має статусу «До виконання», тож взяти його не можна — можливо, ним уже зайнятий інший сеанс.",

@@ -58,6 +58,9 @@ const hoisted = vi.hoisted(() => ({
   dragging: null as null | ((event: { payload: unknown }) => void),
   /** What the editor was asked to draw, and whether it was allowed to be typed into. */
   editing: [] as { text: string; editable: boolean; name: string }[],
+  /** Every text the panel replaced the standing editor's document with — a file read again is one
+   *  of the two ways this happens, and "nothing was replaced" is a thing to assert (`AMB-D-784`). */
+  shown: [] as string[],
   /** What the host answers about a row it was asked to bin — a test makes one stop by filling it. */
   trashed: null as null | { gone: string[]; stopped: { name: string; why: string } | null },
   /** What comes back out of the bin. `null` is the host saying there is nothing left to undo. */
@@ -74,11 +77,19 @@ const hoisted = vi.hoisted(() => ({
   slowRefusal: false,
   /** The way to tell the panel a person typed, as the stand-in editor took it. */
   typing: null as null | (() => void),
-  /** Every save the panel asked for, and what it sent with it. */
-  saved: [] as { path: string; text: string; encoding: string; bom: boolean; lineEnding: string }[],
+  /** Every save the panel asked for, and what it sent with it — the mark of what was read
+   *  included, which is what the host weighs the file against (`AMB-D-784`). */
+  saved: [] as {
+    path: string; text: string; encoding: string; bom: boolean; lineEnding: string; seen: string;
+  }[],
+  /** The mark a save answers with: what the file is once this save has landed. */
+  keptDigest: "after",
   /** What the next save is refused with. Its own field: a name and a save are refused for different
    *  reasons, and a test about one must not arm the other. */
   refuseSave: null as unknown,
+  /** What the next read is refused with. Its own field for the same reason a save has one: a read
+   *  and a save are turned away for different reasons. */
+  refuseRead: null as unknown,
 }));
 
 // The editor is loaded on demand and lays itself out by measuring, which jsdom cannot do — so what
@@ -94,7 +105,7 @@ vi.mock("./editorLoad", () => ({
     parent.appendChild(drawn);
     hoisted.typing = () => onEdit?.();
     return {
-      show(next: string) { drawn.textContent = next; },
+      show(next: string) { hoisted.shown.push(next); drawn.textContent = next; },
       text() { return drawn.textContent ?? ""; },
       close() { drawn.remove(); hoisted.typing = null; },
     };
@@ -140,6 +151,7 @@ vi.mock("./folder", () => ({
     encoding?: string,
   ): Promise<FolderFileDto> => {
     hoisted.asked.push(`read:${root}:${path.join("/")}${encoding === undefined ? "" : `:${encoding}`}`);
+    if (hoisted.refuseRead !== null) throw hoisted.refuseRead;
     return hoisted.file;
   },
   folderEncodings: async (): Promise<string[]> => {
@@ -185,11 +197,12 @@ vi.mock("./folder", () => ({
   },
   folderSave: async (
     _projectId: number, root: string, path: string[],
-    text: string, encoding: string, bom: boolean, lineEnding: string,
-  ) => {
+    text: string, encoding: string, bom: boolean, lineEnding: string, seen: string,
+  ): Promise<string> => {
     hoisted.asked.push(`save:${root}:${path.join("/")}`);
     if (hoisted.refuseSave !== null) throw hoisted.refuseSave;
-    hoisted.saved.push({ path: path.join("/"), text, encoding, bom, lineEnding });
+    hoisted.saved.push({ path: path.join("/"), text, encoding, bom, lineEnding, seen });
+    return hoisted.keptDigest;
   },
   folderRename: async (_projectId: number, root: string, path: string[], name: string) => {
     hoisted.asked.push(`rename:${root}:${path.join("/")}:${name}`);
@@ -284,8 +297,31 @@ function click(el: Element | null | undefined) {
 const megabytes = (n: number) =>
   formatNumber(n, { style: "unit", unit: "megabyte", unitDisplay: "short", maximumFractionDigits: 1 });
 
-const button = (text: string) =>
+/**
+ * A control by the words on it: a button, or one of the tree's rows.
+ *
+ * The rows are items rather than buttons, because the whole tree carries one stop in the tab order
+ * instead of one per row (`./FilesPanel`). What a row is called is read off its own line and not off
+ * its text, since an open folder's text holds every name under it — matched on that, a press meant
+ * for a file inside would land on the folder around it.
+ */
+const button = (text: string): HTMLElement | undefined =>
+  [...container.querySelectorAll<HTMLElement>("button, [role=\"treeitem\"]")]
+    .find((b) => labelOf(b).includes(text));
+
+const labelOf = (el: HTMLElement): string =>
+  (el.getAttribute("role") === "treeitem"
+    ? el.querySelector(":scope > .files__dir, :scope > .files__file")?.textContent
+    : el.textContent) ?? "";
+
+/** The same, where what is asked is a button's own state rather than a press on it. */
+const pressable = (text: string): HTMLButtonElement | undefined =>
   [...container.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
+
+/** One row of one folder's tree, named exactly — for a test about which of two folders it is in. */
+const rowIn = (folder: Element, name: string): HTMLElement | undefined =>
+  [...folder.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")]
+    .find((one) => labelOf(one) === name);
 
 /** The same, over the whole page: the question before the bin is drawn onto `document.body`. */
 const anyButton = (text: string) =>
@@ -346,9 +382,12 @@ async function drawOpen(props: Partial<Props> = {}) {
 beforeEach(() => {
   hoisted.asked = [];
   hoisted.editing = [];
+  hoisted.shown = [];
   hoisted.typing = null;
   hoisted.saved = [];
+  hoisted.keptDigest = "after";
   hoisted.refuseSave = null;
+  hoisted.refuseRead = null;
   // One file in the folder, so a test that only wants a row to press has one without saying so.
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();
@@ -991,6 +1030,40 @@ describe("the file face", () => {
     expect(button("windows-1252")).toBeDefined();
   });
 
+  /** The name is the only thing on the bar that can give way, every control beside it being as wide
+   *  as its own words — so it gave way to almost nothing once three tasks had each put one there.
+   *  What acts on the file stands on a row of its own now, and the name has the bar to itself. */
+  it("keeps the name on a row of its own, with what acts on the file under it", async () => {
+    hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
+    hoisted.file = aFile({ text: "#!/bin/sh\necho hi", encoding: "UTF-8" });
+    await drawOpen();
+    await click(button("run.sh"));
+    await settle();
+
+    const bar = container.querySelector(".files__bar");
+    expect(bar?.querySelector(".files__name")?.textContent).toBe("run.sh");
+    // Nothing that acts on the file shares the row, which is the whole of the fix.
+    for (const one of [".files__view", ".files__encoding", ".files__keep"]) {
+      expect(bar?.querySelector(one), `${one} is still on the name's row`).toBeNull();
+    }
+    // And they are all on the row under it, rather than gone.
+    const tools = container.querySelector(".files__tools");
+    expect(tools?.querySelector(".files__encoding")).toBeTruthy();
+    expect(tools?.querySelector(".files__keep")).toBeTruthy();
+  });
+
+  /** A picture has nothing to switch, nothing to reopen and nothing to save, so the row that would
+   *  hold them is not drawn at all — a panel this narrow does not spend a line on an empty one. */
+  it("draws no second row where there is nothing to put on it", async () => {
+    hoisted.file = aFile({ image: { mime: "image/png" } });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+
+    expect(container.querySelector(".files__name")?.textContent).toBe("a.md");
+    expect(container.querySelector(".files__tools")).toBeNull();
+  });
+
   it("says nothing about the encoding of a picture", async () => {
     hoisted.file = aFile({ image: { mime: "image/png" } });
     await drawOpen();
@@ -1007,7 +1080,9 @@ describe("the file face", () => {
     /** Open `run.sh` in the editor, ready to be typed into. */
     async function open(about: Partial<FolderFileDto> = {}) {
       hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
-      hoisted.file = aFile({ text: "#!/bin/sh\necho hi", encoding: "UTF-8", ...about });
+      hoisted.file = aFile({
+        text: "#!/bin/sh\necho hi", encoding: "UTF-8", digest: "before", ...about,
+      });
       await draw();
       await click(button(t("files.tree")));
       await settle();
@@ -1028,10 +1103,10 @@ describe("the file face", () => {
     it("offers nothing to press until somebody has typed", async () => {
       await open();
       // The one control, saying which of the three it is — and there is nothing to save yet.
-      expect(button(t("files.saved"))?.disabled).toBe(true);
+      expect(pressable(t("files.saved"))?.disabled).toBe(true);
 
       await type("#!/bin/sh\necho there");
-      expect(button(t("files.save"))?.disabled).toBe(false);
+      expect(pressable(t("files.save"))?.disabled).toBe(false);
     });
 
     /** What the read answered with is what the save carries back: the encoding the bytes were in,
@@ -1049,9 +1124,12 @@ describe("the file face", () => {
         encoding: "Shift_JIS",
         bom: true,
         lineEnding: "crlf",
+        // And the mark of what was read, which is what the host refuses to write over a file that
+        // no longer answers to (`AMB-D-784`).
+        seen: "before",
       });
       // And there is nothing left to save, which is what the control says once it is through.
-      expect(button(t("files.saved"))?.disabled).toBe(true);
+      expect(pressable(t("files.saved"))?.disabled).toBe(true);
     });
 
     /** A file with both kinds of newline in it comes out of a save with one kind, which changes
@@ -1061,7 +1139,7 @@ describe("the file face", () => {
       await open({ lineEnding: "mixed" });
       expect(container.textContent).toContain(t("files.newlinesMixed"));
       await type("#!/bin/sh\necho there");
-      expect(button(t("files.save"))?.disabled).toBe(true);
+      expect(pressable(t("files.save"))?.disabled).toBe(true);
 
       const picker = container.querySelector<HTMLSelectElement>(".files__newline");
       expect(picker).not.toBeNull();
@@ -1096,7 +1174,7 @@ describe("the file face", () => {
       expect(container.textContent).toContain("Shift_JIS");
       expect(hoisted.saved).toEqual([]);
       // Still unsaved, so the way to try again is still there.
-      expect(button(t("files.save"))?.disabled).toBe(false);
+      expect(pressable(t("files.save"))?.disabled).toBe(false);
     });
 
     /** A file the panel could never write back has no way to save it at all — not a control that
@@ -1131,6 +1209,129 @@ describe("the file face", () => {
     });
   });
 
+  /** The file moving under the reader while they have it open (`AMB-D-784`).
+   *
+   *  This panel sits beside an agent that edits the same files, so the case is the ordinary one and
+   *  not the corner: what has to be right is that a reader looking at a file sees what it says now,
+   *  and that a reader who has typed into it keeps what they typed until they say otherwise. */
+  describe("a file written to while it is open", () => {
+    /** Open `run.sh` with a mark on it, and the panel watching the folder for it. */
+    async function open(about: Partial<FolderFileDto> = {}) {
+      hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
+      hoisted.file = aFile({
+        text: "#!/bin/sh\necho hi", encoding: "UTF-8", digest: "before", ...about,
+      });
+      await draw();
+      await click(button(t("files.tree")));
+      await settle();
+      await click(button("run.sh"));
+      await settle();
+    }
+
+    /** Somebody else writing to the file, and the host saying the folder moved. */
+    async function written(text: string, digest: string) {
+      hoisted.file = aFile({ text, encoding: "UTF-8", digest });
+      await act(async () => {
+        tell({ root: ROOT, capped: false, unwatched: false, gone: false });
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      await settle();
+    }
+
+    /** The reader typing, as the editor reports it. */
+    async function type(text: string) {
+      await act(async () => {
+        const drawn = container.querySelector(".cm-editor");
+        if (drawn !== null) drawn.textContent = text;
+        hoisted.typing?.();
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+
+    /** The tree is not on the page while a file is being read, so the face reading it is what
+     *  keeps a watch over the folder — without one, nothing would ever say the file had moved. */
+    it("watches the folder while it is showing a file", async () => {
+      await open();
+      expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
+    });
+
+    /** Nothing of the reader's is at stake, so the panel simply shows what the file says now. A
+     *  reader looking at what the agent changed an hour ago reads it as the agent having done
+     *  nothing at all. */
+    it("shows what the file says now, where nobody has typed", async () => {
+      await open();
+      await written("#!/bin/sh\necho the agent was here", "after");
+      expect(last(hoisted.shown)).toContain("the agent was here");
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("the agent was here");
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+    });
+
+    /** The word carries no rows, so every move of the folder brings the panel back to read the
+     *  file — and the mark is what tells "this file moved" from "something else in the folder
+     *  did", which is most of what arrives. */
+    it("draws nothing where the folder moved and this file did not", async () => {
+      await open();
+      hoisted.shown = [];
+      await written("#!/bin/sh\necho hi", "before");
+      expect(hoisted.shown).toEqual([]);
+    });
+
+    /** What a reader has typed is theirs. They are told, and reading the file again is a thing they
+     *  ask for — which is the one thing here that loses somebody's work. */
+    it("tells a reader who has typed, and takes nothing away from them", async () => {
+      await open();
+      await type("#!/bin/sh\necho mine");
+      await written("#!/bin/sh\necho theirs", "after");
+
+      expect(container.textContent).toContain(t("files.changedUnderneath"));
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("mine");
+
+      await click(button(t("files.readAgain")));
+      await settle();
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("theirs");
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+      // And there is nothing of theirs left unsaved, so the control says so.
+      expect(pressable(t("files.saved"))?.disabled).toBe(true);
+    });
+
+    /** The belt behind the watch: a move the panel never heard about is still refused at the door,
+     *  and what the reader gets is the same offer rather than a sentence to read. */
+    it("says so when the save is the thing that finds out", async () => {
+      await open();
+      hoisted.refuseSave = {
+        code: "folder_changed_underneath",
+        message_en: "somebody wrote to this file after it was read here",
+        fields: {},
+      };
+      await type("#!/bin/sh\necho mine");
+      await click(button(t("files.save")));
+      await settle();
+
+      expect(container.textContent).toContain(t("files.changedUnderneath"));
+      expect(hoisted.saved).toEqual([]);
+      expect(pressable(t("files.save"))?.disabled).toBe(false);
+    });
+
+    /** A save answers with the mark of what it wrote, and the panel takes it: without that, the
+     *  panel's own writing would come back as the folder having moved and be read as somebody
+     *  else's. */
+    it("knows the file by what its own save wrote", async () => {
+      await open();
+      await type("#!/bin/sh\necho mine");
+      await click(button(t("files.save")));
+      await settle();
+      // The folder moves because of that very save, and the file answers to the new mark.
+      await written("#!/bin/sh\necho mine", "after");
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+
+      await type("#!/bin/sh\necho mine again");
+      await click(button(t("files.save")));
+      await settle();
+      expect(last(hoisted.saved)?.seen).toBe("after");
+    });
+  });
+
+
   it("says so when the file is not something a panel can show", async () => {
     hoisted.file = aFile();
     await drawOpen();
@@ -1138,6 +1339,41 @@ describe("the file face", () => {
     await settle();
     // The name says Markdown and the bytes say otherwise; the bytes win (`crate::folder`).
     expect(container.textContent).toContain(t("files.notText"));
+  });
+
+  /** A link is refused on purpose (`AMB-D-782`), and answering it with the sentence every other
+   *  refusal gets told the person most likely to meet it — somebody sharing one `CLAUDE.md` between
+   *  projects — that their file was broken. */
+  it("says a name it would not follow is a link, rather than a file it could not read", async () => {
+    const link: CmdError = {
+      code: "folder_link",
+      message_en: "this name is a link, and a link is not followed here",
+      fields: null,
+    };
+    hoisted.refuseRead = link;
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(errLabel(link));
+    expect(container.textContent).not.toContain(t("files.unreadable"));
+    // The sentence is the reader's, not the English one that came with the refusal.
+    expect(container.textContent).not.toContain(link.message_en);
+  });
+
+  /** Everything else keeps the one sentence, because everything else is what the host had nothing
+   *  finer to say about — and core's own English would name this project's folders at a reader who
+   *  asked about a file. */
+  it("says only that a file could not be read where that is all the host said", async () => {
+    hoisted.refuseRead = {
+      code: "not_found",
+      message_en: "no such file in this project's folder",
+      fields: null,
+    };
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(t("files.unreadable"));
+    expect(container.textContent).not.toContain("no such file");
   });
 
   it("points a picture at the door that hands out a file, not at bytes of its own", async () => {
@@ -1230,6 +1466,129 @@ describe("the file face", () => {
     await click(ref);
     expect(left).toEqual([1]);
   });
+  // ── walking the tree with the keys ──────────────────────────────────────────────────────────
+  // Amenbo invents no key of its own; what is here is the tree pattern's own vocabulary and the
+  // machine's own undo, which is the whole of what a face carrying a terminal may take (`AMB-D-780`).
+
+  const rows = () => [...container.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")];
+  const at = () => labelOf(document.activeElement as HTMLElement);
+
+  /** A tree of one folder with a file in it, and one file beside it, unfolded and stood on. */
+  async function stood() {
+    hoisted.entries = {
+      "": [{ name: "src", isDir: true, ignored: false }, { name: "a.md", isDir: false, ignored: false }],
+      src: [{ name: "main.rs", isDir: false, ignored: false }],
+    };
+    await drawOpen();
+    rows()[0]!.focus();
+  }
+
+  it("carries one stop in the tab order for the whole tree, not one for every row", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowRight");
+    await settle();
+    // Three rows drawn, and a reader tabbing past the panel stops once. Nothing caps what a level
+    // answers with, so one stop per row is a thousand presses on a folder of a thousand names.
+    expect(rows()).toHaveLength(3);
+    expect(rows().filter((one) => one.tabIndex === 0)).toHaveLength(1);
+  });
+
+  it("walks the rows with the arrows, and opens and shuts a folder with them", async () => {
+    await stood();
+    expect(at()).toBe("src");
+
+    // Into the folder: the first press opens it, the second steps onto what is inside.
+    await press(rows()[0]!, "ArrowRight");
+    await settle();
+    expect(rows()[0]!.getAttribute("aria-expanded")).toBe("true");
+    await press(rows()[0]!, "ArrowRight");
+    expect(at()).toBe("main.rs");
+
+    // And out of it: from a row inside, back to the folder holding it; then shut.
+    await press(document.activeElement!, "ArrowLeft");
+    expect(at()).toBe("src");
+    await press(document.activeElement!, "ArrowLeft");
+    await settle();
+    expect(rows()[0]!.getAttribute("aria-expanded")).toBe("false");
+
+    // Down and up along what is drawn, ends included.
+    await press(rows()[0]!, "ArrowDown");
+    expect(at()).toBe("a.md");
+    await press(document.activeElement!, "ArrowUp");
+    expect(at()).toBe("src");
+    await press(document.activeElement!, "End");
+    expect(at()).toBe("a.md");
+    await press(document.activeElement!, "Home");
+    expect(at()).toBe("src");
+  });
+
+  it("says how deep a row is, how many it stands among, and which one it is", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowRight");
+    await settle();
+    const inside = rows().find((one) => labelOf(one) === "main.rs")!;
+    // The tree is read a level at a time, so what is not on the screen is not in the document
+    // either — nothing but these says how far down a row is or how many it stands among.
+    expect(inside.getAttribute("aria-level")).toBe("2");
+    expect(inside.getAttribute("aria-setsize")).toBe("1");
+    expect(inside.getAttribute("aria-posinset")).toBe("1");
+    expect(rows()[0]!.getAttribute("aria-level")).toBe("1");
+    expect(rows()[0]!.getAttribute("aria-setsize")).toBe("2");
+  });
+
+  it("opens the file the reader is standing on", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowDown");
+    await press(document.activeElement!, "Enter");
+    await settle();
+    expect(hoisted.asked).toContain(`read:${ROOT}:a.md`);
+  });
+
+  it("puts the row the reader is standing on to the question about the bin", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowDown");
+    await press(document.activeElement!, "Delete");
+    await settle();
+    // The key reaches the same question the menu item does, rather than a second road to the bin.
+    expect(document.body.textContent).toContain(tf("files.trashAsk", { name: "a.md" }));
+    await click(anyButton(t("files.trashGo")));
+    expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
+  });
+
+  it("leaves the menu open while the arrows are walking it", async () => {
+    await stood();
+    await menuOn(button("a.md"));
+    expect(button(t("files.openWith"))).toBeDefined();
+
+    // This closed on every key once, so every press meant to walk the tree shut it on the way past.
+    await press(document.body, "ArrowDown");
+    await settle();
+    expect(button(t("files.openWith"))).toBeDefined();
+
+    await press(document.body, "Escape");
+    await settle();
+    expect(button(t("files.openWith"))).toBeUndefined();
+    // And the reader is standing on the row again, not on nothing: a menu that took the focus and
+    // did not give it back leaves the next arrow reaching no tree at all.
+    expect(at()).toBe("a.md");
+  });
+
+  it("walks its own items with the arrows, which is what it names itself a menu for", async () => {
+    await stood();
+    await menuOn(button("a.md"));
+    // Opened on its first item, because a list nothing is standing on is one every key falls out of.
+    const items = [...document.querySelectorAll<HTMLElement>(".files__menuitem")];
+    expect(items.length).toBeGreaterThan(1);
+    expect(document.activeElement).toBe(items[0]);
+    await press(document.activeElement!, "ArrowDown");
+    expect(document.activeElement).toBe(items[1]);
+    await press(document.activeElement!, "ArrowUp");
+    expect(document.activeElement).toBe(items[0]);
+    // Round, because a menu is short and a reader who walks off the end of one means to go on.
+    await press(document.activeElement!, "ArrowUp");
+    expect(document.activeElement).toBe(items[items.length - 1]);
+  });
+
   it("asks before it puts a row in the bin, and bins it on yes", async () => {
     await drawOpen();
     await menuOn(button("a.md"));
@@ -1354,9 +1713,7 @@ describe("a project bound to several folders", () => {
     both();
     hoisted.file = aFile({ text: "hello" });
     await openBothTrees();
-    const row = [...folderNamed("plugins").querySelectorAll("button")]
-      .find((one) => one.textContent === "a.md");
-    await click(row);
+    await click(rowIn(folderNamed("plugins"), "a.md"));
     await settle();
     // The same path names a different file in each folder, so which folder the row was in has to
     // travel with it.
@@ -1396,9 +1753,7 @@ describe("a project bound to several folders", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    const srcOf = (folder: Element) =>
-      [...folder.querySelectorAll("button")].find((one) => one.textContent === "src");
-    await over(srcOf(trees[1]!));
+    await over(rowIn(trees[1]!, "src"));
     // The row lit up is in the second folder, and the first folder's `src` is left alone.
     expect(trees[1]!.querySelectorAll(".files__into")).toHaveLength(1);
     expect(trees[0]!.querySelectorAll(".files__into")).toHaveLength(0);

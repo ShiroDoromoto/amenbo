@@ -117,13 +117,12 @@ export const it: Translation = {
     "dec.unknownName": "(sconosciuto)",
     "dec.comments": "Discussione", "dec.reasonPh": "Motivo (facoltativo, Markdown)…",
     "dec.revisit": "Queste decisioni poggiano su questa — rivedile se la respingi:",
-    "dec.filterAll": "Tutte",
     "dec.searchFailed": "La ricerca non è potuta partire",
     "dec.searchPh": "Cerca in titolo / corpo / commenti / AMB-D-<n>",
     "dec.sort": "Ordine",
     "dec.sort.numberDesc": "Numero, dalle più recenti", "dec.sort.numberAsc": "Numero, dalle più vecchie",
     "dec.sort.decidedDesc": "Decisione, dalle più recenti", "dec.sort.decidedAsc": "Decisione, dalle più vecchie",
-    "board.filter": "Filtro:", "board.group": "Raggruppa:",
+    "board.group": "Raggruppa:",
     "board.filters": "Filtri",
     "filter.dim.status": "Stato", "filter.dim.assignee": "Responsabile", "filter.dim.priority": "Priorità",
     "filter.opt.assignee.none": "Senza responsabile", "filter.opt.assignee.me": "Io", "filter.opt.assignee.meAi": "La mia IA",
@@ -255,6 +254,11 @@ export const it: Translation = {
     "nudge.autostart.yes": "Sì, aprilo all’accesso (consigliato)",
     "nudge.autostart.no": "No, grazie",
     "nudge.autostart.hint": "Impostazioni › Avvio permette di cambiare idea quando vuoi.",
+    "settings.files": "File",
+    "settings.trashAsk": "Chiedi prima di cestinare",
+    "settings.trashAskOn": "Chiedi",
+    "settings.trashAskOff": "Non chiedere",
+    "settings.trashAskNote": "Il pannello dei file chiede prima di spostare una riga nel cestino. Dentro la domanda si può solo disattivare; qui si riattiva.",
     "settings.updates": "Aggiornamenti",
     "settings.updateCheck": "Controllo degli aggiornamenti",
     "settings.updateCheckOn": "Sì",
@@ -610,6 +614,11 @@ export const it: Translation = {
     "files.save": "Salva",
     "files.saving": "Salvataggio…",
     "files.saved": "Salvato",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Qualcuno ha scritto in questo file dopo che è stato aperto qui.",
+    "files.readAgain": "Rileggilo",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Questo file contiene entrambi i tipi di a capo. Salvandolo diventeranno tutti uguali.",
@@ -776,6 +785,10 @@ export const it: Translation = {
     window_failed: "Non è stato possibile aprire quella finestra: {reason}",
     talk_blank: "Quella finestra si è aperta senza disegnare nulla, quindi il terminale è tornato in questa.",
     clip_refused: "Non è stato possibile mettere i file negli appunti: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Questo è un collegamento a un altro file e Amenbo non lo segue: ciò a cui punta può stare fuori dalle cartelle di questo progetto.",
     folder_taken: "{name} c’è già.",
     folder_name: "Questa macchina non accetta {name} come nome.",
     folder_make: "Non è stato possibile creare {name}: {reason}",
@@ -784,6 +797,9 @@ export const it: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Non è stato possibile salvare questo file: {reason}",
     folder_unwritable_character: "«{character}» non si può scrivere in {encoding}, quindi non è stato salvato nulla.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Qualcuno ha scritto in questo file dopo che è stato letto qui, quindi non è stato salvato nulla.",
 
     already_reserved:
       "{ref} non è in “Da fare”, quindi non si può prendere in carico — forse un'altra sessione la tiene già.",

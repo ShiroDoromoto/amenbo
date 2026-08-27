@@ -118,13 +118,12 @@ export const ptBR: Translation = {
     "dec.unknownName": "(desconhecido)",
     "dec.comments": "Discussão", "dec.reasonPh": "Motivo (opcional, Markdown)…",
     "dec.revisit": "Estas decisões se apoiam nesta — revise-as se recusá-la:",
-    "dec.filterAll": "Todas",
     "dec.searchFailed": "A busca não pôde ser executada",
     "dec.searchPh": "Buscar em título / corpo / comentários / AMB-D-<n>",
     "dec.sort": "Ordenar",
     "dec.sort.numberDesc": "Número, mais recentes primeiro", "dec.sort.numberAsc": "Número, mais antigas primeiro",
     "dec.sort.decidedDesc": "Decisão, mais recentes primeiro", "dec.sort.decidedAsc": "Decisão, mais antigas primeiro",
-    "board.filter": "Filtro:", "board.group": "Agrupar:",
+    "board.group": "Agrupar:",
     "board.filters": "Filtros",
     "filter.dim.status": "Situação", "filter.dim.assignee": "Responsável", "filter.dim.priority": "Prioridade",
     "filter.opt.assignee.none": "Sem responsável", "filter.opt.assignee.me": "Eu", "filter.opt.assignee.meAi": "Minha IA",
@@ -256,6 +255,11 @@ export const ptBR: Translation = {
     "nudge.autostart.yes": "Sim, abrir ao fazer login (recomendado)",
     "nudge.autostart.no": "Não, obrigado",
     "nudge.autostart.hint": "Em Configurações › Inicialização dá para mudar quando quiser.",
+    "settings.files": "Arquivos",
+    "settings.trashAsk": "Perguntar antes de mandar para a lixeira",
+    "settings.trashAskOn": "Perguntar",
+    "settings.trashAskOff": "Não perguntar",
+    "settings.trashAskNote": "O painel de arquivos pergunta antes de mandar uma linha para a lixeira. Dentro da pergunta só dá para desligar; aqui é onde se liga de novo.",
     "settings.updates": "Atualizações",
     "settings.updateCheck": "Verificar atualizações",
     "settings.updateCheckOn": "Sim",
@@ -611,6 +615,11 @@ export const ptBR: Translation = {
     "files.save": "Salvar",
     "files.saving": "Salvando…",
     "files.saved": "Salvo",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Alguém escreveu neste arquivo depois que ele foi aberto aqui.",
+    "files.readAgain": "Ler de novo",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Este arquivo tem os dois tipos de quebra de linha. Ao salvar, todas ficam iguais.",
@@ -777,6 +786,10 @@ export const ptBR: Translation = {
     window_failed: "Não foi possível abrir essa janela: {reason}",
     talk_blank: "Aquela janela abriu, mas nunca desenhou nada, então o terminal voltou para esta.",
     clip_refused: "Não foi possível colocar os arquivos na área de transferência: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Isto é um link para outro arquivo, e o Amenbo não o segue: o que ele aponta pode estar fora das pastas deste projeto.",
     folder_taken: "{name} já existe.",
     folder_name: "Esta máquina não aceita {name} como nome.",
     folder_make: "Não foi possível criar {name}: {reason}",
@@ -785,6 +798,9 @@ export const ptBR: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Não foi possível salvar este arquivo: {reason}",
     folder_unwritable_character: "“{character}” não pode ser escrito em {encoding}, então nada foi salvo.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Alguém escreveu neste arquivo depois que ele foi lido aqui, então nada foi salvo.",
 
     already_reserved: "{ref} não está em “A fazer”, então não dá para reservar — outra sessão pode já estar com ela.",
     not_ready: "{ref} ainda não dá para reservar: {reasons}",

@@ -114,13 +114,12 @@ export const hi: Translation = {
     "dec.unknownName": "(अज्ञात)",
     "dec.comments": "चर्चा", "dec.reasonPh": "कारण (वैकल्पिक, Markdown)…",
     "dec.revisit": "ये निर्णय इसी पर टिके हैं — इसे अस्वीकारें तो इन्हें फिर से देखें:",
-    "dec.filterAll": "सभी",
     "dec.searchFailed": "खोज नहीं चल सकी",
     "dec.searchPh": "शीर्षक / मूल पाठ / टिप्पणी / AMB-D-<n> खोजें",
     "dec.sort": "क्रम",
     "dec.sort.numberDesc": "संख्या, नई पहले", "dec.sort.numberAsc": "संख्या, पुरानी पहले",
     "dec.sort.decidedDesc": "निर्णय, नया पहले", "dec.sort.decidedAsc": "निर्णय, पुराना पहले",
-    "board.filter": "छाँटें:", "board.group": "समूह:",
+    "board.group": "समूह:",
     "board.filters": "छाँटें",
     "filter.dim.status": "स्थिति", "filter.dim.assignee": "ज़िम्मेदार", "filter.dim.priority": "प्राथमिकता",
     "filter.opt.assignee.none": "किसी को नहीं सौंपा", "filter.opt.assignee.me": "मैं", "filter.opt.assignee.meAi": "मेरा AI",
@@ -249,6 +248,11 @@ export const hi: Translation = {
     "nudge.autostart.yes": "हाँ, लॉगिन पर खोलें (अनुशंसित)",
     "nudge.autostart.no": "नहीं, धन्यवाद",
     "nudge.autostart.hint": "सेटिंग › स्टार्टअप में इसे कभी भी बदला जा सकता है।",
+    "settings.files": "फ़ाइलें",
+    "settings.trashAsk": "रद्दी में डालने से पहले पूछें",
+    "settings.trashAskOn": "पूछें",
+    "settings.trashAskOff": "न पूछें",
+    "settings.trashAskNote": "फ़ाइल पैनल किसी पंक्ति को रद्दी में डालने से पहले पूछता है। पूछताछ के भीतर उसे सिर्फ़ बंद किया जा सकता है; वापस चालू यहाँ से होता है।",
     "settings.updates": "अपडेट",
     "settings.updateCheck": "अपडेट जाँच",
     "settings.updateCheckOn": "चालू",
@@ -589,6 +593,11 @@ export const hi: Translation = {
     "files.save": "सहेजें",
     "files.saving": "सहेजा जा रहा है…",
     "files.saved": "सहेज लिया",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "इस फ़ाइल को यहाँ खोलने के बाद किसी ने बदल दिया।",
+    "files.readAgain": "फिर से पढ़ें",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "इस फ़ाइल में दोनों तरह के लाइन ब्रेक हैं। सहेजने पर सब एक जैसे हो जाएँगे।",
@@ -748,6 +757,10 @@ export const hi: Translation = {
     window_failed: "वह विंडो नहीं खोली जा सकी: {reason}",
     talk_blank: "वह विंडो खुली तो सही, पर उसमें कुछ भी नहीं आया, इसलिए टर्मिनल को इसी विंडो में लौटा दिया गया।",
     clip_refused: "फ़ाइलें क्लिपबोर्ड पर नहीं रखी जा सकीं: {reason}",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "यह किसी दूसरी फ़ाइल का लिंक है, और Amenbo इसका पीछा नहीं करता — यह जिसकी ओर इशारा करता है वह इस प्रोजेक्ट के फ़ोल्डरों के बाहर हो सकता है।",
     folder_taken: "{name} पहले से मौजूद है।",
     folder_name: "यह मशीन {name} को नाम के रूप में स्वीकार नहीं करती।",
     folder_make: "{name} नहीं बनाया जा सका: {reason}",
@@ -756,6 +769,9 @@ export const hi: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "यह फ़ाइल सहेजी नहीं जा सकी: {reason}",
     folder_unwritable_character: "“{character}” को {encoding} में नहीं लिखा जा सकता, इसलिए कुछ भी नहीं सहेजा गया।",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "इस फ़ाइल को यहाँ पढ़ने के बाद किसी ने बदल दिया, इसलिए कुछ भी सहेजा नहीं गया।",
 
     already_reserved:
       "{ref} “करना है” में नहीं है, इसलिए इसे लिया नहीं जा सकता — शायद कोई दूसरा सत्र इसे पहले ही ले चुका है।",

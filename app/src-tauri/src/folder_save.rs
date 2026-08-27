@@ -29,9 +29,15 @@
 //! that colour is what the tree draws (`AMB-D-785`). The one thing a save owes the walk is that the
 //! file it writes beside the real one never appears in it ([`crate::folder::SAVING`]).
 //!
+//! **A save is refused where the file moved under the reader.** The mark of what was read travels
+//! back in beside the text, and a file that no longer answers to it is left alone (`AMB-D-784`):
+//! what the editor holds is then older than the file, and writing it would take away whatever the
+//! other writer put there. The panel is told that and nothing else — settling which text is right
+//! is the work of the agent in the pane, not of this door.
+//!
 //! **A link is not one of the cases.** `AMB-D-776` was written with three, the third being to write
 //! through a symbolic link at the file it points at; `AMB-D-782` was settled after it and closed
-//! that door on the reading side ([`crate::folder::open_no_follow`]), so a file reached through a
+//! that door on the reading side ([`crate::folder_fence::open_no_follow`]), so a file reached through a
 //! link never opens, never reaches an editor, and has no text to be saved. What is left is the two
 //! above.
 
@@ -42,7 +48,9 @@ use encoding_rs::Encoding;
 
 use crate::dto::FolderLineEndingDto;
 use crate::error::CmdError;
-use crate::folder::{gone, open_no_follow, rooted, under, write_no_follow, SAVING};
+use crate::folder::SAVING;
+use crate::folder_bytes::{digest, digest_of};
+use crate::folder_fence::{gone, open_no_follow, rooted, under, write_no_follow};
 
 /// How many saves this process has begun. It is the whole of what the name of a half-written file
 /// has to carry: that name only has to be in the folder the file is in, be nobody else's, and be
@@ -54,7 +62,7 @@ static SAVES: AtomicU64 = AtomicU64::new(0);
 /// **The whole text is what travels, both ways.** The editor holds the changes as a diff and could
 /// send that instead — but a diff applied here would mean this side holding the document too, and
 /// then there would be two of them to keep the same. Reading already pays for the whole text
-/// ([`crate::folder::folder_read`]); saving pays for it once more, on a file of at most five
+/// ([`crate::folder_bytes::folder_read`]); saving pays for it once more, on a file of at most five
 /// megabytes.
 ///
 /// **What may not be saved is refused before anything is opened**, and the panel already knows all
@@ -62,6 +70,23 @@ static SAVES: AtomicU64 = AtomicU64::new(0);
 /// read-only from the start (`AMB-D-773`). What only shows up here is a character the encoding
 /// cannot write — a `✓` typed into a Shift_JIS file — which is named back rather than mangled into
 /// the file as `&#10003;`.
+///
+/// **`seen` is the file as the panel last read it** ([`crate::folder_bytes::digest`]), and a file that
+/// does not answer to it any more is not written to at all (`AMB-D-784`). This side remembers
+/// nothing between a read and a save, so the mark travels out with the text and back in with it —
+/// the same way the encoding and the newline do. What comes back is the mark of what was written,
+/// which is what the panel goes on knowing the file by.
+///
+/// **It is the reader's copy that is being checked, not the file that is being held.** Nothing is
+/// locked and nothing could be: the window between the mark being taken and the bytes landing is
+/// this process's own, and a writer inside it is one this door would have to stop the operating
+/// system to see. What it catches is the case that actually happens — an agent in the pane wrote to
+/// the file minutes ago and the editor above still holds what was there before.
+// Eight of them, and every one is a separate answer the read gave that this call needs back: which
+// file, in what encoding, with which mark on it. Folding them into a struct would put a shape
+// between the two calls that neither side has a use for — the panel holds the read's own answer and
+// hands it back a field at a time.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn folder_save(
     project_id: i64,
@@ -71,7 +96,8 @@ pub fn folder_save(
     encoding: String,
     bom: bool,
     line_ending: FolderLineEndingDto,
-) -> Result<(), CmdError> {
+    seen: String,
+) -> Result<String, CmdError> {
     let Some(encoding) = crate::encoding::writable(&encoding) else {
         return Err(not_saved(format_args!("{encoding} is not an encoding this writes back")));
     };
@@ -88,12 +114,18 @@ pub fn folder_save(
     if !meta.is_file() {
         return Err(gone());
     }
+    // The one question this door asks about what is in the file: whether it is still what the
+    // reader was handed. Asked through the handle already open, so the answer is about the file
+    // that is about to be written and not about whatever the name led to a moment later.
+    if digest_of(&opened).map_err(|_| gone())? != seen {
+        return Err(moved());
+    }
     let shared = shares_its_bytes(&opened, &meta);
     drop(opened);
 
     if shared { in_place(&target, &bytes) } else { replace(&target, &bytes) }
         .map_err(not_saved)?;
-    Ok(())
+    Ok(digest(&bytes))
 }
 
 /// The text with the newline the file has, from an editor that hands back only one kind.
@@ -196,6 +228,20 @@ fn unwritable(character: char, encoding: &'static Encoding) -> CmdError {
         "folder_unwritable_character",
         format!("{character} cannot be written in {}", encoding.name()),
         serde_json::json!({ "character": character.to_string(), "encoding": encoding.name() }),
+    )
+}
+
+/// The file moved under the reader between the read and the save (`AMB-D-784`).
+///
+/// **It carries the fact and nothing more.** Which of the two texts is right is not a question this
+/// door could answer — lining the differences up, or making one file out of three, is the work of
+/// the agent in the pane beside the panel, and what is refused here is a save that would quietly
+/// win over somebody else's writing.
+fn moved() -> CmdError {
+    CmdError::coded(
+        "folder_changed_underneath",
+        "somebody wrote to this file after it was read here".to_string(),
+        serde_json::Value::Null,
     )
 }
 

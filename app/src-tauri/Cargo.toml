@@ -54,6 +54,14 @@ notify = "8"
 # nothing — there is simply nothing to read.
 ignore = "0.4"
 
+# The short mark a file open in the panel is known by, so that a save does not write over what
+# somebody else put there in the meantime (`crate::folder::digest`). Neither a modification time nor
+# a length answers that question — a FAT32 volume records times to the nearest two seconds, and an
+# edit that keeps the file the same length is invisible to a length. It is the same crate and the
+# same version the store already content-addresses its blobs with, so nothing new arrives in the
+# tree with it.
+blake3 = "1"
+
 # The pseudo-terminal a pane of the talk window is filled with: what runs in one draws full-screen,
 # so the pane is a real terminal rather than a rendering of one. wezterm's implementation, chosen
 # because it is Rust the whole way down — no build.rs, no C toolchain, no sidecar binary to ship —

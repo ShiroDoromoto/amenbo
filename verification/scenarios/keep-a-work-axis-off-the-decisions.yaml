@@ -140,6 +140,27 @@ steps_cli:
       target: run
       present: true
 
+  # Taking the offer off is half of it; the other half is what the side answers when it is asked
+  # anyway. Not with an empty page — that page would mean "no decision carries that value" and "this
+  # axis does not run here" at once, and only the second is a question worth correcting — so the
+  # question is turned away instead, the way a mistyped axis name is.
+  - type: assert
+    domain: decision
+    op: filter-refused
+    with:
+      filter: "dim:Lane=iOS"
+      code: invalid_value
+
+  # `=none` is the arm the refusal is worth most on. It asks for what carries no value of the axis, and
+  # an axis that does not run here answers that of every decision there is — so the empty page the
+  # other arm would give back becomes a full one, and a wrong answer reads exactly like a right one.
+  - type: assert
+    domain: decision
+    op: filter-refused
+    with:
+      filter: "dim:Lane=none"
+      code: invalid_value
+
   # And what narrowing took is the offer, never the filing. The decision was filed while the axis ran
   # on its side, and it is filed still — so widening the axis back finds it where it was rather than
   # finding it emptied, which is what a narrowing that deleted would have left behind.
@@ -157,6 +178,30 @@ steps_cli:
       dimension: Lane
       side: decision
       present: true
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "dim:Lane=iOS"
+      target: ruling
+      present: true
+
+  # And the answer is the axis's own, not one face being poorer than the other: narrowed the other
+  # way, it is the board that is turned away by the same guard.
+  - type: action
+    domain: dimension
+    op: applies-to
+    with:
+      dimension: Lane
+      side: decision
+
+  - type: assert
+    domain: task
+    op: filter-refused
+    with:
+      filter: "dim:Lane=iOS"
+      code: invalid_value
 
   - type: assert
     domain: decision

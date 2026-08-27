@@ -16,7 +16,7 @@
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
-  GitEntryDto,
+  FolderRestoredDto, FolderTrashedDto, GitEntryDto,
 } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
@@ -88,14 +88,32 @@ export async function onFolderChanged(
   return await listen<FolderChangesDto>(CHANGED_EVENT, ({ payload }) => take(payload));
 }
 
-/** What one file has to show: its text, or its picture, or neither. */
+/**
+ * What one file has to show: its text, or its picture, or neither.
+ *
+ * `encoding` is the reader overruling the guess. Left out, the host guesses as it always does;
+ * named — one of the names `folderEncodings` gave — the bytes are decoded as that and nothing is
+ * guessed (`AMB-D-773`).
+ */
 export async function folderRead(
   projectId: number,
   root: string,
   path: string[],
+  encoding?: string,
 ): Promise<FolderFileDto> {
   if (!inTauri()) return { truncated: false, bom: false, lineEnding: "lf", clean: true };
-  return await invoke<FolderFileDto>("folder_read", { projectId, root, path });
+  return await invoke<FolderFileDto>("folder_read", { projectId, root, path, encoding });
+}
+
+/**
+ * The encodings a file may be reopened in, in the order to offer them.
+ *
+ * Asked for rather than written here, because what may be offered is what the host can write back
+ * and only the host knows that list (`crate::encoding`).
+ */
+export async function folderEncodings(): Promise<string[]> {
+  if (!inTauri()) return [];
+  return await invoke<string[]>("folder_encodings");
 }
 
 /**
@@ -187,6 +205,35 @@ export async function folderRevealFile(
 ): Promise<void> {
   if (!inTauri()) return;
   await invoke<void>("folder_reveal_file", { projectId, root, path });
+}
+
+/**
+ * Put rows into the machine's own bin. Nothing here deletes: the bin is the whole of it, and a
+ * machine that cannot offer one says so rather than deleting instead (`crate::trash`).
+ *
+ * The answer is a line through the list — what went, and the row it stopped on — because once one
+ * row is in the bin no single word covers the press. Outside Tauri nothing is binned and the answer
+ * says so, which is the empty list.
+ */
+export async function folderTrash(
+  projectId: number,
+  root: string,
+  paths: string[][],
+): Promise<FolderTrashedDto> {
+  if (!inTauri()) return { gone: [], stopped: null };
+  return await invoke<FolderTrashedDto>("folder_trash", { projectId, root, paths });
+}
+
+/**
+ * Put back what the last press binned, and say what came back.
+ *
+ * `null` means there was nothing left to undo — an answer rather than a failure, since pressing undo
+ * once more than one deleted is not a mistake. What the host remembers goes when the app does, so a
+ * fresh window has nothing to undo either.
+ */
+export async function folderUntrash(): Promise<FolderRestoredDto | null> {
+  if (!inTauri()) return null;
+  return await invoke<FolderRestoredDto | null>("folder_untrash", {});
 }
 
 /**

@@ -604,6 +604,16 @@ pub fn folder_reveal_file(project_id: i64, root: String, path: Vec<String>) -> R
         .map_err(|e| CmdError::coded("folder.reveal", e.to_string(), serde_json::Value::Null))
 }
 
+/// The encodings a file may be reopened in, in the order to offer them.
+///
+/// It is asked for rather than written on the panel's own side because the list is one fact with
+/// one owner: which encodings this can write back ([`crate::encoding::writable_names`]). A copy
+/// kept over there would go on offering an encoding the day it stopped being written.
+#[tauri::command]
+pub fn folder_encodings() -> Vec<String> {
+    crate::encoding::writable_names().into_iter().map(str::to_owned).collect()
+}
+
 /// What one file has to show: its text, or that it is a picture and of what type, or why the
 /// picture is not drawn, or none of those.
 ///
@@ -615,12 +625,30 @@ pub fn folder_reveal_file(project_id: i64, root: String, path: Vec<String>) -> R
 /// **A picture is never read whole here.** Its bytes reach the webview through
 /// [`crate::fileproto`], which the caller can address because it named this file by the same
 /// project, folder and path (`AMB-D-783`).
+///
+/// `encoding` is the reader putting the guess right. Left out, the bytes are guessed at as usual;
+/// named, that encoding is what they are decoded as and nothing is guessed (`AMB-D-773`). A name
+/// this cannot write back is refused rather than honoured — offering to open a file in an encoding
+/// that could never be saved would be handing back a file to look at and not to keep — and a name
+/// on a file that is not text is simply not reached, the encoding question never being asked of a
+/// picture.
 #[tauri::command]
 pub fn folder_read(
     project_id: i64,
     root: String,
     path: Vec<String>,
+    encoding: Option<String>,
 ) -> Result<FolderFileDto, CmdError> {
+    let asked = match encoding.as_deref() {
+        None => None,
+        Some(name) => Some(crate::encoding::writable(name).ok_or_else(|| {
+            CmdError::coded(
+                "folder.encoding",
+                format!("not an encoding this writes back: {name}"),
+                serde_json::Value::Null,
+            )
+        })?),
+    };
     let (roots, base) = rooted(project_id, &root)?;
     let (_owner, file) = under(&roots, base, &path).ok_or_else(gone)?;
     let meta = readable(&file)?;
@@ -639,7 +667,10 @@ pub fn folder_read(
         let truncated = (bytes.len() as u64) < size;
         // The reader's own language is the guess's only hint, and it is fetched here rather than
         // held because only a file that is not UTF-8 is ever guessed at — one in 645 of them.
-        let read = crate::encoding::read(&bytes, truncated, language_tld());
+        let read = match asked {
+            Some(encoding) => crate::encoding::read_as(&bytes, truncated, encoding),
+            None => crate::encoding::read(&bytes, truncated, language_tld()),
+        };
         return Ok(FolderFileDto {
             truncated,
             text: Some(read.text),

@@ -4,7 +4,7 @@
 // All three are held against real snippets rather than synthetic ones, because the thing that makes
 // them hard is real text — a brace inside a string, a comment on the line that decides the indent.
 // None of it needs a screen: indentation and folding are asked for from the state.
-import { foldable, getIndentation, indentUnit } from "@codemirror/language";
+import { IndentContext, foldable, getIndentation, indentUnit } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
@@ -21,10 +21,17 @@ async function stateOf(lang: LangId | null, doc: string) {
   });
 }
 
-/** Where the editor would put the caret if Enter were pressed at the end of `doc`. */
+/**
+ * Where the editor would put the caret if Enter were pressed at the end of `doc`.
+ *
+ * Asked the way pressing Enter asks it: at the caret, with the break simulated there, **before** the
+ * break is made. Both halves have to answer that question — the line the answer depends on is one
+ * the document does not have yet.
+ */
 async function indentAfter(lang: LangId, doc: string) {
-  const state = await stateOf(lang, `${doc}\n`);
-  return getIndentation(state, state.doc.length);
+  const state = await stateOf(lang, doc);
+  const at = state.doc.length;
+  return getIndentation(new IndentContext(state, { simulateBreak: at }), at);
 }
 
 describe("indentation", () => {
@@ -47,6 +54,19 @@ describe("indentation", () => {
   // ends in `{` inside a string and would push the next one in.
   it("is not fooled by a brace inside a string", async () => {
     expect(await indentAfter("rust", 'fn main() {\n    let s = "{";')).toBe(4);
+  });
+
+  // Python's own configuration carries no indentation rules at all, and a rule could not carry
+  // them: "one shallower from here on" is not sayable in that vocabulary. So Python and YAML take a
+  // parse tree instead.
+  //
+  // Each line below is also proof that the rules are not still running underneath: an indentation
+  // service answers before a tree is ever consulted, and the rules these two languages would fall
+  // to are the generic bracket ones, which have nothing at all to say after a colon.
+  it("comes from a parse tree in the two languages that close by coming back out", async () => {
+    expect(await indentAfter("python", "def f():")).toBe(4);
+    expect(await indentAfter("python", "class C:\n    def m(self):\n        return 1")).toBe(8);
+    expect(await indentAfter("yaml", "a:\n  b: 1")).toBe(2);
   });
 
   it("has an answer for a language nothing was baked for", async () => {

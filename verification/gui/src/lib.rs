@@ -654,6 +654,7 @@ impl Instructor {
             | (Domain::Task, "narrowed")
             | (Domain::Task, "view-lists")
             | (Domain::Task, "found")
+            | (Domain::Decision, "narrowed")
             | (Domain::Decision, "found") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
@@ -875,9 +876,25 @@ impl Instructor {
             // can see which value it names. What is already chosen there is said out loud: each value is
             // a switch, so a press that cleared its neighbours would be a different move.
             (Domain::Task, "choose-filter") => format!(
-                "In the values now open, press the one the CLI writes as `{}:{}`, and leave whatever is already chosen on that axis chosen.",
-                req(with, "axis")?,
-                req(with, "value")?
+                "In the values now open, press the one the CLI writes as `{}`, and leave whatever is already chosen on that axis chosen.",
+                filter_pair(req(with, "axis")?, req(with, "value")?)
+            ),
+            // The same three moves on the decisions tab. They are written out rather than shared with the
+            // board's, for the reason the decision's own comment is (above): the control sits over the
+            // decisions and not over the columns, and a road that did not say which of the two tabs the
+            // operator is standing on could be walked on either. What the lines ask for is the same act —
+            // the panel is one panel — so the wording is kept parallel and only the screen differs.
+            (Domain::Decision, "open-filters") => {
+                "On the decisions tab, open the values to narrow by, from the control beside the search box that says how many axes are narrowing."
+                    .to_string()
+            }
+            (Domain::Decision, "close-filters") => {
+                "Fold the values away again from that same control, so the decisions have back the room they were taking."
+                    .to_string()
+            }
+            (Domain::Decision, "choose-filter") => format!(
+                "In the values now open, press the one the CLI writes as `{}`, and leave whatever is already chosen on that axis chosen.",
+                filter_pair(req(with, "axis")?, req(with, "value")?)
             ),
             // Onto the face that searches across the records, and through the hit standing on it. The
             // asking is part of the move rather than a step of its own: a hit cannot be pressed before
@@ -1334,6 +1351,20 @@ impl Instructor {
                 with.get("axes")
                     .map(show)
                     .ok_or_else(|| "arg `axes` must say how many axes are narrowing".to_string())?
+            ),
+            (Domain::Decision, "filters-folded") => format!(
+                "Confirm the values are off the screen — the decisions have their room back — and that the control they folded into says {} axes are narrowing.",
+                with.get("axes")
+                    .map(show)
+                    .ok_or_else(|| "arg `axes` must say how many axes are narrowing".to_string())?
+            ),
+            // The row the narrowing left, on the decisions tab. It names no narrowing of its own for the
+            // reason the board's twin does not: the move in front of it is what did the narrowing, and
+            // saying it twice is what would let the two disagree.
+            (Domain::Decision, "narrowed") => format!(
+                "On the list the narrowing left, confirm the decision \"{}\" is {} the rows.",
+                self.target_label(with),
+                if present(with) { "among" } else { "not among" }
             ),
             // Which record the press opened. Both halves name the phrase rather than the record's title:
             // the title is standing on the hit row as well, so a line read on it would pass over a press
@@ -2039,6 +2070,16 @@ pub fn instructions(scenario: &Scenario) -> Result<Vec<String>, String> {
     let mut instructor = Instructor::new();
     instructor.learn(&scenario.given);
     scenario.steps(Driver::Gui).iter().map(|s| instructor.render(s)).collect()
+}
+
+/// One axis and one value, written the way the `--filter` grammar writes them — which is the one
+/// name a chip and a terminal share, since the chip itself reads in whatever language the app was
+/// started in. The two builtin keys join with a colon (`status:todo`); a classification axis is
+/// already a `dim:`-prefixed key and takes its value after `=` (`dim:theme=main`), because the axis
+/// there is the user's own word and the grammar needs the two halves told apart.
+fn filter_pair(axis: &str, value: &str) -> String {
+    let sep = if axis.starts_with("dim:") { '=' } else { ':' };
+    format!("{axis}{sep}{value}")
 }
 
 fn unmapped(domain: Domain, op: &str) -> String {
@@ -3322,6 +3363,87 @@ steps_gui:
         assert!(
             ins.expectation(&steps[3]).is_none(),
             "an absence and a bare number are closed by an eye, not by a reading"
+        );
+    }
+
+    /// The same panel on the other tab. What is asked of it is that the road says which of the two the
+    /// operator is standing on: the board's line and this one describe the same act, so a line that did
+    /// not name its screen could be walked on either tab and would prove neither.
+    #[test]
+    fn the_decisions_tab_has_the_same_values_and_says_it_is_the_decisions_tab() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: decision
+    op: open-filters
+  - type: action
+    domain: decision
+    op: choose-filter
+    with: { axis: dim:theme, value: main }
+  - type: action
+    domain: decision
+    op: close-filters
+  - type: assert
+    domain: decision
+    op: filters-folded
+    with: { axes: 1 }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("On the decisions tab"), "got: {}", lines[0]);
+        assert!(lines[0].contains("how many axes are narrowing"), "got: {}", lines[0]);
+        // The pair as the grammar writes it: a classification axis is a `dim:` key and takes `=`,
+        // where the two builtin keys take a colon. A chip pressed off the wrong spelling is a chip
+        // an operator has to guess at.
+        assert!(lines[1].contains("`dim:theme=main`"), "got: {}", lines[1]);
+        assert!(lines[2].contains("the decisions have back the room"), "got: {}", lines[2]);
+        assert!(lines[3].contains("says 1 axes are narrowing"), "got: {}", lines[3]);
+        assert!(
+            ins.expectation(&steps[3]).is_none(),
+            "an absence and a bare number are closed by an eye, not by a reading"
+        );
+    }
+
+    /// The row the narrowing left. It is read off the shot by the decision's own title, both ways round:
+    /// a row that should have gone and one that should have stayed are the same screen until the title
+    /// is looked for, and the line names no narrowing of its own because the press before it did that.
+    #[test]
+    fn a_decision_row_is_read_against_the_list_the_narrowing_left() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: decision
+    op: create
+    with: { title: SCENARIO — the retention window }
+    as: retention
+steps_gui:
+  - type: action
+    domain: decision
+    op: choose-filter
+    with: { axis: status, value: accepted }
+  - type: assert
+    domain: decision
+    op: narrowed
+    with: { target: retention, present: false }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let steps = s.steps(Driver::Gui);
+        let line = ins.render(&steps[1]).unwrap();
+        assert!(line.contains("the list the narrowing left"), "got: {line}");
+        assert!(line.contains("not among"), "got: {line}");
+        assert!(!line.contains("search"), "got: {line}");
+        let e = ins.expectation(&steps[1]).expect("a row that went is read off the shot");
+        assert_eq!(
+            e,
+            Expectation { text: "SCENARIO — the retention window".into(), present: false }
         );
     }
 

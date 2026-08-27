@@ -810,6 +810,7 @@ export const uk: Translation = {
     invalid_dimension_slug_shape: "«{slug}» не годиться як ключ — щонайбільше {max} малі літери, цифри й дефіси, починаючи з літери.",
     invalid_dimension_slug_taken: "«{slug}» тут уже належить іншому — виберіть інший ключ.",
     invalid_task_required_dimension: "У цього завдання немає значення в {names}, якого вимагає цей проєкт.",
+    invalid_decision_required_dimension: "У цього рішення немає значення в {names}, якого вимагає цей проєкт.",
     invalid_dimension_values_unordered: "Значення цієї категорії не впорядковані, тож переставити їх не можна.",
     invalid_decision_edit_rejected: "{ref} відхилено, а відхилене рішення не можна редагувати.",
     invalid_decision_accept_rejected: "{ref} відхилено, а відхилене рішення не можна ухвалити.",

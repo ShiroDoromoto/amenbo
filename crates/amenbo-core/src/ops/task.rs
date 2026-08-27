@@ -181,7 +181,9 @@ pub fn finish_creating(tx: &WriteTx<'_>, id: i64) -> Result<Task> {
 }
 
 /// The names of the project's required axes this task carries no value on, in display order
-/// (`AMB-D-734`). Empty is the pass. Read inside the caller's transaction, so a flag raised while this
+/// (`AMB-D-734`). Only the axes that classify tasks are asked: an axis narrowed to decisions means
+/// nothing here, and holding a creation on one would demand a value no task can carry (`AMB-D-789`).
+/// Empty is the pass. Read inside the caller's transaction, so a flag raised while this
 /// creation was being finished is either seen here or lands after the commit — never half-seen.
 ///
 /// One query for the axes and one per axis for the assignment: a project's axes are a handful, and the
@@ -194,7 +196,9 @@ fn unmet_required_axes(tx: &WriteTx<'_>, task: &Task) -> Result<Vec<String>> {
         return Ok(Vec::new());
     };
     let mut empty = Vec::new();
-    for (axis_id, name) in read::required_dimensions(tx.conn(), project_id)? {
+    for (axis_id, name) in
+        read::required_dimensions(tx.conn(), project_id, crate::model::ClassifiedSide::Task)?
+    {
         if read::assignment_ids_on_axis(tx.conn(), task.id, axis_id)?.is_empty() {
             empty.push(name);
         }

@@ -787,6 +787,7 @@ export const de: Translation = {
     invalid_dimension_slug_shape: "„{slug}“ eignet sich nicht als Schlüssel — höchstens {max} Kleinbuchstaben, Ziffern und Bindestriche, beginnend mit einem Buchstaben.",
     invalid_dimension_slug_taken: "„{slug}“ ist hier bereits der Schlüssel von etwas anderem — wählen Sie einen anderen.",
     invalid_task_required_dimension: "Diese Aufgabe trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
+    invalid_decision_required_dimension: "Diese Entscheidung trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
     invalid_dimension_values_unordered:
       "Die Werte dieser Kategorie tragen keine Reihenfolge und lassen sich deshalb nicht umsortieren.",
     invalid_decision_edit_rejected:

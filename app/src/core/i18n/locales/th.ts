@@ -774,6 +774,7 @@ export const th: Translation = {
     invalid_dimension_slug_shape: "“{slug}” ใช้เป็นคีย์ไม่ได้ — ใช้ตัวพิมพ์เล็ก ตัวเลข และยัติภังค์ ไม่เกิน {max} ตัว และขึ้นต้นด้วยตัวอักษร",
     invalid_dimension_slug_taken: "“{slug}” เป็นคีย์ของสิ่งอื่นที่นี่อยู่แล้ว — เลือกคีย์อื่น",
     invalid_task_required_dimension: "งานนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
+    invalid_decision_required_dimension: "การตัดสินใจนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
     invalid_dimension_values_unordered: "ค่าของหมวดนี้ไม่มีลำดับ จึงจัดเรียงใหม่ไม่ได้",
     invalid_decision_edit_rejected: "{ref} ถูกปฏิเสธไปแล้ว และการตัดสินใจที่ถูกปฏิเสธจะแก้ไขไม่ได้",
     invalid_decision_accept_rejected: "{ref} ถูกปฏิเสธไปแล้ว และการตัดสินใจที่ถูกปฏิเสธจะรับไม่ได้",

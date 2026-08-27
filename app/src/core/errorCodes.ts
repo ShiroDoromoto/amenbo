@@ -73,6 +73,9 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_dimension_slug_shape",
   "invalid_dimension_slug_taken",
   "invalid_task_required_dimension",
+  // Its decision twin: the same flag, read at the other door a record passes through once
+  // (`decision accept`), and the decision pane is where that button is.
+  "invalid_decision_required_dimension",
   "invalid_decision_edit_rejected",
   "invalid_decision_accept_rejected",
   "invalid_decision_reject_accepted",

@@ -547,6 +547,8 @@ export const nl: Translation = {
     "files.notText": "Dit is geen tekst en kan hier niet worden getoond.",
     "files.cut": "Alleen het begin wordt getoond.",
     "files.unreadable": "Dit bestand kon niet worden gelezen.",
+    "files.dropStopped": "{name} kon niet worden opgenomen: {why}",
+    "files.dropPartly": "{count} opgenomen. {name} niet: {why}",
     "files.tooBig": "Deze afbeelding is te groot om hier te tonen.",
     "files.tooBigPixels": "{width} × {height} pixels",
     "files.tooBigOpen": "In een andere app openen",

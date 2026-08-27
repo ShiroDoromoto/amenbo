@@ -573,6 +573,8 @@ export const uk: Translation = {
     "files.notText": "Це не текст, тому показати його тут не можна.",
     "files.cut": "Показано лише початок.",
     "files.unreadable": "Не вдалося прочитати цей файл.",
+    "files.dropStopped": "Не вдалося перенести {name}: {why}",
+    "files.dropPartly": "Перенесено: {count}. {name} — ні: {why}",
     "files.tooBig": "Це зображення завелике, щоб показати його тут.",
     "files.tooBigPixels": "{width} × {height} пікселів",
     "files.tooBigOpen": "Відкрити в іншій програмі",

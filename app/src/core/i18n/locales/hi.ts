@@ -547,6 +547,8 @@ export const hi: Translation = {
     "files.notText": "यह टेक्स्ट नहीं है, इसलिए इसे यहाँ नहीं दिखाया जा सकता।",
     "files.cut": "सिर्फ़ शुरुआत दिखाई जा रही है।",
     "files.unreadable": "यह फ़ाइल पढ़ी नहीं जा सकी।",
+    "files.dropStopped": "{name} को लाया नहीं जा सका: {why}",
+    "files.dropPartly": "{count} आ गए। {name} नहीं आया: {why}",
     "files.tooBig": "यह छवि इतनी बड़ी है कि यहाँ नहीं दिखाई जा सकती।",
     "files.tooBigPixels": "{width} × {height} पिक्सेल",
     "files.tooBigOpen": "किसी और ऐप में खोलें",

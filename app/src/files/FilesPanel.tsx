@@ -41,17 +41,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type {
-  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
+  FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
 } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
 import { fileUrl } from "../core/fileUrl";
 import { errText, formatNumber, t, tf } from "../core/i18n";
+import { pushNotice } from "../core/notice";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
-  folderEntries, folderGitStatus, folderMake, folderOpenFile, folderOpenFileWith, folderOpenWith,
-  folderRead, folderRename, folderRevealFile, folderUnwatch, folderWatch, onFolderChanged,
+  folderEntries, folderGitStatus, folderImport, folderMake, folderOpenFile, folderOpenFileWith,
+  folderOpenWith, folderRead, folderRename, folderRevealFile, folderUnwatch, folderWatch,
+  onFolderChanged,
 } from "./folder";
 import { FileEditor } from "./FileEditor";
 import { MemoPage } from "./MemoPage";
@@ -113,6 +115,32 @@ function landingOf(el: Element | null | undefined): Landing | null {
 /** Whether this folder of this section is the one a drop would land in. */
 function landed(landing: Landing | null, root: string, into: string | undefined): boolean {
   return into !== undefined && landing?.root === root && landing.into === into;
+}
+
+/**
+ * A landing's folder as the segments the host takes, the bound folder itself being none of them.
+ *
+ * The join is this face's own — a name cannot hold a `/` on any of the three — so splitting it back
+ * is exact rather than a guess at where one name ended.
+ */
+function segmentsOf(into: string): string[] {
+  return into === "" ? [] : into.split("/");
+}
+
+/**
+ * What to say about a carry that stopped, or nothing where the whole of it arrived.
+ *
+ * The count is in the sentence because a carry is not one act: stopping on the second of three
+ * leaves one file in the folder, and a line that named only the failure would have the reader
+ * looking for the one that did arrive.
+ */
+function stoppedLine(carried: FolderCarriedDto): string | null {
+  const stopped = carried.stopped;
+  if (stopped === null) return null;
+  const about = { name: stopped.name, why: stopped.why };
+  return carried.arrived.length === 0
+    ? tf("files.dropStopped", about)
+    : tf("files.dropPartly", { ...about, count: formatNumber(carried.arrived.length) });
 }
 
 export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose }: {
@@ -187,10 +215,14 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // the DOM, so the highlight under the pointer — and the scroll when the pointer hangs at an edge —
   // are this side's to drive (`../core/hostDrop`).
   //
-  // **Where a drop lands is worked out and goes no further.** Bringing the file in wants a door that
-  // writes into the folder, and the file face has none yet (`AMB-T-3791`); until it does, what the
-  // highlight says is which folder the paths would be handed to, which is the half of this that has
-  // to be right on all three operating systems.
+  // **The folder the highlight named is the folder the files are carried into** (`./folder`). Both
+  // halves of the landing go to the host, not the path alone: every section draws a row for its own
+  // root, and two projects' folders each holding a `src` are two places (`AMB-T-3781`).
+  //
+  // **What arrived is not said, and what did not is.** The folder is watched and the tree reads its
+  // names again on every move, so a file that came in is about to be a row — a line saying so would
+  // be a second, slower account of what the panel is already drawing. A carry that stopped leaves
+  // nothing to draw, and that is what the toast is for.
   useEffect(() => {
     if (projectId === null || sections.length === 0 || tab !== "files") return;
     let alive = true;
@@ -200,7 +232,20 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
       scroller: () => box.current,
       over: ({ el }) => { if (alive) setLanding(landingOf(el)); },
       leave: () => { if (alive) setLanding(null); },
-      drop: () => { if (alive) setLanding(null); },
+      drop: ({ el }, paths, effect) => {
+        if (!alive) return;
+        setLanding(null);
+        const at = landingOf(el);
+        if (at === null) return;
+        void folderImport(projectId, paths, at.root, segmentsOf(at.into), effect)
+          .then((carried) => {
+            const line = stoppedLine(carried);
+            if (line !== null) pushNotice(line);
+          })
+          // The refusal is the host's own sentence — the folder having gone since the row was drawn
+          // is the whole of what it can be, and it is worth saying rather than swallowing.
+          .catch((e: unknown) => pushNotice(errText(e)));
+      },
     }).then((off) => { if (alive) stop = off; else off(); });
     return () => {
       alive = false;

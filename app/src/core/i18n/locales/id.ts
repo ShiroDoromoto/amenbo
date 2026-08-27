@@ -550,6 +550,8 @@ export const id: Translation = {
     "files.notText": "Ini bukan teks, jadi tidak bisa ditampilkan di sini.",
     "files.cut": "Hanya bagian awal yang ditampilkan.",
     "files.unreadable": "Berkas ini tidak bisa dibaca.",
+    "files.dropStopped": "{name} tidak bisa dimasukkan: {why}",
+    "files.dropPartly": "{count} masuk. {name} tidak: {why}",
     "files.tooBig": "Gambar ini terlalu besar untuk ditampilkan di sini.",
     "files.tooBigPixels": "{width} × {height} piksel",
     "files.tooBigOpen": "Buka di aplikasi lain",

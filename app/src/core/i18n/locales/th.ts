@@ -550,6 +550,8 @@ export const th: Translation = {
     "files.notText": "นี่ไม่ใช่ข้อความ จึงแสดงที่นี่ไม่ได้",
     "files.cut": "แสดงเฉพาะส่วนต้นเท่านั้น",
     "files.unreadable": "อ่านไฟล์นี้ไม่ได้",
+    "files.dropStopped": "นำ {name} เข้ามาไม่ได้: {why}",
+    "files.dropPartly": "นำเข้ามาแล้ว {count} รายการ {name} ไม่ได้: {why}",
     "files.tooBig": "ภาพนี้ใหญ่เกินกว่าจะแสดงที่นี่",
     "files.tooBigPixels": "{width} × {height} พิกเซล",
     "files.tooBigOpen": "เปิดในแอปอื่น",

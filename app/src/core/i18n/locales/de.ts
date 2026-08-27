@@ -557,6 +557,8 @@ export const de: Translation = {
     "files.notText": "Das ist kein Text und lässt sich hier nicht anzeigen.",
     "files.cut": "Es wird nur der Anfang angezeigt.",
     "files.unreadable": "Diese Datei konnte nicht gelesen werden.",
+    "files.dropStopped": "{name} konnte nicht übernommen werden: {why}",
+    "files.dropPartly": "{count} übernommen. {name} nicht: {why}",
     "files.tooBig": "Dieses Bild ist zu groß, um es hier zu zeigen.",
     "files.tooBigPixels": "{width} × {height} Pixel",
     "files.tooBigOpen": "In einer anderen Anwendung öffnen",

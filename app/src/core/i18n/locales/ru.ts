@@ -576,6 +576,8 @@ export const ru: Translation = {
     "files.notText": "Это не текст, поэтому показать его здесь нельзя.",
     "files.cut": "Показано только начало.",
     "files.unreadable": "Не удалось прочитать этот файл.",
+    "files.dropStopped": "Не удалось перенести {name}: {why}",
+    "files.dropPartly": "Перенесено: {count}. {name} — нет: {why}",
     "files.tooBig": "Это изображение слишком большое, чтобы показать его здесь.",
     "files.tooBigPixels": "{width} × {height} пикселей",
     "files.tooBigOpen": "Открыть в другом приложении",

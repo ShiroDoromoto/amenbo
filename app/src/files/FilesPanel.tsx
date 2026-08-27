@@ -17,7 +17,9 @@
 // is.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { FolderAppDto, FolderChangesDto, FolderFileDto } from "../bindings/bindings";
+import type {
+  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
+} from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { formatNumber, t, tf, whenLabel } from "../core/i18n";
@@ -337,6 +339,18 @@ function useLedgerNav(onOpenLedger?: () => void): RefNav {
   }), [outer, onOpenLedger]);
 }
 
+/**
+ * A row's classes, with the faint one added for a name the repository ignores.
+ *
+ * The row is drawn either way: `.gitignore` says what git does not record, not what a reader may
+ * not look at, and the files a person goes looking for after an agent has been at work — `.env`,
+ * `.amenbo` — are ignored in most repositories (`AMB-D-786`). What is left out of the tree is the
+ * floor the host prunes, and that never reaches here.
+ */
+function faint(base: string, ignored: boolean): string {
+  return ignored ? `${base} ${base}--ignored` : base;
+}
+
 /** One folder's worth of names, and whatever of it has been opened. */
 function Level({ projectId, root, path, onRead, onMenu }: {
   projectId: number;
@@ -345,7 +359,7 @@ function Level({ projectId, root, path, onRead, onMenu }: {
   onRead: (path: string[]) => void;
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
-  const [names, setNames] = useState<{ name: string; isDir: boolean }[]>([]);
+  const [names, setNames] = useState<FolderEntryDto[]>([]);
   const [open, setOpen] = useState<string[]>([]);
 
   useEffect(() => {
@@ -365,7 +379,7 @@ function Level({ projectId, root, path, onRead, onMenu }: {
             ? (
               <>
                 <button
-                  className="files__dir"
+                  className={faint("files__dir", one.ignored)}
                   aria-expanded={open.includes(one.name)}
                   onClick={() => setOpen((was) =>
                     was.includes(one.name) ? was.filter((n) => n !== one.name) : [...was, one.name]
@@ -386,7 +400,7 @@ function Level({ projectId, root, path, onRead, onMenu }: {
             )
             : (
               <button
-                className="files__file"
+                className={faint("files__file", one.ignored)}
                 onClick={() => onRead([...path, one.name])}
                 onContextMenu={(e) => {
                   e.preventDefault();

@@ -1768,6 +1768,32 @@ impl Instructor {
                 req(with, "name")?,
                 section(with)?
             ),
+            // The menu over a folder, which is where a name is made. The heading is named by nothing, so the
+            // line says which of the two the operator is pointing at rather than leaving them to read it off
+            // an arg that is not there.
+            (Domain::Files, "menu-on-folder") => match with.get("name").and_then(|v| v.as_str()) {
+                Some(name) => format!(
+                    "Come back to Amenbo if something else is in front of it. Then in {}, right-click the folder's row \"{name}\": a short menu of what can be done in that folder comes up where the pointer is.",
+                    section(with)?
+                ),
+                None => format!(
+                    "Come back to Amenbo if something else is in front of it. Then right-click the heading over {} — the folder's own row, at the top of the tree: the same short menu comes up where the pointer is.",
+                    section(with)?
+                ),
+            },
+            // The item pressed and the name typed, which is one move. The refusal is described here rather
+            // than at the reading, because what the operator does next depends on the box still being open.
+            (Domain::Files, "name") => format!(
+                "In that menu, press the item that makes a new {}. A box takes the place of a row: type \"{}\" into it and press Enter. If the machine will not take that name it says so under the box, and the box stays open — leave it as it is.",
+                made(with)?,
+                req(with, "name")?
+            ),
+            // The same box over a name already on the row, which is why the line says the old one goes: a
+            // box that opened holding the old name would otherwise be read as one to add to.
+            (Domain::Files, "rename") => format!(
+                "In that menu, press the item that changes the name. The box opens with the name that is there, selected — type \"{}\" over it and press Enter.",
+                req(with, "name")?
+            ),
             // Handing the file to the machine. On a row the menu is a right-click, and it is drawn on files alone
             // — a folder's row opens a level — so the step names a row the way every other one here does, and says
             // where the menu comes up, since nothing else on this face does.
@@ -3071,6 +3097,17 @@ fn door(with: &Args) -> Result<&'static str, String> {
     }
 }
 
+/// Which of the two items that open a naming box a step is about, named by what it makes rather than
+/// by the item's words, for the reason `door` and `section` are named that way.
+fn made(with: &Args) -> Result<&'static str, String> {
+    match with.get("as").and_then(|v| v.as_str()) {
+        Some("file") => Ok("file"),
+        Some("folder") => Ok("folder"),
+        Some(other) => Err(format!("`as` does not know `{other}` — it is file or folder")),
+        None => Err("arg `as` must say which of the two the item makes".to_string()),
+    }
+}
+
 /// One of the file face's standing lines, named by what it says. The wording is the interface's, so an
 /// instruction describes the line rather than quoting it.
 fn note(with: &Args) -> Result<&'static str, String> {
@@ -3085,6 +3122,12 @@ fn note(with: &Args) -> Result<&'static str, String> {
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),
         Some("folder-gone") => Ok("that this folder is not there any more"),
+        // The two refusals a name comes back with, read under the box the name was typed into rather
+        // than among the lines the column stands with. They are named by what the machine answered —
+        // the name is in the folder already, or it is not a name this machine will hold — and not by
+        // the sentence drawn for it, which is the interface's own.
+        Some("taken") => Ok("that the name typed into the box is already in that folder"),
+        Some("unnameable") => Ok("that this machine will not take what was typed as the name of one file"),
         Some(other) => Err(format!("`note` does not know `{other}`")),
         None => Err("arg `note` must say which of the face's lines".to_string()),
     }

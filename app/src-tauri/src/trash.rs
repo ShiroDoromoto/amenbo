@@ -33,9 +33,46 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use crate::dto::{FolderRestoredDto, FolderStoppedDto, FolderTrashedDto};
+use crate::dto::{FolderRestoredDto, FolderStopDto, FolderStoppedDto, FolderTrashedDto};
 use crate::error::CmdError;
 use crate::folder::{gone, rooted, under};
+
+/// Why one row would not go, or would not come back.
+///
+/// **What Amenbo decided is named; what the machine said is quoted.** The two are not the same kind
+/// of answer — a refusal of ours means the same thing every time and can be said in the reader's
+/// language, while a filesystem's sentence is one sentence in whatever language it was built with
+/// (`crate::dto`). The sentence is carried either way, so a face that does not know the name still
+/// has something to draw.
+struct Stop {
+    code: Option<FolderStopDto>,
+    why: String,
+}
+
+/// The sentence alone, which is the whole of what a test that fails has to show. Written by hand
+/// rather than derived because the name beside it is a wire type with no `Debug` of its own.
+impl std::fmt::Debug for Stop {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.why)
+    }
+}
+
+impl Stop {
+    /// A refusal of Amenbo's own: named, and written out for whoever does not know the name.
+    fn ours(code: FolderStopDto, why: String) -> Self {
+        Stop { code: Some(code), why }
+    }
+
+    /// The machine's, in the machine's own words.
+    fn theirs(why: impl ToString) -> Self {
+        Stop { code: None, why: why.to_string() }
+    }
+
+    /// The row this stopped on, as the answer carries it.
+    fn on(self, name: String) -> FolderStoppedDto {
+        FolderStoppedDto { name, code: self.code, why: self.why }
+    }
+}
 
 /// One row that went to the bin: where it was, and what its machine needs to put it back.
 struct Trashed {
@@ -127,12 +164,9 @@ pub fn folder_trash(
                 went.push(Trashed { from: target, held });
                 names.push(name);
             }
-            Err(why) => {
+            Err(stop) => {
                 bin.keep(went);
-                return Ok(FolderTrashedDto {
-                    gone: names,
-                    stopped: Some(FolderStoppedDto { name, why }),
-                });
+                return Ok(FolderTrashedDto { gone: names, stopped: Some(stop.on(name)) });
             }
         }
     }
@@ -156,14 +190,11 @@ pub fn folder_untrash(bin: tauri::State<'_, Bin>) -> Result<Option<FolderRestore
 
     let mut back = Vec::new();
     while let Some(one) = group.pop() {
-        if let Err(why) = put_back(&one) {
+        if let Err(stop) = put_back(&one) {
             let name = one.name();
             group.push(one);
             bin.keep(group);
-            return Ok(Some(FolderRestoredDto {
-                back,
-                stopped: Some(FolderStoppedDto { name, why }),
-            }));
+            return Ok(Some(FolderRestoredDto { back, stopped: Some(stop.on(name)) }));
         }
         back.push(one.name());
     }
@@ -171,7 +202,7 @@ pub fn folder_untrash(bin: tauri::State<'_, Bin>) -> Result<Option<FolderRestore
 }
 
 /// Put one row back where it came from: the half every machine agrees on, then the half it does not.
-fn put_back(one: &Trashed) -> Result<(), String> {
+fn put_back(one: &Trashed) -> Result<(), Stop> {
     returnable(&one.from)?;
     lift(one)
 }
@@ -188,14 +219,24 @@ fn put_back(one: &Trashed) -> Result<(), String> {
 /// freedesktop's bin makes it, the other two refuse — and one answer is better than three: a person
 /// who deleted a folder and then a file inside it presses undo twice, and the second press has
 /// nowhere to put anything unless the first one made the folder.
-fn returnable(from: &Path) -> Result<(), String> {
+fn returnable(from: &Path) -> Result<(), Stop> {
     if from.symlink_metadata().is_ok() {
-        return Err(format!("{} is already there", named(from)));
+        return Err(Stop::ours(
+            FolderStopDto::Taken,
+            format!("{} is already there", named(from)),
+        ));
     }
     if let Some(parent) = from.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(parent).map_err(Stop::theirs)?;
     }
     Ok(())
+}
+
+/// The refusal for a row the bin no longer holds — somebody emptied it, or took the row out of it
+/// by hand. There is nothing left to bring back, and saying which row it was is the whole of what a
+/// reader can act on.
+fn emptied(name: &str) -> Stop {
+    Stop::ours(FolderStopDto::Emptied, format!("{name} is not in the bin any more"))
 }
 
 /// The name to put in a sentence about this path.
@@ -219,18 +260,18 @@ fn named(path: &Path) -> String {
 /// in the reader's language, and they name the volume that has no bin — which is more than a
 /// sentence written here could say (`AMB-T-3749` read one over SMB).
 #[cfg(target_os = "macos")]
-fn take(path: &Path) -> Result<Held, String> {
+fn take(path: &Path) -> Result<Held, Stop> {
     use objc2_foundation::{NSFileManager, NSString, NSURL};
 
     let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
     let mut landed: Option<objc2::rc::Retained<NSURL>> = None;
     NSFileManager::defaultManager()
         .trashItemAtURL_resultingItemURL_error(&url, Some(&mut landed))
-        .map_err(|e| e.localizedDescription().to_string())?;
+        .map_err(|e| Stop::theirs(e.localizedDescription()))?;
     landed
         .and_then(|url| url.path())
         .map(|path| PathBuf::from(path.to_string()))
-        .ok_or_else(|| "the bin did not say where it put it".to_string())
+        .ok_or_else(|| Stop::theirs("the bin did not say where it put it"))
 }
 
 /// Move it back, refusing a name in the way in the same call that would have taken it.
@@ -241,14 +282,14 @@ fn take(path: &Path) -> Result<Held, String> {
 /// plain rename is what is left there. The check in [`returnable`] has already run, so the fallback
 /// is the ordinary road with a window in it rather than no check at all.
 #[cfg(target_os = "macos")]
-fn lift(one: &Trashed) -> Result<(), String> {
+fn lift(one: &Trashed) -> Result<(), Stop> {
     use std::os::unix::ffi::OsStrExt as _;
 
     if one.held.symlink_metadata().is_err() {
-        return Err(format!("{} is no longer in the bin", one.name()));
+        return Err(emptied(&one.name()));
     }
-    let from = std::ffi::CString::new(one.held.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
-    let to = std::ffi::CString::new(one.from.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
+    let from = std::ffi::CString::new(one.held.as_os_str().as_bytes()).map_err(Stop::theirs)?;
+    let to = std::ffi::CString::new(one.from.as_os_str().as_bytes()).map_err(Stop::theirs)?;
 
     let done = unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) };
     if done == 0 {
@@ -256,9 +297,9 @@ fn lift(one: &Trashed) -> Result<(), String> {
     }
     let refused = std::io::Error::last_os_error();
     if refused.raw_os_error() == Some(libc::ENOTSUP) {
-        return std::fs::rename(&one.held, &one.from).map_err(|e| e.to_string());
+        return std::fs::rename(&one.held, &one.from).map_err(Stop::theirs);
     }
-    Err(refused.to_string())
+    Err(Stop::theirs(refused))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -272,13 +313,13 @@ fn lift(one: &Trashed) -> Result<(), String> {
 /// and a time cannot, because the bin holds a second `l6.txt` under a name of its own while calling
 /// them both `l6.txt`, and the deletion time it records has a second's resolution (`AMB-T-3747`).
 #[cfg(target_os = "linux")]
-fn take(path: &Path) -> Result<Held, String> {
+fn take(path: &Path) -> Result<Held, Stop> {
     let before = records(path);
-    trash::delete(path).map_err(|e| e.to_string())?;
+    trash::delete(path).map_err(Stop::theirs)?;
     records(path)
         .into_iter()
         .find(|one| !before.iter().any(|was| was.id == one.id))
-        .ok_or_else(|| "the bin kept no record of it".to_string())
+        .ok_or_else(|| Stop::theirs("the bin kept no record of it"))
 }
 
 /// The bin's records for one path, which is every row it holds that came from there.
@@ -306,8 +347,13 @@ fn records(path: &Path) -> Vec<trash::TrashItem> {
 /// nothing is a bin that lists a row nobody can restore. One record at a time: two rows the bin
 /// calls by the same name are refused as a pair (`AMB-T-3747`).
 #[cfg(target_os = "linux")]
-fn lift(one: &Trashed) -> Result<(), String> {
-    trash::os_limited::restore_all([one.held.clone()]).map_err(|e| e.to_string())
+fn lift(one: &Trashed) -> Result<(), Stop> {
+    // The record is the row here, and its id is where the record is written. A bin somebody emptied
+    // has neither, and the crate's own word for that is a sentence about a file nobody named.
+    if !Path::new(&one.held.id).exists() {
+        return Err(emptied(&one.name()));
+    }
+    trash::os_limited::restore_all([one.held.clone()]).map_err(Stop::theirs)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -325,7 +371,7 @@ fn lift(one: &Trashed) -> Result<(), String> {
 /// costs about 9ms on a full bin because it counts what is in it, which is why it is asked once,
 /// here, rather than anywhere a screen could poll it.
 #[cfg(target_os = "windows")]
-fn take(path: &Path) -> Result<Held, String> {
+fn take(path: &Path) -> Result<Held, Stop> {
     use windows::core::HSTRING;
     use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED};
     use windows::Win32::UI::Shell::{SHQueryRecycleBinW, SHQUERYRBINFO};
@@ -337,7 +383,10 @@ fn take(path: &Path) -> Result<Held, String> {
     };
     let has_bin = unsafe { SHQueryRecycleBinW(&HSTRING::from(path.as_os_str()), &mut info) };
     if has_bin.is_err() {
-        return Err(format!("{} is on a drive with no recycle bin", named(path)));
+        return Err(Stop::ours(
+            FolderStopDto::NoBin,
+            format!("{} is on a drive with no recycle bin", named(path)),
+        ));
     }
 
     // The shell's file operation is a COM object, and so is the sink it reports through, so the
@@ -357,7 +406,7 @@ fn take(path: &Path) -> Result<Held, String> {
 /// nothing more, and the name the shell gives a binned row is `$R` and six characters it drew at
 /// random (`AMB-T-3747`).
 #[cfg(target_os = "windows")]
-fn recycle(path: &Path) -> Result<Held, String> {
+fn recycle(path: &Path) -> Result<Held, Stop> {
     use windows::core::HSTRING;
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
     use windows::Win32::UI::Shell::{
@@ -368,19 +417,26 @@ fn recycle(path: &Path) -> Result<Held, String> {
     let landed: Landed = std::sync::Arc::new(Mutex::new(None));
     unsafe {
         let op: IFileOperation =
-            CoCreateInstance(&FileOperation, None, CLSCTX_ALL).map_err(|e| e.message())?;
+            CoCreateInstance(&FileOperation, None, CLSCTX_ALL).map_err(|e| Stop::theirs(e.message()))?;
         op.SetOperationFlags(FOF_NO_UI | FOF_NOCONFIRMATION | FOFX_RECYCLEONDELETE)
-            .map_err(|e| e.message())?;
+            .map_err(|e| Stop::theirs(e.message()))?;
 
         let item: IShellItem = SHCreateItemFromParsingName(&HSTRING::from(path.as_os_str()), None)
-            .map_err(|e| e.message())?;
+            .map_err(|e| Stop::theirs(e.message()))?;
         let sink: IFileOperationProgressSink = Watch(landed.clone()).into();
-        op.DeleteItem(&item, &sink).map_err(|e| e.message())?;
-        op.PerformOperations().map_err(|e| e.message())?;
+        op.DeleteItem(&item, &sink).map_err(|e| Stop::theirs(e.message()))?;
+        op.PerformOperations().map_err(|e| Stop::theirs(e.message()))?;
     }
 
     let held = landed.lock().ok().and_then(|held| held.clone());
-    held.ok_or_else(|| format!("{} was not put in the recycle bin", named(path)))
+    // The sink named no landing, which on this OS is the shell saying it deleted the row instead of
+    // binning it. The question before the operation is what keeps this from happening at all.
+    held.ok_or_else(|| {
+        Stop::ours(
+            FolderStopDto::NoBin,
+            format!("{} was not put in the recycle bin", named(path)),
+        )
+    })
 }
 
 /// Where the sink writes what it was told, for the call that made it to read.
@@ -532,11 +588,11 @@ impl windows::Win32::UI::Shell::IFileOperationProgressSink_Impl for Watch_Impl {
 /// `rename` on this OS replaces what it finds without a word (`crate::folder_write`), and a window
 /// between the question and the act is what is left once no call offers to do both (`AMB-T-3747`).
 #[cfg(target_os = "windows")]
-fn lift(one: &Trashed) -> Result<(), String> {
+fn lift(one: &Trashed) -> Result<(), Stop> {
     if one.held.symlink_metadata().is_err() {
-        return Err(format!("{} is no longer in the recycle bin", one.name()));
+        return Err(emptied(&one.name()));
     }
-    std::fs::rename(&one.held, &one.from).map_err(|e| e.to_string())
+    std::fs::rename(&one.held, &one.from).map_err(Stop::theirs)
 }
 
 /// Only what a caller could ask for, and the halves that do not need a real bin to answer. The bin
@@ -584,7 +640,8 @@ mod tests {
         std::fs::write(&from, b"written since").expect("a file");
 
         let refused = returnable(&from).expect_err("the name is in use");
-        assert!(refused.contains("note.md"), "the refusal names it: {refused}");
+        assert!(matches!(refused.code, Some(FolderStopDto::Taken)), "named, so a screen can say it");
+        assert!(refused.why.contains("note.md"), "and it names the row: {}", refused.why);
         assert_eq!(std::fs::read(&from).expect("the file"), b"written since");
     }
 
@@ -612,7 +669,8 @@ mod tests {
         };
 
         let refused = put_back(&one).expect_err("nothing is in the bin");
-        assert!(refused.contains("note.md"), "the refusal names it: {refused}");
+        assert!(matches!(refused.code, Some(FolderStopDto::Emptied)));
+        assert!(refused.why.contains("note.md"), "and it names the row: {}", refused.why);
     }
 
     /// Moving it back is a move: the bin no longer holds it, and the folder does. The bin here is

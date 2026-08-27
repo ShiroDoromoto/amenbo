@@ -76,6 +76,11 @@ pub struct DimensionDto {
     pub(crate) ordered: bool,
     pub(crate) show_on_card: bool,
     pub(crate) required: bool,
+    /// Which of the two entities this axis classifies (`AMB-D-789`). The screens read it to decide
+    /// which of them offer the axis at all — the board and the task card the task side, the decision
+    /// pane the decision side — while the manager, which is where it is set, offers every axis.
+    #[ts(type = "\"task\" | \"decision\" | \"both\"")]
+    pub(crate) applies_to: String,
     pub(crate) values: Vec<DimensionValueDto>,
 }
 
@@ -2302,16 +2307,42 @@ pub struct FolderCarriedDto {
 pub struct FolderStoppedDto {
     /// The name the run was on when it stopped.
     pub(crate) name: String,
+    /// What stopped it, where what stopped it was Amenbo. Absent where the machine did, and then
+    /// `why` is the whole of the answer.
+    pub(crate) code: Option<FolderStopDto>,
     /// What the machine said, in the machine's own words. It is not a code with a template behind
     /// it: what a disk that filled up or a permission that was not there has to say is its own, and
-    /// a sentence written here would be a guess at which of them it was. macOS writes its own in the
-    /// reader's language.
+    /// a sentence written here would be a guess at which of them it was.
     ///
-    /// Where the machine says nothing this stands in its place, in English — a drive Windows would
-    /// have deleted on rather than binned, and a name that came back into use while its row was in
-    /// the bin (`crate::trash`). Both are Amenbo's judgement rather than a failure, and both are as
-    /// specific as a machine's sentence would have been.
+    /// Amenbo's own refusals fill it too, in English, and a face that knows the `code` draws from
+    /// its own words instead. Keeping the sentence here is what leaves a face that does not know a
+    /// code something to say rather than nothing.
     pub(crate) why: String,
+}
+
+/// Why a run stopped, where it was Amenbo that stopped it (`crate::folder_write`, `crate::trash`).
+///
+/// **Only Amenbo's own refusals are named.** They are decided before anything is written and they
+/// are the same few every time, so a screen can put them in the reader's language — which the
+/// machine's own sentences cannot be, and are not asked to be. Each of these was Amenbo's English
+/// standing on a Japanese screen until it had a name.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum FolderStopDto {
+    /// The folder being carried into already holds that name.
+    Taken,
+    /// A folder was being carried into itself.
+    Inside,
+    /// The path has no last name, so there is nothing to carry it in under.
+    Nameless,
+    /// The drive the row is on has no bin, and the shell there would have deleted it instead of
+    /// binning it (`crate::trash`). Only one operating system can answer this, and it is the only
+    /// one that builds the code raising it — a wire value, not a branch every platform reaches.
+    #[allow(dead_code)]
+    NoBin,
+    /// The row is not in the bin any more, so there is nothing left to bring back.
+    Emptied,
 }
 
 /// What went to the machine's bin, and what it stopped on (`crate::trash`).

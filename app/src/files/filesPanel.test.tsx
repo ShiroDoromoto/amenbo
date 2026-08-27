@@ -50,6 +50,8 @@ const hoisted = vi.hoisted(() => ({
   git: {} as Record<string, GitEntryDto[]>,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
   apps: [] as FolderAppDto[],
+  /** The encodings the host says a file may be reopened in. */
+  encodings: [] as string[],
   /** The folders the project is bound to. Empty is a project nobody has bound one to yet. */
   bound: [] as { path: string; exists: boolean }[],
   /** The host's side of the drag-and-drop subscription (`../core/hostDrop`). */
@@ -131,9 +133,18 @@ vi.mock("./folder", () => ({
     hoisted.asked.push(`entries:${root}:${path.join("/")}`);
     return hoisted.entries[path.join("/")] ?? [];
   },
-  folderRead: async (_projectId: number, root: string, path: string[]): Promise<FolderFileDto> => {
-    hoisted.asked.push(`read:${root}:${path.join("/")}`);
+  folderRead: async (
+    _projectId: number,
+    root: string,
+    path: string[],
+    encoding?: string,
+  ): Promise<FolderFileDto> => {
+    hoisted.asked.push(`read:${root}:${path.join("/")}${encoding === undefined ? "" : `:${encoding}`}`);
     return hoisted.file;
+  },
+  folderEncodings: async (): Promise<string[]> => {
+    hoisted.asked.push("encodings");
+    return hoisted.encodings;
   },
   folderOpenFile: async (_projectId: number, root: string, path: string[]) => {
     hoisted.asked.push(`open:${root}:${path.join("/")}`);
@@ -219,6 +230,26 @@ function tell(changes: FolderChangesDto) {
 
 async function settle() {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+}
+
+/**
+ * Wait until something the panel is still working on has landed.
+ *
+ * Polled rather than slept through. A fixed wait is a guess about how busy the machine is, and the
+ * machine running the whole suite at once — every file in its own worker, on however many cores it
+ * has — is a great deal busier than the one running this file alone: the guess held on the second
+ * and failed on the first, which is a red build that says nothing about the code (`AMB-T-3858`).
+ *
+ * The deadline is long because it is not a measurement. Nothing here waits it out when the panel is
+ * working — the loop stops on the first look that holds — so its only job is to end a wait that is
+ * never going to end, with a sentence saying what did not happen.
+ */
+async function until(held: () => boolean, missing: string) {
+  for (let look = 0; look < 400; look += 1) {
+    if (held()) return;
+    await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+  }
+  throw new Error(`waited two seconds and ${missing}`);
 }
 
 type Props = Parameters<typeof FilesPanel>[0];
@@ -322,6 +353,7 @@ beforeEach(() => {
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();
   hoisted.apps = [];
+  hoisted.encodings = ["UTF-8", "Shift_JIS", "EUC-JP", "windows-1252", "ISO-2022-JP"];
   hoisted.refuse = null;
   hoisted.slowRefusal = false;
   hoisted.takers = [];
@@ -679,11 +711,15 @@ describe("the file face", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    hoisted.carried = { arrived: [], stopped: { name: "note.md", why: "no room left" } };
+    // The machine's own words, carried through as they came: no code, so nothing here rewrites them.
+    hoisted.carried = { arrived: [], stopped: { name: "note.md", code: null, why: "no room left" } };
     await drop(["/a/note.md"]);
     expect(said).toEqual([tf("files.dropStopped", { name: "note.md", why: "no room left" })]);
 
-    hoisted.carried = { arrived: ["one.md"], stopped: { name: "note.md", why: "no room left" } };
+    hoisted.carried = {
+      arrived: ["one.md"],
+      stopped: { name: "note.md", code: null, why: "no room left" },
+    };
     await drop(["/a/one.md", "/a/note.md"]);
     expect(said[1]).toBe(
       tf("files.dropPartly", { name: "note.md", why: "no room left", count: formatNumber(1) }),
@@ -693,6 +729,31 @@ describe("the file face", () => {
     hoisted.carried = { arrived: ["one.md"], stopped: null };
     await drop(["/a/one.md"]);
     expect(said).toHaveLength(2);
+    stop();
+  });
+
+  // What Amenbo itself refused. The host sends the sentence as well as the code, in English, and the
+  // face is asked to draw the code — a reader whose screen is in another language would otherwise be
+  // handed the one sentence on it that was never translated.
+  it("says a refusal of its own in the reader's language, not in the host's English", async () => {
+    await draw();
+    const said: string[] = [];
+    const stop = subscribeNotice((line) => said.push(line));
+    const drop = (paths: string[]) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => container.querySelector("[data-into]");
+      hoisted.dragging?.({ payload: { type: "drop", position: { x: 1, y: 1 }, paths } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    hoisted.carried = {
+      arrived: [],
+      stopped: { name: "note.md", code: "taken", why: "note.md is already there" },
+    };
+    await drop(["/a/note.md"]);
+    expect(said).toEqual([
+      tf("files.dropStopped", { name: "note.md", why: t("files.stoppedTaken") }),
+    ]);
     stop();
   });
 
@@ -824,6 +885,69 @@ describe("the file face", () => {
     await click(button("cut.txt"));
     await settle();
     expect(last(hoisted.editing)?.editable).toBe(false);
+  });
+
+  /** The guess reports no confidence and breaks nothing visible when it is wrong — 46 files were
+   *  misread with not one damaged character between them — so the reader is the only one who can
+   *  catch it, and only if they are told what was guessed (`AMB-D-773`). */
+  it("says on the file's own row what the bytes were read as, and how the lines end", async () => {
+    hoisted.file = aFile({ text: "a", encoding: "Shift_JIS", lineEnding: "crlf" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(button("Shift_JIS")?.textContent).toContain("CRLF");
+  });
+
+  it("says in words that a file's newlines are mixed, rather than in a token nobody reads", async () => {
+    hoisted.file = aFile({ text: "a", encoding: "UTF-8", lineEnding: "mixed" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(t("files.lineEndingMixed"));
+  });
+
+  it("asks the host to read the file again in the encoding the reader named", async () => {
+    hoisted.file = aFile({ text: "a", encoding: "windows-1252" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(hoisted.asked).toContain(`read:${ROOT}:a.md`);
+
+    await click(button("windows-1252"));
+    await settle();
+    // The list is the host's, not a copy kept here: what may be offered is what can be written back.
+    expect(hoisted.asked).toContain("encodings");
+
+    hoisted.asked = [];
+    hoisted.file = aFile({ text: "あ", encoding: "Shift_JIS" });
+    await click(button("Shift_JIS"));
+    await settle();
+    expect(hoisted.asked).toContain(`read:${ROOT}:a.md:Shift_JIS`);
+    expect(container.textContent).toContain("あ");
+  });
+
+  /** A file whose bytes and text no longer say the same thing is exactly the file a wrong guess
+   *  produces, so the road out of a wrong guess has to be open on it. */
+  it("offers the encodings on a file it could not save", async () => {
+    // Not Markdown: a file drawn as a document never reaches the editor, and what is under test
+    // here is that the road out is open on the very file the editor has locked.
+    hoisted.entries[""] = [{ name: "guessed.txt", isDir: false, ignored: false }];
+    hoisted.file = aFile({ text: "?????", encoding: "windows-1252", clean: false });
+    await drawOpen();
+    await click(button("guessed.txt"));
+    await settle();
+    expect(last(hoisted.editing)?.editable).toBe(false);
+    expect(button("windows-1252")).toBeDefined();
+  });
+
+  it("says nothing about the encoding of a picture", async () => {
+    hoisted.file = aFile({ image: { mime: "image/png" } });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    // A picture has no encoding to be wrong about, and a control that asked about one would be
+    // asking a question the file cannot answer.
+    expect(container.querySelector(".files__encoding")).toBeNull();
   });
 
   /** Opening a file the panel can write back and typing into it: the one door that changes what is
@@ -1317,8 +1441,10 @@ describe("a project bound to several folders", () => {
     // Left while the answer is out. A box that closed itself here would take the refusal with it,
     // and the reader would watch the name they typed vanish with nothing said.
     await leave(box);
-    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
-    expect(container.textContent).toContain(errLabel(refusal));
+    await until(
+      () => container.textContent?.includes(errLabel(refusal)) === true,
+      "the refusal never reached the screen",
+    );
     // Still there, still holding what was typed: a refusal a person has to type their way back to
     // is one they were told nothing by. And the name was asked for once, not once per leaving.
     expect(namebox()?.value).toBe("notes.md");

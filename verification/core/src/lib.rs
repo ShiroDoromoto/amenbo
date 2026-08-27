@@ -1947,6 +1947,27 @@ const REGISTRY: &[OpSpec] = &[
     // three, because the shell is reachable from every shape the face can come up in — which is the
     // whole of what lets these roads be walked on any machine.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-shell", required: &[], refs: &[], strings: &[], binds: false },
+    // A command of the reader's own, written down on the frame. The catalog is a
+    // shortcut and not a census, so what a pane can be opened with is not only what Amenbo lists —
+    // and this is the road that says so.
+    //
+    // **It is the one terminal op that may name a program**, and the reason is that the program is
+    // the road's own. Every other reading here is written around not naming one (`opens-with`): which
+    // agents are on the row is a probe of the run machine's `PATH`, so a road that asked for Claude
+    // Code would run on the machines that happen to have it and nowhere else. A registered `line` is
+    // not that — it is text the road wrote, judged by its first word alone, so a road may name
+    // something every machine has and get the same answer on all of them.
+    //
+    // `line` is written with an argument in it or the road proves nothing. What is under test is that
+    // the whole line reaches the shell as it stands: a line of one bare word would read alike whether
+    // Amenbo handed it over or rebuilt it from the first word, which is the fault this exists to
+    // catch.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "register-start", required: &["name", "line"], refs: &[], strings: &["name", "line"], binds: false },
+    // Opening a pane on one of those. It names the row by the `name` it was registered under and
+    // never by a line, because a name is what the row is drawn by and the line is what it runs — the
+    // two are separate on purpose, and a road that pressed by the line would be reading the one place
+    // the screen does not put it.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-registered", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // A line typed into the pane and sent. `text` is the reader's own words rather than the
     // interface's, which is what makes it worth reading back: it is on the screen because a person
     // put it there, in whatever language the app is in, so a road can follow it from one window to
@@ -2142,6 +2163,15 @@ const REGISTRY: &[OpSpec] = &[
     // before anything on the frame has been pressed — a choice made anywhere in the run ends the
     // state for good, this person's answer being kept and outliving the press that made it.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "opens-with", required: &["start"], refs: &[], strings: &["start"], binds: false },
+    // A registered command as the frame draws it: the `name` on the row, and the `line` written out
+    // beside it.
+    //
+    // **Both halves are read, and the line is the half that matters.** What is registered runs in a
+    // terminal exactly as it was written — Amenbo composes none of it — so the promise the screen
+    // makes is that a reader can see what a press would start before they press it. A frame that drew
+    // the name alone would keep that promise for nobody, and one that drew a line it had tidied up
+    // would keep it falsely.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "registered", required: &["name", "line"], refs: &[], strings: &["name", "line"], binds: false },
     // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
     // ceiling on how many a page may hold, and this is how many are actually standing there. The two
     // part company on exactly the thing worth defending — a face that filled the ceiling with empty
@@ -2248,6 +2278,25 @@ const REGISTRY: &[OpSpec] = &[
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
+
+    // ── changing what is in a file ────────────────────────────────────────────────────────────────
+    // The words typed into the editor an opened file draws. They go on the end and on a line of their
+    // own, which is what lets a road read the file afterwards for **both** what it already held and
+    // what was added: a save that wrote only the typing would pass a reading of the new words and
+    // have thrown the file away.
+    //
+    // It is one op and not two — the caret put where it goes, and then the typing — because on this
+    // face they are one move, the same reasoning `name` is one op for.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "edit", required: &["types"], refs: &[], strings: &["types"], binds: false },
+    // And the typing kept. It takes no args: what is saved is the file that is open, and where the
+    // bytes go is not a road's to say.
+    //
+    // **Nothing is asserted here**, and that is deliberate. What the panel draws once a save is
+    // through is that there is nothing left to save, which is a reading of the control rather than of
+    // the file — a face that drew it having written nothing would read exactly the same. So a road
+    // that means to prove the bytes landed leaves the file and opens it again, which is the app
+    // reading the disk, and the only reading that could not have come from what was on the screen.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "save", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── bringing a file in from the machine ───────────────────────────────────────────────────────
     // A file dragged in from outside and let go over a row, which is the one way anything reaches this

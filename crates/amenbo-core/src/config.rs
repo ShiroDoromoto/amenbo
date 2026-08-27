@@ -689,6 +689,28 @@ pub struct Config {
     /// never synced**, because what can be started is a fact about this machine.
     #[serde(default)]
     pub last_agent: Option<String>,
+    /// **What this machine was last seen able to start** ([`crate::wake`]) — the catalogued commands
+    /// a probe of the reader's own login shell came back naming.
+    ///
+    /// It is written down because asking is both expensive and unreliable. The probe starts a login
+    /// shell and reads the profile, which is arbitrary code and on some machines waits on a network,
+    /// so it is abandoned after a deadline. Paying that on every window, and drawing whatever came
+    /// back by then, is how a machine with four agents on it says none are installed. Remembering
+    /// lets the window come up on the last answer and correct itself when a fresh one lands.
+    ///
+    /// **`None` is "never asked" and `Some(vec![])` is "asked, and nothing catalogued is here".**
+    /// They are different answers to the reader and are drawn differently. A probe that could not be
+    /// run is neither of them, and is never written here: writing it would fix a lie in place, and
+    /// the lie is the one the remembering exists to end (`AMB-D-792`).
+    ///
+    /// Commands rather than ids, because what a probe asks about is a program name
+    /// ([`crate::harness::Launch::command`]). A name whose catalog row has since gone is left alone
+    /// rather than pruned — it costs a line, and nothing reads a name it cannot match.
+    ///
+    /// A device-level setting; **never synced**, for the reason [`Config::last_agent`] is not: what
+    /// can be started is a fact about this machine.
+    #[serde(default)]
+    pub installed_agents: Option<Vec<String>>,
     /// **The commands this person registered themselves** ([`CustomAgent`], `AMB-D-794`), in the
     /// order they were added — the rows a face offers after the catalog's.
     ///
@@ -823,6 +845,7 @@ impl Default for Config {
             tick_consent: None,
             project_agent: Default::default(),
             last_agent: None,
+            installed_agents: None,
             custom_agents: Vec::new(),
             custom_agent_seq: 0,
         }
@@ -1017,6 +1040,25 @@ impl Config {
         self.last_agent = Some(id.to_string());
     }
 
+    /// What a probe of this machine last found, where this machine has ever been asked
+    /// ([`Config::installed_agents`]).
+    ///
+    /// `None` and an empty slice are **not** the same answer: the first has never been asked and the
+    /// second was asked and found nothing, so this hands back the distinction rather than flattening
+    /// it into a list.
+    pub fn installed_agents(&self) -> Option<&[String]> {
+        self.installed_agents.as_deref()
+    }
+
+    /// Keep what a probe found, replacing whatever the last one found.
+    ///
+    /// Only an answer reaches here. A probe that could not be run has nothing to say and must not
+    /// say it by writing an empty list, which reads back as "nothing is installed"
+    /// ([`Config::installed_agents`]).
+    pub fn remember_installed(&mut self, commands: &[String]) {
+        self.installed_agents = Some(commands.to_vec());
+    }
+
     /// The commands this person registered, in the order they registered them.
     pub fn custom_agents(&self) -> &[CustomAgent] {
         &self.custom_agents
@@ -1207,6 +1249,45 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// "Nobody has asked this machine" and "this machine was asked and has nothing" are different
+    /// answers, and the difference has to survive the file: written flat, the first would come back
+    /// as the second and a face would report a machine bare that nobody ever looked at
+    /// (`AMB-D-792`).
+    #[test]
+    fn never_asked_and_nothing_installed_are_kept_apart() {
+        let mut config = Config::default();
+        assert_eq!(config.installed_agents(), None, "a fresh config has never asked");
+
+        config.remember_installed(&[]);
+        assert_eq!(config.installed_agents(), Some(&[][..]), "asked, and nothing is here");
+
+        let round = |c: &Config| {
+            serde_json::from_str::<Config>(&serde_json::to_string(c).expect("written"))
+                .expect("read back")
+        };
+        assert_eq!(round(&config).installed_agents(), Some(&[][..]));
+        assert_eq!(round(&Config::default()).installed_agents(), None);
+    }
+
+    /// A config written before the field existed reads back as never asked, not as a machine with
+    /// nothing on it — the same distinction, arriving from the other direction.
+    #[test]
+    fn a_config_from_before_the_field_has_never_been_asked() {
+        let old: Config =
+            serde_json::from_str(r#"{"default_view":"board"}"#).expect("an older file");
+        assert_eq!(old.installed_agents(), None);
+    }
+
+    /// What a probe found replaces what the one before it found; nothing accumulates. A tool that
+    /// was uninstalled between two probes has to leave.
+    #[test]
+    fn what_a_probe_found_replaces_the_last_answer() {
+        let mut config = Config::default();
+        config.remember_installed(&["claude".to_string(), "codex".to_string()]);
+        config.remember_installed(&["codex".to_string()]);
+        assert_eq!(config.installed_agents(), Some(&["codex".to_string()][..]));
+    }
 
     /// Every supported language code reaches the managed block as a name, never as the code itself
     /// — the label is the whole instruction an AI gets about which language to write in.

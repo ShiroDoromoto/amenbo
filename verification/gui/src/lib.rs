@@ -1396,6 +1396,22 @@ impl Instructor {
             (Domain::Terminal, "open-shell") =>
                 "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first (run: exit): the row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. On an empty frame the same list is on the frame itself, above the press that opens it: choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane."
                     .to_string(),
+            // Writing a command of the reader's own down on the frame. Two fields and a
+            // press, and the reading that matters is taken before the press: what is registered runs
+            // in a terminal exactly as it stands, so the frame has to say so while there is still
+            // something to change.
+            (Domain::Terminal, "register-start") => format!(
+                "On the terminal face, find the empty frame — the box on the page that is not a terminal — and under the row of things a pane can be opened with, press the control that registers a command of your own. Fill the two fields it opens: the name \"{}\", and the command line `{}` written exactly as it stands here, spaces and quotes and all. Before saving, confirm the frame shows that same line back as what will run in the terminal. Then save.",
+                req(with, "name")?,
+                req(with, "line")?,
+            ),
+            // Opening a pane on one. It is the same two moves the plain shell is opened by — choose,
+            // then press — and it is written as its own step because what is being proved is that a
+            // row nobody catalogued is pressable at all.
+            (Domain::Terminal, "open-registered") => format!(
+                "On the empty frame, choose \"{}\" from the row of things a pane can be opened with — it stands among them after the ones Amenbo lists and before the plain shell — and press to open. A pane comes up and the command runs in it.",
+                req(with, "name")?
+            ),
             // A line typed into the pane and sent. It is typed rather than pasted because what is
             // under test is a terminal: keys are what a terminal is driven by, and a line that
             // arrived some other way would be evidence of a path nobody walks.
@@ -1757,6 +1773,19 @@ impl Instructor {
             ),
             (Domain::Files, "back") =>
                 "Press the way back out of the file. The column returns to its two sections."
+                    .to_string(),
+            // The typing, put where it cannot land on top of what is already there: a road that reads the
+            // file afterwards reads it for both, and an operator who typed over the middle of it would
+            // leave one of the two readings answering for nothing.
+            (Domain::Files, "edit") => format!(
+                "Click into the text of the file, put the caret at the very end of it, press Enter and type \"{}\" on the new line.",
+                req(with, "types")?
+            ),
+            // And the keeping. The control is named by what it does rather than quoted, the same as
+            // every other item on this face — and the line says where it is, since a reader who has just
+            // been typing is looking at the text and not at the row above it.
+            (Domain::Files, "save") =>
+                "In the row above the text — beside the file's name — press the way the panel offers to keep what was typed."
                     .to_string(),
             // A file brought in from outside and let go over a folder's row. The instruction names where it
             // is dragged from as loosely as it can — anywhere on the machine that is not this folder —
@@ -2697,6 +2726,16 @@ impl Instructor {
                     "assert `opens-with` cannot name `{other}` — the plain shell is the one thing every machine's row has, `none` is nobody having chosen yet, and which agents are on the row is that machine's own"
                 )),
             },
+            // A registered command as the frame draws it, name and line together. The line is read
+            // character for character rather than recognised: a build that tidied it — trimmed the
+            // quotes, dropped the arguments, rebuilt it from the first word — would draw something a
+            // reader would still call the right one, and it is the one thing this reading exists to
+            // catch.
+            (Domain::Terminal, "registered") => format!(
+                "On the empty frame, look under the row of things a pane can be opened with, at the list of the commands registered on this machine. Confirm one of them is called \"{}\" and that the line drawn beside it reads `{}` — the same characters in the same order, with nothing added, tidied or left out.",
+                req(with, "name")?,
+                req(with, "line")?,
+            ),
             // How many panes are standing on the page. Counted rather than read: the boxes carry no
             // words of the road's, and the whole of what this asks is how many of them there are.
             //

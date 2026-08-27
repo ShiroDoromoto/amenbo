@@ -73,7 +73,12 @@ emit_staged() {
   local file
   while IFS= read -r -d '' file; do
     is_allowed "$file" && continue
-    git diff --cached --unified=0 --no-color -- "$file" | awk -v f="$file" '
+    # Bytes, not characters: a staged file need not be UTF-8 — a fixture whose whole point is that
+    # it is not (`verification/fixtures/`) is one — and an awk reading it as text dies on the first
+    # sequence that is not, taking the commit with it. The scan is for an ASCII pattern either way,
+    # so there is nothing a character reading would find that a byte reading does not. `emit_files`
+    # has read this way all along.
+    git diff --cached --unified=0 --no-color -- "$file" | LC_ALL=C awk -v f="$file" '
       /^\+\+\+/ { next }
       /^@@/ {
         if (match($0, /\+[0-9]+/)) { ln = substr($0, RSTART + 1, RLENGTH - 1) + 0 }

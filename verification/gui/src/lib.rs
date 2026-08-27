@@ -824,6 +824,12 @@ impl Instructor {
             (Domain::Files, "listed") => {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
+            // The encoding the row names. It is drawn as words and read as words, and the fold takes
+            // the punctuation with it — `Shift_JIS` and `UTF-8` come back as their letters and digits
+            // either way, which is the whole of what is being compared.
+            (Domain::Files, "read-as") => {
+                Some(Expectation { text: arg_str(with, "encoding")?.to_string(), present: present(with) })
+            }
             (Domain::Files, "reading") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
@@ -1770,6 +1776,13 @@ impl Instructor {
                 "In {}, press \"{}\". The column is replaced by what is in that file.",
                 section(with)?,
                 req(with, "name")?
+            ),
+            // The control is named by what it says rather than by where it is: it draws the encoding
+            // and the newline with a dot between them, and those words are the file's rather than the
+            // interface's — so an operator can find it on a screen in any language.
+            (Domain::Files, "reopen-with") => format!(
+                "On the row the open file is named on, press what says how it was read — an encoding and a newline with a dot between them — and choose \"{}\" from the list that comes up. The file is read again from its bytes as that.",
+                req(with, "encoding")?
             ),
             (Domain::Files, "back") =>
                 "Press the way back out of the file. The column returns to its two sections."
@@ -2807,6 +2820,16 @@ impl Instructor {
                     "In {}, confirm \"{}\" is not among the rows — the section is drawn, and this is not on it.",
                     section(with)?,
                     req(with, "name")?
+                ),
+            },
+            (Domain::Files, "read-as") => match present(with) {
+                true => format!(
+                    "On the row the open file is named on, confirm what says how it was read now names \"{}\".",
+                    req(with, "encoding")?
+                ),
+                false => format!(
+                    "On the row the open file is named on, confirm what says how it was read does not name \"{}\".",
+                    req(with, "encoding")?
                 ),
             },
             (Domain::Files, "reading") => match present(with) {

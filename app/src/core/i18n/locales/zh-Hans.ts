@@ -561,6 +561,17 @@ export const zhHans: Translation = {
     "files.unreadable": "无法读取这个文件。",
     "files.dropStopped": "没能把 {name} 放进来：{why}",
     "files.dropPartly": "放进来 {count} 个。{name} 没有：{why}",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "保存",
+    "files.saving": "正在保存…",
+    "files.saved": "已保存",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "这个文件里两种换行都有。保存后会统一成一种。",
+    "files.newlineChoose": "用哪种换行保存",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "这张图太大了，没法在这里显示。",
     "files.tooBigPixels": "{width} × {height} 像素",
     "files.tooBigOpen": "用别的应用打开",
@@ -716,6 +727,10 @@ export const zhHans: Translation = {
     folder_name: "这台机器不接受 {name} 作为名称。",
     folder_make: "无法创建 {name}：{reason}",
     folder_rename: "无法重命名为 {name}：{reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "无法保存这个文件：{reason}",
+    folder_unwritable_character: "“{character}”在 {encoding} 里写不出来，所以什么都没保存。",
 
     already_reserved: "{ref} 不是“待办”，无法认领；可能已有另一个会话在处理。",
     not_ready: "{ref} 还不能认领：{reasons}",

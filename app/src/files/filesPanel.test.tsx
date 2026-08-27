@@ -710,6 +710,23 @@ describe("the file face", () => {
     expect(container.querySelector(".files__file--git-untracked")?.textContent).toContain("one.md");
   });
 
+  it("colours a folded folder for what is under it, and lets it go plain when it opens", async () => {
+    hoisted.entries[""] = [{ name: "src", isDir: true, ignored: false }];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
+    // git names the file and not the folder holding it, so a tree that matched what git said would
+    // leave the folded row saying nothing about the change it is hiding (`AMB-D-795`).
+    hoisted.git[ROOT] = [{ path: ["src", "main.rs"], index: " ", worktree: "M", isDir: false }];
+    await drawOpen();
+    expect(container.querySelector(".files__dir--git-modified")?.textContent).toContain("src");
+
+    await click(button("src"));
+    await settle();
+    // Open, the row inside says it, and the folder stops saying it: two rows in one colour down one
+    // column would be the tree saying "somewhere, something".
+    expect(container.querySelector(".files__dir--git-modified")).toBeNull();
+    expect(container.querySelector(".files__file--git-modified")?.textContent).toContain("main.rs");
+  });
+
   it("colours a whole repository nothing is tracked in yet", async () => {
     hoisted.entries[""] = [{ name: "one.md", isDir: false, ignored: false }];
     // Zero segments is the bound folder itself, which is what git names when nothing under it is

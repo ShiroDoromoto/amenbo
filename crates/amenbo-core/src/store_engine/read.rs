@@ -27,7 +27,7 @@ use super::sql::{
     Slot, Sort, Sql, Text as SqlText, Union,
 };
 use super::{StoreEngineError, Result};
-use crate::model::{ActorKind, DecisionStatus, Priority, TaskStatus};
+use crate::model::{ActorKind, AttachmentTarget, DecisionStatus, Priority, TaskStatus};
 use crate::query::{AssigneeFilter, DueFilter, Filter, StartFilter};
 use crate::view::{ProjectRef, TaskCompact};
 
@@ -426,11 +426,11 @@ fn task_word_sets(term: search::Term<'_>) -> [IdSet; 6] {
     let on_axis = IdSet::of(TDV.table, TDV.task_id)
         .join(SD.table, on_face(search::DATASET_DIMENSION, TDV.dimension_id))
         .filter(term.pred(SD));
-    let attached = attachment_ids(search::DATASET_TASK, term);
+    let attached = attachment_ids(AttachmentTarget::Task, term);
     // What hangs off a comment hangs off the task, by the same reading that puts the comment's own body
     // here: the timeline is the task's, and so is what was pinned to it.
     let attached_to_comment = IdSet::of(TC.table, TC.task_id)
-        .join(A.table, hangs_off(search::DATASET_TASK_COMMENT, TC.id))
+        .join(A.table, hangs_off(AttachmentTarget::TaskComment, TC.id))
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
         .filter(term.pred(SD));
     [own, in_comment, on_value, on_axis, attached, attached_to_comment]
@@ -457,9 +457,9 @@ fn decision_word_sets(term: search::Term<'_>) -> [IdSet; 4] {
     let in_comment = IdSet::of(DC.table, DC.decision_id)
         .join(SD.table, on_face(search::DATASET_DECISION_COMMENT, DC.id))
         .filter(term.pred(SD));
-    let attached = attachment_ids(search::DATASET_DECISION, term);
+    let attached = attachment_ids(AttachmentTarget::Decision, term);
     let attached_to_comment = IdSet::of(DC.table, DC.decision_id)
-        .join(A.table, hangs_off(search::DATASET_DECISION_COMMENT, DC.id))
+        .join(A.table, hangs_off(AttachmentTarget::DecisionComment, DC.id))
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
         .filter(term.pred(SD));
     [own, in_comment, attached, attached_to_comment]
@@ -477,8 +477,8 @@ fn on_face<N: Nullability>(owner_kind: &str, owner: Col<Int, N>) -> Pred {
 
 /// The join that reaches what hangs off one record — `attachment_by_target`'s two columns, the same way.
 /// Polymorphic, so the kind of the thing hung off is half of the condition.
-fn hangs_off<N: Nullability>(target_type: &str, target: Col<Int, N>) -> Pred {
-    Pred::eq(A.target_type, target_type).and(same(A.target_id, target))
+fn hangs_off<N: Nullability>(target_type: AttachmentTarget, target: Col<Int, N>) -> Pred {
+    Pred::eq(A.target_type, target_type.as_str()).and(same(A.target_id, target))
 }
 
 /// The ids of the records of `target_type` something attached to them is named by — the filename a blob
@@ -486,10 +486,10 @@ fn hangs_off<N: Nullability>(target_type: &str, target: Col<Int, N>) -> Pred {
 ///
 /// It drives from `attachment`, seeking `attachment_by_target`, and reaches the copy from there: driving
 /// from the copy instead would leave the seek with only the face key's leading column.
-fn attachment_ids(target_type: &str, term: search::Term<'_>) -> IdSet {
+fn attachment_ids(target_type: AttachmentTarget, term: search::Term<'_>) -> IdSet {
     IdSet::of(A.table, A.target_id)
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
-        .filter(Pred::eq(A.target_type, target_type))
+        .filter(Pred::eq(A.target_type, target_type.as_str()))
         .filter(term.pred(SD))
 }
 
@@ -1110,7 +1110,7 @@ fn blob_hashes<C: FromIterator<String>>(conn: &Connection, pred: &Pred) -> Resul
 /// a delete can hand its caller the exact set of blobs it may have orphaned.
 pub fn blob_hashes_for_target(
     conn: &Connection,
-    target_type: &str,
+    target_type: AttachmentTarget,
     target_id: i64,
 ) -> Result<Vec<String>> {
     blob_hashes(conn, &any_blob().and(on_target(target_type, target_id)))
@@ -1134,9 +1134,11 @@ pub fn blob_refcount(conn: &Connection, hash: &str) -> Result<i64> {
 
 /// The attachments of one polymorphic target. The target is a `(type, id)` pair rather than a foreign
 /// key — no `REFERENCES` can branch on a sibling column — so the two halves are asked for together, and
-/// an id is never matched without the type that says what it names.
-fn on_target(target_type: &str, target_id: i64) -> Pred {
-    Pred::eq(ATT.target_type, target_type).and(Pred::eq(ATT.target_id, target_id))
+/// an id is never matched without the type that says what it names. The type stays
+/// [`AttachmentTarget`] up to here and falls to text only for the
+/// parameter: what the `CHECK` on that column accepts is then what the caller is able to say.
+fn on_target(target_type: AttachmentTarget, target_id: i64) -> Pred {
+    Pred::eq(ATT.target_type, target_type.as_str()).and(Pred::eq(ATT.target_id, target_id))
 }
 
 /// One live attachment's metadata, as the store holds it. The blob bytes are
@@ -1160,7 +1162,7 @@ pub struct AttachmentRow {
 /// read-model so the GUI read path stays O(result).
 pub fn attachments_for_target(
     conn: &Connection,
-    target_type: &str,
+    target_type: AttachmentTarget,
     target_id: i64,
 ) -> Result<Vec<AttachmentRow>> {
     let mut sel = Select::new();
@@ -1367,7 +1369,7 @@ pub fn next_id(conn: &Connection, table: &str) -> Result<i64> {
 /// attachments to the same target would otherwise read the same maximum and take the same key.
 pub fn max_attachment_order_key(
     conn: &Connection,
-    target_type: &str,
+    target_type: AttachmentTarget,
     target_id: i64,
 ) -> Result<Option<String>> {
     const A: col::attachment::Cols = col::attachment::ALL;
@@ -1375,7 +1377,7 @@ pub fn max_attachment_order_key(
     // MAX over a column: an aggregate, so the registry cannot type it — an empty target has no row to
     // take the maximum of, and the aggregate answers NULL rather than nothing.
     let max = sel.expr::<Option<String>>(format!("MAX({})", A.order_key.name()));
-    let pred = Pred::eq(A.target_type, target_type).and(Pred::eq(A.target_id, target_id));
+    let pred = Pred::eq(A.target_type, target_type.as_str()).and(Pred::eq(A.target_id, target_id));
     let mut sql = Sql::from(&sel, A.table);
     sql.push_where(Some(&pred));
     conn.query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| max.get(r))
@@ -2360,7 +2362,7 @@ fn attachment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
                 attachment_name(A),
             );
             let mut tail = Sql::from_table(A.table);
-            tail.join(T.table, hangs_off(TASK, T.id)).push_where(
+            tail.join(T.table, hangs_off(AttachmentTarget::Task, T.id)).push_where(
                 a.r#where(
                     face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], a.asked),
                     HitFace::Attachment,
@@ -2383,7 +2385,7 @@ fn attachment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
                 attachment_name(A),
             );
             let mut tail = Sql::from_table(A.table);
-            tail.join(DEC.table, hangs_off(DECISION, DEC.id)).push_where(
+            tail.join(DEC.table, hangs_off(AttachmentTarget::Decision, DEC.id)).push_where(
                 a.r#where(
                     face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], a.asked),
                     HitFace::Attachment,
@@ -2417,7 +2419,7 @@ fn comment_attachment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlot
                 attachment_name(A),
             );
             let mut tail = Sql::from_table(A.table);
-            tail.join(TC.table, hangs_off(search::DATASET_TASK_COMMENT, TC.id))
+            tail.join(TC.table, hangs_off(AttachmentTarget::TaskComment, TC.id))
                 .join(T.table, same(T.id, TC.task_id))
                 .push_where(
                     a.r#where(
@@ -2442,7 +2444,7 @@ fn comment_attachment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlot
                 attachment_name(A),
             );
             let mut tail = Sql::from_table(A.table);
-            tail.join(DC.table, hangs_off(search::DATASET_DECISION_COMMENT, DC.id))
+            tail.join(DC.table, hangs_off(AttachmentTarget::DecisionComment, DC.id))
                 .join(DEC.table, same(DEC.id, DC.decision_id))
                 .push_where(
                     a.r#where(
@@ -5588,7 +5590,7 @@ pub fn attachment(conn: &Connection, id: i64) -> Result<Option<crate::model::Att
 /// with the GUI's projection row; this one hands back ids so the caller can load whole records.
 pub fn live_attachment_ids_for_target(
     conn: &Connection,
-    target_type: &str,
+    target_type: AttachmentTarget,
     target_id: i64,
 ) -> Result<Vec<i64>> {
     let mut sel = Select::new();

@@ -314,7 +314,7 @@ fn attachments_for_target_lists_live_in_order() {
 
     let store = Store::open_at(paths).unwrap();
     let rm = store.read_model();
-    let rows = read::attachments_for_target(rm.conn(), "task", TASK_A).unwrap();
+    let rows = read::attachments_for_target(rm.conn(), AttachmentTarget::Task, TASK_A).unwrap();
 
     // Three live (h1 blob, h2 blob, url) in attach order; the removed one is gone; task-b absent.
     assert_eq!(rows.len(), 3);

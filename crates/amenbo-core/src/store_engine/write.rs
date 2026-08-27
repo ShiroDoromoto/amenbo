@@ -36,6 +36,8 @@
 use rusqlite::types::Value;
 use rusqlite::Connection;
 
+use crate::model::AttachmentTarget;
+
 use super::engine::{Result, StoreEngine, StoreEngineError};
 use super::schema::col;
 use super::sql::Insert;
@@ -109,7 +111,11 @@ impl<'a> WriteTx<'a> {
 
     /// Physically delete the `attachment` rows of `(target_type, target_id)`. See
     /// [`StoreEngine::delete_records_for_target`].
-    pub fn delete_records_for_target(&self, target_type: &str, target_id: i64) -> Result<usize> {
+    pub fn delete_records_for_target(
+        &self,
+        target_type: AttachmentTarget,
+        target_id: i64,
+    ) -> Result<usize> {
         self.engine.delete_records_for_target(target_type, target_id)
     }
 

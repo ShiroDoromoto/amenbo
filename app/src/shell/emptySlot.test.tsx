@@ -19,14 +19,26 @@ const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
   /** Set to refuse the read, the way a host that could not answer does. */
   wakeFails: false,
+  /** What the frame handed the host along with each command it asked, in the same order. */
+  args: [] as unknown[],
+  /** What the host answers the next read with, where registering one is meant to change the row. */
+  wakeAfter: null as unknown,
+  /** Set to refuse a registration, the way a host with an empty half does. */
+  keepFails: false,
 }));
 
 vi.mock("../core/ipc", () => ({
-  invoke: vi.fn(async (cmd: string) => {
+  invoke: vi.fn(async (cmd: string, args?: unknown) => {
     hoisted.asked.push(cmd);
+    hoisted.args.push(args);
     if (cmd === "wake_choices") {
       if (hoisted.wakeFails) throw new Error("the host could not say");
       return hoisted.wake;
+    }
+    if (cmd === "wake_register" || cmd === "wake_amend" || cmd === "wake_unregister") {
+      if (hoisted.keepFails) throw new Error("that command could not be registered");
+      if (hoisted.wakeAfter !== null) hoisted.wake = hoisted.wakeAfter;
+      return cmd === "wake_register" ? "custom:1" : undefined;
     }
     throw new Error(`the frame asked the host for ${cmd}`);
   }),
@@ -55,6 +67,33 @@ function partly(has: string[], lacks: string[], settled?: string): WakeDto {
   };
 }
 
+/** A machine with a command the reader registered on it (`AMB-D-794`): `own` is `[label, line]`, and
+ *  `installed` says whether this machine can start its first word. Catalog rows come first, as the
+ *  host answers them. */
+function withOwn(
+  has: string[],
+  own: [string, string][],
+  installed = true,
+  settled?: string,
+): WakeDto {
+  const row = [
+    ...has.map((id) => ({ id, label: id, command: id, traced: false, installed: true })),
+    ...own.map(([label, line], i) => ({
+      id: `custom:${i + 1}`,
+      label,
+      command: line.split(" ")[0] ?? "",
+      line,
+      traced: false,
+      installed,
+    })),
+  ];
+  return {
+    candidates: row,
+    offered: row.map((one) => one.id),
+    ...(settled === undefined ? {} : { settled }),
+  };
+}
+
 let container: HTMLDivElement;
 let root: Root;
 /** What the frame was pressed to open a terminal with, in the order it was pressed — null where the
@@ -67,6 +106,9 @@ beforeEach(() => {
   // shape where the row of them is not drawn at all.
   hoisted.wake = startable([]);
   hoisted.wakeFails = false;
+  hoisted.args = [];
+  hoisted.wakeAfter = null;
+  hoisted.keepFails = false;
   started.length = 0;
   container = document.createElement("div");
   document.body.append(container);
@@ -106,6 +148,29 @@ function on(): string | null {
 
 function buttons(): HTMLButtonElement[] {
   return [...container.querySelectorAll("button")];
+}
+
+/** Type into the field whose label reads this. React listens for the native input event, so the
+ *  value goes in through the setter React did not replace. */
+async function type(label: string, text: string): Promise<void> {
+  const field = [...container.querySelectorAll(".slot__field")].find(
+    (one) => one.querySelector("span")?.textContent === label,
+  );
+  const input = field?.querySelector("input");
+  expect(input, `there is no "${label}" to type into`).toBeTruthy();
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, text);
+    input?.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+/** The registered commands as the list under the row draws them: name and the line it runs. */
+function listed(): [string, string][] {
+  return [...container.querySelectorAll(".slot__ownrow")].map((row) => [
+    row.querySelector(".slot__ownname")?.textContent ?? "",
+    row.querySelector(".slot__ownline")?.textContent ?? "",
+  ]);
 }
 
 describe("what the empty frame says", () => {
@@ -289,5 +354,117 @@ describe("what a terminal opened here is opened with", () => {
     await press("Open a terminal here");
 
     expect(started).toEqual(["shell"]);
+  });
+});
+
+describe("a command the reader registered", () => {
+  it("stands among the choices, after the catalogue and before the shell", async () => {
+    hoisted.wake = withOwn(["claude-code"], [["Mine", "mine --model big"]]);
+    await draw("/work/here");
+
+    expect([...container.querySelectorAll(".slot__start")].map((b) => b.textContent))
+      .toEqual(["claude-code", "Mine", "Plain shell"]);
+    // And the line it runs is readable without pressing anything: it goes to a terminal as written,
+    // so a reader who cannot read it cannot judge it.
+    expect(listed()).toEqual([["Mine", "mine --model big"]]);
+  });
+
+  it("is drawn last among the ones this machine has not got, right above the form", async () => {
+    hoisted.wake = {
+      candidates: [
+        { id: "claude-code", label: "claude-code", command: "claude", traced: false, installed: true },
+        { id: "codex-cli", label: "codex-cli", command: "codex", traced: false, installed: false },
+        { id: "custom:1", label: "Mine", command: "mine", line: "mine --model big", traced: false, installed: false },
+      ],
+      offered: ["claude-code", "codex-cli", "custom:1"],
+    };
+    await draw("/work/here");
+    await press("Not installed (2)");
+
+    expect([...container.querySelectorAll(".slot__start--missing")].map((b) => b.textContent))
+      .toEqual(["codex-cli", "Mine"]);
+    // Unpressable like any other row this machine has not got: its first word is what was looked
+    // for, and it was not found.
+    await press("claude-code");
+    await press("Mine");
+    expect(on(), "a press moved what is on to a line this machine cannot start").toBe("claude-code");
+  });
+
+  it("is registered from the frame, and the row is read again once it is", async () => {
+    hoisted.wake = startable(["claude-code"]);
+    hoisted.wakeAfter = withOwn(["claude-code"], [["Mine", "mine --model big"]]);
+    await draw("/work/here");
+
+    await press("Register a command");
+    await type("Name", "Mine");
+    await type("Command line", "mine --model big");
+    // Said before it is saved: this is what will run, and Amenbo composes none of it.
+    expect(container.querySelector(".slot__runs")?.textContent)
+      .toContain("mine --model big");
+
+    await press("Save");
+
+    expect(hoisted.asked).toEqual(["wake_choices", "wake_register", "wake_choices"]);
+    expect(hoisted.args[1]).toEqual({ label: "Mine", line: "mine --model big" });
+    expect([...container.querySelectorAll(".slot__start")].map((b) => b.textContent))
+      .toEqual(["claude-code", "Mine", "Plain shell"]);
+  });
+
+  it("cannot be saved with a half missing", async () => {
+    hoisted.wake = startable(["claude-code"]);
+    await draw("/work/here");
+
+    await press("Register a command");
+    const save = () => buttons().find((b) => b.textContent === "Save");
+    expect(save()?.disabled, "an empty form could be saved").toBe(true);
+    await type("Name", "Mine");
+    expect(save()?.disabled, "a name with no line could be saved").toBe(true);
+    await type("Command line", "mine");
+    expect(save()?.disabled).toBe(false);
+  });
+
+  it("keeps its id when it is corrected, so a pinned answer survives a typo", async () => {
+    hoisted.wake = withOwn(["claude-code"], [["Mine", "mien"]]);
+    await draw("/work/here");
+
+    await press("Edit");
+    await type("Command line", "mine");
+    await press("Save");
+
+    expect(hoisted.asked).toEqual(["wake_choices", "wake_amend", "wake_choices"]);
+    expect(hoisted.args[1]).toEqual({ id: "custom:1", label: "Mine", line: "mine" });
+  });
+
+  it("is dropped from the frame, and what was on moves off it", async () => {
+    hoisted.wake = withOwn(["claude-code"], [["Mine", "mine"]]);
+    hoisted.wakeAfter = startable(["claude-code"], "claude-code");
+    await draw("/work/here");
+
+    await press("Mine");
+    expect(on()).toBe("Mine");
+    await press("Remove");
+
+    expect(hoisted.asked).toEqual(["wake_choices", "wake_unregister", "wake_choices"]);
+    expect(hoisted.args[1]).toEqual({ id: "custom:1" });
+    expect(listed(), "the row it was drawn in stayed behind").toEqual([]);
+    // The frame is not holding an id it can no longer start: the host's own answer takes over.
+    await press("Open a terminal here");
+    expect(started).toEqual(["claude-code"]);
+  });
+
+  it("says why a registration did not land, without closing the form", async () => {
+    hoisted.wake = startable(["claude-code"]);
+    hoisted.keepFails = true;
+    await draw("/work/here");
+
+    await press("Register a command");
+    await type("Name", "Mine");
+    await type("Command line", "mine");
+    await press("Save");
+
+    expect(container.querySelector(".slot__failed")).toBeTruthy();
+    // Still open, with what was typed still in it: the reader has one thing to fix, not two.
+    expect(buttons().some((b) => b.textContent === "Save"), "the form was closed on a failure")
+      .toBe(true);
   });
 });

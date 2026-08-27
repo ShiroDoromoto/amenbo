@@ -99,7 +99,11 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 // instant the decision was recorded or settled at.
                 human(flags, format!("recorded: {}", detail.created_at.to_rfc3339_z()));
                 if let Some(at) = detail.decided_at {
-                    human(flags, format!("decided: {}", at.to_rfc3339_z()));
+                    // Who settled it rides on the same line as when, because the two are one fact about
+                    // the ruling — and a reader who is deciding whether to trust it wants both at once
+                    // (`AMB-D-788`, now that an AI may accept as well as a person).
+                    let by = detail.decided_by.as_ref().map(|r| format!(" by {}", decider_name(&r.id))).unwrap_or_default();
+                    human(flags, format!("decided: {}{by}", at.to_rfc3339_z()));
                 }
                 if detail.updated_at != detail.created_at && Some(detail.updated_at) != detail.decided_at {
                     human(flags, format!("last changed: {}", detail.updated_at.to_rfc3339_z()));
@@ -382,19 +386,29 @@ fn ambiguous_comment(reference: &str, task_comment_id: i64, decision_comment_id:
     }
 }
 
-/// Record the reason a decision was accepted or rejected as a comment (the same shape as
-/// `task block --reason`). An empty or whitespace-only reason is ignored.
+/// The name to print for whoever settled a decision. `decided_by` holds a free-text decider token, so
+/// the two facets are named the way the rest of the page names them ([`query::facet_label`], the same
+/// call `task show` makes for an assignee) and any other token a store carries is printed as written.
+fn decider_name(token: &str) -> String {
+    match amenbo_core::model::ActorKind::parse(token) {
+        Some(kind) => query::facet_label(Some(kind)),
+        None => token.to_string(),
+    }
+}
+
 /// A `" (by <facet>, <utc>)"` suffix naming who settled an already-accepted decision, empty when the
 /// stamps are missing. Shown on the idempotent re-accept so `reopen` is an informed choice, not a guess.
 fn accepted_by_suffix(d: &amenbo_core::model::Decision) -> String {
     match (&d.decided_by, &d.decided_at) {
-        (Some(who), Some(at)) => format!(" (by {who}, {})", at.to_rfc3339_z()),
-        (Some(who), None) => format!(" (by {who})"),
+        (Some(who), Some(at)) => format!(" (by {}, {})", decider_name(who), at.to_rfc3339_z()),
+        (Some(who), None) => format!(" (by {})", decider_name(who)),
         (None, Some(at)) => format!(" (at {})", at.to_rfc3339_z()),
         (None, None) => String::new(),
     }
 }
 
+/// Record the reason a decision was accepted or rejected as a comment (the same shape as
+/// `task block --reason`). An empty or whitespace-only reason is ignored.
 fn add_reason_comment(store: &mut Store, flags: &Flags, decision_id: i64, reason: Option<String>) -> Result<(), CliError> {
     if let Some(r) = reason.as_deref().map(str::trim).filter(|r| !r.is_empty()) {
         // The author is our own facet; the author argument is the trace string for the audit log.

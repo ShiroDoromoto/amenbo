@@ -1758,6 +1758,16 @@ impl Instructor {
             (Domain::Files, "back") =>
                 "Press the way back out of the file. The column returns to its two sections."
                     .to_string(),
+            // A file brought in from outside and let go over a folder's row. The instruction names where it
+            // is dragged from as loosely as it can — anywhere on the machine that is not this folder —
+            // because what would go wrong is dragging a row out of the panel and back into it, which is a
+            // move of its own and not this one.
+            (Domain::Files, "drop-in") => format!(
+                "From outside Amenbo — a file manager, the desktop, anywhere on this machine that is not this folder — drag a file named \"{}\" over the row \"{}\" in {}, and let it go there.",
+                file_named(with)?,
+                req(with, "name")?,
+                section(with)?
+            ),
             // Handing the file to the machine. On a row the menu is a right-click, and it is drawn on files alone
             // — a folder's row opens a level — so the step names a row the way every other one here does, and says
             // where the menu comes up, since nothing else on this face does.

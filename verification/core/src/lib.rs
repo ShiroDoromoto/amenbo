@@ -2243,6 +2243,22 @@ const REGISTRY: &[OpSpec] = &[
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
 
+    // ── bringing a file in from the machine ───────────────────────────────────────────────────────
+    // A file dragged in from outside and let go over a row, which is the one way anything reaches this
+    // folder that does not go through the folder itself. What is under test is the landing rather than
+    // the carrying: the drop is caught by the application and not by the face, and what the face
+    // decides is which folder was under the pointer when the hand opened.
+    //
+    // So the row is named the way every other row here is, and it is a folder's — a file's row opens a
+    // file and has nothing to put anything in. The section is named beside it for the reason `open` and
+    // `menu` name theirs.
+    //
+    // `file` is a name rather than a path, and the operator brings the file it stands for. That is the
+    // same fact `task attach` runs into on this face and for the same reason: a drop reads the disk the
+    // operator is sitting at, and nothing a run lays down is anywhere a hand can reach from there. What
+    // the file holds is nothing this road reads — it is looked for by its name once it has landed.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "drop-in", required: &["file", "name", "section"], refs: &[], strings: &["file", "name", "section"], binds: false },
+
     // ── handing a file to the machine ─────────────────────────────────────────────────────────────
     // The three ways out of this face that are not reading the file here, and all three are the
     // machine's own: the application it already opens that kind of file with, one the reader picks

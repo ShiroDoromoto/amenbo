@@ -2254,6 +2254,11 @@ pub struct FolderEntryDto {
     pub(crate) name: String,
     /// Whether opening it lists more names.
     pub(crate) is_dir: bool,
+    /// Whether the repository's own ignore rules cover it. The row is drawn either way and drawn
+    /// faintly for this, since what git does not record is still something somebody wrote
+    /// (`AMB-D-786`) — it is the row of what changed lately, and the watch behind it, that leave
+    /// these out.
+    pub(crate) ignored: bool,
 }
 
 /// One application a file could be opened with, as the file face draws a row of the chooser it has

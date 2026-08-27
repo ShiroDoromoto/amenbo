@@ -146,30 +146,76 @@ pub fn gone() -> CmdError {
     ))
 }
 
-/// The walk both doors take, pruned the one way (`AMB-T-3604`).
-///
-/// **What a folder holds is what somebody wrote in it.** The floor above is pruned outright, and
-/// over it the repository's own answer is taken: `.gitignore`, the global one and the parents' are
-/// all read, so a build directory this project happens to call `.next` or `__pycache__` drops out
-/// without anybody listing it here. A folder that is no repository loses nothing — there is simply
-/// nothing to read, and the floor is all that applies.
+/// What both walks below agree on: the floor is pruned outright, and a dotfile is not noise.
 ///
 /// Hidden files are **not** skipped, which is where this parts company with the ignore crate's
 /// default: a dotfile is a file somebody wrote, and `.amenbo` and `.env` are exactly the ones a
 /// reader goes looking for after an agent has been at work.
-fn walker(root: &Path) -> ignore::WalkBuilder {
+fn floor(root: &Path) -> ignore::WalkBuilder {
     let mut builder = ignore::WalkBuilder::new(root);
+    builder.hidden(false).require_git(false).filter_entry(|entry| {
+        !PRUNED.contains(&entry.file_name().to_string_lossy().as_ref())
+    });
     builder
-        .hidden(false)
+}
+
+/// The walk the tree is drawn from: the floor, and nothing the repository has to say (`AMB-D-786`).
+///
+/// **`.gitignore` says what git does not record, not what a person may not look at.** The two were
+/// the same walk until now, and the argument against that is in this module's own reasoning: the
+/// dotfiles named above as the ones worth showing — `.amenbo`, `.env` — are the very files a
+/// repository ignores, this one included.
+///
+/// What is left out is still left out. A build directory is the floor's business, and the floor is
+/// what keeps a tree from burying what somebody wrote under what a build wrote.
+fn shown(root: &Path) -> ignore::WalkBuilder {
+    let mut builder = floor(root);
+    builder
+        .ignore(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .parents(false);
+    builder
+}
+
+/// The walk the watch and "what changed lately" are drawn from: the floor, plus the repository's
+/// own answer (`AMB-T-3604`).
+///
+/// `.gitignore`, the global one and the parents' are all read, so a build directory this project
+/// happens to call `.next` or `__pycache__` drops out without anybody listing it here. A folder
+/// that is no repository loses nothing — there is simply nothing to read, and the floor is all that
+/// applies.
+///
+/// **Here the ignore file is doing work a tree does not need done.** A build rewrites thousands of
+/// files a second, and a row of what changed lately that showed them would be a row nobody could
+/// read — in exactly the folders people work in (`AMB-D-786`).
+fn walker(root: &Path) -> ignore::WalkBuilder {
+    let mut builder = floor(root);
+    builder
+        .ignore(true)
         .git_ignore(true)
         .git_global(true)
         .git_exclude(true)
-        .parents(true)
-        .require_git(false)
-        .filter_entry(|entry| {
-            !PRUNED.contains(&entry.file_name().to_string_lossy().as_ref())
-        });
+        .parents(true);
     builder
+}
+
+/// The names directly inside the folder a walk is rooted at, each with whether it is a folder.
+fn level(builder: &mut ignore::WalkBuilder) -> Vec<(String, bool)> {
+    builder
+        .max_depth(Some(1))
+        .build()
+        .filter_map(Result::ok)
+        // The first entry of a walk is the folder it started in.
+        .filter(|entry| entry.depth() > 0)
+        .map(|entry| {
+            (
+                entry.file_name().to_string_lossy().into_owned(),
+                entry.file_type().is_some_and(|t| t.is_dir()),
+            )
+        })
+        .collect()
 }
 
 /// Whether a path a watch woke us with names something the walk above would never have shown.
@@ -270,18 +316,18 @@ pub fn folder_entries(
     if !dir.is_dir() {
         return Err(gone());
     }
-    // One level of the shared walk. Going through it rather than reading the directory outright is
-    // what keeps the tree and the changed list saying the same thing about what is in this folder:
-    // a name the repository ignores is absent from both, not from one of them.
-    let mut rows: Vec<FolderEntryDto> = walker(&dir)
-        .max_depth(Some(1))
-        .build()
-        .filter_map(Result::ok)
-        // The first entry of a walk is the folder it started in.
-        .filter(|entry| entry.depth() > 0)
-        .map(|entry| FolderEntryDto {
-            name: entry.file_name().to_string_lossy().into_owned(),
-            is_dir: entry.file_type().is_some_and(|t| t.is_dir()),
+    // The level is walked twice, and the difference between the two walks is the mark: what the
+    // repository ignores is drawn, and drawn as ignored (`AMB-D-786`). Asking the ignore rules
+    // directly instead would be a second reading of them — global file, parents, `.git/info/exclude`
+    // and all — and the one that could drift from the walk the watch is actually laid over.
+    let kept: std::collections::HashSet<String> =
+        level(&mut walker(&dir)).into_iter().map(|(name, _)| name).collect();
+    let mut rows: Vec<FolderEntryDto> = level(&mut shown(&dir))
+        .into_iter()
+        .map(|(name, is_dir)| FolderEntryDto {
+            ignored: !kept.contains(&name),
+            name,
+            is_dir,
         })
         .collect();
     rows.sort_by(|a, b| {
@@ -709,6 +755,50 @@ mod tests {
         // Every folder the walk kept is one the watch is laid over, the root included.
         assert!(found.dirs.contains(&root.to_path_buf()));
         assert!(!found.dirs.iter().any(|d| d.ends_with("node_modules")));
+    }
+
+    /// The tree and the row of what changed lately part company at the ignore file, and only
+    /// there: what a repository ignores is a file somebody wrote, and the tree says so by drawing
+    /// it as ignored rather than by leaving it out (`AMB-D-786`). The floor is under both.
+    #[test]
+    fn the_tree_shows_what_the_repository_ignores_and_says_that_it_does() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("node_modules")).expect("the machine's folder");
+        std::fs::create_dir_all(root.join("build")).expect("this project's own");
+        std::fs::write(root.join(".gitignore"), "build/
+.env
+").expect("the ignore file");
+        std::fs::write(root.join("node_modules/x.js"), b"built").expect("a file");
+        std::fs::write(root.join("build/out.js"), b"built").expect("a file");
+        std::fs::write(root.join(".env"), b"SECRET=1").expect("a file");
+        std::fs::write(root.join("notes.md"), b"mine").expect("a file");
+
+        // The same two walks the row is built from, and the same difference between them.
+        let kept: std::collections::HashSet<String> =
+            level(&mut walker(root)).into_iter().map(|(name, _)| name).collect();
+        let rows: Vec<(String, bool)> = level(&mut shown(root))
+            .into_iter()
+            .map(|(name, _)| {
+                let ignored = !kept.contains(&name);
+                (name, ignored)
+            })
+            .collect();
+        let named = |want: &str| rows.iter().find(|(name, _)| name == want).map(|(_, i)| *i);
+
+        assert_eq!(named("notes.md"), Some(false), "nothing ignores it: {rows:?}");
+        assert_eq!(named(".env"), Some(true), "ignored, and on the list all the same: {rows:?}");
+        assert_eq!(named("build"), Some(true));
+        // The floor is not the ignore file's to overturn: it is off the tree either way.
+        assert_eq!(named("node_modules"), None, "the floor is pruned outright: {rows:?}");
+
+        // And the walk the watch is laid over has not moved: what is ignored is still out of it.
+        let found = scan(root);
+        let names: Vec<String> = found.files.iter().map(|(_, p)| p.join("/")).collect();
+        assert!(names.contains(&"notes.md".to_string()));
+        for gone in [".env", "build/out.js", "node_modules/x.js"] {
+            assert!(!names.contains(&gone.to_string()), "{gone} is not what changed: {names:?}");
+        }
     }
 
     /// The floor is read off a path the same way it is walked — and only below the root, since the

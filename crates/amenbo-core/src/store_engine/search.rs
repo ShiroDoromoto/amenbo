@@ -415,7 +415,7 @@ fn term_lookup(term: &str) -> Sql {
 /// many times the statement can end up running it.
 ///
 /// A read that names a term **once** writes the lookup where it asks it. A read that names the same term
-/// in many places — the word search puts every term to twelve arms, twice over (the count and the page)
+/// in many places — the word search puts every term to fourteen arms, twice over (the count and the page)
 /// — makes the lookup once at its head instead and asks the arms for membership of that: written into
 /// each arm, the copy is walked once per arm, and no order the tables are named in changes that
 /// (`AMB-D-511`). The wording is the caller's because only the caller knows how many arms it has.

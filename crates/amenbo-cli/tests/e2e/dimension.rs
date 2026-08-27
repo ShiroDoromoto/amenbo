@@ -452,3 +452,51 @@ fn a_required_axis_makes_no_demand_of_a_decision() {
         "a decision's value on a required axis clears"
     );
 }
+
+/// The names of the classification are a way **in** to a decision, not only a way to narrow a listing:
+/// `search` reaches the value a decision is filed under and the axis behind it, exactly as it does on the
+/// task side, and the row it comes back on says what the record is filed under.
+///
+/// One value, worn by a task and by a decision, is what makes the two halves separable here: a search
+/// narrowed to decisions must answer with the decision alone, and the same search narrowed to tasks with
+/// the task alone — a single set of arms answering for both would show it by answering twice.
+#[test]
+fn search_reaches_the_classification_a_decision_is_filed_under() {
+    let cli = Cli::new();
+    let pid = id_str(&cli.json(&["project", "add", "--name", "分類検索PJ", "--json"])["project"]["id"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "テーマ", "--json"]);
+    cli.json(&["dimension", "value-add", "テーマ", "--name", "対話ウィンドウ", "--json"]);
+
+    let tid = id_str(
+        &cli.json(&["task", "add", "--project", &pid, "--title", "窓の設計", "--dim", "テーマ=対話ウィンドウ", "--json"])
+            ["task"]["id"],
+    );
+    let did = id_str(
+        &cli.json(&["decision", "add", "--project", &pid, "--title", "窓をどう閉じるか", "--body", "根拠", "--json"])
+            ["decision"]["id"],
+    );
+    cli.json(&["dimension", "set", &decision_ref(&did), "テーマ", "対話ウィンドウ", "--json"]);
+
+    // The refs a word reaches on the label face, on the side asked for.
+    let refs_for = |word: &str, kind: &str| -> Vec<String> {
+        cli.json(&["search", word, "--kind", kind, "--face", "label", "--limit", "100", "--json"])["hits"]
+            .as_array()
+            .expect("hits is an array")
+            .iter()
+            .map(|h| h["ref"].as_str().expect("a hit names its record").to_string())
+            .collect()
+    };
+
+    assert_eq!(refs_for("対話ウィンドウ", "decision"), vec![format!("AMB-D-{did}")], "the value's name");
+    assert_eq!(refs_for("テーマ", "decision"), vec![format!("AMB-D-{did}")], "the axis behind it");
+    assert_eq!(
+        refs_for("対話ウィンドウ", "task"),
+        vec![format!("AMB-T-{tid}")],
+        "and the same value on the other side stays the task's"
+    );
+
+    // The row says what the record it points at is filed under, the way the filter takes it back.
+    let hit = &cli.json(&["search", "対話ウィンドウ", "--kind", "decision", "--json"])["hits"][0];
+    assert_eq!(hit["standing"]["labels"][0]["axis"], "テーマ");
+    assert_eq!(hit["standing"]["labels"][0]["value"], "対話ウィンドウ");
+}

@@ -42,7 +42,7 @@ vi.mock("../core/reads", () => ({
 }));
 
 import { Sidebar } from "./Sidebar";
-import { DRAG_SLOP } from "./rowDrag";
+import { DRAG_SLOP } from "../core/pointerDrag";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

@@ -40,12 +40,12 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use notify::{RecursiveMode, Watcher};
 use tauri::Emitter as _;
 
-use crate::dto::FolderChangesDto;
+use crate::dto::{FolderChangedDto, FolderChangesDto};
 use crate::error::CmdError;
 
 /// How long to wait for quiet before scanning again. One write fires three or four events (the
@@ -235,11 +235,94 @@ fn run(
         // **Except when the repository is what moved**, where the comparison would drop the one
         // wake-up worth having: staging changes what git says about a file and nothing about the
         // file, so the rows are equal and the face still has to go and ask again (`AMB-D-774`).
-        if fresh != held || matches!(awake, Some(Wake::Git)) {
-            held = fresh;
+        //
+        // **And what this app itself just saved**, which is a change a reader asked for and is
+        // already looking at: the row belongs on the list, and the panel being redrawn under them
+        // for their own save is the noise (`our_own` below). The answer is kept either way, so the
+        // saved file is on the list the next time anything is said.
+        let news = fresh != held && !our_own(root, &held, &fresh);
+        held = fresh;
+        if news || matches!(awake, Some(Wake::Git)) {
             tell(&held);
         }
     }
+}
+
+/// What this process has written lately: the path, and the time the file came out with.
+///
+/// **The kernel does not say who wrote.** macOS answers `None` for the process behind an event and
+/// the other two carry no such field at all (`AMB-T-3739` measured it), and `notify` sets no
+/// ignore-self flag — so the only way to tell a save made here from one made by the agent in the
+/// pane is to have written down what was saved.
+///
+/// The time is what makes it a note about *this* write rather than about the file: it is spelled
+/// the way a scan spells it ([`crate::folder::recent`]), so a row read back off the filesystem
+/// either is the one that was written or is somebody else's. ⚠ The one filesystem that blurs this
+/// is FAT, whose times move in two-second steps (`AMB-T-3739`) — a write from elsewhere landing in
+/// the same step as ours is read as ours, and told about at the next thing that moves.
+static WRITTEN: Mutex<Vec<(PathBuf, String, Instant)>> = Mutex::new(Vec::new());
+
+/// How long a note is kept: long enough to cover the wait for quiet and the walk behind it, short
+/// enough that the file goes back to being anybody's the moment nothing more is coming.
+const REMEMBERED: Duration = Duration::from_secs(5);
+
+/// Write down that this process has just put bytes into `path` (`crate::folder_save`).
+///
+/// A file whose time cannot be read is not written down. That is the safe way round: the save is
+/// then treated as somebody else's and the face is told, which is a redraw rather than a silence.
+pub fn wrote(path: &Path) {
+    let Ok(stamped) = path.symlink_metadata().and_then(|meta| meta.modified()) else {
+        return;
+    };
+    let stamped = chrono::DateTime::<chrono::Utc>::from(stamped).to_rfc3339();
+    let Ok(mut written) = WRITTEN.lock() else { return };
+    let now = Instant::now();
+    written.retain(|(_, _, at)| now.duration_since(*at) < REMEMBERED);
+    written.push((path.to_path_buf(), stamped, now));
+}
+
+/// Whether the only rows that moved between these two answers are ones this process wrote itself.
+///
+/// A row that **arrived** has to be one of ours, and there has to be at least one — two answers
+/// that differ in nothing gained are not a save.
+///
+/// A row that **left** is allowed only where a row arriving explains it: the same file under the
+/// time it carried before, or the oldest of a full list pushed off the end by the new one. Anything
+/// else — a file deleted while the save was going through — is news, and is told. ⚠ The one it
+/// cannot tell apart is a deletion of the very oldest row of a full list, which is the thirtieth
+/// entry of "what changed lately" and reappears correct at the next wake-up.
+fn our_own(root: &Path, held: &FolderChangesDto, fresh: &FolderChangesDto) -> bool {
+    if held.partial != fresh.partial || held.gone != fresh.gone {
+        return false;
+    }
+    let Ok(written) = WRITTEN.lock() else { return false };
+    let now = Instant::now();
+    let ours = |row: &FolderChangedDto| {
+        let path = root.join(row.path.iter().collect::<PathBuf>());
+        written.iter().any(|(wrote, stamped, at)| {
+            *wrote == path && *stamped == row.modified && now.duration_since(*at) < REMEMBERED
+        })
+    };
+
+    let before: HashSet<(&[String], &str)> = held.changed.iter().map(named).collect();
+    let mut gained = fresh.changed.iter().filter(|row| !before.contains(&named(row))).peekable();
+    if gained.peek().is_none() || !gained.all(ours) {
+        return false;
+    }
+
+    let after: HashSet<(&[String], &str)> = fresh.changed.iter().map(named).collect();
+    held.changed
+        .iter()
+        .filter(|row| !after.contains(&named(row)))
+        .all(|row| {
+            fresh.changed.iter().any(|now| now.path == row.path)
+                || fresh.changed.len() == crate::folder::RECENT
+        })
+}
+
+/// One row as the pair that makes it the same row: where it is, and when it was written.
+fn named(row: &FolderChangedDto) -> (&[String], &str) {
+    (&row.path, &row.modified)
 }
 
 /// Wait for a wake-up and let the burst behind it settle. False when nothing came — the thread then
@@ -385,6 +468,45 @@ fn told(app: &tauri::AppHandle, changes: &FolderChangesDto) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// One row, as a scan would have read it off the filesystem.
+    fn row(root: &Path, name: &str) -> FolderChangedDto {
+        let stamped = root
+            .join(name)
+            .symlink_metadata()
+            .and_then(|meta| meta.modified())
+            .expect("the file");
+        FolderChangedDto {
+            path: vec![name.to_string()],
+            modified: chrono::DateTime::<chrono::Utc>::from(stamped).to_rfc3339(),
+        }
+    }
+
+    fn changes(rows: Vec<FolderChangedDto>) -> FolderChangesDto {
+        FolderChangesDto { root: String::new(), changed: rows, partial: false, gone: false }
+    }
+
+    /// A save made here is a change the reader asked for and is already looking at, so the wake-up
+    /// it causes is not passed on — while a write from anywhere else is, which is the whole point of
+    /// writing anything down (`AMB-T-3739`: the events themselves never say who wrote).
+    #[test]
+    fn this_app_s_own_save_is_not_news_and_anybody_else_s_is() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path();
+        let before = changes(vec![]);
+
+        std::fs::write(root.join("ours.md"), b"saved from the panel").expect("a file");
+        wrote(&root.join("ours.md"));
+        assert!(our_own(root, &before, &changes(vec![row(root, "ours.md")])));
+
+        // The same file, written again by something else: the time is not the one written down.
+        std::fs::write(root.join("theirs.md"), b"the agent in the pane").expect("a file");
+        assert!(!our_own(root, &before, &changes(vec![row(root, "theirs.md")])));
+
+        // And two answers that gained nothing are not a save either — they are a folder where
+        // something was taken away, which is news.
+        assert!(!our_own(root, &changes(vec![row(root, "ours.md")]), &before));
+    }
 
     /// Installing is once per folder: a scan that names the same folders again asks the kernel for
     /// nothing, which is what keeps a watch that is up from being rebuilt on every wake-up.

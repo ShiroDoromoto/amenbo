@@ -564,6 +564,17 @@ export const it: Translation = {
     "files.notText": "Non è testo, quindi non può essere mostrato qui.",
     "files.cut": "Viene mostrato solo l'inizio.",
     "files.unreadable": "Non è stato possibile leggere questo file.",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Salva",
+    "files.saving": "Salvataggio…",
+    "files.saved": "Salvato",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Questo file contiene entrambi i tipi di a capo. Salvandolo diventeranno tutti uguali.",
+    "files.newlineChoose": "Con quale a capo salvarlo",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Questa immagine è troppo grande per essere mostrata qui.",
     "files.tooBigPixels": "{width} × {height} pixel",
     "files.tooBigOpen": "Aprirla in un'altra applicazione",
@@ -722,6 +733,10 @@ export const it: Translation = {
     wake_not_kept: "Non è stato possibile salvare la scelta.",
     window_failed: "Non è stato possibile aprire quella finestra: {reason}",
     talk_blank: "Quella finestra si è aperta senza disegnare nulla, quindi il terminale è tornato in questa.",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Non è stato possibile salvare questo file: {reason}",
+    folder_unwritable_character: "«{character}» non si può scrivere in {encoding}, quindi non è stato salvato nulla.",
 
     already_reserved:
       "{ref} non è in “Da fare”, quindi non si può prendere in carico — forse un'altra sessione la tiene già.",

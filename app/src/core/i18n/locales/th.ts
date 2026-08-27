@@ -546,6 +546,17 @@ export const th: Translation = {
     "files.notText": "นี่ไม่ใช่ข้อความ จึงแสดงที่นี่ไม่ได้",
     "files.cut": "แสดงเฉพาะส่วนต้นเท่านั้น",
     "files.unreadable": "อ่านไฟล์นี้ไม่ได้",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "บันทึก",
+    "files.saving": "กำลังบันทึก…",
+    "files.saved": "บันทึกแล้ว",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "ไฟล์นี้มีการขึ้นบรรทัดใหม่ทั้งสองแบบ ถ้าบันทึกจะกลายเป็นแบบเดียวกันทั้งหมด",
+    "files.newlineChoose": "จะบันทึกด้วยการขึ้นบรรทัดใหม่แบบไหน",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "ภาพนี้ใหญ่เกินกว่าจะแสดงที่นี่",
     "files.tooBigPixels": "{width} × {height} พิกเซล",
     "files.tooBigOpen": "เปิดในแอปอื่น",
@@ -696,6 +707,10 @@ export const th: Translation = {
     wake_not_kept: "บันทึกตัวเลือกไม่ได้",
     window_failed: "ไม่สามารถเปิดหน้าต่างนั้นได้: {reason}",
     talk_blank: "หน้าต่างนั้นเปิดขึ้นแต่ไม่มีอะไรถูกวาดเลย จึงนำเทอร์มินัลกลับมาไว้ที่หน้าต่างนี้",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "บันทึกไฟล์นี้ไม่ได้: {reason}",
+    folder_unwritable_character: "“{character}” เขียนใน {encoding} ไม่ได้ จึงไม่ได้บันทึกอะไรเลย",
 
     already_reserved: "{ref} ไม่ได้อยู่ในสถานะ “รอทำ” จึงจองไม่ได้ — อาจมีเซสชันอื่นถืออยู่แล้ว",
     not_ready: "{ref} ยังจองไม่ได้: {reasons}",

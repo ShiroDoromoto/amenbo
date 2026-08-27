@@ -564,6 +564,17 @@ export const fr: Translation = {
     "files.notText": "Ce n'est pas du texte : impossible de l'afficher ici.",
     "files.cut": "Seul le début est affiché.",
     "files.unreadable": "Ce fichier n'a pas pu être lu.",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Enregistrer",
+    "files.saving": "Enregistrement…",
+    "files.saved": "Enregistré",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Ce fichier contient les deux sortes de saut de ligne. L'enregistrer les rendra toutes identiques.",
+    "files.newlineChoose": "Avec quel saut de ligne l'enregistrer",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Cette image est trop grande pour être affichée ici.",
     "files.tooBigPixels": "{width} × {height} pixels",
     "files.tooBigOpen": "L'ouvrir dans une autre application",
@@ -722,6 +733,10 @@ export const fr: Translation = {
     wake_not_kept: "Le choix n'a pas pu être enregistré.",
     window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
     talk_blank: "Cette fenêtre s'est ouverte sans rien afficher : le terminal a été remis dans celle-ci.",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Ce fichier n'a pas pu être enregistré : {reason}",
+    folder_unwritable_character: "« {character} » ne peut pas s'écrire en {encoding}, donc rien n'a été enregistré.",
 
     already_reserved:
       "{ref} n'est pas « À faire », donc impossible de la réserver — une autre session la tient peut-être déjà.",

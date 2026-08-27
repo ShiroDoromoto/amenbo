@@ -543,6 +543,17 @@ export const hi: Translation = {
     "files.notText": "यह टेक्स्ट नहीं है, इसलिए इसे यहाँ नहीं दिखाया जा सकता।",
     "files.cut": "सिर्फ़ शुरुआत दिखाई जा रही है।",
     "files.unreadable": "यह फ़ाइल पढ़ी नहीं जा सकी।",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "सहेजें",
+    "files.saving": "सहेजा जा रहा है…",
+    "files.saved": "सहेज लिया",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "इस फ़ाइल में दोनों तरह के लाइन ब्रेक हैं। सहेजने पर सब एक जैसे हो जाएँगे।",
+    "files.newlineChoose": "किस लाइन ब्रेक के साथ सहेजना है",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "यह छवि इतनी बड़ी है कि यहाँ नहीं दिखाई जा सकती।",
     "files.tooBigPixels": "{width} × {height} पिक्सेल",
     "files.tooBigOpen": "किसी और ऐप में खोलें",
@@ -694,6 +705,10 @@ export const hi: Translation = {
     wake_not_kept: "चुनाव सहेजा नहीं जा सका।",
     window_failed: "वह विंडो नहीं खोली जा सकी: {reason}",
     talk_blank: "वह विंडो खुली तो सही, पर उसमें कुछ भी नहीं आया, इसलिए टर्मिनल को इसी विंडो में लौटा दिया गया।",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "यह फ़ाइल सहेजी नहीं जा सकी: {reason}",
+    folder_unwritable_character: "“{character}” को {encoding} में नहीं लिखा जा सकता, इसलिए कुछ भी नहीं सहेजा गया।",
 
     already_reserved:
       "{ref} “करना है” में नहीं है, इसलिए इसे लिया नहीं जा सकता — शायद कोई दूसरा सत्र इसे पहले ही ले चुका है।",

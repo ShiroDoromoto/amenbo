@@ -546,6 +546,17 @@ export const id: Translation = {
     "files.notText": "Ini bukan teks, jadi tidak bisa ditampilkan di sini.",
     "files.cut": "Hanya bagian awal yang ditampilkan.",
     "files.unreadable": "Berkas ini tidak bisa dibaca.",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Simpan",
+    "files.saving": "Menyimpan…",
+    "files.saved": "Tersimpan",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Berkas ini memuat dua macam pemisah baris. Menyimpannya akan menyamakan semuanya.",
+    "files.newlineChoose": "Simpan dengan pemisah baris yang mana",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Gambar ini terlalu besar untuk ditampilkan di sini.",
     "files.tooBigPixels": "{width} × {height} piksel",
     "files.tooBigOpen": "Buka di aplikasi lain",
@@ -696,6 +707,10 @@ export const id: Translation = {
     wake_not_kept: "Pilihan tidak bisa disimpan.",
     window_failed: "Jendela itu tidak dapat dibuka: {reason}",
     talk_blank: "Jendela itu terbuka tetapi tidak menggambar apa pun, jadi terminal dikembalikan ke jendela ini.",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Berkas ini tidak bisa disimpan: {reason}",
+    folder_unwritable_character: "“{character}” tidak bisa ditulis dalam {encoding}, jadi tidak ada yang disimpan.",
 
     already_reserved:
       "{ref} tidak berstatus “Akan dikerjakan”, jadi tidak bisa diambil — mungkin sesi lain sudah memegangnya.",

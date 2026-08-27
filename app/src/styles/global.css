@@ -552,6 +552,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); cursor: pointer;
 }
 .files__back:hover { color: var(--c-text); }
+/* Saving what was typed. It sits at the far end of the bar, past the name, because it is the one
+   control there that changes the file rather than the view of it (`../files/FilesPanel`). */
+.files__keep {
+  flex: none; margin-left: auto; padding: 0; border: 0; background: none;
+  color: var(--c-accent-text); cursor: pointer;
+}
+.files__keep:hover:not(:disabled) { text-decoration: underline; }
+.files__keep:disabled { color: var(--c-text-muted); cursor: default; }
+/* Which newline a file that has both is saved with. It sits under the sentence that explains it
+   rather than in the bar, which is only as wide as the panel (`AMB-D-773`). */
+.files__newlines { display: flex; flex-direction: column; gap: var(--s-1); }
+.files__newline {
+  align-self: start; max-width: 100%;
+  color: var(--c-text); font-size: var(--fs-xs);
+  background: none; border: 1px solid var(--c-border); border-radius: var(--r-sm);
+}
 .files__body { min-height: 0; overflow-y: auto; }
 .files__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; }
 /* The editor a file's text is drawn in (`../files/FileEditor`). It brings its own type and colours

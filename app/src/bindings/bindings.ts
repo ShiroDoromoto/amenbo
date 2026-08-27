@@ -344,7 +344,9 @@ export type DoctorReportDto = { ok: boolean, errors: number, warnings: number, i
  * modifier keys on the drag event** (`AMB-T-3740`). The keyboard is read where it can be read — the
  * host, at the instant of the drop — and the answer is this and nothing else.
  *
- * `default` is neither key: what a plain drop means belongs to the face receiving it, not here.
+ * `default` is neither key: what a plain drop means belongs to the face receiving it, not here. It
+ * travels back the other way too — the face hands it to [`crate::folder_write::folder_import`] as
+ * the whole of what the reader asked of the drop.
  */
 export type DropEffectDto = "copy" | "move" | "default";
 

@@ -543,6 +543,8 @@ export const tr: Translation = {
     "files.notText": "Bu metin değil, burada gösterilemez.",
     "files.cut": "Yalnızca başı gösteriliyor.",
     "files.unreadable": "Bu dosya okunamadı.",
+    "files.dropStopped": "{name} alınamadı: {why}",
+    "files.dropPartly": "{count} alındı. {name} alınamadı: {why}",
     "files.tooBig": "Bu görsel burada gösterilemeyecek kadar büyük.",
     "files.tooBigPixels": "{width} × {height} piksel",
     "files.tooBigOpen": "Başka bir uygulamada aç",

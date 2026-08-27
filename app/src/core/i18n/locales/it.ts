@@ -564,6 +564,8 @@ export const it: Translation = {
     "files.notText": "Non è testo, quindi non può essere mostrato qui.",
     "files.cut": "Viene mostrato solo l'inizio.",
     "files.unreadable": "Non è stato possibile leggere questo file.",
+    "files.dropStopped": "Non è stato possibile inserire {name}: {why}",
+    "files.dropPartly": "{count} inseriti. {name} no: {why}",
     "files.tooBig": "Questa immagine è troppo grande per essere mostrata qui.",
     "files.tooBigPixels": "{width} × {height} pixel",
     "files.tooBigOpen": "Aprirla in un'altra applicazione",

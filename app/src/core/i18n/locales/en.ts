@@ -613,6 +613,8 @@ const ui = {
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",
+  "files.dropStopped": "{name} could not be brought in: {why}",
+  "files.dropPartly": "{count} came in. {name} did not: {why}",
   // A picture the panel would not draw. What it is refused for travels with the
   // refusal, because a reader shown nothing at all reads it as a damaged file
   // (`AMB-D-783`).

@@ -555,6 +555,8 @@ export const ja: Translation = {
     "files.notText": "テキストではないので、ここには出せません。",
     "files.cut": "先頭だけを出しています。",
     "files.unreadable": "このファイルは読めませんでした。",
+    "files.dropStopped": "{name} を取り込めませんでした: {why}",
+    "files.dropPartly": "{count} 件を取り込みました。{name} は取り込めませんでした: {why}",
     "files.tooBig": "この画像は大きすぎて、ここには出せません。",
     "files.tooBigPixels": "{width} × {height} ピクセル",
     "files.tooBigOpen": "ほかのアプリで開く",

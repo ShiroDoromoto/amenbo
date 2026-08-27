@@ -2470,8 +2470,10 @@ pub struct FolderOversizeDto {
 /// modifier keys on the drag event** (`AMB-T-3740`). The keyboard is read where it can be read — the
 /// host, at the instant of the drop — and the answer is this and nothing else.
 ///
-/// `default` is neither key: what a plain drop means belongs to the face receiving it, not here.
-#[derive(Serialize, TS)]
+/// `default` is neither key: what a plain drop means belongs to the face receiving it, not here. It
+/// travels back the other way too — the face hands it to [`crate::folder_write::folder_import`] as
+/// the whole of what the reader asked of the drop.
+#[derive(Deserialize, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "lowercase")]
 pub enum DropEffectDto {

@@ -11,7 +11,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
-  FolderAppDto, FolderChangedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
+  DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangedDto, FolderChangesDto, FolderEntryDto,
+  FolderFileDto,
 } from "../bindings/bindings";
 
 const ROOT = "/work/repo";
@@ -49,6 +50,11 @@ const hoisted = vi.hoisted(() => ({
   dragging: null as null | ((event: { payload: unknown }) => void),
   /** What the editor was asked to draw, and whether it was allowed to be typed into. */
   editing: [] as { text: string; editable: boolean }[],
+  /** Every carry the panel asked the host for, as it asked for it. */
+  imported: [] as
+    { paths: string[]; toRoot: string; to: string[]; effect: DropEffectDto }[],
+  /** What the host answers a carry with — the whole list arriving, unless a test says otherwise. */
+  carried: { arrived: [] as string[], stopped: null } as FolderCarriedDto,
 }));
 
 // The editor is loaded on demand and lays itself out by measuring, which jsdom cannot do — so what
@@ -112,6 +118,16 @@ vi.mock("./folder", () => ({
   folderOpenFileWith: async (_projectId: number, root: string, path: string[], app: string) => {
     hoisted.asked.push(`with:${root}:${path.join("/")}:${app}`);
   },
+  folderImport: async (
+    _projectId: number,
+    paths: string[],
+    toRoot: string,
+    to: string[],
+    effect: DropEffectDto,
+  ): Promise<FolderCarriedDto> => {
+    hoisted.imported.push({ paths, toRoot, to, effect });
+    return hoisted.carried;
+  },
 }));
 
 // The folders the project is bound to, answered without a store. `live` is derived the way the real
@@ -133,6 +149,7 @@ vi.mock("../core/reads", async (importOriginal) => ({
 
 import { FilesPanel } from "./FilesPanel";
 import { formatNumber, t, tf } from "../core/i18n";
+import { subscribeNotice } from "../core/notice";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -199,6 +216,8 @@ beforeEach(() => {
   };
   hoisted.bound = [{ path: ROOT, exists: true }];
   hoisted.dragging = null;
+  hoisted.imported = [];
+  hoisted.carried = { arrived: [], stopped: null };
   // Inside Tauri as far as the panel is concerned; without it there is no host to hear a drop from.
   (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};
   container = document.createElement("div");
@@ -468,6 +487,72 @@ describe("the file face", () => {
     // the reader had already dragged away from.
     await over(null);
     expect(container.querySelector(".files__into, .files__row--into")).toBeNull();
+  });
+
+  // The highlight said which folder; letting go is the panel carrying the files into that one and no
+  // other. Both halves of the landing travel, because the same path inside two bound folders is two
+  // places (`AMB-T-3781`).
+  it("carries what was dropped into the folder the highlight named", async () => {
+    hoisted.entries[""] = [{ name: "src", isDir: true, ignored: false }];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
+    await draw();
+    await click(button(t("files.tree")));
+    await settle();
+    await click(button("src"));
+    await settle();
+
+    const drop = (el: Element | null | undefined, paths: string[]) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => el ?? null;
+      hoisted.dragging?.({ payload: { type: "drop", position: { x: 1, y: 1 }, paths } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    await drop(button("main.rs"), ["/Users/someone/Desktop/note.md"]);
+    expect(hoisted.imported).toEqual([{
+      paths: ["/Users/someone/Desktop/note.md"],
+      toRoot: ROOT,
+      to: ["src"],
+      // Neither modifier was held, and the host reads that as neither: what a plain drop means is
+      // decided where the carry is made, and it copies.
+      effect: "default",
+    }]);
+    // And the highlight is gone the moment the files are let go.
+    expect(container.querySelector(".files__into, .files__row--into")).toBeNull();
+
+    // The bound folder itself is a landing like any other, and its path is no segments at all.
+    await drop(container.querySelector("[data-into=\"\"]"), ["/Users/someone/Desktop/other.md"]);
+    expect(hoisted.imported[1]?.to).toEqual([]);
+  });
+
+  // Nothing is said about what arrived — the folder is watched and is about to list it. What stops
+  // has nothing drawing it, so that is what is said, and it says how far the carry got.
+  it("says what a carry stopped on, and how much of it had already arrived", async () => {
+    await draw();
+    const said: string[] = [];
+    const stop = subscribeNotice((line) => said.push(line));
+    const drop = (paths: string[]) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => container.querySelector("[data-into]");
+      hoisted.dragging?.({ payload: { type: "drop", position: { x: 1, y: 1 }, paths } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    hoisted.carried = { arrived: [], stopped: { name: "note.md", why: "no room left" } };
+    await drop(["/a/note.md"]);
+    expect(said).toEqual([tf("files.dropStopped", { name: "note.md", why: "no room left" })]);
+
+    hoisted.carried = { arrived: ["one.md"], stopped: { name: "note.md", why: "no room left" } };
+    await drop(["/a/one.md", "/a/note.md"]);
+    expect(said[1]).toBe(
+      tf("files.dropPartly", { name: "note.md", why: "no room left", count: formatNumber(1) }),
+    );
+
+    // A carry that got the whole way through says nothing at all.
+    hoisted.carried = { arrived: ["one.md"], stopped: null };
+    await drop(["/a/one.md"]);
+    expect(said).toHaveLength(2);
+    stop();
   });
 
   it("draws a Markdown file as Markdown", async () => {

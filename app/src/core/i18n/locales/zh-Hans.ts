@@ -543,6 +543,8 @@ export const zhHans: Translation = {
     "files.notText": "这不是文本，无法在这里显示。",
     "files.cut": "只显示了开头部分。",
     "files.unreadable": "无法读取这个文件。",
+    "files.dropStopped": "没能把 {name} 放进来：{why}",
+    "files.dropPartly": "放进来 {count} 个。{name} 没有：{why}",
     "files.tooBig": "这张图太大了，没法在这里显示。",
     "files.tooBigPixels": "{width} × {height} 像素",
     "files.tooBigOpen": "用别的应用打开",

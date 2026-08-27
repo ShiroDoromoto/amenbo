@@ -565,6 +565,8 @@ export const ptBR: Translation = {
     "files.notText": "Isto não é texto, então não dá para mostrar aqui.",
     "files.cut": "Só o começo está sendo mostrado.",
     "files.unreadable": "Não foi possível ler este arquivo.",
+    "files.dropStopped": "Não foi possível trazer {name}: {why}",
+    "files.dropPartly": "{count} entraram. {name} não: {why}",
     "files.tooBig": "Esta imagem é grande demais para ser mostrada aqui.",
     "files.tooBigPixels": "{width} × {height} pixels",
     "files.tooBigOpen": "Abrir em outro aplicativo",

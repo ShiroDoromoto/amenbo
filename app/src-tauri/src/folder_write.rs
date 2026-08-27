@@ -23,11 +23,11 @@
 //!    that says nothing about the other two (`AMB-D-782`). Crossing a disk is where it happens: the
 //!    bytes are written again, and there is no way to make that one step.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use amenbo_core::binding::canonical_dir;
 
-use crate::dto::{FolderCarriedDto, FolderStoppedDto};
+use crate::dto::{DropEffectDto, FolderCarriedDto, FolderStoppedDto};
 use crate::error::CmdError;
 use crate::folder::{gone, rooted, under};
 
@@ -143,6 +143,49 @@ pub fn folder_copy(
     carry(project_id, &root, &paths, &to_root, &to, copy_one)
 }
 
+/// Bring rows in from outside — the files a person dragged onto the window (`AMB-D-775`).
+///
+/// **Only the far end is fenced, and only the far end can be.** What was dropped is whatever the
+/// reader was holding, and the operating system is what granted it: a path under no bound folder is
+/// the ordinary case here, not an escape from one. So `paths` arrive as the host gave them, whole,
+/// and it is the folder they land in that is proved against the project's own — the same
+/// [`landing`] a move or a copy is aimed at, and the same answer when the carry stops part way.
+///
+/// **A plain drop copies.** A move takes the file away from wherever it was, which on a drop from
+/// the desktop is a place Amenbo does not answer for; taking it is done only where the operating
+/// system says the reader asked for it in so many words (`crate::dropped`). `default` is the face's
+/// to read, and this is the face reading it.
+#[tauri::command]
+pub fn folder_import(
+    project_id: i64,
+    paths: Vec<String>,
+    to_root: String,
+    to: Vec<String>,
+    effect: DropEffectDto,
+) -> Result<FolderCarriedDto, CmdError> {
+    let (roots, base) = rooted(project_id, &to_root)?;
+    let into = landing(&roots, base, &to)?;
+    let from: Vec<PathBuf> = paths.iter().map(|path| levelled(Path::new(path))).collect();
+    let one = if matches!(effect, DropEffectDto::Move) { move_one } else { copy_one };
+    Ok(carried(&from, &into, one))
+}
+
+/// A dropped path in the spelling the landing is in, so the two can be compared.
+///
+/// Everything but the last name is resolved, and the last name is left alone — the same shape
+/// [`crate::folder::under`] leaves a fenced path in, for the same reason: a link at the end of a
+/// path is a name to carry, not a way through. What it buys is the one comparison that matters:
+/// "is the folder being carried into inside the folder being carried" is asked of two paths, and on
+/// macOS the one the operating system hands over goes through `/var` where the one the fence
+/// resolved says `/private/var`. Unresolvable is left as it came — a path to nothing fails at the
+/// carry, which is where it should.
+fn levelled(path: &Path) -> PathBuf {
+    let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else {
+        return path.to_path_buf();
+    };
+    canonical_dir(parent).map_or_else(|_| path.to_path_buf(), |dir| dir.join(name))
+}
+
 /// What both carries do, differing only in what one row costs.
 ///
 /// The rows are taken in the order they were given and the first failure ends it: what came before
@@ -160,33 +203,65 @@ fn carry(
     let (roots, base) = rooted(project_id, root)?;
     let asked = canonical_dir(to_root).map_err(|_| gone())?;
     let to_base = roots.iter().position(|dir| *dir == asked).ok_or_else(gone)?;
-    let (_, into) = under(&roots, to_base, to).ok_or_else(gone)?;
+    let into = landing(&roots, to_base, to)?;
+
+    let mut from = Vec::with_capacity(paths.len());
+    for path in paths {
+        from.push(under(&roots, base, path).ok_or_else(gone)?.1);
+    }
+    Ok(carried(&from, &into, one))
+}
+
+/// The folder a carry is aimed at, proved against the project's own before anything is written.
+///
+/// It is asked for as a folder and not merely as a path: the rows are joined onto it by name, so a
+/// file at the far end would silently become a parent of names it cannot hold.
+fn landing(roots: &[PathBuf], base: usize, to: &[String]) -> Result<PathBuf, CmdError> {
+    let (_, into) = under(roots, base, to).ok_or_else(gone)?;
     if !into.is_dir() {
         return Err(gone());
     }
+    Ok(into)
+}
 
+/// The carry itself, once both ends are paths: the rows in the order they were given, stopping on
+/// the first that will not go.
+///
+/// **The near end is a path and nothing more**, which is what lets the same loop answer for rows
+/// out of the project's own folders and for rows dropped in from the desktop — where they came from
+/// is the fence's question and it has already been asked.
+fn carried(
+    from: &[PathBuf],
+    into: &Path,
+    one: fn(&Path, &Path) -> std::io::Result<()>,
+) -> FolderCarriedDto {
     let mut arrived = Vec::new();
-    for path in paths {
-        let name = path.last().ok_or_else(gone)?.clone();
-        let (_, from) = under(&roots, base, path).ok_or_else(gone)?;
-        let landing = into.join(&name);
+    for path in from {
+        // A path with no last name is not a row: a drop can hand over a whole volume, and there is
+        // no name to give what would be carried in.
+        let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+            let name = path.to_string_lossy().into_owned();
+            let why = "this has no name to carry it in under".to_string();
+            return FolderCarriedDto { arrived, stopped: Some(FolderStoppedDto { name, why }) };
+        };
+        let target = into.join(&name);
 
         // A folder cannot be carried into itself: the copy would be writing into what it is reading,
         // and the move would be asking the kernel to make a folder its own child.
-        let stopped = if into.starts_with(&from) {
+        let stopped = if into.starts_with(path) {
             Some("a folder cannot be moved inside itself".to_string())
-        } else if holds(&landing) {
+        } else if holds(&target) {
             Some(format!("{name} is already there"))
         } else {
-            one(&from, &landing).err().map(|e| e.to_string())
+            one(path, &target).err().map(|e| e.to_string())
         };
 
         if let Some(why) = stopped {
-            return Ok(FolderCarriedDto { arrived, stopped: Some(FolderStoppedDto { name, why }) });
+            return FolderCarriedDto { arrived, stopped: Some(FolderStoppedDto { name, why }) };
         }
         arrived.push(name);
     }
-    Ok(FolderCarriedDto { arrived, stopped: None })
+    FolderCarriedDto { arrived, stopped: None }
 }
 
 /// Move one row, and copy it instead where the kernel says the two ends are not the same disk.
@@ -472,6 +547,74 @@ mod tests {
 
         move_one(&from, &dir.path().join("never-made/note.md")).expect_err("nowhere to move it to");
         assert_eq!(std::fs::read(&from).expect("the file"), b"mine");
+    }
+
+    /// A carry stops on the first row that will not go, and says where it got to: what came before
+    /// is in the folder, what it stopped on is named, and what came after was never touched.
+    #[test]
+    fn a_carry_that_stops_says_where_it_got_to() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let into = dir.path().join("into");
+        std::fs::create_dir(&into).expect("a folder");
+        std::fs::write(into.join("beta.md"), b"already here").expect("a file");
+        let rows: Vec<PathBuf> = ["alpha.md", "beta.md", "gamma.md"]
+            .iter()
+            .map(|name| {
+                let at = dir.path().join(name);
+                std::fs::write(&at, b"mine").expect("a file");
+                at
+            })
+            .collect();
+
+        let answer = carried(&rows, &into, copy_one);
+        assert_eq!(answer.arrived, ["alpha.md"]);
+        let stopped = answer.stopped.expect("it stopped on the name that was taken");
+        assert_eq!(stopped.name, "beta.md");
+        assert_eq!(
+            std::fs::read(into.join("beta.md")).expect("the file"),
+            b"already here",
+            "and what was already there is untouched",
+        );
+        assert!(!holds(&into.join("gamma.md")), "the rest were never tried");
+    }
+
+    /// What a drop hands over is a whole path from outside the project, and that is the ordinary
+    /// case: the fence is on the folder it lands in, and the name it lands under is the path's own.
+    #[test]
+    fn a_row_from_outside_is_carried_in_under_its_own_name() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let outside = dir.path().join("desktop/note.md");
+        std::fs::create_dir_all(outside.parent().expect("the folder")).expect("a folder");
+        std::fs::write(&outside, b"dropped").expect("a file");
+        let into = dir.path().join("into");
+        std::fs::create_dir(&into).expect("a folder");
+
+        let answer = carried(std::slice::from_ref(&outside), &into, copy_one);
+        assert_eq!(answer.arrived, ["note.md"]);
+        assert_eq!(std::fs::read(into.join("note.md")).expect("the file"), b"dropped");
+        assert!(holds(&outside), "a copy takes nothing away from where it was dragged from");
+    }
+
+    /// A folder cannot be carried into itself, and the two paths have to be in the same spelling for
+    /// that to be seen: on macOS a temp folder is `/var/...` as it is handed over and `/private/var/...`
+    /// once the fence has resolved it, which is two paths neither of which contains the other.
+    #[test]
+    fn a_dropped_path_is_levelled_against_the_landing() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let from = dir.path().join("carried");
+        std::fs::create_dir(&from).expect("a folder");
+        let into = from.join("inside");
+        std::fs::create_dir(&into).expect("a folder");
+
+        let asked = levelled(&from);
+        assert_eq!(asked, canonical_dir(&from).expect("the folder"));
+        let answer = carried(
+            std::slice::from_ref(&asked),
+            &canonical_dir(&into).expect("the folder"),
+            copy_one,
+        );
+        assert!(answer.arrived.is_empty());
+        assert_eq!(answer.stopped.expect("it is inside itself").name, "carried");
     }
 
     /// Moving on one disk is a rename, and a rename takes the source away. The other half — the

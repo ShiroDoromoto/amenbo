@@ -101,6 +101,30 @@
   --c-due-tomorrow: var(--c-heed);
   --c-due-future: var(--c-text-muted);
 
+  /* ----- the colours a file's own text is read in -----
+     Not the ladder above. A scope in a grammar asks nothing of the reader — it says what a run of
+     characters *is*, and the reader is looking for shape, not for a step to take. Borrowing
+     `--c-stop` for a keyword would put a red on the screen that means "nothing moves until a hand
+     is put to it" beside a `let`.
+     Named after what the token is rather than after a language's word for it, because one set has
+     to hold for twelve grammars (`files/grammars.ts`): `keyword` is `fn` in Rust and `def` in
+     Python. A kind with no entry here is drawn in `--c-text`, which is what most of a file is.
+     Held to the warm-gray ground the rest of the application is on, and to a contrast a body of
+     text can be read at — comment included, which is the one that is usually dimmed past it. */
+  --c-code-comment: #7a7263;
+  --c-code-keyword: #9a4f8c;
+  --c-code-string: #3d7a4a;
+  --c-code-number: #a35a24;
+  --c-code-constant: #a35a24;
+  --c-code-function: #2f6aa8;
+  --c-code-type: #0e7c7b;
+  --c-code-variable: #23211c;
+  --c-code-tag: #9a4f8c;
+  --c-code-attribute: #2f6aa8;
+  --c-code-operator: #6f6a5e;
+  --c-code-heading: #2f6aa8;
+  --c-code-invalid: #c0392b;
+
   /* ----- typography ----- */
   --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
@@ -186,6 +210,22 @@
 
   --c-progress: #2ba6a4;
   --c-done: #46c97e;
+
+  /* The same thirteen, lifted onto the dark ground. `variable` follows the body text, as it does
+     on the light side — most of a file is variables, and colouring them would colour everything. */
+  --c-code-comment: #8d8578;
+  --c-code-keyword: #cf8fc4;
+  --c-code-string: #86c98f;
+  --c-code-number: #e0a04a;
+  --c-code-constant: #e0a04a;
+  --c-code-function: #7fb0e8;
+  --c-code-type: #2ba6a4;
+  --c-code-variable: #ece9e1;
+  --c-code-tag: #cf8fc4;
+  --c-code-attribute: #7fb0e8;
+  --c-code-operator: #a8a399;
+  --c-code-heading: #7fb0e8;
+  --c-code-invalid: #e06155;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);

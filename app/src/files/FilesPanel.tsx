@@ -657,7 +657,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
         {file?.text !== undefined && (
           MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext))
             ? <RefNavProvider value={nav}><Markdown>{file.text}</Markdown></RefNavProvider>
-            : <FileEditor text={file.text} editable={!file.truncated && file.clean} />
+            : <FileEditor text={file.text} editable={!file.truncated && file.clean} name={name} />
         )}
         {/* A picture refused is not a picture missing. Drawn as nothing at all it reads as a
             damaged file, so the refusal says what it measured and hands the file on to something

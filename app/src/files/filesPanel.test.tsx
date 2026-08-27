@@ -54,14 +54,14 @@ const hoisted = vi.hoisted(() => ({
   /** The host's side of the drag-and-drop subscription (`../core/hostDrop`). */
   dragging: null as null | ((event: { payload: unknown }) => void),
   /** What the editor was asked to draw, and whether it was allowed to be typed into. */
-  editing: [] as { text: string; editable: boolean }[],
+  editing: [] as { text: string; editable: boolean; name: string }[],
 }));
 
 // The editor is loaded on demand and lays itself out by measuring, which jsdom cannot do — so what
 // it was asked to draw is recorded instead, the same stand-in the Markdown face makes for mermaid.
 vi.mock("./editorLoad", () => ({
-  mountEditor: async (parent: HTMLElement, text: string, editable: boolean) => {
-    hoisted.editing.push({ text, editable });
+  mountEditor: async (parent: HTMLElement, text: string, editable: boolean, name: string) => {
+    hoisted.editing.push({ text, editable, name });
     const drawn = parent.ownerDocument.createElement("div");
     drawn.className = "cm-editor";
     drawn.textContent = text;
@@ -574,8 +574,10 @@ describe("the file face", () => {
     // Not a heading: the hash in a shell script is a comment, and a name is what decides that.
     expect(container.querySelector("h1")).toBeNull();
     expect(container.querySelector(".cm-editor")?.textContent).toBe("#!/bin/sh\necho hi");
-    // And it is a file this panel could save, so it is one somebody may type into.
-    expect(last(hoisted.editing)).toEqual({ text: "#!/bin/sh\necho hi", editable: true });
+    // And it is a file this panel could save, so it is one somebody may type into. The name goes
+    // with it: what language a file is written in is the only thing that says how to colour it.
+    expect(last(hoisted.editing))
+      .toEqual({ text: "#!/bin/sh\necho hi", editable: true, name: "run.sh" });
   });
 
   /** A file the panel could never write back is read-only from the moment it opens. Saying so after

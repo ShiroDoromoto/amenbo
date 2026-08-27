@@ -299,7 +299,7 @@ export const ptBR: Translation = {
     "settings.doctorRebind": "Vincular de novo",
     "settings.doctorRepairing": "Trabalhando…",
     "settings.doctorRepairDone": "Consertado.",
-    "settings.doctorFixDone": "Reparado ({blobs} arquivo(s) anexo(s) · {bindings} vínculo(s) de pasta)",
+    "settings.doctorFixDone": "Reparado ({attachments} linha(s) de anexo · {blobs} arquivo(s) anexo(s) · {bindings} vínculo(s) de pasta)",
     "settings.doctorFixNothing": "Não há nada a reparar.",
     "settings.dataOpPreparing": "Preparando…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -545,7 +545,6 @@ export const ptBR: Translation = {
     "face.whichFolder": "Em qual pasta este painel trabalha?",
     "face.rename": "Renomear este painel",
     "face.needsYou": "esperando por você",
-    "face.nothingNeedsYou": "Pelo que o registro sabe, nada precisa de você.",
     "files.tab": "Arquivos",
     "files.memo": "A página",
     "files.memoWide": "Escrever amplo",
@@ -565,6 +564,9 @@ export const ptBR: Translation = {
     "files.notText": "Isto não é texto, então não dá para mostrar aqui.",
     "files.cut": "Só o começo está sendo mostrado.",
     "files.unreadable": "Não foi possível ler este arquivo.",
+    "files.tooBig": "Esta imagem é grande demais para ser mostrada aqui.",
+    "files.tooBigPixels": "{width} × {height} pixels",
+    "files.tooBigOpen": "Abrir em outro aplicativo",
     "talk.elevated.title": "O Amenbo está sendo executado como administrador",
     "talk.elevated.body": "Um terminal aberto aqui herda isso, e um administrador não segue os links por trás dos quais o scoop instala seus pacotes. Essas ferramentas não podem ser alcançadas desta janela — o Amenbo dirá que não estão instaladas, embora estejam.",
     "talk.elevated.fix": "Feche o Amenbo e abra-o novamente sem “Executar como administrador”, e elas voltam.",
@@ -829,6 +831,10 @@ export const ptBR: Translation = {
     duplicate_order_key: {
       message: "O projeto {project} tem tarefas dividindo a mesma chave de ordenação ({order_key}).",
       fix: "Reordene as tarefas e isso se resolve sozinho.",
+    },
+    orphan_attachment: {
+      message: "{attachment} está preso a {target}, e esse registro não existe: a linha sobreviveu ao que estava anexada e segura o arquivo dela onde ninguém mais chega.",
+      fix: "“Reparar” remove a linha e solta o arquivo dela. Não há nada para abrir antes: aquilo em que estava presa já se foi.",
     },
     stale_managed_block: {
       message: "O guia da IA (bloco gerenciado pelo Amenbo) em {path} está desatualizado (v{version} → v{current}).",

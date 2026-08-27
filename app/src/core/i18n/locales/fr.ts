@@ -298,7 +298,7 @@ export const fr: Translation = {
     "settings.doctorRebind": "Relier",
     "settings.doctorRepairing": "Traitement…",
     "settings.doctorRepairDone": "Corrigé.",
-    "settings.doctorFixDone": "Réparé ({blobs} fichier(s) joint(s) · {bindings} liaison(s) de dossier)",
+    "settings.doctorFixDone": "Réparé ({attachments} ligne(s) de pièce jointe · {blobs} fichier(s) joint(s) · {bindings} liaison(s) de dossier)",
     "settings.doctorFixNothing": "Rien à réparer.",
     "settings.dataOpPreparing": "Préparation…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -544,7 +544,6 @@ export const fr: Translation = {
     "face.whichFolder": "Dans quel dossier ce volet travaille-t-il ?",
     "face.rename": "Renommer ce volet",
     "face.needsYou": "vous attend",
-    "face.nothingNeedsYou": "Pour ce qu'en sait le registre, rien n'attend après vous.",
     "files.tab": "Fichiers",
     "files.memo": "La page",
     "files.memoWide": "Écrire en grand",
@@ -564,6 +563,9 @@ export const fr: Translation = {
     "files.notText": "Ce n'est pas du texte : impossible de l'afficher ici.",
     "files.cut": "Seul le début est affiché.",
     "files.unreadable": "Ce fichier n'a pas pu être lu.",
+    "files.tooBig": "Cette image est trop grande pour être affichée ici.",
+    "files.tooBigPixels": "{width} × {height} pixels",
+    "files.tooBigOpen": "L'ouvrir dans une autre application",
     "talk.elevated.title": "Amenbo s'exécute en tant qu'administrateur",
     "talk.elevated.body": "Un terminal ouvert ici en hérite, et un administrateur ne suit pas les liens derrière lesquels scoop installe ses paquets. Ces outils sont inaccessibles depuis cette fenêtre : Amenbo les signalera comme non installés, alors qu'ils le sont.",
     "talk.elevated.fix": "Quittez Amenbo et rouvrez-le sans « Exécuter en tant qu'administrateur » : ils reviennent.",
@@ -830,6 +832,10 @@ export const fr: Translation = {
     duplicate_order_key: {
       message: "Le projet {project} a des tâches qui partagent la même clé d'ordre ({order_key}).",
       fix: "Réordonnez les tâches et cela se résout de soi-même.",
+    },
+    orphan_attachment: {
+      message: "{attachment} est rattaché à {target}, et cet enregistrement n'existe pas : la ligne a survécu à ce à quoi elle tenait, et retient son fichier là où personne ne peut plus l'atteindre.",
+      fix: "« Réparer » supprime la ligne et libère son fichier. Il n'y a rien à ouvrir d'abord : ce à quoi elle tenait a déjà disparu.",
     },
     stale_managed_block: {
       message: "Le guide de l'IA (bloc géré par Amenbo) dans {path} est périmé (v{version} → v{current}).",

@@ -291,7 +291,7 @@ export const zhHant: Translation = {
     "settings.doctorRebind": "重新連結",
     "settings.doctorRepairing": "處理中…",
     "settings.doctorRepairDone": "已修復。",
-    "settings.doctorFixDone": "已修復（附件檔案 {blobs} 個 · 資料夾連結 {bindings} 個）",
+    "settings.doctorFixDone": "已修復（附件列 {attachments} 個 · 附件檔案 {blobs} 個 · 資料夾連結 {bindings} 個）",
     "settings.doctorFixNothing": "沒有需要修復的東西。",
     "settings.dataOpPreparing": "準備中…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -523,7 +523,6 @@ export const zhHant: Translation = {
     "face.whichFolder": "這個窗格在哪個資料夾中工作？",
     "face.rename": "重新命名此窗格",
     "face.needsYou": "在等你",
-    "face.nothingNeedsYou": "就帳本所知，沒有需要你的地方。",
     "files.tab": "檔案",
     "files.memo": "便箋",
     "files.memoWide": "寫得寬一些",
@@ -543,6 +542,9 @@ export const zhHant: Translation = {
     "files.notText": "這不是文字，無法在這裡顯示。",
     "files.cut": "只顯示了開頭部分。",
     "files.unreadable": "無法讀取這個檔案。",
+    "files.tooBig": "這張圖太大了，沒辦法在這裡顯示。",
+    "files.tooBigPixels": "{width} × {height} 像素",
+    "files.tooBigOpen": "用別的應用程式開啟",
     "talk.elevated.title": "Amenbo 正以系統管理員身分執行",
     "talk.elevated.body": "在此開啟的終端機會繼承該權限，而系統管理員不會跟隨 scoop 安放套件所用的連結。這些工具在本視窗中無法存取——即使已安裝，Amenbo 仍會回報為未安裝。",
     "talk.elevated.fix": "結束 Amenbo，不使用「以系統管理員身分執行」重新開啟，工具就會回來。",
@@ -798,6 +800,10 @@ export const zhHant: Translation = {
     duplicate_order_key: {
       message: "專案 {project} 中有任務共用了同一個排序鍵（{order_key}）。",
       fix: "重新排一下任務順序，它就會自行解決。",
+    },
+    orphan_attachment: {
+      message: "{attachment} 掛在 {target} 上，可是並沒有這筆記錄——這一列比它所附的東西活得更久，還攥著自己的檔案，誰也搆不著。",
+      fix: "「修復」會刪掉這一列並放開它的檔案。不必先打開什麼：它所附的東西早就沒了。",
     },
     stale_managed_block: {
       message: "{path} 中的 AI 指南（Amenbo 受管區塊）已過時（v{version} → v{current}）。",

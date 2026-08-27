@@ -953,9 +953,11 @@ impl Store {
         self.write_one(&[WriteTarget::DimensionValue(value_id)], |tx| crate::ops::dimension::value_move(tx, value_id, pos))
     }
 
-    /// Delete a dimension value — a hard delete (one operation = one transaction). The task
-    /// assignments to that value go with it, unless `reassign_to` names another value of the same axis
-    /// for them to move to — which a required axis demands whenever there are any.
+    /// Delete a dimension value — a hard delete (one operation = one transaction). The assignments to
+    /// that value, on tasks and on decisions alike, go with it, unless `reassign_to` names another value
+    /// of the same axis for them to move to — which a required axis demands whenever there are tasks on
+    /// it. What never goes is a task or a decision itself: removing a value un-classifies, it does not
+    /// delete (`AMB-D-781`).
     pub fn dimension_value_delete(&mut self, value_id: i64, reassign_to: Option<i64>) -> Result<()> {
         let mut targets = vec![WriteTarget::DimensionValue(value_id)];
         // The destination is written to as well (the assignments land on it), so it is declared for the
@@ -984,6 +986,33 @@ impl Store {
         self.write_one(
             &[WriteTarget::Task(task_id), WriteTarget::DimensionValue(value_id)],
             |tx| crate::ops::dimension::unset(tx, task_id, value_id),
+        )
+    }
+
+    /// Assign a dimension value to a decision (one operation = one transaction) — the decision side of
+    /// [`Self::set_task_dimension_value`] (`AMB-D-781`), and one transaction for the same reason: the
+    /// one row per `(decision, dimension)` is never broken in between.
+    pub fn set_decision_dimension_value(
+        &mut self,
+        decision_id: i64,
+        value_id: i64,
+    ) -> Result<(crate::model::DecisionDimensionValue, bool)> {
+        self.write_one(
+            &[WriteTarget::Decision(decision_id), WriteTarget::DimensionValue(value_id)],
+            |tx| crate::ops::dimension::set_on_decision(tx, decision_id, value_id),
+        )
+    }
+
+    /// Remove a dimension value assignment from a decision (one operation = one transaction). If there
+    /// is none, it is a no-op and returns `false`.
+    pub fn unset_decision_dimension_value(
+        &mut self,
+        decision_id: i64,
+        value_id: i64,
+    ) -> Result<bool> {
+        self.write_one(
+            &[WriteTarget::Decision(decision_id), WriteTarget::DimensionValue(value_id)],
+            |tx| crate::ops::dimension::unset_on_decision(tx, decision_id, value_id),
         )
     }
 
@@ -1334,6 +1363,36 @@ impl Store {
             removed.iter().filter_map(|r| r.blob_hash.clone()).collect();
         self.reclaim_after_delete(&orphaned);
         Ok(removed.is_some())
+    }
+
+    /// Delete the attachment rows whose target is gone ([`crate::validate::orphan_attachments`]) and
+    /// reclaim the bytes they were holding alive — the other half of what `doctor --fix` calls.
+    ///
+    /// An orphan is unreachable from every surface: nothing lists it, nothing opens it, and the only thing
+    /// it still does is keep its `blob_hash` in the GC root set so the bytes are never collected. Dropping
+    /// it destroys nothing a reader could have got to, which is why it sits beside the other cleanups and
+    /// asks for no confirmation. The blobs go the same way every delete's do — reclaimed after the commit,
+    /// and only where no live attachment still points at the same content.
+    ///
+    /// **No reach guard, and none is possible**: an attachment's project is read through the row it hung
+    /// off, and that row is precisely what is gone. It belongs to no project, exactly as an orphan folder
+    /// row does ([`Self::forget_orphan_dirs`]), so there is no project whose binding could contain it and
+    /// no project version to move. Returns how many rows were swept.
+    pub fn sweep_orphan_attachments(&mut self) -> Result<usize> {
+        let orphans = crate::validate::orphan_attachments(self.engine.conn())?;
+        if orphans.is_empty() {
+            return Ok(0);
+        }
+        let tx = self.engine.write()?;
+        let mut orphaned = Vec::new();
+        for orphan in &orphans {
+            if let Some(removed) = crate::ops::attachment::remove(&tx, orphan.id)? {
+                orphaned.extend(removed.blob_hash);
+            }
+        }
+        tx.commit()?;
+        self.reclaim_after_delete(&orphaned);
+        Ok(orphans.len())
     }
 
     /// Drop from the binding registry the folder rows no live project claims

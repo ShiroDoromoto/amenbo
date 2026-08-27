@@ -300,7 +300,7 @@ export const pl: Translation = {
     "settings.doctorRebind": "Podepnij ponownie",
     "settings.doctorRepairing": "Pracuję…",
     "settings.doctorRepairDone": "Naprawione.",
-    "settings.doctorFixDone": "Naprawiono (pliki załączników: {blobs} · powiązania folderów: {bindings})",
+    "settings.doctorFixDone": "Naprawiono (wiersze załączników: {attachments} · pliki załączników: {blobs} · powiązania folderów: {bindings})",
     "settings.doctorFixNothing": "Nie było czego naprawiać.",
     "settings.dataOpPreparing": "Przygotowywanie…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -549,7 +549,6 @@ export const pl: Translation = {
     "face.whichFolder": "W którym folderze pracuje ten panel?",
     "face.rename": "Zmień nazwę tego panelu",
     "face.needsYou": "czeka na Ciebie",
-    "face.nothingNeedsYou": "Z tego, co wie rejestr, nic nie czeka na ciebie.",
     "files.tab": "Pliki",
     "files.memo": "Strona",
     "files.memoWide": "Pisz szeroko",
@@ -569,6 +568,9 @@ export const pl: Translation = {
     "files.notText": "To nie jest tekst, więc nie da się go tu pokazać.",
     "files.cut": "Pokazany jest tylko początek.",
     "files.unreadable": "Nie udało się odczytać tego pliku.",
+    "files.tooBig": "Ten obraz jest za duży, żeby pokazać go tutaj.",
+    "files.tooBigPixels": "{width} × {height} pikseli",
+    "files.tooBigOpen": "Otwórz w innej aplikacji",
     "talk.elevated.title": "Amenbo działa jako administrator",
     "talk.elevated.body": "Terminal otwarty tutaj dziedziczy te uprawnienia, a administrator nie podąża za dowiązaniami, za którymi scoop instaluje swoje pakiety. Tych narzędzi nie da się osiągnąć z tego okna — Amenbo zgłosi je jako niezainstalowane, choć są.",
     "talk.elevated.fix": "Zamknij Amenbo i otwórz je ponownie bez „Uruchom jako administrator”, a wrócą.",
@@ -838,6 +840,10 @@ export const pl: Translation = {
     duplicate_order_key: {
       message: "W projekcie {project} są zadania z tym samym kluczem porządkowym ({order_key}).",
       fix: "Przestaw zadania, a rozwiąże się samo.",
+    },
+    orphan_attachment: {
+      message: "{attachment} wisi przy {target}, a takiego wpisu nie ma — wiersz przeżył to, do czego był dołączony, i trzyma swój plik tam, gdzie już nikt nie sięgnie.",
+      fix: "„Napraw” usuwa wiersz i wypuszcza jego plik. Nie ma czego wcześniej otwierać: tego, przy czym wisiał, już nie ma.",
     },
     stale_managed_block: {
       message: "Przewodnik dla SI (blok zarządzany przez Amenbo) w {path} jest nieaktualny (v{version} → v{current}).",

@@ -290,7 +290,7 @@ export const ko: Translation = {
     "settings.doctorRebind": "다시 연결",
     "settings.doctorRepairing": "처리 중…",
     "settings.doctorRepairDone": "고쳤습니다.",
-    "settings.doctorFixDone": "복구했습니다(첨부 파일 {blobs}개 · 폴더 연결 {bindings}개)",
+    "settings.doctorFixDone": "복구했습니다(첨부 행 {attachments}개 · 첨부 파일 {blobs}개 · 폴더 연결 {bindings}개)",
     "settings.doctorFixNothing": "복구할 것이 없습니다.",
     "settings.dataOpPreparing": "준비 중…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -522,7 +522,6 @@ export const ko: Translation = {
     "face.whichFolder": "이 페인은 어느 폴더에서 작업하나요?",
     "face.rename": "이 페인 이름 바꾸기",
     "face.needsYou": "사용자를 기다리는 중",
-    "face.nothingNeedsYou": "장부에 있는 것 중에는 손이 필요한 것이 없습니다.",
     "files.tab": "파일",
     "files.memo": "메모",
     "files.memoWide": "넓게 쓰기",
@@ -542,6 +541,9 @@ export const ko: Translation = {
     "files.notText": "텍스트가 아니라서 여기에서는 볼 수 없습니다.",
     "files.cut": "앞부분만 보여 줍니다.",
     "files.unreadable": "이 파일은 읽지 못했습니다.",
+    "files.tooBig": "이 이미지는 너무 커서 여기에 보여줄 수 없습니다.",
+    "files.tooBigPixels": "{width} × {height} 픽셀",
+    "files.tooBigOpen": "다른 앱으로 열기",
     "talk.elevated.title": "Amenbo가 관리자 권한으로 실행 중입니다",
     "talk.elevated.body": "여기서 연 터미널도 그 권한을 물려받습니다. 관리자 권한은 scoop이 패키지를 두는 링크를 따라가지 않으므로, 이 창에서는 그 도구에 닿을 수 없습니다. 설치되어 있어도 Amenbo는 설치되지 않았다고 답합니다.",
     "talk.elevated.fix": "Amenbo를 종료하고 “관리자 권한으로 실행”을 쓰지 않고 다시 열면 도구가 돌아옵니다.",
@@ -797,6 +799,10 @@ export const ko: Translation = {
     duplicate_order_key: {
       message: "프로젝트 {project}에 같은 정렬 키({order_key})를 쓰는 작업들이 있습니다.",
       fix: "작업 순서를 다시 잡으면 저절로 풀립니다.",
+    },
+    orphan_attachment: {
+      message: "{attachment}이(가) {target}에 달려 있는데, 그런 기록은 없습니다. 달려 있던 것보다 오래 남은 행이고, 아무도 닿을 수 없는 곳에 자기 파일을 붙들고 있습니다.",
+      fix: "“복구”가 그 행을 지우고 파일을 놓아줍니다. 먼저 열어볼 것은 없습니다. 달려 있던 대상은 이미 사라졌습니다.",
     },
     stale_managed_block: {
       message: "{path}의 AI 안내서(Amenbo 관리 블록)가 낡았습니다(v{version} → v{current}).",

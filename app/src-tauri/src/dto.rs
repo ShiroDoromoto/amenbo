@@ -91,6 +91,18 @@ pub struct TaskDimensionAssignmentDto {
     pub(crate) value_id: i64,
 }
 
+/// One decision × dimension assignment (`valueId` is set on the `dimensionId` axis) — the decision
+/// side of [`TaskDimensionAssignmentDto`], a type of its own because the two ends are (`AMB-D-781`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct DecisionDimensionAssignmentDto {
+    #[ts(type = "number")]
+    pub(crate) dimension_id: i64,
+    #[ts(type = "number")]
+    pub(crate) value_id: i64,
+}
+
 /// The per-task assigned value for one project × dimension (`taskId`→`valueId`). The board uses it
 /// to bundle tasks by value on the chosen dimension (browsing/grouping).
 #[derive(Serialize, TS)]
@@ -1237,6 +1249,9 @@ pub struct PointerRepairDto {
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct DoctorFixDto {
+    /// Attachment rows swept because the record they hung off is gone. Counted apart from
+    /// `reclaimed_blobs`: that counts **files**, and a `url`-mode orphan frees none.
+    pub(crate) swept_attachments: usize,
     pub(crate) reclaimed_blobs: usize,
     pub(crate) freed_bytes: usize,
     pub(crate) forgotten_bindings: usize,
@@ -2262,20 +2277,32 @@ pub struct FolderAppDto {
 /// What the file face's second row is drawn from: the rows, and whether they are the whole story
 /// (`crate::folder_watch`).
 ///
-/// `partial` is the one thing the rows cannot say for themselves. A watch is a set of watches, one
-/// per folder, and the kernel's limit is per user — so some may be refused while the rest work.
-/// Drawn as a whole watch, that reads as "nothing has changed" in the half nobody is watching.
+/// `partial` and `gone` are the two things the rows cannot say for themselves. Where every folder
+/// needs a watch of its own the kernel's limit is per user, so some may be refused while the rest
+/// work; drawn as a whole watch, that reads as "nothing has changed" in the half nobody is
+/// watching. An empty list means the same thing for a folder that was removed as for one nobody
+/// has written in, and only one of the two is worth telling a reader about.
 // Clone because the answer to the first call is also what the thread starts out holding, and
 // PartialEq because a wake-up is only worth telling anybody about when it moved these rows.
 #[derive(Clone, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct FolderChangesDto {
+    /// Which folder this is about, spelled the way the caller asked for it.
+    ///
+    /// A project can be bound to several folders and each is watched on its own, so an answer that
+    /// did not name one would leave a face with several of them unable to say which of its
+    /// sections had moved. It is the caller's own spelling rather than the canonical one because
+    /// the caller is what has to match it against a folder it is already drawing.
+    pub(crate) root: String,
     /// The files written to most recently, newest first.
     pub(crate) changed: Vec<FolderChangedDto>,
     /// Whether some of the folder is unwatched — a walk that stopped at its cap, or a watch the
     /// kernel refused.
     pub(crate) partial: bool,
+    /// Whether the folder itself is no longer there. It can come back: a folder made again where
+    /// this one was is watched again, and this goes back to false.
+    pub(crate) gone: bool,
 }
 
 /// A file that changed lately, as the file face's second row draws it (`crate::folder`).
@@ -2294,10 +2321,10 @@ pub struct FolderChangedDto {
 
 /// What a file has to show for itself, as far as a panel can show it (`crate::folder`).
 ///
-/// Exactly one of `text` and `image` is filled, and both are empty for a file that is neither —
-/// what a reader is then told is that it cannot be read here, which is the honest answer for a
-/// binary. Text is cut at a cap, because a panel is not a pager and a very long file would be paid
-/// for in full to draw a screen of it.
+/// At most one of `text`, `image` and `oversize` is filled, and all three are empty for a file that
+/// is none of them — what a reader is then told is that it cannot be read here, which is the honest
+/// answer for a binary. Text is cut at a cap, because a panel is not a pager and a very long file
+/// would be paid for in full to draw a screen of it.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -2312,6 +2339,38 @@ pub struct FolderFileDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) image: Option<FolderImageDto>,
+    /// The picture that was refused, where it is one and there are too many of it to carry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) oversize: Option<FolderOversizeDto>,
+}
+
+/// A picture the panel would not carry, and what it was measured against (`AMB-D-783`).
+///
+/// **The numbers travel because silence reads as a broken file.** A reader shown nothing where a
+/// picture was concludes the file is damaged; one shown how large it is concludes it is large, and
+/// goes on to open it in something built for that.
+///
+/// Two of them, because two caps are being kept and they guard different things: the bytes stand
+/// for what the host would hold, the pixels for what the webview would decode. The pixels are
+/// absent where the front of the file did not say — a picture whose size could not be read is let
+/// through on the bytes alone, so a refusal with no size in it is always a refusal about bytes.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderOversizeDto {
+    /// The whole file, in bytes.
+    #[ts(type = "number")]
+    pub(crate) bytes: u64,
+    /// How wide the picture says it is, where the front of the file said.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) width: Option<u32>,
+    /// How tall it says it is, on the same terms as `width` — the two are always both there or both
+    /// absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) height: Option<u32>,
 }
 
 /// What a drop asked for, as the keys held at the moment it landed say it (`crate::dropped`).

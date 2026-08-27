@@ -13,6 +13,7 @@
 export const DOCTOR_ISSUE_KINDS = [
   "self_dependency",
   "duplicate_order_key",
+  "orphan_attachment",
   "stale_managed_block",
   "legacy_pointer",
   "legacy_pointer_ambiguous",

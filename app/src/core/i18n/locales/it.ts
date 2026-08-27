@@ -298,7 +298,7 @@ export const it: Translation = {
     "settings.doctorRebind": "Ricollega",
     "settings.doctorRepairing": "In lavorazione…",
     "settings.doctorRepairDone": "Risolto.",
-    "settings.doctorFixDone": "Riparato ({blobs} file allegato/i · {bindings} collegamento/i di cartella)",
+    "settings.doctorFixDone": "Riparato ({attachments} riga/righe di allegato · {blobs} file allegato/i · {bindings} collegamento/i di cartella)",
     "settings.doctorFixNothing": "Non c'è nulla da riparare.",
     "settings.dataOpPreparing": "Preparazione…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -544,7 +544,6 @@ export const it: Translation = {
     "face.whichFolder": "In quale cartella lavora questo riquadro?",
     "face.rename": "Rinomina questo riquadro",
     "face.needsYou": "ti sta aspettando",
-    "face.nothingNeedsYou": "Per quel che risulta al registro, nulla ha bisogno di te.",
     "files.tab": "File",
     "files.memo": "La pagina",
     "files.memoWide": "Scrivi in grande",
@@ -564,6 +563,9 @@ export const it: Translation = {
     "files.notText": "Non è testo, quindi non può essere mostrato qui.",
     "files.cut": "Viene mostrato solo l'inizio.",
     "files.unreadable": "Non è stato possibile leggere questo file.",
+    "files.tooBig": "Questa immagine è troppo grande per essere mostrata qui.",
+    "files.tooBigPixels": "{width} × {height} pixel",
+    "files.tooBigOpen": "Aprirla in un'altra applicazione",
     "talk.elevated.title": "Amenbo è in esecuzione come amministratore",
     "talk.elevated.body": "Un terminale aperto qui lo eredita, e un amministratore non segue i collegamenti dietro cui scoop installa i suoi pacchetti. Quegli strumenti non sono raggiungibili da questa finestra: Amenbo li segnalerà come non installati, anche se lo sono.",
     "talk.elevated.fix": "Chiudi Amenbo e riaprilo senza «Esegui come amministratore»: torneranno.",
@@ -830,6 +832,10 @@ export const it: Translation = {
     duplicate_order_key: {
       message: "Il progetto {project} ha attività che condividono la stessa chiave di ordinamento ({order_key}).",
       fix: "Riordina le attività e si risolve da sé.",
+    },
+    orphan_attachment: {
+      message: "{attachment} è agganciato a {target}, e quel record non esiste: la riga è sopravvissuta a ciò a cui era allegata e trattiene il suo file dove nessuno arriva più.",
+      fix: "«Ripara» elimina la riga e lascia andare il suo file. Non c'è nulla da aprire prima: ciò a cui era agganciata non c'è già più.",
     },
     stale_managed_block: {
       message: "La guida per l'IA (blocco gestito da Amenbo) in {path} è superata (v{version} → v{current}).",

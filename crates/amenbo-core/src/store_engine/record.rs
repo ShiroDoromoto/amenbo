@@ -21,7 +21,8 @@ use chrono::NaiveDate;
 use rusqlite::types::Value;
 
 use crate::model::{
-    ActorKind, Attachment, Database, Decision, DecisionComment, DecisionEdge, DecisionTaskLink,
+    ActorKind, Attachment, Database, Decision, DecisionComment, DecisionDimensionValue,
+    DecisionEdge, DecisionTaskLink,
     Dimension, DimensionValue, PluginConfigValue, PluginEnabledProject, PluginSecret, Project, Task,
     TaskComment, TaskCommit, TaskDependency, TaskDimensionValue,
 };
@@ -348,6 +349,22 @@ pub fn task_dimension_value(v: &TaskDimensionValue) -> Record {
     )
 }
 
+pub fn decision_dimension_value(v: &DecisionDimensionValue) -> Record {
+    Record::new(
+        "decision_dimension_value",
+        v.id,
+        with_audit(
+            vec![
+                ("decision_id", kv(v.decision_id)),
+                ("dimension_id", kv(v.dimension_id)),
+                ("value_id", kv(v.value_id)),
+            ],
+            &v.created_at,
+            &v.updated_at,
+        ),
+    )
+}
+
 pub fn task_comment(c: &TaskComment) -> Record {
     Record::new(
         "task_comment",
@@ -447,6 +464,9 @@ pub fn put_database(tx: &super::WriteTx<'_>, db: &Database) -> super::Result<()>
     }
     for x in &db.task_dimension_values {
         put(tx, task_dimension_value(x))?;
+    }
+    for x in &db.decision_dimension_values {
+        put(tx, decision_dimension_value(x))?;
     }
     for x in &db.task_comments {
         put(tx, task_comment(x))?;

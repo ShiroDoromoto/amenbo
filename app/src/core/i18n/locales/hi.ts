@@ -290,7 +290,7 @@ export const hi: Translation = {
     "settings.doctorRebind": "दोबारा जोड़ें",
     "settings.doctorRepairing": "काम चल रहा है…",
     "settings.doctorRepairDone": "ठीक हो गया।",
-    "settings.doctorFixDone": "मरम्मत हुई ({blobs} संलग्नक फ़ाइल · {bindings} फ़ोल्डर कड़ी)",
+    "settings.doctorFixDone": "मरम्मत हुई ({attachments} संलग्नक पंक्ति · {blobs} संलग्नक फ़ाइल · {bindings} फ़ोल्डर कड़ी)",
     "settings.doctorFixNothing": "मरम्मत को कुछ नहीं था।",
     "settings.dataOpPreparing": "तैयारी हो रही है…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -523,7 +523,6 @@ export const hi: Translation = {
     "face.whichFolder": "यह पैन किस फ़ोल्डर में काम करता है?",
     "face.rename": "इस पैन का नाम बदलें",
     "face.needsYou": "आपकी प्रतीक्षा में",
-    "face.nothingNeedsYou": "बहीखाते के अनुसार, अभी कहीं आपकी ज़रूरत नहीं है।",
     "files.tab": "फ़ाइलें",
     "files.memo": "पन्ना",
     "files.memoWide": "बड़े में लिखें",
@@ -543,6 +542,9 @@ export const hi: Translation = {
     "files.notText": "यह टेक्स्ट नहीं है, इसलिए इसे यहाँ नहीं दिखाया जा सकता।",
     "files.cut": "सिर्फ़ शुरुआत दिखाई जा रही है।",
     "files.unreadable": "यह फ़ाइल पढ़ी नहीं जा सकी।",
+    "files.tooBig": "यह छवि इतनी बड़ी है कि यहाँ नहीं दिखाई जा सकती।",
+    "files.tooBigPixels": "{width} × {height} पिक्सेल",
+    "files.tooBigOpen": "किसी और ऐप में खोलें",
     "talk.elevated.title": "Amenbo व्यवस्थापक के रूप में चल रहा है",
     "talk.elevated.body": "यहाँ खोला गया टर्मिनल भी वही अधिकार पाता है, और व्यवस्थापक उन लिंक का अनुसरण नहीं करता जिनके पीछे scoop अपने पैकेज रखता है। उन उपकरणों तक इस विंडो से नहीं पहुँचा जा सकता — Amenbo उन्हें अनइंस्टॉल बताएगा, जबकि वे इंस्टॉल हैं।",
     "talk.elevated.fix": "Amenbo बंद करें और “व्यवस्थापक के रूप में चलाएँ” के बिना फिर से खोलें, तो वे लौट आएँगे।",
@@ -802,6 +804,10 @@ export const hi: Translation = {
     duplicate_order_key: {
       message: "प्रोजेक्ट {project} में कुछ कामों की क्रम-कुंजी एक ही है ({order_key})।",
       fix: "कामों का क्रम बदल दें — यह अपने आप सुलझ जाएगा।",
+    },
+    orphan_attachment: {
+      message: "{attachment} {target} से लगा है, और ऐसा कोई रिकॉर्ड है ही नहीं — यह पंक्ति उससे ज़्यादा टिकी रही जिससे लगी थी, और अपनी फ़ाइल को वहाँ थामे है जहाँ अब कोई नहीं पहुँच सकता।",
+      fix: "“मरम्मत” पंक्ति हटा देती है और उसकी फ़ाइल छोड़ देती है। पहले कुछ खोलने को नहीं है — जिससे लगी थी वह पहले ही जा चुका।",
     },
     stale_managed_block: {
       message: "{path} में AI मार्गदर्शन (Amenbo द्वारा संचालित ब्लॉक) पुराना है (v{version} → v{current})।",

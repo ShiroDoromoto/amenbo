@@ -293,7 +293,7 @@ export const id: Translation = {
     "settings.doctorRebind": "Tautkan ulang",
     "settings.doctorRepairing": "Sedang bekerja…",
     "settings.doctorRepairDone": "Sudah diperbaiki.",
-    "settings.doctorFixDone": "Diperbaiki ({blobs} berkas lampiran · {bindings} tautan folder)",
+    "settings.doctorFixDone": "Diperbaiki ({attachments} baris lampiran · {blobs} berkas lampiran · {bindings} tautan folder)",
     "settings.doctorFixNothing": "Tidak ada yang perlu diperbaiki.",
     "settings.dataOpPreparing": "Bersiap…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -526,7 +526,6 @@ export const id: Translation = {
     "face.whichFolder": "Panel ini bekerja di folder yang mana?",
     "face.rename": "Ganti nama panel ini",
     "face.needsYou": "menunggu Anda",
-    "face.nothingNeedsYou": "Sejauh yang tercatat, tidak ada yang membutuhkan Anda.",
     "files.tab": "Berkas",
     "files.memo": "Halaman",
     "files.memoWide": "Tulis melebar",
@@ -546,6 +545,9 @@ export const id: Translation = {
     "files.notText": "Ini bukan teks, jadi tidak bisa ditampilkan di sini.",
     "files.cut": "Hanya bagian awal yang ditampilkan.",
     "files.unreadable": "Berkas ini tidak bisa dibaca.",
+    "files.tooBig": "Gambar ini terlalu besar untuk ditampilkan di sini.",
+    "files.tooBigPixels": "{width} × {height} piksel",
+    "files.tooBigOpen": "Buka di aplikasi lain",
     "talk.elevated.title": "Amenbo berjalan sebagai administrator",
     "talk.elevated.body": "Terminal yang dibuka di sini mewarisi hak itu, dan administrator tidak mengikuti tautan tempat scoop memasang paketnya. Alat-alat itu tidak dapat dijangkau dari jendela ini — Amenbo akan melaporkannya tidak terpasang, padahal terpasang.",
     "talk.elevated.fix": "Tutup Amenbo lalu buka lagi tanpa “Run as administrator”, dan alat-alat itu kembali.",
@@ -803,6 +805,10 @@ export const id: Translation = {
     duplicate_order_key: {
       message: "Proyek {project} punya tugas-tugas dengan kunci urutan yang sama ({order_key}).",
       fix: "Susun ulang tugasnya dan ini beres dengan sendirinya.",
+    },
+    orphan_attachment: {
+      message: "{attachment} menempel pada {target}, dan catatan itu tidak ada: barisnya hidup lebih lama dari tempat menempelnya, dan menahan berkasnya di tempat yang tak terjangkau siapa pun.",
+      fix: "“Perbaiki” menghapus barisnya dan melepaskan berkasnya. Tidak ada yang perlu dibuka lebih dulu: tempat menempelnya sudah tiada.",
     },
     stale_managed_block: {
       message: "Panduan AI (blok yang dikelola Amenbo) di {path} sudah usang (v{version} → v{current}).",

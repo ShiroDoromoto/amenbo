@@ -26,6 +26,7 @@ use rusqlite::types::Value;
 use serde::Serialize;
 
 use crate::error::{Error, Result};
+use crate::model::AttachmentTarget;
 #[cfg(any(test, debug_assertions))]
 use crate::store_engine::schema::col;
 #[cfg(any(test, debug_assertions))]
@@ -128,12 +129,12 @@ impl Store {
                     // capability exists for. The bytes are out-of-band, so the sweep only hands back the
                     // hashes it let go of — they are reclaimed after the commit, below.
                     HardEraseTarget::TaskComment { id } => {
-                        orphaned.extend(crate::ops::sweep_polymorphic(&tx, "task_comment", *id)?);
+                        orphaned.extend(crate::ops::sweep_polymorphic(&tx, AttachmentTarget::TaskComment, *id)?);
                         tx.delete_record("task_comment", *id)?;
                         report.task_comments_erased.push(*id);
                     }
                     HardEraseTarget::DecisionComment { id } => {
-                        orphaned.extend(crate::ops::sweep_polymorphic(&tx, "decision_comment", *id)?);
+                        orphaned.extend(crate::ops::sweep_polymorphic(&tx, AttachmentTarget::DecisionComment, *id)?);
                         tx.delete_record("decision_comment", *id)?;
                         report.decision_comments_erased.push(*id);
                     }

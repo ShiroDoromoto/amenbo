@@ -194,6 +194,12 @@ export type DecisionCommentDto = { id: number, at: string, author: ActorDto, tex
 editedAt?: string, };
 
 /**
+ * One decision × dimension assignment (`valueId` is set on the `dimensionId` axis) — the decision
+ * side of [`TaskDimensionAssignmentDto`], a type of its own because the two ends are (`AMB-D-781`).
+ */
+export type DecisionDimensionAssignmentDto = { dimensionId: number, valueId: number, };
+
+/**
  * One decision record. The real data behind the list, the detail view and the cross-links.
  */
 export type DecisionDto = { id: number, 
@@ -308,7 +314,12 @@ endOn?: string, };
 /**
  * What `doctor_fix` returns: what was cleaned up, and how much of it.
  */
-export type DoctorFixDto = { reclaimedBlobs: number, freedBytes: number, forgottenBindings: number, };
+export type DoctorFixDto = { 
+/**
+ * Attachment rows swept because the record they hung off is gone. Counted apart from
+ * `reclaimed_blobs`: that counts **files**, and a `url`-mode orphan frees none.
+ */
+sweptAttachments: number, reclaimedBlobs: number, freedBytes: number, forgottenBindings: number, };
 
 /**
  * One issue on the doctor screen (the same shape as core's
@@ -421,11 +432,22 @@ modified: string, };
  * What the file face's second row is drawn from: the rows, and whether they are the whole story
  * (`crate::folder_watch`).
  *
- * `partial` is the one thing the rows cannot say for themselves. A watch is a set of watches, one
- * per folder, and the kernel's limit is per user — so some may be refused while the rest work.
- * Drawn as a whole watch, that reads as "nothing has changed" in the half nobody is watching.
+ * `partial` and `gone` are the two things the rows cannot say for themselves. Where every folder
+ * needs a watch of its own the kernel's limit is per user, so some may be refused while the rest
+ * work; drawn as a whole watch, that reads as "nothing has changed" in the half nobody is
+ * watching. An empty list means the same thing for a folder that was removed as for one nobody
+ * has written in, and only one of the two is worth telling a reader about.
  */
 export type FolderChangesDto = { 
+/**
+ * Which folder this is about, spelled the way the caller asked for it.
+ *
+ * A project can be bound to several folders and each is watched on its own, so an answer that
+ * did not name one would leave a face with several of them unable to say which of its
+ * sections had moved. It is the caller's own spelling rather than the canonical one because
+ * the caller is what has to match it against a folder it is already drawing.
+ */
+root: string, 
 /**
  * The files written to most recently, newest first.
  */
@@ -434,7 +456,12 @@ changed: Array<FolderChangedDto>,
  * Whether some of the folder is unwatched — a walk that stopped at its cap, or a watch the
  * kernel refused.
  */
-partial: boolean, };
+partial: boolean, 
+/**
+ * Whether the folder itself is no longer there. It can come back: a folder made again where
+ * this one was is watched again, and this goes back to false.
+ */
+gone: boolean, };
 
 /**
  * One name inside a folder, as the file face draws a row of its tree (`crate::folder`).
@@ -455,10 +482,10 @@ isDir: boolean, };
 /**
  * What a file has to show for itself, as far as a panel can show it (`crate::folder`).
  *
- * Exactly one of `text` and `image` is filled, and both are empty for a file that is neither —
- * what a reader is then told is that it cannot be read here, which is the honest answer for a
- * binary. Text is cut at a cap, because a panel is not a pager and a very long file would be paid
- * for in full to draw a screen of it.
+ * At most one of `text`, `image` and `oversize` is filled, and all three are empty for a file that
+ * is none of them — what a reader is then told is that it cannot be read here, which is the honest
+ * answer for a binary. Text is cut at a cap, because a panel is not a pager and a very long file
+ * would be paid for in full to draw a screen of it.
  */
 export type FolderFileDto = { 
 /**
@@ -472,7 +499,11 @@ truncated: boolean,
 /**
  * The picture, where the bytes say they are one and there are few enough of them to carry.
  */
-image?: FolderImageDto, };
+image?: FolderImageDto, 
+/**
+ * The picture that was refused, where it is one and there are too many of it to carry.
+ */
+oversize?: FolderOversizeDto, };
 
 /**
  * A picture out of a folder, carried whole so the webview can draw it without a URL of its own.
@@ -489,6 +520,33 @@ mime: string,
  * The whole picture, base64-encoded, for a `data:` URL.
  */
 base64: string, };
+
+/**
+ * A picture the panel would not carry, and what it was measured against (`AMB-D-783`).
+ *
+ * **The numbers travel because silence reads as a broken file.** A reader shown nothing where a
+ * picture was concludes the file is damaged; one shown how large it is concludes it is large, and
+ * goes on to open it in something built for that.
+ *
+ * Two of them, because two caps are being kept and they guard different things: the bytes stand
+ * for what the host would hold, the pixels for what the webview would decode. The pixels are
+ * absent where the front of the file did not say — a picture whose size could not be read is let
+ * through on the bytes alone, so a refusal with no size in it is always a refusal about bytes.
+ */
+export type FolderOversizeDto = { 
+/**
+ * The whole file, in bytes.
+ */
+bytes: number, 
+/**
+ * How wide the picture says it is, where the front of the file said.
+ */
+width?: number, 
+/**
+ * How tall it says it is, on the same terms as `width` — the two are always both there or both
+ * absent.
+ */
+height?: number, };
 
 /**
  * That folder's `.amenbo` was written by a build of another channel

@@ -219,6 +219,18 @@ impl Store {
         Ok(r)
     }
 
+    /// Resolve a reference that must name its own kind — `AMB-T-n` or `AMB-D-n`, never a bare number
+    /// ([`crate::query::resolve_typed_ref`]). What this answers decides which row is written to, and
+    /// the two kinds number independently, so the caller asks rather than guesses.
+    pub fn resolve_typed_ref(&self, input: &str) -> Result<crate::ops::Ref> {
+        let r = crate::query::resolve_typed_ref(self.engine.conn(), input)?;
+        match r {
+            crate::ops::Ref::Task(id) => self.reachable_task(id)?,
+            crate::ops::Ref::Decision(id) => self.reachable_decision(id)?,
+        }
+        Ok(r)
+    }
+
     /// Resolve a `project` reference (an id, or an exact name match), served by indexed SQL
     /// ([`crate::query::resolve_project_ref`]).
     pub fn resolve_project_ref(&self, reference: &str) -> Result<i64> {
@@ -519,11 +531,8 @@ impl Store {
             super::owner::attach_target(c, target_type, target_id)
         })?;
         let conn = self.engine.conn();
-        let ids = crate::store_engine::read::live_attachment_ids_for_target(
-            conn,
-            target_type.as_str(),
-            target_id,
-        )?;
+        let ids =
+            crate::store_engine::read::live_attachment_ids_for_target(conn, target_type, target_id)?;
         let mut out = Vec::with_capacity(ids.len());
         for id in ids {
             if let Some(a) = crate::store_engine::read::attachment(conn, id)? {

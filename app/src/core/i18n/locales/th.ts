@@ -293,7 +293,7 @@ export const th: Translation = {
     "settings.doctorRebind": "ผูกใหม่",
     "settings.doctorRepairing": "กำลังทำ…",
     "settings.doctorRepairDone": "ซ่อมแล้ว",
-    "settings.doctorFixDone": "ซ่อมแล้ว (ไฟล์แนบ {blobs} ไฟล์ · การผูกโฟลเดอร์ {bindings} รายการ)",
+    "settings.doctorFixDone": "ซ่อมแล้ว (แถวไฟล์แนบ {attachments} แถว · ไฟล์แนบ {blobs} ไฟล์ · การผูกโฟลเดอร์ {bindings} รายการ)",
     "settings.doctorFixNothing": "ไม่มีอะไรต้องซ่อม",
     "settings.dataOpPreparing": "กำลังเตรียม…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -526,7 +526,6 @@ export const th: Translation = {
     "face.whichFolder": "บานหน้าต่างนี้ทำงานในโฟลเดอร์ใด",
     "face.rename": "เปลี่ยนชื่อบานหน้าต่างนี้",
     "face.needsYou": "กำลังรอคุณอยู่",
-    "face.nothingNeedsYou": "เท่าที่บันทึกรู้ ยังไม่มีอะไรต้องให้คุณจัดการ",
     "files.tab": "ไฟล์",
     "files.memo": "หน้าบันทึก",
     "files.memoWide": "เขียนแบบกว้าง",
@@ -546,6 +545,9 @@ export const th: Translation = {
     "files.notText": "นี่ไม่ใช่ข้อความ จึงแสดงที่นี่ไม่ได้",
     "files.cut": "แสดงเฉพาะส่วนต้นเท่านั้น",
     "files.unreadable": "อ่านไฟล์นี้ไม่ได้",
+    "files.tooBig": "ภาพนี้ใหญ่เกินกว่าจะแสดงที่นี่",
+    "files.tooBigPixels": "{width} × {height} พิกเซล",
+    "files.tooBigOpen": "เปิดในแอปอื่น",
     "talk.elevated.title": "Amenbo กำลังทำงานในฐานะผู้ดูแลระบบ",
     "talk.elevated.body": "เทอร์มินัลที่เปิดที่นี่จะได้รับสิทธิ์นั้นต่อ และผู้ดูแลระบบจะไม่ตามลิงก์ที่ scoop ใช้วางแพ็กเกจของมัน เครื่องมือเหล่านั้นจึงเข้าถึงไม่ได้จากหน้าต่างนี้ — Amenbo จะรายงานว่ายังไม่ได้ติดตั้ง ทั้งที่ติดตั้งไว้แล้ว",
     "talk.elevated.fix": "ปิด Amenbo แล้วเปิดใหม่โดยไม่ใช้ “Run as administrator” เครื่องมือก็จะกลับมา",
@@ -802,6 +804,10 @@ export const th: Translation = {
     duplicate_order_key: {
       message: "โปรเจกต์ {project} มีงานที่ใช้กุญแจเรียงลำดับเดียวกัน ({order_key})",
       fix: "จัดเรียงงานใหม่แล้วมันจะหายไปเอง",
+    },
+    orphan_attachment: {
+      message: "{attachment} ติดอยู่กับ {target} แต่ไม่มีระเบียนนั้นอยู่ — แถวนี้อยู่ยาวกว่าสิ่งที่มันติดอยู่ และยังกอดไฟล์ของมันไว้ในที่ที่ไม่มีใครไปถึงแล้ว",
+      fix: "“ซ่อม” จะลบแถวนั้นและปล่อยไฟล์ของมันไป ไม่มีอะไรต้องเปิดดูก่อน เพราะสิ่งที่มันติดอยู่หายไปแล้ว",
     },
     stale_managed_block: {
       message: "คู่มือสำหรับ AI (บล็อกที่ Amenbo ดูแล) ใน {path} เก่าไปแล้ว (v{version} → v{current})",

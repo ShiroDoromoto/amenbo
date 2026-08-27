@@ -14,7 +14,7 @@ use chrono::NaiveDate;
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
-    ActorKind, DecisionStatus, Priority, Subtype, Task, TaskStatus,
+    ActorKind, AttachmentTarget, DecisionStatus, Priority, Subtype, Task, TaskStatus,
 };
 use crate::ops::{emit_create, emit_update, place, Noun, Position};
 use crate::store_engine::{read, record, WriteTx};
@@ -450,7 +450,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let mut orphaned = Vec::new();
     for comment_id in read::task_comment_ids(tx.conn(), id)? {
-        orphaned.extend(crate::ops::sweep_polymorphic(tx, "task_comment", comment_id)?);
+        orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::TaskComment, comment_id)?);
         tx.delete_record("task_comment", comment_id)?;
     }
     for edge_id in read::task_dependency_ids(tx.conn(), id)? {
@@ -465,7 +465,7 @@ pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     for link_id in read::decision_task_link_ids_of_task(tx.conn(), id)? {
         tx.delete_record("decision_task_link", link_id)?;
     }
-    orphaned.extend(crate::ops::sweep_polymorphic(tx, "task", id)?);
+    orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::Task, id)?);
     tx.delete_record("task", id)?;
     Ok(orphaned)
 }

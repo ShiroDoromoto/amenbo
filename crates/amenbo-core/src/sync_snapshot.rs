@@ -200,6 +200,13 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
             " AND value_id IN (SELECT id FROM dimension_value WHERE dimension_id IN",
             " (SELECT id FROM dimension WHERE project_id = ?1))",
         ),
+        // The decision side, closed exactly as far and by the same three ends (`AMB-D-781`).
+        "decision_dimension_value" => concat!(
+            "decision_id IN (SELECT id FROM decision WHERE project_id = ?1)",
+            " AND dimension_id IN (SELECT id FROM dimension WHERE project_id = ?1)",
+            " AND value_id IN (SELECT id FROM dimension_value WHERE dimension_id IN",
+            " (SELECT id FROM dimension WHERE project_id = ?1))",
+        ),
 
         // Polymorphic: no constraint can branch on a sibling column, so the predicate does it by hand —
         // one arm per `target_type` the column admits, each reaching the project the way its own kind
@@ -899,6 +906,7 @@ mod tests {
                 .id;
             let value = s.dimension_value_add(axis, "a value", None, None).unwrap().id;
             s.set_task_dimension_value(task, value).unwrap();
+            s.set_decision_dimension_value(newer, value).unwrap();
 
             s.attach_url(AttachmentTarget::Task, task, "https://example.com/seed", None, ActorKind::Ai)
                 .unwrap();

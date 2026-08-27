@@ -293,7 +293,7 @@ export const de: Translation = {
     "settings.doctorRebind": "Neu verknüpfen",
     "settings.doctorRepairing": "Wird bearbeitet…",
     "settings.doctorRepairDone": "Behoben.",
-    "settings.doctorFixDone": "Repariert ({blobs} Anhangsdatei(en) · {bindings} Ordnerverknüpfung(en))",
+    "settings.doctorFixDone": "Repariert ({attachments} Anhangszeile(n) · {blobs} Anhangsdatei(en) · {bindings} Ordnerverknüpfung(en))",
     "settings.doctorFixNothing": "Es gibt nichts zu reparieren.",
     "settings.dataOpPreparing": "Wird vorbereitet…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -533,7 +533,6 @@ export const de: Translation = {
     "face.whichFolder": "In welchem Ordner arbeitet dieser Bereich?",
     "face.rename": "Diesen Bereich umbenennen",
     "face.needsYou": "wartet auf Sie",
-    "face.nothingNeedsYou": "Soweit das Verzeichnis weiß, wird nirgends jemand gebraucht.",
     "files.tab": "Dateien",
     "files.memo": "Die Seite",
     "files.memoWide": "Breit schreiben",
@@ -553,6 +552,9 @@ export const de: Translation = {
     "files.notText": "Das ist kein Text und lässt sich hier nicht anzeigen.",
     "files.cut": "Es wird nur der Anfang angezeigt.",
     "files.unreadable": "Diese Datei konnte nicht gelesen werden.",
+    "files.tooBig": "Dieses Bild ist zu groß, um es hier zu zeigen.",
+    "files.tooBigPixels": "{width} × {height} Pixel",
+    "files.tooBigOpen": "In einer anderen Anwendung öffnen",
     "talk.elevated.title": "Amenbo läuft als Administrator",
     "talk.elevated.body": "Ein hier geöffnetes Terminal erbt das, und ein Administrator folgt den Verknüpfungen nicht, hinter denen scoop seine Pakete ablegt. Diese Werkzeuge sind aus diesem Fenster nicht erreichbar – Amenbo meldet sie als nicht installiert, obwohl sie es sind.",
     "talk.elevated.fix": "Beenden Sie Amenbo und öffnen Sie es erneut ohne „Als Administrator ausführen“, dann sind sie wieder da.",
@@ -819,6 +821,10 @@ export const de: Translation = {
     duplicate_order_key: {
       message: "Im Projekt {project} teilen sich Aufgaben denselben Sortierschlüssel ({order_key}).",
       fix: "Sortiere die Aufgaben neu, dann löst sich das von selbst.",
+    },
+    orphan_attachment: {
+      message: "{attachment} hängt an {target}, und diesen Eintrag gibt es nicht — die Zeile hat überlebt, woran sie hing, und hält ihre Datei fest, an die niemand mehr herankommt.",
+      fix: "„Reparieren“ entfernt die Zeile und gibt ihre Datei frei. Es gibt nichts vorher zu öffnen: woran sie hing, ist längst weg.",
     },
     stale_managed_block: {
       message: "Der KI-Leitfaden (von Amenbo verwalteter Block) in {path} ist veraltet (v{version} → v{current}).",

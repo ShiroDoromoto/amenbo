@@ -295,7 +295,7 @@ export const ja: Translation = {
     "settings.doctorRebind": "紐付け直す",
     "settings.doctorRepairing": "実行中…",
     "settings.doctorRepairDone": "直しました。",
-    "settings.doctorFixDone": "修復しました（添付ファイル {blobs} 件・フォルダ紐付け {bindings} 件）",
+    "settings.doctorFixDone": "修復しました（添付の行 {attachments} 件・添付ファイル {blobs} 件・フォルダ紐付け {bindings} 件）",
     "settings.doctorFixNothing": "修復の対象はありませんでした。",
     "settings.dataOpPreparing": "準備中…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -535,7 +535,6 @@ export const ja: Translation = {
     "face.whichFolder": "このペインはどのフォルダで作業しますか？",
     "face.rename": "このペインの名前を変える",
     "face.needsYou": "手が要ります",
-    "face.nothingNeedsYou": "台帳の上では、手が要るものはありません。",
     "files.tab": "ファイル",
     "files.memo": "メモ",
     "files.memoWide": "広く書く",
@@ -555,6 +554,9 @@ export const ja: Translation = {
     "files.notText": "テキストではないので、ここには出せません。",
     "files.cut": "先頭だけを出しています。",
     "files.unreadable": "このファイルは読めませんでした。",
+    "files.tooBig": "この画像は大きすぎて、ここには出せません。",
+    "files.tooBigPixels": "{width} × {height} ピクセル",
+    "files.tooBigOpen": "ほかのアプリで開く",
     "talk.elevated.title": "Amenbo を管理者として実行しています",
     "talk.elevated.body": "ここで開いた端末にも管理者の権限が引き継がれます。管理者の権限では scoop がパッケージを置くリンクをたどれないので、この窓からはその道具に届きません。入っていても、Amenbo は「入っていない」と答えます。",
     "talk.elevated.fix": "Amenbo を終了し、「管理者として実行」を使わずに開き直すと、道具は戻ります。",
@@ -821,6 +823,10 @@ export const ja: Translation = {
     duplicate_order_key: {
       message: "プロジェクト {project} で並び順（{order_key}）が重複しています。",
       fix: "タスクを並べ替えると解消します。",
+    },
+    orphan_attachment: {
+      message: "{attachment} は {target} に付いていますが、その記録はありません。付いていた先より長く残ってしまった行です。誰も辿り着けないのに、ファイルだけを抱えたままになっています。",
+      fix: "「修復する」で行を消し、ファイルを解放します。付いていた先はもう無いので、先に開くものはありません。",
     },
     stale_managed_block: {
       message: "{path} の AI 手引き（Amenbo 管理ブロック）が古い版です（v{version} → v{current}）。",

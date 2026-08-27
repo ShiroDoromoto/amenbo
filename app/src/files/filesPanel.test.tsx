@@ -19,10 +19,10 @@ const ROOT = "/work/repo";
 const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
   entries: {} as Record<string, { name: string; isDir: boolean }[]>,
-  file: { truncated: false } as { text?: string; truncated: boolean; image?: { mime: string; base64: string } },
+  file: { truncated: false } as FolderFileDto,
   /** The host's side of the watch: what it answers with, and the way to push a later list. */
   tell: null as null | ((changes: FolderChangesDto) => void),
-  watching: { changed: [] as FolderChangedDto[], partial: false } as FolderChangesDto,
+  watching: { root: "", changed: [] as FolderChangedDto[], partial: false, gone: false } as FolderChangesDto,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
   apps: [] as FolderAppDto[],
   /** The folders the project is bound to. Empty is a project nobody has bound one to yet. */
@@ -47,7 +47,7 @@ vi.mock("./folder", () => ({
     hoisted.asked.push(`watch:${projectId}:${root}`);
     return hoisted.watching;
   },
-  folderUnwatch: async () => { hoisted.asked.push("unwatch"); },
+  folderUnwatch: async (root: string) => { hoisted.asked.push(`unwatch:${root}`); },
   onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
     hoisted.tell = take;
     return () => { hoisted.tell = null; hoisted.asked.push("unlisten"); };
@@ -88,7 +88,7 @@ vi.mock("../core/reads", async (importOriginal) => ({
 }));
 
 import { FilesPanel } from "./FilesPanel";
-import { t, tf } from "../core/i18n";
+import { formatNumber, t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -127,6 +127,10 @@ function click(el: Element | null | undefined) {
   });
 }
 
+/** A size as the panel writes one, so the assertion is about the number and not about `Intl`. */
+const megabytes = (n: number) =>
+  formatNumber(n, { style: "unit", unit: "megabyte", unitDisplay: "short", maximumFractionDigits: 1 });
+
 const button = (text: string) =>
   [...container.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
 
@@ -137,8 +141,10 @@ beforeEach(() => {
   hoisted.apps = [];
   hoisted.tell = null;
   hoisted.watching = {
+    root: ROOT,
     changed: [{ path: ["notes", "a.md"], modified: new Date().toISOString() }],
     partial: false,
+    gone: false,
   };
   hoisted.bound = [{ path: ROOT, exists: true }];
   hoisted.dragging = null;
@@ -181,8 +187,10 @@ describe("the file face", () => {
     expect(container.textContent).toContain("a.md");
     await act(async () => {
       hoisted.tell?.({
+        root: ROOT,
         changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
         partial: false,
+        gone: false,
       });
       await new Promise((r) => setTimeout(r, 0));
     });
@@ -192,17 +200,35 @@ describe("the file face", () => {
   });
 
   it("says out loud when only part of the folder is watched", async () => {
-    hoisted.watching = { changed: [], partial: true };
+    hoisted.watching = { root: ROOT, changed: [], partial: true, gone: false };
     await draw();
     // An unwatched half looks exactly like a half where nothing happened, so it is said rather
     // than left to be assumed (`AMB-T-3604`).
     expect(container.textContent).toContain(t("files.partial"));
   });
 
+  it("leaves another folder's news alone", async () => {
+    await draw();
+    expect(container.textContent).toContain("a.md");
+    await act(async () => {
+      hoisted.tell?.({
+        root: "/work/other",
+        changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
+        partial: false,
+        gone: false,
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    // Every watched folder is told about through the one listener, and a row rooted at one of them
+    // that drew another's list would be saying something untrue about the folder it names.
+    expect(container.textContent).toContain("a.md");
+    expect(container.textContent).not.toContain("main.rs");
+  });
+
   it("takes its watch down when the face goes away", async () => {
     await draw();
     await act(async () => { root.unmount(); });
-    expect(hoisted.asked).toContain("unwatch");
+    expect(hoisted.asked).toContain(`unwatch:${ROOT}`);
     expect(hoisted.asked).toContain("unlisten");
     // Re-created so afterEach's unmount has something to work on.
     container.remove();
@@ -423,6 +449,64 @@ describe("the file face", () => {
     await click(button("a.md"));
     await settle();
     expect(container.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,AAAA");
+  });
+
+  it("says what a picture it would not draw was measured at, and offers the way on", async () => {
+    hoisted.file = { truncated: false, oversize: { bytes: 6 * 1024 * 1024, width: 40000, height: 30000 } };
+    await draw();
+    await click(button("a.md"));
+    await settle();
+    // A refusal drawn as nothing at all reads as a damaged file, so both numbers travel with it and
+    // the reader is pointed at something built to open it (`AMB-D-783`).
+    expect(container.textContent).toContain(t("files.tooBig"));
+    expect(container.textContent).toContain(megabytes(6));
+    expect(container.textContent).toContain(
+      tf("files.tooBigPixels", { width: formatNumber(40000), height: formatNumber(30000) }),
+    );
+    // Not the sentence for a file there is nothing to show of: this one is a picture, and it is
+    // being refused rather than failed to be read.
+    expect(container.textContent).not.toContain(t("files.notText"));
+
+    await click(button(t("files.tooBigOpen")));
+    // The way on is the one the list rows already open — nothing new was invented for this state.
+    expect(button(t("files.chooseApp"))).toBeDefined();
+    await click(button(t("files.openWith")));
+    expect(hoisted.asked).toContain(`open:${ROOT}:notes/a.md`);
+  });
+
+  it("refuses on bytes alone where the picture would not say its size", async () => {
+    hoisted.file = { truncated: false, oversize: { bytes: 6 * 1024 * 1024 } };
+    await draw();
+    await click(button("a.md"));
+    await settle();
+    // A size nobody could read is not printed as a guess (`crate::folder`).
+    expect(container.textContent).toContain(megabytes(6));
+    expect(container.textContent).not.toContain("×");
+  });
+
+  it("writes a refused picture's size in a unit that says something about it", async () => {
+    // The pictures that cost the most to draw are the ones that compress best, so a refusal on
+    // pixels alone is commonly a file of a few kilobytes. Rounded to megabytes it would read "0 MB"
+    // — the file said to be empty, which is the opposite of what it is (`AMB-D-783`).
+    hoisted.file = { truncated: false, oversize: { bytes: 10 * 1024, width: 16000, height: 16000 } };
+    await draw();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(
+      formatNumber(10, { style: "unit", unit: "kilobyte", unitDisplay: "short", maximumFractionDigits: 0 }),
+    );
+  });
+
+  it("goes all the way down to bytes rather than round a refused picture to nothing", async () => {
+    // A header alone is the cheapest thing that can claim thirty thousand square, and it is under a
+    // kilobyte. Rounded up a unit it would read "0 kB" — the same lie one unit further down.
+    hoisted.file = { truncated: false, oversize: { bytes: 33, width: 30000, height: 30000 } };
+    await draw();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(
+      formatNumber(33, { style: "unit", unit: "byte", unitDisplay: "short", maximumFractionDigits: 0 }),
+    );
   });
 
   it("says out loud when only the head of a long file is shown", async () => {

@@ -290,7 +290,7 @@ export const tr: Translation = {
     "settings.doctorRebind": "Yeniden bağla",
     "settings.doctorRepairing": "Çalışıyor…",
     "settings.doctorRepairDone": "Onarıldı.",
-    "settings.doctorFixDone": "Onarıldı ({blobs} ek dosyası · {bindings} klasör bağı)",
+    "settings.doctorFixDone": "Onarıldı ({attachments} ek satırı · {blobs} ek dosyası · {bindings} klasör bağı)",
     "settings.doctorFixNothing": "Onarılacak bir şey yok.",
     "settings.dataOpPreparing": "Hazırlanıyor…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -523,7 +523,6 @@ export const tr: Translation = {
     "face.whichFolder": "Bu bölme hangi klasörde çalışıyor?",
     "face.rename": "Bu bölmeyi yeniden adlandır",
     "face.needsYou": "sizi bekliyor",
-    "face.nothingNeedsYou": "Kayıtların bildiği kadarıyla sana ihtiyaç duyan bir şey yok.",
     "files.tab": "Dosyalar",
     "files.memo": "Sayfa",
     "files.memoWide": "Geniş yaz",
@@ -543,6 +542,9 @@ export const tr: Translation = {
     "files.notText": "Bu metin değil, burada gösterilemez.",
     "files.cut": "Yalnızca başı gösteriliyor.",
     "files.unreadable": "Bu dosya okunamadı.",
+    "files.tooBig": "Bu görsel burada gösterilemeyecek kadar büyük.",
+    "files.tooBigPixels": "{width} × {height} piksel",
+    "files.tooBigOpen": "Başka bir uygulamada aç",
     "talk.elevated.title": "Amenbo yönetici olarak çalışıyor",
     "talk.elevated.body": "Burada açılan bir terminal bunu devralır ve bir yönetici, scoop'un paketlerini arkasına kurduğu bağlantıları izlemez. Bu araçlara bu pencereden ulaşılamaz — kurulu olsalar da Amenbo kurulu değil diyecektir.",
     "talk.elevated.fix": "Amenbo'dan çıkın ve “Yönetici olarak çalıştır” demeden yeniden açın; araçlar geri gelir.",
@@ -801,6 +803,10 @@ export const tr: Translation = {
     duplicate_order_key: {
       message: "{project} projesinde aynı sıralama anahtarını paylaşan işler var ({order_key}).",
       fix: "İşleri yeniden sıralayın, kendiliğinden çözülür.",
+    },
+    orphan_attachment: {
+      message: "{attachment} {target} üzerinde duruyor ama böyle bir kayıt yok: satır, iliştirildiği şeyden uzun yaşadı ve dosyasını kimsenin erişemediği yerde tutuyor.",
+      fix: "“Onar” satırı siler ve dosyasını serbest bırakır. Önce açılacak bir şey yok: iliştirildiği şey zaten gitti.",
     },
     stale_managed_block: {
       message: "{path} içindeki yapay zekâ kılavuzu (Amenbo'nun yönettiği blok) güncelliğini yitirmiş (v{version} → v{current}).",

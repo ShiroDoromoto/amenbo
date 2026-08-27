@@ -311,7 +311,7 @@ const ui = {
   "settings.doctorRebind": "Re-bind",
   "settings.doctorRepairing": "Working…",
   "settings.doctorRepairDone": "Fixed.",
-  "settings.doctorFixDone": "Repaired ({blobs} attachment file(s) · {bindings} folder binding(s))",
+  "settings.doctorFixDone": "Repaired ({attachments} attachment row(s) · {blobs} attachment file(s) · {bindings} folder binding(s))",
   "settings.doctorFixNothing": "Nothing to repair.",
   "settings.dataOpPreparing": "Preparing…",
   "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -590,7 +590,6 @@ const ui = {
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",
-  "face.nothingNeedsYou": "As far as the ledger knows, nothing needs you.",
   // The file face beside the terminal's pane: what changed in the project's folder lately, and
   // the folder itself, folded. What a file turns out not to be is said in its own words — a
   // binary is not a failure, it is simply not something a panel can show.
@@ -613,6 +612,12 @@ const ui = {
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",
+  // A picture the panel would not draw. What it is refused for travels with the
+  // refusal, because a reader shown nothing at all reads it as a damaged file
+  // (`AMB-D-783`).
+  "files.tooBig": "This picture is too large to show here.",
+  "files.tooBigPixels": "{width} × {height} pixels",
+  "files.tooBigOpen": "Open it in another application",
   // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
   // on Windows. What it warns about is not a right the user lacks but one they have too much of:
   // the terminal opens, and the tools behind scoop's links are unreachable from inside it
@@ -954,6 +959,10 @@ const doctor = {
   duplicate_order_key: {
     message: "Project {project} has tasks sharing the same ordering key ({order_key}).",
     fix: "Re-order the tasks and it resolves itself.",
+  },
+  orphan_attachment: {
+    message: "{attachment} hangs off {target}, and there is no such record — the row outlived what it was attached to, and its file is held out of reach while nothing can get to it.",
+    fix: "“Repair” drops the row and lets its file go. There is nothing to open first: what it hung off is already gone.",
   },
   stale_managed_block: {
     message: "The AI guidance (Amenbo managed block) in {path} is stale (v{version} → v{current}).",

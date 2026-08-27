@@ -322,6 +322,10 @@ pub struct DecisionDetail {
     /// The decisions that build on this one (the reverse lookup) — part of the blast radius: overturn this
     /// one and these need revisiting.
     pub built_on_by: Vec<DecisionRef>,
+    /// What this decision is filed under, axis by axis (`AMB-D-781`) — the same shape a task's page
+    /// carries, over the same axes and the same values. Empty where nothing was filed, and in a project
+    /// that declares no axis at all.
+    pub dimensions: Vec<ClassifiedAs>,
     pub decided_at: Option<Timestamp>,
     /// Who accepted it: a free-text decider token, not an entity key. The token is read into both `id`
     /// and `name`, so the two always carry the same string.

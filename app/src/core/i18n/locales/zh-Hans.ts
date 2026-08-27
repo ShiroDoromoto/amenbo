@@ -291,7 +291,7 @@ export const zhHans: Translation = {
     "settings.doctorRebind": "重新关联",
     "settings.doctorRepairing": "处理中…",
     "settings.doctorRepairDone": "已修复。",
-    "settings.doctorFixDone": "已修复（附件文件 {blobs} 个 · 文件夹关联 {bindings} 个）",
+    "settings.doctorFixDone": "已修复（附件行 {attachments} 个 · 附件文件 {blobs} 个 · 文件夹关联 {bindings} 个）",
     "settings.doctorFixNothing": "没有需要修复的内容。",
     "settings.dataOpPreparing": "正在准备…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -523,7 +523,6 @@ export const zhHans: Translation = {
     "face.whichFolder": "这个窗格在哪个文件夹里工作？",
     "face.rename": "重命名此窗格",
     "face.needsYou": "在等你",
-    "face.nothingNeedsYou": "就账本所知，没有需要你的地方。",
     "files.tab": "文件",
     "files.memo": "便笺",
     "files.memoWide": "写得宽一些",
@@ -543,6 +542,9 @@ export const zhHans: Translation = {
     "files.notText": "这不是文本，无法在这里显示。",
     "files.cut": "只显示了开头部分。",
     "files.unreadable": "无法读取这个文件。",
+    "files.tooBig": "这张图太大了，没法在这里显示。",
+    "files.tooBigPixels": "{width} × {height} 像素",
+    "files.tooBigOpen": "用别的应用打开",
     "talk.elevated.title": "Amenbo 正以管理员身份运行",
     "talk.elevated.body": "在此打开的终端会继承该权限，而管理员不会跟随 scoop 安放软件包所用的链接。这些工具在本窗口中无法访问——即使已经安装，Amenbo 也会报告为未安装。",
     "talk.elevated.fix": "退出 Amenbo，不使用“以管理员身份运行”重新打开，工具就会回来。",
@@ -798,6 +800,10 @@ export const zhHans: Translation = {
     duplicate_order_key: {
       message: "项目 {project} 中有任务共用了同一个排序键（{order_key}）。",
       fix: "重新排一下任务顺序，它就会自行解决。",
+    },
+    orphan_attachment: {
+      message: "{attachment} 挂在 {target} 上，可并没有这条记录——这一行比它所附的东西活得更久，还攥着自己的文件，谁也够不着。",
+      fix: "“修复”会删掉这一行并放开它的文件。不必先打开什么：它所附的东西早就没了。",
     },
     stale_managed_block: {
       message: "{path} 中的 AI 指南（Amenbo 受管区块）已过时（v{version} → v{current}）。",

@@ -290,7 +290,7 @@ export const nl: Translation = {
     "settings.doctorRebind": "Opnieuw koppelen",
     "settings.doctorRepairing": "Bezig…",
     "settings.doctorRepairDone": "Hersteld.",
-    "settings.doctorFixDone": "Hersteld ({blobs} bijlagebestand(en) · {bindings} mapkoppeling(en))",
+    "settings.doctorFixDone": "Hersteld ({attachments} bijlagerij(en) · {blobs} bijlagebestand(en) · {bindings} mapkoppeling(en))",
     "settings.doctorFixNothing": "Er viel niets te herstellen.",
     "settings.dataOpPreparing": "Bezig met voorbereiden…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -523,7 +523,6 @@ export const nl: Translation = {
     "face.whichFolder": "In welke map werkt dit deelvenster?",
     "face.rename": "Dit deelvenster hernoemen",
     "face.needsYou": "wacht op je",
-    "face.nothingNeedsYou": "Voor zover het register weet, is er niets dat u nodig heeft.",
     "files.tab": "Bestanden",
     "files.memo": "De pagina",
     "files.memoWide": "Breed schrijven",
@@ -543,6 +542,9 @@ export const nl: Translation = {
     "files.notText": "Dit is geen tekst en kan hier niet worden getoond.",
     "files.cut": "Alleen het begin wordt getoond.",
     "files.unreadable": "Dit bestand kon niet worden gelezen.",
+    "files.tooBig": "Deze afbeelding is te groot om hier te tonen.",
+    "files.tooBigPixels": "{width} × {height} pixels",
+    "files.tooBigOpen": "In een andere app openen",
     "talk.elevated.title": "Amenbo draait als administrator",
     "talk.elevated.body": "Een terminal die hier opent, erft dat, en een administrator volgt de koppelingen niet waarachter scoop zijn pakketten installeert. Die tools zijn vanuit dit venster onbereikbaar — Amenbo meldt ze als niet geïnstalleerd, terwijl ze dat wel zijn.",
     "talk.elevated.fix": "Sluit Amenbo af en open het opnieuw zonder “Als administrator uitvoeren”, dan zijn ze er weer.",
@@ -803,6 +805,10 @@ export const nl: Translation = {
     duplicate_order_key: {
       message: "Project {project} heeft taken die dezelfde sorteersleutel delen ({order_key}).",
       fix: "Zet de taken opnieuw op volgorde en het lost zichzelf op.",
+    },
+    orphan_attachment: {
+      message: "{attachment} hangt aan {target}, en dat record bestaat niet — de rij overleefde waar hij aan hing en houdt zijn bestand vast waar niemand nog bij kan.",
+      fix: "“Repareren” verwijdert de rij en laat zijn bestand los. Er valt niets vooraf te openen: waar hij aan hing, is al weg.",
     },
     stale_managed_block: {
       message: "De AI-handleiding (het blok dat Amenbo beheert) in {path} is verouderd (v{version} → v{current}).",

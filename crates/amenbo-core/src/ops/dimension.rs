@@ -6,8 +6,9 @@
 //! and priority are first-class task attributes instead).
 //!
 //! The operations are add/list/show/update/move/delete. Renaming is the `name` argument of
-//! `update` (there is no dedicated `rename`). Values are handled by `value_*`, and assignment to a
-//! task by set/unset.
+//! `update` (there is no dedicated `rename`). Values are handled by `value_*`, assignment to a
+//! task by set/unset, and assignment to a decision by set_on_decision/unset_on_decision — one axis,
+//! one set of values, two kinds of thing classified by it (`AMB-D-781`).
 //!
 //! **Writes go straight to SQL through the engine.** Every mutator takes a [`WriteTx`]
 //! (`BEGIN IMMEDIATE`) opened by the caller and does its read-then-write — the `order_key` of the
@@ -20,7 +21,7 @@ use chrono::NaiveDate;
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
-    Dimension, DimensionCardinality, DimensionRole, DimensionValue,
+    DecisionDimensionValue, Dimension, DimensionCardinality, DimensionRole, DimensionValue,
     TaskDimensionValue,
 };
 use crate::ops::{emit_create, emit_update, place, Noun, Position};
@@ -318,8 +319,9 @@ pub fn move_to(tx: &WriteTx<'_>, id: i64, pos: Position) -> Result<Dimension> {
     Ok(after)
 }
 
-/// Hard-delete a dimension, its values (`dimension_value`) and the task assignments on them
-/// (`task_dimension_value`). Dimensions are all user-editable alike, so deleting one is equally free.
+/// Hard-delete a dimension, its values (`dimension_value`) and the assignments on them — on tasks
+/// (`task_dimension_value`) and on decisions (`decision_dimension_value`) alike. Dimensions are all
+/// user-editable alike, so deleting one is equally free.
 pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     let before = live_before(tx, id)?;
     delete_subtree(tx, before.id)
@@ -329,8 +331,8 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 /// This is the body of [`delete`], and [`crate::ops::project::delete`] uses it to clear out a project's
 /// dimensions. The op deletes each child itself, child-first — an axis and the classification a task
 /// carries on it are both things a person can point at, so what goes has to go through code
-/// (`AMB-D-403`). Sweeping value by value covers the whole axis: an assignment names a value, and that
-/// value's axis is this one.
+/// (`AMB-D-403`). Sweeping value by value covers the whole axis, and both sides of it: an assignment —
+/// a task's or a decision's — names a value, and that value's axis is this one.
 pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<()> {
     for value_id in read::dimension_value_ids(tx.conn(), id)? {
         delete_value_subtree(tx, value_id)?;
@@ -518,6 +520,8 @@ pub fn value_delete(tx: &WriteTx<'_>, value_id: i64, reassign_to: Option<i64>) -
                 )));
             }
             move_assignments(tx, &assignments, target.id)?;
+            let on_decisions = read::decision_assignment_ids_of_value(tx.conn(), before.id)?;
+            move_decision_assignments(tx, &on_decisions, target.id)?;
         }
         None if axis.required && !assignments.is_empty() => {
             return Err(Error::Invalid(
@@ -553,11 +557,42 @@ fn move_assignments(tx: &WriteTx<'_>, assignment_ids: &[i64], target_id: i64) ->
     Ok(())
 }
 
-/// Hard-delete one dimension value and the assignments on it (pass an id already checked to exist) —
+/// The same move for the decisions on the value (`AMB-D-781`). A destination named on the door means the
+/// same thing on either side — say where what carried this value goes, and the decisions go there too
+/// rather than being quietly un-classified while the tasks travel. Unnamed, they leave with the value
+/// ([`delete_value_subtree`]); a decision itself is never deleted by either road.
+fn move_decision_assignments(
+    tx: &WriteTx<'_>,
+    assignment_ids: &[i64],
+    target_id: i64,
+) -> Result<()> {
+    let now = Timestamp::now();
+    for &id in assignment_ids {
+        let cur = read::decision_dimension_value(tx.conn(), id)?
+            .expect("the assignment id was just read from the same transaction");
+        let moved = DecisionDimensionValue { value_id: target_id, updated_at: now, ..cur.clone() };
+        emit_update(
+            tx,
+            record::decision_dimension_value(&cur),
+            record::decision_dimension_value(&moved),
+        )?;
+    }
+    Ok(())
+}
+
+/// Hard-delete one dimension value and the assignments on it, on both sides (pass an id already checked
+/// to exist) —
 /// the body of [`value_delete`], and the per-value step [`delete_subtree`] repeats down an axis.
 pub(crate) fn delete_value_subtree(tx: &WriteTx<'_>, value_id: i64) -> Result<()> {
     for assignment_id in read::assignment_ids_of_value(tx.conn(), value_id)? {
         tx.delete_record("task_dimension_value", assignment_id)?;
+    }
+    // The decision side of the same value (`AMB-D-781`). What goes here is the **assignment**, never the
+    // decision: removing a value un-classifies what carried it, and a decision is not deleted by a
+    // classification going away. This is also the only sweep the decision side needs — an axis is deleted
+    // value by value by delete_subtree, so its decision assignments leave with the values they name.
+    for assignment_id in read::decision_assignment_ids_of_value(tx.conn(), value_id)? {
+        tx.delete_record("decision_dimension_value", assignment_id)?;
     }
     tx.delete_record("dimension_value", value_id)?;
     Ok(())
@@ -643,10 +678,75 @@ pub fn unset(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<bool> {
     Ok(true)
 }
 
+// ───────────────────────────── Assignment to decisions ─────────────────────────────
+
+/// Assign a decision to a dimension value — [`set`]'s twin on the decision side (`AMB-D-781`), with the
+/// same single-select `(decision, dimension)` one-row rule and the same one-transaction replacement.
+/// A noop when the same value is already assigned. Returns (row, created).
+///
+/// **No `required` here.** The flag bites at one point only, `task::finish_creating`, and a decision has
+/// no creation to finish — so an axis being required neither demands a value of a decision nor forbids
+/// clearing one ([`unset_on_decision`]).
+pub fn set_on_decision(
+    tx: &WriteTx<'_>,
+    decision_id: i64,
+    value_id: i64,
+) -> Result<(DecisionDimensionValue, bool)> {
+    let Some(decision) = read::decision(tx.conn(), decision_id)? else {
+        return Err(crate::ops::decision::NOUN.not_found(decision_id.to_string()));
+    };
+    let dimension_id = read::dimension_id_of_value(tx.conn(), value_id)?
+        .ok_or_else(|| VALUE_NOUN.not_found(value_id.to_string()))?;
+    let axis = read::dimension(tx.conn(), dimension_id)?
+        .ok_or_else(|| NOUN.not_found(dimension_id.to_string()))?;
+    // A classification is an edge, and following it reads the other end's project vocabulary — the same
+    // reason the task side guards. A decision always sits in a project, so neither end is ever the inbox.
+    crate::ops::guard_same_project(
+        Some(decision.project_id),
+        Some(axis.project_id),
+        "this classification",
+    )?;
+
+    // Idempotent noop when the same value is already assigned.
+    if let Some(id) = read::decision_assignment_id(tx.conn(), decision_id, value_id)? {
+        let existing = read::decision_dimension_value(tx.conn(), id)?
+            .expect("the assignment id was just read from the same transaction");
+        return Ok((existing, false));
+    }
+
+    // Drop the existing assignment on this axis (a different value) first, keeping it to one row.
+    let now = Timestamp::now();
+    for id in read::decision_assignment_ids_on_axis(tx.conn(), decision_id, dimension_id)? {
+        tx.delete_record("decision_dimension_value", id)?;
+    }
+
+    let dv = DecisionDimensionValue {
+        id: read::next_id(tx.conn(), "decision_dimension_value")?,
+        decision_id,
+        dimension_id,
+        value_id,
+        created_at: now,
+        updated_at: now,
+    };
+    emit_create(tx, record::decision_dimension_value(&dv))?;
+    Ok((dv, true))
+}
+
+/// Remove a decision's assignment to a particular dimension value (a hard delete). A noop when it is not
+/// assigned. Returns changed. Unconditional, for the reason [`set_on_decision`] gives: `required` has no
+/// door to bite at on this side.
+pub fn unset_on_decision(tx: &WriteTx<'_>, decision_id: i64, value_id: i64) -> Result<bool> {
+    let Some(id) = read::decision_assignment_id(tx.conn(), decision_id, value_id)? else {
+        return Ok(false);
+    };
+    tx.delete_record("decision_dimension_value", id)?;
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ops::test_support::{mk_project, mk_task_in, new_engine};
+    use crate::ops::test_support::{mk_decision_in, mk_project, mk_task_in, new_engine};
 
     /// A project in which to exercise the dimension ops in isolation (`project::add` seeds no
     /// dimensions).
@@ -1390,6 +1490,100 @@ mod tests {
         assert!(set(tx, t, 999_999).is_err());
     }
 
+    /// The decision side of the axis (`AMB-D-781`): single-select per `(decision, axis)`, idempotent, and
+    /// independent of the task assignments that name the same value.
+    #[test]
+    fn a_decision_carries_one_value_per_axis_and_shares_the_axis_with_tasks() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let k = mk_decision_in(tx, "決定", p);
+        let cat = add(tx, p, custom("カテゴリー")).unwrap();
+        let a = value_add(tx, cat.id, "A", None).unwrap();
+        let b = value_add(tx, cat.id, "B", None).unwrap();
+
+        let (_, created1) = set_on_decision(tx, k, a.id).unwrap();
+        let (_, created2) = set_on_decision(tx, k, a.id).unwrap();
+        assert!(created1 && !created2, "setting the same value again is idempotent");
+
+        set_on_decision(tx, k, b.id).unwrap();
+        let live = read::decision_assignment_ids_on_axis(tx.conn(), k, cat.id).unwrap();
+        assert_eq!(live.len(), 1, "single-select means one row per (decision,axis)");
+        let row = read::decision_dimension_value(tx.conn(), live[0]).unwrap().unwrap();
+        assert_eq!(row.value_id, b.id);
+
+        // The values are the axis's own: a task on the same value is a separate row, and neither side
+        // reads the other's.
+        let t = task_in(tx, "task", p);
+        set(tx, t, a.id).unwrap();
+        assert_eq!(read::task_dimension_assignments(tx.conn(), t).unwrap(), vec![(cat.id, a.id)]);
+        assert_eq!(read::decision_dimension_assignments(tx.conn(), k).unwrap(), vec![(cat.id, b.id)]);
+        assert_eq!(
+            read::decision_classification(tx.conn(), k).unwrap(),
+            vec![("カテゴリー".to_string(), "B".to_string())]
+        );
+
+        assert!(unset_on_decision(tx, k, b.id).unwrap());
+        assert!(!unset_on_decision(tx, k, b.id).unwrap(), "already unset is a noop");
+    }
+
+    /// `required` has no door to bite at on the decision side — a decision has no creation to finish, so
+    /// it is neither demanded a value nor stopped from clearing one. The flag still holds the task side.
+    #[test]
+    fn a_required_axis_makes_no_demand_of_a_decision() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let k = mk_decision_in(tx, "決定", p);
+        // An axis is born with no values, so the flag is raised once it has some.
+        let axis = add(tx, p, custom("カテゴリー")).unwrap();
+        let a = value_add(tx, axis.id, "A", None).unwrap();
+        let b = value_add(tx, axis.id, "B", None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, Some(true), None).unwrap();
+        set_on_decision(tx, k, a.id).unwrap();
+        assert!(unset_on_decision(tx, k, a.id).unwrap(), "a decision's value on a required axis clears");
+
+        // And the required-axis guard on `value_delete` still counts tasks only: a value carrying nothing
+        // but decisions is removable without naming a destination.
+        set_on_decision(tx, k, b.id).unwrap();
+        value_delete(tx, b.id, None).unwrap();
+        assert!(val_opt(tx, b.id).is_none());
+        assert!(
+            read::decision_assignment_id(tx.conn(), k, b.id).unwrap().is_none(),
+            "the decision keeps existing, unclassified"
+        );
+        assert!(read::decision(tx.conn(), k).unwrap().is_some(), "removing a value deletes no decision");
+    }
+
+    /// Removing a value un-classifies both sides; naming a destination moves both, so a decision is never
+    /// quietly left behind while the tasks travel.
+    #[test]
+    fn value_delete_carries_the_decisions_with_the_tasks() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let axis = add(tx, p, custom("カテゴリー")).unwrap();
+        let going = value_add(tx, axis.id, "旧", None).unwrap();
+        let staying = value_add(tx, axis.id, "新", None).unwrap();
+        let t = task_in(tx, "task", p);
+        let k = mk_decision_in(tx, "決定", p);
+        set(tx, t, going.id).unwrap();
+        set_on_decision(tx, k, going.id).unwrap();
+
+        value_delete(tx, going.id, Some(staying.id)).unwrap();
+        assert_eq!(read::task_dimension_assignments(tx.conn(), t).unwrap(), vec![(axis.id, staying.id)]);
+        assert_eq!(
+            read::decision_dimension_assignments(tx.conn(), k).unwrap(),
+            vec![(axis.id, staying.id)],
+            "the decisions move where the tasks moved"
+        );
+
+        // Unnamed, both sides leave with the value.
+        value_delete(tx, staying.id, None).unwrap();
+        assert!(read::assignment_id(tx.conn(), t, staying.id).unwrap().is_none());
+        assert!(read::decision_assignment_id(tx.conn(), k, staying.id).unwrap().is_none());
+    }
+
     /// Deleting a dimension takes its values (dependent content) and assignments (links) with it.
     #[test]
     fn delete_dimension_takes_values_and_assignments() {
@@ -1400,9 +1594,15 @@ mod tests {
         let v = value_add(tx, d.id, "A", None).unwrap();
         let t = task_in(tx, "task", p);
         set(tx, t, v.id).unwrap();
+        let k = mk_decision_in(tx, "決定", p);
+        set_on_decision(tx, k, v.id).unwrap();
         delete(tx, d.id).unwrap();
         assert!(dim_opt(tx, d.id).is_none());
         assert!(val_opt(tx, v.id).is_none(), "the values go too");
         assert!(read::assignment_id(tx.conn(), t, v.id).unwrap().is_none(), "and the assignments on them");
+        assert!(
+            read::decision_assignment_id(tx.conn(), k, v.id).unwrap().is_none(),
+            "on either side — an axis is swept value by value, so the decision rows leave with them"
+        );
     }
 }

@@ -23,11 +23,11 @@
 // name of a file mean the same as dropping just beside it.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { FolderAppDto, FolderChangesDto } from "../bindings/bindings";
+import type { FolderAppDto, FolderChangesDto, FolderFileDto } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
-import { t, tf, whenLabel } from "../core/i18n";
+import { formatNumber, t, tf, whenLabel } from "../core/i18n";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
   folderEntries, folderOpenFile, folderOpenFileWith, folderOpenWith, folderRead, folderRevealFile,
@@ -70,7 +70,9 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // project on it draws the invitation, the same as one whose project has no folder.
   const folders = useBoundFolders(projectId ?? 0);
   const root = folders.live[0]?.path ?? null;
-  const [changes, setChanges] = useState<FolderChangesDto>({ changed: [], partial: false });
+  const [changes, setChanges] = useState<FolderChangesDto>(
+    { root: "", changed: [], partial: false, gone: false },
+  );
   const [treeOpen, setTreeOpen] = useState(false);
   const [reading, setReading] = useState<string[] | null>(null);
   // The file a right-click was on, and where the pointer was. One menu for the face rather than one
@@ -101,14 +103,20 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
     let alive = true;
     // Subscribed before the watch is asked for: the first thing the folder does could happen while
     // the host is still walking it, and a listener set up afterwards would miss exactly that.
-    const listening = onFolderChanged((fresh) => { if (alive) setChanges(fresh); });
+    // Every watched folder is told about through the one listener, and this face is rooted at one of
+    // them — so an answer about another folder is not this row's news.
+    const listening = onFolderChanged((fresh) => {
+      if (alive && fresh.root === root) setChanges(fresh);
+    });
     void folderWatch(projectId, root)
       .then((now) => { if (alive) setChanges(now); })
-      .catch(() => { if (alive) setChanges({ changed: [], partial: false }); });
+      .catch(() => {
+        if (alive) setChanges({ root, changed: [], partial: false, gone: false });
+      });
     return () => {
       alive = false;
       void listening.then((stop) => stop());
-      void folderUnwatch();
+      void folderUnwatch(root);
     };
   }, [projectId, root]);
 
@@ -467,8 +475,12 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
    *  to leave before they can close the panel (`./FilesPanel`). */
   close: ReactNode;
 }) {
-  const [file, setFile] = useState<{ text?: string; truncated: boolean; image?: { mime: string; base64: string } } | null>(null);
+  const [file, setFile] = useState<FolderFileDto | null>(null);
   const [failed, setFailed] = useState(false);
+  // Where a picture too large to draw was handed on to the machine from. The same menu the list
+  // rows open, opened here because this is the one state a reader reaches it from with no row under
+  // the pointer.
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const name = path[path.length - 1];
 
   useEffect(() => {
@@ -502,11 +514,76 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
             ? <RefNavProvider value={nav}><Markdown>{file.text}</Markdown></RefNavProvider>
             : <pre className="files__text">{file.text}</pre>
         )}
-        {file !== null && file.text === undefined && file.image === undefined && (
+        {/* A picture refused is not a picture missing. Drawn as nothing at all it reads as a
+            damaged file, so the refusal says what it measured and hands the file on to something
+            built to open it (`AMB-D-783`). */}
+        {file?.oversize !== undefined && (
+          <>
+            <p className="files__none">{t("files.tooBig")}</p>
+            <p className="files__none">{measured(file.oversize)}</p>
+            <button
+              className="files__hand"
+              onClick={(e) => setMenu({ x: e.clientX, y: e.clientY })}
+            >
+              {t("files.tooBigOpen")}
+            </button>
+          </>
+        )}
+        {file !== null && file.text === undefined && file.image === undefined
+          && file.oversize === undefined && (
           <p className="files__none">{t("files.notText")}</p>
         )}
         {file?.truncated === true && <p className="files__none">{t("files.cut")}</p>}
       </div>
+      {menu !== null && (
+        <FileMenu
+          projectId={projectId}
+          root={root}
+          path={path}
+          at={menu}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
+}
+
+/**
+ * What a refused picture is refused for, in the two numbers that were measured.
+ *
+ * The pixels are absent where the front of the file did not say — a picture that would not say its
+ * size is refused on its bytes alone (`crate::folder`), and printing a size nobody read would be
+ * inventing one.
+ */
+function measured(oversize: NonNullable<FolderFileDto["oversize"]>): string {
+  const size = fileSize(oversize.bytes);
+  if (oversize.width === undefined || oversize.height === undefined) return size;
+  return `${size} · ${tf("files.tooBigPixels", {
+    width: formatNumber(oversize.width),
+    height: formatNumber(oversize.height),
+  })}`;
+}
+
+/**
+ * A file's size, in the unit that says something about it.
+ *
+ * **Megabytes alone would print "0 MB" for the case this exists to explain.** A picture is refused
+ * on pixels as well as bytes, and the pictures that cost the most to draw are the ones that
+ * compress best — ten kilobytes of lossless WebP decodes to over a gigabyte (`AMB-D-783`), and a
+ * header claiming thirty thousand square costs less than a kilobyte to write. A refusal that reads
+ * "0 MB" tells the reader the file is empty, which is the opposite of true, so the unit goes down
+ * as far as bytes rather than ever rounding to nothing.
+ *
+ * The unit's own name comes from `Intl` rather than the dictionary: it is one of the things a
+ * locale already knows how to write, down to `Mo` in French.
+ */
+function fileSize(bytes: number): string {
+  const mib = 1024 * 1024;
+  if (bytes >= mib) return formatNumber(bytes / mib, unit("megabyte", 1));
+  if (bytes >= 1024) return formatNumber(bytes / 1024, unit("kilobyte", 0));
+  return formatNumber(bytes, unit("byte", 0));
+}
+
+function unit(name: string, maximumFractionDigits: number): Intl.NumberFormatOptions {
+  return { style: "unit", unit: name, unitDisplay: "short", maximumFractionDigits };
 }

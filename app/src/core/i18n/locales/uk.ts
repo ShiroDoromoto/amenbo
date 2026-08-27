@@ -300,7 +300,7 @@ export const uk: Translation = {
     "settings.doctorRebind": "Прив'язати заново",
     "settings.doctorRepairing": "Працюю…",
     "settings.doctorRepairDone": "Полагоджено.",
-    "settings.doctorFixDone": "Полагоджено (файлів вкладень: {blobs} · прив'язок папок: {bindings})",
+    "settings.doctorFixDone": "Полагоджено (рядків вкладень: {attachments} · файлів вкладень: {blobs} · прив'язок папок: {bindings})",
     "settings.doctorFixNothing": "Лагодити не було чого.",
     "settings.dataOpPreparing": "Підготовка…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -549,7 +549,6 @@ export const uk: Translation = {
     "face.whichFolder": "У якій теці працює ця панель?",
     "face.rename": "Перейменувати цю панель",
     "face.needsYou": "чекає на вас",
-    "face.nothingNeedsYou": "Наскільки відомо журналу, ви ніде не потрібні.",
     "files.tab": "Файли",
     "files.memo": "Сторінка",
     "files.memoWide": "Писати широко",
@@ -569,6 +568,9 @@ export const uk: Translation = {
     "files.notText": "Це не текст, тому показати його тут не можна.",
     "files.cut": "Показано лише початок.",
     "files.unreadable": "Не вдалося прочитати цей файл.",
+    "files.tooBig": "Це зображення завелике, щоб показати його тут.",
+    "files.tooBigPixels": "{width} × {height} пікселів",
+    "files.tooBigOpen": "Відкрити в іншій програмі",
     "talk.elevated.title": "Amenbo запущено від імені адміністратора",
     "talk.elevated.body": "Термінал, відкритий тут, успадковує це, а адміністратор не переходить за посиланнями, за якими scoop розміщує свої пакунки. З цього вікна такі інструменти недосяжні — Amenbo повідомить, що їх не встановлено, хоча вони встановлені.",
     "talk.elevated.fix": "Закрийте Amenbo й відкрийте його знову без «Запуску від імені адміністратора» — інструменти повернуться.",
@@ -838,6 +840,10 @@ export const uk: Translation = {
     duplicate_order_key: {
       message: "У проєкті {project} є завдання з однаковим ключем упорядкування ({order_key}).",
       fix: "Переставте завдання — і це владнається саме.",
+    },
+    orphan_attachment: {
+      message: "{attachment} висить на {target}, а такого запису немає: рядок пережив те, до чого був долучений, і тримає свій файл там, куди вже ніхто не дістанеться.",
+      fix: "«Полагодити» вилучає рядок і відпускає його файл. Відкривати наперед нічого: того, до чого він був долучений, уже немає.",
     },
     stale_managed_block: {
       message: "Посібник для ШІ (блок, яким керує Amenbo) у {path} застарів (v{version} → v{current}).",

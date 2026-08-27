@@ -53,7 +53,7 @@ vi.mock("../core/mutations", () => {
       Promise.resolve(hoisted.reports.length > 1 ? hoisted.reports.shift()! : hoisted.reports[0]),
     runDoctorFix: () => {
       hoisted.fixes += 1;
-      return Promise.resolve({ reclaimedBlobs: 0, freedBytes: 0, forgottenBindings: 1 });
+      return Promise.resolve({ sweptAttachments: 0, reclaimedBlobs: 0, freedBytes: 0, forgottenBindings: 1 });
     },
     bindFolder: (project: number, dir: string) => {
       hoisted.binds.push({ project, dir });

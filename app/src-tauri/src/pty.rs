@@ -660,23 +660,6 @@ pub fn pty_attach(
     Ok(base64::engine::general_purpose::STANDARD.encode(terminal.pane.adopt(window.label())))
 }
 
-/// The folder a session was opened in, if it is still open and was given one.
-///
-/// This is what [`crate::fileproto`] fences a request with, and the answer being `None` is the whole
-/// of the refusal: a session that has closed, an id that never named one, and a pane opened without a
-/// folder are all the same "nothing is reachable through this". The registry entry is dropped when the
-/// program in the terminal exits, so a folder stops being readable at the moment the pane showing it
-/// stops being live.
-pub fn folder(app: &tauri::AppHandle, session: &str) -> Option<PathBuf> {
-    app.state::<Terminals>()
-        .0
-        .lock()
-        .expect("terminals lock")
-        .get(session)?
-        .folder
-        .clone()
-}
-
 /// End the program in a terminal, and forget the session.
 ///
 /// **It is the only way out.** A pane going away leaves the terminal running — that is a pane moving

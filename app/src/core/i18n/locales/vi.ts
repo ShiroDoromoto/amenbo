@@ -537,6 +537,7 @@ export const vi: Translation = {
     "files.nothingChanged": "Chưa có gì thay đổi.",
     "files.partial": "Một phần thư mục này không được theo dõi.",
     "files.noFolder": "Dự án này chưa có thư mục.",
+    "files.folderGone": "Thư mục này không còn nữa.",
     "files.back": "Quay lại danh sách",
     "files.openWith": "Mở bằng ứng dụng thường dùng",
     "files.chooseApp": "Mở bằng ứng dụng tôi chọn",

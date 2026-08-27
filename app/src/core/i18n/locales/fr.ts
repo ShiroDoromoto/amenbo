@@ -555,6 +555,7 @@ export const fr: Translation = {
     "files.nothingChanged": "Rien n'a encore changé.",
     "files.partial": "Une partie de ce dossier n'est pas surveillée.",
     "files.noFolder": "Ce projet n'a pas encore de dossier.",
+    "files.folderGone": "Ce dossier n'est plus là.",
     "files.back": "Retour à la liste",
     "files.openWith": "Ouvrir avec l'application habituelle",
     "files.chooseApp": "Ouvrir avec une application de mon choix",

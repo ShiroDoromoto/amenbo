@@ -556,6 +556,7 @@ export const ptBR: Translation = {
     "files.nothingChanged": "Nada mudou ainda.",
     "files.partial": "Parte desta pasta não está sendo observada.",
     "files.noFolder": "Este projeto ainda não tem pasta.",
+    "files.folderGone": "Esta pasta não está mais lá.",
     "files.back": "Voltar para a lista",
     "files.openWith": "Abrir com o aplicativo de sempre",
     "files.chooseApp": "Abrir com um aplicativo à minha escolha",

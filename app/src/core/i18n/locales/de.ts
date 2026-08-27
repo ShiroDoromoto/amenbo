@@ -544,6 +544,7 @@ export const de: Translation = {
     "files.nothingChanged": "Bisher hat sich nichts geändert.",
     "files.partial": "Ein Teil dieses Ordners wird nicht überwacht.",
     "files.noFolder": "Dieses Projekt hat noch keinen Ordner.",
+    "files.folderGone": "Dieser Ordner ist nicht mehr da.",
     "files.back": "Zurück zur Liste",
     "files.openWith": "Mit der üblichen App öffnen",
     "files.chooseApp": "Mit einer ausgewählten App öffnen",

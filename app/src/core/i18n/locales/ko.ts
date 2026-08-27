@@ -533,6 +533,7 @@ export const ko: Translation = {
     "files.nothingChanged": "아직 바뀐 것이 없습니다.",
     "files.partial": "이 폴더의 일부는 지켜보지 못하고 있습니다.",
     "files.noFolder": "이 프로젝트에는 아직 폴더가 없습니다.",
+    "files.folderGone": "이 폴더는 더 이상 없습니다.",
     "files.back": "목록으로 돌아가기",
     "files.openWith": "늘 쓰는 앱으로 열기",
     "files.chooseApp": "앱을 골라서 열기",

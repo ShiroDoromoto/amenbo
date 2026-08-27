@@ -35,6 +35,7 @@ mod folder_watch;
 /// Changing what that folder holds — making a name, renaming one, moving and copying — behind the
 /// same fence the reading doors are behind, and answering a carry that stopped part way with where
 /// it got to (`AMB-D-782`).
+mod folder_save;
 mod folder_write;
 /// The talk window's face while the app is up — where its panes are and what they are called.
 mod frames;
@@ -501,6 +502,7 @@ pub fn run() {
       wake::wake_chose,
       wake::wake_forget,
       wake::wake_choices,
+      wake::wake_rescan,
       wake::wake_register,
       wake::wake_amend,
       wake::wake_unregister,
@@ -526,6 +528,7 @@ pub fn run() {
       open_with::folder_open_file_with,
       folder_watch::folder_watch,
       folder_watch::folder_unwatch,
+      folder_save::folder_save,
       folder_write::folder_make,
       folder_write::folder_rename,
       folder_write::folder_move,

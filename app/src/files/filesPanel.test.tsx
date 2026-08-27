@@ -66,20 +66,31 @@ const hoisted = vi.hoisted(() => ({
   /** Whether that refusal takes a moment to arrive — the ordering a real host has and a stand-in
    *  that throws on the spot does not. */
   slowRefusal: false,
+  /** The way to tell the panel a person typed, as the stand-in editor took it. */
+  typing: null as null | (() => void),
+  /** Every save the panel asked for, and what it sent with it. */
+  saved: [] as { path: string; text: string; encoding: string; bom: boolean; lineEnding: string }[],
+  /** What the next save is refused with. Its own field: a name and a save are refused for different
+   *  reasons, and a test about one must not arm the other. */
+  refuseSave: null as unknown,
 }));
 
 // The editor is loaded on demand and lays itself out by measuring, which jsdom cannot do — so what
 // it was asked to draw is recorded instead, the same stand-in the Markdown face makes for mermaid.
 vi.mock("./editorLoad", () => ({
-  mountEditor: async (parent: HTMLElement, text: string, editable: boolean, name: string) => {
+  mountEditor: async (
+    parent: HTMLElement, text: string, editable: boolean, name: string, onEdit?: () => void,
+  ) => {
     hoisted.editing.push({ text, editable, name });
     const drawn = parent.ownerDocument.createElement("div");
     drawn.className = "cm-editor";
     drawn.textContent = text;
     parent.appendChild(drawn);
+    hoisted.typing = () => onEdit?.();
     return {
       show(next: string) { drawn.textContent = next; },
-      close() { drawn.remove(); },
+      text() { return drawn.textContent ?? ""; },
+      close() { drawn.remove(); hoisted.typing = null; },
     };
   },
 }));
@@ -149,6 +160,14 @@ vi.mock("./folder", () => ({
     if (hoisted.slowRefusal) await new Promise((r) => setTimeout(r, 5));
     throw hoisted.refuse;
   },
+  folderSave: async (
+    _projectId: number, root: string, path: string[],
+    text: string, encoding: string, bom: boolean, lineEnding: string,
+  ) => {
+    hoisted.asked.push(`save:${root}:${path.join("/")}`);
+    if (hoisted.refuseSave !== null) throw hoisted.refuseSave;
+    hoisted.saved.push({ path: path.join("/"), text, encoding, bom, lineEnding });
+  },
   folderRename: async (_projectId: number, root: string, path: string[], name: string) => {
     hoisted.asked.push(`rename:${root}:${path.join("/")}:${name}`);
     if (hoisted.refuse !== null) throw hoisted.refuse;
@@ -188,6 +207,26 @@ function tell(changes: FolderChangesDto) {
 
 async function settle() {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+}
+
+/**
+ * Wait until something the panel is still working on has landed.
+ *
+ * Polled rather than slept through. A fixed wait is a guess about how busy the machine is, and the
+ * machine running the whole suite at once — every file in its own worker, on however many cores it
+ * has — is a great deal busier than the one running this file alone: the guess held on the second
+ * and failed on the first, which is a red build that says nothing about the code (`AMB-T-3858`).
+ *
+ * The deadline is long because it is not a measurement. Nothing here waits it out when the panel is
+ * working — the loop stops on the first look that holds — so its only job is to end a wait that is
+ * never going to end, with a sentence saying what did not happen.
+ */
+async function until(held: () => boolean, missing: string) {
+  for (let look = 0; look < 400; look += 1) {
+    if (held()) return;
+    await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+  }
+  throw new Error(`waited two seconds and ${missing}`);
 }
 
 type Props = Parameters<typeof FilesPanel>[0];
@@ -272,6 +311,9 @@ async function drawOpen(props: Partial<Props> = {}) {
 beforeEach(() => {
   hoisted.asked = [];
   hoisted.editing = [];
+  hoisted.typing = null;
+  hoisted.saved = [];
+  hoisted.refuseSave = null;
   // One file in the folder, so a test that only wants a row to press has one without saying so.
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();
@@ -826,6 +868,136 @@ describe("the file face", () => {
     expect(last(hoisted.editing)?.editable).toBe(false);
   });
 
+  /** Opening a file the panel can write back and typing into it: the one door that changes what is
+   *  in the folder rather than what is on the screen (`AMB-D-776`). */
+  describe("saving what was typed", () => {
+    /** Open `run.sh` in the editor, ready to be typed into. */
+    async function open(about: Partial<FolderFileDto> = {}) {
+      hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
+      hoisted.file = aFile({ text: "#!/bin/sh\necho hi", encoding: "UTF-8", ...about });
+      await draw();
+      await click(button(t("files.tree")));
+      await settle();
+      await click(button("run.sh"));
+      await settle();
+    }
+
+    /** The reader typing, as the editor reports it, and then the text it now holds. */
+    async function type(text: string) {
+      await act(async () => {
+        const drawn = container.querySelector(".cm-editor");
+        if (drawn !== null) drawn.textContent = text;
+        hoisted.typing?.();
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+
+    it("offers nothing to press until somebody has typed", async () => {
+      await open();
+      // The one control, saying which of the three it is — and there is nothing to save yet.
+      expect(button(t("files.saved"))?.disabled).toBe(true);
+
+      await type("#!/bin/sh\necho there");
+      expect(button(t("files.save"))?.disabled).toBe(false);
+    });
+
+    /** What the read answered with is what the save carries back: the encoding the bytes were in,
+     *  the mark the file began with, and how its lines end. The host remembers none of it between
+     *  the two calls (`AMB-D-773`). */
+    it("sends the text back in what the file was read in", async () => {
+      await open({ encoding: "Shift_JIS", bom: true, lineEnding: "crlf" });
+      await type("書き換えました");
+      await click(button(t("files.save")));
+      await settle();
+
+      expect(last(hoisted.saved)).toEqual({
+        path: "run.sh",
+        text: "書き換えました",
+        encoding: "Shift_JIS",
+        bom: true,
+        lineEnding: "crlf",
+      });
+      // And there is nothing left to save, which is what the control says once it is through.
+      expect(button(t("files.saved"))?.disabled).toBe(true);
+    });
+
+    /** A file with both kinds of newline in it comes out of a save with one kind, which changes
+     *  every line of the other. There is no right answer to guess at, so the reader is told and
+     *  asked, and nothing is written until they have said (`AMB-D-773`). */
+    it("will not save a file with both newlines until the reader picks one", async () => {
+      await open({ lineEnding: "mixed" });
+      expect(container.textContent).toContain(t("files.newlinesMixed"));
+      await type("#!/bin/sh\necho there");
+      expect(button(t("files.save"))?.disabled).toBe(true);
+
+      const picker = container.querySelector<HTMLSelectElement>(".files__newline");
+      expect(picker).not.toBeNull();
+      await act(async () => {
+        if (picker !== null) {
+          picker.value = "crlf";
+          picker.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      await click(button(t("files.save")));
+      await settle();
+      expect(last(hoisted.saved)?.lineEnding).toBe("crlf");
+      // Asked once: what is on the disk now has one kind, so the question is gone.
+      expect(container.querySelector(".files__newline")).toBeNull();
+    });
+
+    /** A refusal is the reader's sentence, in their own language, and what they typed is still
+     *  there to try again with — the file was not half written (`crate::folder_save`). */
+    it("says why a save did not happen and keeps what was typed", async () => {
+      await open({ encoding: "Shift_JIS" });
+      hoisted.refuseSave = {
+        code: "folder_unwritable_character",
+        message_en: "✓ cannot be written in Shift_JIS",
+        fields: { character: "✓", encoding: "Shift_JIS" },
+      };
+      await type("これは ✓ です");
+      await click(button(t("files.save")));
+      await settle();
+
+      expect(container.textContent).toContain("✓");
+      expect(container.textContent).toContain("Shift_JIS");
+      expect(hoisted.saved).toEqual([]);
+      // Still unsaved, so the way to try again is still there.
+      expect(button(t("files.save"))?.disabled).toBe(false);
+    });
+
+    /** A file the panel could never write back has no way to save it at all — not a control that
+     *  refuses, which would be a promise it cannot keep. */
+    it("offers no way to save a file it could not write back", async () => {
+      await open({ truncated: true, clean: false });
+      expect(button(t("files.saved"))).toBeUndefined();
+      expect(button(t("files.save"))).toBeUndefined();
+    });
+
+    /** A Markdown file being drawn is not a file that cannot be written back — it is one whose text
+     *  is not on the screen. There is no editor on the rendering, so a save there would have nothing
+     *  to write; the switch beside the name is what puts the text up, and the save with it. */
+    it("offers the save on a Markdown file once its text is the thing on the screen", async () => {
+      hoisted.entries[""] = [{ name: "notes.md", isDir: false, ignored: false }];
+      hoisted.file = aFile({ text: "# a heading", encoding: "UTF-8" });
+      await drawOpen();
+      await click(button("notes.md"));
+      await settle();
+      expect(container.querySelector("h1")).not.toBeNull();
+      expect(button(t("files.saved"))).toBeUndefined();
+
+      await click(button(t("files.edit")));
+      await settle();
+      expect(button(t("files.saved"))).toBeDefined();
+
+      // And it goes again with the rendering, rather than standing over a document nobody can type
+      // into.
+      await click(button(t("files.read")));
+      await settle();
+      expect(button(t("files.saved"))).toBeUndefined();
+    });
+  });
+
   it("says so when the file is not something a panel can show", async () => {
     hoisted.file = aFile();
     await drawOpen();
@@ -1136,8 +1308,10 @@ describe("a project bound to several folders", () => {
     // Left while the answer is out. A box that closed itself here would take the refusal with it,
     // and the reader would watch the name they typed vanish with nothing said.
     await leave(box);
-    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
-    expect(container.textContent).toContain(errLabel(refusal));
+    await until(
+      () => container.textContent?.includes(errLabel(refusal)) === true,
+      "the refusal never reached the screen",
+    );
     // Still there, still holding what was typed: a refusal a person has to type their way back to
     // is one they were told nothing by. And the name was asked for once, not once per leaving.
     expect(namebox()?.value).toBe("notes.md");

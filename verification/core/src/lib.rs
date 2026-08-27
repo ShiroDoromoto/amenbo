@@ -2204,6 +2204,14 @@ const REGISTRY: &[OpSpec] = &[
     // It is the fixed English Amenbo hands an agent, the same on a machine set to any language, and
     // what the operator is given to look for stops before the command name in it — so the reading
     // holds on a dev-channel build as well as on the shipped one.
+    //
+    // **The absent half is the dangerous half, and it is the half a build gets wrong quietly.** The
+    // sentence is put in whatever the program does, so a pane that never showed it is a pane the
+    // newline was withheld from — the sentence is left in the input box for the person, and nothing
+    // was answered on their behalf. A road reads that with a line the program cannot have been sent:
+    // it registers a command that swallows what it is shown but still hands back any line it is
+    // given, so the marked line appearing at all is a newline that went in blind. Where such a build
+    // would have answered the first thing the program asked, this reading is the whole of the guard.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "handed-over", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
     // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
     // ceiling on how many a page may hold, and this is how many are actually standing there. The two

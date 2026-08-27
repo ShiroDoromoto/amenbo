@@ -554,6 +554,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__back:hover { color: var(--c-text); }
 .files__body { min-height: 0; overflow-y: auto; }
 .files__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; }
+/* The editor a file's text is drawn in (`../files/FileEditor`). It brings its own type and colours
+   from the tokens around it; what is left here is the room it draws into — the panel scrolls, so
+   the editor grows to its text rather than scrolling inside a box of its own. */
+.files__editor { font-size: var(--fs-xs); }
+.files__editor .cm-editor { height: auto; }
 .files__image { max-width: 100%; height: auto; }
 /* The way out of a picture the panel would not draw: a word under the refusal, not a control in a
    row, because it is the sentence's own next step. */

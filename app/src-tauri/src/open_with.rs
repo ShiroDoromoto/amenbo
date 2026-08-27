@@ -20,7 +20,7 @@
 //!
 //! **Amenbo still keeps no opinion about applications** (`AMB-T-3605`). Nothing here is remembered:
 //! the list is asked for again every time it is drawn, and picking one changes nothing about what
-//! the file opens with next time. The file face reads — choosing an editor is not its business, it
+//! the file opens with next time. Which application to hand a file to is not the face's business, it
 //! is the reader's, once.
 //!
 //! The fence is [`crate::folder`]'s and is not relaxed by a step: the file is resolved under a

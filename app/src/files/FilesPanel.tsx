@@ -41,6 +41,7 @@ import {
   folderEntries, folderOpenFile, folderOpenFileWith, folderOpenWith, folderRead, folderRevealFile,
   folderUnwatch, folderWatch, onFolderChanged,
 } from "./folder";
+import { FileEditor } from "./FileEditor";
 import { MemoPage } from "./MemoPage";
 import { fileUnderAny } from "./fileUnder";
 import { sectionsOf } from "./sections";
@@ -628,7 +629,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
         {file?.text !== undefined && (
           MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext))
             ? <RefNavProvider value={nav}><Markdown>{file.text}</Markdown></RefNavProvider>
-            : <pre className="files__text">{file.text}</pre>
+            : <FileEditor text={file.text} editable={!file.truncated && file.clean} />
         )}
         {/* A picture refused is not a picture missing. Drawn as nothing at all it reads as a
             damaged file, so the refusal says what it measured and hands the file on to something

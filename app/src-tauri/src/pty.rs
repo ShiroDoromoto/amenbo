@@ -234,13 +234,13 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
     )
 }
 
-/// The catalog row a webview's agent id names, or the refusal for an id nothing lists.
+/// The launch row a webview's agent id names, or the refusal for an id nothing lists.
 ///
 /// The lookup is what keeps the pane's command line out of the webview's hands: an id that is not in
 /// the catalog is turned away here rather than handed to a shell. It is refused under `crate::wake`'s
 /// code, because what it names is that rule and not this door — the same id is turned away the same
 /// way where a folder's answer is written down.
-fn started_as(agent: &str) -> Result<&'static amenbo_core::harness::Harness, CmdError> {
+fn started_as(agent: &str) -> Result<&'static amenbo_core::harness::Launch, CmdError> {
     amenbo_core::wake::started_as(agent).ok_or_else(|| {
         CmdError::coded(
             "wake_unknown_agent",
@@ -266,9 +266,9 @@ fn started_as(agent: &str) -> Result<&'static amenbo_core::harness::Harness, Cmd
 /// terminal outside — and once the terminal is here there is nothing to carry: the sentence goes in as
 /// the pane opens. What is left of the old shape would be a card asking a person who has just arrived
 /// to decide what to ask for, which is the one thing they do not yet know.
-fn opening_line(harness: &amenbo_core::harness::Harness) -> String {
+fn opening_line(launch: &amenbo_core::harness::Launch) -> String {
     let cmd = amenbo_core::config::Paths::command_name();
-    launch::command_line(harness.command, &amenbo_core::harness::opening(harness, cmd))
+    launch::command_line(launch.command, &amenbo_core::harness::opening(launch, cmd))
 }
 
 /// The refusal for a session id that names no open terminal — closed while the pane still had it,

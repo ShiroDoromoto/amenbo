@@ -189,7 +189,7 @@ dispatch_newest() {
 
 # Watch one run to its conclusion. Failing jobs are named as they appear, each once.
 watch_run() {
-    local id="$1" miss=0 prev="" st fail status
+    local id="$1" miss=0 prev="" said_restart="" st fail status restarting
     echo "watching run $id  https://github.com/$repo/actions/runs/$id"
     while :; do
         if ! st=$(gh run view "$id" -R "$repo" --json status,conclusion,jobs 2>&1); then
@@ -212,12 +212,28 @@ watch_run() {
         [ -n "$fail" ] && [ "$fail" != "$prev" ] && echo "$fail"
         prev=$fail
         status=$(jq -r .status <<< "$st")
-        if [ "$status" = completed ]; then
+        # A re-run reopens the same id, and it reaches the jobs before it reaches the
+        # run: for a window after `gh run rerun`, the run still reads `completed`
+        # carrying the previous attempt's conclusion, while a job it has just restarted
+        # is already back to `queued` with no conclusion of its own. Taking the run's
+        # word there reports a verdict about the attempt that was thrown away — a green
+        # for a build nobody has finished. So the jobs are asked as well, and a run is
+        # over only when nothing it carries is still going. A run with no jobs at all
+        # has nothing to contradict its status, and is read exactly as before.
+        restarting=$(jq '[(.jobs // [])[]
+            | select(.status != "completed" or (.conclusion // "") == "")] | length' <<< "$st")
+        if [ "$status" = completed ] && [ "$restarting" = 0 ]; then
             local conclusion; conclusion=$(jq -r .conclusion <<< "$st")
             echo "run $id: $conclusion"
-            # A re-run reopens the same id, which this has already left. Start
-            # another watch for it rather than expecting this one to notice.
+            # A re-run started after this returns reopens an id this watch has already
+            # left. Start another one for it rather than expecting this to notice.
             [ "$conclusion" = success ] && return 0 || return 1
+        fi
+        # Held by the window above rather than by the run still running. Said once, so
+        # a watch that stays quiet through it is not mistaken for one that died.
+        if [ "$status" = completed ] && [ -z "$said_restart" ]; then
+            echo "run $id reads completed while a job it carries is still going — waiting out the re-run" >&2
+            said_restart=yes
         fi
         sleep "$POLL_SECONDS"
     done

@@ -524,6 +524,10 @@ there from `fixtures/`, and `git-init` makes the folder a git repository, which 
 hook slots are real enough to write into. That one takes the same `dir` the first two do, and a road
 reading what git says about a folder on screen needs it: the colours are drawn on the face of the
 folder a project is **bound** to, and a repository anywhere else leaves every row of it bare.
+`git-commit` records everything lying in that folder, and it is there for one state nothing else
+reaches: until something is committed git names the whole folder and never the paths inside it, so a
+folder git is quiet about while a file in it is new — which is what a folded row on the tree answers
+for — does not exist on the near side of a commit.
 `wire-ai` is the same kind of stand-in one tier up: Amenbo
 hands over the text that starts a folder's AI on it and writes no settings file itself, so the road
 past that point exists only if someone pastes — and it pastes what the build under test handed over,

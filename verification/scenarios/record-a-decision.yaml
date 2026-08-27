@@ -10,7 +10,8 @@ description: >
   rulings it can meet: accepted (which freezes the body), reopened (which lifts the freeze so it can
   be said better), and accepted again. A second decision takes the other ruling, rejection, whose
   reason lands on the timeline rather than in a field of its own. Acceptance is what other work waits
-  on, so the status these lines read is the one a task's readiness is derived from.
+  on, so the status these lines read is the one a task's readiness is derived from, and the settled
+  record names who settled it.
 steps_cli:
   - type: action
     domain: decision
@@ -58,6 +59,17 @@ steps_cli:
       target: rec
       field: status
       equals: accepted
+
+  # A ruling is only worth what its author is worth, and an AI may settle one as well as a person, so
+  # the settled record carries who settled it — read back off the shipped build, not assumed from the
+  # accept having exited zero.
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: rec
+      field: decided_by.id
+      equals: human
 
   # Nothing has replaced it, which is asked of the edges rather than of a word: `superseded:no` is
   # the listing arm a reader narrows by when looking for what has not been overturned.

@@ -30,22 +30,26 @@
 //!    not known", so they are not held back for the quiet that follows: nothing arriving after can
 //!    make the answer any less unknown. Windows sends no such signal at all, which is why nothing
 //!    here waits for one.
-//! 4. **A watch that could not be installed is said out loud.** The kernel's watch limit is per
-//!    user (inotify's `max_user_watches`), and hitting it does not stop the ones already installed:
-//!    the answer is a real but partial watch, and a face that drew it as a whole one would be
-//!    telling the reader that nothing has changed in the half nobody is looking at.
+//! 4. **A watch that could not be installed is said out loud, and separately from a folder too big
+//!    to walk.** The kernel's watch limit is per user (inotify's `max_user_watches`), and hitting
+//!    it does not stop the ones already installed: the answer is a real but partial watch, and a
+//!    face that drew it as a whole one would be telling the reader that nothing has changed in the
+//!    half nobody is looking at. A walk that stopped at its own cap ([`crate::folder::scan`])
+//!    leaves the same half unwatched for a different reason, and the two are carried apart
+//!    (`AMB-D-778`): one is answered by pointing the app at less, the other by giving the machine
+//!    more watches, and one sentence covering both sends the reader down neither road.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use notify::{RecursiveMode, Watcher};
 use tauri::Emitter as _;
 
-use crate::dto::{FolderChangedDto, FolderChangesDto};
+use crate::dto::FolderChangesDto;
 use crate::error::CmdError;
 
 /// How long to wait for quiet before scanning again. One write fires three or four events (the
@@ -58,8 +62,9 @@ const DEBOUNCE: Duration = Duration::from_millis(400);
 /// change takes to arrive.
 const HEARTBEAT: Duration = Duration::from_millis(500);
 
-/// The event the webview listens for. It carries the whole list rather than what moved: the face
-/// draws a list, and a delta it had to apply would be a second copy of the truth to keep in step.
+/// The event the webview listens for. What it carries is that the folder moved and nothing about
+/// how: the face goes and asks — the tree for the names, git for the colour beside them — so a list
+/// sent along would be a second copy of the truth to keep in step with the disk's (`AMB-D-785`).
 const CHANGED_EVENT: &str = "folder://changed";
 
 /// Whether one watch covers everything under the folder it is put on. The line four other products
@@ -67,16 +72,16 @@ const CHANGED_EVENT: &str = "folder://changed";
 const RECURSIVE: bool = cfg!(any(target_os = "windows", target_os = "macos"));
 
 /// What a wake-up carries. Not which file — that is still never read (see the note at the top) —
-/// only which of three things happened.
+/// only which of two things happened.
 enum Wake {
-    /// Something under the root moved. Part of a burst, worth waiting out.
+    /// Something moved: under the root, or inside the repository's own directory where staging and
+    /// committing write. Part of a burst, worth waiting out.
+    ///
+    /// **The two are one word on purpose.** Staging touches not a byte of the working tree
+    /// (`AMB-T-3748` measured it), so a wake-up that told them apart would only be useful to
+    /// somebody deciding whether the news is worth passing on — and that decision is not made here
+    /// any more (see [`run`]).
     Moved,
-    /// Something moved in the repository's own directory: the reader staged something, or
-    /// committed. Part of a burst too, and told apart from the rest because **nothing under the
-    /// root moved with it** — staging and committing write inside `.git` and touch not one byte of
-    /// the working tree (`AMB-T-3748` measured it) — so the answer the face is holding is still
-    /// true, and it still has to be told (`AMB-D-774`).
-    Git,
     /// The kernel dropped events and is saying so. Not a burst: acted on where it lands.
     Rescan,
 }
@@ -125,9 +130,9 @@ pub fn folder_watch(
     let scan = crate::folder::scan(&dir);
     let first = FolderChangesDto {
         root: root.clone(),
-        changed: crate::folder::recent(&scan),
         // Nothing has been installed yet, so what is reported here is only what the walk itself hit.
-        partial: scan.capped,
+        capped: scan.capped,
+        unwatched: false,
         gone: false,
     };
 
@@ -153,6 +158,14 @@ pub fn folder_unwatch(watches: tauri::State<'_, FolderWatches>, root: String) {
 /// Where what it has to say goes is the caller's to give, and every window is where that is in the
 /// app ([`told`]). Taking it as an argument is what lets the loop be run against a folder in a test
 /// rather than only against a running window.
+///
+/// **Every wake-up that gets this far is passed on.** What used to decide it was comparing the rows
+/// against the ones the face was holding, and there are no rows any more: the news *is* the news
+/// (`AMB-D-785`). Nothing is lost by that — what the comparison dropped were touches that moved no
+/// row, and the colour beside a row moves without a row moving, which is the case it had to be
+/// excepted for anyway (`AMB-D-774`). What keeps this from being chatty is upstream: the reads and
+/// the machine's own folders never reach the channel ([`handler`]), and a burst is one wake-up
+/// ([`woke`]).
 fn run(
     root: &Path,
     mut held: FolderChangesDto,
@@ -169,7 +182,7 @@ fn run(
     else {
         // No watcher at all. The face keeps the list it was answered with, which is true of the
         // moment it asked — and is told that this is all it will get.
-        tell(&FolderChangesDto { partial: true, ..held });
+        tell(&FolderChangesDto { unwatched: true, ..held });
         return;
     };
 
@@ -178,10 +191,11 @@ fn run(
     let whole = [root.to_path_buf()];
     let mut scan = crate::folder::scan(root);
     let mut watched = HashSet::new();
-    let mut partial = install(&mut watcher, laid_over(&whole, &scan), &mut watched) || scan.capped;
+    let mut unwatched = install(&mut watcher, laid_over(&whole, &scan), &mut watched);
     watch_repo(&mut watcher, repo.as_deref());
-    if partial != held.partial {
-        held.partial = partial;
+    if unwatched != held.unwatched || scan.capped != held.capped {
+        held.unwatched = unwatched;
+        held.capped = scan.capped;
         tell(&held);
     }
 
@@ -195,7 +209,7 @@ fn run(
     while !stop.load(Ordering::Relaxed) {
         let awake = woke(&rx, stop);
         let here = root.is_dir();
-        if awake.is_none() && here == present {
+        if !awake && here == present {
             continue;
         }
         // A folder that went away took its watches with it, the repository's among them.
@@ -217,112 +231,18 @@ fn run(
         });
         // A folder that is not there is not a folder that is half watched: the walk found nothing
         // because there is nothing, and saying "some of this is unwatched" of it would send a
-        // reader looking for the half that is.
-        partial = present
-            && (install(&mut watcher, laid_over(&whole, &scan), &mut watched) || scan.capped);
+        // reader looking for the half that is. That holds for both halves — a walk of a folder that
+        // is not there stops at nothing rather than at its cap.
+        unwatched = present && install(&mut watcher, laid_over(&whole, &scan), &mut watched);
 
-        let fresh = FolderChangesDto {
-            changed: crate::folder::recent(&scan),
-            partial,
+        held = FolderChangesDto {
+            capped: present && scan.capped,
+            unwatched,
             gone: !present,
-            ..held.clone()
+            ..held
         };
-        // A watch fires on touches that mean nothing to a reader — a file read that updated an
-        // access time, a build writing inside a folder nobody is shown. Comparing what would be
-        // drawn is what drops those, and it is the same reasoning `store_watch`'s signature check
-        // is built on.
-        //
-        // **Except when the repository is what moved**, where the comparison would drop the one
-        // wake-up worth having: staging changes what git says about a file and nothing about the
-        // file, so the rows are equal and the face still has to go and ask again (`AMB-D-774`).
-        //
-        // **And what this app itself just saved**, which is a change a reader asked for and is
-        // already looking at: the row belongs on the list, and the panel being redrawn under them
-        // for their own save is the noise (`our_own` below). The answer is kept either way, so the
-        // saved file is on the list the next time anything is said.
-        let news = fresh != held && !our_own(root, &held, &fresh);
-        held = fresh;
-        if news || matches!(awake, Some(Wake::Git)) {
-            tell(&held);
-        }
+        tell(&held);
     }
-}
-
-/// What this process has written lately: the path, and the time the file came out with.
-///
-/// **The kernel does not say who wrote.** macOS answers `None` for the process behind an event and
-/// the other two carry no such field at all (`AMB-T-3739` measured it), and `notify` sets no
-/// ignore-self flag — so the only way to tell a save made here from one made by the agent in the
-/// pane is to have written down what was saved.
-///
-/// The time is what makes it a note about *this* write rather than about the file: it is spelled
-/// the way a scan spells it ([`crate::folder::recent`]), so a row read back off the filesystem
-/// either is the one that was written or is somebody else's. ⚠ The one filesystem that blurs this
-/// is FAT, whose times move in two-second steps (`AMB-T-3739`) — a write from elsewhere landing in
-/// the same step as ours is read as ours, and told about at the next thing that moves.
-static WRITTEN: Mutex<Vec<(PathBuf, String, Instant)>> = Mutex::new(Vec::new());
-
-/// How long a note is kept: long enough to cover the wait for quiet and the walk behind it, short
-/// enough that the file goes back to being anybody's the moment nothing more is coming.
-const REMEMBERED: Duration = Duration::from_secs(5);
-
-/// Write down that this process has just put bytes into `path` (`crate::folder_save`).
-///
-/// A file whose time cannot be read is not written down. That is the safe way round: the save is
-/// then treated as somebody else's and the face is told, which is a redraw rather than a silence.
-pub fn wrote(path: &Path) {
-    let Ok(stamped) = path.symlink_metadata().and_then(|meta| meta.modified()) else {
-        return;
-    };
-    let stamped = chrono::DateTime::<chrono::Utc>::from(stamped).to_rfc3339();
-    let Ok(mut written) = WRITTEN.lock() else { return };
-    let now = Instant::now();
-    written.retain(|(_, _, at)| now.duration_since(*at) < REMEMBERED);
-    written.push((path.to_path_buf(), stamped, now));
-}
-
-/// Whether the only rows that moved between these two answers are ones this process wrote itself.
-///
-/// A row that **arrived** has to be one of ours, and there has to be at least one — two answers
-/// that differ in nothing gained are not a save.
-///
-/// A row that **left** is allowed only where a row arriving explains it: the same file under the
-/// time it carried before, or the oldest of a full list pushed off the end by the new one. Anything
-/// else — a file deleted while the save was going through — is news, and is told. ⚠ The one it
-/// cannot tell apart is a deletion of the very oldest row of a full list, which is the thirtieth
-/// entry of "what changed lately" and reappears correct at the next wake-up.
-fn our_own(root: &Path, held: &FolderChangesDto, fresh: &FolderChangesDto) -> bool {
-    if held.partial != fresh.partial || held.gone != fresh.gone {
-        return false;
-    }
-    let Ok(written) = WRITTEN.lock() else { return false };
-    let now = Instant::now();
-    let ours = |row: &FolderChangedDto| {
-        let path = root.join(row.path.iter().collect::<PathBuf>());
-        written.iter().any(|(wrote, stamped, at)| {
-            *wrote == path && *stamped == row.modified && now.duration_since(*at) < REMEMBERED
-        })
-    };
-
-    let before: HashSet<(&[String], &str)> = held.changed.iter().map(named).collect();
-    let mut gained = fresh.changed.iter().filter(|row| !before.contains(&named(row))).peekable();
-    if gained.peek().is_none() || !gained.all(ours) {
-        return false;
-    }
-
-    let after: HashSet<(&[String], &str)> = fresh.changed.iter().map(named).collect();
-    held.changed
-        .iter()
-        .filter(|row| !after.contains(&named(row)))
-        .all(|row| {
-            fresh.changed.iter().any(|now| now.path == row.path)
-                || fresh.changed.len() == crate::folder::RECENT
-        })
-}
-
-/// One row as the pair that makes it the same row: where it is, and when it was written.
-fn named(row: &FolderChangedDto) -> (&[String], &str) {
-    (&row.path, &row.modified)
 }
 
 /// Wait for a wake-up and let the burst behind it settle. False when nothing came — the thread then
@@ -331,25 +251,21 @@ fn named(row: &FolderChangedDto) -> (&[String], &str) {
 /// A dropped-events signal is not settled for. Waiting is what turns a burst into one scan, and
 /// there is no burst here to fold: the signal already says the kernel has stopped accounting for
 /// what moved, so the answer is the same whatever arrives next.
-fn woke(rx: &Receiver<Wake>, stop: &AtomicBool) -> Option<Wake> {
-    let mut held = match rx.recv_timeout(HEARTBEAT) {
-        Err(_) => return None,
-        Ok(Wake::Rescan) => return Some(Wake::Rescan),
-        Ok(wake) => wake,
-    };
+fn woke(rx: &Receiver<Wake>, stop: &AtomicBool) -> bool {
+    match rx.recv_timeout(HEARTBEAT) {
+        Err(_) => return false,
+        Ok(Wake::Rescan) => return true,
+        Ok(Wake::Moved) => {}
+    }
     while let Ok(wake) = rx.recv_timeout(DEBOUNCE) {
         if stop.load(Ordering::Relaxed) {
-            return None;
+            return false;
         }
-        match wake {
-            Wake::Rescan => return Some(Wake::Rescan),
-            // One repository wake-up in the burst is what the burst is: a commit writes several
-            // names in there and moves nothing outside, and it is the outside the comparison reads.
-            Wake::Git => held = Wake::Git,
-            Wake::Moved => {}
+        if matches!(wake, Wake::Rescan) {
+            return true;
         }
     }
-    Some(held)
+    true
 }
 
 /// Put the second watch on: the directory the repository keeps itself in, where staging and
@@ -412,7 +328,8 @@ fn install(
     refused > 0
 }
 
-/// What is made of an event, on the kernel's own thread: at most which of the two things happened.
+/// What is made of an event, on the kernel's own thread: at most which of the two things happened
+/// ([`Wake`]).
 /// Whether anything really changed is still answered by scanning, not by the event — the kinds
 /// cannot be trusted to say (see the note at the top).
 ///
@@ -446,7 +363,7 @@ fn handler(
             repo.as_deref().is_some_and(|dir| path.parent() == Some(dir))
         };
         if event.paths.iter().any(|path| staged(path)) {
-            let _ = tx.send(Wake::Git);
+            let _ = tx.send(Wake::Moved);
             return;
         }
         // A rename carries both names; either one being a name a reader would see is reason enough.
@@ -468,45 +385,6 @@ fn told(app: &tauri::AppHandle, changes: &FolderChangesDto) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// One row, as a scan would have read it off the filesystem.
-    fn row(root: &Path, name: &str) -> FolderChangedDto {
-        let stamped = root
-            .join(name)
-            .symlink_metadata()
-            .and_then(|meta| meta.modified())
-            .expect("the file");
-        FolderChangedDto {
-            path: vec![name.to_string()],
-            modified: chrono::DateTime::<chrono::Utc>::from(stamped).to_rfc3339(),
-        }
-    }
-
-    fn changes(rows: Vec<FolderChangedDto>) -> FolderChangesDto {
-        FolderChangesDto { root: String::new(), changed: rows, partial: false, gone: false }
-    }
-
-    /// A save made here is a change the reader asked for and is already looking at, so the wake-up
-    /// it causes is not passed on — while a write from anywhere else is, which is the whole point of
-    /// writing anything down (`AMB-T-3739`: the events themselves never say who wrote).
-    #[test]
-    fn this_app_s_own_save_is_not_news_and_anybody_else_s_is() {
-        let dir = tempfile::tempdir().expect("a temp dir");
-        let root = dir.path();
-        let before = changes(vec![]);
-
-        std::fs::write(root.join("ours.md"), b"saved from the panel").expect("a file");
-        wrote(&root.join("ours.md"));
-        assert!(our_own(root, &before, &changes(vec![row(root, "ours.md")])));
-
-        // The same file, written again by something else: the time is not the one written down.
-        std::fs::write(root.join("theirs.md"), b"the agent in the pane").expect("a file");
-        assert!(!our_own(root, &before, &changes(vec![row(root, "theirs.md")])));
-
-        // And two answers that gained nothing are not a save either — they are a folder where
-        // something was taken away, which is news.
-        assert!(!our_own(root, &changes(vec![row(root, "ours.md")]), &before));
-    }
 
     /// Installing is once per folder: a scan that names the same folders again asks the kernel for
     /// nothing, which is what keeps a watch that is up from being rebuilt on every wake-up.
@@ -595,7 +473,7 @@ mod tests {
         tx.send(Wake::Rescan).expect("the channel");
         let stop = AtomicBool::new(false);
         // Nothing follows it, and it does not wait for anything to.
-        assert!(woke(&rx, &stop).is_some());
+        assert!(woke(&rx, &stop));
     }
 
     /// What the mode is for: a file written in a folder that never got a watch of its own still
@@ -620,7 +498,7 @@ mod tests {
         let stop = AtomicBool::new(false);
         // One wait is a heartbeat long, which is how often the thread looks up — not how long a
         // kernel has to get round to it. A machine with something else on it takes longer than one.
-        let woken = (0..20).any(|_| woke(&rx, &stop).is_some());
+        let woken = (0..20).any(|_| woke(&rx, &stop));
         assert!(woken, "a write under the root is what the watch is for");
     }
 
@@ -673,8 +551,8 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let held = FolderChangesDto {
             root: root.to_string_lossy().into_owned(),
-            changed: Vec::new(),
-            partial: false,
+            capped: false,
+            unwatched: false,
             gone: false,
         };
         let thread = {
@@ -689,7 +567,7 @@ mod tests {
         std::fs::remove_dir_all(&root).expect("take the folder away");
         let told = next_saying(&rx, |changes| changes.gone);
         assert!(told.gone, "a folder that is not there is said to be gone");
-        assert!(!told.partial, "and not drawn as a folder that is half watched");
+        assert!(!told.capped && !told.unwatched, "and not drawn as a folder that is half watched");
 
         std::fs::create_dir(&root).expect("put it back");
         let told = next_saying(&rx, |changes| !changes.gone);
@@ -718,9 +596,8 @@ mod tests {
     }
 
     /// Staging is the wake-up nothing else here would notice: `git add` writes inside the
-    /// repository's own directory and touches not one byte of the working tree, so the rows the
-    /// face is holding are still right and it still has to be told — the colour beside them is not
-    /// (`AMB-D-774`).
+    /// repository's own directory and touches not one byte of the working tree, so nothing about
+    /// the folder itself moved — and the colour beside every row of it did (`AMB-D-774`).
     #[test]
     fn staging_something_wakes_the_face_although_nothing_moved() {
         let Some(_) = amenbo_core::sys::git() else {
@@ -747,8 +624,8 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let held = FolderChangesDto {
             root: root.to_string_lossy().into_owned(),
-            changed: Vec::new(),
-            partial: false,
+            capped: false,
+            unwatched: false,
             gone: false,
         };
         let thread = {
@@ -774,9 +651,7 @@ mod tests {
 
         let told = rx.recv_timeout(Duration::from_secs(20)).expect("the face is told");
         assert!(!told.gone);
-        // And what it is told is the same list it was holding: the rows did not move, which is the
-        // whole reason the comparison would have swallowed this one.
-        assert!(told.changed.iter().any(|row| row.path == ["note.md"]));
+        assert!(!told.capped && !told.unwatched);
 
         stop.store(true, Ordering::Relaxed);
         thread.join().expect("the watch thread");
@@ -817,8 +692,8 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let held = FolderChangesDto {
             root: linked.to_string_lossy().into_owned(),
-            changed: Vec::new(),
-            partial: false,
+            capped: false,
+            unwatched: false,
             gone: false,
         };
         let thread = {

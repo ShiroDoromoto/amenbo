@@ -16,12 +16,18 @@
 // | the half-transparent card that follows | a clone of the card's own node, so what follows the pointer is the card rather than a drawing of one |
 // | not selecting text, not opening a menu | 🚨 both are put back by hand below, and neither is optional |
 //
+// A fifth thing the browser never did: scrolling the board while a card is held against its edge.
+// A column runs past the window and the board runs wider than it, so without it a card cannot be
+// carried anywhere it cannot already see (`../core/edgeScroll`).
+//
 // **The two fences are the whole of what makes this usable.** Without the context menu one, a right
 // click during a drag freezes the gesture on all three — macOS delivers no pointer event at all until
 // the menu is dismissed, which reads as "it sometimes sticks". Without `user-select: none`, dragging
 // down a column selects the text it passes over on macOS and Linux (`AMB-T-3755`).
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as CardPress } from "react";
+
+import { flowEdges } from "../core/edgeScroll";
 
 /**
  * How far the pointer travels before a press becomes a drag, in CSS pixels.
@@ -142,6 +148,7 @@ export function useCardDrag(onDrop: (column: string, id: number) => void): {
 
     const stop = () => {
       held.current = null;
+      stopFlow();
       if (frame !== 0) cancelAnimationFrame(frame);
       ghost?.node.remove();
       document.body.classList.remove("is-dragging");
@@ -172,12 +179,23 @@ export function useCardDrag(onDrop: (column: string, id: number) => void): {
       e.stopImmediatePropagation();
     };
 
-    const look = () => {
-      frame = 0;
+    // Where the ghost is drawn and what it is over — both read off `at`, which is why a board that
+    // scrolled under a still hand needs this run again with nothing else having changed.
+    const refresh = () => {
       if (ghost === null) return;
       place(ghost, at);
       setOverColumn(columnUnder(at.x, at.y));
     };
+
+    const look = () => {
+      frame = 0;
+      refresh();
+    };
+
+    // The board flows while the card is held against one of its edges. Nothing before the threshold:
+    // a press that has not travelled is a click, and a click must not scroll the board out from under
+    // itself (`../core/edgeScroll`).
+    const stopFlow = flowEdges(() => (ghost === null ? null : at), refresh);
 
     const move = (e: PointerEvent) => {
       at = { x: e.clientX, y: e.clientY };

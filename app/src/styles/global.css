@@ -538,12 +538,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__dir::before { content: "▸ "; color: var(--c-text-muted); }
 .files__dir[aria-expanded="true"]::before { content: "▾ "; }
 .files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.files__when, .files__where {
-  color: var(--c-text-muted); font-size: var(--fs-xs);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.files__when { margin-left: auto; flex: none; }
-.files__where { display: block; padding-left: var(--s-2); }
+/* What git says about the row (`AMB-D-785`). The colour is the whole mark — no letter beside the
+   name — because the row is one line and the name is what is read on it; a badge would take the
+   width the name needs, on every row, to say what three hues already say. */
+.files__file--git .files__name, .files__dir--git { color: var(--git); }
+.files__file--git-modified, .files__dir--git-modified { --git: var(--c-git-modified); }
+.files__file--git-added, .files__dir--git-added { --git: var(--c-git-added); }
+.files__file--git-untracked, .files__dir--git-untracked { --git: var(--c-git-untracked); }
+/* The pointer still wins, said again here because these rules come after the hover above and a
+   row whose colour did not move under the pointer reads as a row that cannot be pressed. */
+.files__file--git:hover .files__name, .files__dir--git:hover { color: var(--c-accent); }
 /* Reading one file: the way back, the name, and whatever the file turned out to be. */
 .files--reading { gap: var(--s-2); }
 .files__bar { display: flex; align-items: baseline; gap: var(--s-2); }

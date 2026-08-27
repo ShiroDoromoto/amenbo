@@ -221,6 +221,55 @@ steps_cli:
       target: bystander
       present: false
 
+  # The same two joins on the other side. A decision is filed under the very same axes, with the very
+  # same values, so the label face is a way in to a decision as much as to a task — and it is the only
+  # face on this road whose text is held on neither record. The value is the one already worn above, so
+  # what the two arms have to keep apart is which record the placement belongs to, not which word it is.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: outbox
+      dimension: surface
+      value: typography
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: typography
+      target: outbox
+      face: label
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: surface
+      target: outbox
+      face: label
+
+  # And the sides stay apart under it: the word reaches a record on each, and naming a side leaves the
+  # other's placement out — a single set of arms answering for both would show up here as the decision
+  # coming back from a search narrowed to tasks.
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      words: typography
+      target: outbox
+      kind: task
+      present: false
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: typography
+      target: window
+      kind: decision
+      present: false
+
   - type: assert
     domain: task
     op: found

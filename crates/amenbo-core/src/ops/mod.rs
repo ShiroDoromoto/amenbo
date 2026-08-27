@@ -140,6 +140,7 @@ pub(crate) mod test_support {
                 role: crate::model::DimensionRole::None,
                 show_on_card: false,
                 required: false,
+                applies_to: crate::model::DimensionAppliesTo::Both,
                 slug: None,
             },
         )
@@ -389,6 +390,7 @@ mod delete_children_tests {
                 role: DimensionRole::None,
                 show_on_card: false,
                 required: false,
+                applies_to: crate::model::DimensionAppliesTo::Both,
                 slug: None,
             },
         )

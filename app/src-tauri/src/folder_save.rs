@@ -24,6 +24,11 @@
 //! were one file, quietly becoming two. That file is written into directly, and the half-written
 //! window is what it costs.
 //!
+//! **Nothing here tells the watch anything.** A save wakes it like any other write and the face is
+//! told, which is right: what a reader has just saved is a file whose git colour has moved, and
+//! that colour is what the tree draws (`AMB-D-785`). The one thing a save owes the walk is that the
+//! file it writes beside the real one never appears in it ([`crate::folder::SAVING`]).
+//!
 //! **A link is not one of the cases.** `AMB-D-776` was written with three, the third being to write
 //! through a symbolic link at the file it points at; `AMB-D-782` was settled after it and closed
 //! that door on the reading side ([`crate::folder::open_no_follow`]), so a file reached through a
@@ -88,10 +93,6 @@ pub fn folder_save(
 
     if shared { in_place(&target, &bytes) } else { replace(&target, &bytes) }
         .map_err(not_saved)?;
-
-    // Written down before the answer goes back, so the watch already knows this one is ours by the
-    // time the wake-up it caused arrives (`crate::folder_watch::wrote`).
-    crate::folder_watch::wrote(&target);
     Ok(())
 }
 

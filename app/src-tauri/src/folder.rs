@@ -2,11 +2,11 @@
 //!
 //! That door hands out the bytes of one file and says so plainly: a directory is not listed there,
 //! because listing is not what a door that streams bytes is for. The file face asks the other half
-//! of the question — what is in this folder, what changed in it lately, and what does this file
-//! say — and it asks over the command seam, where an answer can be a list.
+//! of the question — what is in this folder, and what does this file say — and it asks over the
+//! command seam, where an answer can be a list.
 //!
 //! **The fence is the project's folders, not a session's.** The face's rows belong to the project:
-//! the tree and what changed in it do not move when the pane beside them is switched (`AMB-T-3602`).
+//! the tree does not move when the pane beside it is switched (`AMB-T-3602`).
 //! So the root a caller may name is a folder the project is bound to, checked against the store
 //! rather than taken on the caller's word, and everything under it is judged the way `fileproto`
 //! judges a path — segment by segment as text, the folders then resolved against the real filesystem,
@@ -22,17 +22,15 @@
 use std::path::{Component, Path, PathBuf};
 
 use amenbo_core::binding::canonical_dir;
-use base64::Engine as _;
 
 use crate::dto::{
-    FolderChangedDto, FolderEntryDto, FolderFileDto, FolderImageDto, FolderLineEndingDto,
-    FolderOversizeDto,
+    FolderEntryDto, FolderFileDto, FolderImageDto, FolderLineEndingDto, FolderOversizeDto,
 };
 use crate::error::CmdError;
 
 /// The floor of the pruning: folders whose contents are the machine's rather than the person's,
 /// pruned whether or not anything says to. A tree that lists them buries what somebody wrote under
-/// what a build wrote, and the walk behind "what changed lately" would return almost nothing else —
+/// what a build wrote, and the walk the watch is laid over would be nearly all build output —
 /// a build touches thousands of files in seconds (`AMB-T-3566`).
 ///
 /// Above this floor the folder speaks for itself: what its `.gitignore` calls noise is noise here
@@ -44,10 +42,10 @@ const PRUNED: [&str; 4] = [".git", "node_modules", "target", "dist"];
 /// (`crate::folder_save`).
 ///
 /// **It is left out of both walks below.** The window it exists in is about a tenth of a
-/// millisecond and the watch waits 400 ms for quiet before it looks, so it is rarely seen — but a
-/// burst arriving around it puts a name nobody wrote into "what changed lately" (`AMB-T-3739`), and
-/// a file appearing in somebody's folder under a name they never chose reads as the app being
-/// broken rather than as the app working.
+/// millisecond and the watch waits 400 ms for quiet before it looks, so it is rarely seen
+/// (`AMB-T-3739`) — but a burst arriving around it draws a row in the tree under a name nobody
+/// wrote, which reads as the app being broken rather than as the app working. The row would go on
+/// standing there too: what takes it away is the next walk, and nothing is bound to happen next.
 ///
 /// **It carries no part of the file's own name.** A name may be 255 bytes and no more, so one built
 /// out of another name plus a front of its own is longer than the filesystem will take for exactly
@@ -67,11 +65,13 @@ const HEAD: usize = 8000;
 /// it and refuses to save.
 const TEXT_CAP: usize = 5 * 1024 * 1024;
 
-/// The largest picture carried whole over the command seam. Past it the reader is told there is a
-/// picture and not made to wait for it.
+/// The largest picture the panel draws, in bytes. Past it the reader is told there is a picture and
+/// not made to wait for it.
 ///
-/// This is the cap on what the **host** holds: the file is read whole into this process before any
-/// of it reaches the webview.
+/// This is the cap on what the **host** holds. The bytes no longer cross the command seam — the
+/// webview fetches them from [`crate::fileproto`] — but that door still reads the file whole into
+/// this process to answer a request with no range on it, so the number guards the same thing it
+/// always did.
 const IMAGE_CAP: u64 = 5 * 1024 * 1024;
 
 /// The largest picture a webview is asked to draw, in pixels — the second cap, and not a
@@ -96,11 +96,8 @@ const PIXEL_CAP: u64 = 100_000_000;
 /// 64 KB for 99.3%. It is one extra read of a file already known to be under the byte cap.
 const JPEG_HEAD: usize = 64 * 1024;
 
-/// How many files "what changed lately" names.
-pub const RECENT: usize = 30;
-
-/// How many names the walk behind it will look at before it stops. A folder someone points the app
-/// at can be anything, and a list of the thirty newest files is not worth an unbounded walk.
+/// How many names the walk behind the watch will look at before it stops. A folder someone points
+/// the app at can be anything, and a set of watches is not worth an unbounded walk.
 const VISIT_CAP: usize = 20_000;
 
 /// The path `segments` name inside the folder `roots[base]`, and which of `roots` it belongs to —
@@ -128,7 +125,12 @@ const VISIT_CAP: usize = 20_000;
 /// `std::fs::canonicalize`'s. On Windows that call answers in the verbatim `\\?\C:\…` form, and a
 /// path in that form is not a path every Win32 entry point takes: `SHOpenWithDialog` rejects it
 /// outright with `E_INVALIDARG` and draws nothing (`AMB-T-3651` measured it on a real machine).
-/// What leaves this fence is handed to the shell, so it leaves in the form the shell accepts.
+///
+/// **That spelling is not guaranteed past 260 characters**, which is where [`canonical_dir`] stops
+/// taking the verbatim front off — a folder bound at 582 characters is answered for in the verbatim
+/// form and so is everything under it (`AMB-T-3749` measured it). A door handing a path to the shell
+/// therefore spells it with [`plain`] rather than trusting what it was given; below 260 that changes
+/// nothing, because what arrives here is already plain.
 pub fn under(
     roots: &[PathBuf],
     base: usize,
@@ -159,43 +161,55 @@ pub fn under(
 
     // Of two nested folders, one spelling is a prefix of the other, so the longer one is the deeper.
     // Both sides are levelled first: on Windows one folder has two spellings, and which one a path
-    // comes back in depends on how long it is (see `levelled`).
-    let compared = levelled(&path);
+    // comes back in depends on how long it is (see `plain`).
+    let compared = plain(&path);
     let owner = roots
         .iter()
         .enumerate()
-        .filter(|(_, root)| compared.starts_with(levelled(root)))
+        .filter(|(_, root)| compared.starts_with(plain(root)))
         .max_by_key(|(_, root)| root.as_os_str().len())?
         .0;
     Some((owner, path))
 }
 
-/// One spelling to compare two paths by, where a machine keeps more than one for the same folder.
+/// The one spelling of a path that both halves of Windows agree on — what two paths are compared
+/// by, and what is handed to anything outside this process.
 ///
 /// **Windows answers in whichever of two spellings a path's length falls into.** [`canonical_dir`]
 /// takes the verbatim front off what the system hands back, but only up to 260 characters — past
-/// that it stays on, because that is the only spelling a path that long works in. So a folder bound
-/// at 249 characters comes back plain and a file 289 characters deep inside it comes back verbatim,
-/// and asking whether the second starts with the first is asking whether a path that begins with
-/// the verbatim front begins with a drive letter: it does not. The fence then turns away a file the
-/// tree is drawing and the filesystem opens without complaint, and the shape that does it is the
-/// most ordinary there is — a folder of ordinary length with one long branch (`AMB-T-3749`
-/// measured it; the reading in `AMB-D-771` had it the other way round).
+/// that it stays on, because that is the only spelling a path that long works in. Two things follow
+/// from the same fact:
 ///
-/// Nothing is levelled anywhere but here. What leaves the fence is the spelling it arrived in,
-/// because the shell takes one of the two and refuses the other (`AMB-T-3651`).
+/// - **Comparing.** A folder bound at 249 characters comes back plain and a file 289 characters deep
+///   inside it comes back verbatim, and asking whether the second starts with the first is asking
+///   whether a path that begins with the verbatim front begins with a drive letter: it does not. The
+///   fence would then turn away a file the tree is drawing and the filesystem opens without
+///   complaint, and the shape that does it is the most ordinary there is — a folder of ordinary
+///   length with one long branch (`AMB-T-3749` measured it; the reading in `AMB-D-771` had it the
+///   other way round).
+/// - **Handing over.** A folder bound *past* 260 characters comes back verbatim itself, and so does
+///   every path [`under`] answers with beneath it. `SHOpenWithDialog` refuses that form with
+///   `E_INVALIDARG` and draws nothing at all (`AMB-T-3651`), so a root long enough kills every door
+///   that goes out to the shell, while the fence itself is perfectly happy.
+///
+/// **Below 260 this is the identity**, since what [`canonical_dir`] handed back was already plain —
+/// which is why spelling a path here changes nothing for an ordinary folder.
+///
+/// What it does not do is ask whether the plain spelling names the same file. [`canonical_dir`] does
+/// ask, and keeps the verbatim front on for a name Win32 reserves; here there is nothing to be
+/// gained by keeping it, because the form the shell refuses is not a form a door can hand over.
 #[cfg(windows)]
-fn levelled(path: &Path) -> std::borrow::Cow<'_, Path> {
+pub fn plain(path: &Path) -> std::borrow::Cow<'_, Path> {
     match without_verbatim(&path.as_os_str().to_string_lossy()) {
-        Some(plain) => std::borrow::Cow::Owned(PathBuf::from(plain)),
+        Some(text) => std::borrow::Cow::Owned(PathBuf::from(text)),
         None => std::borrow::Cow::Borrowed(path),
     }
 }
 
-/// Everywhere else a folder has one spelling, and a name that really holds those characters is a
+/// Everywhere else a path has one spelling, and a name that really holds those characters is a
 /// name somebody wrote.
 #[cfg(not(windows))]
-fn levelled(path: &Path) -> std::borrow::Cow<'_, Path> {
+pub fn plain(path: &Path) -> std::borrow::Cow<'_, Path> {
     std::borrow::Cow::Borrowed(path)
 }
 
@@ -381,8 +395,7 @@ fn shown(root: &Path) -> ignore::WalkBuilder {
     builder
 }
 
-/// The walk the watch and "what changed lately" are drawn from: the floor, plus the repository's
-/// own answer (`AMB-T-3604`).
+/// The walk the watch is laid over: the floor, plus the repository's own answer (`AMB-T-3604`).
 ///
 /// `.gitignore`, the global one and the parents' are all read, so a build directory this project
 /// happens to call `.next` or `__pycache__` drops out without anybody listing it here. A folder
@@ -390,8 +403,8 @@ fn shown(root: &Path) -> ignore::WalkBuilder {
 /// applies.
 ///
 /// **Here the ignore file is doing work a tree does not need done.** A build rewrites thousands of
-/// files a second, and a row of what changed lately that showed them would be a row nobody could
-/// read — in exactly the folders people work in (`AMB-D-786`).
+/// files a second, and a watch laid over every folder it writes in would wake the face without
+/// pause — in exactly the folders people work in (`AMB-D-786`).
 fn walker(root: &Path) -> ignore::WalkBuilder {
     let mut builder = floor(root);
     builder
@@ -446,17 +459,18 @@ pub fn pruned(root: &Path, path: &Path) -> bool {
     })
 }
 
-/// Everything under `root` that a reader would call theirs: the files with when they were last
-/// written, and the folders they are in — which is also the list a watch is installed over
+/// The folders under `root` that a reader would call theirs — the list a watch is installed over
 /// (`crate::folder_watch`).
 ///
+/// **The files are walked past and not carried.** Nothing reads them any more: the tree asks for
+/// one level at a time as it is opened, and what has changed in the folder is git's answer rather
+/// than a list of the newest names (`AMB-D-785`). What that leaves out is the `modified` of every
+/// file in the tree — one `stat` per name, which is 26-44% of what this walk cost.
+///
 /// The walk is capped rather than trusted to end: a folder somebody points the app at can be
-/// anything, and neither a list of the thirty newest files nor a set of watches is worth an
-/// unbounded one. `capped` is true when the cap is what stopped it, which is the one thing the
-/// caller cannot work out from the answer.
+/// anything, and a set of watches is not worth an unbounded one. `capped` is true when the cap is
+/// what stopped it, which is the one thing the caller cannot work out from the answer.
 pub struct Scan {
-    /// Every file, most recently written first, as segments from the root.
-    pub files: Vec<(std::time::SystemTime, Vec<String>)>,
     /// Every folder walked, `root` included — one watch each.
     pub dirs: Vec<PathBuf>,
     /// Whether the walk stopped at the cap rather than at the end of the tree.
@@ -464,7 +478,6 @@ pub struct Scan {
 }
 
 pub fn scan(root: &Path) -> Scan {
-    let mut files = Vec::new();
     let mut dirs = Vec::new();
     let mut visited = 0usize;
     let mut capped = false;
@@ -476,34 +489,14 @@ pub fn scan(root: &Path) -> Scan {
             capped = true;
             break;
         }
-        let path = entry.path();
+        // The files are still walked — they are what the cap counts, and a folder is only reached
+        // by walking what is beside it — but nothing is kept of them.
         if entry.file_type().is_some_and(|t| t.is_dir()) {
-            dirs.push(path.to_path_buf());
-            continue;
+            dirs.push(entry.path().to_path_buf());
         }
-        let Ok(segments) = path.strip_prefix(root) else { continue };
-        let Ok(meta) = entry.metadata() else { continue };
-        let Ok(modified) = meta.modified() else { continue };
-        files.push((
-            modified,
-            segments.iter().map(|s| s.to_string_lossy().into_owned()).collect(),
-        ));
     }
 
-    files.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
-    Scan { files, dirs, capped }
-}
-
-/// The rows "what changed lately" is drawn from: the newest of a scan, in the shape the panel reads.
-pub fn recent(scan: &Scan) -> Vec<FolderChangedDto> {
-    scan.files
-        .iter()
-        .take(RECENT)
-        .map(|(modified, path)| FolderChangedDto {
-            path: path.clone(),
-            modified: chrono::DateTime::<chrono::Utc>::from(*modified).to_rfc3339(),
-        })
-        .collect()
+    Scan { dirs, capped }
 }
 
 /// The names directly inside one folder — folders first, then files, each run in the order a person
@@ -548,11 +541,15 @@ pub fn folder_entries(
 /// The face has an editor of its own, and this is still worth having: what it opens a file in is
 /// whatever the person already opens that kind of file with. The OS decides what that is, and Amenbo
 /// does not keep an opinion about it.
+///
+/// The path goes out through [`plain`] because this is a door out of the process: past 260
+/// characters the fence answers in Windows's internal spelling, and what is on the other side of
+/// this call is the shell (`AMB-T-3749`).
 #[tauri::command]
 pub fn folder_open_file(project_id: i64, root: String, path: Vec<String>) -> Result<(), CmdError> {
     let (roots, base) = rooted(project_id, &root)?;
     let (_owner, file) = under(&roots, base, &path).ok_or_else(gone)?;
-    tauri_plugin_opener::open_path(&file, None::<&str>)
+    tauri_plugin_opener::open_path(plain(&file).as_ref(), None::<&str>)
         .map_err(|e| CmdError::coded("folder.open", e.to_string(), serde_json::Value::Null))
 }
 
@@ -561,21 +558,29 @@ pub fn folder_open_file(project_id: i64, root: String, path: Vec<String>) -> Res
 /// It is the other half of opening: what a person wants of a file is as often "where is this" as
 /// "what is in it", and a panel that could only read would leave them hunting for a path they can
 /// already see.
+///
+/// Spelled with [`plain`] for the same reason as [`folder_open_file`]: the file manager is outside
+/// this process, and the plugin's own levelling stops at 260 characters where ours does not
+/// (`dunce::simplified`, which it calls, keeps the verbatim front on past that).
 #[tauri::command]
 pub fn folder_reveal_file(project_id: i64, root: String, path: Vec<String>) -> Result<(), CmdError> {
     let (roots, base) = rooted(project_id, &root)?;
     let (_owner, file) = under(&roots, base, &path).ok_or_else(gone)?;
-    tauri_plugin_opener::reveal_item_in_dir(&file)
+    tauri_plugin_opener::reveal_item_in_dir(plain(&file).as_ref())
         .map_err(|e| CmdError::coded("folder.reveal", e.to_string(), serde_json::Value::Null))
 }
 
-/// What one file has to show: its text, or its picture, or why the picture is not here, or none of
-/// those.
+/// What one file has to show: its text, or that it is a picture and of what type, or why the
+/// picture is not drawn, or none of those.
 ///
 /// The head is read once and answers both questions — whether there is a NUL in it, and what the
 /// first bytes say the file is — so a name is never consulted about either. Only what that head
 /// settles on is then read further: the text up to its cap, or a JPEG's front far enough to reach
 /// the frame header. A file that is neither is never read past the head at all.
+///
+/// **A picture is never read whole here.** Its bytes reach the webview through
+/// [`crate::fileproto`], which the caller can address because it named this file by the same
+/// project, folder and path (`AMB-D-783`).
 #[tauri::command]
 pub fn folder_read(
     project_id: i64,
@@ -642,14 +647,12 @@ pub fn folder_read(
     let pixels = measure(mime, &front);
 
     if carriable(size, pixels) {
-        let image = read_whole(&file).ok().map(|whole| FolderImageDto {
-            mime: mime.to_string(),
-            base64: base64::engine::general_purpose::STANDARD.encode(whole),
-        });
+        // The bytes are not read here: what the panel is handed is the type, and it asks
+        // fileproto for the picture itself at the path it named this call with.
         return Ok(FolderFileDto {
             text: None,
             truncated: false,
-            image,
+            image: Some(FolderImageDto { mime: mime.to_string() }),
             oversize: None,
             encoding: None,
             bom: false,
@@ -871,14 +874,6 @@ fn read_head(path: &Path, cap: usize) -> std::io::Result<Vec<u8>> {
     Ok(buf)
 }
 
-/// The whole of a file, opened the way its head was — a picture is carried entire or not at all.
-fn read_whole(path: &Path) -> std::io::Result<Vec<u8>> {
-    use std::io::Read as _;
-    let mut buf = Vec::new();
-    open_no_follow(path)?.read_to_end(&mut buf)?;
-    Ok(buf)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1058,34 +1053,38 @@ mod tests {
 
     /// The floor is pruned whether or not anything says so, and what the folder's own ignore file
     /// calls noise is noise here too — the point of taking ripgrep's walker rather than reading the
-    /// directory (`AMB-T-3604`). A dotfile is not noise: it is a file somebody wrote.
+    /// directory (`AMB-T-3604`). A folder whose name starts with a dot is not noise: it is a folder
+    /// somebody made.
     #[test]
     fn the_folder_says_what_of_it_is_the_machines() {
         let dir = tempfile::tempdir().expect("a temp dir");
         let root = dir.path();
-        std::fs::create_dir_all(root.join("node_modules")).expect("the machine's folder");
-        std::fs::create_dir_all(root.join("build")).expect("this project's own");
-        std::fs::write(root.join(".gitignore"), "build/\n*.log\n").expect("the ignore file");
-        std::fs::write(root.join("node_modules/x.js"), b"built").expect("a file");
-        std::fs::write(root.join("build/out.js"), b"built").expect("a file");
-        std::fs::write(root.join("run.log"), b"noise").expect("a file");
-        std::fs::write(root.join(".amenbo"), b"pointer").expect("a file");
-        std::fs::write(root.join("notes.md"), b"mine").expect("a file");
+        std::fs::create_dir_all(root.join("node_modules/left-pad")).expect("the machine's folder");
+        std::fs::create_dir_all(root.join("build/out")).expect("this project's own");
+        std::fs::create_dir_all(root.join("notes")).expect("somebody's folder");
+        std::fs::create_dir_all(root.join(".github")).expect("a dot folder is somebody's too");
+        std::fs::write(root.join(".gitignore"), "build/\n").expect("the ignore file");
 
         let found = scan(root);
-        let names: Vec<String> = found.files.iter().map(|(_, p)| p.join("/")).collect();
-        assert!(names.contains(&"notes.md".to_string()));
-        assert!(names.contains(&".amenbo".to_string()), "a dotfile is somebody's: {names:?}");
-        assert!(names.contains(&".gitignore".to_string()));
-        for gone in ["node_modules/x.js", "build/out.js", "run.log"] {
-            assert!(!names.contains(&gone.to_string()), "{gone} is the machine's: {names:?}");
-        }
-        // Every folder the walk kept is one the watch is laid over, the root included.
+        let kept: Vec<String> = found
+            .dirs
+            .iter()
+            .filter_map(|d| d.strip_prefix(root).ok())
+            .map(|d| d.to_string_lossy().into_owned())
+            .collect();
+        // The root is one of them: it is watched like every folder under it.
         assert!(found.dirs.contains(&root.to_path_buf()));
-        assert!(!found.dirs.iter().any(|d| d.ends_with("node_modules")));
+        assert!(kept.iter().any(|d| d == "notes"), "{kept:?}");
+        assert!(kept.iter().any(|d| d == ".github"), "a dot folder is somebody's: {kept:?}");
+        for gone in ["node_modules", "build"] {
+            assert!(
+                !kept.iter().any(|d| d.starts_with(gone)),
+                "{gone} is the machine's: {kept:?}",
+            );
+        }
     }
 
-    /// The tree and the row of what changed lately part company at the ignore file, and only
+    /// The tree and the walk the watch is laid over part company at the ignore file, and only
     /// there: what a repository ignores is a file somebody wrote, and the tree says so by drawing
     /// it as ignored rather than by leaving it out (`AMB-D-786`). The floor is under both.
     #[test]
@@ -1122,14 +1121,35 @@ mod tests {
 
         // And the walk the watch is laid over has not moved: what is ignored is still out of it.
         let found = scan(root);
-        let names: Vec<String> = found.files.iter().map(|(_, p)| p.join("/")).collect();
-        assert!(names.contains(&"notes.md".to_string()));
-        for gone in [".env", "build/out.js", "node_modules/x.js"] {
-            assert!(!names.contains(&gone.to_string()), "{gone} is not what changed: {names:?}");
+        for gone in ["build", "node_modules"] {
+            assert!(
+                !found.dirs.iter().any(|d| d.ends_with(gone)),
+                "{gone} is not watched: {:?}",
+                found.dirs,
+            );
         }
     }
 
-    /// The two spellings Windows keeps for one folder are levelled before they are compared — and
+    /// Past 260 characters the verbatim front is not a spelling Windows is offering as one of two —
+    /// it is the only one `canonicalize` will answer in, and `dunce` leaves it on for that reason
+    /// (`is_safe_to_strip_unc` refuses anything longer). A door out to the shell has to take it off
+    /// anyway: `SHOpenWithDialog` refuses the verbatim form outright and draws nothing at all
+    /// (`AMB-T-3651`), so keeping it means every door under a folder bound that long is dead while
+    /// the fence itself reports no trouble.
+    ///
+    /// So this is deliberately not `dunce::simplified`: length is not a reason to keep it here.
+    #[test]
+    fn a_path_too_long_for_dunce_is_still_spelled_plainly_for_the_shell() {
+        let root = format!(r"\\?\C:\{}", "folder-with-a-long-name\\".repeat(12));
+        assert!(root.len() > 260, "the shape this is about is one dunce refuses: {}", root.len());
+        assert_eq!(
+            without_verbatim(&root).as_deref(),
+            Some(root.trim_start_matches(r"\\?\")),
+            "the front comes off however long the path is",
+        );
+    }
+
+    /// The two spellings Windows keeps for one folder are levelled to one before they are compared —
     /// the network one is not the disk one, so taking the front off a share has to leave a path
     /// that still names the server.
     #[test]
@@ -1159,22 +1179,6 @@ mod tests {
         assert!(!pruned(root, &root.join("targets/plan.md")));
         // Somewhere else entirely says nothing about this folder, so it is not thrown away.
         assert!(!pruned(root, Path::new("/elsewhere/target/x.o")));
-    }
-
-    /// Newest first, because that is the whole of what the row says: what was written last.
-    #[test]
-    fn the_newest_file_is_named_first() {
-        let dir = tempfile::tempdir().expect("a temp dir");
-        let root = dir.path();
-        std::fs::write(root.join("older.txt"), b"a").expect("a file");
-        // Written one after the other, and the clock has to have moved between them for the order
-        // to mean anything.
-        std::thread::sleep(std::time::Duration::from_millis(20));
-        std::fs::write(root.join("newer.txt"), b"b").expect("a file");
-
-        let rows = recent(&scan(root));
-        let names: Vec<&str> = rows.iter().map(|r| r.path[0].as_str()).collect();
-        assert_eq!(names, ["newer.txt", "older.txt"]);
     }
 
     /// A picture with a bare header of the given form, long enough to be measured and nothing more.

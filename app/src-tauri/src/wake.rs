@@ -25,7 +25,7 @@
 //! anyone can act on is noise in the one log that is meant to be read.
 //!
 //! **The webview never names a program.** What crosses is a catalogued id; the command it becomes is
-//! read out of [`amenbo_core::harness::HARNESSES`] on this side. A pane is a shell with a command
+//! read out of [`amenbo_core::harness::LAUNCHES`] on this side. A pane is a shell with a command
 //! line, so an id that turned into whatever string arrived would be a shell injection with a webview
 //! at the other end of it.
 
@@ -75,17 +75,22 @@ pub fn wake_choices(project: Option<i64>, folders: Vec<String>) -> Result<WakeDt
     answer(None, weighed(&found), project)
 }
 
-/// Every catalogued provider, told apart by what this machine can start.
+/// Every provider Amenbo can start, told apart by what this machine can start.
 fn weighed(found: &[amenbo_core::harness::Wiring]) -> Vec<wake::Candidate> {
-    let commands: Vec<&str> = amenbo_core::harness::HARNESSES
+    let commands: Vec<&str> = amenbo_core::harness::LAUNCHES
         .iter()
-        .map(|h| h.command)
+        .map(|one| one.command)
         .collect();
     let installed = crate::launch::installed(&commands);
     wake::candidates(found, |cmd| installed.iter().any(|one| one == cmd))
 }
 
 /// The candidates and the project's answer, in the shape a face reads.
+///
+/// `offered` is the row and `settled` is what a press opens with, and the two are drawn from
+/// different lists on purpose ([`amenbo_core::wake::offered`] against
+/// [`amenbo_core::wake::startable`]): the row names every agent so an uninstalled one can be seen
+/// and installed, while the answer is only ever one this machine can start.
 fn answer(
     folder: Option<String>,
     candidates: Vec<wake::Candidate>,

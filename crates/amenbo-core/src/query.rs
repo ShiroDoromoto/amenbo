@@ -2245,8 +2245,9 @@ pub struct HitStanding {
     pub status: String,
     /// How urgent it is — tasks only, and only where one was set.
     pub priority: Option<String>,
-    /// What it is filed under — tasks only, in axis order, and empty for a task placed on no axis. It is
-    /// also what a hit on the label face landed in, so a row can show why it came back.
+    /// What it is filed under, in axis order, and empty for a record placed on no axis — a decision
+    /// carries a classification as well (`AMB-D-781`). It is also what a hit on the label face landed
+    /// in, so a row can show why it came back.
     pub labels: Vec<HitLabel>,
 }
 
@@ -2483,23 +2484,25 @@ fn stand(
     )
     .map_err(crate::error::engine_on(conn))?;
 
+    // The two sides' placements read the same way, off whichever map the side keeps them in.
+    let labels = |from: &std::collections::HashMap<i64, Vec<(String, String)>>, id: i64| -> Vec<HitLabel> {
+        from.get(&id)
+            .into_iter()
+            .flatten()
+            .map(|(axis, value)| HitLabel { axis: axis.clone(), value: value.clone() })
+            .collect()
+    };
     for hit in hits.iter_mut() {
         hit.standing = match owner(hit) {
             Some((TypedKind::Task, id)) => rows.tasks.get(&id).map(|(status, priority)| HitStanding {
                 status: status.as_str().to_string(),
                 priority: priority.map(|p| p.as_str().to_string()),
-                labels: rows
-                    .labels
-                    .get(&id)
-                    .into_iter()
-                    .flatten()
-                    .map(|(axis, value)| HitLabel { axis: axis.clone(), value: value.clone() })
-                    .collect(),
+                labels: labels(&rows.labels, id),
             }),
             Some((TypedKind::Decision, id)) => rows.decisions.get(&id).map(|status| HitStanding {
                 status: status.as_str().to_string(),
                 priority: None,
-                labels: Vec::new(),
+                labels: labels(&rows.decision_labels, id),
             }),
             None => None,
         };
@@ -2919,6 +2922,7 @@ mod filter_tests {
                     role,
                     show_on_card: false,
                     required: false,
+                    applies_to: crate::model::DimensionAppliesTo::Both,
                     slug: None,
                 },
             )
@@ -3005,6 +3009,7 @@ mod filter_tests {
                     role,
                     show_on_card: false,
                     required: false,
+                    applies_to: crate::model::DimensionAppliesTo::Both,
                     slug: None,
                 },
             )
@@ -3075,6 +3080,7 @@ mod filter_tests {
                     role,
                     show_on_card: false,
                     required: false,
+                    applies_to: crate::model::DimensionAppliesTo::Both,
                     slug: None,
                 },
             )
@@ -3279,8 +3285,8 @@ mod filter_tests {
     }
 
     /// Every row says where its record stands, so a reader can tell a task still to be done from one that
-    /// is over without opening either (`AMB-D-567`). A task carries its status, its priority and what it
-    /// is filed under; a decision carries its status and nothing a decision does not have.
+    /// is over without opening either (`AMB-D-567`). Both sides carry their status and what they are
+    /// filed under (`AMB-D-781`); the priority is the task's alone.
     #[test]
     fn every_hit_says_where_its_record_stands() {
         let e = new_engine();
@@ -3309,7 +3315,7 @@ mod filter_tests {
         .expect("add dimension");
         let value = ops::dimension::value_add(tx, axis.id, "コア", None).expect("add value");
         ops::dimension::set(tx, t, value.id).expect("place the task on the axis");
-        ops::decision::add(
+        let d = ops::decision::add(
             tx,
             ops::decision::NewDecision {
                 title: "索引をどう引くか".to_string(),
@@ -3318,6 +3324,7 @@ mod filter_tests {
             },
         )
         .expect("add decision");
+        ops::dimension::set_on_decision(tx, d.id, value.id).expect("file the decision under the axis");
 
         let r = search(
             tx.conn(),
@@ -3339,7 +3346,11 @@ mod filter_tests {
         let d = decision_hit.standing.as_ref().expect("the decision's standing");
         assert_eq!(d.status, "proposed");
         assert_eq!(d.priority, None, "a decision has no priority to carry");
-        assert!(d.labels.is_empty(), "and nothing is filed under an axis but a task");
+        assert_eq!(
+            d.labels.iter().map(|l| (l.axis.as_str(), l.value.as_str())).collect::<Vec<_>>(),
+            [("面", "コア")],
+            "but it is filed under an axis just as a task is"
+        );
     }
 
     /// A hit carries a snippet, so `search` is the one read that **has** a ceiling of its own: no limit

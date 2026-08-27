@@ -574,6 +574,8 @@ export const fr: Translation = {
     "files.noFolder": "Ce projet n'a pas encore de dossier.",
     "files.folderGone": "Ce dossier n'est plus là.",
     "files.back": "Retour à la liste",
+    "files.edit": "Modifier",
+    "files.read": "Lire",
     "files.reopenWith": "Rouvrir avec un encodage",
     "files.lineEndingMixed": "Fins de ligne mélangées",
     "files.openWith": "Ouvrir avec l'application habituelle",

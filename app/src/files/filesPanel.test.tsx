@@ -737,6 +737,57 @@ describe("the file face", () => {
     expect(container.querySelector("h1")?.textContent).toBe("A heading");
   });
 
+  /** The text is what the file holds and the rendering is a view of it (`AMB-D-41`). Until now the
+   *  one kind of file an agent writes most was the one kind nobody could correct: `.md` went to the
+   *  renderer and never to the editor. */
+  it("switches a Markdown file between what it draws and the text it is", async () => {
+    hoisted.file = aFile({ text: "# A heading" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    // It opens on the rendering: what a person opens a Markdown file for is to read it.
+    expect(container.querySelector("h1")?.textContent).toBe("A heading");
+    expect(hoisted.editing).toHaveLength(0);
+
+    await click(button(t("files.edit")));
+    await settle();
+    expect(container.querySelector("h1")).toBeNull();
+    expect(last(hoisted.editing)).toEqual({ text: "# A heading", editable: true, name: "a.md" });
+
+    await click(button(t("files.read")));
+    await settle();
+    expect(container.querySelector("h1")?.textContent).toBe("A heading");
+  });
+
+  it("draws no switch on a file there is only one way to show", async () => {
+    hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
+    hoisted.file = aFile({ text: "echo hi" });
+    await drawOpen();
+    await click(button("run.sh"));
+    await settle();
+    // A switch with nowhere to switch to is a control that answers nothing.
+    expect(button(t("files.edit"))).toBeUndefined();
+    expect(button(t("files.read"))).toBeUndefined();
+  });
+
+  /** A choice that outlived the file would be a setting nobody set: one edit, and every Markdown
+   *  file afterwards opens as source — the ones they only wanted to read included.
+   *
+   *  Driven through a path clicked in a pane, which is the one road that changes the file under a
+   *  reader that stays on the screen. Going back to the list and picking another row takes the
+   *  reader off the page and would prove only that a fresh one starts fresh. */
+  it("opens the next Markdown file on the rendering, whatever the last one was left on", async () => {
+    hoisted.file = aFile({ text: "# A heading" });
+    await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 1 } });
+    await click(button(t("files.edit")));
+    await settle();
+    expect(container.querySelector("h1")).toBeNull();
+
+    await draw({ show: { target: "notes/b.md", cwd: ROOT, nth: 2 } });
+    expect(hoisted.asked).toContain(`read:${ROOT}:notes/b.md`);
+    expect(container.querySelector("h1")?.textContent).toBe("A heading");
+  });
+
   it("draws a name the repository ignores, and draws it faintly", async () => {
     hoisted.entries[""] = [
       { name: "src", isDir: true, ignored: false },
@@ -1020,23 +1071,33 @@ describe("the file face", () => {
     });
 
     /** A file the panel could never write back has no way to save it at all — not a control that
-     *  refuses, which would be a promise it cannot keep. Markdown is drawn rather than edited, so
-     *  it has none either (`AMB-T-3807`). */
+     *  refuses, which would be a promise it cannot keep. */
     it("offers no way to save a file it could not write back", async () => {
       await open({ truncated: true, clean: false });
       expect(button(t("files.saved"))).toBeUndefined();
       expect(button(t("files.save"))).toBeUndefined();
+    });
 
-      await click(button(t("files.back")));
-      await settle();
+    /** A Markdown file being drawn is not a file that cannot be written back — it is one whose text
+     *  is not on the screen. There is no editor on the rendering, so a save there would have nothing
+     *  to write; the switch beside the name is what puts the text up, and the save with it. */
+    it("offers the save on a Markdown file once its text is the thing on the screen", async () => {
       hoisted.entries[""] = [{ name: "notes.md", isDir: false, ignored: false }];
       hoisted.file = aFile({ text: "# a heading", encoding: "UTF-8" });
-      await draw();
-      await click(button(t("files.tree")));
-      await settle();
+      await drawOpen();
       await click(button("notes.md"));
       await settle();
       expect(container.querySelector("h1")).not.toBeNull();
+      expect(button(t("files.saved"))).toBeUndefined();
+
+      await click(button(t("files.edit")));
+      await settle();
+      expect(button(t("files.saved"))).toBeDefined();
+
+      // And it goes again with the rendering, rather than standing over a document nobody can type
+      // into.
+      await click(button(t("files.read")));
+      await settle();
       expect(button(t("files.saved"))).toBeUndefined();
     });
   });

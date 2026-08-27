@@ -1019,7 +1019,14 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   // rows open, opened here because this is the one state a reader reaches it from with no row under
   // the pointer.
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  // Whether a Markdown file is being shown as the text it is rather than as what that text draws.
+  // **It goes back with every file opened**, deliberately: what a person opens a Markdown file for
+  // is to read it, and a choice that outlived the file would be a setting nobody set — one edit and
+  // every Markdown file afterwards opens as source, the ones they only wanted to read included.
+  const [asText, setAsText] = useState(false);
   const name = path[path.length - 1];
+  // The one thing the name decides, and the only file there are two ways to show (`MARKDOWN`).
+  const markdown = MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext));
 
   // A different file is a different question: what the reader named was this file's encoding, and
   // carrying it to the next one would open that one in an encoding nobody chose for it.
@@ -1029,6 +1036,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
     let alive = true;
     setFile(null);
     setFailed(false);
+    setAsText(false);
     setEdited(false);
     setRefused(null);
     setNewline(null);
@@ -1045,13 +1053,16 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
 
   // Whether this file is one the panel can write back at all. The host says so before a reader has
   // typed a character: a file cut at the read cap, or one whose bytes and text do not round-trip,
-  // is drawn read-only from the start (`AMB-D-773`). Markdown is drawn rather than edited, so there
-  // is nothing to save there either (`AMB-T-3807` is where that changes).
+  // is drawn read-only from the start (`AMB-D-773`).
+  //
+  // **A Markdown file being drawn is not one of them.** There is no editor on the rendering, so
+  // there is no text to write and nothing a save could mean — the switch beside the name is what
+  // makes it savable, by putting the text on the screen.
   const savable = file?.text !== undefined
     && file.encoding !== undefined
     && !file.truncated
     && file.clean
-    && !MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext));
+    && (!markdown || asText);
 
   const save = async () => {
     const read = typed.current;
@@ -1095,6 +1106,15 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
       <div className="files__bar">
         <button className="files__back" onClick={onBack}>{t("files.back")}</button>
         <span className="files__name" title={path.join("/")}>{name}</span>
+        {/* Drawn for a Markdown file and for nothing else: every other file has one way to be shown,
+            and a switch with nowhere to switch to is a control that answers nothing. What it says is
+            where it goes rather than where it is — the reader can see where they are, and the name
+            beside it is what has to stay legible on a panel this narrow. */}
+        {file?.text !== undefined && markdown && (
+          <button className="files__view" onClick={() => setAsText((was) => !was)}>
+            {t(asText ? "files.read" : "files.edit")}
+          </button>
+        )}
         {/* What the bytes were read as, said on the row the file is named on. The guess reports no
             confidence and breaks nothing visible when it is wrong, so the reader is the only one
             who can catch it — and they can only catch it if they are told what was guessed
@@ -1136,8 +1156,11 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
             src={fileUrl(projectId, root, path, file.image.mime)}
           />
         )}
+        {/* The text is what the file holds and the rendering is a view of it (`AMB-D-41`), so the
+            editor is reachable for a Markdown file too — otherwise the one kind of file an agent
+            writes most is the one kind nobody could correct. */}
         {file?.text !== undefined && (
-          MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext))
+          markdown && !asText
             ? <RefNavProvider value={nav}><Markdown>{file.text}</Markdown></RefNavProvider>
             : (
               <FileEditor

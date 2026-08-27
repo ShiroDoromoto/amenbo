@@ -575,6 +575,8 @@ export const ptBR: Translation = {
     "files.noFolder": "Este projeto ainda não tem pasta.",
     "files.folderGone": "Esta pasta não está mais lá.",
     "files.back": "Voltar para a lista",
+    "files.edit": "Editar",
+    "files.read": "Ler",
     "files.reopenWith": "Reabrir com uma codificação",
     "files.lineEndingMixed": "Fins de linha misturados",
     "files.openWith": "Abrir com o aplicativo de sempre",

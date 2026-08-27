@@ -553,6 +553,8 @@ export const hi: Translation = {
     "files.noFolder": "इस प्रोजेक्ट का अभी कोई फ़ोल्डर नहीं है।",
     "files.folderGone": "यह फ़ोल्डर अब मौजूद नहीं है।",
     "files.back": "सूची पर वापस",
+    "files.edit": "संपादित करें",
+    "files.read": "पढ़ें",
     "files.reopenWith": "किसी एन्कोडिंग के साथ फिर से खोलें",
     "files.lineEndingMixed": "मिली-जुली पंक्ति-अंत",
     "files.openWith": "सामान्य ऐप में खोलें",

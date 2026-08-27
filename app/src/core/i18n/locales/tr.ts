@@ -553,6 +553,8 @@ export const tr: Translation = {
     "files.noFolder": "Bu projenin henüz bir klasörü yok.",
     "files.folderGone": "Bu klasör artık yok.",
     "files.back": "Listeye dön",
+    "files.edit": "Düzenle",
+    "files.read": "Oku",
     "files.reopenWith": "Bir kodlamayla yeniden aç",
     "files.lineEndingMixed": "Karışık satır sonları",
     "files.openWith": "Her zamanki uygulamayla aç",

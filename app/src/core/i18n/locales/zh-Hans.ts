@@ -553,6 +553,8 @@ export const zhHans: Translation = {
     "files.noFolder": "这个项目还没有文件夹。",
     "files.folderGone": "这个文件夹已经不在了。",
     "files.back": "返回列表",
+    "files.edit": "编辑",
+    "files.read": "阅读",
     "files.reopenWith": "指定字符编码重新打开",
     "files.lineEndingMixed": "换行符混用",
     "files.openWith": "用常用的应用打开",

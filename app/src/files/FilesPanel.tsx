@@ -5,6 +5,12 @@
 // folder the project is bound to, so switching panes does not move them — what changed in the
 // repository is the same question whichever terminal is in front of it.
 //
+// **Every bound folder is drawn, each in a section of its own** (`AMB-D-778`). A project with one
+// folder is drawn without a heading, because a heading over the only thing on the screen names
+// nothing the reader could confuse it with. A folder that has gone keeps its section and says so:
+// dropped from the list it would look like one nobody ever bound, and the reader would have no way
+// to tell a folder that moved from a binding they removed.
+//
 // **What changed lately is watched, not asked for.** The host lays a watch over the folder and
 // says what is in it as it moves (`crate::folder_watch`), so the row is right while a person is
 // looking at it rather than as of whenever this side last thought to ask. What it cannot watch —
@@ -36,11 +42,33 @@ import {
   folderUnwatch, folderWatch, onFolderChanged,
 } from "./folder";
 import { MemoPage } from "./MemoPage";
-import { fileUnder } from "./fileUnder";
+import { fileUnderAny } from "./fileUnder";
+import { sectionsOf } from "./sections";
 import { Icon } from "../components/Icon";
 
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
 const MARKDOWN = [".md", ".markdown"];
+
+/**
+ * Where a dragged file would land: the bound folder, and the folder inside it as its segments joined
+ * ("" being the bound folder itself).
+ *
+ * Both halves are needed because every section draws a row for its own root, and two sections have a
+ * `src` each — a landing that said only `src` would light one up in both.
+ */
+type Landing = { root: string; into: string };
+
+/** The row under the pointer, read as a landing — its folder and its path, or nothing off a row. */
+function landingOf(el: Element | null | undefined): Landing | null {
+  const into = el?.getAttribute("data-into");
+  if (into === null || into === undefined) return null;
+  return { root: el?.getAttribute("data-root") ?? "", into };
+}
+
+/** Whether this folder of this section is the one a drop would land in. */
+function landed(landing: Landing | null, root: string, into: string | undefined): boolean {
+  return into !== undefined && landing?.root === root && landing.into === into;
+}
 
 export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose }: {
   /** The project whose folder the face is rooted at; nothing is drawn without one. */
@@ -71,56 +99,40 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // `0` names no project, which is what the folder read then answers with: none. A window with no
   // project on it draws the invitation, the same as one whose project has no folder.
   const folders = useBoundFolders(projectId ?? 0);
-  const root = folders.live[0]?.path ?? null;
-  const [changes, setChanges] = useState<FolderChangesDto>(
-    { root: "", changed: [], partial: false, gone: false },
-  );
-  const [treeOpen, setTreeOpen] = useState(false);
-  const [reading, setReading] = useState<string[] | null>(null);
+  // Every folder recorded rather than every folder that is there: one that has gone is a section
+  // saying so, and it can only say so if it is still on the list.
+  const sections = useMemo(() => sectionsOf(folders.all), [folders.all]);
+  const live = folders.live.map((one) => one.path);
+  // Which file is being read, and which folder it is in. The folder travels with the path because
+  // the same path means a different file in each section.
+  const [reading, setReading] = useState<{ root: string; path: string[] } | null>(null);
   // The file a right-click was on, and where the pointer was. One menu for the face rather than one
   // per row: only one can be open, and a row that held its own would keep it after the list moved
   // under it (`AMB-T-3605`).
-  const [menu, setMenu] = useState<{ path: string[]; x: number; y: number } | null>(null);
-  // The folder a file being dragged in would land in, spelled as its segments from the root ("" is
-  // the root itself), or null while nothing is over the panel.
-  const [landing, setLanding] = useState<string | null>(null);
+  const [menu, setMenu] = useState<
+    { root: string; path: string[]; x: number; y: number } | null
+  >(null);
+  // Where a file being dragged in would land: which bound folder, and which folder inside it ("" is
+  // the bound folder itself). Null while nothing is over the panel. The folder is half of it because
+  // every section has a row for its own root, and the same path inside two of them is two places.
+  const [landing, setLanding] = useState<Landing | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
-  // A path clicked in a pane. It opens only where it lands inside the folder this face is rooted at
-  // — the same fence the host applies. One that lands outside opens nothing: the pane keeps the
-  // characters it drew, and no reader is shown a file from somewhere this face cannot answer for
-  // (`AMB-D-747`).
+  // A path clicked in a pane. It opens only where it lands inside one of the folders this face is
+  // rooted at — the same fence the host applies. One that lands outside opens nothing: the pane
+  // keeps the characters it drew, and no reader is shown a file from somewhere this face cannot
+  // answer for (`AMB-D-747`).
+  const roots = live.join("\0");
   useEffect(() => {
-    if (show === undefined || show === null || root === null) return;
-    const path = fileUnder(root, show.cwd, show.target);
+    if (show === undefined || show === null) return;
+    const found = fileUnderAny(live, show.cwd, show.target);
     // A file asked for is a file to be looked at: the panel comes back off the page to show it.
-    if (path) {
-      setReading(path);
+    if (found) {
+      setReading(found);
       onTab("files");
     }
-    // `nth` is what makes the same file asked for twice two answers.
-  }, [show?.nth, root]);
-
-  useEffect(() => {
-    if (projectId === null || root === null) return;
-    let alive = true;
-    // Subscribed before the watch is asked for: the first thing the folder does could happen while
-    // the host is still walking it, and a listener set up afterwards would miss exactly that.
-    // Every watched folder is told about through the one listener, and this face is rooted at one of
-    // them — so an answer about another folder is not this row's news.
-    const listening = onFolderChanged((fresh) => {
-      if (alive && fresh.root === root) setChanges(fresh);
-    });
-    void folderWatch(projectId, root)
-      .then((now) => { if (alive) setChanges(now); })
-      .catch(() => {
-        if (alive) setChanges({ root, changed: [], partial: false, gone: false });
-      });
-    return () => {
-      alive = false;
-      void listening.then((stop) => stop());
-      void folderUnwatch(root);
-    };
-  }, [projectId, root]);
+    // `nth` is what makes the same file asked for twice two answers, and the folders are joined
+    // because the array itself is rebuilt on every render.
+  }, [show?.nth, roots]);
 
   // Files dragged in from the desktop. The panel hears about them from the host rather than from
   // the DOM, so the highlight under the pointer — and the scroll when the pointer hangs at an edge —
@@ -131,13 +143,13 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // highlight says is which folder the paths would be handed to, which is the half of this that has
   // to be right on all three operating systems.
   useEffect(() => {
-    if (projectId === null || root === null || tab !== "files") return;
+    if (projectId === null || sections.length === 0 || tab !== "files") return;
     let alive = true;
     let stop: (() => void) | null = null;
     void watchHostDrop({
       select: "[data-into]",
       scroller: () => box.current,
-      over: ({ el }) => { if (alive) setLanding(el?.getAttribute("data-into") ?? null); },
+      over: ({ el }) => { if (alive) setLanding(landingOf(el)); },
       leave: () => { if (alive) setLanding(null); },
       drop: () => { if (alive) setLanding(null); },
     }).then((off) => { if (alive) stop = off; else off(); });
@@ -146,7 +158,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
       stop?.();
       setLanding(null);
     };
-  }, [projectId, root, tab]);
+  }, [projectId, roots, tab]);
 
   // The way to put the panel away, and the whole of the row it sits on. It is drawn in every state
   // the panel can be in — reading a file included — because a panel that could only be closed from
@@ -170,7 +182,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
     );
   }
 
-  if (projectId === null || root === null) {
+  if (projectId === null || sections.length === 0) {
     // A read that has not come back draws nothing at all: a flash of "no folder" on a project that
     // has one reads as a broken binding (`core/boundFolders`).
     return folders.answered
@@ -187,8 +199,8 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
     return (
       <FileReader
         projectId={projectId}
-        root={root}
-        path={reading}
+        root={reading.root}
+        path={reading.path}
         onBack={() => setReading(null)}
         onOpenLedger={onOpenLedger}
         close={close}
@@ -201,6 +213,103 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   return (
     <div className="files" ref={box}>
       {top}
+      {sections.map((one) => (
+        <FolderSection
+          key={one.path}
+          projectId={projectId}
+          root={one.path}
+          // The only folder there is needs no heading: a name is what tells two of them apart.
+          label={sections.length > 1 ? one.label : null}
+          bound={one.exists}
+          landing={landing}
+          onRead={(path) => setReading({ root: one.path, path })}
+          onMenu={(path, x, y) => setMenu({ root: one.path, path, x, y })}
+        />
+      ))}
+      {menu !== null && (
+        <FileMenu
+          projectId={projectId}
+          root={menu.root}
+          path={menu.path}
+          at={{ x: menu.x, y: menu.y }}
+          onClose={() => setMenu(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * One bound folder: what changed in it lately, and its tree.
+ *
+ * **The watch is the section's own.** Each folder is watched separately and each answer names the
+ * folder it is about (`./folder`), so a section takes the news addressed to it and leaves the rest.
+ * Holding one watch for the panel would mean the panel deciding which folder each answer belonged
+ * to, which is the same work done once further from where it is used.
+ *
+ * A folder that is gone draws its heading and the reason, and nothing else. There is nothing to
+ * watch and no tree to open, and the two states it could be confused with — a binding somebody
+ * removed, and a folder with nothing in it — both look like an empty section.
+ */
+function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu }: {
+  projectId: number;
+  root: string;
+  /** The heading, or nothing where this is the only folder. */
+  label: string | null;
+  /** Whether the store's own read found the folder. The watch answers the same question later. */
+  bound: boolean;
+  /** Where a dragged file would land, anywhere on the panel — a section draws the highlight only
+   *  where the landing is one of its own (`landed`). */
+  landing: Landing | null;
+  onRead: (path: string[]) => void;
+  onMenu: (path: string[], x: number, y: number) => void;
+}) {
+  const [changes, setChanges] = useState<FolderChangesDto>(
+    { root, changed: [], partial: false, gone: false },
+  );
+  const [treeOpen, setTreeOpen] = useState(false);
+  const gone = !bound || changes.gone;
+
+  useEffect(() => {
+    if (!bound) return;
+    let alive = true;
+    // Subscribed before the watch is asked for: the first thing the folder does could happen while
+    // the host is still walking it, and a listener set up afterwards would miss exactly that.
+    // Every watched folder is told about through the one listener, so an answer about another
+    // folder is not this section's news.
+    const listening = onFolderChanged((fresh) => {
+      if (alive && fresh.root === root) setChanges(fresh);
+    });
+    void folderWatch(projectId, root)
+      .then((now) => { if (alive) setChanges(now); })
+      .catch(() => {
+        if (alive) setChanges({ root, changed: [], partial: false, gone: false });
+      });
+    return () => {
+      alive = false;
+      void listening.then((stop) => stop());
+      void folderUnwatch(root);
+    };
+  }, [projectId, root, bound]);
+
+  // The whole of one folder is one box, so the space between two folders is wider than the space
+  // inside either — two stacks of rows with the same gap everywhere read as one long stack.
+  const heading = label !== null && (
+    <h3 className="files__foldername" title={root}>{label}</h3>
+  );
+
+  if (gone) {
+    return (
+      <div className="files__folder">
+        {heading}
+        <p className="files__none">{t("files.folderGone")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="files__folder">
+      {heading}
       <section className="files__row">
         <h3 className="files__head">{t("files.changed")}</h3>
         {changes.changed.length === 0
@@ -211,10 +320,10 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
                 <li key={one.path.join("/")}>
                   <button
                     className="files__file"
-                    onClick={() => setReading(one.path)}
+                    onClick={() => onRead(one.path)}
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      setMenu({ path: one.path, x: e.clientX, y: e.clientY });
+                      onMenu(one.path, e.clientX, e.clientY);
                     }}
                   >
                     <span className="files__name">{one.path[one.path.length - 1]}</span>
@@ -233,7 +342,8 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
           lands in. It is marked on the section rather than on the heading so that the whole of the
           tree — the gaps between its rows included — answers for it. */}
       <section
-        className={`files__row${landing === "" ? " files__row--into" : ""}`}
+        className={`files__row${landed(landing, root, "") ? " files__row--into" : ""}`}
+        data-root={root}
         data-into=""
       >
         <button
@@ -252,20 +362,11 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
             root={root}
             path={[]}
             landing={landing}
-            onRead={setReading}
-            onMenu={(path, x, y) => setMenu({ path, x, y })}
+            onRead={onRead}
+            onMenu={onMenu}
           />
         )}
       </section>
-      {menu !== null && (
-        <FileMenu
-          projectId={projectId}
-          root={root}
-          path={menu.path}
-          at={{ x: menu.x, y: menu.y }}
-          onClose={() => setMenu(null)}
-        />
-      )}
     </div>
   );
 }
@@ -401,11 +502,11 @@ function Level({ projectId, root, path, landing, onRead, onMenu }: {
   root: string;
   path: string[];
   /**
-   * The folder a file being dragged in would land in, as its segments joined — passed down whole
-   * rather than resolved per level, because a drag hangs over one folder in the whole tree and every
-   * level has to be able to stop drawing the highlight it was drawing a moment ago.
+   * Where a file being dragged in would land — passed down whole rather than resolved per level,
+   * because a drag hangs over one folder on the whole panel and every level has to be able to stop
+   * drawing the highlight it was drawing a moment ago.
    */
-  landing: string | null;
+  landing: Landing | null;
   onRead: (path: string[]) => void;
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
@@ -432,8 +533,9 @@ function Level({ projectId, root, path, landing, onRead, onMenu }: {
         return (
           <li
             key={one.name}
+            data-root={root}
             data-into={into}
-            className={into !== undefined && into === landing ? "files__into" : undefined}
+            className={landed(landing, root, into) ? "files__into" : undefined}
           >
             {one.isDir
               ? (

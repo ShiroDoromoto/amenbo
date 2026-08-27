@@ -560,6 +560,7 @@ export const pl: Translation = {
     "files.nothingChanged": "Nic się jeszcze nie zmieniło.",
     "files.partial": "Część tego folderu nie jest obserwowana.",
     "files.noFolder": "Ten projekt nie ma jeszcze folderu.",
+    "files.folderGone": "Tego folderu już nie ma.",
     "files.back": "Powrót do listy",
     "files.openWith": "Otwórz w zwykłej aplikacji",
     "files.chooseApp": "Otwórz w wybranej aplikacji",

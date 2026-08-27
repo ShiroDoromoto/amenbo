@@ -534,6 +534,7 @@ export const zhHans: Translation = {
     "files.nothingChanged": "还没有任何改动。",
     "files.partial": "这个文件夹有一部分没有被监看。",
     "files.noFolder": "这个项目还没有文件夹。",
+    "files.folderGone": "这个文件夹已经不在了。",
     "files.back": "返回列表",
     "files.openWith": "用常用的应用打开",
     "files.chooseApp": "用我选的应用打开",

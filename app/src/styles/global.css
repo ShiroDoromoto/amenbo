@@ -488,6 +488,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: var(--fs-sm);
 }
 .files--empty { color: var(--c-text-muted); }
+/* One bound folder and everything drawn about it. A project can be bound to several and each gets
+   one of these, so the box is what makes two folders read as two rather than as one long list. */
+.files__folder { min-width: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+/* The folder's name, drawn only where there is more than one to tell apart. The rule above it is
+   what separates the stacks; the name itself never wraps, since a long path would otherwise push
+   the rows it belongs to down the panel. */
+.files__foldername {
+  margin: 0; padding: var(--s-2) 0 0;
+  border-top: 1px solid var(--c-border);
+  color: var(--c-text); font-size: var(--fs-sm); font-weight: 700; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .files__row { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
 .files__head {
   margin: 0; padding: 0;
@@ -878,8 +890,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .navitem__dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 /* Drag-and-drop reordering of projects. The row being held fades, and the drop target
    takes an accent line above or below its midline. */
-.navitem[draggable="true"] { cursor: grab; }
+.navitem--reorderable { cursor: grab; }
+.navitem--dragging { cursor: grabbing; }
 .navitem--dragging { opacity: 0.4; }
+/* Worn by the body while a row is being dragged, because a selection begun on a row runs on across everything under
+   it — and dragging across rows selects their text on macOS and Linux (`AMB-T-3755`). */
+body.dragging-row { user-select: none; }
 .navitem--drop-before { box-shadow: inset 0 2px 0 0 var(--c-accent); }
 .navitem--drop-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
 .navitem__count {

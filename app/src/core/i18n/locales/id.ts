@@ -537,6 +537,7 @@ export const id: Translation = {
     "files.nothingChanged": "Belum ada yang berubah.",
     "files.partial": "Sebagian folder ini tidak sedang dipantau.",
     "files.noFolder": "Proyek ini belum punya folder.",
+    "files.folderGone": "Folder ini sudah tidak ada.",
     "files.back": "Kembali ke daftar",
     "files.openWith": "Buka dengan aplikasi biasa",
     "files.chooseApp": "Buka dengan aplikasi pilihan saya",

@@ -25,15 +25,23 @@ use crate::folder::root_of;
 
 /// What git calls one bound folder — as much of it as anything here reads.
 ///
-/// One `rev-parse` answers several questions about where a folder sits, and the same call can hand
-/// back the repository's root and the directory it keeps itself in. Neither is asked for while
-/// nothing reads them: what needs them is the watch over the repository, and a field carried for a
-/// reader that does not exist yet is one nothing goes red about when it turns out to be wrong.
+/// One `rev-parse` answers several questions about where a folder sits in the same call, and only
+/// the ones something reads are asked for: a field carried for a reader that does not exist yet is
+/// one nothing goes red about when it turns out to be wrong. The repository's own root is still not
+/// among them.
 #[derive(Clone)]
 pub struct Repo {
     /// The path from the repository's root down to the bound folder, ending in `/`, and empty when
     /// the bound folder *is* the root. This is the front that comes off every path git names.
     pub prefix: String,
+    /// The directory git keeps the repository in — where staging and committing write, and where
+    /// nothing else does ([`crate::folder_watch`]).
+    ///
+    /// **Asked for rather than guessed at as `<folder>/.git`.** In a linked worktree that name is a
+    /// file pointing elsewhere, and a watch laid on it would miss every commit made in the worktree
+    /// (`AMB-T-3748` measured all three systems). It is the per-worktree directory that holds
+    /// `index` and `HEAD`, which is why this is `--absolute-git-dir` and not `--git-common-dir`.
+    pub git_dir: PathBuf,
 }
 
 /// The answer for each bound folder that had one, kept for the life of the process.
@@ -52,10 +60,15 @@ pub fn repo_of(dir: &Path) -> Option<Repo> {
     if let Some(known) = remembered().lock().ok()?.get(dir) {
         return Some(known.clone());
     }
-    let out = run(dir, &["rev-parse", "--show-prefix"])?;
-    // One line, and at the root of a repository it is an empty one — which is an answer and not a
-    // failure, so it is taken by position rather than by whether it says anything.
-    let repo = Repo { prefix: out.lines().next()?.to_string() };
+    let out = run(dir, &["rev-parse", "--show-prefix", "--absolute-git-dir"])?;
+    // One line each, in the order the options were written. At the root of a repository the prefix
+    // is an empty line — an answer and not a failure — so both are taken by position rather than by
+    // whether they say anything.
+    let mut lines = out.lines();
+    let repo = Repo {
+        prefix: lines.next()?.to_string(),
+        git_dir: PathBuf::from(lines.next()?),
+    };
     if let Ok(mut all) = remembered().lock() {
         all.insert(dir.to_path_buf(), repo.clone());
     }

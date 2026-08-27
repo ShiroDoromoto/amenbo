@@ -1761,6 +1761,10 @@ pub fn attachments_for(target_type: String, target_id: i64) -> Result<Vec<Attach
 /// Ingest a file as a blob and attach it to a task or decision record. Same shape as the CLI's
 /// `task/decision attach`: check the per-file size cap, ingest content-addressed, record the
 /// metadata. The MIME type is guessed from the extension.
+///
+/// **Every attachment the screen adds comes through here**, whether it was picked or dragged in: the
+/// host receives an outside drop and hands over the paths (`AMB-D-775`), so nothing has to read a
+/// file into memory to pass it on. A file of any size is ingested as a stream.
 #[tauri::command]
 pub fn attachment_add(
     target_type: String,
@@ -1783,50 +1787,6 @@ pub fn attachment_add(
         let mime = amenbo_core::blob::mime_from_filename(&filename);
         store.config.attachment_limits.check_per_file(mime, meta.len())?;
         let blob = store.blobs().ingest_path(src)?;
-        store.attach_blob(
-            target,
-            target_id,
-            &blob.hash,
-            &filename,
-            mime,
-            blob.size_bytes as i64,
-            ActorKind::Human,
-        )?;
-        Ok(())
-    })?;
-    let scope: &[&'static str] = if target == amenbo_core::model::AttachmentTarget::Decision {
-        &["decisions"]
-    } else {
-        &["tasks"]
-    };
-    let ack = WriteAck::new(scope);
-    Ok(if target == amenbo_core::model::AttachmentTarget::Decision {
-        ack.decision(target_id)
-    } else {
-        ack.task(target_id)
-    })
-}
-
-/// Ingest raw bytes as a blob and attach them. HTML5 drag-and-drop inside the webview cannot give us
-/// an OS path (`dragDropEnabled:false` is the setting that lets card drag-and-drop on the board work
-/// at all), so the front end reads the dropped File itself and hands the bytes over this path. Large
-/// files are better off going through the file picker ([`attachment_add`] takes a path and ingests
-/// as a stream). The body is the same as [`attachment_add`]: check the cap, ingest
-/// content-addressed, record the metadata.
-#[tauri::command]
-pub fn attachment_add_bytes(
-    target_type: String,
-    target_id: i64,
-    filename: String,
-    bytes: Vec<u8>,
-) -> Result<WriteAck, CmdError> {
-    let target = amenbo_core::model::AttachmentTarget::parse(&target_type)
-        .ok_or_else(|| format!("attachment target '{target_type}' is not one of task / decision / task_comment / decision_comment"))?;
-    let filename = if filename.trim().is_empty() { "attachment".to_string() } else { filename };
-    with_store_mut(|store| {
-        let mime = amenbo_core::blob::mime_from_filename(&filename);
-        store.config.attachment_limits.check_per_file(mime, bytes.len() as u64)?;
-        let blob = store.blobs().ingest_bytes(&bytes)?;
         store.attach_blob(
             target,
             target_id,
@@ -7582,7 +7542,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    /// Round-trips per-comment attachments at the command layer. `attachment_add_bytes` with
+    /// Round-trips per-comment attachments at the command layer. `attachment_add` with
     /// `target_type="task_comment"` hangs an attachment off a comment id, `attachments_for` reads it
     /// back by the same id, and it **never bleeds into the task body's attachments** — they are
     /// different targets. The ack puts the comment id in `tasks` so the attachments query gets
@@ -7613,11 +7573,12 @@ mod tests {
             store.comment_list(task_id, None, None).unwrap().comments[0].id
         };
 
-        let ack = attachment_add_bytes(
+        let file = tmp.join("note.txt");
+        std::fs::write(&file, b"hello").unwrap();
+        let ack = attachment_add(
             "task_comment".into(),
             comment_id,
-            "note.txt".into(),
-            b"hello".to_vec(),
+            file.to_string_lossy().into_owned(),
         )
         .unwrap();
         assert!(

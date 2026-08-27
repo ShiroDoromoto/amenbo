@@ -440,7 +440,6 @@ pub fn run() {
       commands::migration_retry,
       commands::attachments_for,
       commands::attachment_add,
-      commands::attachment_add_bytes,
       commands::attachment_open,
       commands::attachment_save,
       commands::attachment_remove,

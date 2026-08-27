@@ -24,6 +24,8 @@ const hoisted = vi.hoisted(() => ({
   unlistened: false,
   /** What the host answers when asked what the keys were at the drop. */
   effect: "default" as string,
+  /** Whether asking which webview this is throws — what the API does with no window behind it. */
+  noWebview: false,
   asked: [] as string[],
 }));
 
@@ -35,12 +37,15 @@ vi.mock("./ipc", () => ({
 }));
 
 vi.mock("@tauri-apps/api/webview", () => ({
-  getCurrentWebview: () => ({
-    onDragDropEvent: async (take: (event: { payload: DragDrop }) => void) => {
-      hoisted.handler = take;
-      return () => { hoisted.unlistened = true; };
-    },
-  }),
+  getCurrentWebview: () => {
+    if (hoisted.noWebview) throw new TypeError("Cannot read properties of undefined");
+    return {
+      onDragDropEvent: async (take: (event: { payload: DragDrop }) => void) => {
+        hoisted.handler = take;
+        return () => { hoisted.unlistened = true; };
+      },
+    };
+  },
 }));
 
 /**
@@ -63,6 +68,7 @@ beforeEach(() => {
   hoisted.handler = null;
   hoisted.unlistened = false;
   hoisted.effect = "default";
+  hoisted.noWebview = false;
   hoisted.asked = [];
   // Inside Tauri as far as the module is concerned; there is no host without it and it subscribes
   // to nothing.
@@ -209,5 +215,18 @@ describe("a watcher", () => {
     // happened to be under the point: a row inside a folder belongs to that folder.
     expect(landed).toEqual([{ el: outer, paths: ["/a.txt", "/b"], effect: "move" }]);
     expect(hoisted.asked).toEqual(["drop_effect"]);
+  });
+});
+
+describe("a host that is there but cannot be reached", () => {
+  /** Asking which webview this is throws where there is no window behind it. Every face watches from
+   *  inside its own render, so a throw here is one nobody catches — and what is being lost is a
+   *  convenience, not the page. */
+  it("subscribes to nothing rather than throwing under whoever asked", async () => {
+    hoisted.noWebview = true;
+    const stop = await watchHostDrop({ select: "[data-into]" });
+    expect(hoisted.handler, "nothing was subscribed").toBeNull();
+    // And letting go of nothing is not an error either.
+    expect(() => stop()).not.toThrow();
   });
 });

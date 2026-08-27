@@ -67,7 +67,9 @@ given:
     with:
       dir: greenhouse
       path: notes/watering.md
-      content: SCENARIO the seedlings are watered every second morning
+      # Written with a mark on it, because the road below reads the file both ways round and a file
+      # with no marks in it draws the same picture either way.
+      content: "# SCENARIO the seedlings are watered every second morning"
 
   - type: action
     domain: repo
@@ -135,6 +137,38 @@ steps_gui:
     op: reading
     with:
       shows: SCENARIO the seedlings are watered every second morning
+
+  # And the other half of what a Markdown file is. It opens as what its text says, which is what a
+  # person opens one to do; the text itself is a second thing to want, and the file is the same file
+  # either way — the marks are in it, and drawing them is a choice about the screen rather than about
+  # the bytes.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+      as: source
+
+  # Back, because a reader who cannot get back has been handed a one-way door: the form that opened
+  # is the one they came for, and the other is a look.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: rendered
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+      as: rendered
 
   - type: action
     domain: files

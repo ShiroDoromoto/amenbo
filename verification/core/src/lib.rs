@@ -2281,6 +2281,14 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "open", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     // And back out of it, which is the only way back: opening a file replaces the column.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "back", required: &[], refs: &[], strings: &[], binds: false },
+    // Which of its two forms a Markdown file is drawn in — what the text says (`rendered`), or the
+    // text itself, hashes and all (`source`). Markdown is the only file with two, and the control is
+    // drawn for it and for nothing else.
+    //
+    // The step names the form to end in rather than the press, because the one control is a toggle:
+    // a road saying "press it" would mean the other form on a face that had already been switched,
+    // and what a road is about is where the screen ends up.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "show-as", required: &["form"], refs: &[], strings: &["form"], binds: false },
     // The open file read again as the encoding the reader names, chosen from the control on its own
     // row that says what it was read as. The guess reports no confidence and breaks nothing visible
     // when it is wrong, so this door is the only thing standing between a reader and a file that
@@ -2304,7 +2312,13 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "read-as", required: &["encoding"], refs: &[], strings: &["encoding"], binds: false },
     // What an opened file draws. `shows` is words the road itself put in the file, so a reading finds
     // them because the bytes reached the screen and for no other reason.
-    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "reading", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    //
+    // `as` says which of a Markdown file's two forms those words are standing in, and asking for it
+    // hands the whole step to an eye. The two forms carry the same words — that is what makes them
+    // the same file — and what tells them apart is punctuation a reading throws away and a size no
+    // reading reports. A step that judged the words alone while naming a form would pass on the form
+    // it was written to catch.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "reading", required: &["shows"], refs: &[], strings: &["shows", "as"], binds: false },
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },

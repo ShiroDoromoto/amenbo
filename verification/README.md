@@ -743,8 +743,14 @@ one of the face's standing lines. `row-mark` reads the colour a row wears, named
 `untracked`, `added`, `modified` — rather than by the colour itself, since which colour that is
 belongs to the theme. It is a `Review` and can be nothing else: a shot is read for words, and a row
 wearing a colour says the same letters as the row beside it that wears none.
+`show-as` puts a Markdown file in one of its two forms — `rendered` for what the text says, `source`
+for the text itself — and `reading` takes an `as` saying which of them its words are standing in,
+which hands that step to an eye: both forms carry the same words, and what separates them is
+punctuation the fold throws away and a size no reading reports.
 `reopen-with` reads an open file again as an encoding the road names, and `read-as` reads back what
-the row says it was read as. What the *guess* said is never asserted: it reads the machine's own
+the row says it was read as. The two are one control apart and stay two ops: one is about the bytes
+and what they mean, the other about the screen and what it draws — a road that named an encoding to
+change a form would be asking one question with the other's word. What the *guess* said is never asserted: it reads the machine's own
 language out of its settings, so where it lands belongs to the box the run is on rather than to the
 build. What belongs to the build is that the row follows the reader, which two namings prove and one
 cannot.

@@ -830,6 +830,9 @@ impl Instructor {
             (Domain::Files, "read-as") => {
                 Some(Expectation { text: arg_str(with, "encoding")?.to_string(), present: present(with) })
             }
+            // A form named takes this away from the reading: both forms carry the same words, and
+            // what separates them is punctuation the fold throws away and a size no reading reports.
+            (Domain::Files, "reading") if with.contains_key("as") => None,
             (Domain::Files, "reading") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
@@ -1777,6 +1780,15 @@ impl Instructor {
                 section(with)?,
                 req(with, "name")?
             ),
+            // The one control with two ends and one press, so the step names the end. What it is
+            // called on screen is the form it is *not* in — a switch says where it goes — which is
+            // why the instruction describes the offer rather than quoting the word on it.
+            (Domain::Files, "show-as") => match form(with, "form")? {
+                "source" => "On the row the open file is named on, have it drawn as the text it is rather than as what that text says: press the control offering to edit it, if it is not already showing the text. The hashes and the brackets are then on the screen as characters."
+                    .to_string(),
+                _ => "On the row the open file is named on, have it drawn as what its text says rather than as the text itself: press the control offering to read it, if it is not already drawn that way. The hashes and the brackets are then gone, and what they marked is drawn."
+                    .to_string(),
+            },
             // The control is named by what it says rather than by where it is: it draws the encoding
             // and the newline with a dot between them, and those words are the file's rather than the
             // interface's — so an operator can find it on a screen in any language.
@@ -2832,6 +2844,16 @@ impl Instructor {
                     req(with, "encoding")?
                 ),
             },
+            (Domain::Files, "reading") if with.contains_key("as") => match form(with, "as")? {
+                "source" => format!(
+                    "Confirm the opened file shows \"{}\" as the text it is: the words stand in one plain size with the marks around them — a hash before a heading, and whatever else the file was written with — visible as characters.",
+                    req(with, "shows")?
+                ),
+                _ => format!(
+                    "Confirm the opened file shows \"{}\" as what the text says: no hash before it, and drawn as the heading it marks rather than in the size of the lines below.",
+                    req(with, "shows")?
+                ),
+            },
             (Domain::Files, "reading") => match present(with) {
                 true => format!(
                     "Confirm the opened file shows \"{}\" — the words that are in it.",
@@ -3142,6 +3164,21 @@ fn section(with: &Args) -> Result<&'static str, String> {
         Some("tree") => Ok("the folder's own section"),
         Some(other) => Err(format!("`section` does not know `{other}` — it is tree")),
         None => Err("arg `section` must say which section".to_string()),
+    }
+}
+
+/// Which of a Markdown file's two forms a step is about — what the text says, or the text itself.
+/// Named by the form and not by the word on the control, for the reason `section` and `note` are: the
+/// switch says where it goes rather than where it is, and the run's language is the machine's.
+///
+/// The key is the caller's because the two sides of the same question read differently: the move says
+/// the `form` to end in, and the reading says what the words are standing `as`.
+fn form(with: &Args, key: &str) -> Result<&'static str, String> {
+    match with.get(key).and_then(|v| v.as_str()) {
+        Some("rendered") => Ok("rendered"),
+        Some("source") => Ok("source"),
+        Some(other) => Err(format!("`{key}` does not know `{other}` — it is rendered or source")),
+        None => Err(format!("arg `{key}` must say which of the two forms")),
     }
 }
 

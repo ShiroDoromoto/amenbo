@@ -1,5 +1,5 @@
 // screen — drive a mac screen from the outside and read what is on it: bring an app to the front,
-// click, type, send a key, shoot its window, and read the text off a shot.
+// click, drag, type, send a key, shoot its window, and read the text off a shot.
 //
 // One tool rather than one per caller. What a caller needs of a screen is the moves, a shot and the
 // words on it — never a window id or its bounds, which is why neither leaves here: the tool shoots
@@ -19,6 +19,7 @@
 //   swift screen.swift click-named <pid> <name>  left-click what that name names (fronts the app first)
 //   swift screen.swift click <x> <y>             left-click at a screen point
 //   swift screen.swift dblclick <x> <y>          double-click at a screen point (what opens a dialog's row)
+//   swift screen.swift drag <pid> <x1> <y1> <x2> <y2> [steps]   press at the first point, move to the second, let go
 //   swift screen.swift type "text"               type into the focused element (Unicode direct, so no IME)
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 125=Down / 126=Up)
 //   swift screen.swift trusted                   whether the accessibility permission is granted (prompts if not)
@@ -458,14 +459,20 @@ func hover(_ p: CGPoint) {
     usleep(120_000)
 }
 
-/// One down/up at a point, saying which press of a run it is. That number is the whole difference
-/// between two clicks and a double click: the events are otherwise identical, and what is listening
-/// reads the count off the field rather than timing the pair itself.
+/// One left-button event at a point, saying which press of a run it is. That number is the whole
+/// difference between two clicks and a double click: the events are otherwise identical, and what is
+/// listening reads the count off the field rather than timing the pair itself. A drag's events carry
+/// it too — a webview handed a `pointerdown` whose count is zero has been handed a press nobody made.
+func mouse(_ phase: CGEventType, at p: CGPoint, clickState: Int64 = 1) {
+    let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: .left)
+    e?.setIntegerValueField(.mouseEventClickState, value: clickState)
+    e?.post(tap: .cghidEventTap)
+}
+
+/// One down/up at a point.
 func press(at p: CGPoint, clickState: Int64) {
     for phase in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
-        let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: .left)
-        e?.setIntegerValueField(.mouseEventClickState, value: clickState)
-        e?.post(tap: .cghidEventTap)
+        mouse(phase, at: p, clickState: clickState)
         usleep(60_000)
     }
 }
@@ -484,6 +491,35 @@ func doubleClick(x: Double, y: Double) {
     hover(p)
     press(at: p, clickState: 1)
     press(at: p, clickState: 2)
+}
+
+/// Press at one point, cross to another with the button held, and let go there.
+///
+/// A point at each end rather than a name, unlike everything else that can be aimed by one: where a
+/// drag lands is decided by which side of a row's middle it is let go on, and both sides of that line
+/// are the same row. A name says which row and cannot say which side of it, so the two ends are the
+/// caller's arithmetic — `find`'s rectangle is what the start is built from.
+///
+/// The crossing is sent as `steps` moves rather than as one, because moves are what the screen under
+/// it is listening to: a webview being reordered works out where the pointer is on every move it is
+/// given, and a jump straight to the far end gives it exactly one — after which the drop is right but
+/// nothing that was meant to follow the pointer ever moved. 24 crossed a sidebar's list.
+///
+/// It is also the only way to photograph a drag in progress. Ask for a few hundred steps and the
+/// crossing takes seconds, which is long enough for another process to run `screen shot` while the
+/// button is still down — the drop line and the faded row it left are on screen for that long and
+/// nowhere else.
+func drag(pid: Int, window: String?, from a: CGPoint, to b: CGPoint, steps: Int) {
+    front(pid: pid, window: window)
+    hover(a)
+    mouse(.leftMouseDown, at: a)
+    usleep(80_000) // long enough that what is under the pointer has taken the press before it moves
+    for i in 1 ... steps {
+        let t = Double(i) / Double(steps)
+        mouse(.leftMouseDragged, at: CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t))
+        usleep(20_000)
+    }
+    mouse(.leftMouseUp, at: b)
 }
 
 /// type sends the string itself rather than keycodes. It bypasses the IME, so any script goes in as-is.
@@ -529,7 +565,7 @@ func takeWindow(_ argv: [String]) -> (window: String?, rest: [String]) {
 
 let (window, args) = takeWindow(CommandLine.arguments)
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|type|key|trusted> … [--window <title>]")
+    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|drag|type|key|trusted> … [--window <title>]")
 }
 
 switch args[1] {
@@ -554,6 +590,15 @@ case "click":
 case "dblclick":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen dblclick <x> <y>") }
     doubleClick(x: x, y: y)
+case "drag":
+    let dragUsage = "usage: screen drag <pid> <x1> <y1> <x2> <y2> [steps] [--window <title>]"
+    guard args.count == 7 || args.count == 8, let pid = Int(args[2]),
+        let x1 = Double(args[3]), let y1 = Double(args[4]),
+        let x2 = Double(args[5]), let y2 = Double(args[6])
+    else { fail(dragUsage) }
+    let steps = args.count == 8 ? Int(args[7]) : 24
+    guard let steps, steps > 0 else { fail(dragUsage) }
+    drag(pid: pid, window: window, from: CGPoint(x: x1, y: y1), to: CGPoint(x: x2, y: y2), steps: steps)
 case "type":
     guard args.count == 3 else { fail("usage: screen type <text>") }
     type(args[2])

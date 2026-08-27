@@ -218,11 +218,10 @@ pub fn run() {
       // Keep the file IO (the Range read) off the webview and main threads.
       std::thread::spawn(move || responder.respond(blobproto::serve(&request)));
     })
-    .register_asynchronous_uri_scheme_protocol(FILE_SCHEME, |ctx, request, responder| {
-      // Same reason as above, and one more: the fence resolves the path on the real filesystem, which
-      // on a cold cache is the slowest part of answering.
-      let app = ctx.app_handle().clone();
-      std::thread::spawn(move || responder.respond(fileproto::serve(&app, &request)));
+    .register_asynchronous_uri_scheme_protocol(FILE_SCHEME, |_ctx, request, responder| {
+      // Same reason as above, and one more: the fence reads the store and resolves the path on the real
+      // filesystem, which on a cold cache is the slowest part of answering.
+      std::thread::spawn(move || responder.respond(fileproto::serve(&request)));
     })
     .setup(|app| {
       let config = amenbo_core::config::Paths::resolve()

@@ -5,12 +5,13 @@
 //! of the question — what is in this folder, what changed in it lately, and what does this file
 //! say — and it asks over the command seam, where an answer can be a list.
 //!
-//! **The fence is the project's folder, not a session's.** The face's rows belong to the project:
+//! **The fence is the project's folders, not a session's.** The face's rows belong to the project:
 //! the tree and what changed in it do not move when the pane beside them is switched (`AMB-T-3602`).
 //! So the root a caller may name is a folder the project is bound to, checked against the store
 //! rather than taken on the caller's word, and everything under it is judged the way `fileproto`
-//! judges a path — segment by segment as text, and then again against the real filesystem, links
-//! followed (see [`crate::folder::under`], which both doors share).
+//! judges a path — segment by segment as text, the folders then resolved against the real filesystem,
+//! and the last name left as text for the open to refuse a link at ([`crate::folder::under`],
+//! [`crate::folder::open_no_follow`], which both doors share).
 //!
 //! **What a file is, is read off its bytes.** A name says nothing reliable: the extension table this
 //! replaces could not answer for 19% of this repository's files (`AMB-T-3547`). A NUL byte in the
@@ -86,54 +87,142 @@ const RECENT: usize = 30;
 /// at can be anything, and a list of the thirty newest files is not worth an unbounded walk.
 const VISIT_CAP: usize = 20_000;
 
-/// The path `segments` name inside `root`, or nothing at all — the fence both doors are built on.
+/// The path `segments` name inside the folder `roots[base]`, and which of `roots` it belongs to —
+/// the fence every door onto a project's folders is built on.
 ///
-/// Nothing is resolved before it is judged and nothing is judged before it is resolved: each segment
-/// is checked on its own as text, and what they add up to is then checked again against the real
-/// filesystem. A path that passes the first check can still leave the folder through a symbolic
-/// link, and a path that would pass the second could still have been written as `..` — neither
-/// check subsumes the other. What comes back is canonical and inside `root`; whether it may be a
-/// directory is the caller's to say, since one door hands out bytes and the other lists names.
+/// **The folders above the last name are resolved; the last name is only ever text.** Each segment is
+/// checked on its own as a single ordinary name, the ones above the last are then resolved against the
+/// real filesystem — a folder that is a link leading out of the project is caught there and nowhere
+/// else — and the last name is joined on without being resolved at all. That is what lets a name which
+/// does not exist yet be spoken for (a file about to be written), and it is why a link at the end is
+/// refused where the file is opened rather than here: [`open_no_follow`] refuses it in the same call
+/// that opens it, leaving no window between asking and acting.
+///
+/// **Which folder it belongs to is the deepest one holding it**, not the one the caller named. A
+/// project can be bound to a folder inside another one — this repository binds itself and its plugins
+/// — and a file in the inner folder is the inner folder's: that is whose git state it is read from and
+/// whose watch reports it (`AMB-D-782`). Taking the first match instead would hand the answer to the
+/// order the folders happen to be held in, which is their path names and not anybody's ranking
+/// (`AMB-D-531`).
+///
+/// Whether the answer may be a directory is the caller's to say, since one door hands out bytes and
+/// another lists names.
 ///
 /// **Canonical here is the reader's spelling** ([`canonical_dir`], `AMB-D-703`), not
 /// `std::fs::canonicalize`'s. On Windows that call answers in the verbatim `\\?\C:\…` form, and a
 /// path in that form is not a path every Win32 entry point takes: `SHOpenWithDialog` rejects it
 /// outright with `E_INVALIDARG` and draws nothing (`AMB-T-3651` measured it on a real machine).
 /// What leaves this fence is handed to the shell, so it leaves in the form the shell accepts.
-pub fn under(root: &Path, segments: impl IntoIterator<Item = impl AsRef<str>>) -> Option<PathBuf> {
-    let root = canonical_dir(root).ok()?;
-
-    let mut path = root.clone();
+pub fn under(
+    roots: &[PathBuf],
+    base: usize,
+    segments: impl IntoIterator<Item = impl AsRef<str>>,
+) -> Option<(usize, PathBuf)> {
+    let mut names = Vec::new();
     for segment in segments {
         // One ordinary name and nothing else. `..`, `.`, an embedded separator, a root and a drive
         // letter all come back as some other kind of component, or as more than one — none of which
         // is a file name.
         let mut parts = Path::new(segment.as_ref()).components();
         match (parts.next(), parts.next()) {
-            (Some(Component::Normal(name)), None) => path.push(name),
+            (Some(Component::Normal(name)), None) => names.push(name.to_os_string()),
             _ => return None,
         }
     }
 
-    // Now the filesystem's own answer, links followed. A link inside the folder that points out of
-    // it is only caught here, which is why the text check above is not the end of it.
-    let path = canonical_dir(&path).ok()?;
-    path.starts_with(&root).then_some(path)
+    let last = names.pop();
+    let mut walked = canonical_dir(roots.get(base)?).ok()?;
+    walked.extend(names);
+    // The filesystem's own answer for the folders, links followed. A link inside the folder that
+    // points out of it is only caught here, which is why the text check above is not the end of it.
+    let walked = canonical_dir(&walked).ok()?;
+    let path = match last {
+        Some(name) => walked.join(name),
+        None => walked,
+    };
+
+    // Of two nested folders, one spelling is a prefix of the other, so the longer one is the deeper.
+    let owner = roots
+        .iter()
+        .enumerate()
+        .filter(|(_, root)| path.starts_with(root))
+        .max_by_key(|(_, root)| root.as_os_str().len())?
+        .0;
+    Some((owner, path))
 }
 
-/// The folder this call is rooted at, having established that the project really is bound to it.
+/// Open one file for reading **without following a link at the last name**.
 ///
-/// The caller names a root, and a webview is not trusted to name one: the registry is asked whether
-/// this project claims that folder. Everything else in this module resolves under what comes back.
-pub fn root_of(project_id: i64, root: &str) -> Result<PathBuf, CmdError> {
-    let asked = canonical_dir(root).map_err(|_| gone())?;
+/// The fence resolves the folders above a name and leaves the name itself as text ([`under`]), which
+/// is what lets a file that is not there yet be named — and what leaves the last hop to be refused
+/// here. A `docs/CLAUDE.md` that is really a link to `~/dotfiles/CLAUDE.md` is inside the folder by its
+/// spelling and outside it by its bytes; a door that followed it would read, and once there is a way
+/// to save, write, somebody's machine-wide configuration through a panel fenced to one project
+/// (`AMB-D-782`).
+///
+/// Asking whether a name is a link and then opening it would leave a window between the two answers.
+/// The flag closes it: the kernel refuses in the same call, with `ELOOP`.
+#[cfg(unix)]
+pub fn open_no_follow(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+}
+
+/// Open one file for reading, with a link at the last name opened rather than followed.
+///
+/// Why the last name is the one to judge is the Unix half's to say. What differs here is that Windows
+/// has no flag which refuses: `FILE_FLAG_OPEN_REPARSE_POINT` hands back the link itself rather than
+/// what it points at, so nothing outside the folder is ever read through it — but saying no is then
+/// ours to do, once the handle is in hand.
+#[cfg(windows)]
+pub fn open_no_follow(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)?;
+    if file.metadata()?.file_type().is_symlink() {
+        return Err(std::io::Error::other("a link is not followed here"));
+    }
+    Ok(file)
+}
+
+/// The folders this project is bound to, in the order they are held — their path names, which is a
+/// spelling and not a ranking (`AMB-D-531`) — each in the reader's spelling.
+///
+/// A folder that is not there is left out rather than carried as a root nothing can resolve under: an
+/// unmounted disk and a deleted folder hold no file. What the panel does about a folder that has gone
+/// is a question for the panel, which is told by the store and not by this fence.
+pub fn roots_of(project_id: i64) -> Result<Vec<PathBuf>, CmdError> {
     let store = crate::commands::open_store_read()?;
-    let bound = store
+    Ok(store
         .bindings()
         .dirs_for_project(project_id)
         .into_iter()
-        .any(|dir| canonical_dir(dir).is_ok_and(|dir| dir == asked));
-    if bound { Ok(asked) } else { Err(gone()) }
+        .filter_map(|dir| canonical_dir(dir).ok())
+        .collect())
+}
+
+/// The folders this call may reach, and which of them the caller named.
+///
+/// The caller names a root, and a webview is not trusted to name one: the registry is asked whether
+/// this project claims that folder. The rest of the list travels with it because a folder bound inside
+/// another one owns what is in it ([`under`]).
+pub fn rooted(project_id: i64, root: &str) -> Result<(Vec<PathBuf>, usize), CmdError> {
+    let asked = canonical_dir(root).map_err(|_| gone())?;
+    let roots = roots_of(project_id)?;
+    let base = roots.iter().position(|dir| *dir == asked).ok_or_else(gone)?;
+    Ok((roots, base))
+}
+
+/// The one folder [`rooted`] proved, for a caller that watches a folder rather than resolves a path
+/// under it.
+pub fn root_of(project_id: i64, root: &str) -> Result<PathBuf, CmdError> {
+    let (mut roots, base) = rooted(project_id, root)?;
+    Ok(roots.swap_remove(base))
 }
 
 /// The one refusal made about a file in this folder. Which rule turned a caller away — outside the
@@ -266,8 +355,11 @@ pub fn folder_entries(
     root: String,
     path: Vec<String>,
 ) -> Result<Vec<FolderEntryDto>, CmdError> {
-    let dir = under(&root_of(project_id, &root)?, &path).ok_or_else(gone)?;
-    if !dir.is_dir() {
+    let (roots, base) = rooted(project_id, &root)?;
+    let (_owner, dir) = under(&roots, base, &path).ok_or_else(gone)?;
+    // Read off the name itself and not off what it leads to: a folder that is a link is not walked,
+    // whatever is on the other side of it (`AMB-D-782`).
+    if !std::fs::symlink_metadata(&dir).is_ok_and(|meta| meta.is_dir()) {
         return Err(gone());
     }
     // One level of the shared walk. Going through it rather than reading the directory outright is
@@ -299,7 +391,8 @@ pub fn folder_entries(
 /// is, and Amenbo does not keep an opinion about it.
 #[tauri::command]
 pub fn folder_open_file(project_id: i64, root: String, path: Vec<String>) -> Result<(), CmdError> {
-    let file = under(&root_of(project_id, &root)?, &path).ok_or_else(gone)?;
+    let (roots, base) = rooted(project_id, &root)?;
+    let (_owner, file) = under(&roots, base, &path).ok_or_else(gone)?;
     tauri_plugin_opener::open_path(&file, None::<&str>)
         .map_err(|e| CmdError::coded("folder.open", e.to_string(), serde_json::Value::Null))
 }
@@ -311,7 +404,8 @@ pub fn folder_open_file(project_id: i64, root: String, path: Vec<String>) -> Res
 /// already see.
 #[tauri::command]
 pub fn folder_reveal_file(project_id: i64, root: String, path: Vec<String>) -> Result<(), CmdError> {
-    let file = under(&root_of(project_id, &root)?, &path).ok_or_else(gone)?;
+    let (roots, base) = rooted(project_id, &root)?;
+    let (_owner, file) = under(&roots, base, &path).ok_or_else(gone)?;
     tauri_plugin_opener::reveal_item_in_dir(&file)
         .map_err(|e| CmdError::coded("folder.reveal", e.to_string(), serde_json::Value::Null))
 }
@@ -329,8 +423,10 @@ pub fn folder_read(
     root: String,
     path: Vec<String>,
 ) -> Result<FolderFileDto, CmdError> {
-    let file = under(&root_of(project_id, &root)?, &path).ok_or_else(gone)?;
-    let meta = std::fs::metadata(&file).map_err(|_| gone())?;
+    let (roots, base) = rooted(project_id, &root)?;
+    let (_owner, file) = under(&roots, base, &path).ok_or_else(gone)?;
+    // The name's own answer, not the one it leads to: a link is not a file to read here.
+    let meta = std::fs::symlink_metadata(&file).map_err(|_| gone())?;
     if !meta.is_file() {
         return Err(gone());
     }
@@ -370,7 +466,7 @@ pub fn folder_read(
     let pixels = measure(mime, &front);
 
     if carriable(size, pixels) {
-        let image = std::fs::read(&file).ok().map(|whole| FolderImageDto {
+        let image = read_whole(&file).ok().map(|whole| FolderImageDto {
             mime: mime.to_string(),
             base64: base64::engine::general_purpose::STANDARD.encode(whole),
         });
@@ -560,9 +656,15 @@ fn le32(bytes: &[u8], at: usize) -> Option<u32> {
 fn read_head(path: &Path, cap: usize) -> std::io::Result<Vec<u8>> {
     use std::io::Read as _;
     let mut buf = Vec::new();
-    std::fs::File::open(path)?
-        .take(cap as u64)
-        .read_to_end(&mut buf)?;
+    open_no_follow(path)?.take(cap as u64).read_to_end(&mut buf)?;
+    Ok(buf)
+}
+
+/// The whole of a file, opened the way its head was — a picture is carried entire or not at all.
+fn read_whole(path: &Path) -> std::io::Result<Vec<u8>> {
+    use std::io::Read as _;
+    let mut buf = Vec::new();
+    open_no_follow(path)?.read_to_end(&mut buf)?;
     Ok(buf)
 }
 
@@ -571,7 +673,7 @@ mod tests {
     use super::*;
 
     /// A folder with something in it, and a sibling holding a secret that must stay out of reach.
-    fn folders() -> (tempfile::TempDir, PathBuf) {
+    fn folders() -> (tempfile::TempDir, Vec<PathBuf>) {
         let dir = tempfile::tempdir().expect("a temp dir");
         let root = dir.path().join("work");
         std::fs::create_dir_all(root.join("notes")).expect("the folder");
@@ -579,15 +681,15 @@ mod tests {
         std::fs::write(root.join("notes/a.md"), b"hello").expect("a file");
         std::fs::write(root.join("node_modules/x.js"), b"built").expect("the machine's file");
         std::fs::write(dir.path().join("secret.txt"), b"no").expect("the secret");
-        (dir, root)
+        (dir, vec![canonical_dir(&root).expect("the folder is there")])
     }
 
     /// The fence, which is the whole of what this module has to get right: every spelling of
     /// "somewhere else" is refused, including the ones that would land back inside after a detour.
     #[test]
     fn nothing_outside_the_folder_can_be_named() {
-        let (dir, root) = folders();
-        assert!(under(&root, ["notes", "a.md"]).is_some());
+        let (dir, roots) = folders();
+        assert!(under(&roots, 0, ["notes", "a.md"]).is_some());
         for segments in [
             vec![".."],
             vec!["notes", "..", "..", "secret.txt"],
@@ -595,8 +697,23 @@ mod tests {
             vec!["/etc/passwd"],
             vec!["."],
         ] {
-            assert!(under(&root, &segments).is_none(), "reached out with {segments:?}");
+            assert!(under(&roots, 0, &segments).is_none(), "reached out with {segments:?}");
         }
+        drop(dir);
+    }
+
+    /// A name that is not there yet is still a name this fence can answer for: the folders above it
+    /// are resolved, and the name itself is only read as text. Saving to a file that does not exist
+    /// is the whole reason (`AMB-D-782`).
+    #[test]
+    fn a_name_that_is_not_there_yet_can_be_spoken_for() {
+        let (dir, roots) = folders();
+        let (owner, path) = under(&roots, 0, ["notes", "not-written-yet.md"]).expect("a name");
+        assert_eq!(owner, 0);
+        assert!(!path.exists());
+        assert_eq!(path.parent(), Some(canonical_dir(roots[0].join("notes")).unwrap().as_path()));
+        // The folders above it are resolved, so a folder that is not there answers nothing at all.
+        assert!(under(&roots, 0, ["nowhere", "a.md"]).is_none());
         drop(dir);
     }
 
@@ -604,9 +721,33 @@ mod tests {
     /// is opened with — and for the root itself, named by no segments at all.
     #[test]
     fn a_folder_is_an_answer_here() {
-        let (dir, root) = folders();
-        assert_eq!(under(&root, ["notes"]), Some(canonical_dir(root.join("notes")).unwrap()));
-        assert_eq!(under(&root, Vec::<String>::new()), Some(canonical_dir(&root).unwrap()));
+        let (dir, roots) = folders();
+        assert_eq!(
+            under(&roots, 0, ["notes"]),
+            Some((0, canonical_dir(roots[0].join("notes")).unwrap())),
+        );
+        assert_eq!(under(&roots, 0, Vec::<String>::new()), Some((0, roots[0].clone())));
+        drop(dir);
+    }
+
+    /// A file in a folder bound inside another bound folder is the inner one's, whichever of the two
+    /// the caller named. Which folder a file belongs to is what its git state is read from and what
+    /// its watch reports, so the answer cannot be left to the order the folders are held in.
+    #[test]
+    fn the_deepest_folder_holding_a_file_is_the_one_it_belongs_to() {
+        let (dir, mut roots) = folders();
+        let inner = roots[0].join("plugin");
+        std::fs::create_dir_all(&inner).expect("the inner folder");
+        std::fs::write(inner.join("b.md"), b"mine").expect("a file");
+        roots.push(canonical_dir(&inner).expect("the inner folder is there"));
+
+        let (owner, _) = under(&roots, 0, ["plugin", "b.md"]).expect("named through the outer");
+        assert_eq!(owner, 1, "the inner folder owns what is in it");
+        let (owner, _) = under(&roots, 1, ["b.md"]).expect("named through the inner");
+        assert_eq!(owner, 1);
+        // And what is outside the inner one is still the outer one's.
+        let (owner, _) = under(&roots, 0, ["notes", "a.md"]).expect("a file beside it");
+        assert_eq!(owner, 0);
         drop(dir);
     }
 
@@ -616,8 +757,8 @@ mod tests {
     /// with `E_INVALIDARG` and draws nothing at all — measured on a real machine in `AMB-T-3651`.
     #[test]
     fn what_the_fence_hands_back_is_spelled_the_way_the_shell_takes_it() {
-        let (dir, root) = folders();
-        let file = under(&root, ["notes", "a.md"]).expect("a file inside the folder");
+        let (dir, roots) = folders();
+        let (_, file) = under(&roots, 0, ["notes", "a.md"]).expect("a file inside the folder");
         assert!(
             !file.to_string_lossy().starts_with(r"\\?\"),
             "no verbatim prefix leaves the fence: {}",
@@ -626,16 +767,38 @@ mod tests {
         drop(dir);
     }
 
-    /// A link is followed and *then* judged, which is the only order that catches one pointing out
-    /// of the folder. Judging the text alone would pass it: nothing in the spelling says where it
-    /// goes.
+    /// A folder that is a link out of the project is caught by the fence, because the folders above
+    /// the last name are resolved. Judging the text alone would pass it: nothing in the spelling
+    /// says where it goes.
     #[cfg(unix)]
     #[test]
-    fn a_link_out_of_the_folder_is_refused() {
-        let (dir, root) = folders();
-        std::os::unix::fs::symlink(dir.path().join("secret.txt"), root.join("escape"))
+    fn a_folder_that_links_out_of_the_project_is_refused() {
+        let (dir, roots) = folders();
+        let outside = dir.path().join("elsewhere");
+        std::fs::create_dir_all(&outside).expect("the folder");
+        std::fs::write(outside.join("secret.txt"), b"no").expect("the secret");
+        std::os::unix::fs::symlink(&outside, roots[0].join("escape")).expect("the link");
+        assert!(under(&roots, 0, ["escape", "secret.txt"]).is_none());
+        drop(dir);
+    }
+
+    /// The last name is not resolved, so a link there passes the fence — and is refused where the
+    /// file is opened, in the same call that opens it. That order is what leaves no window between
+    /// asking and acting, and it is what lets a name that is not there yet be named at all.
+    #[cfg(unix)]
+    #[test]
+    fn a_link_at_the_last_name_is_refused_at_the_open() {
+        let (dir, roots) = folders();
+        std::os::unix::fs::symlink(dir.path().join("secret.txt"), roots[0].join("escape"))
             .expect("the link");
-        assert!(under(&root, ["escape"]).is_none());
+        let (_, path) = under(&roots, 0, ["escape"]).expect("the fence lets the name through");
+        let refused = open_no_follow(&path).expect_err("the open refuses it");
+        assert_eq!(refused.raw_os_error(), Some(libc::ELOOP));
+        // And the file it points at is readable through no door of this module.
+        assert!(read_head(&path, TEXT_CAP).is_err());
+        // A file that is really a file still opens.
+        let (_, real) = under(&roots, 0, ["notes", "a.md"]).expect("a real file");
+        assert_eq!(read_head(&real, TEXT_CAP).unwrap(), b"hello");
         drop(dir);
     }
 

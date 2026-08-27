@@ -201,11 +201,14 @@ export const CORE_ERROR_CODES = [
  * with a half missing (`wake_not_registered`); the four the file panel meets when it writes a
  * name into a folder (`crate::folder_write`) — the name is taken (`folder_taken`), the machine will
  * not hold it (`folder_name`), or the machine refused the making or the renaming itself for a reason
- * of its own (`folder_make`, `folder_rename`); and the two it answers a save with
+ * of its own (`folder_make`, `folder_rename`); and the three it answers a save with
  * (`crate::folder_save`) — a character the file's encoding has no room for
  * (`folder_unwritable_character` — a `✓` typed into a Shift_JIS file, named rather than mangled into
- * it) and everything else the filesystem said (`folder_not_saved`). */
+ * it), the file having moved between the read and the save
+ * (`folder_changed_underneath` — an agent in the pane wrote to it while the editor held what was
+ * there before), and everything else the filesystem said (`folder_not_saved`). */
 export const TAURI_ERROR_CODES = [
+  "folder_changed_underneath",
   "folder_make",
   "folder_name",
   "folder_not_saved",

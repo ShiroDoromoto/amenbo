@@ -88,7 +88,14 @@ export async function onFolderChanged(
   return await listen<FolderChangesDto>(CHANGED_EVENT, ({ payload }) => take(payload));
 }
 
-/** What one file has to show: its text, or its picture, or neither. */
+/**
+ * What one file has to show: its text, or its picture, or neither.
+ *
+ * **A text file comes back with a short mark of the bytes it was read from** (`digest`), and that
+ * is what a panel holding the file open knows it by: the folder says it moved, the panel reads
+ * again, and a mark that came back different is somebody having written to this file
+ * (`AMB-D-784`). The same mark goes back into {@link folderSave}.
+ */
 export async function folderRead(
   projectId: number,
   root: string,
@@ -112,6 +119,13 @@ export async function folderRead(
  *
  * It refuses rather than half-saves. What a reader can actually cause is a character the encoding
  * has no room for — a `✓` in a Shift_JIS file — which comes back named, with the file untouched.
+ *
+ * `seen` is the mark {@link folderRead} handed back, or the one the last save did. **A file that no
+ * longer answers to it is not written to**: somebody wrote to it after this side read it, and what
+ * the editor holds is older than what is on the disk (`folder_changed_underneath`, `AMB-D-784`).
+ * What a save that did happen answers with is the mark of what it wrote, which is what the panel
+ * goes on knowing the file by — without it, the panel's next look would find its own save and read
+ * it as somebody else's.
  */
 export async function folderSave(
   projectId: number,
@@ -121,9 +135,13 @@ export async function folderSave(
   encoding: string,
   bom: boolean,
   lineEnding: "lf" | "crlf",
-): Promise<void> {
-  if (!inTauri()) return;
-  await invoke<void>("folder_save", { projectId, root, path, text, encoding, bom, lineEnding });
+  seen: string,
+): Promise<string> {
+  if (!inTauri()) return seen;
+  return await invoke<string>(
+    "folder_save",
+    { projectId, root, path, text, encoding, bom, lineEnding, seen },
+  );
 }
 
 /**

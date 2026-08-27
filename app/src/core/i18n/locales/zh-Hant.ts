@@ -566,6 +566,11 @@ export const zhHant: Translation = {
     "files.save": "儲存",
     "files.saving": "正在儲存…",
     "files.saved": "已儲存",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "這個檔案在這裡開啟之後，有人寫過它。",
+    "files.readAgain": "重新讀取",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "這個檔案裡兩種換行都有。儲存後會統一成一種。",
@@ -731,6 +736,9 @@ export const zhHant: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "無法儲存這個檔案：{reason}",
     folder_unwritable_character: "「{character}」在 {encoding} 裡寫不出來，所以什麼都沒儲存。",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "這個檔案在這裡讀取之後，有人寫過它，所以什麼都沒儲存。",
 
     already_reserved: "{ref} 不是「待辦」，無法認領；可能已有另一個工作階段在處理。",
     not_ready: "{ref} 還不能認領：{reasons}",

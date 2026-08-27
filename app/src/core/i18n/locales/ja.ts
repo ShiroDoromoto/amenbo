@@ -578,6 +578,11 @@ export const ja: Translation = {
     "files.save": "保存",
     "files.saving": "保存しています…",
     "files.saved": "保存しました",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "このファイルは、ここで開いたあとに誰かが書き換えました。",
+    "files.readAgain": "読み直す",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "このファイルは改行が2種類まざっています。保存すると、どちらかにそろいます。",
@@ -754,6 +759,9 @@ export const ja: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "このファイルを保存できませんでした: {reason}",
     folder_unwritable_character: "「{character}」は {encoding} では書けないので、何も保存していません。",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "このファイルは、ここで読んだあとに誰かが書き換えました。何も保存していません。",
 
     already_reserved: "{ref} は「未着手」ではないため予約できません。別のセッションが着手済みかもしれません。",
     not_ready: "{ref} はまだ予約できません: {reasons}",

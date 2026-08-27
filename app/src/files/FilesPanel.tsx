@@ -961,6 +961,17 @@ function NameBox({ initial, onName, onEnd }: {
   );
 }
 
+/**
+ * Whether a refusal is the host saying the file moved under the reader (`crate::folder_save`).
+ *
+ * It is the one save refusal the panel acts on rather than prints: every other is a sentence and a
+ * reader who can try again, where this one has an answer of its own to offer (`AMB-D-784`).
+ */
+function changedUnderneath(e: unknown): boolean {
+  return typeof e === "object" && e !== null
+    && (e as { code?: unknown }).code === "folder_changed_underneath";
+}
+
 /** One file, as far as a panel can show it. */
 function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   projectId: number;
@@ -987,11 +998,29 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   // Which newline to write. A file with one kind keeps it; a file with both has none until the
   // reader picks, and the save waits for that rather than guessing.
   const [newline, setNewline] = useState<Newline>(null);
+  // Whether the file moved under a reader who has typed. Nothing of theirs is taken away by it —
+  // reading the file again is a thing they ask for, and this is the asking (`AMB-D-784`).
+  const [stale, setStale] = useState(false);
   // Where a picture too large to draw was handed on to the machine from. The same menu the list
   // rows open, opened here because this is the one state a reader reaches it from with no row under
   // the pointer.
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const name = path[path.length - 1];
+
+  // What the file was as it was last read, and whether there is anything of the reader's to lose by
+  // replacing it. Held in a ref rather than read out of the effect below: that effect is subscribed
+  // once per file, and taking these as reasons to re-subscribe would install a fresh watch over the
+  // folder the first time somebody typed.
+  const held = useRef({ edited, digest: file?.digest });
+  held.current = { edited, digest: file?.digest };
+
+  // One file as it has just been read. The newline travels with the text because a file read again
+  // is a file whose lines may end differently than they did — and both kinds in one file is the one
+  // answer this side cannot act on by itself.
+  const take = (one: FolderFileDto) => {
+    setFile(one);
+    setNewline(one.lineEnding === "mixed" ? null : one.lineEnding);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -1000,16 +1029,59 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
     setEdited(false);
     setRefused(null);
     setNewline(null);
+    setStale(false);
     void folderRead(projectId, root, path)
-      .then((one) => {
-        if (!alive) return;
-        setFile(one);
-        // Both kinds in one file is the only answer this side cannot act on by itself.
-        setNewline(one.lineEnding === "mixed" ? null : one.lineEnding);
-      })
+      .then((one) => { if (alive) take(one); })
       .catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
   }, [projectId, root, path.join("/")]);
+
+  // The file moving under the reader while they have it open.
+  //
+  // **This face watches the folder itself**, because the tree that was watching it is not on the
+  // page while a file is being read — the panel draws one or the other. What arrives says only that
+  // the folder moved (`AMB-D-785`), so the answer is to read the file again and compare the mark:
+  // the same mark is this file standing still while something else in the folder changed, which is
+  // most of what arrives here and draws nothing at all.
+  //
+  // **A reader who has typed nothing is simply shown what the file says now.** This panel sits
+  // beside an agent that edits the same files, and a reader looking at what it changed an hour ago
+  // reads it as the agent having done nothing (`AMB-D-784`).
+  const tracked = file?.digest !== undefined;
+  useEffect(() => {
+    if (!tracked) return;
+    let alive = true;
+    const look = () => {
+      void folderRead(projectId, root, path)
+        .then((fresh) => {
+          if (!alive || fresh.digest === undefined || fresh.digest === held.current.digest) return;
+          if (held.current.edited) setStale(true);
+          else take(fresh);
+        })
+        // A read that did not answer leaves what is drawn where it is. The file may be being
+        // written this very instant, and taking a reader's text off the screen for a moment of the
+        // disk's is worse than being a moment out of date — a file that has really gone is what the
+        // save then says, to somebody who asked for it.
+        .catch(() => {});
+    };
+    // Subscribed before the watch is asked for, the same order the tree takes: the first thing the
+    // folder does could happen while the host is still walking it.
+    const listening = onFolderChanged((changes) => { if (alive && changes.root === root) look(); });
+    void folderWatch(projectId, root).catch(() => {});
+    return () => {
+      alive = false;
+      void listening.then((stop) => stop());
+      void folderUnwatch(root);
+    };
+  }, [projectId, root, path.join("/"), tracked]);
+
+  // Taking what is on the disk now, over what the reader has typed. It is the one thing here that
+  // loses somebody's work, which is why nothing does it on their behalf (`AMB-D-784`).
+  const readAgain = () => {
+    void folderRead(projectId, root, path)
+      .then((fresh) => { take(fresh); setEdited(false); setStale(false); setRefused(null); })
+      .catch(() => setFailed(true));
+  };
 
   // Whether this file is one the panel can write back at all. The host says so before a reader has
   // typed a character: a file cut at the read cap, or one whose bytes and text do not round-trip,
@@ -1023,18 +1095,26 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
 
   const save = async () => {
     const read = typed.current;
-    if (!savable || keeping || file?.encoding === undefined || read === null || newline === null) return;
+    if (!savable || keeping || file?.encoding === undefined || file.digest === undefined
+      || read === null || newline === null) return;
     setKeeping(true);
     setRefused(null);
     try {
-      await folderSave(projectId, root, path, read(), file.encoding, file.bom, newline);
+      const kept = await folderSave(
+        projectId, root, path, read(), file.encoding, file.bom, newline, file.digest,
+      );
       setEdited(false);
-      // What is on the disk now has one kind of newline, so the question is not asked again. The
-      // text is left where it is: replacing it would be handing the editor its own document back
-      // and moving the caret to the top for the trouble.
-      setFile({ ...file, lineEnding: newline });
+      // What is on the disk now has one kind of newline, so the question is not asked again, and it
+      // is the mark this save came back with — without taking that, the panel's next look at the
+      // folder would find its own writing and read it as somebody else's (`AMB-D-784`). The text is
+      // left where it is: replacing it would be handing the editor its own document back and moving
+      // the caret to the top for the trouble.
+      setFile({ ...file, lineEnding: newline, digest: kept });
     } catch (e) {
-      setRefused(errText(e));
+      // The one refusal that is not a sentence to read and be done with: the file moved under the
+      // reader, and what that wants is the offer below rather than a line of prose.
+      if (changedUnderneath(e)) setStale(true);
+      else setRefused(errText(e));
     } finally {
       setKeeping(false);
     }
@@ -1120,6 +1200,15 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
               <option value="lf">{t("files.newlineLf")}</option>
               <option value="crlf">{t("files.newlineCrlf")}</option>
             </select>
+          </div>
+        )}
+        {/* The file moved under the reader while they were typing in it. What is said is the fact
+            and nothing else, and what is offered is the one thing this panel can do about it:
+            lining the two texts up is the work of the agent in the pane (`AMB-D-784`). */}
+        {stale && (
+          <div className="files__changed">
+            <p className="files__none">{t("files.changedUnderneath")}</p>
+            <button className="files__reread" onClick={readAgain}>{t("files.readAgain")}</button>
           </div>
         )}
         {refused !== null && <p className="files__none">{refused}</p>}

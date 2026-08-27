@@ -569,6 +569,11 @@ export const vi: Translation = {
     "files.save": "Lưu",
     "files.saving": "Đang lưu…",
     "files.saved": "Đã lưu",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Ai đó đã ghi vào tệp này sau khi nó được mở ở đây.",
+    "files.readAgain": "Đọc lại",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Tệp này có cả hai kiểu xuống dòng. Khi lưu, tất cả sẽ thành một kiểu.",
@@ -734,6 +739,9 @@ export const vi: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Không lưu được tệp này: {reason}",
     folder_unwritable_character: "“{character}” không viết được trong {encoding}, nên không có gì được lưu.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Ai đó đã ghi vào tệp này sau khi nó được đọc ở đây, nên không có gì được lưu.",
 
     already_reserved: "{ref} không ở trạng thái “Cần làm” nên không thể nhận — có thể một phiên khác đã giữ nó.",
     not_ready: "{ref} chưa thể nhận: {reasons}",

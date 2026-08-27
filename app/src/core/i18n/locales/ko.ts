@@ -565,6 +565,11 @@ export const ko: Translation = {
     "files.save": "저장",
     "files.saving": "저장하는 중…",
     "files.saved": "저장했습니다",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "이 파일은 여기서 연 뒤에 누군가 고쳤습니다.",
+    "files.readAgain": "다시 읽기",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "이 파일에는 줄바꿈이 두 가지 섞여 있습니다. 저장하면 한 가지로 맞춰집니다.",
@@ -730,6 +735,9 @@ export const ko: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "이 파일을 저장하지 못했습니다: {reason}",
     folder_unwritable_character: "“{character}”는 {encoding}에서 쓸 수 없어서 아무것도 저장하지 않았습니다.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "이 파일은 여기서 읽은 뒤에 누군가 고쳤기 때문에, 아무것도 저장하지 않았습니다.",
 
     already_reserved: "{ref}은(는) ‘할 일’이 아니어서 맡을 수 없습니다. 다른 세션이 이미 진행 중일 수 있습니다.",
     not_ready: "{ref}은(는) 아직 맡을 수 없습니다: {reasons}",

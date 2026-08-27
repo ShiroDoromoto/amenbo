@@ -595,6 +595,11 @@ export const ru: Translation = {
     "files.save": "Сохранить",
     "files.saving": "Сохранение…",
     "files.saved": "Сохранено",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Кто-то записал в этот файл после того, как он был здесь открыт.",
+    "files.readAgain": "Прочитать заново",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "В этом файле оба вида переноса строк. При сохранении все станут одинаковыми.",
@@ -772,6 +777,9 @@ export const ru: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Не удалось сохранить этот файл: {reason}",
     folder_unwritable_character: "«{character}» нельзя записать в {encoding}, поэтому ничего не сохранено.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Кто-то записал в этот файл после того, как он был здесь прочитан, поэтому ничего не сохранено.",
 
     already_reserved:
       "{ref} не в состоянии «К выполнению», поэтому взять её нельзя — возможно, ею уже занят другой сеанс.",

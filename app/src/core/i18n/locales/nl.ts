@@ -566,6 +566,11 @@ export const nl: Translation = {
     "files.save": "Opslaan",
     "files.saving": "Bezig met opslaan…",
     "files.saved": "Opgeslagen",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Iemand heeft naar dit bestand geschreven nadat het hier is geopend.",
+    "files.readAgain": "Opnieuw inlezen",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Dit bestand bevat beide soorten regeleinde. Bij het opslaan worden ze allemaal gelijk.",
@@ -732,6 +737,9 @@ export const nl: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Dit bestand kon niet worden opgeslagen: {reason}",
     folder_unwritable_character: "‘{character}’ kan niet in {encoding} worden geschreven, dus er is niets opgeslagen.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Iemand heeft naar dit bestand geschreven nadat het hier is gelezen, dus er is niets opgeslagen.",
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",

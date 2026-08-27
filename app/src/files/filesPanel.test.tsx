@@ -56,6 +56,9 @@ const hoisted = vi.hoisted(() => ({
   dragging: null as null | ((event: { payload: unknown }) => void),
   /** What the editor was asked to draw, and whether it was allowed to be typed into. */
   editing: [] as { text: string; editable: boolean; name: string }[],
+  /** Every text the panel replaced the standing editor's document with — a file read again is one
+   *  of the two ways this happens, and "nothing was replaced" is a thing to assert (`AMB-D-784`). */
+  shown: [] as string[],
   /** Every carry the panel asked the host for, as it asked for it. */
   imported: [] as
     { paths: string[]; toRoot: string; to: string[]; effect: DropEffectDto }[],
@@ -68,8 +71,13 @@ const hoisted = vi.hoisted(() => ({
   slowRefusal: false,
   /** The way to tell the panel a person typed, as the stand-in editor took it. */
   typing: null as null | (() => void),
-  /** Every save the panel asked for, and what it sent with it. */
-  saved: [] as { path: string; text: string; encoding: string; bom: boolean; lineEnding: string }[],
+  /** Every save the panel asked for, and what it sent with it — the mark of what was read
+   *  included, which is what the host weighs the file against (`AMB-D-784`). */
+  saved: [] as {
+    path: string; text: string; encoding: string; bom: boolean; lineEnding: string; seen: string;
+  }[],
+  /** The mark a save answers with: what the file is once this save has landed. */
+  keptDigest: "after",
   /** What the next save is refused with. Its own field: a name and a save are refused for different
    *  reasons, and a test about one must not arm the other. */
   refuseSave: null as unknown,
@@ -88,7 +96,7 @@ vi.mock("./editorLoad", () => ({
     parent.appendChild(drawn);
     hoisted.typing = () => onEdit?.();
     return {
-      show(next: string) { drawn.textContent = next; },
+      show(next: string) { hoisted.shown.push(next); drawn.textContent = next; },
       text() { return drawn.textContent ?? ""; },
       close() { drawn.remove(); hoisted.typing = null; },
     };
@@ -162,11 +170,12 @@ vi.mock("./folder", () => ({
   },
   folderSave: async (
     _projectId: number, root: string, path: string[],
-    text: string, encoding: string, bom: boolean, lineEnding: string,
-  ) => {
+    text: string, encoding: string, bom: boolean, lineEnding: string, seen: string,
+  ): Promise<string> => {
     hoisted.asked.push(`save:${root}:${path.join("/")}`);
     if (hoisted.refuseSave !== null) throw hoisted.refuseSave;
-    hoisted.saved.push({ path: path.join("/"), text, encoding, bom, lineEnding });
+    hoisted.saved.push({ path: path.join("/"), text, encoding, bom, lineEnding, seen });
+    return hoisted.keptDigest;
   },
   folderRename: async (_projectId: number, root: string, path: string[], name: string) => {
     hoisted.asked.push(`rename:${root}:${path.join("/")}:${name}`);
@@ -311,8 +320,10 @@ async function drawOpen(props: Partial<Props> = {}) {
 beforeEach(() => {
   hoisted.asked = [];
   hoisted.editing = [];
+  hoisted.shown = [];
   hoisted.typing = null;
   hoisted.saved = [];
+  hoisted.keptDigest = "after";
   hoisted.refuseSave = null;
   // One file in the folder, so a test that only wants a row to press has one without saying so.
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
@@ -823,7 +834,9 @@ describe("the file face", () => {
     /** Open `run.sh` in the editor, ready to be typed into. */
     async function open(about: Partial<FolderFileDto> = {}) {
       hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
-      hoisted.file = aFile({ text: "#!/bin/sh\necho hi", encoding: "UTF-8", ...about });
+      hoisted.file = aFile({
+        text: "#!/bin/sh\necho hi", encoding: "UTF-8", digest: "before", ...about,
+      });
       await draw();
       await click(button(t("files.tree")));
       await settle();
@@ -865,6 +878,9 @@ describe("the file face", () => {
         encoding: "Shift_JIS",
         bom: true,
         lineEnding: "crlf",
+        // And the mark of what was read, which is what the host refuses to write over a file that
+        // no longer answers to (`AMB-D-784`).
+        seen: "before",
       });
       // And there is nothing left to save, which is what the control says once it is through.
       expect(button(t("files.saved"))?.disabled).toBe(true);
@@ -936,6 +952,129 @@ describe("the file face", () => {
       expect(button(t("files.saved"))).toBeUndefined();
     });
   });
+
+  /** The file moving under the reader while they have it open (`AMB-D-784`).
+   *
+   *  This panel sits beside an agent that edits the same files, so the case is the ordinary one and
+   *  not the corner: what has to be right is that a reader looking at a file sees what it says now,
+   *  and that a reader who has typed into it keeps what they typed until they say otherwise. */
+  describe("a file written to while it is open", () => {
+    /** Open `run.sh` with a mark on it, and the panel watching the folder for it. */
+    async function open(about: Partial<FolderFileDto> = {}) {
+      hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
+      hoisted.file = aFile({
+        text: "#!/bin/sh\necho hi", encoding: "UTF-8", digest: "before", ...about,
+      });
+      await draw();
+      await click(button(t("files.tree")));
+      await settle();
+      await click(button("run.sh"));
+      await settle();
+    }
+
+    /** Somebody else writing to the file, and the host saying the folder moved. */
+    async function written(text: string, digest: string) {
+      hoisted.file = aFile({ text, encoding: "UTF-8", digest });
+      await act(async () => {
+        tell({ root: ROOT, capped: false, unwatched: false, gone: false });
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      await settle();
+    }
+
+    /** The reader typing, as the editor reports it. */
+    async function type(text: string) {
+      await act(async () => {
+        const drawn = container.querySelector(".cm-editor");
+        if (drawn !== null) drawn.textContent = text;
+        hoisted.typing?.();
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+
+    /** The tree is not on the page while a file is being read, so the face reading it is what
+     *  keeps a watch over the folder — without one, nothing would ever say the file had moved. */
+    it("watches the folder while it is showing a file", async () => {
+      await open();
+      expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
+    });
+
+    /** Nothing of the reader's is at stake, so the panel simply shows what the file says now. A
+     *  reader looking at what the agent changed an hour ago reads it as the agent having done
+     *  nothing at all. */
+    it("shows what the file says now, where nobody has typed", async () => {
+      await open();
+      await written("#!/bin/sh\necho the agent was here", "after");
+      expect(last(hoisted.shown)).toContain("the agent was here");
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("the agent was here");
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+    });
+
+    /** The word carries no rows, so every move of the folder brings the panel back to read the
+     *  file — and the mark is what tells "this file moved" from "something else in the folder
+     *  did", which is most of what arrives. */
+    it("draws nothing where the folder moved and this file did not", async () => {
+      await open();
+      hoisted.shown = [];
+      await written("#!/bin/sh\necho hi", "before");
+      expect(hoisted.shown).toEqual([]);
+    });
+
+    /** What a reader has typed is theirs. They are told, and reading the file again is a thing they
+     *  ask for — which is the one thing here that loses somebody's work. */
+    it("tells a reader who has typed, and takes nothing away from them", async () => {
+      await open();
+      await type("#!/bin/sh\necho mine");
+      await written("#!/bin/sh\necho theirs", "after");
+
+      expect(container.textContent).toContain(t("files.changedUnderneath"));
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("mine");
+
+      await click(button(t("files.readAgain")));
+      await settle();
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("theirs");
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+      // And there is nothing of theirs left unsaved, so the control says so.
+      expect(button(t("files.saved"))?.disabled).toBe(true);
+    });
+
+    /** The belt behind the watch: a move the panel never heard about is still refused at the door,
+     *  and what the reader gets is the same offer rather than a sentence to read. */
+    it("says so when the save is the thing that finds out", async () => {
+      await open();
+      hoisted.refuseSave = {
+        code: "folder_changed_underneath",
+        message_en: "somebody wrote to this file after it was read here",
+        fields: {},
+      };
+      await type("#!/bin/sh\necho mine");
+      await click(button(t("files.save")));
+      await settle();
+
+      expect(container.textContent).toContain(t("files.changedUnderneath"));
+      expect(hoisted.saved).toEqual([]);
+      expect(button(t("files.save"))?.disabled).toBe(false);
+    });
+
+    /** A save answers with the mark of what it wrote, and the panel takes it: without that, the
+     *  panel's own writing would come back as the folder having moved and be read as somebody
+     *  else's. */
+    it("knows the file by what its own save wrote", async () => {
+      await open();
+      await type("#!/bin/sh\necho mine");
+      await click(button(t("files.save")));
+      await settle();
+      // The folder moves because of that very save, and the file answers to the new mark.
+      await written("#!/bin/sh\necho mine", "after");
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+
+      await type("#!/bin/sh\necho mine again");
+      await click(button(t("files.save")));
+      await settle();
+      expect(last(hoisted.saved)?.seen).toBe("after");
+    });
+  });
+
 
   it("says so when the file is not something a panel can show", async () => {
     hoisted.file = aFile();

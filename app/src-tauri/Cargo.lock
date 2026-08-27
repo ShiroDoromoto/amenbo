@@ -40,6 +40,7 @@ dependencies = [
  "amenbo-scratch",
  "amenbo-static-host",
  "base64 0.23.0",
+ "blake3",
  "block2",
  "chardetng",
  "chrono",

@@ -588,6 +588,11 @@ export const ptBR: Translation = {
     "files.save": "Salvar",
     "files.saving": "Salvando…",
     "files.saved": "Salvo",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Alguém escreveu neste arquivo depois que ele foi aberto aqui.",
+    "files.readAgain": "Ler de novo",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Este arquivo tem os dois tipos de quebra de linha. Ao salvar, todas ficam iguais.",
@@ -761,6 +766,9 @@ export const ptBR: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Não foi possível salvar este arquivo: {reason}",
     folder_unwritable_character: "“{character}” não pode ser escrito em {encoding}, então nada foi salvo.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Alguém escreveu neste arquivo depois que ele foi lido aqui, então nada foi salvo.",
 
     already_reserved: "{ref} não está em “A fazer”, então não dá para reservar — outra sessão pode já estar com ela.",
     not_ready: "{ref} ainda não dá para reservar: {reasons}",

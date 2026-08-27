@@ -27,6 +27,19 @@ const hoisted = vi.hoisted(() => ({
   apps: [] as FolderAppDto[],
   /** The folders the project is bound to. Empty is a project nobody has bound one to yet. */
   bound: [] as { path: string; exists: boolean }[],
+  /** The host's side of the drag-and-drop subscription (`../core/hostDrop`). */
+  dragging: null as null | ((event: { payload: unknown }) => void),
+}));
+
+// A file dragged in from the desktop reaches the application, and the page hears about it through
+// this one event (`AMB-D-775`). It is the host's, so the test plays the host.
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({
+    onDragDropEvent: async (take: (event: { payload: unknown }) => void) => {
+      hoisted.dragging = take;
+      return () => { hoisted.dragging = null; };
+    },
+  }),
 }));
 
 vi.mock("./folder", () => ({
@@ -128,6 +141,9 @@ beforeEach(() => {
     partial: false,
   };
   hoisted.bound = [{ path: ROOT, exists: true }];
+  hoisted.dragging = null;
+  // Inside Tauri as far as the panel is concerned; without it there is no host to hear a drop from.
+  (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -136,6 +152,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 });
 
 describe("the file face", () => {
@@ -327,6 +344,46 @@ describe("the file face", () => {
     await settle();
     expect(hoisted.asked).toContain(`entries:${ROOT}:src`);
     expect(container.textContent).toContain("main.rs");
+  });
+
+  // The host says where the pointer is and nothing else, so which folder a file would land in is
+  // the panel's own answer — and the answer a reader can see before they let go (`AMB-D-775`).
+  it("marks the folder a file dragged in from the desktop would land in", async () => {
+    hoisted.entries[""] = [{ name: "src", isDir: true }, { name: "README.md", isDir: false }];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false }];
+    await draw();
+    await click(button(t("files.tree")));
+    await settle();
+    await click(button("src"));
+    await settle();
+
+    // jsdom lays nothing out, so what is under the point is stated. What is being read is the walk
+    // up from it: a file row belongs to the folder holding it, so hanging over `main.rs` is hanging
+    // over `src` — the same folder as hanging over its name.
+    // Each move is at a point of its own: a move that repeats the last one is dropped on the way in,
+    // because macOS sends the same point twice while the drag stands still (`../core/hostDrop`).
+    let step = 0;
+    const over = (el: Element | null | undefined) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => el ?? null;
+      step += 1;
+      hoisted.dragging?.({ payload: { type: "over", position: { x: step, y: 1 } } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const marked = () => container.querySelector(".files__into")?.getAttribute("data-into");
+
+    await over(button("main.rs"));
+    expect(marked()).toBe("src");
+
+    // A row belonging to no folder in the tree belongs to the tree, which is the root itself.
+    await over(button("README.md"));
+    expect(marked()).toBeUndefined();
+    expect(container.querySelector(".files__row--into")?.getAttribute("data-into")).toBe("");
+
+    // Nothing under the pointer is nothing marked: a highlight left standing would name a folder
+    // the reader had already dragged away from.
+    await over(null);
+    expect(container.querySelector(".files__into, .files__row--into")).toBeNull();
   });
 
   it("draws a Markdown file as Markdown", async () => {

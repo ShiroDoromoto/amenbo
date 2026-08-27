@@ -2314,6 +2314,25 @@ pub struct FolderFileDto {
     pub(crate) image: Option<FolderImageDto>,
 }
 
+/// What a drop asked for, as the keys held at the moment it landed say it (`crate::dropped`).
+///
+/// It crosses on its own, out of a command of its own, because **no operating system puts the
+/// modifier keys on the drag event** (`AMB-T-3740`). The keyboard is read where it can be read — the
+/// host, at the instant of the drop — and the answer is this and nothing else.
+///
+/// `default` is neither key: what a plain drop means belongs to the face receiving it, not here.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum DropEffectDto {
+    /// Copy: Option on macOS, Ctrl on Windows and Linux.
+    Copy,
+    /// Move: Command on macOS, Shift on Windows and Linux.
+    Move,
+    /// Neither was held.
+    Default,
+}
+
 /// A picture out of a folder, carried whole so the webview can draw it without a URL of its own.
 ///
 /// The bytes come over the command seam rather than through [`crate::fileproto`], because that door

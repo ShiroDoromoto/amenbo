@@ -127,7 +127,9 @@ objc2-service-management = "0.3"
 # (`crate::open_with`) — the one operating system with no "open with" dialog of its own. Only
 # `NSWorkspace` is taken: AppKit's default feature set is the whole framework, and none of the rest of
 # it is wanted in a process whose windows belong to Tauri.
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
+# `NSEvent` is taken for its class method alone: it reports the modifier keys as they are right now,
+# which is the only way to know whether a drop that just landed was a copy or a move (`crate::dropped`).
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace", "NSEvent"] }
 # Names the user's home directory, which is where a login registration written by an older version of
 # this app sits. Same crate core resolves the app-data base with.
 directories = "6"
@@ -153,4 +155,7 @@ windows-sys = { version = "0.61", features = [
   # be in an apartment first.
   "Win32_System_Com",
   "Win32_UI_Shell",
+  # `GetAsyncKeyState` reads Ctrl and Shift as they are right now — whether a drop that just landed
+  # was a copy or a move, which the drag event does not carry (`crate::dropped`).
+  "Win32_UI_Input_KeyboardAndMouse",
 ] }

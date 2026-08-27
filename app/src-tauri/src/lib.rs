@@ -10,6 +10,9 @@ mod blobproto;
 mod commands;
 mod diag;
 mod dto;
+/// Whether a drop was a copy or a move: the keys held as it landed, read off the keyboard because no
+/// operating system puts them on the drag event (`AMB-T-3740`).
+mod dropped;
 mod error;
 /// The custom protocol that hands the webview a file by its path, and the fence that keeps that from
 /// meaning any path: a session this app opened, and then a path inside that session's folder.
@@ -483,6 +486,7 @@ pub fn run() {
       folder::folder_read,
       folder::folder_open_file,
       folder::folder_reveal_file,
+      dropped::drop_effect,
       open_with::folder_open_with,
       open_with::folder_open_file_with,
       folder_watch::folder_watch,

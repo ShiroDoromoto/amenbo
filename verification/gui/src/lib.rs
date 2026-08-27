@@ -1855,6 +1855,13 @@ impl Instructor {
             (Domain::Files, "save") =>
                 "In the row above the text — beside the file's name — press the way the panel offers to keep what was typed."
                     .to_string(),
+            // And the offer that comes with the line about the file having moved. It is named by what
+            // it does — take the disk, drop the typing — because the words on it are the interface's
+            // own, and it is said where it is, since it stands with that line rather than in the row
+            // the saving is in.
+            (Domain::Files, "read-again") =>
+                "Beside the line saying somebody wrote to this file after it was opened, press the offer to read it again — what is on the disk now replaces what is in the editor."
+                    .to_string(),
             // The file face's own settings row moved. The move and what it writes are one instruction,
             // the way the tick's is: a row read in its new position with nothing written behind it
             // would be evidence of an answer nothing kept.
@@ -3369,6 +3376,13 @@ fn note(with: &Args) -> Result<&'static str, String> {
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),
         Some("folder-gone") => Ok("that this folder is not there any more"),
+        // The file written under a reader who was typing in it. One line covers both ways it is
+        // reached — the watch noticing while they type, and a save turned away for the same reason —
+        // because the panel draws one state for them: what it says is the fact, and beside it is the
+        // one thing it can do about it.
+        Some("changed-underneath") => {
+            Ok("that somebody wrote to this file after it was opened here")
+        }
         // The two refusals a name comes back with, read under the box the name was typed into rather
         // than among the lines the column stands with. They are named by what the machine answered —
         // the name is in the folder already, or it is not a name this machine will hold — and not by

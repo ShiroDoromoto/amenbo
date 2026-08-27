@@ -9,6 +9,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DoctorIssueDto, DoctorReportDto, RestoreReportDto } from "../bindings/bindings";
+import { asksBeforeTrash, setAsksBeforeTrash } from "../files/askBeforeTrash";
 
 const hoisted = vi.hoisted(() => ({
   /** What `fetchDoctorReport` answers: consumed from the front on each check; the last one then repeats. */
@@ -166,6 +167,7 @@ beforeEach(() => {
   hoisted.defaultViews = [];
   hoisted.tickAnswers = [];
   hoisted.tickFails = null;
+  setAsksBeforeTrash(true);
   applySnapshot({ ...getSnapshot(), tickConsent: null, tickRemovalLeavesARow: false });
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -396,6 +398,41 @@ describe("Settings > Appearance (the view a project created without one opens in
       pick.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(hoisted.defaultViews).toEqual(["calendar"]);
+  });
+});
+
+// The way back from a "do not ask again" inside the question itself (`AMB-D-777`): the checkbox that
+// turns it off is drawn inside the thing it silences, so this row is the only place it can be turned
+// back on. What is held here is the round trip, because a one-way switch is what this row exists to
+// stop being.
+describe("Settings > Files (the question before a row goes in the bin)", () => {
+  it("stands where the setting stands, and can turn it off and back on again", async () => {
+    setAsksBeforeTrash(true);
+    await render();
+
+    const pick = selectInRow(t("settings.trashAsk"));
+    expect(pick.value).toBe("on");
+
+    await act(async () => {
+      pick.value = "off";
+      pick.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(asksBeforeTrash()).toBe(false);
+
+    // The half that was missing: nothing else on any screen writes this back, so if this press does
+    // not land, a reader who ticked the box once is never asked again.
+    await act(async () => {
+      pick.value = "on";
+      pick.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(asksBeforeTrash()).toBe(true);
+  });
+
+  it("comes up off where the reader turned it off before, rather than at its own default", async () => {
+    setAsksBeforeTrash(false);
+    await render();
+
+    expect(selectInRow(t("settings.trashAsk")).value).toBe("off");
   });
 });
 

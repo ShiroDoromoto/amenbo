@@ -752,6 +752,12 @@ jobs:
       - name: Check the shipped npm dependencies' licenses
         run: node guards/check-npm-licenses.mjs
 
+      # One license per package is as deep as npm records, and the file panel's TextMate grammars
+      # are other people's work inside a package that declares only its own. This reads the panel's
+      # catalog instead — also a file, also no install.
+      - name: Check the bundled TextMate grammars' licenses
+        run: node guards/check-grammar-licenses.mjs
+
   # The Tauri host crate (app/src-tauri) is `exclude`d from the root workspace, so
   # the `rust` job above never compiles it — a core refactor can break it on main
   # unnoticed. This job closes that gap by clippy+test gating the crate. It is NOT

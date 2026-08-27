@@ -899,6 +899,7 @@ mod tests {
                         role: DimensionRole::None,
                         show_on_card: false,
                         required: false,
+                        applies_to: crate::model::DimensionAppliesTo::Both,
                         slug: None,
                     },
                 )

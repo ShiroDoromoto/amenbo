@@ -14,31 +14,39 @@
 //! on. The trace is read off the wiring catalog because that is the table a folder leaves traces of, so
 //! a startable provider with no wiring row simply traces nothing — startable, and unspoken for.
 //!
-//! **And beside it, what the reader registered** ([`crate::config::Config::custom_agents`],
-//! `AMB-D-794`). The catalog is a shortcut and not a census — this field is a fast-moving one, and the
-//! table goes out of date faster than it can be corrected — so a command the reader wrote themselves
-//! stands as a candidate on the same terms as a catalogued one. It traces nothing, for the same
-//! reason a provider with no wiring row traces nothing, and it is judged installed by the first word
-//! of its line and by nothing else.
+//! **Being installed decides what a press can open; the trace decides what it comes up on**
+//! (`AMB-D-792`). The two answer different questions — *can this machine run it* and *is it worked
+//! with here* — and the second used to overrule the first: the product of the two was the row, so a
+//! folder holding `.claude` and nothing else lost Codex CLI and Gemini CLI off it entirely, which
+//! reads as a dead end to somebody who wants one of them.
 //!
-//! **The product of the two is the answer, and the second is the floor.** A trace is a folder's
-//! preference, so a provider that left one and is not installed is a preference this machine cannot
-//! act on — starting it would open a pane on `command not found`. An installed provider that left no
-//! trace is the opposite: startable, and merely unspoken for. So the two ranks below are the product
-//! first and the floor second, and what is never offered is a provider that is not installed.
+//! So the row is every catalogued provider ([`offered`]), the ones this machine has are the ones a
+//! press can open ([`startable`]), and the trace has moved to the rank below — where it says which of
+//! them to come up on rather than which of them exist. What is **not** startable is drawn and not
+//! pressed: leaving it off the row is what makes a tool unfindable, and starting it would open a pane
+//! on `command not found`.
+//!
+//! **And beside the catalog, what the reader registered** ([`crate::config::Config::custom_agents`],
+//! `AMB-D-794`). The catalog is a shortcut and not a census — this field moves faster than the table
+//! can be corrected, and a catalog row names a bare program where `claude --model opus` is an
+//! ordinary thing to want — so a command the reader wrote themselves is a candidate on the same
+//! terms as a catalogued one, and every rank below reads the two alike. It traces nothing, for the
+//! same reason a provider with no wiring row traces nothing, and it is judged installed by the first
+//! word of its line and by nothing else.
 //!
 //! **What is said about a provider stops at "installed".** Whether the person is signed in, whether
 //! their subscription is current, whether the version still speaks the flags — none of it is knowable
 //! before the program runs, and a face that guessed would be telling the reader something it made up
 //! (`AMB-T-3591`). The vocabulary here is **installed / not installed**, and nothing wider.
 //!
-//! **Three things are looked at in turn, and the first that holds is the answer** ([`settle`]):
+//! **Four things are looked at in turn, and the first that holds is the answer** ([`settle`]):
 //!
 //! | | kept against | written by |
 //! |---|---|---|
 //! | 1 | the project ([`crate::config::Config::agent_for`]) | the project's own settings, and nothing else |
 //! | 2 | the person ([`crate::config::Config::last_agent`]) | every press that opens a pane with one |
-//! | 3 | — | nothing: this is the run before anybody has chosen |
+//! | 3 | the folder ([`Candidate::traced`]) | the provider itself, by leaving its directory in the folder |
+//! | 4 | — | nothing: this is the run before anybody has chosen |
 //!
 //! **The project is above the person because it is the pinned answer.** Somebody who works with one
 //! agent everywhere never touches it, and rank 2 carries their choice from the first project into
@@ -46,7 +54,12 @@
 //! outranks the habit. Neither is kept per folder: one project can bind several, which would give it
 //! as many answers as it has folders.
 //!
-//! **Rank 3 is the first run, and it is drawn as "nothing is chosen" rather than guessed at.** The
+//! **The trace is under both because nobody gave it as an answer.** A folder holding `.claude` says
+//! an agent has been run here, which is a good guess and not a decision — so it settles the run where
+//! neither answer holds, and gives way the moment one does. Where a folder traces several, it settles
+//! nothing: two guesses are not an answer either.
+//!
+//! **Rank 4 is the first run, and it is drawn as "nothing is chosen" rather than guessed at.** The
 //! one exception is a machine with a single startable agent, where there is no question to put.
 //!
 //! A kept answer that stops being startable — the tool was removed — is not an error and not a
@@ -73,14 +86,13 @@ pub const SHELL: &str = "shell";
 /// and this machine say about it.
 ///
 /// **A row the reader registered stands here too** ([`CustomAgent`], `AMB-D-794`), which is why the
-/// strings are owned: the catalog is `'static` and a registration is not. Everything the ranks below
-/// do is done to both kinds alike — a registered command that is not installed is not offered, and
-/// one this project pinned is the answer while it holds.
+/// strings are owned: the catalog is `'static` and a registration is not.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Candidate {
     /// The provider this answers for ([`Launch::id`], or [`CustomAgent::id`]).
     pub id: String,
-    /// The provider's own name for itself, so a face can render a row without a second lookup.
+    /// The provider's own name for itself, so a face can render a row without a second lookup — or
+    /// what the reader called their own row.
     pub label: String,
     /// What it is started as ([`Launch::command`]) — shown, because a reader told a tool is missing
     /// needs the word to type to install it. For a registered row it is the first word of the line
@@ -94,8 +106,8 @@ pub struct Candidate {
     pub line: Option<String>,
     /// Whether this folder shows a trace of the provider being used here ([`Wiring::traced`]).
     ///
-    /// Always `false` for a registered row: a trace is a wiring catalog's row and a registration has
-    /// none, so nothing a folder holds can point at one.
+    /// Always `false` for a registered row: a trace is left against a wiring catalog row, and a
+    /// registration has none, so nothing a folder holds can point at one.
     pub traced: bool,
     /// Whether the command is on the `PATH` of the shell a pane starts with. Only ever this — see
     /// the module docs on what it deliberately does not claim.
@@ -107,9 +119,12 @@ pub struct Candidate {
 pub enum Choice {
     /// One agent, and nothing to ask: the id to start ([`Candidate::id`]).
     Settled(String),
-    /// Several, so the person picks — the ids to offer, in catalog order then registration order.
+    /// Several, so the person picks — the ids a press can open ([`startable`]), in catalog order
+    /// then registration order. What the face *draws* is wider than this ([`offered`]).
     Ask(Vec<String>),
-    /// Nothing on this machine can be started. The face has an install notice to put, not a question.
+    /// Nothing on this machine can be started, so there is no answer to settle on. The row is still
+    /// drawn — every provider is on it, none of them pressable (`AMB-D-792`) — which is what tells a
+    /// reader with no agent installed that there is something to install.
     Nothing,
 }
 
@@ -145,7 +160,7 @@ pub fn candidates(
         command: one.command().to_string(),
         line: Some(one.line.clone()),
         // Nothing can have traced it: a trace is left against a wiring row, and a registration has
-        // none. It reaches the offer through the fallback, the same as a startable provider that
+        // none. It reaches the ranks below through what this machine has, like a startable provider
         // the wiring catalog does not list.
         traced: false,
         installed: installed(one.command()),
@@ -153,43 +168,52 @@ pub fn candidates(
     catalogued.chain(own).collect()
 }
 
-/// The candidates a face offers, in catalog order: the ones the folders trace **and** this machine
-/// has, or — when the product is empty — every one this machine has.
+/// The candidates a face draws, in catalog order then registration order — **every one of them**
+/// (`AMB-D-792`).
 ///
-/// The fallback is not a weakening of the rule. Folders with no trace have said nothing, and the
-/// question then is only which of the installed agents to open; treating that as "none" would put an
-/// install notice in front of a reader whose tools are all installed.
+/// Nothing is filtered out here, which is the point: a provider left off the row is one the reader
+/// cannot install their way onto, and neither of the two facts about a candidate is a reason to leave
+/// it off. Not the trace, which says what is worked with here and not what exists. Not being
+/// installed either — a tool a reader has yet to install is exactly the one the row has to be able
+/// to tell them about, and it is drawn unpressable rather than left out (`app/src/shell/EmptySlot.tsx`).
+///
+/// It is a function rather than the slice itself because *what a face draws* is a question worth
+/// having one answer to, and because the answer has changed once already.
 pub fn offered(candidates: &[Candidate]) -> Vec<&Candidate> {
-    let preferred: Vec<&Candidate> = candidates
-        .iter()
-        .filter(|c| c.traced && c.installed)
-        .collect();
-    if !preferred.is_empty() {
-        return preferred;
-    }
-    candidates.iter().filter(|c| c.installed).collect()
+    candidates.iter().collect()
 }
 
-/// The answer: the project's if it still holds, else the person's, else what [`offered`] leaves.
+/// The candidates a press can actually open, in catalog order: [`offered`] minus what this machine
+/// has not got.
+///
+/// This is the half that must never be widened by mistake. What is settled on here is started
+/// ([`crate::harness::Launch::command`]), so a row that is not installed reaching this would open a
+/// pane on `command not found` — which is the one outcome the two lists exist to keep apart.
+pub fn startable(candidates: &[Candidate]) -> Vec<&Candidate> {
+    candidates.iter().filter(|one| one.installed).collect()
+}
+
+/// The answer: the project's if it still holds, else the person's, else the folder's trace, else
+/// nothing — the four ranks the module docs set out, in that order.
 ///
 /// `remembered` is what this project pinned ([`crate::config::Config::agent_for`]) and `last` is
-/// what this person last opened with ([`crate::config::Config::last_agent`]) — the two ranks the
-/// module docs set out, in that order.
+/// what this person last opened with ([`crate::config::Config::last_agent`]).
 ///
-/// **Either is honoured only while it is still startable**, and only while it is still one of the
-/// offered: a project whose folders have since grown a trace for the agent actually used in it
-/// should not be held to an answer given before they did. [`SHELL`] is the one value that always
-/// holds, since a folder always has a prompt — but only where there is something to open at all,
-/// because a machine with nothing startable has one terminal and no choice to make about it.
+/// **Every rank is read against [`startable`] and never against [`offered`]**, which is what keeps
+/// a row drawn for a tool the reader might install from becoming a pane opened on one they have not.
+/// An answer whose tool has gone is not an error and not a question about itself: it stops holding,
+/// and the rank underneath answers instead. [`SHELL`] is the one value that always holds, since a
+/// folder always has a prompt — but only where there is something to open at all, because a machine
+/// with nothing startable has one terminal and no choice to make about it.
 ///
 /// [`Choice::Ask`] is the run before anybody has chosen, and it is put to the person as a row with
 /// **nothing on it** rather than as a guess.
 pub fn settle(remembered: Option<&str>, last: Option<&str>, candidates: &[Candidate]) -> Choice {
-    let offered = offered(candidates);
-    if offered.is_empty() {
+    let startable = startable(candidates);
+    if startable.is_empty() {
         return Choice::Nothing;
     }
-    let holds = |kept: &str| offered.iter().find(|c| c.id == kept).map(|one| one.id.clone());
+    let holds = |kept: &str| startable.iter().find(|c| c.id == kept).map(|one| one.id.clone());
     if let Some(id) = remembered.and_then(holds) {
         return Choice::Settled(id);
     }
@@ -201,12 +225,22 @@ pub fn settle(remembered: Option<&str>, last: Option<&str>, candidates: &[Candid
             return Choice::Settled(id);
         }
     }
-    match offered.as_slice() {
+    // The folder's own guess, and only where it points at one thing: a folder tracing two says which
+    // agents have been run here, which is not the same as saying which one to open with now.
+    if let [one] = traced(&startable).as_slice() {
+        return Choice::Settled(one.id.clone());
+    }
+    match startable.as_slice() {
         // One thing to open with is not a question: asking about a row with a single answer on it
         // would be asking the person to agree with the machine.
         [one] => Choice::Settled(one.id.clone()),
         several => Choice::Ask(several.iter().map(|c| c.id.clone()).collect()),
     }
+}
+
+/// The startable candidates this folder shows a trace of, in catalog order.
+fn traced<'a>(startable: &[&'a Candidate]) -> Vec<&'a Candidate> {
+    startable.iter().copied().filter(|one| one.traced).collect()
 }
 
 /// The launch row an id names, for a caller holding a [`Choice::Settled`].
@@ -255,23 +289,63 @@ mod tests {
         Choice::Ask(ids.iter().map(|one| one.to_string()).collect())
     }
 
-    /// The product decides while it has anything in it: an agent this machine has but this folder
-    /// has never been opened with does not compete with the one the folder traces.
+    /// The folder's own guess, where nobody has given an answer: one traced agent this machine has
+    /// is what the run comes up on, and the machine's other tools do not make it a question.
     #[test]
     fn a_folder_that_traces_one_installed_agent_is_not_asked_about() {
         let c = built(&["claude-code", "codex-cli"], &["claude", "gemini"]);
         assert_eq!(settle(None, None, &c), settled("claude-code"));
     }
 
-    /// Several traced and installed is the one case a person is asked, and the offer is those —
-    /// not the whole catalog, and not the machine's other tools.
+    /// A folder tracing two has said which agents have been run in it, which is not an answer to
+    /// which one to open with — so nothing is settled, and what is asked about is everything this
+    /// machine can start rather than the two.
     #[test]
-    fn several_in_the_product_are_offered_and_nothing_else_is() {
+    fn a_folder_that_traces_several_settles_nothing() {
         let c = built(&["claude-code", "codex-cli"], &["claude", "codex", "gemini"]);
         assert_eq!(
             settle(None, None, &c),
-            ask(&["claude-code", "codex-cli"])
+            ask(&["claude-code", "codex-cli", "gemini-cli"])
         );
+    }
+
+    /// The trace is a rank and not a filter (`AMB-D-792`): it is read under both answers a person
+    /// gave, and it gives way to either. The old shape had it deciding the row instead, which is
+    /// what took Codex CLI off a folder holding `.claude`.
+    #[test]
+    fn a_trace_gives_way_to_an_answer_somebody_gave() {
+        let c = built(&["codex-cli"], &["claude", "codex"]);
+        assert_eq!(settle(None, Some("claude-code"), &c), settled("claude-code"));
+        assert_eq!(settle(Some("claude-code"), None, &c), settled("claude-code"));
+        // And with neither given, the trace is what is left to answer with.
+        assert_eq!(settle(None, None, &c), settled("codex-cli"));
+    }
+
+    /// A trace this machine cannot act on settles nothing — the rank reads what can be started, so
+    /// what is left is the question rather than a pane opened on `command not found`.
+    #[test]
+    fn a_trace_for_a_tool_that_is_not_installed_settles_nothing() {
+        let c = built(&["claude-code"], &["codex", "gemini"]);
+        assert_eq!(settle(None, None, &c), ask(&["codex-cli", "gemini-cli"]));
+    }
+
+    /// The row is the whole catalog, whatever this folder traces and whatever this machine has: a
+    /// provider left off it is one the reader cannot install their way onto. What being installed
+    /// decides is [`startable`], which is what a press is allowed to open.
+    #[test]
+    fn the_row_is_drawn_whole_and_only_the_press_is_narrowed() {
+        let c = built(&["claude-code"], &["claude"]);
+        assert_eq!(offered(&c).len(), harness::LAUNCHES.len(), "every provider is on the row");
+        assert_eq!(
+            startable(&c).iter().map(|one| one.id.as_str()).collect::<Vec<_>>(),
+            ["claude-code"],
+            "and only what this machine has can be pressed",
+        );
+        // Nothing installed at all is still a whole row — that is what tells a reader with no agent
+        // there is something to install.
+        let bare = built(&[], &[]);
+        assert_eq!(offered(&bare).len(), harness::LAUNCHES.len());
+        assert!(startable(&bare).is_empty());
     }
 
     /// A folder that traces nothing has said nothing, so what is asked about is what the machine
@@ -283,12 +357,14 @@ mod tests {
         assert_eq!(settle(None, None, &built(&[], &["gemini"])), settled("gemini-cli"));
     }
 
-    /// A trace this machine cannot act on is not an answer. Starting it would open the pane on
-    /// `command not found`, which is the one outcome the multiplication exists to rule out.
+    /// A trace this machine cannot act on is not something a press may open. Starting it would open
+    /// the pane on `command not found`, which is the one outcome the two lists exist to keep apart —
+    /// it stays on the row, and the one installed agent is what the run settles on.
     #[test]
-    fn a_traced_agent_that_is_not_installed_is_never_offered() {
+    fn a_traced_agent_that_is_not_installed_is_never_pressed() {
         let c = built(&["claude-code"], &["codex"]);
-        assert!(!offered(&c).iter().any(|one| one.id == "claude-code"));
+        assert!(!startable(&c).iter().any(|one| one.id == "claude-code"));
+        assert!(offered(&c).iter().any(|one| one.id == "claude-code"), "and it is still drawn");
         assert_eq!(settle(None, None, &c), settled("codex-cli"));
     }
 
@@ -378,8 +454,8 @@ mod tests {
         assert_eq!(settle(None, None, &c), settled("claude-code"));
     }
 
-    /// A registered command is a candidate on the same terms as a catalogued one: installed decides
-    /// whether it is offered, and nothing about it being the reader's own changes that.
+    /// A registered command is a candidate on the same terms as a catalogued one: being installed
+    /// decides whether a press can open it, and nothing about it being the reader's own changes that.
     #[test]
     fn a_registered_command_stands_beside_the_catalogued_ones() {
         let c = with_registered(&[], &["mine"], &[("Mine", "mine --model big")]);
@@ -391,13 +467,14 @@ mod tests {
         assert!(!row.traced, "nothing can have traced a row the wiring catalog does not list");
     }
 
-    /// The first word is the whole of the judgment. A line whose program is not there is not
-    /// offered, exactly as an uninstalled catalog row is not — the flags after it are nobody's to
+    /// The first word is the whole of the judgment. A line whose program is not there is drawn and
+    /// not pressed, exactly as an uninstalled catalog row is — the flags after it are nobody's to
     /// vouch for.
     #[test]
-    fn a_registered_command_whose_program_is_missing_is_not_offered() {
+    fn a_registered_command_whose_program_is_missing_is_drawn_and_not_pressed() {
         let c = with_registered(&[], &["claude"], &[("Mine", "mine --model big")]);
-        assert!(!offered(&c).iter().any(|one| one.id == "custom:1"));
+        assert!(offered(&c).iter().any(|one| one.id == "custom:1"), "it is still drawn");
+        assert!(!startable(&c).iter().any(|one| one.id == "custom:1"));
         assert_eq!(settle(None, None, &c), settled("claude-code"));
     }
 
@@ -419,17 +496,35 @@ mod tests {
     #[test]
     fn the_readers_own_rows_come_after_the_catalogues() {
         let c = with_registered(&[], &["claude", "mine"], &[("Mine", "mine")]);
-        let ids: Vec<&str> = c.iter().map(|one| one.id.as_str()).collect();
+        let ids: Vec<&str> = offered(&c).iter().map(|one| one.id.as_str()).collect();
         assert_eq!(ids.last(), Some(&"custom:1"));
         assert_eq!(settle(None, None, &c), ask(&["claude-code", "custom:1"]));
     }
 
-    /// Every offered id names a launch row, which is what lets a caller turn the answer into a
-    /// command without a second table.
+    /// Every **catalogued** id on the row names a launch row, which is what lets a caller turn the
+    /// answer into a command without a second table.
+    ///
+    /// A registered row is the one thing on the row that does not, and that is not an oversight: its
+    /// command line is this device's and lives in the settings, so the caller that starts a pane
+    /// looks in two places rather than one (`app/src-tauri/src/pty.rs`).
     #[test]
     fn what_is_offered_can_always_be_started() {
-        for one in offered(&built(&[], &["claude", "codex", "gemini", "copilot", "cursor-agent"])) {
-            assert_eq!(started_as(&one.id).map(|h| h.command), Some(one.command.as_str()));
+        let row = with_registered(
+            &[],
+            &["claude", "codex", "gemini", "copilot", "cursor-agent", "mine"],
+            &[("Mine", "mine --model big")],
+        );
+        for one in offered(&row) {
+            match &one.line {
+                None => assert_eq!(
+                    started_as(&one.id).map(|h| h.command),
+                    Some(one.command.as_str()),
+                ),
+                Some(line) => {
+                    assert!(started_as(&one.id).is_none(), "a registration is not a catalog row");
+                    assert_eq!(line, "mine --model big");
+                }
+            }
         }
     }
 }

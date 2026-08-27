@@ -258,6 +258,15 @@ tolerance that finds a misread title on a `present: true` step finds it on a `pr
 too, so it can red a run and never green one on a screen nobody stood up. A step that passed only
 because a character was forgiven says so in the summary and carries `slipped` in `manifest.json`;
 several of those in one run is a reader going wrong rather than a screen.
+
+**Two pairs of glyphs are folded onto each other before any of that**: the digit `1` against the
+letter `l`, and the digit `0` against the letter `o`. They are one drawing, not a reader's slip, so
+they cost nothing out of the budget above and reach the expectations the budget cannot — a category's
+key is a monospace word of five or six characters, well under the floor, and `channel` came back as
+`channe1` off a shot it was plainly legible on. What it gives up is telling `route1` from `routel`,
+which no reading of a photograph could do anyway. A lowercase `i` is deliberately not in the set: the
+face this serves draws it with a dot, so folding it onto `l` would give away discrimination against a
+misreading this screen does not produce. A green earned this way carries `slipped` like any other.
 An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
 kept for an AI/human eye and does not fail the run. A task's **title is one of those once the task
 has ended**: done and rejected are drawn with a line through them, and the reader returns the glyphs
@@ -295,7 +304,7 @@ one build produces alongside the app and one installer carries with it. The exec
 asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
 The screen tool is the input primitive too, called by whoever drives the screen between steps: its
-`find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the action steps the
+`find` / `click-named` / `click` / `dblclick` / `type` / `key` / `set-date` carry out the action steps the
 checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
 at all — the proof it waits for is a shot it throws away, since an app the system has taken up is
 not yet an app with a window, and a walk that started between the two would fail on its first step.
@@ -325,6 +334,15 @@ pixels. Anything wide swallows both, which is why aiming works until it is aimed
 the board's `＋` and the view tabs read as unreachable elements until the arithmetic was suspected
 instead.
 
+**A day goes in through `set-date <pid> <name> <yyyy-mm-dd>` rather than through the keys.** A date
+field is one control with three numbered parts in it, and typing into it is a digit at a time — but
+every digit that leaves the value a valid day makes the app commit and redraw the field, and the
+redraw drops the run of digits the webview was collecting. A year is four digits and valid after each
+one, so `2099` arrives as `0009`. Typing slower does not help: it is the redraw between the digits,
+not the pace of them. The tool opens the field's picker, writes the day where the picker keeps it,
+tabs back out so the panel is not standing over the rows beneath, and reads the field back — so a
+write that reached nothing is reported here rather than as a red assert on the day.
+
 ### `--print` — read the road without a screen
 
 The screen road is written in YAML, but the sentences it turns into are written in Rust, so what a
@@ -345,7 +363,7 @@ cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml 
 
 A screen road is walked by somebody, always. The run prints the step it is about to shoot and waits
 for a line on stdin; between the two, the screen belongs to whoever is driving — carry the step out
-by hand, or with the screen tool's `click-named` / `type` / `key`, and send the line once the screen
+by hand, or with the screen tool's `click-named` / `type` / `key` / `set-date`, and send the line once the screen
 is standing where the step says it should. There is no flag for running it any other way.
 
 **The hand-over comes before the step, the first one included.** That is what lets a road open with a
@@ -503,7 +521,10 @@ the other two.
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
 a file there (what an attachment ingests, what the lint is pointed at), `copy-fixture` puts one
 there from `fixtures/`, and `git-init` makes the folder a git repository, which is the only way the
-hook slots are real enough to write into. `wire-ai` is the same kind of stand-in one tier up: Amenbo
+hook slots are real enough to write into. That one takes the same `dir` the first two do, and a road
+reading what git says about a folder on screen needs it: the colours are drawn on the face of the
+folder a project is **bound** to, and a repository anywhere else leaves every row of it bare.
+`wire-ai` is the same kind of stand-in one tier up: Amenbo
 hands over the text that starts a folder's AI on it and writes no settings file itself, so the road
 past that point exists only if someone pastes — and it pastes what the build under test handed over,
 into the file that build named. All of it stays inside the run's own throwaway folder — a
@@ -709,11 +730,15 @@ is drawn on the other side of the switch, so the operator arms the word and cros
 lands. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
 
 And the last is the column beside those panes. **`files`** is the folder a project answers for, read
-from inside Amenbo: two sections in one column — what has changed lately, and the folder itself
-folded down — so every op takes a `section` saying which of the two a row is being looked for in, the
-same file being able to stand in both at once. `tree` unfolds the folder's section, `enter` opens one
-folder a level, `open` presses a file and `back` leaves it; `listed`, `reading` and `says` read what a
-row is, what an opened file draws, and one of the face's standing lines.
+from inside Amenbo: the folder itself, folded down, with what git says about each row drawn as a
+colour on it. Every op takes a `section` saying which part of the column a row is being looked for
+in — there is one part to name today, and the arg is kept because the panel is not finished growing.
+`tree` unfolds the folder's section, `enter` opens one folder a level, `open` presses a file and
+`back` leaves it; `listed`, `reading` and `says` read what a row is, what an opened file draws, and
+one of the face's standing lines. `row-mark` reads the colour a row wears, named by what git says —
+`untracked`, `added`, `modified` — rather than by the colour itself, since which colour that is
+belongs to the theme. It is a `Review` and can be nothing else: a shot is read for words, and a row
+wearing a colour says the same letters as the row beside it that wears none.
 
 The rest are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks a row
 and `menu-on-file` reaches the same menu from the file that is open, which is where a file the face

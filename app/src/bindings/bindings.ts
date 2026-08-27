@@ -432,30 +432,18 @@ arrived: Array<string>,
 stopped: FolderStoppedDto | null, };
 
 /**
- * A file that changed lately, as the file face's second row draws it (`crate::folder`).
+ * The word that one watched folder moved, and the two things about the watch itself that the face
+ * cannot see for itself (`crate::folder_watch`).
  *
- * The path is the segments from the folder the face is rooted at, so the row can be opened by
- * handing the same list back — nothing here is a path a caller has to take apart.
- */
-export type FolderChangedDto = { 
-/**
- * The segments from the root, the file's own name last.
- */
-path: Array<string>, 
-/**
- * When it was last written (RFC3339 UTC).
- */
-modified: string, };
-
-/**
- * What the file face's second row is drawn from: the rows, and whether they are the whole story
- * (`crate::folder_watch`).
+ * **It carries nothing about what moved.** The face goes and asks — the tree for the names, git
+ * for the colour beside them (`AMB-D-785`) — and what arrives here is the moment to ask, not the
+ * answer. A list carried along would be a second copy of the truth to keep in step with the disk's.
  *
- * `partial` and `gone` are the two things the rows cannot say for themselves. Where every folder
- * needs a watch of its own the kernel's limit is per user, so some may be refused while the rest
- * work; drawn as a whole watch, that reads as "nothing has changed" in the half nobody is
- * watching. An empty list means the same thing for a folder that was removed as for one nobody
- * has written in, and only one of the two is worth telling a reader about.
+ * `partial` and `gone` are what is left, and neither can be worked out from asking. Where every
+ * folder needs a watch of its own the kernel's limit is per user, so some may be refused while the
+ * rest work; drawn as a whole watch, that reads as "nothing has changed" in the half nobody is
+ * watching. And a folder that was removed answers the same as one nobody has written in, which is
+ * the one of the two worth telling a reader about.
  */
 export type FolderChangesDto = { 
 /**
@@ -467,10 +455,6 @@ export type FolderChangesDto = {
  * the caller is what has to match it against a folder it is already drawing.
  */
 root: string, 
-/**
- * The files written to most recently, newest first.
- */
-changed: Array<FolderChangedDto>, 
 /**
  * Whether some of the folder is unwatched — a walk that stopped at its cap, or a watch the
  * kernel refused.
@@ -500,8 +484,7 @@ isDir: boolean,
 /**
  * Whether the repository's own ignore rules cover it. The row is drawn either way and drawn
  * faintly for this, since what git does not record is still something somebody wrote
- * (`AMB-D-786`) — it is the row of what changed lately, and the watch behind it, that leave
- * these out.
+ * (`AMB-D-786`) — it is the watch, and the search, that leave these out.
  */
 ignored: boolean, };
 
@@ -523,7 +506,7 @@ text?: string,
  */
 truncated: boolean, 
 /**
- * The picture, where the bytes say they are one and there are few enough of them to carry.
+ * The picture, where the bytes say they are one and there are few enough of them to draw.
  */
 image?: FolderImageDto, 
 /**
@@ -554,20 +537,23 @@ lineEnding: FolderLineEndingDto,
 clean: boolean, };
 
 /**
- * A picture out of a folder, carried whole so the webview can draw it without a URL of its own.
+ * A picture out of a folder, named rather than carried: the webview asks [`crate::fileproto`] for
+ * the bytes at the path it already has in hand (`AMB-D-783`).
  *
- * The bytes come over the command seam rather than through [`crate::fileproto`], because that door
- * is fenced by a session's folder and this face is rooted at the project's (`AMB-T-3602`).
+ * **The bytes used to come over this seam base64-encoded**, which cost a third again in size, put
+ * the whole picture in one message, and held every byte of it in both processes before a single
+ * pixel was drawn. The door that hands out a file by its path is fenced by the project's folders,
+ * the same fence this answer was resolved through, so there is nothing left for the seam to carry.
+ * A reader is meant to see the picture arrive top to bottom rather than all at once.
  */
 export type FolderImageDto = { 
 /**
  * The type the bytes themselves say they are — read off the first of them, never off the name.
+ *
+ * It travels because the door is told what to serve as: the sniff happened here, and asking the
+ * webview to name the type of a file it has not read would be asking it to guess from the name.
  */
-mime: string, 
-/**
- * The whole picture, base64-encoded, for a `data:` URL.
- */
-base64: string, };
+mime: string, };
 
 /**
  * How a file's lines end — the wire form of [`crate::encoding::LineEnding`].
@@ -2541,12 +2527,17 @@ folder?: string,
  */
 candidates: Array<WakeCandidateDto>, 
 /**
- * The ids worth offering, in catalog order. Empty means nothing on this machine can be started.
+ * The ids the row is drawn from, in catalog order — every catalogued agent (`AMB-D-792`).
+ *
+ * **Not the ids a press may open.** Which of them this machine can start is each row's own
+ * `installed`, and a face that opened one without reading it puts a pane on `command not
+ * found`. It is the whole catalog because a provider left off the row is one the reader cannot
+ * install their way onto.
  */
 offered: Array<string>, 
 /**
- * The id to open with, when nothing needs asking. `None` with a non-empty `offered` is the
- * question; `None` with an empty one is the notice.
+ * The id to open with, when nothing needs asking. `None` is the question — put to a person as a
+ * row with nothing on it, whether or not anything on that row can be pressed.
  */
 settled?: string, 
 /**

@@ -612,6 +612,53 @@ impl DimensionRole {
     }
 }
 
+/// What a classification axis is allowed to classify: tasks, decisions, or both (`AMB-D-789`). An axis
+/// is one mechanism serving two entities, and until this column existed it served them both whether or
+/// not that made sense — a project's "occupancy" axis is an exclusive lane on a real device, and a
+/// decision record occupies no device, yet opening one offered the choice. The values are shared either
+/// way: narrowing an axis says where it *means* something, never which values it holds.
+///
+/// `Both` is the default, and deliberately the wide side — the opposite of `show_on_card` and
+/// `required`, which start `false`. Those widen into crowding; this one, started narrow, would betray
+/// the plain expectation that an axis somebody raised applies where they raise it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DimensionAppliesTo {
+    Task,
+    Decision,
+    #[default]
+    Both,
+}
+
+impl DimensionAppliesTo {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DimensionAppliesTo::Task => "task",
+            DimensionAppliesTo::Decision => "decision",
+            DimensionAppliesTo::Both => "both",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<DimensionAppliesTo> {
+        match s {
+            "task" => Some(DimensionAppliesTo::Task),
+            "decision" => Some(DimensionAppliesTo::Decision),
+            "both" => Some(DimensionAppliesTo::Both),
+            _ => None,
+        }
+    }
+
+    /// Does this axis mean anything on a task?
+    pub fn on_task(&self) -> bool {
+        matches!(self, DimensionAppliesTo::Task | DimensionAppliesTo::Both)
+    }
+
+    /// Does this axis mean anything on a decision?
+    pub fn on_decision(&self) -> bool {
+        matches!(self, DimensionAppliesTo::Decision | DimensionAppliesTo::Both)
+    }
+}
+
 /// The classification axis itself — one "column". Scoped to a project; its set of values lives in
 /// [`DimensionValue`], its assignments to tasks in [`TaskDimensionValue`] and its assignments to
 /// decisions in [`DecisionDimensionValue`]. Categories, phases and any
@@ -650,6 +697,13 @@ pub struct Dimension {
     /// stays.
     #[serde(default)]
     pub required: bool,
+    /// Which side of the store this axis classifies (`AMB-D-789`). `Both` is where every axis starts and
+    /// where every axis an upgrade brings in stays, so nothing an existing store classified changes
+    /// meaning. Narrowing "both → one side" leaves the assignments already made on the other side in
+    /// place; they simply stop meaning anything, the way a time axis's dates do once `role` goes back to
+    /// `None`.
+    #[serde(default)]
+    pub applies_to: DimensionAppliesTo,
     /// The axis's readable, stable key — what names it **outside** Amenbo (`AMB-D-735`). The id is the
     /// real identifier; the slug is the one that can be read and typed where the id cannot be and the
     /// display name (Japanese, spaces and all) may not go. Unique within the project. `None` is only

@@ -571,6 +571,12 @@ export const de: Translation = {
     "files.chooseApp": "Mit einer ausgewählten App öffnen",
     "files.appUsual": "{name} (die übliche)",
     "files.reveal": "Im Dateimanager zeigen",
+    "files.trash": "In den Papierkorb verschieben",
+    "files.trashAsk": "{name} in den Papierkorb verschieben?",
+    "files.trashUndoable": "Die Datei landet im Papierkorb dieses Rechners und lässt sich zurückholen.",
+    "files.trashQuiet": "Nicht mehr nachfragen",
+    "files.trashGo": "Verschieben",
+    "files.trashKeep": "Abbrechen",
     "files.newFile": "Neue Datei",
     "files.newFolder": "Neuer Ordner",
     "files.rename": "Umbenennen",
@@ -583,6 +589,8 @@ export const de: Translation = {
     "files.stoppedTaken": "dort gibt es bereits etwas mit diesem Namen",
     "files.stoppedInside": "ein Ordner kann nicht in sich selbst verschoben werden",
     "files.stoppedNameless": "es hat keinen Namen, unter dem es übernommen werden könnte",
+    "files.stoppedNoBin": "dieses Laufwerk hat keinen Papierkorb, es wäre nichts zum Zurückholen geblieben",
+    "files.stoppedEmptied": "es ist nicht mehr im Papierkorb",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Speichern",

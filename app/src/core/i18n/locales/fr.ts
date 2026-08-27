@@ -582,6 +582,12 @@ export const fr: Translation = {
     "files.chooseApp": "Ouvrir avec une application de mon choix",
     "files.appUsual": "{name} (celle habituelle)",
     "files.reveal": "Afficher dans le gestionnaire de fichiers",
+    "files.trash": "Mettre à la corbeille",
+    "files.trashAsk": "Mettre {name} à la corbeille ?",
+    "files.trashUndoable": "Le fichier va dans la corbeille de cet ordinateur, et annuler le ramène.",
+    "files.trashQuiet": "Ne plus demander",
+    "files.trashGo": "Mettre à la corbeille",
+    "files.trashKeep": "Annuler",
     "files.newFile": "Nouveau fichier",
     "files.newFolder": "Nouveau dossier",
     "files.rename": "Renommer",
@@ -594,6 +600,8 @@ export const fr: Translation = {
     "files.stoppedTaken": "quelque chose porte déjà ce nom",
     "files.stoppedInside": "un dossier ne peut pas être déplacé dans lui-même",
     "files.stoppedNameless": "il n'a aucun nom sous lequel l'accueillir",
+    "files.stoppedNoBin": "ce disque n'a pas de corbeille, il ne resterait rien à récupérer",
+    "files.stoppedEmptied": "il n'est plus dans la corbeille",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Enregistrer",

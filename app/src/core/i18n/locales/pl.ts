@@ -587,6 +587,12 @@ export const pl: Translation = {
     "files.chooseApp": "Otwórz w wybranej aplikacji",
     "files.appUsual": "{name} (ta zwykła)",
     "files.reveal": "Pokaż w menedżerze plików",
+    "files.trash": "Przenieś do kosza",
+    "files.trashAsk": "Przenieść {name} do kosza?",
+    "files.trashUndoable": "Plik trafi do kosza tego komputera, a cofnięcie go przywróci.",
+    "files.trashQuiet": "Nie pytaj ponownie",
+    "files.trashGo": "Przenieś",
+    "files.trashKeep": "Anuluj",
     "files.newFile": "Nowy plik",
     "files.newFolder": "Nowy folder",
     "files.rename": "Zmień nazwę",
@@ -599,6 +605,8 @@ export const pl: Translation = {
     "files.stoppedTaken": "coś o tej nazwie już tam jest",
     "files.stoppedInside": "folderu nie można przenieść do niego samego",
     "files.stoppedNameless": "nie ma nazwy, pod którą można by go przyjąć",
+    "files.stoppedNoBin": "ten dysk nie ma kosza, więc nie zostałoby nic do przywrócenia",
+    "files.stoppedEmptied": "nie ma go już w koszu",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Zapisz",

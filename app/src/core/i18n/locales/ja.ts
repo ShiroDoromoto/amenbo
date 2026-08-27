@@ -573,6 +573,12 @@ export const ja: Translation = {
     "files.chooseApp": "アプリを選んで開く",
     "files.appUsual": "{name}（いつものアプリ）",
     "files.reveal": "フォルダで表示",
+    "files.trash": "ゴミ箱へ入れる",
+    "files.trashAsk": "{name} をゴミ箱へ入れますか？",
+    "files.trashUndoable": "このパソコンのゴミ箱へ移ります。元に戻せます。",
+    "files.trashQuiet": "今後確認しない",
+    "files.trashGo": "ゴミ箱へ入れる",
+    "files.trashKeep": "キャンセル",
     "files.newFile": "新しいファイル",
     "files.newFolder": "新しいフォルダ",
     "files.rename": "名前を変える",
@@ -585,6 +591,8 @@ export const ja: Translation = {
     "files.stoppedTaken": "同じ名前のものがすでにあります",
     "files.stoppedInside": "フォルダを自分の中へは運べません",
     "files.stoppedNameless": "取り込む先の名前になるものがありません",
+    "files.stoppedNoBin": "そのドライブにはゴミ箱が無く、入れると戻せなくなります",
+    "files.stoppedEmptied": "もうゴミ箱にありません",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "保存",

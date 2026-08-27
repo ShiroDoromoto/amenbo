@@ -587,6 +587,12 @@ export const uk: Translation = {
     "files.chooseApp": "Відкрити у вибраній програмі",
     "files.appUsual": "{name} (звична)",
     "files.reveal": "Показати у файловому менеджері",
+    "files.trash": "Перемістити до кошика",
+    "files.trashAsk": "Перемістити {name} до кошика?",
+    "files.trashUndoable": "Файл потрапить до кошика цього комп'ютера, і скасування поверне його.",
+    "files.trashQuiet": "Більше не запитувати",
+    "files.trashGo": "Перемістити",
+    "files.trashKeep": "Скасувати",
     "files.newFile": "Новий файл",
     "files.newFolder": "Нова тека",
     "files.rename": "Перейменувати",
@@ -599,6 +605,8 @@ export const uk: Translation = {
     "files.stoppedTaken": "щось із таким іменем уже є",
     "files.stoppedInside": "теку не можна перемістити всередину неї самої",
     "files.stoppedNameless": "немає імені, під яким його прийняти",
+    "files.stoppedNoBin": "на цьому диску немає кошика, і повертати було б уже нічого",
+    "files.stoppedEmptied": "його вже немає в кошику",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Зберегти",

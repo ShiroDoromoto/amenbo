@@ -561,6 +561,12 @@ export const tr: Translation = {
     "files.chooseApp": "Seçtiğim uygulamayla aç",
     "files.appUsual": "{name} (her zamanki)",
     "files.reveal": "Dosya yöneticisinde göster",
+    "files.trash": "Çöp kutusuna taşı",
+    "files.trashAsk": "{name} çöp kutusuna taşınsın mı?",
+    "files.trashUndoable": "Dosya bu bilgisayarın çöp kutusuna gider ve geri alınabilir.",
+    "files.trashQuiet": "Bir daha sorma",
+    "files.trashGo": "Taşı",
+    "files.trashKeep": "Vazgeç",
     "files.newFile": "Yeni dosya",
     "files.newFolder": "Yeni klasör",
     "files.rename": "Yeniden adlandır",
@@ -573,6 +579,8 @@ export const tr: Translation = {
     "files.stoppedTaken": "o adda bir şey zaten var",
     "files.stoppedInside": "bir klasör kendi içine taşınamaz",
     "files.stoppedNameless": "içeri alınacağı bir adı yok",
+    "files.stoppedNoBin": "o sürücüde çöp kutusu yok, geri getirilecek bir şey kalmazdı",
+    "files.stoppedEmptied": "artık çöp kutusunda değil",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Kaydet",

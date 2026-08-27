@@ -632,6 +632,15 @@ const ui = {
   "files.chooseApp": "Open with an application I pick",
   "files.appUsual": "{name} (the usual one)",
   "files.reveal": "Show in the file manager",
+  // Taking a file out of the folder, which here means the machine's own bin and nothing further: a
+  // press that was a slip costs a trip to the bin rather than the file (`AMB-D-777`). The question
+  // says so, because what makes "yes" cheap to press is knowing where the file goes.
+  "files.trash": "Move to the bin",
+  "files.trashAsk": "Move {name} to the bin?",
+  "files.trashUndoable": "It goes where this machine's deleted files go, and undo brings it back.",
+  "files.trashQuiet": "Do not ask again",
+  "files.trashGo": "Move it",
+  "files.trashKeep": "Cancel",
   "files.newFile": "New file",
   "files.newFolder": "New folder",
   "files.rename": "Rename",
@@ -644,6 +653,8 @@ const ui = {
   "files.stoppedTaken": "something with that name is already there",
   "files.stoppedInside": "a folder cannot be moved inside itself",
   "files.stoppedNameless": "it has no name to be brought in under",
+  "files.stoppedNoBin": "that drive has no bin, so nothing would have been left to bring back",
+  "files.stoppedEmptied": "it is not in the bin any more",
   // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
   // of the three it is, so there is no separate place for a reader to look for the answer.
   "files.save": "Save",

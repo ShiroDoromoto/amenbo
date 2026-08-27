@@ -561,6 +561,12 @@ export const nl: Translation = {
     "files.chooseApp": "Openen met een app naar keuze",
     "files.appUsual": "{name} (de gebruikelijke)",
     "files.reveal": "Tonen in de bestandsbeheerder",
+    "files.trash": "Naar de prullenbak",
+    "files.trashAsk": "{name} naar de prullenbak verplaatsen?",
+    "files.trashUndoable": "Het bestand gaat naar de prullenbak van deze computer, en ongedaan maken haalt het terug.",
+    "files.trashQuiet": "Niet meer vragen",
+    "files.trashGo": "Verplaatsen",
+    "files.trashKeep": "Annuleren",
     "files.newFile": "Nieuw bestand",
     "files.newFolder": "Nieuwe map",
     "files.rename": "Naam wijzigen",
@@ -573,6 +579,8 @@ export const nl: Translation = {
     "files.stoppedTaken": "er staat al iets met die naam",
     "files.stoppedInside": "een map kan niet in zichzelf worden verplaatst",
     "files.stoppedNameless": "het heeft geen naam om het onder binnen te halen",
+    "files.stoppedNoBin": "die schijf heeft geen prullenbak, er zou niets overblijven om terug te halen",
+    "files.stoppedEmptied": "het zit niet meer in de prullenbak",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Opslaan",

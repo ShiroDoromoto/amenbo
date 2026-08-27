@@ -564,6 +564,12 @@ export const vi: Translation = {
     "files.chooseApp": "Mở bằng ứng dụng tôi chọn",
     "files.appUsual": "{name} (ứng dụng thường dùng)",
     "files.reveal": "Hiện trong trình quản lý tệp",
+    "files.trash": "Chuyển vào thùng rác",
+    "files.trashAsk": "Chuyển {name} vào thùng rác?",
+    "files.trashUndoable": "Tệp sẽ nằm trong thùng rác của máy này, và hoàn tác sẽ đưa nó trở lại.",
+    "files.trashQuiet": "Đừng hỏi lại",
+    "files.trashGo": "Chuyển",
+    "files.trashKeep": "Hủy",
     "files.newFile": "Tệp mới",
     "files.newFolder": "Thư mục mới",
     "files.rename": "Đổi tên",
@@ -576,6 +582,8 @@ export const vi: Translation = {
     "files.stoppedTaken": "đã có thứ mang tên đó",
     "files.stoppedInside": "không thể chuyển một thư mục vào chính nó",
     "files.stoppedNameless": "không có tên nào để nhận vào",
+    "files.stoppedNoBin": "ổ đĩa đó không có thùng rác, nên sẽ không còn gì để lấy lại",
+    "files.stoppedEmptied": "nó không còn trong thùng rác",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Lưu",

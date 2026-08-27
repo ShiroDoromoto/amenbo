@@ -561,6 +561,12 @@ export const zhHans: Translation = {
     "files.chooseApp": "用我选的应用打开",
     "files.appUsual": "{name}（常用的）",
     "files.reveal": "在文件管理器中显示",
+    "files.trash": "移到回收站",
+    "files.trashAsk": "把 {name} 移到回收站吗？",
+    "files.trashUndoable": "文件会进入这台电脑的回收站，撤销可以还原。",
+    "files.trashQuiet": "不再询问",
+    "files.trashGo": "移动",
+    "files.trashKeep": "取消",
     "files.newFile": "新建文件",
     "files.newFolder": "新建文件夹",
     "files.rename": "重命名",
@@ -573,6 +579,8 @@ export const zhHans: Translation = {
     "files.stoppedTaken": "那里已经有同名的东西",
     "files.stoppedInside": "文件夹不能移动到它自己里面",
     "files.stoppedNameless": "没有可以据以接收的名称",
+    "files.stoppedNoBin": "该驱动器没有回收站，删除后就没有可还原的了",
+    "files.stoppedEmptied": "它已经不在回收站里了",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "保存",

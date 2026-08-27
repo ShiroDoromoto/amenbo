@@ -582,6 +582,12 @@ export const it: Translation = {
     "files.chooseApp": "Apri con un'applicazione a scelta",
     "files.appUsual": "{name} (quella solita)",
     "files.reveal": "Mostra nel gestore file",
+    "files.trash": "Sposta nel cestino",
+    "files.trashAsk": "Spostare {name} nel cestino?",
+    "files.trashUndoable": "Va nel cestino di questo computer, e annulla lo riporta indietro.",
+    "files.trashQuiet": "Non chiedere più",
+    "files.trashGo": "Sposta",
+    "files.trashKeep": "Annulla",
     "files.newFile": "Nuovo file",
     "files.newFolder": "Nuova cartella",
     "files.rename": "Rinomina",
@@ -594,6 +600,8 @@ export const it: Translation = {
     "files.stoppedTaken": "c'è già qualcosa con quel nome",
     "files.stoppedInside": "una cartella non può essere spostata dentro se stessa",
     "files.stoppedNameless": "non ha un nome sotto cui accoglierlo",
+    "files.stoppedNoBin": "quel disco non ha un cestino, quindi non resterebbe nulla da recuperare",
+    "files.stoppedEmptied": "non è più nel cestino",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Salva",

@@ -564,6 +564,12 @@ export const id: Translation = {
     "files.chooseApp": "Buka dengan aplikasi pilihan saya",
     "files.appUsual": "{name} (yang biasa)",
     "files.reveal": "Tampilkan di pengelola berkas",
+    "files.trash": "Pindahkan ke tempat sampah",
+    "files.trashAsk": "Pindahkan {name} ke tempat sampah?",
+    "files.trashUndoable": "Berkas masuk ke tempat sampah komputer ini, dan urungkan mengembalikannya.",
+    "files.trashQuiet": "Jangan tanya lagi",
+    "files.trashGo": "Pindahkan",
+    "files.trashKeep": "Batal",
     "files.newFile": "Berkas baru",
     "files.newFolder": "Folder baru",
     "files.rename": "Ganti nama",
@@ -576,6 +582,8 @@ export const id: Translation = {
     "files.stoppedTaken": "sudah ada sesuatu dengan nama itu",
     "files.stoppedInside": "folder tidak bisa dipindahkan ke dalam dirinya sendiri",
     "files.stoppedNameless": "tidak ada nama untuk menampungnya",
+    "files.stoppedNoBin": "drive itu tidak punya tempat sampah, jadi tidak ada yang bisa dikembalikan",
+    "files.stoppedEmptied": "sudah tidak ada di tempat sampah",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Simpan",

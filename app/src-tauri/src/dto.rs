@@ -2299,12 +2299,13 @@ pub struct FolderCarriedDto {
     pub(crate) stopped: Option<FolderStoppedDto>,
 }
 
-/// The row a carry stopped on, and what stopped it (`crate::folder_write`).
+/// The row a run over several of them stopped on, and what stopped it (`crate::folder_write`,
+/// `crate::trash`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct FolderStoppedDto {
-    /// The name that was being carried.
+    /// The name the run was on when it stopped.
     pub(crate) name: String,
     /// What stopped it, where what stopped it was Amenbo. Absent where the machine did, and then
     /// `why` is the whole of the answer.
@@ -2319,10 +2320,10 @@ pub struct FolderStoppedDto {
     pub(crate) why: String,
 }
 
-/// Why a carry stopped, where it was Amenbo that stopped it (`crate::folder_write`).
+/// Why a run stopped, where it was Amenbo that stopped it (`crate::folder_write`, `crate::trash`).
 ///
 /// **Only Amenbo's own refusals are named.** They are decided before anything is written and they
-/// are the same three every time, so a screen can put them in the reader's language — which the
+/// are the same few every time, so a screen can put them in the reader's language — which the
 /// machine's own sentences cannot be, and are not asked to be. Each of these was Amenbo's English
 /// standing on a Japanese screen until it had a name.
 #[derive(Serialize, TS)]
@@ -2335,6 +2336,43 @@ pub enum FolderStopDto {
     Inside,
     /// The path has no last name, so there is nothing to carry it in under.
     Nameless,
+    /// The drive the row is on has no bin, and the shell there would have deleted it instead of
+    /// binning it (`crate::trash`). Only one operating system can answer this, and it is the only
+    /// one that builds the code raising it — a wire value, not a branch every platform reaches.
+    #[allow(dead_code)]
+    NoBin,
+    /// The row is not in the bin any more, so there is nothing left to bring back.
+    Emptied,
+}
+
+/// What went to the machine's bin, and what it stopped on (`crate::trash`).
+///
+/// The same line through the list a carry answers with, for the same reason: the rows go one at a
+/// time, and once one of them is in the bin no single word covers the press.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderTrashedDto {
+    /// The names that are in the bin now, in the order they went there.
+    pub(crate) gone: Vec<String>,
+    /// The one it stopped on. Absent when the whole list went.
+    pub(crate) stopped: Option<FolderStoppedDto>,
+}
+
+/// What came back out of the bin, and what it stopped on (`crate::trash`).
+///
+/// The names are in the order they were put back, which is the reverse of the order they went in:
+/// undoing a press retraces it rather than replaying it, so a folder is back before what was inside
+/// it.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderRestoredDto {
+    /// The names that are where they were again.
+    pub(crate) back: Vec<String>,
+    /// The one it stopped on. What is still in the bin stays undoable, so pressing undo again
+    /// carries on from here.
+    pub(crate) stopped: Option<FolderStoppedDto>,
 }
 
 /// One path git named inside the folder the file face is showing (`crate::folder_git`).

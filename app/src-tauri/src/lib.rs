@@ -84,6 +84,9 @@ pub mod store_watch;
 /// The hourly tick's startup pass: what this device answered about being woken, settled against what
 /// its scheduler holds (`AMB-D-707`).
 mod tick;
+/// Taking a row out of that folder: into the machine's own bin and never past it, and back out again
+/// on the pair of paths each OS's bin hands over (`AMB-D-777`).
+mod trash;
 /// What every custom-protocol answer owes, whatever door it came out of — the served type's allowlist,
 /// the headers that keep it from being read back as a document, and `Range`.
 mod webproto;
@@ -222,6 +225,10 @@ pub fn run() {
     // different threads and long after the call that opened it returned (`pty`).
     .manage(pty::Terminals::default())
     .manage(folder_watch::FolderWatches::default())
+    // What this run of the app has put in the machine's bin, held for the life of the app rather
+    // than of the command that binned it: undo is a later press, and what it needs is the pair of
+    // paths the bin handed back at the time (`trash`).
+    .manage(trash::Bin::default())
     // The face of the talk window, held for the life of the app rather than of either window: the
     // two windows hand the arrangement between themselves through it, and none of it is kept
     // (`frames`).
@@ -534,6 +541,8 @@ pub fn run() {
       folder_write::folder_rename,
       folder_write::folder_move,
       folder_write::folder_copy,
+      trash::folder_trash,
+      trash::folder_untrash,
       folder_write::folder_import,
       pty::pty_open,
       pty::pty_sessions,

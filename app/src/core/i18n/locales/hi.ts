@@ -561,6 +561,12 @@ export const hi: Translation = {
     "files.chooseApp": "चुने हुए ऐप में खोलें",
     "files.appUsual": "{name} (सामान्य वाला)",
     "files.reveal": "फ़ाइल मैनेजर में दिखाएँ",
+    "files.trash": "रद्दी में भेजें",
+    "files.trashAsk": "{name} को रद्दी में भेजें?",
+    "files.trashUndoable": "यह इस मशीन की रद्दी में जाएगी, और पूर्ववत करने पर वापस आ जाएगी।",
+    "files.trashQuiet": "दोबारा न पूछें",
+    "files.trashGo": "भेजें",
+    "files.trashKeep": "रद्द करें",
     "files.newFile": "नई फ़ाइल",
     "files.newFolder": "नया फ़ोल्डर",
     "files.rename": "नाम बदलें",
@@ -573,6 +579,8 @@ export const hi: Translation = {
     "files.stoppedTaken": "उस नाम की कोई चीज़ पहले से वहाँ है",
     "files.stoppedInside": "किसी फ़ोल्डर को उसी के अंदर नहीं ले जाया जा सकता",
     "files.stoppedNameless": "इसका कोई नाम नहीं है जिसके तहत इसे लिया जा सके",
+    "files.stoppedNoBin": "उस ड्राइव में रद्दी नहीं है, इसलिए वापस लाने को कुछ नहीं बचता",
+    "files.stoppedEmptied": "यह अब रद्दी में नहीं है",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "सहेजें",

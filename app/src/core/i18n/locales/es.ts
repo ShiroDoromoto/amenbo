@@ -582,6 +582,12 @@ export const es: Translation = {
     "files.chooseApp": "Abrir con una aplicación que yo elija",
     "files.appUsual": "{name} (la de siempre)",
     "files.reveal": "Mostrar en el gestor de archivos",
+    "files.trash": "Mover a la papelera",
+    "files.trashAsk": "¿Mover {name} a la papelera?",
+    "files.trashUndoable": "Va a la papelera de este equipo, y deshacer lo devuelve.",
+    "files.trashQuiet": "No volver a preguntar",
+    "files.trashGo": "Mover",
+    "files.trashKeep": "Cancelar",
     "files.newFile": "Archivo nuevo",
     "files.newFolder": "Carpeta nueva",
     "files.rename": "Cambiar el nombre",
@@ -594,6 +600,8 @@ export const es: Translation = {
     "files.stoppedTaken": "ya hay algo con ese nombre",
     "files.stoppedInside": "una carpeta no puede moverse dentro de sí misma",
     "files.stoppedNameless": "no tiene ningún nombre con el que incorporarlo",
+    "files.stoppedNoBin": "esa unidad no tiene papelera, así que no quedaría nada que recuperar",
+    "files.stoppedEmptied": "ya no está en la papelera",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Guardar",

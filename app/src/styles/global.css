@@ -713,6 +713,46 @@ button { font: inherit; color: inherit; cursor: pointer; }
   cursor: pointer;
 }
 .files__menuitem:hover { background: var(--c-surface-sunken); }
+/* The item that changes the folder, held off from the ones that only hand the file to something
+   else. The gap is the whole of the separation: a rule would draw a heading over a group of one. */
+.files__menuitem--apart { margin-top: var(--s-1); border-top: 1px solid var(--c-border); padding-top: var(--s-2); }
+/* The same road out of the file being read, where there is no row under the pointer to open the
+   menu on. Quiet, like the control beside it: what makes it safe to sit there is that it asks
+   (`../files/TrashAsk`) and that the bin gives it back. */
+.files__trash {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+  cursor: pointer;
+}
+.files__trash:hover { color: var(--c-text); }
+/* The name takes the room in this row, so the two controls at its end stay together. */
+.files--reading .files__bar .files__name { flex: 1; }
+/* What the machine said about a row that would not go to the bin, or would not come back out of it.
+   It stands in the panel rather than beside the row, because by then the row is either gone from the
+   list or was never on it. */
+.files__stopped { margin: 0; color: var(--c-stop); font-size: var(--fs-xs); }
+
+/* The question before a row goes to the bin (`../files/TrashAsk`). Its own block rather than a share
+   of another feature's modal, for the reason the terminal face's is its own: a modal borrowing
+   another's class names cannot be restyled without touching that feature. The backdrop is the
+   exception — `.modal__overlay` is every modal's in this app. */
+.trashask {
+  width: min(420px, 100%);
+  padding: var(--s-5);
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+.trashask__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-2); overflow-wrap: anywhere; }
+.trashask__undoable { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-4); }
+.trashask__quiet { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-sm); margin-bottom: var(--s-4); cursor: pointer; }
+.trashask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.trashask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); color: var(--c-text); cursor: pointer; }
+/* The answer the question was opened to get. It is drawn as the answer rather than argued against,
+   because the bin is where it sends the row and undo brings it back. */
+.trashask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 
 /* ---------- the two halves of the panel ---------- */
 /* The row above whichever half is up. It holds the way out and nothing else: the switch between

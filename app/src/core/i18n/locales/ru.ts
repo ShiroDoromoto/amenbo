@@ -590,6 +590,12 @@ export const ru: Translation = {
     "files.chooseApp": "Открыть в выбранном приложении",
     "files.appUsual": "{name} (обычное)",
     "files.reveal": "Показать в файловом менеджере",
+    "files.trash": "Переместить в корзину",
+    "files.trashAsk": "Переместить {name} в корзину?",
+    "files.trashUndoable": "Файл попадёт в корзину этого компьютера, и отмена вернёт его обратно.",
+    "files.trashQuiet": "Больше не спрашивать",
+    "files.trashGo": "Переместить",
+    "files.trashKeep": "Отмена",
     "files.newFile": "Новый файл",
     "files.newFolder": "Новая папка",
     "files.rename": "Переименовать",
@@ -602,6 +608,8 @@ export const ru: Translation = {
     "files.stoppedTaken": "что-то с таким именем уже есть",
     "files.stoppedInside": "папку нельзя переместить внутрь неё самой",
     "files.stoppedNameless": "нет имени, под которым его можно принять",
+    "files.stoppedNoBin": "на этом диске нет корзины, и возвращать было бы уже нечего",
+    "files.stoppedEmptied": "его больше нет в корзине",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Сохранить",

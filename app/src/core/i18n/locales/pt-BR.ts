@@ -583,6 +583,12 @@ export const ptBR: Translation = {
     "files.chooseApp": "Abrir com um aplicativo à minha escolha",
     "files.appUsual": "{name} (o de sempre)",
     "files.reveal": "Mostrar no gerenciador de arquivos",
+    "files.trash": "Mover para a lixeira",
+    "files.trashAsk": "Mover {name} para a lixeira?",
+    "files.trashUndoable": "Vai para a lixeira deste computador, e desfazer traz de volta.",
+    "files.trashQuiet": "Não perguntar novamente",
+    "files.trashGo": "Mover",
+    "files.trashKeep": "Cancelar",
     "files.newFile": "Novo arquivo",
     "files.newFolder": "Nova pasta",
     "files.rename": "Renomear",
@@ -595,6 +601,8 @@ export const ptBR: Translation = {
     "files.stoppedTaken": "já existe algo com esse nome",
     "files.stoppedInside": "uma pasta não pode ser movida para dentro dela mesma",
     "files.stoppedNameless": "não há nome sob o qual recebê-lo",
+    "files.stoppedNoBin": "essa unidade não tem lixeira, então não sobraria nada para trazer de volta",
+    "files.stoppedEmptied": "não está mais na lixeira",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Salvar",

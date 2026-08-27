@@ -564,6 +564,12 @@ export const th: Translation = {
     "files.chooseApp": "เปิดด้วยแอปที่เลือกเอง",
     "files.appUsual": "{name} (แอปที่ใช้ประจำ)",
     "files.reveal": "แสดงในตัวจัดการไฟล์",
+    "files.trash": "ย้ายไปถังขยะ",
+    "files.trashAsk": "ย้าย {name} ไปถังขยะไหม",
+    "files.trashUndoable": "ไฟล์จะไปอยู่ในถังขยะของเครื่องนี้ และเลิกทำแล้วจะกลับมา",
+    "files.trashQuiet": "ไม่ต้องถามอีก",
+    "files.trashGo": "ย้าย",
+    "files.trashKeep": "ยกเลิก",
     "files.newFile": "ไฟล์ใหม่",
     "files.newFolder": "โฟลเดอร์ใหม่",
     "files.rename": "เปลี่ยนชื่อ",
@@ -576,6 +582,8 @@ export const th: Translation = {
     "files.stoppedTaken": "มีสิ่งที่ชื่อนี้อยู่แล้ว",
     "files.stoppedInside": "ย้ายโฟลเดอร์เข้าไปในตัวมันเองไม่ได้",
     "files.stoppedNameless": "ไม่มีชื่อสำหรับรับเข้ามา",
+    "files.stoppedNoBin": "ไดรฟ์นั้นไม่มีถังขยะ จึงไม่เหลืออะไรให้เรียกกลับ",
+    "files.stoppedEmptied": "ไม่ได้อยู่ในถังขยะแล้ว",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "บันทึก",

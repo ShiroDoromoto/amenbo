@@ -1724,13 +1724,13 @@ pub fn decision_comment_edit(id: i64, decision_id: i64, text: String) -> Result<
 #[tauri::command]
 pub fn attachments_for(target_type: String, target_id: i64) -> Result<Vec<AttachmentDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("attachments_for");
-    if amenbo_core::model::AttachmentTarget::parse(&target_type).is_none() {
+    let Some(target_type) = amenbo_core::model::AttachmentTarget::parse(&target_type) else {
         return Err(format!("attachment target '{target_type}' is not one of task / decision / task_comment / decision_comment").into());
-    }
+    };
     let found = find_in_store(|store| {
         let read_model = store.read_model();
         let conn = read_model.conn();
-        let rows = amenbo_core::store_engine::read::attachments_for_target(conn, &target_type, target_id)?;
+        let rows = amenbo_core::store_engine::read::attachments_for_target(conn, target_type, target_id)?;
         if rows.is_empty() {
             return Ok(None);
         }

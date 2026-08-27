@@ -519,11 +519,8 @@ impl Store {
             super::owner::attach_target(c, target_type, target_id)
         })?;
         let conn = self.engine.conn();
-        let ids = crate::store_engine::read::live_attachment_ids_for_target(
-            conn,
-            target_type.as_str(),
-            target_id,
-        )?;
+        let ids =
+            crate::store_engine::read::live_attachment_ids_for_target(conn, target_type, target_id)?;
         let mut out = Vec::with_capacity(ids.len());
         for id in ids {
             if let Some(a) = crate::store_engine::read::attachment(conn, id)? {

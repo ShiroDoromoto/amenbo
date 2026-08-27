@@ -17,8 +17,8 @@
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
-    ActorKind, Decision, DecisionComment, DecisionEdge, DecisionEdgeKind, DecisionStatus,
-    DecisionTaskLink,
+    ActorKind, AttachmentTarget, Decision, DecisionComment, DecisionEdge, DecisionEdgeKind,
+    DecisionStatus, DecisionTaskLink,
 };
 use crate::ops::{emit_create, emit_update, Noun};
 use crate::store_engine::{read, record, WriteTx};
@@ -59,7 +59,7 @@ pub fn remove_comment(tx: &WriteTx<'_>, id: i64) -> Result<bool> {
     if read::decision_comment(tx.conn(), id)?.is_none() {
         return Ok(false);
     }
-    crate::ops::sweep_polymorphic(tx, "decision_comment", id)?;
+    crate::ops::sweep_polymorphic(tx, AttachmentTarget::DecisionComment, id)?;
     tx.delete_record("decision_comment", id)?;
     Ok(true)
 }
@@ -453,7 +453,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let mut orphaned = Vec::new();
     for comment_id in read::decision_comment_ids(tx.conn(), id)? {
-        orphaned.extend(crate::ops::sweep_polymorphic(tx, "decision_comment", comment_id)?);
+        orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::DecisionComment, comment_id)?);
         tx.delete_record("decision_comment", comment_id)?;
     }
     for edge_id in read::decision_edge_ids(tx.conn(), id)? {
@@ -462,7 +462,7 @@ pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     for link_id in read::decision_task_link_ids_of_decision(tx.conn(), id)? {
         tx.delete_record("decision_task_link", link_id)?;
     }
-    orphaned.extend(crate::ops::sweep_polymorphic(tx, "decision", id)?);
+    orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::Decision, id)?);
     tx.delete_record("decision", id)?;
     Ok(orphaned)
 }
@@ -676,7 +676,7 @@ mod tests {
         assert_eq!(num_comments(tx, d.id), 0);
         assert!(read::decision_comment(tx.conn(), c.id).unwrap().is_none(), "the row goes away entirely (it is not a tombstone)");
         assert!(
-            read::attachments_for_target(tx.conn(), "decision_comment", c.id).unwrap().is_empty(),
+            read::attachments_for_target(tx.conn(), AttachmentTarget::DecisionComment, c.id).unwrap().is_empty(),
             "a polymorphic attachment is swept by the delete op (no FK can be drawn)"
         );
     }

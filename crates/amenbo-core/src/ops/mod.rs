@@ -31,6 +31,7 @@ pub mod task;
 pub mod user;
 
 use crate::error::{Error, Result};
+use crate::model::AttachmentTarget;
 use crate::order::key_between;
 use crate::store_engine::{Record, WriteTx};
 
@@ -91,10 +92,13 @@ pub(crate) fn emit_update(tx: &WriteTx<'_>, before: Record, after: Record) -> Re
 /// deleted attachments pointed at: the bytes live out of band, so they do not go with the row — they are
 /// reclaimed only once nothing references them, and this is the only moment the candidates are knowable
 /// (with the rows gone there is nobody left to ask which blobs were orphaned). **Reclamation happens after
-/// commit**, so all we do here is hand the candidates back.
+/// commit**, so all we do here is hand the candidates back. What may be swept is named as an
+/// [`AttachmentTarget`], not as text: a caller can only say one of the four
+/// things the column's `CHECK` accepts, so a sweep for something nothing can hang off — which would compile,
+/// run, and quietly match no row — is not sayable.
 pub(crate) fn sweep_polymorphic(
     tx: &WriteTx<'_>,
-    target_type: &str,
+    target_type: AttachmentTarget,
     target_id: i64,
 ) -> Result<Vec<String>> {
     let orphaned = crate::store_engine::read::blob_hashes_for_target(tx.conn(), target_type, target_id)?;

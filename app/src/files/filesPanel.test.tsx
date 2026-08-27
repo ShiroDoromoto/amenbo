@@ -209,6 +209,26 @@ async function settle() {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 }
 
+/**
+ * Wait until something the panel is still working on has landed.
+ *
+ * Polled rather than slept through. A fixed wait is a guess about how busy the machine is, and the
+ * machine running the whole suite at once — every file in its own worker, on however many cores it
+ * has — is a great deal busier than the one running this file alone: the guess held on the second
+ * and failed on the first, which is a red build that says nothing about the code (`AMB-T-3858`).
+ *
+ * The deadline is long because it is not a measurement. Nothing here waits it out when the panel is
+ * working — the loop stops on the first look that holds — so its only job is to end a wait that is
+ * never going to end, with a sentence saying what did not happen.
+ */
+async function until(held: () => boolean, missing: string) {
+  for (let look = 0; look < 400; look += 1) {
+    if (held()) return;
+    await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+  }
+  throw new Error(`waited two seconds and ${missing}`);
+}
+
 type Props = Parameters<typeof FilesPanel>[0];
 
 async function draw(props: Partial<Props> = {}) {
@@ -1227,8 +1247,10 @@ describe("a project bound to several folders", () => {
     // Left while the answer is out. A box that closed itself here would take the refusal with it,
     // and the reader would watch the name they typed vanish with nothing said.
     await leave(box);
-    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
-    expect(container.textContent).toContain(errLabel(refusal));
+    await until(
+      () => container.textContent?.includes(errLabel(refusal)) === true,
+      "the refusal never reached the screen",
+    );
     // Still there, still holding what was typed: a refusal a person has to type their way back to
     // is one they were told nothing by. And the name was asked for once, not once per leaving.
     expect(namebox()?.value).toBe("notes.md");

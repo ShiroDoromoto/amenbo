@@ -660,12 +660,15 @@ describe("the file face", () => {
     expect(container.textContent).toContain(t("files.notText"));
   });
 
-  it("draws a picture out of the bytes the host carried", async () => {
-    hoisted.file = aFile({ image: { mime: "image/png", base64: "AAAA" } });
+  it("points a picture at the door that hands out a file, not at bytes of its own", async () => {
+    hoisted.file = aFile({ image: { mime: "image/png" } });
     await drawOpen();
     await click(button("a.md"));
     await settle();
-    expect(container.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,AAAA");
+    // The address is the project, the folder and the path this reader was opened on — the same
+    // three the host resolved the answer through, so nothing had to be carried (`AMB-D-783`).
+    expect(container.querySelector("img")?.getAttribute("src"))
+      .toBe("amenbofile://localhost/1/%2Fwork%2Frepo/a.md?mime=image%2Fpng");
   });
 
   it("says what a picture it would not draw was measured at, and offers the way on", async () => {

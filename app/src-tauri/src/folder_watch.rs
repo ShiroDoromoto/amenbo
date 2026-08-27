@@ -30,10 +30,14 @@
 //!    not known", so they are not held back for the quiet that follows: nothing arriving after can
 //!    make the answer any less unknown. Windows sends no such signal at all, which is why nothing
 //!    here waits for one.
-//! 4. **A watch that could not be installed is said out loud.** The kernel's watch limit is per
-//!    user (inotify's `max_user_watches`), and hitting it does not stop the ones already installed:
-//!    the answer is a real but partial watch, and a face that drew it as a whole one would be
-//!    telling the reader that nothing has changed in the half nobody is looking at.
+//! 4. **A watch that could not be installed is said out loud, and separately from a folder too big
+//!    to walk.** The kernel's watch limit is per user (inotify's `max_user_watches`), and hitting
+//!    it does not stop the ones already installed: the answer is a real but partial watch, and a
+//!    face that drew it as a whole one would be telling the reader that nothing has changed in the
+//!    half nobody is looking at. A walk that stopped at its own cap ([`crate::folder::scan`])
+//!    leaves the same half unwatched for a different reason, and the two are carried apart
+//!    (`AMB-D-778`): one is answered by pointing the app at less, the other by giving the machine
+//!    more watches, and one sentence covering both sends the reader down neither road.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -127,7 +131,8 @@ pub fn folder_watch(
     let first = FolderChangesDto {
         root: root.clone(),
         // Nothing has been installed yet, so what is reported here is only what the walk itself hit.
-        partial: scan.capped,
+        capped: scan.capped,
+        unwatched: false,
         gone: false,
     };
 
@@ -177,7 +182,7 @@ fn run(
     else {
         // No watcher at all. The face keeps the list it was answered with, which is true of the
         // moment it asked — and is told that this is all it will get.
-        tell(&FolderChangesDto { partial: true, ..held });
+        tell(&FolderChangesDto { unwatched: true, ..held });
         return;
     };
 
@@ -186,10 +191,11 @@ fn run(
     let whole = [root.to_path_buf()];
     let mut scan = crate::folder::scan(root);
     let mut watched = HashSet::new();
-    let mut partial = install(&mut watcher, laid_over(&whole, &scan), &mut watched) || scan.capped;
+    let mut unwatched = install(&mut watcher, laid_over(&whole, &scan), &mut watched);
     watch_repo(&mut watcher, repo.as_deref());
-    if partial != held.partial {
-        held.partial = partial;
+    if unwatched != held.unwatched || scan.capped != held.capped {
+        held.unwatched = unwatched;
+        held.capped = scan.capped;
         tell(&held);
     }
 
@@ -225,11 +231,16 @@ fn run(
         });
         // A folder that is not there is not a folder that is half watched: the walk found nothing
         // because there is nothing, and saying "some of this is unwatched" of it would send a
-        // reader looking for the half that is.
-        partial = present
-            && (install(&mut watcher, laid_over(&whole, &scan), &mut watched) || scan.capped);
+        // reader looking for the half that is. That holds for both halves — a walk of a folder that
+        // is not there stops at nothing rather than at its cap.
+        unwatched = present && install(&mut watcher, laid_over(&whole, &scan), &mut watched);
 
-        held = FolderChangesDto { partial, gone: !present, ..held };
+        held = FolderChangesDto {
+            capped: present && scan.capped,
+            unwatched,
+            gone: !present,
+            ..held
+        };
         tell(&held);
     }
 }
@@ -540,7 +551,8 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let held = FolderChangesDto {
             root: root.to_string_lossy().into_owned(),
-            partial: false,
+            capped: false,
+            unwatched: false,
             gone: false,
         };
         let thread = {
@@ -555,7 +567,7 @@ mod tests {
         std::fs::remove_dir_all(&root).expect("take the folder away");
         let told = next_saying(&rx, |changes| changes.gone);
         assert!(told.gone, "a folder that is not there is said to be gone");
-        assert!(!told.partial, "and not drawn as a folder that is half watched");
+        assert!(!told.capped && !told.unwatched, "and not drawn as a folder that is half watched");
 
         std::fs::create_dir(&root).expect("put it back");
         let told = next_saying(&rx, |changes| !changes.gone);
@@ -612,7 +624,8 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let held = FolderChangesDto {
             root: root.to_string_lossy().into_owned(),
-            partial: false,
+            capped: false,
+            unwatched: false,
             gone: false,
         };
         let thread = {
@@ -638,7 +651,7 @@ mod tests {
 
         let told = rx.recv_timeout(Duration::from_secs(20)).expect("the face is told");
         assert!(!told.gone);
-        assert!(!told.partial);
+        assert!(!told.capped && !told.unwatched);
 
         stop.store(true, Ordering::Relaxed);
         thread.join().expect("the watch thread");
@@ -679,7 +692,8 @@ mod tests {
         let stop = Arc::new(AtomicBool::new(false));
         let held = FolderChangesDto {
             root: linked.to_string_lossy().into_owned(),
-            partial: false,
+            capped: false,
+            unwatched: false,
             gone: false,
         };
         let thread = {

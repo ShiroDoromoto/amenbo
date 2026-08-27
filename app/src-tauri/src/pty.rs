@@ -164,6 +164,15 @@ impl Pane {
         self.target()
     }
 
+    /// The tail as it stands — what the pane has drawn lately, for a reader that is not a pane.
+    ///
+    /// The handover ([`crate::handover`]) is that reader: it is looking for the words it pasted, and
+    /// the tail is where they appear. It takes the same copy a pane adopting the session is given,
+    /// rather than a window onto the buffer, so nothing holds this lock while it searches.
+    fn screen(&self) -> Vec<u8> {
+        self.recent.lock().expect("pane recent lock").iter().copied().collect()
+    }
+
     /// Send what follows to this window, and answer with the tail as it stood at that moment.
     ///
     /// After an overflow the tail begins wherever the cap fell, which can be part-way through an
@@ -234,7 +243,7 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
     )
 }
 
-/// The command line a webview's agent id is started as, or the refusal for an id nothing answers to.
+/// How a webview's agent id is started ([`Started`]), or the refusal for an id nothing answers to.
 ///
 /// The lookup is what keeps the pane's command line out of the webview's hands: an id that names
 /// neither a catalog row nor one of this device's registrations is turned away here rather than
@@ -242,26 +251,30 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
 /// and not this door — the same id is turned away the same way where a folder's answer is written
 /// down.
 ///
-/// **The two kinds are started differently, and deliberately so** (`AMB-D-794`):
+/// **The two kinds take the instruction by different routes, and deliberately so** (`AMB-D-794`):
 ///
-/// | | what the shell is handed |
-/// |---|---|
-/// | a catalog row | the program, with the launch instruction as its opening prompt ([`opening_line`]) |
-/// | a registered row | the line as the reader wrote it, and nothing else |
+/// | | what the shell is handed | what is owed afterwards |
+/// |---|---|---|
+/// | a catalog row | the program, with the instruction as its opening prompt | nothing |
+/// | a registered row | the line as the reader wrote it | the instruction, handed over in two stages |
 ///
 /// A registered line is not taken apart and not rebuilt. Amenbo does not know where in
 /// `claude --model opus` an opening instruction would go — before the flags, after them, behind a
-/// flag of its own — so it does not guess: what is registered is spoken to in two stages once the
-/// pane is up (`AMB-D-793`) instead of being argued with here.
-fn started_as(agent: &str) -> Result<String, CmdError> {
+/// flag of its own — so it does not guess: the line is started as it stands and the sentence follows
+/// it into the pane (`AMB-D-793`).
+fn started_as(agent: &str) -> Result<Started, CmdError> {
     if let Some(launch) = amenbo_core::wake::started_as(agent) {
         return Ok(opening_line(launch));
     }
+    let cmd = amenbo_core::config::Paths::command_name();
     let config = amenbo_core::config::Paths::resolve()
         .map(|paths| amenbo_core::config::Config::load(&paths.config_file))
         .unwrap_or_default();
     if let Some(own) = config.custom_agent(agent) {
-        return Ok(own.line.clone());
+        return Ok(Started {
+            line: own.line.clone(),
+            hand_over: Some(amenbo_core::agents::launch_instruction(cmd)),
+        });
     }
     Err(CmdError::coded(
         "wake_unknown_agent",
@@ -270,8 +283,8 @@ fn started_as(agent: &str) -> Result<String, CmdError> {
     ))
 }
 
-/// The command line one catalogued agent is started as: the program, with the launch instruction
-/// handed to it as its opening prompt (`AMB-T-3596`).
+/// How one catalogued agent is started: the program, with the launch instruction handed to it as its
+/// opening prompt (`AMB-T-3596`) — so a row out of the catalog is owed nothing afterwards.
 ///
 /// **Every terminal this window opens gets it, and it is never put to the person first.** It is
 /// plumbing — the sentence that points an agent at `agent --json` — and a pane that asked before
@@ -286,9 +299,68 @@ fn started_as(agent: &str) -> Result<String, CmdError> {
 /// terminal outside — and once the terminal is here there is nothing to carry: the sentence goes in as
 /// the pane opens. What is left of the old shape would be a card asking a person who has just arrived
 /// to decide what to ask for, which is the one thing they do not yet know.
-fn opening_line(launch: &amenbo_core::harness::Launch) -> String {
+fn opening_line(launch: &amenbo_core::harness::Launch) -> Started {
     let cmd = amenbo_core::config::Paths::command_name();
-    launch::command_line(launch.command, &amenbo_core::harness::opening(launch, cmd))
+    Started {
+        line: launch::command_line(launch.command, &amenbo_core::harness::opening(launch, cmd)),
+        hand_over: None,
+    }
+}
+
+/// How a pane is started, and whether anything is still owed to what is running in it.
+///
+/// The two are separate because the instruction has two routes and only one of them is finished by
+/// the time the program starts. A catalogued row takes it as an argument, which is the whole of the
+/// hand-over; a launch line Amenbo did not compose has nowhere to put one, so the line is started as
+/// it stands and the sentence follows it into the pane (`AMB-D-793`, `AMB-D-794`).
+struct Started {
+    /// What the pane's shell is asked to run.
+    line: String,
+    /// The instruction still to be handed over once the pane draws, or `None` where the line already
+    /// carries it.
+    hand_over: Option<String>,
+}
+
+/// How long between one look at the pane and the next, while the instruction is being handed over.
+///
+/// Slow enough that a program repainting its interface is not raced on every frame, quick enough
+/// that the sentence goes in about when the input box appears. What is being waited for is
+/// person-scale: a program coming up, and sometimes a person answering a question it asked first.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// How many looks the hand-over gets before the sentence is left for the reader. With [`SETTLE`]
+/// between them this is a minute — long enough to cover a trust prompt somebody has to walk back to
+/// the screen for, short enough that the thread behind it is not a thread for the session's life.
+const TRIES: usize = 120;
+
+/// Hand the instruction to whatever is running in this pane, on a thread of its own.
+///
+/// It is a thread because it is a conversation: the loop writes, then reads what the pane drew, and
+/// both of those outlive the call that opened the terminal. What it may do is bounded by [`TRIES`] —
+/// and by the terminal, which it asks about on every pass, so a pane closed in the middle of this
+/// takes the thread with it.
+fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instruction: String) {
+    std::thread::spawn(move || {
+        let open = |app: &tauri::AppHandle| {
+            app.state::<Terminals>().0.lock().expect("terminals lock").contains_key(&session)
+        };
+        let ended = crate::handover::hand_over(
+            &instruction,
+            TRIES,
+            || open(&app).then(|| pane.screen()),
+            |bytes| {
+                let terminals = app.state::<Terminals>();
+                let mut open = terminals.0.lock().expect("terminals lock");
+                let Some(terminal) = open.get_mut(&session) else { return false };
+                terminal.writer.write_all(bytes).and_then(|()| terminal.writer.flush()).is_ok()
+            },
+            || std::thread::sleep(SETTLE),
+        );
+        // Said once, at the end. Nothing downstream acts on it — the sentence being left in the input
+        // box is a finished state and not a failure — but which of the three happened is the one thing
+        // a person reading a pane that behaved oddly cannot work out from the screen.
+        log::debug!("opening instruction for session {session}: {ended:?}");
+    });
 }
 
 /// The refusal for a session id that names no open terminal — closed while the pane still had it,
@@ -339,8 +411,9 @@ pub fn pty_open(
         .map(|dir| std::fs::canonicalize(dir).map_err(failed))
         .transpose()?;
 
-    let run = agent.as_deref().map(started_as).transpose()?;
-    let mut cmd = launch::command(folder.clone(), run.as_deref());
+    let started = agent.as_deref().map(started_as).transpose()?;
+    let run = started.as_ref().map(|s| s.line.as_str());
+    let mut cmd = launch::command(folder.clone(), run);
     cmd.env(SESSION_ENV, &session);
     // The drop box is made here rather than left for the first statement to make, so that a pane which
     // cannot be spoken to is one the surface layer refuses in from the start: with no directory named,
@@ -382,6 +455,12 @@ pub fn pty_open(
     );
 
     listen(app.clone(), session.clone(), Arc::clone(&pane), drop_box);
+    // Once the terminal is in the registry, which is where the hand-over reaches for the writer. It
+    // may well start before the drain thread below has put anything in the tail it reads; a pane
+    // holding nothing is one it waits on rather than writes into (see the handover module).
+    if let Some(instruction) = started.and_then(|s| s.hand_over) {
+        hand_over(app.clone(), session.clone(), Arc::clone(&pane), instruction);
+    }
 
     let id = session.clone();
     std::thread::spawn(move || {

@@ -2243,6 +2243,22 @@ const REGISTRY: &[OpSpec] = &[
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
 
+    // ── bringing a file in from the machine ───────────────────────────────────────────────────────
+    // A file dragged in from outside and let go over a row, which is the one way anything reaches this
+    // folder that does not go through the folder itself. What is under test is the landing rather than
+    // the carrying: the drop is caught by the application and not by the face, and what the face
+    // decides is which folder was under the pointer when the hand opened.
+    //
+    // So the row is named the way every other row here is, and it is a folder's — a file's row opens a
+    // file and has nothing to put anything in. The section is named beside it for the reason `open` and
+    // `menu` name theirs.
+    //
+    // `file` is a name rather than a path, and the operator brings the file it stands for. That is the
+    // same fact `task attach` runs into on this face and for the same reason: a drop reads the disk the
+    // operator is sitting at, and nothing a run lays down is anywhere a hand can reach from there. What
+    // the file holds is nothing this road reads — it is looked for by its name once it has landed.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "drop-in", required: &["file", "name", "section"], refs: &[], strings: &["file", "name", "section"], binds: false },
+
     // ── handing a file to the machine ─────────────────────────────────────────────────────────────
     // The three ways out of this face that are not reading the file here, and all three are the
     // machine's own: the application it already opens that kind of file with, one the reader picks
@@ -2250,9 +2266,10 @@ const REGISTRY: &[OpSpec] = &[
     // them and remembers none of them, so the road stops at the hand-over and never follows what came
     // forward — where the file ended up is the machine's answer, not this face's.
     //
-    // On a row the menu is a right-click, and it is drawn on files alone: a folder's row opens a
-    // level and has nothing to hand anywhere. The row is therefore named the way every other row
-    // here is — by its name, and by the section it is standing in.
+    // On a row the menu is a right-click. A folder's row opens one too, but it holds none of the
+    // three: what a folder can be handed to is nothing, and what it is offered instead is a name to
+    // make or to write over — which no op here reaches yet. So this op names a file, the way every
+    // other row here is named — by its name, and by the section it is standing in.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     // The same menu, reached from the file that is open rather than from a row. It is a second door and not a
     // convenience: a file the face refuses to draw offers a way on to something built to open it, and there is no

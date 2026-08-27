@@ -601,7 +601,9 @@ const ui = {
   "files.memoTyping": "Typing",
   "files.memoKept": "Kept",
   "files.tree": "The folder",
-  "files.partial": "Some of this folder is not being watched.",
+  "files.capped": "This folder is too big to look through all of.",
+  "files.unwatched": "This machine has run out of watches.",
+  "files.unwatchedHow": "The supply is per user and shared with the editor you have open. Raising fs.inotify.max_user_watches gives it more room.",
   "files.noFolder": "This project has no folder yet.",
   "files.folderGone": "This folder is not there any more.",
   "files.back": "Back to the list",
@@ -609,6 +611,10 @@ const ui = {
   "files.chooseApp": "Open with an application I pick",
   "files.appUsual": "{name} (the usual one)",
   "files.reveal": "Show in the file manager",
+  "files.newFile": "New file",
+  "files.newFolder": "New folder",
+  "files.rename": "Rename",
+  "files.name": "Name",
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",
@@ -800,6 +806,10 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_not_registered: "A registered command needs both a name and a command line.",
   window_failed: "That window could not be opened: {reason}",
   talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
+  folder_taken: "{name} is already there.",
+  folder_name: "This machine will not take {name} as a name.",
+  folder_make: "{name} could not be made: {reason}",
+  folder_rename: "It could not be renamed to {name}: {reason}",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

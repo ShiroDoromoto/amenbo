@@ -9,7 +9,8 @@ description: >
   values. Each filing is then looked for through the filter, both halves every time — the task it
   should find and the one it should leave out. Re-filing one of them says the axis holds a single
   value rather than piling them up, and taking the filing off says the task keeps living once it is
-  no longer filed under the axis at all.
+  no longer filed under the axis at all. A decision is then filed under the same axis, with the same
+  values: one classification model, whichever kind of thing is being filed.
 steps_cli:
   - type: action
     domain: dimension
@@ -180,3 +181,81 @@ steps_cli:
       target: feature
       field: title
       equals: SCENARIO SEED — the printed piece
+
+  # One axis, and not only tasks on it. A decision is filed under the same axis with the same values,
+  # which is the whole of what "one classification model" means — a second set of values raised for
+  # decisions would be two models wearing one name. It is read back on the decision's own page, that
+  # being the face a decision's filing has; the filter's side of it belongs to the road that reads
+  # decisions by axis.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — print goes to the same house
+    as: ruling
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: ruling
+      dimension: medium
+      value: print
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: ruling
+      field: dimensions.0.dimension
+      equals: medium
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: ruling
+      field: dimensions.0.value
+      equals: print
+
+  # Single-select holds on this side too: the other value replaces rather than piles up.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: ruling
+      dimension: medium
+      value: web
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: ruling
+      field: dimensions.0.value
+      equals: web
+
+  # And taken back off, the decision keeps living — it is only no longer filed under the axis.
+  - type: action
+    domain: dimension
+    op: unset
+    with:
+      target: ruling
+      dimension: medium
+      value: web
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: ruling
+      field: dimensions
+      equals: []
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: ruling
+      field: title
+      equals: SCENARIO SEED — print goes to the same house

@@ -111,19 +111,18 @@ impl Driver<'_> {
                 };
                 Ok(Outcome::action(note))
             }
-            // Filing a task under an axis and taking it back off. The axis and value go by name, which
-            // is what the command takes — a bare number there would be read as a name, not an id. The
-            // task goes as `AMB-T-n`, because the command takes a decision on the same argument and a
-            // bare number would not say which of the two is meant.
+            // Filing a task or a decision under an axis, and taking it back off. The axis and value go
+            // by name, which is what the command takes — a bare number there would be read as a name,
+            // not an id. The target goes as a reference: the command takes either kind on that argument,
+            // and a bare number would not say which of the two is meant.
             verb @ ("set" | "unset") => {
-                let target = self.resolve(with)?;
+                let target = self.resolve_ref(with)?;
                 let dimension = req_str(with, "dimension")?;
                 let value = req_str(with, "value")?;
-                let target_ref = format!("AMB-T-{target}");
-                self.run_json(&["dimension", verb, &target_ref, dimension, value, "--json"])?;
+                self.run_json(&["dimension", verb, &target, dimension, value, "--json"])?;
                 let note = match verb {
-                    "set" => format!("filed task {target} under `{dimension}` = `{value}`"),
-                    _ => format!("took task {target} out of `{dimension}` = `{value}`"),
+                    "set" => format!("filed {target} under `{dimension}` = `{value}`"),
+                    _ => format!("took {target} out of `{dimension}` = `{value}`"),
                 };
                 Ok(Outcome::action(note))
             }

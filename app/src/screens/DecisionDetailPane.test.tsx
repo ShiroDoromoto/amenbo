@@ -56,6 +56,11 @@ vi.mock("../core/mutations", () => {
     unlinkDecisionEdge: record("unlinkDecisionEdge"), addDecisionComment: record("addDecisionComment"),
     editDecision: record("editDecision"),
     editDecisionComment: record("editDecisionComment"), removeDecisionComment: record("removeDecisionComment"),
+    // The classification selects are drawn only where the project carries axes, but their read runs
+    // either way — these fixtures carry none, so it answers with nothing.
+    fetchDecisionDimensions: () => Promise.resolve([]),
+    setDecisionDimensionValue: record("setDecisionDimensionValue"),
+    unsetDecisionDimensionValue: record("unsetDecisionDimensionValue"),
   };
 });
 // The attachment list invokes the store, which is none of this pane's business.

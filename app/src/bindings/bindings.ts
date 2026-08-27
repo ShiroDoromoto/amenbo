@@ -194,6 +194,12 @@ export type DecisionCommentDto = { id: number, at: string, author: ActorDto, tex
 editedAt?: string, };
 
 /**
+ * One decision × dimension assignment (`valueId` is set on the `dimensionId` axis) — the decision
+ * side of [`TaskDimensionAssignmentDto`], a type of its own because the two ends are (`AMB-D-781`).
+ */
+export type DecisionDimensionAssignmentDto = { dimensionId: number, valueId: number, };
+
+/**
  * One decision record. The real data behind the list, the detail view and the cross-links.
  */
 export type DecisionDto = { id: number, 

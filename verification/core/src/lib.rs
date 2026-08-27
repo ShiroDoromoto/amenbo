@@ -2204,10 +2204,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "dot", required: &["face"], refs: &[], strings: &["face"], binds: false },
 
     // ── the file face ─────────────────────────────────────────────────────────────────────────────
-    // The folder a project is bound to, read from inside Amenbo. Two sections in one column: what has
-    // changed lately, and the folder itself folded down. Every op is the screen's — `cat` is not
-    // Amenbo doing anything — and `section` says which of the two a row is being looked for in,
-    // because the same file can stand in both of them at once.
+    // The folder a project is bound to, read from inside Amenbo: the folder itself, folded down, with
+    // what git says about each row drawn as a colour on it. Every op is the screen's —
+    // `cat` is not Amenbo doing anything — and `section` says which part of the column a row is being
+    // looked for in. There is one part to name today; the arg is kept because the panel is not
+    // finished growing, and a road that named none of them would have to be rewritten when it does.
     //
     // Unfolding the folder. It is a value and not two ops because it is one control that opens and
     // shuts, unlike the two windows' way out and way back, which are pressed in different places.

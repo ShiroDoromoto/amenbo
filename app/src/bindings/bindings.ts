@@ -432,30 +432,18 @@ arrived: Array<string>,
 stopped: FolderStoppedDto | null, };
 
 /**
- * A file that changed lately, as the file face's second row draws it (`crate::folder`).
+ * The word that one watched folder moved, and the two things about the watch itself that the face
+ * cannot see for itself (`crate::folder_watch`).
  *
- * The path is the segments from the folder the face is rooted at, so the row can be opened by
- * handing the same list back — nothing here is a path a caller has to take apart.
- */
-export type FolderChangedDto = { 
-/**
- * The segments from the root, the file's own name last.
- */
-path: Array<string>, 
-/**
- * When it was last written (RFC3339 UTC).
- */
-modified: string, };
-
-/**
- * What the file face's second row is drawn from: the rows, and whether they are the whole story
- * (`crate::folder_watch`).
+ * **It carries nothing about what moved.** The face goes and asks — the tree for the names, git
+ * for the colour beside them (`AMB-D-785`) — and what arrives here is the moment to ask, not the
+ * answer. A list carried along would be a second copy of the truth to keep in step with the disk's.
  *
- * `partial` and `gone` are the two things the rows cannot say for themselves. Where every folder
- * needs a watch of its own the kernel's limit is per user, so some may be refused while the rest
- * work; drawn as a whole watch, that reads as "nothing has changed" in the half nobody is
- * watching. An empty list means the same thing for a folder that was removed as for one nobody
- * has written in, and only one of the two is worth telling a reader about.
+ * `partial` and `gone` are what is left, and neither can be worked out from asking. Where every
+ * folder needs a watch of its own the kernel's limit is per user, so some may be refused while the
+ * rest work; drawn as a whole watch, that reads as "nothing has changed" in the half nobody is
+ * watching. And a folder that was removed answers the same as one nobody has written in, which is
+ * the one of the two worth telling a reader about.
  */
 export type FolderChangesDto = { 
 /**
@@ -467,10 +455,6 @@ export type FolderChangesDto = {
  * the caller is what has to match it against a folder it is already drawing.
  */
 root: string, 
-/**
- * The files written to most recently, newest first.
- */
-changed: Array<FolderChangedDto>, 
 /**
  * Whether some of the folder is unwatched — a walk that stopped at its cap, or a watch the
  * kernel refused.
@@ -500,8 +484,7 @@ isDir: boolean,
 /**
  * Whether the repository's own ignore rules cover it. The row is drawn either way and drawn
  * faintly for this, since what git does not record is still something somebody wrote
- * (`AMB-D-786`) — it is the row of what changed lately, and the watch behind it, that leave
- * these out.
+ * (`AMB-D-786`) — it is the watch, and the search, that leave these out.
  */
 ignored: boolean, };
 

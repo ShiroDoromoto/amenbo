@@ -1734,8 +1734,11 @@ impl Instructor {
             // by their headings, for the reason the segments are: the headings are the interface's
             // own words and the run's language is whatever the machine is set to.
             (Domain::Files, "tree") => match flag(with, "open")? {
-                true => "In the column beside the panes, unfold the section that draws the folder itself.".to_string(),
-                false => "Fold that section back up.".to_string(),
+                // Every one of them: a project bound to several folders draws a section each, and a
+                // row can only be read in the section it belongs to now that the tree is the only
+                // place rows are.
+                true => "In the column beside the panes, unfold the section that draws the folder itself — each of them where there is more than one.".to_string(),
+                false => "Fold those sections back up.".to_string(),
             },
             (Domain::Files, "enter") => format!(
                 "In the folder's section, open the folder \"{}\" one level.",
@@ -2992,15 +2995,19 @@ fn side(with: &Args) -> Result<Side, String> {
     }
 }
 
-/// Which of the file face's two sections a row is being looked for in, as a phrase an instruction
-/// can be built around. They are named by what each is about because their headings are the
-/// interface's own words, and the run's language is whatever the machine is set to.
+/// Which of the file face's sections a row is being looked for in, as a phrase an instruction can be
+/// built around. It is named by what it is about because its heading is the interface's own words,
+/// and the run's language is whatever the machine is set to.
+///
+/// **There is one left.** The section for what had changed lately is gone — what it answered was
+/// "yesterday", and what git says now goes on the tree's own rows instead. The arg stays because it
+/// is the one place a road says which part of the panel it means, and the panel is not finished
+/// growing.
 fn section(with: &Args) -> Result<&'static str, String> {
     match with.get("section").and_then(|v| v.as_str()) {
-        Some("changed") => Ok("the section for what has changed lately"),
         Some("tree") => Ok("the folder's own section"),
-        Some(other) => Err(format!("`section` does not know `{other}` — it is changed or tree")),
-        None => Err("arg `section` must say which of the two sections".to_string()),
+        Some(other) => Err(format!("`section` does not know `{other}` — it is tree")),
+        None => Err("arg `section` must say which section".to_string()),
     }
 }
 

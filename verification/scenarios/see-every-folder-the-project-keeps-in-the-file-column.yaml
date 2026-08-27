@@ -4,11 +4,15 @@
 #
 # ── Why two files rather than two headings ───────────────────────────────────────────────────────
 # A heading is drawn from the folder's own name, and a section drawn empty draws its heading all the
-# same — so two headings on screen say two sections were made, never that either was walked. What
-# says a folder was really read is something out of that folder on the column, and the only thing
-# there that could not have come from anywhere else is a file the world put in it. So each folder
-# gets a file of its own name, and both are read off what changed lately: both rows are on the column
-# only if both folders were walked.
+# same — so two headings on screen say two sections were made, never that either was read. What says
+# a folder was really read is something out of that folder on the column, and the only thing there
+# that could not have come from anywhere else is a file the world put in it. So each folder gets a
+# file of its own name, and both are read off the trees: both rows are on the column only if both
+# folders were read.
+#
+# The files sit directly in their folders rather than in a subfolder, because the tree opens one
+# level at a time and a road that had to open the same-named subfolder in each of two sections would
+# be naming a folder that is in both.
 #
 # ── Why one of them is then taken away ───────────────────────────────────────────────────────────
 # The half a reader meets by accident is a folder that has gone — renamed, moved somewhere tidier,
@@ -27,8 +31,8 @@ id: see-every-folder-the-project-keeps-in-the-file-column
 title: The file column draws a section for every folder the project keeps, and one that goes away says so where it stood instead of taking the column with it
 description: >
   Raise a project bound to two folders, each holding a file of its own, and open the panel beside the
-  panes: what changed lately carries both files, so both folders were walked. Then take one of the
-  folders away from outside Amenbo, with nothing on the app pressed: its section stays where it was
+  panes and unfold the trees: each folder's tree carries its own file, so both were read. Then take
+  one of the folders away from outside Amenbo, with nothing on the app pressed: its section stays
   and says the folder is not there any more, while the other folder's file is still on the column
   beside it.
 
@@ -57,7 +61,7 @@ given:
     op: write-file
     with:
       dir: greenhouse-beds
-      path: notes/watering.md
+      path: watering.md
       content: SCENARIO the seedlings are watered every second morning
 
   - type: action
@@ -65,7 +69,7 @@ given:
     op: write-file
     with:
       dir: potting-shed
-      path: notes/sieving.md
+      path: sieving.md
       content: SCENARIO the loam is sieved before it goes into the trays
 
 steps_gui:
@@ -89,21 +93,29 @@ steps_gui:
     with:
       side: files
 
+  # The trees start folded — a panel nobody is looking at must not walk a repository — so the road
+  # opens them before it can read anything on them.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
   # Both folders, read by what is in each. Neither row could have come from the other folder, so the
-  # two readings together are the sections having been walked and not merely drawn.
+  # two readings together are the sections having been read and not merely drawn.
   - type: assert
     domain: files
     op: listed
     with:
       name: watering.md
-      section: changed
+      section: tree
 
   - type: assert
     domain: files
     op: listed
     with:
       name: sieving.md
-      section: changed
+      section: tree
 
   # Gone, from outside, while the app is watching. Nothing on the screen is pressed for this.
   - type: action
@@ -128,4 +140,4 @@ steps_gui:
     op: listed
     with:
       name: watering.md
-      section: changed
+      section: tree

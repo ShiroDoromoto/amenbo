@@ -709,11 +709,13 @@ is drawn on the other side of the switch, so the operator arms the word and cros
 lands. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
 
 And the last is the column beside those panes. **`files`** is the folder a project answers for, read
-from inside Amenbo: two sections in one column — what has changed lately, and the folder itself
-folded down — so every op takes a `section` saying which of the two a row is being looked for in, the
-same file being able to stand in both at once. `tree` unfolds the folder's section, `enter` opens one
-folder a level, `open` presses a file and `back` leaves it; `listed`, `reading` and `says` read what a
-row is, what an opened file draws, and one of the face's standing lines.
+from inside Amenbo: the folder itself, folded down, with what git says about each row drawn as a
+colour on it. Every op takes a `section` saying which part of the column a row is being looked for
+in — there is one part to name today, and the arg is kept because the panel is not finished growing.
+`tree` unfolds the folder's section, `enter` opens one folder a level, `open` presses a file and
+`back` leaves it; `listed`, `reading` and `says` read what a row is, what an opened file draws, and
+one of the face's standing lines. **What a row's colour is cannot be read yet** — no op says it —
+which is why the road below reads the names alone.
 
 The rest are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks a row
 and `menu-on-file` reaches the same menu from the file that is open, which is where a file the face

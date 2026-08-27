@@ -54,6 +54,19 @@
   --c-human: #3b6bd6; /* human */
   --c-ai: #8a4fd0;    /* AI */
 
+  /* ----- what git says about a file (`AMB-D-785`) -----
+     Off the ladder below, like `--c-human` and `--c-ai`: these ask nothing of the reader. They say
+     which of three things a name in the file tree is, and a reader who wants none of them can go on
+     ignoring all three — the row is drawn the same either way.
+
+     Three and not one per letter git has. What a person looking at a folder an agent has been
+     working in is asking is coarser than git's alphabet, and the reading is done in a column a
+     couple of centimetres wide (`app/src/files/gitMark.ts`). The hues are the ones every editor
+     has taught: changed is warm, new is green, and never-recorded is the odd one out. */
+  --c-git-modified: #c6791f;
+  --c-git-added: #2b9d5b;
+  --c-git-untracked: #7d7a2c;
+
   /* ----- the step a mark takes -----
      What a colour says is what the mark asks of its reader — not what happened to produce it.
      Named after the event instead (blocked, warning, notice, error, stale, outdated) the names
@@ -161,6 +174,10 @@
 
   --c-human: #6f97ec;
   --c-ai: #b083ea;
+
+  --c-git-modified: #e0a04a;
+  --c-git-added: #46c97e;
+  --c-git-untracked: #b6b25a;
 
   /* The two steps that hold a value of their own; the third and everything derived from the
      three follow from the light side, which names them once. */

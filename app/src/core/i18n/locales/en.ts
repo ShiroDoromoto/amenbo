@@ -621,6 +621,9 @@ const ui = {
   "files.unreadable": "This file could not be read.",
   "files.dropStopped": "{name} could not be brought in: {why}",
   "files.dropPartly": "{count} came in. {name} did not: {why}",
+  "files.stoppedTaken": "something with that name is already there",
+  "files.stoppedInside": "a folder cannot be moved inside itself",
+  "files.stoppedNameless": "it has no name to be brought in under",
   // A picture the panel would not draw. What it is refused for travels with the
   // refusal, because a reader shown nothing at all reads it as a damaged file
   // (`AMB-D-783`).

@@ -41,7 +41,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type {
-  FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
+  FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto, FolderStoppedDto,
+  GitEntryDto,
 } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
@@ -128,6 +129,27 @@ function segmentsOf(into: string): string[] {
 }
 
 /**
+ * Why the carry stopped, in the reader's language where the answer is Amenbo's own.
+ *
+ * The host names its own three refusals and sends the sentence with them (`crate::dto`); everything
+ * else it stops on is the machine's, and the machine's words go through as they came. Which is the
+ * whole of the split: what Amenbo decided means the same thing every time and can be said in any
+ * language, and what a filesystem said is one sentence in whatever language it was built with.
+ */
+function whyStopped(stopped: FolderStoppedDto): string {
+  switch (stopped.code) {
+    case "taken":
+      return t("files.stoppedTaken");
+    case "inside":
+      return t("files.stoppedInside");
+    case "nameless":
+      return t("files.stoppedNameless");
+    default:
+      return stopped.why;
+  }
+}
+
+/**
  * What to say about a carry that stopped, or nothing where the whole of it arrived.
  *
  * The count is in the sentence because a carry is not one act: stopping on the second of three
@@ -137,7 +159,7 @@ function segmentsOf(into: string): string[] {
 function stoppedLine(carried: FolderCarriedDto): string | null {
   const stopped = carried.stopped;
   if (stopped === null) return null;
-  const about = { name: stopped.name, why: stopped.why };
+  const about = { name: stopped.name, why: whyStopped(stopped) };
   return carried.arrived.length === 0
     ? tf("files.dropStopped", about)
     : tf("files.dropPartly", { ...about, count: formatNumber(carried.arrived.length) });

@@ -614,14 +614,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__none { margin: 0; color: var(--c-text-muted); }
 .files__list { list-style: none; margin: 0; padding: 0; }
 .files__list--tree { padding-left: var(--s-3); }
+/* One row of the tree, and the box holding the level under it where it is a folder. It carries the
+   role and the one tab stop the whole tree has; what is drawn on the line is the element inside it
+   (`app/src/files/FilesPanel.tsx`). */
+.files__item { cursor: pointer; }
+.files__item:focus-visible, .files__item:focus {
+  outline: 1px solid var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
+}
 /* A row is one line and never wraps: the name is what is read, and a path that folded would push
    the next row off the panel. */
 .files__file, .files__dir {
   display: flex; align-items: baseline; gap: var(--s-2);
   width: 100%; padding: 0; border: 0; background: none;
-  color: var(--c-text); text-align: left; cursor: pointer;
+  color: var(--c-text); text-align: left;
 }
-.files__file:hover, .files__dir:hover { color: var(--c-accent); }
+.files__item:hover > .files__file, .files__item:hover > .files__dir { color: var(--c-accent); }
 /* One that has been opened. It stays on the list — what was pointed at was pointed at — and says
    for itself that it has been seen (`app/src/files/pointed.ts`). */
 .files__file--read .files__name { color: var(--c-text-muted); }
@@ -648,7 +655,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   outline: 1px solid var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
 }
 .files__dir::before { content: "▸ "; color: var(--c-text-muted); }
-.files__dir[aria-expanded="true"]::before { content: "▾ "; }
+.files__item[aria-expanded="true"] > .files__dir::before { content: "▾ "; }
 .files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* On the reading bar the name takes what the two controls beside it leave, which is the whole row.
    A name longer than that is still cut — there is no width that fits every name — but what it is cut
@@ -663,7 +670,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__file--git-untracked, .files__dir--git-untracked { --git: var(--c-git-untracked); }
 /* The pointer still wins, said again here because these rules come after the hover above and a
    row whose colour did not move under the pointer reads as a row that cannot be pressed. */
-.files__file--git:hover .files__name, .files__dir--git:hover { color: var(--c-accent); }
+.files__item:hover > .files__file--git .files__name,
+.files__item:hover > .files__dir--git { color: var(--c-accent); }
 /* Reading one file: the way back, the name, and whatever the file turned out to be. */
 .files--reading { gap: var(--s-2); }
 /* The name's own row — the way out on either side of it and nothing else between. Every control on

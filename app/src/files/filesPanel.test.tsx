@@ -996,6 +996,40 @@ describe("the file face", () => {
     expect(button("windows-1252")).toBeDefined();
   });
 
+  /** The name is the only thing on the bar that can give way, every control beside it being as wide
+   *  as its own words — so it gave way to almost nothing once three tasks had each put one there.
+   *  What acts on the file stands on a row of its own now, and the name has the bar to itself. */
+  it("keeps the name on a row of its own, with what acts on the file under it", async () => {
+    hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
+    hoisted.file = aFile({ text: "#!/bin/sh\necho hi", encoding: "UTF-8" });
+    await drawOpen();
+    await click(button("run.sh"));
+    await settle();
+
+    const bar = container.querySelector(".files__bar");
+    expect(bar?.querySelector(".files__name")?.textContent).toBe("run.sh");
+    // Nothing that acts on the file shares the row, which is the whole of the fix.
+    for (const one of [".files__view", ".files__encoding", ".files__keep"]) {
+      expect(bar?.querySelector(one), `${one} is still on the name's row`).toBeNull();
+    }
+    // And they are all on the row under it, rather than gone.
+    const tools = container.querySelector(".files__tools");
+    expect(tools?.querySelector(".files__encoding")).toBeTruthy();
+    expect(tools?.querySelector(".files__keep")).toBeTruthy();
+  });
+
+  /** A picture has nothing to switch, nothing to reopen and nothing to save, so the row that would
+   *  hold them is not drawn at all — a panel this narrow does not spend a line on an empty one. */
+  it("draws no second row where there is nothing to put on it", async () => {
+    hoisted.file = aFile({ image: { mime: "image/png" } });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+
+    expect(container.querySelector(".files__name")?.textContent).toBe("a.md");
+    expect(container.querySelector(".files__tools")).toBeNull();
+  });
+
   it("says nothing about the encoding of a picture", async () => {
     hoisted.file = aFile({ image: { mime: "image/png" } });
     await drawOpen();

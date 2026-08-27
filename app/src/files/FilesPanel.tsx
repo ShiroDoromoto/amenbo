@@ -1229,51 +1229,75 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
   // leaves this face: what a record opens on is the ledger.
   const nav = useLedgerNav(onOpenLedger);
 
+  // What the row under the name has on it. Named here rather than asked three times in the markup,
+  // because whether the row exists at all is the same question as whether anything would be on it.
+  const switchable = file?.text !== undefined && markdown;
+  const readAs = file?.text !== undefined && file.encoding !== undefined;
+
   return (
     <div className="files files--reading" tabIndex={-1} onKeyDown={onKey}>
+      {/* **The name has a row to itself, and what to do with the file has another.** The two used to
+          share one, and the name was the only thing on it that could give way — every control beside
+          it is as wide as its own words — so the name is what disappeared: `run.sh` came up as
+          `r...` on a panel of ordinary width, which leaves a reader unable to say which file they
+          are looking at. It got that way one control at a time, and no one of them was the mistake
+          (`AMB-T-3866` measured the state the three arrived at).
+
+          The split is by what a control is for, not by what fits: leaving and closing are the frame's
+          and stay with the name, and the ones that act on the file stand together under it. The
+          second row is drawn only where there is something to put on it, so a picture — which has
+          nothing to switch, nothing to reopen and nothing to save — costs no line at all.
+
+          The bin stays up here though it acts on the file, because it is a mark and not a word: an
+          icon is the same narrow width whatever the reader's language, which is exactly what the
+          three that moved were not. */}
       <div className="files__bar">
         <button className="files__back" onClick={onBack}>{t("files.back")}</button>
         <span className="files__name" title={path.join("/")}>{name}</span>
-        {/* Drawn for a Markdown file and for nothing else: every other file has one way to be shown,
-            and a switch with nowhere to switch to is a control that answers nothing. What it says is
-            where it goes rather than where it is — the reader can see where they are, and the name
-            beside it is what has to stay legible on a panel this narrow. */}
-        {file?.text !== undefined && markdown && (
-          <button className="files__view" onClick={() => setAsText((was) => !was)}>
-            {t(asText ? "files.read" : "files.edit")}
-          </button>
-        )}
-        {/* What the bytes were read as, said on the row the file is named on. The guess reports no
-            confidence and breaks nothing visible when it is wrong, so the reader is the only one
-            who can catch it — and they can only catch it if they are told what was guessed
-            (`AMB-D-773`). Text only: a picture has no encoding to be wrong about. */}
-        {file?.text !== undefined && file.encoding !== undefined && (
-          <button
-            className="files__encoding"
-            title={t("files.reopenWith")}
-            onClick={(e) => setPicking({ x: e.clientX, y: e.clientY })}
-          >
-            {file.encoding}
-            {" · "}
-            {file.lineEnding === "mixed" ? t("files.lineEndingMixed") : file.lineEnding.toUpperCase()}
-          </button>
-        )}
-        {/* One control saying which of three things is true, rather than a button and a word
-            somewhere else for a reader to find the answer in. */}
-        {savable && (
-          <button
-            className="files__keep"
-            disabled={!edited || keeping || newline === null}
-            onClick={() => { void save(); }}
-          >
-            {keeping ? t("files.saving") : edited ? t("files.save") : t("files.saved")}
-          </button>
-        )}
         <button className="files__trash" title={t("files.trash")} onClick={onTrash}>
           <Icon name="trash" />
         </button>
         {close}
       </div>
+      {(switchable || readAs || savable) && (
+        <div className="files__tools">
+          {/* Drawn for a Markdown file and for nothing else: every other file has one way to be
+              shown, and a switch with nowhere to switch to is a control that answers nothing. What
+              it says is where it goes rather than where it is — the reader can see where they
+              are. */}
+          {switchable && (
+            <button className="files__view" onClick={() => setAsText((was) => !was)}>
+              {t(asText ? "files.read" : "files.edit")}
+            </button>
+          )}
+          {/* What the bytes were read as. The guess reports no confidence and breaks nothing visible
+              when it is wrong, so the reader is the only one who can catch it — and they can only
+              catch it if they are told what was guessed (`AMB-D-773`). Text only: a picture has no
+              encoding to be wrong about. */}
+          {file?.text !== undefined && file.encoding !== undefined && (
+            <button
+              className="files__encoding"
+              title={t("files.reopenWith")}
+              onClick={(e) => setPicking({ x: e.clientX, y: e.clientY })}
+            >
+              {file.encoding}
+              {" · "}
+              {file.lineEnding === "mixed" ? t("files.lineEndingMixed") : file.lineEnding.toUpperCase()}
+            </button>
+          )}
+          {/* One control saying which of three things is true, rather than a button and a word
+              somewhere else for a reader to find the answer in. */}
+          {savable && (
+            <button
+              className="files__keep"
+              disabled={!edited || keeping || newline === null}
+              onClick={() => { void save(); }}
+            >
+              {keeping ? t("files.saving") : edited ? t("files.save") : t("files.saved")}
+            </button>
+          )}
+        </div>
+      )}
       {aside}
       <div className="files__body">
         {failed !== null && <p className="files__none">{failed}</p>}

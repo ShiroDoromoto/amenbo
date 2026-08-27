@@ -67,10 +67,16 @@ const CHANGED_EVENT: &str = "folder://changed";
 const RECURSIVE: bool = cfg!(any(target_os = "windows", target_os = "macos"));
 
 /// What a wake-up carries. Not which file — that is still never read (see the note at the top) —
-/// only whether what moved is known to be somewhere under the root, or is not known at all.
+/// only which of three things happened.
 enum Wake {
     /// Something under the root moved. Part of a burst, worth waiting out.
     Moved,
+    /// Something moved in the repository's own directory: the reader staged something, or
+    /// committed. Part of a burst too, and told apart from the rest because **nothing under the
+    /// root moved with it** — staging and committing write inside `.git` and touch not one byte of
+    /// the working tree (`AMB-T-3748` measured it) — so the answer the face is holding is still
+    /// true, and it still has to be told (`AMB-D-774`).
+    Git,
     /// The kernel dropped events and is saying so. Not a burst: acted on where it lands.
     Rescan,
 }
@@ -153,8 +159,14 @@ fn run(
     stop: &AtomicBool,
     tell: &dyn Fn(&FolderChangesDto),
 ) {
+    // Asked before the watcher is built, because what the handler lets through depends on it — and
+    // asked once: a folder that becomes a repository while it is being watched is one the face
+    // learns about when it next mounts, which is the same moment this thread starts again.
+    let repo = crate::folder_git::repo_of(root).map(|repo| repo.git_dir);
+
     let (tx, rx) = std::sync::mpsc::channel::<Wake>();
-    let Ok(mut watcher) = notify::recommended_watcher(handler(tx, root.to_path_buf())) else {
+    let Ok(mut watcher) = notify::recommended_watcher(handler(tx, root.to_path_buf(), repo.clone()))
+    else {
         // No watcher at all. The face keeps the list it was answered with, which is true of the
         // moment it asked — and is told that this is all it will get.
         tell(&FolderChangesDto { partial: true, ..held });
@@ -167,6 +179,7 @@ fn run(
     let mut scan = crate::folder::scan(root);
     let mut watched = HashSet::new();
     let mut partial = install(&mut watcher, laid_over(&whole, &scan), &mut watched) || scan.capped;
+    watch_repo(&mut watcher, repo.as_deref());
     if partial != held.partial {
         held.partial = partial;
         tell(&held);
@@ -182,8 +195,12 @@ fn run(
     while !stop.load(Ordering::Relaxed) {
         let awake = woke(&rx, stop);
         let here = root.is_dir();
-        if !awake && here == present {
+        if awake.is_none() && here == present {
             continue;
+        }
+        // A folder that went away took its watches with it, the repository's among them.
+        if here && !present {
+            watch_repo(&mut watcher, repo.as_deref());
         }
         present = here;
         scan = crate::folder::scan(root);
@@ -214,7 +231,11 @@ fn run(
         // access time, a build writing inside a folder nobody is shown. Comparing what would be
         // drawn is what drops those, and it is the same reasoning `store_watch`'s signature check
         // is built on.
-        if fresh != held {
+        //
+        // **Except when the repository is what moved**, where the comparison would drop the one
+        // wake-up worth having: staging changes what git says about a file and nothing about the
+        // file, so the rows are equal and the face still has to go and ask again (`AMB-D-774`).
+        if fresh != held || matches!(awake, Some(Wake::Git)) {
             held = fresh;
             tell(&held);
         }
@@ -227,21 +248,46 @@ fn run(
 /// A dropped-events signal is not settled for. Waiting is what turns a burst into one scan, and
 /// there is no burst here to fold: the signal already says the kernel has stopped accounting for
 /// what moved, so the answer is the same whatever arrives next.
-fn woke(rx: &Receiver<Wake>, stop: &AtomicBool) -> bool {
-    match rx.recv_timeout(HEARTBEAT) {
-        Err(_) => return false,
-        Ok(Wake::Rescan) => return true,
-        Ok(Wake::Moved) => {}
-    }
+fn woke(rx: &Receiver<Wake>, stop: &AtomicBool) -> Option<Wake> {
+    let mut held = match rx.recv_timeout(HEARTBEAT) {
+        Err(_) => return None,
+        Ok(Wake::Rescan) => return Some(Wake::Rescan),
+        Ok(wake) => wake,
+    };
     while let Ok(wake) = rx.recv_timeout(DEBOUNCE) {
         if stop.load(Ordering::Relaxed) {
-            return false;
+            return None;
         }
-        if matches!(wake, Wake::Rescan) {
-            return true;
+        match wake {
+            Wake::Rescan => return Some(Wake::Rescan),
+            // One repository wake-up in the burst is what the burst is: a commit writes several
+            // names in there and moves nothing outside, and it is the outside the comparison reads.
+            Wake::Git => held = Wake::Git,
+            Wake::Moved => {}
         }
     }
-    true
+    Some(held)
+}
+
+/// Put the second watch on: the directory the repository keeps itself in, where staging and
+/// committing write (`AMB-D-774`). Nothing is said when there is none — a folder that is not a
+/// repository is not a lesser answer, it is the ordinary one.
+///
+/// **Not recursive, whatever the OS would allow.** What a commit does to `.git/objects` is
+/// thousands of names nobody is shown; what a reader's screen turns on is `index` and `HEAD`, which
+/// are directly inside.
+///
+/// **One watch per bound folder, even where two of them are the same repository.** Folding those
+/// into one would leave the other folder's face unwoken unless something fanned the wake-up back
+/// out — two watches on one directory is the cheaper of the two, now that a bound folder costs one
+/// watch rather than one per folder under it (`AMB-D-779`).
+fn watch_repo(watcher: &mut impl Watcher, repo: Option<&Path>) {
+    let Some(dir) = repo else { return };
+    if watcher.watch(dir, RecursiveMode::NonRecursive).is_err() {
+        // The folder is a repository whose own directory could not be watched — the reader's
+        // staging will not turn anything on, and everything else about the folder still will.
+        log::warn!("folder watch: the repository's own directory could not be watched");
+    }
 }
 
 /// The folders the watch is laid over: the root alone where one watch covers what is under it, and
@@ -294,6 +340,7 @@ fn install(
 fn handler(
     tx: Sender<Wake>,
     root: PathBuf,
+    repo: Option<PathBuf>,
 ) -> impl Fn(notify::Result<notify::Event>) + Send + 'static {
     move |res| {
         let Ok(event) = res else { return };
@@ -306,6 +353,17 @@ fn handler(
         // wake itself in a loop (`AMB-T-3753`). Nothing a reader sees is a read, so nowhere loses
         // anything by this.
         if matches!(event.kind, notify::EventKind::Access(_)) {
+            return;
+        }
+        // `.git` is on the floor the tree is pruned by, so the one directory this is here to hear
+        // from is the one the prune would throw away. What is let back through is what is *directly*
+        // inside it — `index`, `HEAD`, the refs a commit moves — and not the thousands of names a
+        // commit writes under `objects`, which are as much nobody's business as a build's output.
+        let staged = |path: &Path| {
+            repo.as_deref().is_some_and(|dir| path.parent() == Some(dir))
+        };
+        if event.paths.iter().any(|path| staged(path)) {
+            let _ = tx.send(Wake::Git);
             return;
         }
         // A rename carries both names; either one being a name a reader would see is reason enough.
@@ -336,7 +394,7 @@ mod tests {
         let root = dir.path().to_path_buf();
         let (tx, _rx) = std::sync::mpsc::channel::<Wake>();
         let mut watcher =
-            notify::recommended_watcher(handler(tx, root.clone())).expect("a watcher");
+            notify::recommended_watcher(handler(tx, root.clone(), None)).expect("a watcher");
         let mut watched = HashSet::new();
 
         assert!(!install(&mut watcher, std::slice::from_ref(&root), &mut watched));
@@ -351,7 +409,7 @@ mod tests {
     fn a_watch_that_will_not_install_is_reported() {
         let dir = tempfile::tempdir().expect("a temp dir");
         let (tx, _rx) = std::sync::mpsc::channel::<Wake>();
-        let mut watcher = notify::recommended_watcher(handler(tx, dir.path().to_path_buf()))
+        let mut watcher = notify::recommended_watcher(handler(tx, dir.path().to_path_buf(), None))
             .expect("a watcher");
         let mut watched = HashSet::new();
 
@@ -366,7 +424,7 @@ mod tests {
     fn a_build_writing_where_nobody_looks_does_not_wake_anybody() {
         let root = PathBuf::from("/projects/thing");
         let (tx, rx) = std::sync::mpsc::channel::<Wake>();
-        let wake = handler(tx, root.clone());
+        let wake = handler(tx, root.clone(), None);
 
         for quiet in ["target/debug/x.o", ".git/index", "node_modules/left-pad/index.js"] {
             wake(Ok(notify::Event::new(notify::EventKind::Modify(
@@ -389,7 +447,7 @@ mod tests {
     fn reading_a_file_is_not_a_change() {
         let root = PathBuf::from("/projects/thing");
         let (tx, rx) = std::sync::mpsc::channel::<Wake>();
-        let wake = handler(tx, root.clone());
+        let wake = handler(tx, root.clone(), None);
 
         wake(Ok(notify::Event::new(notify::EventKind::Access(
             notify::event::AccessKind::Open(notify::event::AccessMode::Read),
@@ -404,7 +462,7 @@ mod tests {
     fn a_kernel_that_lost_track_is_heard_out_at_once() {
         let root = PathBuf::from("/projects/thing");
         let (tx, rx) = std::sync::mpsc::channel::<Wake>();
-        let wake = handler(tx, root.clone());
+        let wake = handler(tx, root.clone(), None);
 
         wake(Ok(notify::Event::new(notify::EventKind::Any)
             .add_path(root.join("target/debug/x.o"))
@@ -415,7 +473,7 @@ mod tests {
         tx.send(Wake::Rescan).expect("the channel");
         let stop = AtomicBool::new(false);
         // Nothing follows it, and it does not wait for anything to.
-        assert!(woke(&rx, &stop));
+        assert!(woke(&rx, &stop).is_some());
     }
 
     /// What the mode is for: a file written in a folder that never got a watch of its own still
@@ -430,7 +488,7 @@ mod tests {
 
         let (tx, rx) = std::sync::mpsc::channel::<Wake>();
         let mut watcher =
-            notify::recommended_watcher(handler(tx, root.clone())).expect("a watcher");
+            notify::recommended_watcher(handler(tx, root.clone(), None)).expect("a watcher");
         let scan = crate::folder::scan(&root);
         let whole = [root.clone()];
         let mut watched = HashSet::new();
@@ -440,7 +498,7 @@ mod tests {
         let stop = AtomicBool::new(false);
         // One wait is a heartbeat long, which is how often the thread looks up — not how long a
         // kernel has to get round to it. A machine with something else on it takes longer than one.
-        let woken = (0..20).any(|_| woke(&rx, &stop));
+        let woken = (0..20).any(|_| woke(&rx, &stop).is_some());
         assert!(woken, "a write under the root is what the watch is for");
     }
 
@@ -535,6 +593,134 @@ mod tests {
             }
         }
         panic!("nothing said what was waited for");
+    }
+
+    /// Staging is the wake-up nothing else here would notice: `git add` writes inside the
+    /// repository's own directory and touches not one byte of the working tree, so the rows the
+    /// face is holding are still right and it still has to be told — the colour beside them is not
+    /// (`AMB-D-774`).
+    #[test]
+    fn staging_something_wakes_the_face_although_nothing_moved() {
+        let Some(_) = amenbo_core::sys::git() else {
+            // A machine with no git to run. What is under test is git writing in its own directory.
+            return;
+        };
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path().to_path_buf();
+        for args in [&["init"][..], &["config", "user.email", "a@b"], &["config", "user.name", "A"]]
+        {
+            let done = amenbo_core::sys::git()
+                .expect("git")
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .output()
+                .expect("git ran");
+            assert!(done.status.success(), "{args:?}");
+        }
+        // Written before the watch is up, so the only thing that moves afterwards is inside `.git`.
+        std::fs::write(root.join("note.md"), b"mine").expect("a file");
+
+        let (tx, rx) = std::sync::mpsc::channel::<FolderChangesDto>();
+        let stop = Arc::new(AtomicBool::new(false));
+        let held = FolderChangesDto {
+            root: root.to_string_lossy().into_owned(),
+            changed: Vec::new(),
+            partial: false,
+            gone: false,
+        };
+        let thread = {
+            let (root, stop) = (root.clone(), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                run(&root, held, &stop, &|changes| {
+                    let _ = tx.send(changes.clone());
+                });
+            })
+        };
+        // Whatever the first walk had to say, said and done with, so what is waited for below can
+        // only be the staging.
+        while rx.recv_timeout(Duration::from_secs(2)).is_ok() {}
+
+        let staged = amenbo_core::sys::git()
+            .expect("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["add", "note.md"])
+            .output()
+            .expect("git ran");
+        assert!(staged.status.success());
+
+        let told = rx.recv_timeout(Duration::from_secs(20)).expect("the face is told");
+        assert!(!told.gone);
+        // And what it is told is the same list it was holding: the rows did not move, which is the
+        // whole reason the comparison would have swallowed this one.
+        assert!(told.changed.iter().any(|row| row.path == ["note.md"]));
+
+        stop.store(true, Ordering::Relaxed);
+        thread.join().expect("the watch thread");
+    }
+
+    /// The same, in a linked worktree — where `.git` is a *file* and the directory that holds the
+    /// index is somewhere else entirely. A watch laid on `<folder>/.git` would be watching a file
+    /// nothing writes, and every commit made in the worktree would go unnoticed.
+    #[test]
+    fn staging_in_a_linked_worktree_wakes_it_too() {
+        let Some(_) = amenbo_core::sys::git() else { return };
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let main = dir.path().join("main");
+        std::fs::create_dir(&main).expect("the repository");
+        let linked = dir.path().join("linked");
+        std::fs::write(main.join("first.md"), b"a commit to branch from").expect("a file");
+        for args in [
+            &["init"][..],
+            &["config", "user.email", "a@b"],
+            &["config", "user.name", "A"],
+            &["add", "first.md"],
+            &["commit", "-m", "first"],
+            &["worktree", "add", linked.to_str().expect("a path"), "-b", "side"],
+        ] {
+            let done = amenbo_core::sys::git()
+                .expect("git")
+                .arg("-C")
+                .arg(&main)
+                .args(args)
+                .output()
+                .expect("git ran");
+            assert!(done.status.success(), "{args:?}: {}", String::from_utf8_lossy(&done.stderr));
+        }
+        assert!(linked.join(".git").is_file(), "a linked worktree keeps a file there, not a folder");
+        std::fs::write(linked.join("note.md"), b"mine").expect("a file");
+
+        let (tx, rx) = std::sync::mpsc::channel::<FolderChangesDto>();
+        let stop = Arc::new(AtomicBool::new(false));
+        let held = FolderChangesDto {
+            root: linked.to_string_lossy().into_owned(),
+            changed: Vec::new(),
+            partial: false,
+            gone: false,
+        };
+        let thread = {
+            let (root, stop) = (linked.clone(), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                run(&root, held, &stop, &|changes| {
+                    let _ = tx.send(changes.clone());
+                });
+            })
+        };
+        while rx.recv_timeout(Duration::from_secs(2)).is_ok() {}
+
+        let staged = amenbo_core::sys::git()
+            .expect("git")
+            .arg("-C")
+            .arg(&linked)
+            .args(["add", "note.md"])
+            .output()
+            .expect("git ran");
+        assert!(staged.status.success());
+
+        rx.recv_timeout(Duration::from_secs(20)).expect("the face is told");
+        stop.store(true, Ordering::Relaxed);
+        thread.join().expect("the watch thread");
     }
 
     /// How many watches a folder takes is the OS's answer, and the two answers are laid over

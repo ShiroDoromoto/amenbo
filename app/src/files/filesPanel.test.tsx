@@ -18,7 +18,7 @@ const ROOT = "/work/repo";
 
 const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
-  entries: {} as Record<string, { name: string; isDir: boolean }[]>,
+  entries: {} as Record<string, FolderEntryDto[]>,
   file: { truncated: false } as FolderFileDto,
   /** The host's side of the watch: what it answers with, and the way to push a later list. */
   tell: null as null | ((changes: FolderChangesDto) => void),
@@ -353,8 +353,11 @@ describe("the file face", () => {
   });
 
   it("leaves the tree folded, and opens it one level at a time", async () => {
-    hoisted.entries[""] = [{ name: "src", isDir: true }, { name: "README.md", isDir: false }];
-    hoisted.entries["src"] = [{ name: "main.rs", isDir: false }];
+    hoisted.entries[""] = [
+      { name: "src", isDir: true, ignored: false },
+      { name: "README.md", isDir: false, ignored: false },
+    ];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
     await draw();
     // Folded: nothing has been read about the folder itself yet.
     expect(hoisted.asked.filter((one) => one.startsWith("entries:"))).toEqual([]);
@@ -375,8 +378,11 @@ describe("the file face", () => {
   // The host says where the pointer is and nothing else, so which folder a file would land in is
   // the panel's own answer — and the answer a reader can see before they let go (`AMB-D-775`).
   it("marks the folder a file dragged in from the desktop would land in", async () => {
-    hoisted.entries[""] = [{ name: "src", isDir: true }, { name: "README.md", isDir: false }];
-    hoisted.entries["src"] = [{ name: "main.rs", isDir: false }];
+    hoisted.entries[""] = [
+      { name: "src", isDir: true, ignored: false },
+      { name: "README.md", isDir: false, ignored: false },
+    ];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
     await draw();
     await click(button(t("files.tree")));
     await settle();
@@ -421,8 +427,27 @@ describe("the file face", () => {
     expect(container.querySelector("h1")?.textContent).toBe("A heading");
   });
 
+  it("draws a name the repository ignores, and draws it faintly", async () => {
+    hoisted.entries[""] = [
+      { name: "src", isDir: true, ignored: false },
+      { name: ".env", isDir: false, ignored: true },
+      { name: ".next", isDir: true, ignored: true },
+    ];
+    await draw();
+    await click(button(t("files.tree")));
+    await settle();
+    // On the list, because what git does not record is still somebody's file — and faint, because
+    // that is the whole of what being ignored says about it (`AMB-D-786`).
+    expect(container.textContent).toContain(".env");
+    expect(container.querySelector(".files__file--ignored")?.textContent).toContain(".env");
+    expect(container.querySelector(".files__dir--ignored")?.textContent).toContain(".next");
+    // The one nothing ignores is drawn as it always was.
+    expect(container.querySelector(".files__dir:not(.files__dir--ignored)")?.textContent)
+      .toContain("src");
+  });
+
   it("draws text that is not Markdown as it was written", async () => {
-    hoisted.entries[""] = [{ name: "run.sh", isDir: false }];
+    hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
     hoisted.file = { text: "#!/bin/sh\necho hi", truncated: false };
     await draw();
     await click(button(t("files.tree")));

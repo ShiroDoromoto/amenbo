@@ -477,7 +477,14 @@ name: string,
 /**
  * Whether opening it lists more names.
  */
-isDir: boolean, };
+isDir: boolean, 
+/**
+ * Whether the repository's own ignore rules cover it. The row is drawn either way and drawn
+ * faintly for this, since what git does not record is still something somebody wrote
+ * (`AMB-D-786`) — it is the row of what changed lately, and the watch behind it, that leave
+ * these out.
+ */
+ignored: boolean, };
 
 /**
  * What a file has to show for itself, as far as a panel can show it (`crate::folder`).

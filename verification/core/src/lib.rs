@@ -661,6 +661,12 @@ const REGISTRY: &[OpSpec] = &[
     // drawn on the file face of the folder a project is *bound* to, so a road reading those colours
     // needs the repository to be that folder and not the one the run stands in.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &["dir"], binds: false },
+    // Everything lying in the folder, recorded. It exists for one state no road could otherwise
+    // reach: git naming a file while saying nothing about the folder holding it. A repository that
+    // has only ever been `init`-ed has nothing tracked in it, so git names the top folder and stops
+    // — and the tree's rollup, which is about a folder git did **not** name, is never walked.
+    // `dir` follows `git-init`'s rule and for its reason.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-commit", required: &[], refs: &[], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], strings: &[], binds: false },
     // The paste that starts this folder's AI on Amenbo at every session, put where the build says it
@@ -2396,6 +2402,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // making one is what is being walked: the hook slots are written into a repository, and getting
     // there is those roads' own work rather than the ground they start from.
     (Domain::Repo, "git-init"),
+    // And what was lying there being recorded in it. Same reason one line up, and one state further:
+    // Amenbo makes no commit either, so a folder git is quiet about while a file inside it is new is
+    // a world no face can reach. It is a premise and only that — a road that recorded something
+    // mid-walk would be walking git rather than Amenbo.
+    (Domain::Repo, "git-commit"),
     // And a folder already wired, which is the same kind of world one step further on. The wiring is a
     // file and not a record, so nothing in the store reaches it — and writing the settings out by hand
     // would put the launch command's own name in the scenario, which is the one thing the build under

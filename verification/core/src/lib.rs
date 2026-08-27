@@ -657,7 +657,10 @@ const REGISTRY: &[OpSpec] = &[
     // reachable by writing inside it. Left out, the file lands in the run's own folder.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path", "dir"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &[], binds: false },
+    // `git-init` takes the same `dir`, and for a reason of its own: what git says about a folder is
+    // drawn on the file face of the folder a project is *bound* to, so a road reading those colours
+    // needs the repository to be that folder and not the one the run stands in.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], strings: &[], binds: false },
     // The paste that starts this folder's AI on Amenbo at every session, put where the build says it
@@ -2224,6 +2227,15 @@ const REGISTRY: &[OpSpec] = &[
     // Whether a row is standing in a section. `present: false` is the half several of these roads are
     // about — a file the folder holds but the face must not offer, because it is ignored.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "listed", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    // What git says about a row, drawn on it as a colour. `mark` names which of the three
+    // the row is wearing — `untracked`, `added`, `modified` — rather than the colour itself: what each
+    // one is drawn in is a theme's to choose, and a road naming a colour would go red the day one moved.
+    //
+    // It is a `Review` on the screen, and the only assert on this face that could never be anything
+    // else. A shot is read for words, and a colour is not one — the row says the same letters wearing
+    // it as it does bare. `present: false` is the half an ignored row is read by: git records nothing
+    // about it, so it wears no colour while standing on the tree like any other.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "row-mark", required: &["name", "section", "mark"], refs: &[], strings: &["name", "section", "mark"], binds: false },
     // What an opened file draws. `shows` is words the road itself put in the file, so a reading finds
     // them because the bytes reached the screen and for no other reason.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "reading", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
@@ -2323,6 +2335,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // And the same file when its bytes cannot be written down in a scenario — one that is
     // deliberately not text, which is a world no amount of YAML reaches.
     (Domain::Repo, "copy-fixture"),
+    // And the folder being a git repository, which is the world every road about what git says has to
+    // open on. Amenbo makes no repository and has no command that would — it only ever reads one — so
+    // no road reaches this state whichever face is walking it. It is a step as well, on the roads where
+    // making one is what is being walked: the hook slots are written into a repository, and getting
+    // there is those roads' own work rather than the ground they start from.
+    (Domain::Repo, "git-init"),
     // And a folder already wired, which is the same kind of world one step further on. The wiring is a
     // file and not a record, so nothing in the store reaches it — and writing the settings out by hand
     // would put the launch command's own name in the scenario, which is the one thing the build under

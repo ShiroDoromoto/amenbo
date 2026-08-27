@@ -24,18 +24,21 @@
 # The world writes the `.gitignore` before anything else, because what is left out of the **watch**
 # is decided as the walk runs and a rule that arrived later would be a rule for the next walk.
 #
-# ── What this road does not read ─────────────────────────────────────────────────────────────────
-# The colour each row wears — what git says about it — is the other half of the same face and is
-# **not** read here. Two ops are missing for it: a world where a bound folder is a repository
-# (`repo git-init` makes the run's own folder one, and no other), and an assert that reads a row's
-# colour. Both are filed for; the lines belong in this file once they land.
+# ── The colour each row wears ────────────────────────────────────────────────────────────────────
+# What git says about a row is drawn on the row as a colour, and that is the other half of the same
+# face. The bound folder is made a repository with nothing recorded in it, so what git reports on is
+# new to it — and the row that arrived while nothing was pressed is read for its colour as well as for
+# being there. The ignored one is read for the other half of the same answer: git reports nothing about
+# it, so it wears nothing. The reading is an eye's either way — a row wearing a colour says the same
+# letters as one that wears none, and words are all a shot gives back.
 id: see-what-changed-in-the-folder-without-touching-it
 title: A file written outside Amenbo shows up in the tree, the folder's own ignore rules included
 description: >
   Open the terminal face on a project whose folder is being watched and unfold the folder's tree,
   then leave Amenbo and put a file in that folder from outside. Come back to a screen nothing was
-  pressed on: the new folder is on the tree. Write a second file the folder's own ignore rules cover,
-  and it is on the tree too — what git does not record is still something somebody wrote.
+  pressed on: the new folder is on the tree, wearing the colour git's answer gives it. Write a second
+  file the folder's own ignore rules cover, and it is on the tree too — what git does not record is
+  still something somebody wrote.
 
 given:
   - type: action
@@ -51,6 +54,15 @@ given:
     with:
       dir: greenhouse
       project: greenhouse
+
+  # The folder the colours are about. It is the bound one and not the run's own, because what git says
+  # is drawn on the face of the folder the project is bound to. Nothing is recorded in it, so what git
+  # reports below is reported as new.
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse
 
   # Written first: what the watch is laid over is decided as the walk runs, so a rule that arrived
   # after one would be a rule for the next.
@@ -135,3 +147,25 @@ steps_gui:
     with:
       name: compost
       section: tree
+
+  # What git says about the row that arrived. Nothing has been recorded in this repository, so the
+  # folder written from outside is new to git, and the row is drawn in the colour that says so.
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: orchard
+      section: tree
+      mark: untracked
+
+  # And the ignored one, which git records nothing about at all. It stands on the tree bare: being
+  # left out of what git tracks is not the same as being new to it, and the face says so by drawing
+  # no colour rather than by leaving the row off.
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: compost
+      section: tree
+      mark: untracked
+      present: false

@@ -2243,6 +2243,60 @@ const REGISTRY: &[OpSpec] = &[
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
 
+    // ── bringing a file in from the machine ───────────────────────────────────────────────────────
+    // A file dragged in from outside and let go over a row, which is the one way anything reaches this
+    // folder that does not go through the folder itself. What is under test is the landing rather than
+    // the carrying: the drop is caught by the application and not by the face, and what the face
+    // decides is which folder was under the pointer when the hand opened.
+    //
+    // So the row is named the way every other row here is, and it is a folder's — a file's row opens a
+    // file and has nothing to put anything in. The section is named beside it for the reason `open` and
+    // `menu` name theirs.
+    //
+    // `brings` is a name rather than a path, and the operator brings the row it stands for. That is the
+    // same fact `task attach` runs into on this face and for the same reason: a drop reads the disk the
+    // operator is sitting at, and nothing a run lays down is anywhere a hand can reach from there. What
+    // it holds is nothing this op reads — it is looked for by its name once it has landed.
+    //
+    // `as` says which of the two is being dragged, because the operator has to bring the right one and
+    // the two prove different things: a file lands as itself, and a folder lands with everything in it,
+    // which is a reading only a road that opens it can make.
+    //
+    // That reading is what `holding` is for, and it is the folder's alone: a road that opened the
+    // folder and looked for a name would be looking for a name only the operator knows, having brought
+    // the folder themselves. Named here, it is asked for at the hand-over instead — bring one with
+    // *this* in it — and the row inside becomes something a shot can answer for.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "drop-in", required: &["as", "brings", "name", "section"], refs: &[], strings: &["as", "brings", "holding", "name", "section"], binds: false },
+
+    // ── naming what is in the folder ──────────────────────────────────────────────────────────────
+    // The menu again, over what a file's menu cannot be opened on. A folder's row carries no way out
+    // to the machine and offers a name to make instead, and so does the heading at the top of the
+    // tree — which is the folder itself, and the only way to make a name at the top level, there
+    // being no row up there to point at.
+    //
+    // The two are one op because they are one menu, and which of them is meant travels as `name`
+    // being there or not: a row is named the way every other row here is, and the heading is named by
+    // nothing, having no name of its own to be told apart by. `section` is asked for either way, and
+    // on the heading it is the whole of the answer — a project answering for several folders draws a
+    // heading each.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu-on-folder", required: &["section"], refs: &[], strings: &["name", "section"], binds: false },
+    // One name made, from the item on that menu through to the name being asked for. It is one op and
+    // not two because the press and the typing are one move on this face: the item puts a box where a
+    // row would be, and a box nobody typed into is a name nobody asked for — there is nothing in
+    // between worth a road's while. `as` says which of the two items, by what it makes rather than by
+    // the item's words.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "name", required: &["as", "name"], refs: &[], strings: &["as", "name"], binds: false },
+    // And the same box over a name that is already there, from the item that opens it. What is typed
+    // is the whole new name and not a change to the old one: the box opens holding what the row is
+    // called, selected, so a name typed into it replaces that.
+    //
+    // **A name changed only in its letters' case is not a rename a road can read.** Every reading on
+    // a screen road is folded to one case before the shot and the expectation meet, so a row that was
+    // never renamed draws the same answer as one that was. It is the rename most worth walking — a
+    // machine that reads two such names as one is the machine that would refuse it — which is why it
+    // is said here: a road that named one would go green over a face that had done nothing.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "rename", required: &["name"], refs: &[], strings: &["name"], binds: false },
+
     // ── handing a file to the machine ─────────────────────────────────────────────────────────────
     // The three ways out of this face that are not reading the file here, and all three are the
     // machine's own: the application it already opens that kind of file with, one the reader picks
@@ -2250,9 +2304,10 @@ const REGISTRY: &[OpSpec] = &[
     // them and remembers none of them, so the road stops at the hand-over and never follows what came
     // forward — where the file ended up is the machine's answer, not this face's.
     //
-    // On a row the menu is a right-click, and it is drawn on files alone: a folder's row opens a
-    // level and has nothing to hand anywhere. The row is therefore named the way every other row
-    // here is — by its name, and by the section it is standing in.
+    // On a row the menu is a right-click. A folder's row opens one too, but it holds none of the
+    // three: what a folder can be handed to is nothing, and what it is offered instead is a name to
+    // make or to write over, which `menu-on-folder` above reaches. So this op names a file, the way
+    // every other row here is named — by its name, and by the section it is standing in.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     // The same menu, reached from the file that is open rather than from a row. It is a second door and not a
     // convenience: a file the face refuses to draw offers a way on to something built to open it, and there is no

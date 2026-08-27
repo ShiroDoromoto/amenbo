@@ -2319,6 +2319,24 @@ pub struct FolderChangedDto {
     pub(crate) modified: String,
 }
 
+/// How a file's lines end — the wire form of [`crate::encoding::LineEnding`].
+///
+/// `mixed` is a value of its own rather than the commoner of the two rounded up, because an editor
+/// hands back one kind of newline for both and nothing could tell them apart again: a file written
+/// back in the commoner kind comes out changed on every line that was the other kind. What to do
+/// about one is the reader's to say (`AMB-D-773`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum FolderLineEndingDto {
+    /// Every newline is `\n` — or there is none at all, which writes back the same either way.
+    Lf,
+    /// Every newline is `\r\n`.
+    Crlf,
+    /// Both, in the same file.
+    Mixed,
+}
+
 /// What a file has to show for itself, as far as a panel can show it (`crate::folder`).
 ///
 /// At most one of `text`, `image` and `oversize` is filled, and all three are empty for a file that
@@ -2343,6 +2361,22 @@ pub struct FolderFileDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) oversize: Option<FolderOversizeDto>,
+    /// What the bytes were read as (`UTF-8`, `Shift_JIS`, …), for a file that is text. It travels
+    /// because a file is written back in what it was read in, and because a guess that went wrong is
+    /// only visible to the reader — who cannot be asked about an encoding nobody named to them
+    /// (`AMB-D-773`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) encoding: Option<String>,
+    /// Whether the file began with a byte order mark. Encoding text does not put one back, so
+    /// nothing but this remembers that 178 files in a real folder have one.
+    pub(crate) bom: bool,
+    /// How its lines end.
+    pub(crate) line_ending: FolderLineEndingDto,
+    /// Whether writing this text back would produce the bytes that were read. A file that is not
+    /// clean — cut at the cap, not wholly decodable, or in an encoding nothing here writes — is one
+    /// to read and not to save.
+    pub(crate) clean: bool,
 }
 
 /// A picture the panel would not carry, and what it was measured against (`AMB-D-783`).

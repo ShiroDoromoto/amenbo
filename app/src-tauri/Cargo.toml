@@ -64,6 +64,16 @@ portable-pty = "0.9"
 # with it — so they are carried whole and decoded on the far side by the terminal that understands
 # them. Same crate core already reads and writes with.
 base64 = "0.23"
+# What a file's bytes are turned into text with, and back. A panel that read every file as UTF-8 put
+# a `?` where each byte it could not read had been — over ten thousand of them in one Shift_JIS
+# document — and saving that back would have written the `?`s into the file. The pair is what Zed
+# carries for the same job, and it costs about 210 KB of binary between them: this one converts,
+# `chardetng` guesses which conversion a file wants. The reasoning is `src/encoding.rs`.
+encoding_rs = "0.8"
+# Guesses a file's encoding from its bytes, for the 0.155% of files that are not valid UTF-8 (measured
+# over 486,169 of them in a real folder). Version 1 rather than 0.1, which has no ISO-2022-JP among
+# its candidates.
+chardetng = "1.0"
 # Draws the session ids the terminals are named by. Sixteen bytes of the operating system's own
 # randomness, which is what keeps a name from repeating across restarts of the app. Same crate core
 # draws its blob nonces with.

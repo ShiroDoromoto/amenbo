@@ -71,7 +71,7 @@ export async function folderRead(
   root: string,
   path: string[],
 ): Promise<FolderFileDto> {
-  if (!inTauri()) return { truncated: false };
+  if (!inTauri()) return { truncated: false, bom: false, lineEnding: "lf", clean: true };
   return await invoke<FolderFileDto>("folder_read", { projectId, root, path });
 }
 

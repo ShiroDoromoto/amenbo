@@ -16,10 +16,21 @@ import type {
 
 const ROOT = "/work/repo";
 
+/** What the host answers `folder_read` with, filled in around whatever a test cares about. */
+const aFile = (about: Partial<FolderFileDto> = {}): FolderFileDto => ({
+  truncated: false,
+  bom: false,
+  lineEnding: "lf",
+  clean: true,
+  ...about,
+});
+
 const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
   entries: {} as Record<string, { name: string; isDir: boolean }[]>,
-  file: { truncated: false } as FolderFileDto,
+  // Spelled out rather than built by `aFile`: `vi.hoisted` runs before this module's own bindings
+  // exist. Every test replaces it in `beforeEach` anyway.
+  file: { truncated: false, bom: false, lineEnding: "lf", clean: true } as FolderFileDto,
   /** The host's side of the watch: what it answers with, and the way to push a later list. */
   tell: null as null | ((changes: FolderChangesDto) => void),
   watching: { root: "", changed: [] as FolderChangedDto[], partial: false, gone: false } as FolderChangesDto,
@@ -124,7 +135,7 @@ const button = (text: string) =>
 beforeEach(() => {
   hoisted.asked = [];
   hoisted.entries = {};
-  hoisted.file = { truncated: false };
+  hoisted.file = aFile();
   hoisted.apps = [];
   hoisted.tell = null;
   hoisted.watching = {
@@ -293,7 +304,7 @@ describe("the file face", () => {
   });
 
   it("opens a path clicked in a pane, read against that pane's folder", async () => {
-    hoisted.file = { text: "# from the pane", truncated: false };
+    hoisted.file = aFile({ text: "# from the pane" });
     await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 1 } });
     expect(hoisted.asked).toContain(`read:${ROOT}:notes/a.md`);
     expect(container.querySelector("h1")?.textContent).toBe("from the pane");
@@ -306,7 +317,7 @@ describe("the file face", () => {
   });
 
   it("opens the same file again when it is clicked again", async () => {
-    hoisted.file = { text: "# again", truncated: false };
+    hoisted.file = aFile({ text: "# again" });
     await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 1 } });
     await click(button(t("files.back")));
     await settle();
@@ -356,7 +367,7 @@ describe("the file face", () => {
   });
 
   it("draws a Markdown file as Markdown", async () => {
-    hoisted.file = { text: "# A heading", truncated: false };
+    hoisted.file = aFile({ text: "# A heading" });
     await draw();
     await click(button("a.md"));
     await settle();
@@ -366,7 +377,7 @@ describe("the file face", () => {
 
   it("draws text that is not Markdown as it was written", async () => {
     hoisted.entries[""] = [{ name: "run.sh", isDir: false }];
-    hoisted.file = { text: "#!/bin/sh\necho hi", truncated: false };
+    hoisted.file = aFile({ text: "#!/bin/sh\necho hi" });
     await draw();
     await click(button(t("files.tree")));
     await settle();
@@ -378,7 +389,7 @@ describe("the file face", () => {
   });
 
   it("says so when the file is not something a panel can show", async () => {
-    hoisted.file = { truncated: false };
+    hoisted.file = aFile();
     await draw();
     await click(button("a.md"));
     await settle();
@@ -387,7 +398,7 @@ describe("the file face", () => {
   });
 
   it("draws a picture out of the bytes the host carried", async () => {
-    hoisted.file = { truncated: false, image: { mime: "image/png", base64: "AAAA" } };
+    hoisted.file = aFile({ image: { mime: "image/png", base64: "AAAA" } });
     await draw();
     await click(button("a.md"));
     await settle();
@@ -395,7 +406,7 @@ describe("the file face", () => {
   });
 
   it("says what a picture it would not draw was measured at, and offers the way on", async () => {
-    hoisted.file = { truncated: false, oversize: { bytes: 6 * 1024 * 1024, width: 40000, height: 30000 } };
+    hoisted.file = aFile({ oversize: { bytes: 6 * 1024 * 1024, width: 40000, height: 30000 } });
     await draw();
     await click(button("a.md"));
     await settle();
@@ -418,7 +429,7 @@ describe("the file face", () => {
   });
 
   it("refuses on bytes alone where the picture would not say its size", async () => {
-    hoisted.file = { truncated: false, oversize: { bytes: 6 * 1024 * 1024 } };
+    hoisted.file = aFile({ oversize: { bytes: 6 * 1024 * 1024 } });
     await draw();
     await click(button("a.md"));
     await settle();
@@ -431,7 +442,7 @@ describe("the file face", () => {
     // The pictures that cost the most to draw are the ones that compress best, so a refusal on
     // pixels alone is commonly a file of a few kilobytes. Rounded to megabytes it would read "0 MB"
     // — the file said to be empty, which is the opposite of what it is (`AMB-D-783`).
-    hoisted.file = { truncated: false, oversize: { bytes: 10 * 1024, width: 16000, height: 16000 } };
+    hoisted.file = aFile({ oversize: { bytes: 10 * 1024, width: 16000, height: 16000 } });
     await draw();
     await click(button("a.md"));
     await settle();
@@ -443,7 +454,7 @@ describe("the file face", () => {
   it("goes all the way down to bytes rather than round a refused picture to nothing", async () => {
     // A header alone is the cheapest thing that can claim thirty thousand square, and it is under a
     // kilobyte. Rounded up a unit it would read "0 kB" — the same lie one unit further down.
-    hoisted.file = { truncated: false, oversize: { bytes: 33, width: 30000, height: 30000 } };
+    hoisted.file = aFile({ oversize: { bytes: 33, width: 30000, height: 30000 } });
     await draw();
     await click(button("a.md"));
     await settle();
@@ -453,7 +464,7 @@ describe("the file face", () => {
   });
 
   it("says out loud when only the head of a long file is shown", async () => {
-    hoisted.file = { text: "x".repeat(10), truncated: true };
+    hoisted.file = aFile({ text: "x".repeat(10), truncated: true, clean: false });
     await draw();
     await click(button("a.md"));
     await settle();
@@ -462,7 +473,7 @@ describe("the file face", () => {
 
   it("leaves this face when a reference in a file is followed", async () => {
     const left: number[] = [];
-    hoisted.file = { text: "see AMB-T-12", truncated: false };
+    hoisted.file = aFile({ text: "see AMB-T-12" });
     await draw({ onOpenLedger: () => left.push(1) });
     await click(button("a.md"));
     await settle();

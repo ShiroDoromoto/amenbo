@@ -755,12 +755,17 @@ to one case before the shot and the expectation meet, so a row that was never re
 like one that was. It is the rename most worth walking — a machine that reads the two names as one is
 the machine that would refuse it — and it is held in a unit test over the rename itself instead.
 
-`drop-in` is the file coming in: one dragged from somewhere else on the machine and let go over a
+`drop-in` is the row coming in: one dragged from somewhere else on the machine and let go over a
 folder's row. What it puts under test is the landing rather than the carrying — the drag is
 caught by the application and not by the face, so the part that can be wrong is which folder was
-under the pointer when the hand opened. The file is named and not pathed, for the reason `task
+under the pointer when the hand opened. What is brought is named and not pathed, for the reason `task
 attach` names one: a drop reads the disk the operator is sitting at, and nothing a run lays down is
-anywhere a hand can reach from there. `bring-a-file-in-from-the-machine` is the road.
+anywhere a hand can reach from there. `as` says whether a file or a folder is being dragged, and for
+a folder `holding` names a row that has to be inside it — what a folder's drop has to answer for is
+what came with it, and a row nobody was told to bring is one no reading can look for.
+`bring-a-file-in-from-the-machine` and `bring-a-folder-in-from-the-machine` are the roads: two,
+because a carry that made the folder and copied nothing into it passes every reading the file road
+makes.
 
 The rest are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks a row
 and `menu-on-file` reaches the same menu from the file that is open, which is where a file the face

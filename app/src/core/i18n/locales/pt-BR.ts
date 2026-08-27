@@ -739,6 +739,7 @@ export const ptBR: Translation = {
     wake_no_folder: "Não foi possível ler essa pasta: {reason}",
     wake_no_config: "O Amenbo não encontrou os próprios arquivos.",
     wake_not_kept: "Não foi possível salvar a escolha.",
+    wake_not_registered: "Um comando registrado precisa de um nome e de uma linha de comando.",
     window_failed: "Não foi possível abrir essa janela: {reason}",
     talk_blank: "Aquela janela abriu, mas nunca desenhou nada, então o terminal voltou para esta.",
     folder_taken: "{name} já existe.",

@@ -738,6 +738,7 @@ export const fr: Translation = {
     wake_no_folder: "Ce dossier n'a pas pu être lu : {reason}",
     wake_no_config: "Amenbo n'a pas pu trouver ses propres fichiers.",
     wake_not_kept: "Le choix n'a pas pu être enregistré.",
+    wake_not_registered: "Une commande enregistrée a besoin d'un nom et d'une ligne de commande.",
     window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
     talk_blank: "Cette fenêtre s'est ouverte sans rien afficher : le terminal a été remis dans celle-ci.",
     folder_taken: "{name} existe déjà.",

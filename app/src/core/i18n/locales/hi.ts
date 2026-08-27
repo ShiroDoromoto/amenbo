@@ -710,6 +710,7 @@ export const hi: Translation = {
     wake_no_folder: "वह फ़ोल्डर पढ़ा नहीं जा सका: {reason}",
     wake_no_config: "Amenbo को अपनी ही फ़ाइलें नहीं मिलीं।",
     wake_not_kept: "चुनाव सहेजा नहीं जा सका।",
+    wake_not_registered: "पंजीकृत कमांड के लिए नाम और कमांड लाइन दोनों चाहिए।",
     window_failed: "वह विंडो नहीं खोली जा सकी: {reason}",
     talk_blank: "वह विंडो खुली तो सही, पर उसमें कुछ भी नहीं आया, इसलिए टर्मिनल को इसी विंडो में लौटा दिया गया।",
     folder_taken: "{name} पहले से मौजूद है।",

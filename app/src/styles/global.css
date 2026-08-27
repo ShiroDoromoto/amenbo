@@ -1076,6 +1076,32 @@ body.dragging-row { user-select: none; }
 
 .agent__choice:hover { border-color: var(--c-accent); }
 
+/* One the machine has not got. Drawn faint and dashed, and dead to a press: it is on the offer to
+   say that installing it would put it among the choices, so it has to read as a choice that is not
+   here yet rather than as one that failed (`../talk/agent`). */
+.agent__choice--missing {
+  border-style: dashed;
+  color: var(--c-text-faint);
+  cursor: default;
+}
+.agent__choice--missing:hover { border-color: var(--c-border); }
+
+/* The press that unfolds them, and the rows it unfolds. Quiet: what the offer is about is what can
+   be started here, and this is the line under it. */
+.agent__more {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--c-text-muted);
+  font: inherit;
+  font-size: var(--fs-xs);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.agent__more:hover { color: var(--c-text); }
+.agent__missing { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); }
+.agent__missing[hidden] { display: none; }
+
 /* A refusal kept under the invitation rather than drawn in place of it — the folder could not be
    bound, and the reader is left where they were, which is with a folder still to choose. Inside the
    box it is one more thing said, so it takes the room of a line instead of the room of a face. */

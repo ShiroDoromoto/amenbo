@@ -738,6 +738,7 @@ export const es: Translation = {
     wake_no_folder: "No se pudo leer esa carpeta: {reason}",
     wake_no_config: "Amenbo no pudo encontrar sus propios archivos.",
     wake_not_kept: "No se pudo guardar la elección.",
+    wake_not_registered: "Un comando registrado necesita un nombre y una línea de comandos.",
     window_failed: "No se pudo abrir esa ventana: {reason}",
     talk_blank: "Esa ventana se abrió pero nunca dibujó nada, así que la terminal volvió a esta.",
     folder_taken: "{name} ya está ahí.",

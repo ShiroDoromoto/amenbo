@@ -105,6 +105,16 @@ function wake(over: Partial<WakeDto> = {}): WakeDto {
   };
 }
 
+/** A host answer from a machine the catalogue is wider than: `has` is installed, `lacks` is on the
+ *  row and not installed — the shape every real machine answers with. */
+function partly(has: string[], lacks: string[], over: Partial<WakeDto> = {}): WakeDto {
+  const row = [
+    ...has.map((id) => ({ id, label: id, command: id, traced: false, installed: true })),
+    ...lacks.map((id) => ({ id, label: id, command: id, traced: false, installed: false })),
+  ];
+  return { folder: "/work/here", candidates: row, offered: row.map((one) => one.id), ...over };
+}
+
 /** What the window is told by the panes under it, counted rather than kept. */
 const heard = { opened: 0, output: 0, chose: [] as string[], said: 0, closed: 0, named: 0 };
 const events: PaneEvents = {
@@ -364,8 +374,28 @@ describe("the frame draws what the host settled", () => {
     expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
   });
 
+  it("puts only what this machine can start among the presses, and folds the rest away", async () => {
+    const root = await draw(partly(["claude"], ["codex", "cursor-agent"]));
+
+    // The offer is what a press can open: the one installed agent, the shell under it, and the press
+    // that unfolds the rest — which are on the page and out of sight until it is pressed.
+    expect(
+      buttons(root).filter((b) => !b.className.includes("--missing")).map((b) => b.textContent),
+    ).toEqual(["claude", "Plain shell", "Not installed (2)"]);
+    expect(root.querySelector(".agent__missing")?.hasAttribute("hidden"), "they were unfolded").toBe(true);
+
+    buttons(root).find((b) => b.textContent === "Not installed (2)")?.click();
+    expect(root.querySelector(".agent__missing")?.hasAttribute("hidden")).toBe(false);
+
+    // Unfolded they are on the offer and dead to a press: a reader who cannot see that Amenbo
+    // starts them has no way of learning that installing one would give them a choice.
+    const missing = [...root.querySelectorAll(".agent__choice--missing")] as HTMLButtonElement[];
+    expect(missing.map((b) => b.textContent)).toEqual(["codex", "cursor-agent"]);
+    expect(missing.every((b) => b.disabled), "one of them could be pressed").toBe(true);
+  });
+
   it("says what it looked for, and looks again on request, when nothing is startable", async () => {
-    const root = await draw(wake({ offered: [] }));
+    const root = await draw(partly([], ["claude", "codex"]));
 
     expect(hoisted.panes).toEqual([]);
     expect(root.textContent).toContain("claude, codex");
@@ -470,7 +500,7 @@ describe("the shell stands beside the agents, and answers nothing about the fold
   });
 
   it("offers the shell where nothing is startable, which is the only terminal such a machine has", async () => {
-    const root = await draw(wake({ offered: [] }));
+    const root = await draw(partly([], ["claude", "codex"]));
 
     const shell = buttons(root).find((b) => b.textContent === "Plain shell");
     expect(shell, "a machine with no agent on it was left with no terminal at all").toBeTruthy();
@@ -490,6 +520,16 @@ describe("the shell stands beside the agents, and answers nothing about the fold
       "Claude Code",
       "Plain shell",
     ]);
+  });
+
+  it("keeps the ones this machine has not got off the row's menu", async () => {
+    const root = await draw(partly(["claude"], ["codex"], { settled: "claude" }));
+    hoisted.end?.();
+
+    // A bar is a place to start something. What could be installed is the offer's to say, and a menu
+    // line that opened a pane on `command not found` would be the worst way to say it.
+    expect([...(root.querySelector("select")?.options ?? [])].map((one) => one.textContent))
+      .toEqual(["claude", "Plain shell"]);
   });
 
   it("starts nothing, and keeps the shell as the person's, when the row opens it", async () => {

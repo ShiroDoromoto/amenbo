@@ -709,6 +709,7 @@ export const zhHans: Translation = {
     wake_no_folder: "读不到那个文件夹：{reason}",
     wake_no_config: "Amenbo 找不到自己的文件。",
     wake_not_kept: "没能保存这个选择。",
+    wake_not_registered: "登记的命令需要名称和命令行两者。",
     window_failed: "无法打开该窗口：{reason}",
     talk_blank: "那个窗口已打开，但始终没有绘制任何内容，因此终端已放回这个窗口。",
     folder_taken: "{name} 已经存在。",

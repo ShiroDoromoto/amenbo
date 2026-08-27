@@ -747,6 +747,7 @@ export const pl: Translation = {
     wake_no_folder: "Nie udało się odczytać tego folderu: {reason}",
     wake_no_config: "Amenbo nie znalazło własnych plików.",
     wake_not_kept: "Nie udało się zapisać wyboru.",
+    wake_not_registered: "Zarejestrowane polecenie wymaga zarówno nazwy, jak i wiersza polecenia.",
     window_failed: "Nie udało się otworzyć tego okna: {reason}",
     talk_blank: "Tamto okno otworzyło się, ale nic w nim nie narysowano, więc terminal wrócił do tego okna.",
     folder_taken: "{name} już tam jest.",

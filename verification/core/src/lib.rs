@@ -2253,11 +2253,20 @@ const REGISTRY: &[OpSpec] = &[
     // file and has nothing to put anything in. The section is named beside it for the reason `open` and
     // `menu` name theirs.
     //
-    // `file` is a name rather than a path, and the operator brings the file it stands for. That is the
+    // `brings` is a name rather than a path, and the operator brings the row it stands for. That is the
     // same fact `task attach` runs into on this face and for the same reason: a drop reads the disk the
     // operator is sitting at, and nothing a run lays down is anywhere a hand can reach from there. What
-    // the file holds is nothing this road reads — it is looked for by its name once it has landed.
-    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "drop-in", required: &["file", "name", "section"], refs: &[], strings: &["file", "name", "section"], binds: false },
+    // it holds is nothing this op reads — it is looked for by its name once it has landed.
+    //
+    // `as` says which of the two is being dragged, because the operator has to bring the right one and
+    // the two prove different things: a file lands as itself, and a folder lands with everything in it,
+    // which is a reading only a road that opens it can make.
+    //
+    // That reading is what `holding` is for, and it is the folder's alone: a road that opened the
+    // folder and looked for a name would be looking for a name only the operator knows, having brought
+    // the folder themselves. Named here, it is asked for at the hand-over instead — bring one with
+    // *this* in it — and the row inside becomes something a shot can answer for.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "drop-in", required: &["as", "brings", "name", "section"], refs: &[], strings: &["as", "brings", "holding", "name", "section"], binds: false },
 
     // ── naming what is in the folder ──────────────────────────────────────────────────────────────
     // The menu again, over what a file's menu cannot be opened on. A folder's row carries no way out

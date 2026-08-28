@@ -1,0 +1,112 @@
+# A picture open in the panel, rewritten from outside, and drawn again as the picture it now is.
+#
+# The pane beside this column is a terminal an agent works in, and the folder it works in is the
+# folder this column draws — so a file being rewritten under a reader is the ordinary case here. Text
+# has a road for that already (`keep-what-was-typed-when-a-file-moves-underneath`). A picture had
+# none, and it is the harder half: the panel never reads a picture's bytes, it points the window at
+# them, so nothing about the file being different would reach the screen on its own.
+#
+# ── Why the two pictures are the same length ─────────────────────────────────────────────────────
+# A picture that changed size could be redrawn for having changed size. Two of exactly the same
+# length take that explanation away and leave one: something read what is inside the file. The
+# padding that makes the lengths meet is a text chunk the format allows and no decoder looks at, so
+# both remain pictures anybody could open.
+#
+# ── Why the words are inside the pictures ────────────────────────────────────────────────────────
+# What a run can carry away from a screen is what the screen says. Two pictures that differed only in
+# their colours would need an eye to tell apart afterwards; two that have a word written across them
+# are told apart by the same reading every other step here is judged by.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. What is under test is a window redrawing, and a binary has no window.
+id: see-a-picture-rewritten-under-you
+title: A picture rewritten from outside is drawn again, without being reopened
+description: >
+  Open the terminal face on a project whose folder holds a picture, unfold the folder's section and
+  open the picture: it has FIRST written across it. Without touching the panel, overwrite the file
+  from outside with a different picture of exactly the same length. What the panel draws becomes the
+  new picture, which says SECOND.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      dir: greenhouse
+      from: files/picture-first.png
+      path: glasshouse.png
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: glasshouse.png
+      section: tree
+
+  # Read before it is rewritten, so a run that finds the second picture later fails on the rewriting
+  # rather than on having been looking at it all along.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      as: picture
+      shows: FIRST
+
+  # The rewriting, from outside the panel and with the picture still open. The name is the same and
+  # so is the length; everything inside it is different.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      dir: greenhouse
+      from: files/picture-second.png
+      path: glasshouse.png
+
+  # The goal the road is named for: the window is pointed at the same name and draws the new bytes.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      as: picture
+      shows: SECOND
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      as: picture
+      shows: FIRST
+      present: false

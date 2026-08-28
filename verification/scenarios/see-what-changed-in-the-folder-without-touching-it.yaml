@@ -98,8 +98,8 @@ steps_gui:
     with:
       side: files
 
-  # The tree starts folded — a panel nobody is looking at must not walk a repository — so the road
-  # opens it before it can read anything on it.
+  # The first level is drawn from the start — the names of the bound folder are what the half is
+  # opened for — so this says where the screen has to stand rather than working a control.
   - type: action
     domain: files
     op: tree

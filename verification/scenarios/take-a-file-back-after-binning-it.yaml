@@ -122,10 +122,10 @@ steps_gui:
     with:
       answer: yes
 
-  # The file that was open has gone, so the column is the list again — and the list comes back folded,
-  # the way it is drawn on the way in. Unfolded here rather than left to be assumed: a reading that
-  # cannot find a name it is looking straight at passes an absent step, so a road that read a folded
-  # section would come out green over a screen nobody could have seen the answer on.
+  # The file that was open has gone, so the column is the list again — standing the way it was left,
+  # because the tree is the panel's to hold. Said rather than assumed: a reading that cannot find a
+  # name it is looking straight at passes an absent step, so a road that read a folded section would
+  # come out green over a screen nobody could have seen the answer on.
   - type: action
     domain: files
     op: tree

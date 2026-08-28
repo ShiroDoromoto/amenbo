@@ -2,8 +2,8 @@
 #
 # The folder is what an AI can reach, and that is the whole reason it is worth drawing: a person who
 # has handed a folder over is entitled to see what is in it without leaving the app to look. This road
-# walks from the folder folded shut down to the words inside one file, and then to a file whose bytes
-# are not words at all.
+# walks from the names in the bound folder down to the words inside one file, and then to a file
+# whose bytes are not words at all.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no second road here and no gap in one. Reading a file at a shell is `cat`, and Amenbo is
@@ -123,8 +123,9 @@ steps_gui:
     with:
       side: files
 
-  # The folder's own section starts folded: what a person opens the face for is the pane, and a tree
-  # unfolded over it would be the column deciding what they came for.
+  # The folder's own section stands unfolded at its first level from the moment the half is drawn:
+  # the names in the bound folder are what a person came to the files half for. What is under them
+  # is not, which is a read per level and is asked for when somebody opens one.
   - type: action
     domain: files
     op: tree

@@ -113,8 +113,17 @@ type Opened = {
   cursor: string | null;
 };
 
-/** A tree nobody has opened yet: folded shut, with no folder unfolded and no stop taken. */
-const FOLDED: Opened = { treeOpen: false, open: [], cursor: null };
+/**
+ * A tree nobody has touched yet: the first level open, nothing under it, and no stop taken.
+ *
+ * **The names of the bound folder are what a reader opens this half for.** So they are on the
+ * screen when it is drawn: a heading standing over nothing is a control every reader has to work
+ * before seeing anything, and a press that asks for what somebody came for need not be asked.
+ *
+ * `open` stays empty, which is what makes it the **first** level and not the whole tree: the levels
+ * under it cost a read each and are asked for when somebody opens them (`Level`).
+ */
+const AT_FIRST: Opened = { treeOpen: true, open: [], cursor: null };
 
 /** The name being typed in one section, and the end of typing it. */
 type Naming = {
@@ -518,10 +527,10 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
           label={sections.length > 1 ? one.label : null}
           bound={one.exists}
           landing={landing}
-          opened={opened[one.path] ?? FOLDED}
+          opened={opened[one.path] ?? AT_FIRST}
           onOpened={(change) => setOpened((was) => ({
             ...was,
-            [one.path]: change(was[one.path] ?? FOLDED),
+            [one.path]: change(was[one.path] ?? AT_FIRST),
           }))}
           edit={edit?.root === one.path ? edit : null}
           onEdit={setEdit}
@@ -634,9 +643,9 @@ function FolderSection({
   };
 
   // The panel says which folder a name is being made in; unfolding the way to it is this section's
-  // own answer, said in one change because the tree and the folder inside it open together. A tree
-  // nobody has opened starts folded, so a box typed into a folder nobody can see is the ordinary
-  // case rather than a corner.
+  // own answer, said in one change because the tree and the folder inside it open together. The
+  // first level is open from the start and everything under it is not, so a box typed into a folder
+  // nobody can see is the ordinary case rather than a corner.
   const making = edit?.kind === "make" ? edit.into.join("/") : null;
   useEffect(() => {
     if (making === null) return;
@@ -676,8 +685,9 @@ function FolderSection({
   // repository answers with nothing, which is a tree with no colours and not a failure to draw.
   //
   // **Only while the tree is open**, which is the same rule the levels themselves are read under: a
-  // colour nobody is looking at is a process started for nothing, and a folder someone leaves the
-  // panel folded on is one an agent may be writing in all afternoon.
+  // colour nobody is looking at is a process started for nothing, and a folder someone folds the
+  // panel shut on is one an agent may be writing in all afternoon. The tree starts open, so this is
+  // asked once when the files half is drawn — the same one process the first level's own read is.
   useEffect(() => {
     if (!bound || !treeOpen) return;
     let alive = true;
@@ -748,9 +758,10 @@ function FolderSection({
         >
           {t("files.tree")}
         </button>
-        {/* Folded until it is asked for, and each level asked for only when it is opened: a tree is
-            not the point of this face, and an unfolded one would read the whole repository to draw
-            a panel nobody was looking at. */}
+        {/* The first level from the start, and each level under it only when it is opened: the
+            names of the bound folder are what a reader opens this half for, and everything deeper
+            is a repository read to draw rows nobody has asked for. Folding the whole tree away is
+            still a press, and it stops the reads the same way. */}
         {treeOpen && (
           <Level
             projectId={projectId}

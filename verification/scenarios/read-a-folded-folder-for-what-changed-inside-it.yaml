@@ -90,8 +90,8 @@ steps_gui:
     with:
       side: files
 
-  # The tree starts folded, so this opens the section that draws the bound folder. What it does not
-  # open is the folders inside it — which is the state this road is about.
+  # The section that draws the bound folder stands unfolded from the start. What is not open is the
+  # folders inside it — which is the state this road is about, and what `open: []` leaves them in.
   - type: action
     domain: files
     op: tree

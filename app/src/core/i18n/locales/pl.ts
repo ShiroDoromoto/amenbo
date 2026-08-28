@@ -793,6 +793,7 @@ export const pl: Translation = {
     wake_not_registered: "Zarejestrowane polecenie wymaga zarówno nazwy, jak i wiersza polecenia.",
     window_failed: "Nie udało się otworzyć tego okna: {reason}",
     talk_blank: "Tamto okno otworzyło się, ale nic w nim nie narysowano, więc terminal wrócił do tego okna.",
+    clip_refused: "Nie udało się umieścić plików w schowku: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

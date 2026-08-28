@@ -214,6 +214,7 @@ export const CORE_ERROR_CODES = [
  * answering that with the same "not there" every other rule uses told the reader their file was
  * broken). */
 export const TAURI_ERROR_CODES = [
+  "clip_refused",
   "folder_changed_underneath",
   "folder_link",
   "folder_make",

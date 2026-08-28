@@ -769,6 +769,7 @@ export const de: Translation = {
     wake_not_registered: "Ein registrierter Befehl braucht sowohl einen Namen als auch eine Befehlszeile.",
     window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
     talk_blank: "Das Fenster wurde geöffnet, hat aber nie etwas gezeichnet — das Terminal ist wieder in diesem Fenster.",
+    clip_refused: "Die Dateien konnten nicht in die Zwischenablage gelegt werden: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

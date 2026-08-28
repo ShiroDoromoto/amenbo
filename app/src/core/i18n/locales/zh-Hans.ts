@@ -755,6 +755,7 @@ export const zhHans: Translation = {
     wake_not_registered: "登记的命令需要名称和命令行两者。",
     window_failed: "无法打开该窗口：{reason}",
     talk_blank: "那个窗口已打开，但始终没有绘制任何内容，因此终端已放回这个窗口。",
+    clip_refused: "无法把文件放到剪贴板：{reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

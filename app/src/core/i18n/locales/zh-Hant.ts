@@ -755,6 +755,7 @@ export const zhHant: Translation = {
     wake_not_registered: "登錄的命令需要名稱和命令列兩者。",
     window_failed: "無法開啟該視窗：{reason}",
     talk_blank: "那個視窗已開啟，但始終沒有繪製任何內容，因此終端機已放回這個視窗。",
+    clip_refused: "無法把檔案放到剪貼簿：{reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

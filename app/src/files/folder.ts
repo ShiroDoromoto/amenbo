@@ -310,3 +310,36 @@ export async function folderRename(
   if (!inTauri()) return;
   await invoke<void>("folder_rename", { projectId, root, path, name });
 }
+
+/**
+ * Put rows on the machine's own clipboard, as the files they are (`AMB-D-796`).
+ *
+ * **What `⌘C` means here is what it means everywhere else on the machine**, so a row copied in this
+ * panel pastes into the reader's file manager and a file copied there pastes in here. The webview
+ * cannot carry a file, which is why both ends of that are the host's (`crate::clipboard`).
+ */
+export async function folderClipCopy(
+  projectId: number,
+  root: string,
+  paths: string[][],
+): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<void>("folder_clip_copy", { projectId, root, paths });
+}
+
+/**
+ * Bring what is on the machine's clipboard into this folder.
+ *
+ * It answers the way a drop does, and for the same reason: what arrives is paths from outside, and a
+ * name already in the way stops the carry and says where it got to. A clipboard holding no files
+ * answers with a carry that carried nothing rather than a refusal — pasting a picture into a folder
+ * is not a failure, it is a paste of something a folder cannot hold.
+ */
+export async function folderClipPaste(
+  projectId: number,
+  toRoot: string,
+  to: string[],
+): Promise<FolderCarriedDto> {
+  if (!inTauri()) return { arrived: [], stopped: null };
+  return await invoke<FolderCarriedDto>("folder_clip_paste", { projectId, toRoot, to });
+}

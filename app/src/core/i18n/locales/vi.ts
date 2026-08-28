@@ -758,6 +758,7 @@ export const vi: Translation = {
     wake_not_registered: "Lệnh đã đăng ký cần cả tên và dòng lệnh.",
     window_failed: "Không thể mở cửa sổ đó: {reason}",
     talk_blank: "Cửa sổ đó đã mở nhưng không vẽ gì cả, nên terminal được đưa về cửa sổ này.",
+    clip_refused: "Không đưa được tệp lên khay nhớ tạm: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

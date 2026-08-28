@@ -756,6 +756,7 @@ export const hi: Translation = {
     wake_not_registered: "पंजीकृत कमांड के लिए नाम और कमांड लाइन दोनों चाहिए।",
     window_failed: "वह विंडो नहीं खोली जा सकी: {reason}",
     talk_blank: "वह विंडो खुली तो सही, पर उसमें कुछ भी नहीं आया, इसलिए टर्मिनल को इसी विंडो में लौटा दिया गया।",
+    clip_refused: "फ़ाइलें क्लिपबोर्ड पर नहीं रखी जा सकीं: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

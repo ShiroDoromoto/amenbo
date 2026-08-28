@@ -784,6 +784,7 @@ export const fr: Translation = {
     wake_not_registered: "Une commande enregistrée a besoin d'un nom et d'une ligne de commande.",
     window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
     talk_blank: "Cette fenêtre s'est ouverte sans rien afficher : le terminal a été remis dans celle-ci.",
+    clip_refused: "Les fichiers n’ont pas pu être placés dans le presse-papiers : {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

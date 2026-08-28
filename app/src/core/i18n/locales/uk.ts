@@ -793,6 +793,7 @@ export const uk: Translation = {
     wake_not_registered: "Для зареєстрованої команди потрібні і назва, і командний рядок.",
     window_failed: "Не вдалося відкрити це вікно: {reason}",
     talk_blank: "Те вікно відкрилося, але нічого в ньому так і не з’явилося, тому термінал повернувся в це вікно.",
+    clip_refused: "Не вдалося помістити файли в буфер обміну: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

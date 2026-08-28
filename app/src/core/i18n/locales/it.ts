@@ -784,6 +784,7 @@ export const it: Translation = {
     wake_not_registered: "Un comando registrato ha bisogno di un nome e di una riga di comando.",
     window_failed: "Non è stato possibile aprire quella finestra: {reason}",
     talk_blank: "Quella finestra si è aperta senza disegnare nulla, quindi il terminale è tornato in questa.",
+    clip_refused: "Non è stato possibile mettere i file negli appunti: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

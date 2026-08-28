@@ -778,6 +778,7 @@ export const ja: Translation = {
     wake_not_registered: "登録するコマンドには、名前と起動行の両方が要ります。",
     window_failed: "その窓を開けませんでした: {reason}",
     talk_blank: "別ウィンドウは開きましたが何も描かれなかったので、ターミナルをこの窓に戻しました。",
+    clip_refused: "クリップボードに載せられませんでした: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

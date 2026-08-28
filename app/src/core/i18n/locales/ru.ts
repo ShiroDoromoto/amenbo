@@ -796,6 +796,7 @@ export const ru: Translation = {
     wake_not_registered: "Для зарегистрированной команды нужны и название, и командная строка.",
     window_failed: "Не удалось открыть это окно: {reason}",
     talk_blank: "То окно открылось, но ничего в нём так и не отрисовалось, поэтому терминал вернулся в это окно.",
+    clip_refused: "Не удалось поместить файлы в буфер обмена: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

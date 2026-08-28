@@ -758,6 +758,7 @@ export const th: Translation = {
     wake_not_registered: "คำสั่งที่ลงทะเบียนต้องมีทั้งชื่อและบรรทัดคำสั่ง",
     window_failed: "ไม่สามารถเปิดหน้าต่างนั้นได้: {reason}",
     talk_blank: "หน้าต่างนั้นเปิดขึ้นแต่ไม่มีอะไรถูกวาดเลย จึงนำเทอร์มินัลกลับมาไว้ที่หน้าต่างนี้",
+    clip_refused: "วางไฟล์ลงคลิปบอร์ดไม่ได้: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

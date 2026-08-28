@@ -754,6 +754,7 @@ export const ko: Translation = {
     wake_not_registered: "등록하는 명령에는 이름과 실행 줄이 모두 필요합니다.",
     window_failed: "그 창을 열 수 없습니다: {reason}",
     talk_blank: "그 창은 열렸지만 아무것도 그려지지 않아, 터미널을 이 창으로 되돌렸습니다.",
+    clip_refused: "클립보드에 올리지 못했습니다: {reason}",
     // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
     // the "not there" the other rules are refused with: the file is whole and the refusal is meant
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

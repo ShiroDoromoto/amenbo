@@ -874,6 +874,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_not_registered: "A registered command needs both a name and a command line.",
   window_failed: "That window could not be opened: {reason}",
   talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
+  clip_refused: "The files could not be put on the clipboard: {reason}",
   // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
   // the "not there" the other rules are refused with: the file is whole and the refusal is meant
   // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.

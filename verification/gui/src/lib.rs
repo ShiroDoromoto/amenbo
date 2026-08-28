@@ -1839,6 +1839,11 @@ impl Instructor {
                     req(with, "path")?
                 ),
             },
+            (Domain::Repo, "paste-outside") => format!(
+                "Outside Amenbo — in a file manager — open \"{}\" inside the folder the road calls \"{}\" and paste there, the way that machine pastes a file.",
+                req(with, "path")?,
+                req(with, "dir")?
+            ),
             // A bound folder taken away from under the app, the same way and for the same reason: a
             // folder is moved by whoever moves folders, and what Amenbo holds only becomes wrong
             // afterwards. The screen road wants the move to land *while the app is watching*, which
@@ -1942,6 +1947,13 @@ impl Instructor {
             },
             // And taking it back. The key is the machine's own, and the line says where to be standing:
             // the terminal beside this column hears the same key as meaning something of its own.
+            // The copy, on the row named. The line says to stand on the row first, because the key
+            // reaches nothing where nothing is standing.
+            (Domain::Files, "copy") => format!(
+                "In {}, click once on the row \"{}\" so the keyboard is standing on it, then press the key this machine copies with.",
+                section(with)?,
+                req(with, "name")?
+            ),
             // The paste. Where it lands is the row the keyboard is on — the folder that row is, or the
             // folder holding it where the row is a file — which is the rule a drop lands by. The line
             // says to stand on the row first, because the key reaches nothing where nothing is

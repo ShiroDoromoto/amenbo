@@ -1255,6 +1255,32 @@ describe("the file face", () => {
       expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
     });
 
+    /** A picture is watched on the same terms and redrawn without being asked about — there is no
+     *  editor over it and so nothing of the reader's to lose. What redraws it is the address, and
+     *  only the address: an `<img>` handed back the URL it already has draws the copy it already
+     *  has, however the file behind it moved (`AMB-D-797`). */
+    it("asks for a rewritten picture at a new address", async () => {
+      hoisted.entries[""] = [{ name: "chart.png", isDir: false, ignored: false }];
+      hoisted.file = aFile({ image: { mime: "image/png" }, digest: "before" });
+      await draw();
+      await click(button(t("files.tree")));
+      await settle();
+      await click(button("chart.png"));
+      await settle();
+      expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
+      expect(container.querySelector("img")?.getAttribute("src")).toContain("mark=before");
+
+      hoisted.file = aFile({ image: { mime: "image/png" }, digest: "after" });
+      await act(async () => {
+        tell({ root: ROOT, capped: false, unwatched: false, gone: false });
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      await settle();
+      expect(container.querySelector("img")?.getAttribute("src")).toContain("mark=after");
+      // And the reader is told nothing: there was nothing of theirs in the way of the redraw.
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+    });
+
     /** Nothing of the reader's is at stake, so the panel simply shows what the file says now. A
      *  reader looking at what the agent changed an hour ago reads it as the agent having done
      *  nothing at all. */

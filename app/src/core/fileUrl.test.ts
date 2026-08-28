@@ -26,6 +26,20 @@ describe("the address of a file under a project's folder", () => {
     expect(fileUrl(1, "/w", ["a.png"], undefined)).toBe("amenbofile://localhost/1/%2Fw/a.png");
   });
 
+  it("carries the file's mark, so a rewritten picture is asked for at a different address", () => {
+    const was = fileUrl(1, "/w", ["a.png"], "image/png", "abc123");
+    const now = fileUrl(1, "/w", ["a.png"], "image/png", "def456");
+    expect(was).toBe("amenbofile://localhost/1/%2Fw/a.png?mime=image%2Fpng&mark=abc123");
+    expect(now).not.toBe(was);
+  });
+
+  it("leaves the mark off a file that has none, rather than asking for an empty one", () => {
+    expect(fileUrl(1, "/w", ["a.png"], "image/png", undefined))
+      .toBe("amenbofile://localhost/1/%2Fw/a.png?mime=image%2Fpng");
+    expect(fileUrl(1, "/w", ["a.png"], null, "abc123"))
+      .toBe("amenbofile://localhost/1/%2Fw/a.png?mark=abc123");
+  });
+
   it("moves to the origin Windows serves a custom scheme at", () => {
     vi.stubGlobal("navigator", { userAgent: WINDOWS });
     expect(fileUrl(2, "C:\\work", ["a.png"], "image/png"))

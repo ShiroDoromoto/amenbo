@@ -1367,6 +1367,11 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
   // **A reader who has typed nothing is simply shown what the file says now.** This panel sits
   // beside an agent that edits the same files, and a reader looking at what it changed an hour ago
   // reads it as the agent having done nothing (`AMB-D-784`).
+  //
+  // **A picture travels this road too and needs nothing of its own** (`AMB-D-797`). It has a mark
+  // like any other file, nobody can have typed into it, and what redraws it is the address it is
+  // fetched from carrying that mark. What is not watched is what is not drawn: a picture refused
+  // for its size, and a binary.
   const tracked = file?.digest !== undefined;
   useEffect(() => {
     if (!tracked) return;
@@ -1538,12 +1543,17 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
         {/* The picture is fetched rather than carried: `folderRead` says only that there is one
             and what type it is, and the door that hands out a file by its path is addressed with
             the same project, folder and path this reader was opened on (`AMB-D-783`). It draws
-            top to bottom as it arrives, where a `data:` URL drew all at once or not at all. */}
+            top to bottom as it arrives, where a `data:` URL drew all at once or not at all.
+
+            The mark goes on the address so that the picture is fetched again when — and only
+            when — the file behind it moved (`AMB-D-797`). Without it the address of a rewritten
+            picture is the address of the old one, and the reader watches an agent redraw a diagram
+            that never changes on screen. */}
         {file?.image !== undefined && (
           <img
             className="files__image"
             alt={name}
-            src={fileUrl(projectId, root, path, file.image.mime)}
+            src={fileUrl(projectId, root, path, file.image.mime, file.digest)}
           />
         )}
         {/* The text is what the file holds and the rendering is a view of it (`AMB-D-41`), so the

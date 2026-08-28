@@ -13,7 +13,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-static-host"
-version = "16.0.0"
+version = "17.0.0"
 
 [[package]]
 name = "amenbo-verify-cli"

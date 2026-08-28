@@ -1864,7 +1864,13 @@ impl Instructor {
                 // Every one of them: a project bound to several folders draws a section each, and a
                 // row can only be read in the section it belongs to now that the tree is the only
                 // place rows are.
-                true => "In the column beside the panes, unfold the section that draws the folder itself — each of them where there is more than one.".to_string(),
+                //
+                // **The state, not the press.** The section is drawn unfolded, so on most roads
+                // there is nothing here for an operator to do — and a step that told them to unfold
+                // what is already unfolded would have them fold it. Saying where the screen has to
+                // stand leaves the road true wherever it is walked from, a section a step above
+                // folded included.
+                true => "In the column beside the panes, the section that draws the folder itself is to be standing unfolded — each of them where there is more than one. It is drawn that way, so this is usually nothing to do; unfold any that is folded.".to_string(),
                 false => "Fold those sections back up.".to_string(),
             },
             (Domain::Files, "enter") => format!(

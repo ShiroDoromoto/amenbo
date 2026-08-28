@@ -154,7 +154,9 @@ steps_gui:
     with:
       answer: yes
 
-  # The list comes back folded, the way it is drawn on the way in.
+  # The list is back, standing the way it was left: the tree is the panel's to hold and reading a
+  # file does not take it away (`app/src/files/FilesPanel.tsx`). Said rather than assumed, so the
+  # road is true walked from anywhere.
   - type: action
     domain: files
     op: tree

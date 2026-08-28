@@ -4,9 +4,9 @@
 // It is rooted at the **project's** folder: the rows are asked for with the folder the project is
 // bound to, so a pane switching underneath them changes nothing (`AMB-T-3602`). It reads a file by
 // asking the host what the file is, rather than deciding from the name — the panel draws Markdown
-// as Markdown, and says plainly when there is nothing it can show. And the tree stays folded until
-// somebody opens it, one level per opening, because a panel nobody is looking at must not walk a
-// repository.
+// as Markdown, and says plainly when there is nothing it can show. And the tree is drawn at its
+// first level and no deeper, one level per opening, because the names of the bound folder are what
+// a reader opens this half for and everything under them is a read nobody asked for.
 //
 // **What the folder moving does is send everybody back to ask** (`AMB-D-785`). The host's word
 // carries no rows, so what has to be right here is that the names of the open level and the colour
@@ -392,12 +392,12 @@ const leave = (el: Element) => act(async () => {
 /**
  * The panel with the folder's own section unfolded, which is where every row is.
  *
- * The tree is folded until somebody opens it, and a test about what a row does has to get past that
- * first — so the opening is written once here rather than at the top of every one of them.
+ * The section stands unfolded from the moment the panel is drawn (`./FilesPanel`), so what is left
+ * here is the settling — the first level is read off the host and the rows arrive with it. It keeps
+ * its own name because what a test using it is about starts with those rows on the screen.
  */
 async function drawOpen(props: Partial<Props> = {}) {
   await draw(props);
-  await click(button(t("files.tree")));
   await settle();
 }
 
@@ -657,18 +657,16 @@ describe("the file face", () => {
     expect(container.querySelector(".files__none")?.textContent).toBe(t("files.noFolder"));
   });
 
-  it("leaves the tree folded, and opens it one level at a time", async () => {
+  it("opens the first level from the start, and everything under it one at a time", async () => {
     hoisted.entries[""] = [
       { name: "src", isDir: true, ignored: false },
       { name: "README.md", isDir: false, ignored: false },
     ];
     hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
     await draw();
-    // Folded: nothing has been read about the folder itself yet.
-    expect(hoisted.asked.filter((one) => one.startsWith("entries:"))).toEqual([]);
-
-    await click(button(t("files.tree")));
     await settle();
+    // The names of the bound folder are what the half is opened for, so they are there without a
+    // press: a heading over nothing was a control every reader had to work before seeing anything.
     expect(hoisted.asked).toContain(`entries:${ROOT}:`);
     expect(container.textContent).toContain("README.md");
     // A folder inside it is a name until it is opened — its children cost nothing until then.
@@ -678,6 +676,19 @@ describe("the file face", () => {
     await settle();
     expect(hoisted.asked).toContain(`entries:${ROOT}:src`);
     expect(container.textContent).toContain("main.rs");
+  });
+
+  it("folds the whole tree away on the heading, and stops reading it", async () => {
+    hoisted.entries[""] = [{ name: "README.md", isDir: false, ignored: false }];
+    await drawOpen();
+    expect(container.textContent).toContain("README.md");
+
+    // The press is still there and still means the same thing — a reader who wants the panes and
+    // not the folder puts the tree away, and the reads it drives go with it (`AMB-D-785`).
+    await click(button(t("files.tree")));
+    await settle();
+    expect(pressable(t("files.tree"))?.getAttribute("aria-expanded")).toBe("false");
+    expect(container.textContent).not.toContain("README.md");
   });
 
   // Reading a file draws the reader where the tree was, so the tree is not on the page while it is
@@ -731,8 +742,10 @@ describe("the file face", () => {
     hoisted.bound = [];
     await draw();
     hoisted.bound = [{ path: ROOT, exists: true }];
-    await draw();
-    expect(pressable(t("files.tree"))?.getAttribute("aria-expanded")).toBe("false");
+    await drawOpen();
+    // Back to where a tree nobody has touched stands: the first level, and nothing under it.
+    expect(pressable(t("files.tree"))?.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain("src");
     expect(container.textContent).not.toContain("main.rs");
   });
 
@@ -744,9 +757,7 @@ describe("the file face", () => {
       { name: "README.md", isDir: false, ignored: false },
     ];
     hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
-    await draw();
-    await click(button(t("files.tree")));
-    await settle();
+    await drawOpen();
     await click(button("src"));
     await settle();
 
@@ -785,9 +796,7 @@ describe("the file face", () => {
   it("carries what was dropped into the folder the highlight named", async () => {
     hoisted.entries[""] = [{ name: "src", isDir: true, ignored: false }];
     hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
-    await draw();
-    await click(button(t("files.tree")));
-    await settle();
+    await drawOpen();
     await click(button("src"));
     await settle();
 
@@ -940,9 +949,7 @@ describe("the file face", () => {
       { name: ".env", isDir: false, ignored: true },
       { name: ".next", isDir: true, ignored: true },
     ];
-    await draw();
-    await click(button(t("files.tree")));
-    await settle();
+    await drawOpen();
     // On the list, because what git does not record is still somebody's file — and faint, because
     // that is the whole of what being ignored says about it (`AMB-D-786`).
     expect(container.textContent).toContain(".env");
@@ -1019,9 +1026,7 @@ describe("the file face", () => {
   it("draws text that is not Markdown as it was written", async () => {
     hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
     hoisted.file = aFile({ text: "#!/bin/sh\necho hi" });
-    await draw();
-    await click(button(t("files.tree")));
-    await settle();
+    await drawOpen();
     await click(button("run.sh"));
     await settle();
     // Not a heading: the hash in a shell script is a comment, and a name is what decides that.
@@ -1039,9 +1044,7 @@ describe("the file face", () => {
   it("opens a file it could not save without letting anyone type into it", async () => {
     hoisted.entries[""] = [{ name: "cut.txt", isDir: false, ignored: false }];
     hoisted.file = aFile({ text: "as far as it goes", truncated: true, clean: false });
-    await draw();
-    await click(button(t("files.tree")));
-    await settle();
+    await drawOpen();
     await click(button("cut.txt"));
     await settle();
     expect(last(hoisted.editing)?.editable).toBe(false);
@@ -1161,9 +1164,7 @@ describe("the file face", () => {
       hoisted.file = aFile({
         text: "#!/bin/sh\necho hi", encoding: "UTF-8", digest: "before", ...about,
       });
-      await draw();
-      await click(button(t("files.tree")));
-      await settle();
+      await drawOpen();
       await click(button("run.sh"));
       await settle();
     }
@@ -1299,9 +1300,7 @@ describe("the file face", () => {
       hoisted.file = aFile({
         text: "#!/bin/sh\necho hi", encoding: "UTF-8", digest: "before", ...about,
       });
-      await draw();
-      await click(button(t("files.tree")));
-      await settle();
+      await drawOpen();
       await click(button("run.sh"));
       await settle();
     }
@@ -1340,9 +1339,7 @@ describe("the file face", () => {
     it("asks for a rewritten picture at a new address", async () => {
       hoisted.entries[""] = [{ name: "chart.png", isDir: false, ignored: false }];
       hoisted.file = aFile({ image: { mime: "image/png" }, digest: "before" });
-      await draw();
-      await click(button(t("files.tree")));
-      await settle();
+      await drawOpen();
       await click(button("chart.png"));
       await settle();
       expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
@@ -1760,15 +1757,11 @@ describe("a project bound to several folders", () => {
   const OTHER = "/work/plugins";
   const both = () => { hoisted.bound = [{ path: ROOT, exists: true }, { path: OTHER, exists: true }]; };
 
-  /** Both sections drawn with their trees unfolded — every row of both is then on the screen. */
+  /** Both sections drawn with their trees unfolded — every row of both is then on the screen. Each
+   *  section stands unfolded on its own, so this is the drawing and the settling after it. */
   async function openBothTrees() {
     await draw();
-    for (const head of [...container.querySelectorAll("button")].filter(
-      (one) => one.textContent === t("files.tree"),
-    )) {
-      await click(head);
-      await settle();
-    }
+    await settle();
   }
 
   /** One folder's section, found by the heading over it — the sections are ordered by path, and a
@@ -1838,13 +1831,7 @@ describe("a project bound to several folders", () => {
   it("marks a drop's landing in the section the pointer is in, and in no other", async () => {
     both();
     hoisted.entries[""] = [{ name: "src", isDir: true, ignored: false }];
-    await draw();
-    for (const head of [...container.querySelectorAll("button")].filter(
-      (one) => one.textContent === t("files.tree"),
-    )) {
-      await click(head);
-      await settle();
-    }
+    await openBothTrees();
     const trees = [...container.querySelectorAll(".files__folder")];
     expect(trees).toHaveLength(2);
 

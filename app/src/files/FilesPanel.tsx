@@ -88,6 +88,34 @@ type Edit =
   | { kind: "make"; root: string; into: string[]; dir: boolean }
   | { kind: "rename"; root: string; path: string[] };
 
+/**
+ * How a reader has opened one folder's tree: whether the tree itself is unfolded, which folders
+ * inside it are, and which row holds the tree's stop in the tab order.
+ *
+ * **The panel holds it, not the section.** Reading a file draws the reader in the sections' place
+ * (`FileReader`), and what a component holds goes when it is unmounted — so a tree whose state lived
+ * in its own section would be folded shut again every time somebody came back from a file, with
+ * their place in it gone too.
+ *
+ * **Only how the reader opened it.** What is read off the disk — the names, git's answer, whether
+ * the folder moved — stays with the watch, which is the section's own and has to stop when the
+ * section does.
+ *
+ * `open` is held for the whole tree rather than per level, because opening a folder is also
+ * something the section does on a reader's behalf: a name being made in a folder that is folded shut
+ * would be typed where nobody could see it.
+ */
+type Opened = {
+  treeOpen: boolean;
+  /** Which folders of the tree are unfolded, as their paths joined. */
+  open: string[];
+  /** Which row holds the stop, as its path joined — nothing until a reader has been on one. */
+  cursor: string | null;
+};
+
+/** A tree nobody has opened yet: folded shut, with no folder unfolded and no stop taken. */
+const FOLDED: Opened = { treeOpen: false, open: [], cursor: null };
+
 /** The name being typed in one section, and the end of typing it. */
 type Naming = {
   /** The one being typed here, or nothing — a section is handed only its own. */
@@ -222,6 +250,9 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // the bound folder itself). Null while nothing is over the panel. The folder is half of it because
   // every section has a row for its own root, and the same path inside two of them is two places.
   const [landing, setLanding] = useState<Landing | null>(null);
+  // How each bound folder's tree is opened, by the folder it is about — the folder is the key
+  // because a project draws a section per binding and each of them is opened on its own (`Opened`).
+  const [opened, setOpened] = useState<Record<string, Opened>>({});
   // The row a question about the bin is standing over, or nothing while none is up.
   const [asking, setAsking] = useState<{ root: string; path: string[] } | null>(null);
   // What the machine said about the last row that would not go — kept until the next press, because
@@ -248,6 +279,19 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
     // `nth` is what makes the same file asked for twice two answers, and the folders are joined
     // because the array itself is rebuilt on every render.
   }, [show?.nth, roots]);
+
+  // A folder nobody is bound to any more takes how it was opened with it. Unbinding one, or moving
+  // to another project, leaves a key here that names a section that is no longer drawn — and it
+  // would be read again by whoever bound the same path back, as an answer about a tree they never
+  // opened. The sections rather than the live folders decide: a folder that has gone is still drawn
+  // and still says so, and a reader who left it open should find it that way when it comes back.
+  const recorded = sections.map((one) => one.path).join("\0");
+  useEffect(() => {
+    setOpened((was) => {
+      const kept = Object.entries(was).filter(([root]) => sections.some((one) => one.path === root));
+      return kept.length === Object.keys(was).length ? was : Object.fromEntries(kept);
+    });
+  }, [recorded]);
 
   // Files dragged in from the desktop. The panel hears about them from the host rather than from
   // the DOM, so the highlight under the pointer — and the scroll when the pointer hangs at an edge —
@@ -474,6 +518,11 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
           label={sections.length > 1 ? one.label : null}
           bound={one.exists}
           landing={landing}
+          opened={opened[one.path] ?? FOLDED}
+          onOpened={(change) => setOpened((was) => ({
+            ...was,
+            [one.path]: change(was[one.path] ?? FOLDED),
+          }))}
           edit={edit?.root === one.path ? edit : null}
           onEdit={setEdit}
           onRead={(path) => { setEdit(null); setReading({ root: one.path, path }); }}
@@ -514,6 +563,10 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
  * Holding one watch for the panel would mean the panel deciding which folder each answer belonged
  * to, which is the same work done once further from where it is used.
  *
+ * **What is watched is the section's, how it is opened is the panel's.** The two are held apart on
+ * one line: a watch has to stop when the section does, and how a reader opened the tree has to
+ * outlive it — the section is unmounted for as long as a file is being read (`Opened`).
+ *
  * **The news is a number, not a payload.** What the host says when the folder moves carries no
  * rows (`AMB-D-785`), so what a section does with it is count: `moved` goes up, and everything read
  * off the disk — git's answer here, the names of each open level in `Level` — is asked for again
@@ -531,7 +584,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
  * tree below, so they stand beside the heading, above it.
  */
 function FolderSection({
-  projectId, root, label, bound, landing, edit, onEdit, onRead, onMenu, onTrash,
+  projectId, root, label, bound, landing, opened, onOpened, edit, onEdit, onRead, onMenu, onTrash,
 }: {
   projectId: number;
   root: string;
@@ -542,6 +595,12 @@ function FolderSection({
   /** Where a dragged file would land, anywhere on the panel — a section draws the highlight only
    *  where the landing is one of its own (`landed`). */
   landing: Landing | null;
+  /** How this folder's tree is opened. The panel holds it so that it outlives the section, which is
+   *  unmounted for as long as a file is being read (`Opened`). */
+  opened: Opened;
+  /** Change it — handed the way it stands, because two of these can land in one render: unfolding
+   *  the way to a name being made is the tree and one folder inside it, said at once. */
+  onOpened: (change: (was: Opened) => Opened) => void;
   /** The name being typed in this section, or nothing. The panel holds it, and hands each section
    *  only what is its own. */
   edit: Edit | null;
@@ -557,15 +616,11 @@ function FolderSection({
   // How many times the host has said this folder moved. Everything read off the disk watches it.
   const [moved, setMoved] = useState(0);
   const [git, setGit] = useState<GitEntryDto[]>([]);
-  const [treeOpen, setTreeOpen] = useState(false);
-  // Which folders of the tree are unfolded, as their paths joined. Held for the whole section rather
-  // than per level, because opening one is also something the section does on a reader's behalf: a
-  // name being made in a folder that is folded shut would be typed where nobody could see it.
-  const [open, setOpen] = useState<string[]>([]);
-  // Which row holds this tree's stop in the tab order. Nothing until a reader has been on one, and
-  // then the first row is the stop — which is what puts the cursor somewhere the moment the panel
-  // is drawn, rather than leaving a reader to Tab through the tree to find out where they are.
-  const [cursor, setCursor] = useState<string | null>(null);
+  // How this tree stands: the panel's answer, because the section is unmounted while a file is
+  // being read and would lose it (`Opened`). Nothing until a reader has been on a row is what puts
+  // the tab stop on the first one the moment the panel is drawn, rather than leaving a reader to
+  // Tab through the tree to find out where they are.
+  const { treeOpen, open, cursor } = opened;
   const gone = !bound || changes.gone;
 
   const naming: Naming = {
@@ -579,13 +634,17 @@ function FolderSection({
   };
 
   // The panel says which folder a name is being made in; unfolding the way to it is this section's
-  // own answer. The tree starts folded, so a box typed into a folder nobody can see is the ordinary
+  // own answer, said in one change because the tree and the folder inside it open together. A tree
+  // nobody has opened starts folded, so a box typed into a folder nobody can see is the ordinary
   // case rather than a corner.
   const making = edit?.kind === "make" ? edit.into.join("/") : null;
   useEffect(() => {
     if (making === null) return;
-    setTreeOpen(true);
-    if (making !== "") setOpen((was) => (was.includes(making) ? was : [...was, making]));
+    onOpened((was) => ({
+      ...was,
+      treeOpen: true,
+      open: making === "" || was.open.includes(making) ? was.open : [...was.open, making],
+    }));
   }, [making]);
 
   useEffect(() => {
@@ -681,7 +740,7 @@ function FolderSection({
         <button
           className="files__head files__head--button"
           aria-expanded={treeOpen}
-          onClick={() => setTreeOpen((was) => !was)}
+          onClick={() => onOpened((was) => ({ ...was, treeOpen: !was.treeOpen }))}
           onContextMenu={(e) => {
             e.preventDefault();
             onMenu([], true, e.clientX, e.clientY);
@@ -701,15 +760,18 @@ function FolderSection({
             marks={marks}
             moved={moved}
             open={open}
-            onOpen={(key) => setOpen((was) =>
-              was.includes(key) ? was.filter((one) => one !== key) : [...was, key]
-            )}
+            onOpen={(key) => onOpened((was) => ({
+              ...was,
+              open: was.open.includes(key)
+                ? was.open.filter((one) => one !== key)
+                : [...was.open, key],
+            }))}
             naming={naming}
             onRead={onRead}
             onMenu={onMenu}
             onTrash={onTrash}
             cursor={cursor}
-            onCursor={setCursor}
+            onCursor={(key) => onOpened((was) => ({ ...was, cursor: key }))}
           />
         )}
       </section>
@@ -979,8 +1041,9 @@ function Level({
    *  wrote is a row that has to appear without anybody folding the tree and opening it again, and a
    *  row that just went to the bin is one that has to stop being drawn. */
   moved: number;
-  /** Which folders of the whole section are unfolded, as their paths joined. The section holds it
-   *  (`FolderSection`) because opening one is also something it does on a reader's behalf. */
+  /** Which folders of the whole section are unfolded, as their paths joined. The panel holds it
+   *  (`Opened`) because opening one is also something the section does on a reader's behalf, and
+   *  because it has to outlive a section that is unmounted while a file is being read. */
   open: string[];
   onOpen: (key: string) => void;
   /** The name being typed anywhere in this section, passed down for the same reason `landing` is:

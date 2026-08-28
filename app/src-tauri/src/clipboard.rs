@@ -225,7 +225,6 @@ pub fn take() -> Vec<PathBuf> {
 #[cfg(target_os = "linux")]
 pub fn put(paths: &[PathBuf]) -> Result<(), String> {
     use gtk::gdk::Atom;
-    use gtk::prelude::*;
 
     if paths.is_empty() {
         return Err("nothing to copy".to_string());
@@ -243,7 +242,6 @@ pub fn put(paths: &[PathBuf]) -> Result<(), String> {
 #[cfg(target_os = "linux")]
 pub fn take() -> Vec<PathBuf> {
     use gtk::gdk::Atom;
-    use gtk::prelude::*;
 
     let clipboard = gtk::Clipboard::get(&Atom::intern("CLIPBOARD"));
     let Some(selection) = clipboard.wait_for_contents(&Atom::intern("text/uri-list")) else {
@@ -266,14 +264,14 @@ fn uri_list(paths: &[PathBuf]) -> String {
 /// marks a file name ordinarily holds — a name is escaped so the reader gets the name back, not so
 /// it looks tidy.
 #[cfg(target_os = "linux")]
-fn as_uri(path: &Path) -> String {
+fn as_uri(path: &std::path::Path) -> String {
     use std::os::unix::ffi::OsStrExt as _;
 
     let mut url = String::from("file://");
-    for byte in path.as_os_str().as_bytes() {
+    for byte in path.as_os_str().as_bytes().iter().copied() {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
-                url.push(*byte as char);
+                url.push(byte as char);
             }
             other => url.push_str(&format!("%{other:02X}")),
         }

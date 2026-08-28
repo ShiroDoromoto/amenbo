@@ -201,7 +201,10 @@ pub fn folder_read(
 
     if carriable(size, pixels) {
         // The bytes are not read here: what the panel is handed is the type, and it asks
-        // fileproto for the picture itself at the path it named this call with.
+        // fileproto for the picture itself at the path it named this call with. They are passed
+        // through the hasher on the way past, though — a mark is what the panel watches a file it
+        // has open by, and a picture with none of it is one that stays on the screen after the
+        // agent beside it has redrawn the thing (`AMB-D-797`).
         return Ok(FolderFileDto {
             text: None,
             truncated: false,
@@ -211,7 +214,7 @@ pub fn folder_read(
             bom: false,
             line_ending: FolderLineEndingDto::Lf,
             clean: false,
-            digest: None,
+            digest: Some(digest_whole(&file).map_err(|_| gone())?),
         });
     }
     Ok(FolderFileDto {
@@ -453,6 +456,31 @@ pub fn digest_of(file: &std::fs::File) -> std::io::Result<String> {
     Ok(digest(&bytes))
 }
 
+/// The same mark over a whole file, taken without ever holding it (`AMB-D-797`).
+///
+/// **This is the picture's mark.** A picture's bytes never reach [`folder_read`] — the webview
+/// fetches them from [`crate::fileproto`] — so there is nothing in hand to give to [`digest`], and
+/// a picture with no mark is one the panel cannot watch. The file is passed through the hasher a
+/// chunk at a time instead, so what this costs is the read: a mark is wanted here and the bytes
+/// are not, and a [`digest`] of them would have to hold the whole picture to say the same thing.
+///
+/// The caller has already refused anything over [`IMAGE_CAP`], and the cap is applied here as well
+/// rather than trusted: the size was read off the metadata, and a file that grew between that read
+/// and this one would otherwise be hashed however large it had become.
+fn digest_whole(path: &Path) -> std::io::Result<String> {
+    use std::io::Read as _;
+    let mut file = open_no_follow(path)?.take(IMAGE_CAP);
+    let mut hasher = blake3::Hasher::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buf)?;
+        if n == 0 {
+            return Ok(hasher.finalize().to_hex().to_string());
+        }
+        hasher.update(&buf[..n]);
+    }
+}
+
 /// At most `cap` bytes from the front of a file. A short file comes back short; a long one comes
 /// back cut, which is what `truncated` is then read from.
 fn read_head(path: &Path, cap: usize) -> std::io::Result<Vec<u8>> {
@@ -497,6 +525,30 @@ mod tests {
         assert_ne!(was, now, "the same length, and not the same file");
         // And a file standing still is the same mark read twice, which is what silence rests on.
         assert_eq!(now, digest(b"BEFORE"));
+    }
+
+    /// A picture is marked over the whole of it, and that is the point of marking it at all: a
+    /// diagram redrawn keeps its header and often its length, so everything the panel already reads
+    /// of a picture — the first bytes, the size, the pixel count — says the same thing before and
+    /// after (`AMB-D-797`).
+    #[test]
+    fn a_picture_is_marked_over_the_whole_of_it() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let file = dir.path().join("chart.png");
+        let mut was = png(1920, 1080);
+        was.extend(vec![0xAA; 200_000]);
+        std::fs::write(&file, &was).expect("a picture");
+        let before = digest_whole(&file).expect("the mark");
+
+        let mut now = png(1920, 1080);
+        now.extend(vec![0xBB; 200_000]);
+        std::fs::write(&file, &now).expect("the agent redrawing it");
+
+        assert_eq!(was.len(), now.len(), "the same length, and the same first bytes");
+        assert_ne!(digest_whole(&file).expect("the mark"), before);
+        // And what is streamed past the hasher is the file itself: the mark is the one the bytes
+        // in hand would have given, so a picture and a text file are known by the same kind of mark.
+        assert_eq!(digest_whole(&file).expect("the mark"), digest(&now));
     }
 
     /// The last name is not resolved, so a link there passes the fence — and is refused where the

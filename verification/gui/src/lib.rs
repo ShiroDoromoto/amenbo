@@ -1824,6 +1824,21 @@ impl Instructor {
                 req(with, "path")?,
                 req(with, "dir")?
             ),
+            // The two halves of the clipboard that happen outside Amenbo. They are the operator's own
+            // file manager, named as loosely as the rest of the outside is: what matters is that the
+            // clipboard was used by something that is not this window, not which application it was.
+            (Domain::Repo, "copy-outside") => match with.get("dir").and_then(|v| v.as_str()) {
+                Some(dir) => format!(
+                    "Outside Amenbo — in a file manager — copy the file \"{}\" inside the folder the road calls \"{dir}\" the way that machine copies a file, so it is on the clipboard.",
+                    req(with, "path")?
+                ),
+                // No folder named is the run's own, which is where the line on stderr says to look:
+                // it is outside every folder the road binds, which is the point of a file kept there.
+                None => format!(
+                    "Outside Amenbo — in a file manager — copy the file \"{}\" from the folder this run works in, the way that machine copies a file, so it is on the clipboard. The run said where that folder is before the first step.",
+                    req(with, "path")?
+                ),
+            },
             // A bound folder taken away from under the app, the same way and for the same reason: a
             // folder is moved by whoever moves folders, and what Amenbo holds only becomes wrong
             // afterwards. The screen road wants the move to land *while the app is watching*, which
@@ -1927,6 +1942,15 @@ impl Instructor {
             },
             // And taking it back. The key is the machine's own, and the line says where to be standing:
             // the terminal beside this column hears the same key as meaning something of its own.
+            // The paste. Where it lands is the row the keyboard is on — the folder that row is, or the
+            // folder holding it where the row is a file — which is the rule a drop lands by. The line
+            // says to stand on the row first, because the key reaches nothing where nothing is
+            // standing.
+            (Domain::Files, "paste") => format!(
+                "In {}, click once on the row \"{}\" so the keyboard is standing on it, then press the key this machine pastes with.",
+                section(with)?,
+                req(with, "name")?
+            ),
             (Domain::Files, "undo") =>
                 "With the file column in front of you — click once on an empty part of it if something else has the keyboard — press the key this machine undoes with."
                     .to_string(),

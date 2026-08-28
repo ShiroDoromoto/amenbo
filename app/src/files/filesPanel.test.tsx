@@ -179,6 +179,17 @@ vi.mock("./folder", () => ({
     hoisted.asked.push("untrash");
     return hoisted.restored;
   },
+  folderClipCopy: async (_projectId: number, root: string, paths: string[][]) => {
+    hoisted.asked.push(`clip-copy:${root}:${paths.map((one) => one.join("/")).join(",")}`);
+  },
+  folderClipPaste: async (
+    _projectId: number,
+    toRoot: string,
+    to: string[],
+  ): Promise<FolderCarriedDto> => {
+    hoisted.asked.push(`clip-paste:${toRoot}:${to.join("/")}`);
+    return hoisted.carried;
+  },
   folderImport: async (
     _projectId: number,
     paths: string[],
@@ -326,6 +337,17 @@ const rowIn = (folder: Element, name: string): HTMLElement | undefined =>
 /** The same, over the whole page: the question before the bin is drawn onto `document.body`. */
 const anyButton = (text: string) =>
   [...document.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
+
+/** Press one of the machine's own keys on a row, the way a reader standing on it does. */
+const pressOn = (el: Element | null | undefined, key: string) => act(async () => {
+  el?.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+});
+
+/** The row a name is drawn on, which is what the keyboard stands on (`role="treeitem"`). */
+const rowFor = (name: string) =>
+  [...container.querySelectorAll<HTMLElement>('[role="treeitem"]')]
+    .find((row) => row.textContent?.includes(name));
 
 /** Press undo where the panel hears it: on the panel, not on the window (`AMB-D-780`). */
 const undo = () => act(async () => {
@@ -1890,6 +1912,59 @@ describe("a project bound to several folders", () => {
     await press(namebox()!, "Escape");
     expect(namebox()).toBeNull();
     expect(hoisted.asked.some((one) => one.startsWith("make:"))).toBe(false);
+  });
+
+  // ── the machine's own copy and paste ─────────────────────────────────────────────────────────
+  // What `⌘C` means here is what it means everywhere else on the machine, so both ends of it are the
+  // host's — the webview cannot carry a file (`AMB-D-796`). What this side decides is which row a
+  // copy is about and which folder a paste lands in.
+
+  it("copies the row the keyboard is standing on", async () => {
+    hoisted.entries = {
+      "": [
+        { name: "src", isDir: true, ignored: false },
+        { name: "README.md", isDir: false, ignored: false },
+      ],
+    };
+    await drawOpen();
+    await pressOn(rowFor("README.md"), "c");
+    expect(hoisted.asked).toContain(`clip-copy:${ROOT}:README.md`);
+  });
+
+  /** The same rule a drop's landing follows: a file's row belongs to the folder holding it, so
+   *  pasting on a name means the same as pasting beside it. */
+  it("pastes into the folder the row is in, and into the folder the row is", async () => {
+    hoisted.entries = {
+      "": [
+        { name: "src", isDir: true, ignored: false },
+        { name: "README.md", isDir: false, ignored: false },
+      ],
+      src: [{ name: "main.rs", isDir: false, ignored: false }],
+    };
+    await drawOpen();
+
+    // A file at the top of the tree lands in the folder itself, which is named by nothing.
+    await pressOn(rowFor("README.md"), "v");
+    expect(hoisted.asked).toContain(`clip-paste:${ROOT}:`);
+
+    await click(button("src"));
+    await settle();
+    await pressOn(rowFor("main.rs"), "v");
+    expect(hoisted.asked).toContain(`clip-paste:${ROOT}:src`);
+  });
+
+  /** A file being read is drawn in an editor, and `⌘C` there is the editor's — it copies the words
+   *  somebody selected. Taking the key on the panel would take it from them. */
+  it("leaves copy and paste alone when the keyboard is not on a row", async () => {
+    hoisted.file = aFile({ text: "echo hi" });
+    hoisted.entries = { "": [{ name: "run.sh", isDir: false, ignored: false }] };
+    await drawOpen();
+    await click(button("run.sh"));
+    await settle();
+
+    await pressOn(container.querySelector(".files--reading"), "c");
+    await pressOn(container.querySelector(".files--reading"), "v");
+    expect(hoisted.asked.some((one) => one.startsWith("clip-"))).toBe(false);
   });
 
   it("says so when a folder goes while it is being looked at", async () => {

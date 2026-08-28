@@ -160,7 +160,7 @@ objc2-service-management = "0.3"
 # which is the only way to know whether a drop that just landed was a copy or a move (`crate::dropped`).
 # `NSPasteboard` is the machine's own clipboard, which is where a copied file goes: the webview
 # cannot carry a file, so both the writing and the reading are this side's (`crate::clipboard`).
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace", "NSEvent", "NSPasteboard"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace", "NSEvent", "NSPasteboard", "NSPasteboardItem"] }
 # Names the user's home directory, which is where a login registration written by an older version of
 # this app sits. Same crate core resolves the app-data base with.
 directories = "6"

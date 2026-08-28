@@ -39,9 +39,17 @@ use std::path::PathBuf;
 /// these.
 #[cfg(target_os = "macos")]
 pub fn put(paths: &[PathBuf]) -> Result<(), String> {
+    put_on(&objc2_app_kit::NSPasteboard::generalPasteboard(), paths)
+}
+
+/// The writing itself, told which pasteboard to write on. Named apart from [`put`] so the round trip
+/// can be held to itself on a pasteboard of its own: a test that used the machine's would take the
+/// clipboard away from whoever was running it.
+#[cfg(target_os = "macos")]
+fn put_on(pasteboard: &objc2_app_kit::NSPasteboard, paths: &[PathBuf]) -> Result<(), String> {
     use objc2::rc::Retained;
     use objc2::runtime::ProtocolObject;
-    use objc2_app_kit::{NSPasteboard, NSPasteboardWriting};
+    use objc2_app_kit::NSPasteboardWriting;
     use objc2_foundation::{NSArray, NSString, NSURL};
 
     let urls: Vec<Retained<ProtocolObject<dyn NSPasteboardWriting>>> = paths
@@ -55,7 +63,6 @@ pub fn put(paths: &[PathBuf]) -> Result<(), String> {
         return Err("nothing to copy".to_string());
     }
 
-    let pasteboard = NSPasteboard::generalPasteboard();
     pasteboard.clearContents();
     let wrote = pasteboard.writeObjects(&NSArray::from_retained_slice(&urls));
     if wrote {
@@ -67,25 +74,34 @@ pub fn put(paths: &[PathBuf]) -> Result<(), String> {
 
 /// The files on the pasteboard, or none where what is on it is not files.
 ///
-/// Asking for `NSURL` and then keeping only the ones that name a path is what tells a copied file
-/// from a copied link: a URL read off the pasteboard may be `https://…`, which has no path to carry
-/// and is not what a paste into a folder means.
+/// **Each item is asked for the one flavour a file is written under**, rather than the pasteboard
+/// being asked to hand back objects. The two are not the same reading: a pasteboard holding several
+/// files holds an item apiece, and the flavour is the name every writer of a file agrees on — the
+/// panel's own copy, and the reader's file manager.
+///
+/// An item with no file under it is dropped rather than refused: a pasteboard holding a picture or a
+/// line of text is one this folder has nothing to take from, which is not a failure.
 #[cfg(target_os = "macos")]
 pub fn take() -> Vec<PathBuf> {
-    use objc2::runtime::AnyClass;
-    use objc2::ClassType as _;
-    use objc2_app_kit::NSPasteboard;
-    use objc2_foundation::{NSArray, NSURL};
+    take_from(&objc2_app_kit::NSPasteboard::generalPasteboard())
+}
 
-    let pasteboard = NSPasteboard::generalPasteboard();
-    let wanted: [&AnyClass; 1] = [NSURL::class()];
-    let classes = NSArray::from_slice(&wanted);
-    let Some(read) = (unsafe { pasteboard.readObjectsForClasses_options(&classes, None) }) else {
+/// The reading itself, told which pasteboard to read. Apart from [`take`] for the reason [`put_on`]
+/// is apart from [`put`].
+#[cfg(target_os = "macos")]
+fn take_from(pasteboard: &objc2_app_kit::NSPasteboard) -> Vec<PathBuf> {
+    use objc2_app_kit::NSPasteboardTypeFileURL;
+    use objc2_foundation::NSURL;
+
+    // SAFETY: the flavour's name is a constant AppKit defines and this only reads it.
+    let flavour = unsafe { NSPasteboardTypeFileURL };
+    let Some(items) = pasteboard.pasteboardItems() else {
         return Vec::new();
     };
-
-    read.iter()
-        .filter_map(|object| object.downcast::<NSURL>().ok())
+    items
+        .iter()
+        .filter_map(|item| item.stringForType(flavour))
+        .filter_map(|text| NSURL::URLWithString(&text))
         .filter_map(|url| url.path())
         .map(|path| PathBuf::from(path.to_string()))
         .collect()
@@ -336,5 +352,82 @@ mod tests {
     fn only_the_lines_that_name_a_file_come_back() {
         let list = "# a comment\r\nfile:///tmp/one.md\r\nhttps://example.com/two.md\r\n\r\n";
         assert_eq!(from_uri_list(list), vec![PathBuf::from("/tmp/one.md")]);
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod mac_tests {
+    use super::*;
+
+    /// The pair held to each other on a pasteboard of this test's own, which is the only way to ask
+    /// the question without taking the clipboard away from whoever is running the suite.
+    ///
+    /// It is worth asking on the real thing rather than a stand-in: what a pasteboard hands back for
+    /// a file is AppKit's answer, and the shape this was written in first wrote a file the machine
+    /// could read and read back nothing at all.
+    #[test]
+    fn a_file_written_to_a_pasteboard_is_the_file_read_back_off_it() {
+        use objc2_app_kit::NSPasteboard;
+
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let one = dir.path().join("a plain one.md");
+        let two = dir.path().join("100% done.md");
+        std::fs::write(&one, b"mine").expect("a file");
+        std::fs::write(&two, b"mine too").expect("a file");
+
+        let pasteboard = NSPasteboard::pasteboardWithUniqueName();
+        put_on(&pasteboard, &[one.clone(), two.clone()]).expect("the pasteboard takes them");
+
+        // The names come back as they were written, punctuation and all: what a URL cannot carry as
+        // it stands is escaped on the way on, and undoing that is not this side's to get right.
+        let read = take_from(&pasteboard);
+        assert_eq!(read.len(), 2, "both files come back: {read:?}");
+        assert!(read.iter().all(|path| path.is_file()), "and they are the files: {read:?}");
+        assert_eq!(
+            read.iter().filter_map(|path| path.file_name()).collect::<Vec<_>>(),
+            vec![one.file_name().expect("a name"), two.file_name().expect("a name")],
+        );
+    }
+
+    /// ⚠ **A command runs on a worker thread, and this is the reading it does there.** AppKit is
+    /// mostly the main thread's, so the question is whether the pasteboard is one of the parts that
+    /// insists — a read that answered on one thread and not the other would be a feature that worked
+    /// in a test and never once in the app.
+    #[test]
+    fn the_reading_answers_off_the_main_thread_too() {
+        use objc2_app_kit::NSPasteboard;
+
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let one = dir.path().join("away.md");
+        std::fs::write(&one, b"mine").expect("a file");
+
+        let pasteboard = NSPasteboard::pasteboardWithUniqueName();
+        let name = pasteboard.name().to_string();
+        put_on(&pasteboard, std::slice::from_ref(&one)).expect("the pasteboard takes it");
+
+        let read = std::thread::spawn(move || {
+            use objc2_foundation::NSString;
+            let same = NSPasteboard::pasteboardWithName(&NSString::from_str(&name));
+            take_from(&same)
+        })
+        .join()
+        .expect("the thread");
+        assert_eq!(read, vec![one], "the same pasteboard, read from another thread");
+    }
+
+    /// A pasteboard holding something that is not a file is not a failure — it is a paste this
+    /// folder has nothing to take from.
+    #[test]
+    fn a_pasteboard_holding_no_files_hands_back_none() {
+        use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+        use objc2_foundation::NSString;
+
+        let pasteboard = NSPasteboard::pasteboardWithUniqueName();
+        pasteboard.clearContents();
+        // SAFETY: the flavour's name is a constant AppKit defines and this only reads it.
+        let flavour = unsafe { NSPasteboardTypeString };
+        pasteboard.setString_forType(&NSString::from_str("just some words"), flavour);
+
+        assert_eq!(take_from(&pasteboard), Vec::<PathBuf>::new());
     }
 }

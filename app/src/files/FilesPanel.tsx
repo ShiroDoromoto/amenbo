@@ -52,7 +52,8 @@ import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
 import { pushNotice } from "../core/notice";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
-  folderEncodings, folderEntries, folderGitStatus, folderImport, folderMake, folderOpenFile,
+  folderClipCopy, folderClipPaste, folderEncodings, folderEntries, folderGitStatus, folderImport,
+  folderMake, folderOpenFile,
   folderOpenFileWith, folderOpenWith, folderRead, folderRename, folderRevealFile, folderSave,
   folderTrash, folderUnwatch, folderUntrash, folderWatch, onFolderChanged,
 } from "./folder";
@@ -342,11 +343,51 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
       .catch((e: unknown) => setStopped(errText(e)));
   };
 
+  /**
+   * The three keys the machine already has, heard on the panel rather than on the window: the
+   * terminal beside it has its own idea of what each of them means, and the boundary between the two
+   * is which of them the reader is in (`AMB-D-780`).
+   *
+   * **Copy and paste act on a row and nowhere else.** A file being read is drawn in an editor, and
+   * ⌘C there is the editor's — it copies the words somebody selected. So neither key is taken unless
+   * the keyboard is standing on the tree, and the press falls through untouched when it is not.
+   */
   const onKey = (e: ReactKeyboardEvent) => {
     if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
-    if (e.key.toLowerCase() !== "z") return;
-    e.preventDefault();
-    undo();
+    const pressed = e.key.toLowerCase();
+    if (pressed === "z") {
+      e.preventDefault();
+      undo();
+      return;
+    }
+    if (projectId === null) return;
+    const on = e.target as HTMLElement;
+
+    // The row the keyboard is on, which is the one thing a copy could be about.
+    if (pressed === "c") {
+      const row = on.closest<HTMLElement>('[role="treeitem"]');
+      const root = row?.dataset.root;
+      const path = row?.dataset.key;
+      if (root === undefined || path === undefined) return;
+      e.preventDefault();
+      void folderClipCopy(projectId, root, [segmentsOf(path)])
+        .catch((why: unknown) => pushNotice(errText(why)));
+      return;
+    }
+
+    // And the folder it would land in, worked out the way a drop's landing is: a file's row belongs
+    // to the folder holding it, so pasting on a name means the same as pasting beside it.
+    if (pressed === "v") {
+      const at = landingOf(on.closest("[data-into]"));
+      if (at === null) return;
+      e.preventDefault();
+      void folderClipPaste(projectId, at.root, segmentsOf(at.into))
+        .then((carried) => {
+          const line = stoppedLine(carried);
+          if (line !== null) pushNotice(line);
+        })
+        .catch((why: unknown) => pushNotice(errText(why)));
+    }
   };
 
   // The question, and the line the last refusal left. Both are drawn in whichever state the panel is

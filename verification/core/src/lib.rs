@@ -670,6 +670,14 @@ const REGISTRY: &[OpSpec] = &[
     // reachable by writing inside it. Left out, the file lands in the run's own folder.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path", "dir"], binds: false },
+    // The clipboard filled from outside Amenbo, which is the only way a road can put a real one in
+    // front of the panel. It is not stood up in a premise: what is under test is the machine's own
+    // clipboard, and a premise that filled it with something other than a file manager would be
+    // testing a road nobody walks.
+    //
+    // It is the operator's own hands on their own file manager, so what is named is the file and the
+    // folder as the road calls them, never a path or an application.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-outside", required: &["path"], refs: &[], strings: &["path", "dir"], binds: false },
     // And a name in that folder that is a link rather than a file. `path` is the name, `to` is what
     // it points at, read in the run's own folder — which is outside every folder a `folder` step
     // binds, so the link a road makes is the one people really make: a file kept in one place and
@@ -2363,11 +2371,12 @@ const REGISTRY: &[OpSpec] = &[
     // What an opened file draws. `shows` is words the road itself put in the file, so a reading finds
     // them because the bytes reached the screen and for no other reason.
     //
-    // `as` says which of a Markdown file's two forms those words are standing in, and asking for it
-    // hands the whole step to an eye. The two forms carry the same words — that is what makes them
-    // the same file — and what tells them apart is punctuation a reading throws away and a size no
-    // reading reports. A step that judged the words alone while naming a form would pass on the form
-    // it was written to catch.
+    // `as` says what the words are standing in. Two of its three answers are a Markdown file's forms,
+    // and asking for either hands the whole step to an eye: they carry the same words — that is what
+    // makes them the same file — and what tells them apart is punctuation a reading throws away and a
+    // size no reading reports, so a step judged on the words alone would pass on the very form it was
+    // written to catch. The third is `picture`, and it is the opposite: the words are drawn inside the
+    // file, so reading them off a shot is the whole of the question.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "reading", required: &["shows"], refs: &[], strings: &["shows", "as"], binds: false },
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
@@ -2435,6 +2444,22 @@ const REGISTRY: &[OpSpec] = &[
     // line says the key — and says where to be standing, because the column beside this one hears the
     // same key as its own.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "undo", required: &[], refs: &[], strings: &[], binds: false },
+
+    // ── the machine's own paste ───────────────────────────────────────────────────────────────────
+    // What `⌘V` means on this face is what it means everywhere else on the machine, so the clipboard
+    // it goes through is the machine's and not a pocket of Amenbo's. Where the paste lands is worked
+    // out from the row the keyboard is on, the way a drop's landing is.
+    //
+    // It names its row the way every other row-addressed op here does: a key reaches the row the
+    // keyboard is standing on, and which row that is cannot be read off the screen afterwards — so a
+    // step that left it unsaid would be handing the operator a choice the road meant to make.
+    //
+    // ⚠ **There is no `copy` beside it, and that is deliberate.** The other direction is a row copied
+    // here and pasted in a file manager, which keeps the file's name — so the copy and the row it came
+    // from carry the same one, and a reading of this window cannot say which of the two it found. A
+    // step that could not tell them apart would go green whether or not the clipboard had ever left
+    // Amenbo, which is the one thing it would exist to catch.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "paste", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
 
     // ── bringing a file in from the machine ───────────────────────────────────────────────────────
     // A file dragged in from outside and let go over a row, which is the one way anything reaches this

@@ -1,0 +1,115 @@
+# A file copied in the reader's own file manager and pasted into the folder from inside Amenbo.
+#
+# `⌘V` is the machine's key, not Amenbo's, so what it does here has to be what it does everywhere
+# else: a file copied in a file manager pastes into the folder. A panel that kept a pocket clipboard
+# of its own would be smaller to build and would read on screen exactly like this one while taking
+# nothing from anybody else.
+#
+# ── Why the outside half is where it is ──────────────────────────────────────────────────────────
+# The other end of a clipboard is another application, which this run does not shoot and cannot
+# judge. So the copying is put where it belongs — the operator's own file manager — and every reading
+# happens in Amenbo's list, which is the one thing a shot of this window can carry. The file it
+# reaches for lies outside every folder the road binds, so a row appearing in the folder afterwards
+# came through the clipboard and could not have come from anywhere else.
+#
+# ── The half that is not here, and why ───────────────────────────────────────────────────────────
+# The other direction — a row copied here and pasted in the file manager — is not written, and it is
+# not an oversight. A paste in a file manager keeps the file's name, so the copy and the row it came
+# from carry the same one; a reading of this window cannot say which of the two it found, and a step
+# that could not tell them apart would go green whether or not the clipboard had left Amenbo at all.
+# Pasting into the folder the file came from does rename it, and to whatever that machine calls a
+# copy in whatever language it is set to — a name this road would be reading the file manager by.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. A shell copies a file with `cp`, which goes nowhere near a clipboard.
+id: carry-a-file-through-the-machines-clipboard
+title: A file copied in the reader's file manager pastes into the folder from inside Amenbo
+description: >
+  Open the terminal face on a project whose folder holds a file, unfold the folder's section, and
+  copy a file that is nowhere in that folder using the reader's own file manager. Come back to
+  Amenbo, stand on a row and press the key this machine pastes with: the file is in the folder.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # One ordinary file, so the tree has a row to stand on before anything is pasted onto it.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  # And the file that will come in. It lies in the run's own folder, which is outside every folder
+  # the road binds — so its arriving is the clipboard's doing and nothing else's.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: almanac.md
+      content: SCENARIO the almanac was never in the greenhouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # Read before anything is pasted, so a run that finds the almanac later fails on the paste rather
+  # than on a folder that had it all along.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: almanac.md
+      section: tree
+      present: false
+
+  - type: action
+    domain: repo
+    op: copy-outside
+    with:
+      path: almanac.md
+
+  # Onto a file's row, so it lands in the folder holding that row — which is the rule a drop lands by,
+  # and the one thing about where a paste goes that this face decides.
+  - type: action
+    domain: files
+    op: paste
+    with:
+      name: watering.md
+      section: tree
+
+  # The goal the road is named for.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: almanac.md
+      section: tree

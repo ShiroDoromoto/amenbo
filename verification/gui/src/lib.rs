@@ -847,6 +847,9 @@ impl Instructor {
             }
             // A form named takes this away from the reading: both forms carry the same words, and
             // what separates them is punctuation the fold throws away and a size no reading reports.
+            (Domain::Files, "reading") if picture(with) => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
             (Domain::Files, "reading") if with.contains_key("as") => None,
             (Domain::Files, "reading") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
@@ -1807,6 +1810,19 @@ impl Instructor {
                 req(with, "path")?,
                 req(with, "dir")?,
                 req(with, "content")?
+            ),
+            // The same, for a file whose bytes a road cannot hold in a line of YAML. What the operator
+            // is asked for is a copy over the top: the name stays, so nothing about the panel's own
+            // list changes, and the only thing that could reach the screen is what is inside the file.
+            //
+            // Where the fixture lies is said as the road says it, and where to find it is on stderr
+            // with the rest of the world the run stood up: the run places the folders, and this YAML
+            // never sees a path.
+            (Domain::Repo, "copy-fixture") => format!(
+                "Outside Amenbo — in a file manager or another terminal — copy this run's fixture \"{}\" over the file \"{}\" inside the folder the road calls \"{}\", keeping the name it has. Do not touch Amenbo while you do.",
+                req(with, "from")?,
+                req(with, "path")?,
+                req(with, "dir")?
             ),
             // A bound folder taken away from under the app, the same way and for the same reason: a
             // folder is moved by whoever moves folders, and what Amenbo holds only becomes wrong
@@ -3002,6 +3018,20 @@ impl Instructor {
                     req(with, "encoding")?
                 ),
             },
+            // A picture is read for the words drawn in it, which is the one thing about a redrawn
+            // picture a shot can carry: what a road wants to know is that the bytes on screen are the
+            // new bytes, and two pictures that say different words answer that where two that differ
+            // only in their pixels would need an eye.
+            (Domain::Files, "reading") if picture(with) => match present(with) {
+                true => format!(
+                    "Confirm the picture drawn in the panel has \"{}\" written across it.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Confirm the picture drawn in the panel does **not** have \"{}\" written across it.",
+                    req(with, "shows")?
+                ),
+            },
             (Domain::Files, "reading") if with.contains_key("as") => match form(with, "as")? {
                 "source" => format!(
                     "Confirm the opened file shows \"{}\" as the text it is: the words stand in one plain size with the marks around them — a hash before a heading, and whatever else the file was written with — visible as characters.",
@@ -3341,6 +3371,14 @@ fn section(with: &Args) -> Result<&'static str, String> {
 ///
 /// The key is the caller's because the two sides of the same question read differently: the move says
 /// the `form` to end in, and the reading says what the words are standing `as`.
+/// Whether a reading is of a picture rather than of a file's text. It is `as` like the other two
+/// forms and not an op of its own, because what is being asked is still "what does the opened file
+/// show" — but it is the only one of the three a shot can judge, so it is told apart here rather
+/// than in [`form`], which answers for the pair that are about text.
+fn picture(with: &Args) -> bool {
+    with.get("as").and_then(|v| v.as_str()) == Some("picture")
+}
+
 fn form(with: &Args, key: &str) -> Result<&'static str, String> {
     match with.get(key).and_then(|v| v.as_str()) {
         Some("rendered") => Ok("rendered"),

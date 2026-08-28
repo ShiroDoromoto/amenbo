@@ -227,4 +227,34 @@ describe("invalidateScopes — a scope reaches the queries drawn from it", () =>
     await settle();
     expect(count("installs")).toBe(2); // a gate moved outside this window: re-read the rows that draw it
   });
+
+  // The maps the filter chips judge on, which reach this path and no other when the writing happened
+  // outside the window: a `dimension set` typed at the terminal folds to a scope here, where a value
+  // chosen on screen comes back through its own ack instead. A key missing from the switch is silent —
+  // the feed folds the scope, nothing refetches, and the chips go on narrowing by the map they had.
+  it("refetches both classification maps when the axes move, and each on its own side", async () => {
+    // One tree, because `render` replaces what the root is showing: mounted apart, the first probe
+    // would be unmounted by the second and stop being live before anything was invalidated.
+    render(
+      createElement(
+        "div",
+        null,
+        createElement(KeyProbe, { qkey: ["dimAssign", 1, "1,2"], k: "board" }),
+        createElement(KeyProbe, { qkey: ["decisionDimAssign", 1, "1,2"], k: "decs" }),
+      ),
+    );
+    await settle();
+    expect([count("board"), count("decs")]).toEqual([1, 1]);
+
+    // A value assigned to a decision at the terminal. The board's own filings did not move.
+    invalidateScopes(new Set(["decisions"]));
+    await settle();
+    expect([count("board"), count("decs")]).toEqual([1, 2]);
+
+    // The axes themselves — added, renamed, deleted — fold to "tasks" whichever side carries them, so
+    // this one has to reach both maps or one of the two keeps naming a value that is gone.
+    invalidateScopes(new Set(["tasks"]));
+    await settle();
+    expect([count("board"), count("decs")]).toEqual([2, 3]);
+  });
 });

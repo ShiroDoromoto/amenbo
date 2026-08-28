@@ -680,6 +680,62 @@ describe("the file face", () => {
     expect(container.textContent).toContain("main.rs");
   });
 
+  // Reading a file draws the reader where the tree was, so the tree is not on the page while it is
+  // open. What a reader did to it has to outlive that: the panel holds it, not the section
+  // (`./FilesPanel`).
+  it("keeps the tree as the reader left it while a file is being read", async () => {
+    hoisted.entries[""] = [
+      { name: "src", isDir: true, ignored: false },
+      { name: "a.md", isDir: false, ignored: false },
+    ];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
+    await drawOpen();
+    await click(button("src"));
+    await settle();
+    expect(container.textContent).toContain("main.rs");
+
+    // Onto the row, so that the tab stop is somewhere a reader put it, and then into the file.
+    const stop = () =>
+      [...container.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")]
+        .find((one) => one.tabIndex === 0);
+    // By its own name and not by the text of the row: an open folder's text holds every name under
+    // it, so `main.rs` matched loosely is the `src` row around it.
+    const named = (name: string) =>
+      [...container.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")]
+        .find((one) => labelOf(one) === name);
+    await act(async () => { named("main.rs")!.focus(); });
+    await click(button("a.md"));
+    await settle();
+    // The tree is off the page while the file is up: that is what used to take its state with it.
+    expect(container.querySelector("[role=\"treeitem\"]")).toBeNull();
+
+    await click(pressable(t("files.back")));
+    await settle();
+    // Both openings still stand, and the stop is on the row it was left on — a tree that folded
+    // itself shut here would send the reader back through every press they had already made.
+    expect(pressable(t("files.tree"))?.getAttribute("aria-expanded")).toBe("true");
+    expect(container.textContent).toContain("main.rs");
+    expect(labelOf(stop()!)).toBe("main.rs");
+  });
+
+  // Held by the folder it is about, so a binding somebody removed must take its own answer with it
+  // — otherwise the reader who binds that path back is handed a tree they never opened.
+  it("forgets how a folder was opened once nobody is bound to it", async () => {
+    hoisted.entries[""] = [{ name: "src", isDir: true, ignored: false }];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
+    await drawOpen();
+    await click(button("src"));
+    await settle();
+    expect(container.textContent).toContain("main.rs");
+
+    hoisted.bound = [];
+    await draw();
+    hoisted.bound = [{ path: ROOT, exists: true }];
+    await draw();
+    expect(pressable(t("files.tree"))?.getAttribute("aria-expanded")).toBe("false");
+    expect(container.textContent).not.toContain("main.rs");
+  });
+
   // The host says where the pointer is and nothing else, so which folder a file would land in is
   // the panel's own answer — and the answer a reader can see before they let go (`AMB-D-775`).
   it("marks the folder a file dragged in from the desktop would land in", async () => {

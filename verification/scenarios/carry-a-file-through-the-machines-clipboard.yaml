@@ -12,22 +12,27 @@
 # reaches for lies outside every folder the road binds, so a row appearing in the folder afterwards
 # came through the clipboard and could not have come from anywhere else.
 #
-# ── The half that is not here, and why ───────────────────────────────────────────────────────────
-# The other direction — a row copied here and pasted in the file manager — is not written, and it is
-# not an oversight. A paste in a file manager keeps the file's name, so the copy and the row it came
-# from carry the same one; a reading of this window cannot say which of the two it found, and a step
-# that could not tell them apart would go green whether or not the clipboard had left Amenbo at all.
-# Pasting into the folder the file came from does rename it, and to whatever that machine calls a
-# copy in whatever language it is set to — a name this road would be reading the file manager by.
+# ── How the other direction is read, given that both rows have the same name ─────────────────────
+# A paste in a file manager keeps the file's name, so a copy made out of a row carries the name that
+# row already has. Two rows with one name is one reading, and a step that could not tell them apart
+# would go green whether or not the clipboard had ever left Amenbo — which is the one thing it exists
+# to catch. Pasting into the folder the file came from renames it instead, to whatever that machine
+# calls a copy in whatever language it is set to, which would be reading the file manager.
+#
+# So the original is taken out of the way. Once the copy has been made outside, the row it came from
+# is put in the bin from inside Amenbo, and the name is left on exactly one file: the one the file
+# manager wrote. Nothing is lost by binning it — the clipboard was used and finished with, and what
+# is being asked about is the copy.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no second road. A shell copies a file with `cp`, which goes nowhere near a clipboard.
 id: carry-a-file-through-the-machines-clipboard
-title: A file copied in the reader's file manager pastes into the folder from inside Amenbo
+title: A file goes out of the panel to the reader's file manager, and comes in from it
 description: >
-  Open the terminal face on a project whose folder holds a file, unfold the folder's section, and
-  copy a file that is nowhere in that folder using the reader's own file manager. Come back to
-  Amenbo, stand on a row and press the key this machine pastes with: the file is in the folder.
+  Open the terminal face on a project whose folder holds a file. Copy a row with the key this machine
+  copies with, paste it in a file manager into another folder inside the same one, then bin the row
+  it came from: the name is left on the copy the file manager wrote. Then copy a file that is nowhere
+  in the folder, come back, and paste onto a row: that file is in the folder too.
 
 given:
   - type: action
@@ -52,6 +57,16 @@ given:
       dir: greenhouse
       path: watering.md
       content: SCENARIO the seedlings are watered every second morning
+
+  # The folder the copy is pasted into. A different one from the file's own, so the file manager
+  # writes the name the file already has rather than one of its own.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/keep.md
+      content: SCENARIO this folder was here before anything was pasted into it
 
   # And the file that will come in. It lies in the run's own folder, which is outside every folder
   # the road binds — so its arriving is the clipboard's doing and nothing else's.
@@ -81,6 +96,87 @@ steps_gui:
     with:
       open: true
 
+  # ── out of Amenbo ─────────────────────────────────────────────────────────────────────────────
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: copy
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: repo
+    op: paste-outside
+    with:
+      dir: greenhouse
+      path: notes
+
+  # The row the copy was made from, taken out of the way so the name is left on one file. It is
+  # opened first because the bin this face offers is on the file being read.
+  #
+  # The question is put back before the bin is pressed rather than left to the machine's habit: which
+  # of the two endings a press has is otherwise decided by whatever the last person at this Mac
+  # ticked, and a road that covered both would be saying less about either.
+  - type: action
+    domain: files
+    op: set
+    with:
+      position: asks
+
+  # Back to the panel, since moving that row is done in the settings and leaves the reader there.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: trash
+
+  - type: action
+    domain: files
+    op: answer
+    with:
+      answer: yes
+
+  # The list comes back folded, the way it is drawn on the way in.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  # The goal of this half: the only file left with this name is the one the file manager wrote, and
+  # it could only have written it from what Amenbo put on the clipboard.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  # ── and into it ───────────────────────────────────────────────────────────────────────────────
   # Read before anything is pasted, so a run that finds the almanac later fails on the paste rather
   # than on a folder that had it all along.
   - type: assert
@@ -98,7 +194,8 @@ steps_gui:
       path: almanac.md
 
   # Onto a file's row, so it lands in the folder holding that row — which is the rule a drop lands by,
-  # and the one thing about where a paste goes that this face decides.
+  # and the one thing about where a paste goes that this face decides. The row is the copy, which is
+  # inside `notes`, so that is where the almanac lands.
   - type: action
     domain: files
     op: paste

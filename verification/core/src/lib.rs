@@ -675,9 +675,14 @@ const REGISTRY: &[OpSpec] = &[
     // clipboard, and a premise that filled it with something other than a file manager would be
     // testing a road nobody walks.
     //
-    // It is the operator's own hands on their own file manager, so what is named is the file and the
-    // folder as the road calls them, never a path or an application.
+    // They are the operator's own hands on their own file manager, so what is named is the file and
+    // the folder as the road calls them, never a path or an application.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-outside", required: &["path"], refs: &[], strings: &["path", "dir"], binds: false },
+    // `path` is the folder inside the bound one to paste into, and it is not optional: pasting into
+    // the folder the file was copied from makes the file manager rename what it writes, and what it
+    // renames it to is that machine's own word in its own language. A road reading that name back
+    // would be reading the file manager rather than Amenbo.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "paste-outside", required: &["path"], refs: &[], strings: &["path", "dir"], binds: false },
     // And a name in that folder that is a link rather than a file. `path` is the name, `to` is what
     // it points at, read in the run's own folder — which is outside every folder a `folder` step
     // binds, so the link a road makes is the one people really make: a file kept in one place and
@@ -2445,20 +2450,15 @@ const REGISTRY: &[OpSpec] = &[
     // same key as its own.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "undo", required: &[], refs: &[], strings: &[], binds: false },
 
-    // ── the machine's own paste ───────────────────────────────────────────────────────────────────
-    // What `⌘V` means on this face is what it means everywhere else on the machine, so the clipboard
-    // it goes through is the machine's and not a pocket of Amenbo's. Where the paste lands is worked
-    // out from the row the keyboard is on, the way a drop's landing is.
+    // ── the machine's own copy and paste ──────────────────────────────────────────────────────────
+    // What `⌘C` and `⌘V` mean on this face is what they mean everywhere else on the machine, so the
+    // clipboard they go through is the machine's and not a pocket of Amenbo's. Where a paste lands is
+    // worked out from the row the keyboard is on, the way a drop's landing is.
     //
-    // It names its row the way every other row-addressed op here does: a key reaches the row the
+    // Each names its row the way every other row-addressed op here does: a key reaches the row the
     // keyboard is standing on, and which row that is cannot be read off the screen afterwards — so a
     // step that left it unsaid would be handing the operator a choice the road meant to make.
-    //
-    // ⚠ **There is no `copy` beside it, and that is deliberate.** The other direction is a row copied
-    // here and pasted in a file manager, which keeps the file's name — so the copy and the row it came
-    // from carry the same one, and a reading of this window cannot say which of the two it found. A
-    // step that could not tell them apart would go green whether or not the clipboard had ever left
-    // Amenbo, which is the one thing it would exist to catch.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "copy", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "paste", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
 
     // ── bringing a file in from the machine ───────────────────────────────────────────────────────

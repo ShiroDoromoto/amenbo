@@ -174,7 +174,7 @@ jobs:
       # `cargo test` and it prints per-test timings (slow tests surface in the
       # final summary; thresholds live in .config/nextest.toml).
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2.86.3
+        uses: taiki-e/install-action@v2.86.7
         with:
           tool: cargo-nextest
 
@@ -235,7 +235,7 @@ jobs:
           save-if: false
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2.86.3
+        uses: taiki-e/install-action@v2.86.7
         with:
           tool: cargo-nextest
 
@@ -341,7 +341,7 @@ jobs:
           save-if: false
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2.86.3
+        uses: taiki-e/install-action@v2.86.7
         with:
           tool: cargo-nextest
 
@@ -408,7 +408,7 @@ jobs:
           save-if: false
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2.86.3
+        uses: taiki-e/install-action@v2.86.7
         with:
           tool: cargo-nextest
 
@@ -702,7 +702,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install cargo-deny
-        uses: taiki-e/install-action@v2.86.3
+        uses: taiki-e/install-action@v2.86.7
         with:
           tool: cargo-deny
 

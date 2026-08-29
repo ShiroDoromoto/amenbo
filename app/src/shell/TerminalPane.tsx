@@ -219,6 +219,8 @@ export function TerminalPane({
       // Straight to the row and nowhere else. What it says is about this pane's own session, and the
       // face has nothing to do with a sentence sitting in an input box.
       unsent: (session) => plate.unsent(session),
+      // And the other half of it, for the same reason and to the same place.
+      sent: (session) => plate.sent(session),
       closed: (session) => {
         plate.closed(session);
         setEnded(true);

@@ -70,6 +70,18 @@ describe("what the plate says about a turn standing in its pane", () => {
     expect(told, "the agent spoke Amenbo's own words and was still called unsent").toEqual([true, false]);
   });
 
+  it("stops calling once the sentence has gone, whether or not the pane ever speaks", () => {
+    // The press that sends it is the reader's own, and it is the last thing they are needed for here.
+    // Waiting for the agent's word instead would leave the badge standing against a program that
+    // never says one.
+    plate.opened("pane-1", AT, null);
+    plate.unsent("pane-1");
+    expect(told).toEqual([true]);
+
+    plate.sent("pane-1");
+    expect(told, "there is nothing left in the box to press Enter for").toEqual([true, false]);
+  });
+
   it("says nothing at all to a pane nobody is waiting on", () => {
     plate.opened("pane-1", AT, null);
     plate.said(say({ verb: "finished", text: "it landed" }));

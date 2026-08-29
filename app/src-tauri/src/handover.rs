@@ -51,6 +51,16 @@
 //! sentence is unsent and that Enter sends it (`crate::pty`, `app/src/talk/nameplate.ts`). Writing
 //! it into the pane is the one place it cannot go — that is the screen this loop is reading, and a
 //! line of Amenbo's own there is a pane answering itself.
+//!
+//! **The fact ends this before the patience does.** Whether the agent has the canon is settled by
+//! whether it ran `amenbo agent`, which it says itself (`AMB-D-805`) — and against that, everything
+//! read off a screen here is a guess. So the loop is asked before every pass and gets off the moment
+//! the fact arrives: there is nothing left to hand over, and a paste into a pane whose agent is
+//! already working is one the person has to clear out of the box themselves.
+//!
+//! **It is asked, never answered.** [`crate::handover::Handover::Sent`] says a newline went out, not
+//! that anything came of it — the screen it was read off is the very thing this is not trusting — so
+//! nothing here ever tells the pane it has been briefed.
 
 /// The bytes that open and close a bracketed paste. A program that has turned bracketed paste on
 /// reads what is between them as text and never as keys; one that has not sees the markers as
@@ -90,6 +100,10 @@ pub enum Handover {
     LeftForTheReader,
     /// The terminal ended, or would not take what was written to it, before either of those.
     Gone,
+    /// The agent said it had run `amenbo agent` in this pane, so the canon is already where this was
+    /// carrying it (`AMB-D-805`). Whether it arrived by the last pass's newline or by a person, the
+    /// question this loop was asking is answered.
+    Briefed,
 }
 
 /// The leading run of `instruction` that a screen is searched for — the longest prefix of at most
@@ -142,13 +156,16 @@ fn moved(screen: &[u8]) -> u64 {
 /// Hand `instruction` to whatever is running in the pane: paste it into a pane standing still, watch
 /// for it to be drawn or answered for, and submit it when either happens.
 ///
-/// `screen` answers with what the pane has drawn so far, or `None` once the terminal is gone.
-/// `send` writes to the terminal and answers whether it could. `wait` is the pause between passes —
-/// the caller's, so that what this does can be walked without a clock. `tries` bounds the whole of
-/// it: the patience is passes × the length of `wait`.
+/// `briefed` answers whether the fact has arrived that the agent ran `amenbo agent` here; while it
+/// says no this goes on, and the pass it says yes on is the last. `screen` answers with what the pane
+/// has drawn so far, or `None` once the terminal is gone. `send` writes to the terminal and answers
+/// whether it could. `wait` is the pause between passes — the caller's, so that what this does can be
+/// walked without a clock. `tries` bounds the whole of it: the patience is passes × the length of
+/// `wait`.
 pub fn hand_over(
     instruction: &str,
     tries: usize,
+    mut briefed: impl FnMut() -> bool,
     mut screen: impl FnMut() -> Option<Vec<u8>>,
     mut send: impl FnMut(&[u8]) -> bool,
     wait: impl Fn(),
@@ -168,6 +185,11 @@ pub fn hand_over(
     let mut answer_due = false;
 
     for pass in 0..tries {
+        // First, and before the screen is looked at: the fact outranks anything read off one, so a
+        // pane whose agent has the canon is never pasted into on the strength of how it looks.
+        if briefed() {
+            return Handover::Briefed;
+        }
         let Some(drawn) = screen() else { return Handover::Gone };
         if echoed(&drawn, head) {
             return if send(SUBMIT) { Handover::Sent } else { Handover::Gone };
@@ -225,6 +247,11 @@ mod tests {
         writes: RefCell<Vec<Vec<u8>>>,
         own: RefCell<VecDeque<&'static [u8]>>,
         takes: Takes,
+        /// The look the fact arrives on, counting from one — the pass on which this agent has run
+        /// `amenbo agent`. `None` for one that never does.
+        briefed_on: Cell<Option<usize>>,
+        /// How many looks have been taken, which is what `briefed_on` is measured against.
+        looks: Cell<usize>,
     }
 
     impl Agent {
@@ -234,7 +261,15 @@ mod tests {
                 writes: RefCell::new(Vec::new()),
                 own: RefCell::new(own.into_iter().collect()),
                 takes,
+                briefed_on: Cell::new(None),
+                looks: Cell::new(0),
             }
+        }
+
+        /// One that runs `amenbo agent` on the given look, whatever else it is drawing.
+        fn runs_agent_on(self, look: usize) -> Self {
+            self.briefed_on.set(Some(look));
+            self
         }
 
         /// One that draws its prompt on the first look and then waits.
@@ -262,6 +297,10 @@ mod tests {
         hand_over(
             instruction,
             tries,
+            || {
+                agent.looks.set(agent.looks.get() + 1);
+                agent.briefed_on.get().is_some_and(|on| agent.looks.get() >= on)
+            },
             || {
                 if let Some(next) = agent.own.borrow_mut().pop_front() {
                     agent.drawn.borrow_mut().extend_from_slice(next);
@@ -346,6 +385,7 @@ mod tests {
         let verdict = hand_over(
             "Before you act on any request",
             8,
+            || false,
             || Some(Vec::new()),
             |_| {
                 writes.set(writes.get() + 1);
@@ -359,15 +399,38 @@ mod tests {
 
     #[test]
     fn a_terminal_that_has_gone_ends_it() {
-        assert_eq!(hand_over("Before you act", 4, || None, |_| true, || {}), Handover::Gone);
+        assert_eq!(
+            hand_over("Before you act", 4, || false, || None, |_| true, || {}),
+            Handover::Gone
+        );
     }
 
     #[test]
     fn a_write_that_fails_ends_it() {
         assert_eq!(
-            hand_over("Before you act", 4, || Some(b"> ".to_vec()), |_| false, || {}),
+            hand_over("Before you act", 4, || false, || Some(b"> ".to_vec()), |_| false, || {}),
             Handover::Gone
         );
+    }
+
+    #[test]
+    fn an_agent_that_already_has_the_canon_is_never_pasted_into() {
+        // It came in on the command line, or a person had already got it there: either way the fact is
+        // in before the first look, and a sentence pasted now is one somebody has to clear out.
+        let agent = Agent::waiting(Takes::Swallows).runs_agent_on(1);
+        assert_eq!(walk(&agent, "Before you act on any request", 12), Handover::Briefed);
+        assert_eq!(agent.pastes(), 0, "nothing went into a pane that did not need it");
+        assert!(!agent.submitted());
+    }
+
+    #[test]
+    fn the_fact_arriving_mid_loop_gets_it_off() {
+        // The pane swallows the paste, so nothing on the screen will ever end this — but the agent
+        // read the sentence all the same and ran the command. That settles it, and the loop stops
+        // rather than pasting into every still screen for the rest of its patience.
+        let agent = Agent::waiting(Takes::Swallows).runs_agent_on(6);
+        assert_eq!(walk(&agent, "Before you act on any request", 60), Handover::Briefed);
+        assert_eq!(agent.pastes(), 1, "the one paste it had already made, and no more");
     }
 
     #[test]

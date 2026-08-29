@@ -30,6 +30,7 @@ import "@xterm/xterm/css/xterm.css";
 import type { PtyChunkDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
+import { hostOs, type HostOs } from "../core/platform";
 import { NOTHING_TYPED, pressedKey, typed, type NamedBy, type Pressed } from "./frames";
 import { pathsOnRow, refFromUrl, refsOnRow, type Cell, type Rows } from "./refLinks";
 
@@ -259,6 +260,31 @@ async function draw(term: Terminal, start: PaneStart): Promise<PtySessionDto> {
  *  reads what is between them as text and never as keys (`crate::handover`). */
 const PASTE_OPEN = "\x1b[200~";
 const PASTE_CLOSE = "\x1b[201~";
+
+/**
+ * One path, written so a terminal reads it as one thing (`AMB-D-801`).
+ *
+ * **Quoted, always — and the escape is the machine's own.** A name with a space in it is two words
+ * to a shell, and the commonest thing anybody hands a pane is a screenshot, whose name has spaces on
+ * every one of the three. Quoting costs nothing on the other side: an agent reads the quotes as text
+ * and reaches the same file with or without them, measured on both macOS and Windows (`AMB-T-4008`,
+ * `AMB-T-4011`). What is *not* free is getting the escape wrong, so it is not guessed:
+ *
+ * | | a `'` inside the name |
+ * |---|---|
+ * | macOS, Linux | closed, escaped, reopened — `'\''` |
+ * | Windows | doubled — `''`, which is PowerShell's own way (`crate::launch` starts no other shell) |
+ *
+ * **Both failures are worse than not quoting at all**, which is why the branch is here rather than
+ * left to one form for everybody. A POSIX escape reaching PowerShell — or no escape at all reaching
+ * either — leaves the shell waiting for a quote it never gets (`quote>`, `>>`): the reader's Enter
+ * does not end it and the pane is stuck until they know to press Ctrl-C. A Windows escape reaching a
+ * POSIX shell is the quiet one: `it''s.png` becomes `its.png`, a different name, with nothing said.
+ */
+export function quotedPath(path: string, os: HostOs = hostOs()): string {
+  const inside = os === "windows" ? path.replace(/'/g, "''") : path.replace(/'/g, "'\\''");
+  return `'${inside}'`;
+}
 
 /**
  * Put `text` in the input box of whatever is running in a terminal, as a paste.

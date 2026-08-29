@@ -137,6 +137,30 @@ export const SHELL = "shell";
 /** What Shift-Enter is sent as: `ESC` and a carriage return, the form the programs that want it read. */
 export const NEWLINE = "\x1b\r";
 
+/** What the emulator gives the program for Enter: the carriage return that sends a line. */
+export const SUBMIT = "\r";
+
+/**
+ * Whether the sentence this pane is holding goes out behind what just crossed to the program.
+ *
+ * `owed` is the host having said it left the opening sentence in this pane's input box, unsent
+ * (`crate::pty`). `data` is what the emulator has just given the program for a press.
+ *
+ * **It is the person's Enter that is being waited for, and nothing stands in for it.** What the
+ * hand-over cannot find out by looking is whether the pane is showing an input box or a program's own
+ * first question; a person sending a line of their own settles that outright (`AMB-D-805`). So the
+ * sentence follows their line rather than preceding it — what they wrote goes through untouched, and
+ * the rescue happens behind it.
+ *
+ * **The crossing is compared whole rather than searched.** What travels here is one press at a time,
+ * or a bracketed paste entire (`\x1b[200~…`), or the emulator's own answers to the program — and
+ * those are escape sequences. A lone carriage return is a person pressing Enter, and an input method
+ * settling a line is not one of them: what a composition produces is the text it composed.
+ */
+export function sendsTheSentence(owed: boolean, data: string): boolean {
+  return owed && data === SUBMIT;
+}
+
 /**
  * Whether this press is the one the pane answers for rather than passing on.
  *
@@ -418,8 +442,14 @@ export async function mountTerminal(
   });
   // Nothing is held for this one the way the output and the statements are. The hand-over gives up
   // only after a minute of looking at the pane, so this cannot arrive before the id it is about.
+  //
+  // It is also what puts this pane in the way of sending it: from here on the person's next Enter
+  // carries the sentence out behind their own line (`sendsTheSentence`).
+  let owed = false;
   const unlistenUnsent = await listen<string>(UNSENT_EVENT, ({ payload }) => {
-    if (payload === session) on.unsent(payload);
+    if (payload !== session) return;
+    owed = true;
+    on.unsent(payload);
   });
   // Statements are held the same way the output is, and for the same reason: the host starts watching
   // the drop box the moment it opens the terminal, so the first thing an agent says can be on its way
@@ -460,7 +490,17 @@ export async function mountTerminal(
   const send = (data: string) => {
     void invoke("pty_write", { session, data }).catch(() => {});
   };
-  const stream = term.onData(send);
+  const stream = term.onData((data) => {
+    send(data);
+    if (!sendsTheSentence(owed, data)) return;
+    // **Asked behind their line, and asked once.** The write above went out first, so what the person
+    // sent lands as they wrote it and the sentence follows rather than mixing into it. Whether
+    // anything is really owed is the host's to answer — it holds the sentence and takes it as it goes
+    // — and the answer cannot come back, so a later Enter is left alone rather than paying a round
+    // trip per keystroke to be told nothing.
+    owed = false;
+    void invoke("pty_brief", { session }).catch(() => {});
+  });
 
   // The first line a person sends into this pane names its frame, so a pane is called something before
   // anyone gets round to naming it. Only the first: the presses are followed until one line has been

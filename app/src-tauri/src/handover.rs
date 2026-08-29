@@ -136,6 +136,22 @@ fn pasteable(instruction: &str) -> String {
     instruction.chars().filter(|c| !c.is_control()).collect()
 }
 
+/// The bytes that put the instruction in **and send it** — for the one moment a newline is owed.
+///
+/// Everything the loop above withholds a newline for is the same question: is this an input box, or
+/// is it a program's own first question with the sentence sitting unread beneath it. A person
+/// pressing Enter in the pane settles that question outright (`AMB-D-805`) — they are sending
+/// something of their own, into a box they can see — so there is nothing left for a newline to answer
+/// by mistake.
+///
+/// The text is made safe the same way, because it is the same text arriving by another door
+/// ([`pasteable`]).
+pub fn paste_and_send(instruction: &str) -> Vec<u8> {
+    let mut out = paste(&pasteable(instruction));
+    out.extend_from_slice(SUBMIT);
+    out
+}
+
 /// The bytes one attempt writes: the instruction, bracketed, with nothing that submits it.
 fn paste(instruction: &str) -> Vec<u8> {
     let mut out = Vec::with_capacity(instruction.len() + PASTE_OPEN.len() + PASTE_CLOSE.len());
@@ -439,6 +455,17 @@ mod tests {
         assert!(bytes.starts_with(PASTE_OPEN));
         assert!(bytes.ends_with(PASTE_CLOSE));
         assert!(!bytes.contains(&b'\r') && !bytes.contains(&b'\n'));
+    }
+
+    #[test]
+    fn the_bytes_a_persons_enter_earns_carry_the_sentence_and_the_newline() {
+        // The one place the newline goes out with the paste: the person just pressed Enter here, so
+        // there is no question of its answering something else (`AMB-D-805`).
+        let bytes = paste_and_send("say this\nand this");
+        assert!(bytes.starts_with(PASTE_OPEN));
+        assert!(bytes.ends_with(SUBMIT));
+        let inside = &bytes[PASTE_OPEN.len()..bytes.len() - PASTE_CLOSE.len() - SUBMIT.len()];
+        assert_eq!(inside, b"say thisand this", "and the line's own newline is still dropped");
     }
 
     #[test]

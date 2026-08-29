@@ -152,6 +152,13 @@ struct Pane {
     /// **Nothing this process does raises it.** A newline sent because the screen looked right is a
     /// guess, and a guess is what this exists to stop standing in for the fact.
     briefed: AtomicBool,
+    /// The opening sentence sitting in this pane's input box, unsent — kept for the one press that
+    /// can send it (`AMB-D-805`).
+    ///
+    /// It is put here when the hand-over runs out of patience and taken when it goes, so it goes
+    /// once however many times a person presses Enter. `None` is a pane with nothing owed: one whose
+    /// sentence rode in on the command line, one the hand-over got through to, or one already sent.
+    unsent: Mutex<Option<String>>,
 }
 
 impl Pane {
@@ -160,6 +167,7 @@ impl Pane {
             target: Mutex::new(target.to_owned()),
             recent: Mutex::new(VecDeque::new()),
             briefed: AtomicBool::new(false),
+            unsent: Mutex::new(None),
         }
     }
 
@@ -181,6 +189,17 @@ impl Pane {
     /// half-second and owes nothing to being told on the exact pass it happened.
     fn briefed(&self) -> bool {
         self.briefed.load(Ordering::Relaxed)
+    }
+
+    /// The sentence has been left in this pane's input box for a person to send.
+    fn leave(&self, instruction: String) {
+        *self.unsent.lock().expect("pane unsent lock") = Some(instruction);
+    }
+
+    /// Take the sentence that was left, if one still is. **Taken rather than read**, so the pane has
+    /// nothing owed the moment it goes out and a second press finds nothing to send.
+    fn take_unsent(&self) -> Option<String> {
+        self.unsent.lock().expect("pane unsent lock").take()
     }
 
     /// The window the chunks are going to right now.
@@ -412,6 +431,9 @@ fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instructio
         // — and a screen holding one is indistinguishable from a screen that was handed its sentence,
         // so the row above the pane says which it is (`app/src/talk/nameplate.ts`).
         if ended == crate::handover::Handover::LeftForTheReader {
+            // Kept before it is said, so that the pane can answer for the sentence from the moment
+            // anybody is told there is one to answer for (`pty_brief`).
+            pane.leave(instruction);
             let _ = app.emit_to(pane.target().as_str(), UNSENT_EVENT, &session);
         }
     });
@@ -873,6 +895,47 @@ pub fn pty_write(
         .map_err(failed)
 }
 
+/// Send the opening sentence this pane is still owed, now that a person has pressed Enter in it.
+///
+/// **The press is what makes this safe.** Everything the hand-over withholds a newline for is one
+/// question — is that an input box, or a program's own first question — and a person sending
+/// something of their own into a box they can see settles it (`AMB-D-805`). So this is the one place
+/// the sentence goes in with the newline that submits it ([`crate::handover::paste_and_send`]).
+///
+/// **It is asked on every eligible press and answers once.** Which press that is belongs to the pane
+/// drawing the terminal, which is where a key is; whether anything is owed belongs here, where the
+/// two things that settle it are:
+///
+/// - the pane has been briefed, and the sentence is not owed however it got there. The fact outranks
+///   the screen and outranks this — an agent that ran `amenbo agent` has the canon, and a second copy
+///   arriving in its input box would be Amenbo talking over the person's own first message;
+/// - nothing is left to send, because the hand-over got through, the sentence rode in on the command
+///   line, or an earlier press already sent it ([`Pane::take_unsent`]).
+///
+/// **A pane that has merely spoken is not one that has been briefed.** The row above it stops saying
+/// the sentence is unsent as soon as the agent says anything at all (`app/src/talk/sessions.ts`) —
+/// that is a notice about a person's turn, and it is right to take it back on any word. What is owed
+/// is a narrower question, and only the one verb answers it.
+///
+/// Saying nothing is the answer for a pane with nothing owed: a press that turned out to need nothing
+/// is not a failure, and there is nothing for a reader to do about it. Only a terminal that is not
+/// there at all is refused, the same way a write to one is.
+#[tauri::command]
+pub fn pty_brief(terminals: tauri::State<'_, Terminals>, session: String) -> Result<(), CmdError> {
+    let mut open = terminals.0.lock().expect("terminals lock");
+    let terminal = open.get_mut(&session).ok_or_else(|| gone(&session))?;
+    if terminal.pane.briefed() {
+        return Ok(());
+    }
+    let Some(instruction) = terminal.pane.take_unsent() else { return Ok(()) };
+    let bytes = crate::handover::paste_and_send(&instruction);
+    terminal
+        .writer
+        .write_all(&bytes)
+        .and_then(|()| terminal.writer.flush())
+        .map_err(failed)
+}
+
 /// Tell the terminal how large the pane is now, in characters.
 ///
 /// This is what a program inside it reads when it asks the terminal its size, and what it is woken
@@ -1130,6 +1193,21 @@ mod tests {
             pane.take_in(&said);
         }
         assert!(pane.briefed(), "and the fact itself is");
+    }
+
+    /// What a pane is owed goes out once, whatever a person presses after.
+    ///
+    /// The guard is the taking rather than a second flag: a press that finds nothing to send is a
+    /// press that does nothing, and there is no window in which two of them could each find the
+    /// sentence still there.
+    #[test]
+    fn the_sentence_a_pane_was_left_holding_goes_out_once() {
+        let pane = Pane::new("main");
+        assert!(pane.take_unsent().is_none(), "a pane the hand-over got through to is owed nothing");
+
+        pane.leave("Before you act on any request".into());
+        assert_eq!(pane.take_unsent().as_deref(), Some("Before you act on any request"));
+        assert!(pane.take_unsent().is_none(), "and the next press finds nothing left to send");
     }
 
     /// A session id has to be unique across restarts of the app, which is the case a counter gets

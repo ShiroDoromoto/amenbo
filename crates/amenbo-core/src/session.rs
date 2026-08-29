@@ -3,7 +3,8 @@
 //!
 //! **It is spoken as `amenbo talk <verb>`** (`AMB-D-757`) — the window's own name, so the boundary and
 //! the namespace are the same word. This module keeps the layer's own name because it also holds the
-//! session id a write is stamped with (`id`), which is not of the surface at all.
+//! session id a write is stamped with (`id`), which is not of the surface at all, and one statement
+//! nobody speaks: the mark `amenbo agent` leaves to say it was run here ([`briefed`], `AMB-D-805`).
 //!
 //! Everything else Amenbo does lands in the store, means the same wherever it is typed, and is still
 //! true tomorrow. Nothing here is. A session is the terminal it runs in — it has no existence outside
@@ -106,11 +107,16 @@ fn from_parts(session: Option<String>, dir: Option<std::ffi::OsString>) -> Optio
     Some(Surface { session, dir: PathBuf::from(dir) })
 }
 
-/// What an AI says about the session it is in. Each variant is one verb of the surface vocabulary.
+/// What an AI says about the session it is in.
 ///
-/// Only two of them are owed: [`Statement::Waiting`] and [`Statement::Finished`], which say the things
-/// nothing else can find out (`AMB-D-748`). The rest are offered — a name that is never set leaves a
-/// pane labelled by its folder, and nobody is misled.
+/// Four of them are verbs of the spoken vocabulary — `amenbo talk <verb>`, one variant each. Only two
+/// of those are owed: [`Statement::Waiting`] and [`Statement::Finished`], which say the things nothing
+/// else can find out (`AMB-D-748`). The rest are offered — a name that is never set leaves a pane
+/// labelled by its folder, and nobody is misled.
+///
+/// [`Statement::Briefed`] is the one that is not spoken. It says the same kind of thing about the same
+/// session and travels the same drop box, so it belongs to this vocabulary; what it does not have is a
+/// verb anyone types, because the act it reports is the typing of another command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Statement {
     /// Name this pane. The name sticks to the frame, not to the process in it.
@@ -121,6 +127,9 @@ pub enum Statement {
     Waiting(String),
     /// The work is done, and what came of it. Owed, for the same reason.
     Finished(String),
+    /// The AI in this pane has run `amenbo agent`, so it has read the canon and knows Amenbo is here
+    /// (`AMB-D-805`). Left by [`briefed`] rather than said, and carrying nothing but the fact.
+    Briefed,
 }
 
 /// How much of the pane's label the reason for a person's turn may take, in the columns a terminal
@@ -198,14 +207,15 @@ impl Statement {
         (got > WAITING_LIMIT).then_some(Overlong { got, limit: WAITING_LIMIT })
     }
 
-    /// The word this statement is filed under, and the one the window branches on. It is the verb the
-    /// person typed, so the two never drift.
+    /// The word this statement is filed under, and the one the window branches on. For the spoken four
+    /// it is the verb the person typed, so the two never drift.
     pub fn verb(&self) -> &'static str {
         match self {
             Statement::Name(_) => "name",
             Statement::Note(_) => "note",
             Statement::Waiting(_) => "waiting",
             Statement::Finished(_) => "finished",
+            Statement::Briefed => "briefed",
         }
     }
 
@@ -216,6 +226,9 @@ impl Statement {
             | Statement::Note(text)
             | Statement::Waiting(text)
             | Statement::Finished(text) => json!({ "text": text }),
+            // The fact is the whole of it: the verb says what happened and the fields every statement
+            // carries say in which pane and when.
+            Statement::Briefed => json!({}),
         }
     }
 }
@@ -254,6 +267,26 @@ pub fn say(surface: &Surface, statement: &Statement) -> Result<PathBuf> {
     drop(f);
     fs::rename(&partial, &final_path)?;
     Ok(final_path)
+}
+
+/// Leave the mark that `amenbo agent` was run here, if here is a pane at all (`AMB-D-805`).
+///
+/// **Whether the first word reached an AI is answered by the fact that it ran this command**, not by
+/// reading the screen it was typed into. The screen belongs to whichever provider drew it and changes
+/// with every release of theirs; `amenbo agent` is Amenbo's own, and [`SESSION_VAR`] is inherited, so
+/// the pane it was run in is known however many processes deep it was run.
+///
+/// **Nothing about it is owed to the caller.** Outside a pane there is nobody to tell, and inside one a
+/// drop box that cannot be written to is a mark that does not arrive — neither is a reason to fail a
+/// read. `agent` answers about this build and touches no store; leaving this mark must not be the thing
+/// that changes that.
+///
+/// It is a notice, once, and never a state. The box is swept by age and taken away with the terminal,
+/// so what reads this moves it onto the pane on the way past (`AMB-T-4017`) and asks the pane from then
+/// on. Left here twice it says the same thing twice, which is what a notice is allowed to do.
+pub fn briefed() {
+    let Some(surface) = surface() else { return };
+    let _ = say(&surface, &Statement::Briefed);
 }
 
 /// The file one statement is left in. It sorts in the order statements were made: a fixed-width instant
@@ -318,6 +351,7 @@ impl Said {
             "note" => Statement::Note(text()?),
             "waiting" => Statement::Waiting(text()?),
             "finished" => Statement::Finished(text()?),
+            "briefed" => Statement::Briefed,
             _ => return None,
         };
         Some(Said {
@@ -478,6 +512,8 @@ mod tests {
                 | Statement::Note(t)
                 | Statement::Waiting(t)
                 | Statement::Finished(t) => t.clone(),
+                // Nothing was said; the mark is not one of the spoken four.
+                Statement::Briefed => String::new(),
             })
             .collect()
     }
@@ -559,6 +595,50 @@ mod tests {
         }
         let said = said_after(&dir, None).expect("read back");
         assert_eq!(texts(&said), vec!["real"], "only the one it understands: {said:?}");
+    }
+
+    /// The mark `amenbo agent` leaves rides the drop box the spoken verbs ride, so the window's one
+    /// reader carries it and the box's two cleaners take it away. It says nothing but that it happened.
+    #[test]
+    fn the_mark_that_the_canon_was_read_travels_as_a_statement_and_carries_no_line() {
+        let dir = amenbo_scratch::scratch("session-briefed");
+        let s = surface_at(&dir);
+        let path = say(&s, &Statement::Briefed).expect("the mark is written");
+
+        let v: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).expect("valid JSON");
+        assert_eq!(v["verb"], "briefed");
+        assert_eq!(v["session"], "pane-1", "the pane it was run in rides with it");
+        assert!(v["text"].is_null(), "and there is no line to read: {v}");
+
+        let said = said_after(&dir, None).expect("read back");
+        assert_eq!(
+            said.iter().map(|s| s.statement.clone()).collect::<Vec<_>>(),
+            vec![Statement::Briefed],
+            "the window's own reader hands it over with the rest: {said:?}",
+        );
+        assert_eq!(Statement::Briefed.overlong(), None, "nothing it carries has to fit on a row");
+    }
+
+    /// A window from before the mark existed meets one and passes over it, the way it passes over any
+    /// verb it does not know — which is why this went in at the same schema rather than a later one.
+    /// Bumping would have had that window refuse every statement, including the four it understands.
+    #[test]
+    fn a_reader_that_does_not_know_the_mark_skips_it_and_keeps_the_rest() {
+        let dir = amenbo_scratch::scratch("session-briefed-old");
+        let s = surface_at(&dir);
+        say(&s, &Statement::Briefed).expect("written");
+        say(&s, &Statement::Note("reading the migration".into())).expect("written");
+
+        let said = said_after(&dir, None).expect("read back");
+        assert_eq!(said.len(), 2, "this reader knows both: {said:?}");
+        assert!(
+            said.iter().all(|s| serde_json::from_str::<Value>(
+                &fs::read_to_string(dir.join(&s.name)).unwrap()
+            )
+            .unwrap()["schema"]
+                == SCHEMA),
+            "and both were left at the schema the four spoken verbs are left at",
+        );
     }
 
     #[test]

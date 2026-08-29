@@ -2211,13 +2211,14 @@ labels: Array<SearchLabelDto>, };
  * One thing an AI said about the session it is running in, on its way to the pane drawing it.
  *
  * It is the surface layer's record ([`amenbo_core::session::Said`]) in the shape the webview reads.
- * Every verb carries one line, which is `text`.
+ * Every spoken verb carries one line, which is `text`; `briefed` is not spoken and carries none
+ * (`AMB-D-805`).
  */
 export type SessionSaidDto = { 
 /**
  * The pane it was said in — the same id the terminal was opened under.
  */
-session: string, verb: "name" | "note" | "waiting" | "finished", 
+session: string, verb: "name" | "note" | "waiting" | "finished" | "briefed", 
 /**
  * When it was said (RFC3339 UTC).
  */

@@ -60,6 +60,9 @@ fn said(statement: &Statement) -> String {
         Statement::Note(text) => format!("note: {text}"),
         Statement::Waiting(text) => format!("waiting for a person: {text}"),
         Statement::Finished(text) => format!("finished: {text}"),
+        // Not a verb anyone types: `amenbo agent` leaves it on its own (`AMB-D-805`), so no route
+        // through `talk` ever reaches this line.
+        Statement::Briefed => "read the canon".to_string(),
     }
 }
 

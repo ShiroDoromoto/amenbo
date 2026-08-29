@@ -2158,7 +2158,8 @@ pub struct WakeDto {
 /// One thing an AI said about the session it is running in, on its way to the pane drawing it.
 ///
 /// It is the surface layer's record ([`amenbo_core::session::Said`]) in the shape the webview reads.
-/// Every verb carries one line, which is `text`.
+/// Every spoken verb carries one line, which is `text`; `briefed` is not spoken and carries none
+/// (`AMB-D-805`).
 // Clone for the same reason `PtyChunkDto` is: `emit_to` takes its payload by value.
 #[derive(Clone, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
@@ -2166,7 +2167,7 @@ pub struct WakeDto {
 pub struct SessionSaidDto {
     /// The pane it was said in — the same id the terminal was opened under.
     pub(crate) session: String,
-    #[ts(type = "\"name\" | \"note\" | \"waiting\" | \"finished\"")]
+    #[ts(type = "\"name\" | \"note\" | \"waiting\" | \"finished\" | \"briefed\"")]
     pub(crate) verb: &'static str,
     /// When it was said (RFC3339 UTC).
     pub(crate) at: String,

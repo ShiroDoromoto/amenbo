@@ -297,3 +297,69 @@ fn a_status_move_made_inside_a_pane_is_recorded_under_it_and_one_made_outside_is
         .collect();
     assert_eq!(files, vec!["pane-a.jsonl".to_string()], "a move from outside a pane writes nothing: {files:?}");
 }
+
+/// The one statement nobody speaks: `amenbo agent` leaves it to say it was run here (`AMB-D-805`).
+///
+/// **Whether the first word reached the AI in a pane is settled by this fact rather than by reading the
+/// screen it was typed into.** The screen is the provider's and changes with their releases; this
+/// command is Amenbo's own. So it is left on every route through `agent` — the entry index and the
+/// drill-down into one command alike — because each of them is the AI having reached the canon.
+#[test]
+fn running_the_canon_inside_a_pane_leaves_the_mark_that_it_was_read() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let dir = amenbo_scratch::scratch("talk-briefed");
+    let pane = in_a_pane(&dir);
+
+    for args in [vec!["agent", "--json"], vec!["agent", "--command", "task add"]] {
+        let (stdout, code) = cli.run_env(&pane_env(&pane), &args);
+        assert_eq!(code, 0, "{args:?} answers as it always did: {stdout}");
+    }
+
+    let said = statements(&dir);
+    let verbs: Vec<&str> = said.iter().map(|s| s["verb"].as_str().unwrap_or_default()).collect();
+    assert_eq!(verbs, vec!["briefed", "briefed"], "one mark per run, on either route: {said:?}");
+    assert!(
+        said.iter().all(|s| s["session"] == "pane-1" && s["text"].is_null()),
+        "each says which pane it was run in, and carries no line: {said:?}",
+    );
+}
+
+/// Outside a pane there is nobody to tell, and `agent` is a read of this build either way. It answers
+/// exactly as it does inside one, and leaves nothing anywhere.
+#[test]
+fn running_the_canon_outside_a_pane_leaves_nothing_and_still_answers() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let dir = amenbo_scratch::scratch("talk-briefed-outside");
+
+    let (stdout, code) = cli.run(&["agent", "--json"]);
+    assert_eq!(code, 0, "the canon is answered at a plain terminal: {stdout}");
+
+    // Half an environment is no pane either: a session with nowhere to leave the mark names a box
+    // nothing is watching, and writing there would read as a mark that arrived.
+    let (_, code) = cli.run_env(&[("AMENBO_SESSION", "pane-1")], &["agent", "--json"]);
+    assert_eq!(code, 0, "and half a window changes nothing about the answer");
+
+    assert!(
+        !dir.exists() || std::fs::read_dir(&dir).into_iter().flatten().count() == 0,
+        "no mark was left behind",
+    );
+}
+
+/// A drop box that cannot be written to is a mark that does not arrive, which is not a reason to fail a
+/// read: `agent` answers about this build and touches no store, and leaving the mark must not be the
+/// thing that changes that.
+#[test]
+fn a_mark_that_cannot_be_left_does_not_fail_the_read() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    // A file where the drop box would be: `create_dir_all` cannot make a directory over it.
+    let blocked = amenbo_scratch::scratch("talk-briefed-blocked").join("not-a-directory");
+    std::fs::write(&blocked, "in the way").expect("the obstruction is written");
+    let path = blocked.to_string_lossy().into_owned();
+
+    let (stdout, code) = cli.run_env(&pane_env(&path), &["agent", "--json"]);
+    assert_eq!(code, 0, "the canon is still answered: {stdout}");
+    assert!(stdout.contains("agentCycle"), "and it is the whole answer: {stdout}");
+}

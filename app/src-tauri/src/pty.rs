@@ -638,6 +638,8 @@ impl SessionSaidDto {
             | Statement::Note(text)
             | Statement::Waiting(text)
             | Statement::Finished(text) => Some(text),
+            // The fact is the whole of it, so there is no line to draw (`AMB-D-805`).
+            Statement::Briefed => None,
         };
         SessionSaidDto { session: session.to_string(), verb, at: said.at, cwd: said.cwd, text }
     }

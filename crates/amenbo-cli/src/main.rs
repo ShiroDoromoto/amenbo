@@ -1138,6 +1138,12 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
 
     match command {
         Command::Agent { command: name, full } => {
+            // Leave the mark in the pane this was run in, before answering: whether the first word
+            // reached the AI working here is settled by the fact that it ran this command, and every
+            // route through `agent` is that fact (`AMB-D-805`). Outside a pane, and where the mark
+            // cannot be written, this does nothing and says nothing — `agent` is a read of this build
+            // and stays one.
+            amenbo_core::session::briefed();
             // Drill down: return the full spec of one command — where the entry index leads.
             if let Some(name) = name {
                 let Some(spec) = agent::command_spec(&name) else {

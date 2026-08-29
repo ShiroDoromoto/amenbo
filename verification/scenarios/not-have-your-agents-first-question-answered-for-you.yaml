@@ -7,15 +7,19 @@
 # choice of their own. A newline sent before the pane is holding the sentence is a newline answering
 # whatever *is* being asked — with the reader's hand nowhere near it.
 #
-# So the sentence goes in, and the newline waits for the pane to draw the sentence back. Where it
-# never does, Amenbo gives up after a minute and leaves the sentence sitting in the input box, one
-# keypress from being sent by the person whose terminal it is. Nothing is taken away and no apology
+# So the sentence goes in, and the newline waits for the pane to draw the sentence back — or, where a
+# program acknowledges a paste without ever showing it, to answer for it on the look after it landed.
+# Where the pane does neither, Amenbo gives up after a minute and leaves the sentence sitting in the
+# input box, one keypress from being sent by the person whose terminal it is. Nothing is taken away and no apology
 # is drawn: what is there is what the reader would have typed themselves.
 #
 # ── Why the line is this line ────────────────────────────────────────────────────────────────────
-# It has to show nothing and hand back everything. Turning the terminal's own echo off is what makes
-# the pane silent about what was written into it — which is the state a program drawing its own
-# interface is in, reproduced on a machine where no such program need be installed. Handing back
+# It has to show nothing, answer nothing, and hand back everything. Turning the terminal's own echo
+# off is what makes the pane silent about what was written into it — which is the state a program
+# drawing its own interface is in, reproduced on a machine where no such program need be installed.
+# Saying nothing at the moment the paste lands is what line buffering gives for free: `sed` writes
+# when a newline arrives and no newline does, so the pane is as still after the paste as before it,
+# which is the reading that says the paste was not answered. Handing back
 # every line it is given is what turns the absence into something readable: a marked line on that
 # pane could only have come from a newline, and a newline could only have come from Amenbo. Without
 # the second half the road would be reading a blank screen and calling it a guard.
@@ -28,14 +32,15 @@
 # So the frame draws the row a command is registered under: where a machine can start one thing there
 # is no row to write anything under, and where it can start none there is none either.
 id: not-have-your-agents-first-question-answered-for-you
-title: A pane that never showed the opening sentence is never sent a newline, and the sentence is left for the reader
+title: A pane that neither shows the opening sentence nor answers for it is never sent a newline, and the sentence is left for the reader
 description: >
   Amenbo tells whatever runs in a pane to read `amenbo agent --json` first, and where the launch line
   is the reader's own the sentence follows the command into the pane rather than riding in as an
-  argument. It is submitted on one condition — that the pane has drawn it back — because a program
-  that opens by asking something would read a newline as the answer. The road registers a command
-  that shows nothing of what it is written but hands back every line it is given, waits out the
-  minute Amenbo spends trying, and reads that nothing was ever sent.
+  argument. It is submitted on one condition — that the pane has drawn it back, or answered the paste
+  the moment it landed — because a program that opens by asking something would read a newline as the
+  answer. The road registers a command that shows nothing of what it is written and says nothing when
+  it arrives, but hands back every line it is given, waits out the minute Amenbo spends trying, and
+  reads that nothing was ever sent.
 
 given:
   - type: action

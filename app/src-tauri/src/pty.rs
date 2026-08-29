@@ -167,8 +167,9 @@ impl Pane {
     /// The tail as it stands — what the pane has drawn lately, for a reader that is not a pane.
     ///
     /// The handover ([`crate::handover`]) is that reader: it is looking for the words it pasted, and
-    /// the tail is where they appear. It takes the same copy a pane adopting the session is given,
-    /// rather than a window onto the buffer, so nothing holds this lock while it searches.
+    /// — where a program answers a paste without drawing it — for the tail moving at all. It takes
+    /// the same copy a pane adopting the session is given, rather than a window onto the buffer, so
+    /// nothing holds this lock while it searches.
     fn screen(&self) -> Vec<u8> {
         self.recent.lock().expect("pane recent lock").iter().copied().collect()
     }
@@ -324,8 +325,10 @@ struct Started {
 /// How long between one look at the pane and the next, while the instruction is being handed over.
 ///
 /// Slow enough that a program repainting its interface is not raced on every frame, quick enough
-/// that the sentence goes in about when the input box appears. What is being waited for is
-/// person-scale: a program coming up, and sometimes a person answering a question it asked first.
+/// that the sentence goes in about when the input box appears — a look this long is also what makes
+/// the pane's stillness worth something, since the handover pastes only into a screen that has held
+/// the same bytes across several of them. What is being waited for is person-scale: a program coming
+/// up, and sometimes a person answering a question it asked first.
 const SETTLE: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// How many looks the hand-over gets before the sentence is left for the reader. With [`SETTLE`]

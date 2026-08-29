@@ -6,7 +6,8 @@
 # program starts. A line the reader registered has nowhere to put an argument. Amenbo does not know
 # where in `claude --model opus` an opening prompt would go, and does not guess, so the line is
 # started as it stands and the sentence follows it into the pane in two stages: pasted once the pane
-# has drawn something, and submitted only once the pane draws the sentence back.
+# has drawn something and gone quiet, and submitted once the pane draws the sentence back — or,
+# where a program acknowledges a paste without ever showing it, once the pane answers for it.
 #
 # ── What this road defends ───────────────────────────────────────────────────────────────────────
 # That the second stage happens at all. The first one is easy to get right and easy to mistake for
@@ -18,8 +19,9 @@
 #
 # ── Why the line is this line ────────────────────────────────────────────────────────────────────
 # It has to do two things no catalogued agent's line does, and both are why the road registers its
-# own. It draws something the moment it starts, because a pane nothing has written to is not pasted
-# into — that rule is what keeps Amenbo from typing at a program that has not begun reading yet. And
+# own. It draws something the moment it starts and then stops, because a pane nothing has written to
+# is not pasted into and neither is one still drawing itself — those rules are what keep Amenbo from
+# typing at a program that has not begun reading yet. And
 # it gives back what it is handed, with a word of the road's own in front, so that what is read is
 # the sending rather than the writing. `printf` and `sed` are on every machine this harness runs on,
 # and neither is a tool a reader would be expected to have.

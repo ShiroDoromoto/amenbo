@@ -45,6 +45,7 @@ import type {
   GitEntryDto,
 } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
+import { Menu, MenuItem } from "../components/Menu";
 import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
 import { fileUrl } from "../core/fileUrl";
@@ -793,6 +794,10 @@ function FolderSection({
 /**
  * What can be done with a file that is not reading it here: hand it to the machine.
  *
+ * **This is the items, not the box.** Where the menu sits, what closes it, how the arrows walk it
+ * and where the focus goes when it leaves are the shell's (`../components/Menu`), because the pane
+ * rows wear the same one and two of them would be a pair that drifts.
+ *
  * All three roads out are the OS's own — the application the reader already opens that kind of file
  * with, one they pick for this file alone, and the file manager they already keep their folders in.
  * None of them is a choice Amenbo makes or remembers (`AMB-T-3605`).
@@ -831,61 +836,6 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: 
   // The applications to pick from, once they have been asked for and there are any — the second
   // face of this one menu, drawn where the OS has no chooser to draw it for us.
   const [apps, setApps] = useState<FolderAppDto[] | null>(null);
-  const box = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    // Anything the person does **outside** the menu closes it: one that outlived the next click
-    // would sit over rows it is no longer about. Inside is the opposite — a press on an item is the
-    // first half of choosing it, and closing there unmounts the button before the click can land on
-    // it, so the item never fires at all.
-    const away = (event: Event) => {
-      if (event.target instanceof Node && box.current?.contains(event.target)) return;
-      onClose();
-    };
-    // **Escape and nothing else.** This listened for every key once, which read as "any key means
-    // move on" and worked only while no key meant anything else — the moment the rows answered to
-    // the arrows, every press meant to walk the tree shut the menu on the way past (`AMB-D-780`).
-    const key = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    document.addEventListener("pointerdown", away);
-    document.addEventListener("keydown", key);
-    window.addEventListener("blur", away);
-    return () => {
-      document.removeEventListener("pointerdown", away);
-      document.removeEventListener("keydown", key);
-      window.removeEventListener("blur", away);
-    };
-  }, [onClose]);
-
-  // The first item, once there is one. A menu opened from a row the arrows reached is a menu the
-  // arrows have to be able to walk, and a list nothing is standing on is one every key falls out of.
-  //
-  // **And the row it was opened on, once it closes.** Focus left where the menu used to be is a
-  // reader standing on nothing: the next arrow reaches no tree and the panel goes quiet, which is
-  // the same dead end as never having taken the focus at all.
-  const from = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    from.current ??= document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    box.current?.querySelector<HTMLElement>(".files__menuitem")?.focus();
-    // Given back only where the menu going is what left the focus nowhere. A reader who clicked
-    // away has already said where they are, and taking them back to the row would be undoing it.
-    return () => {
-      if (document.activeElement === null || document.activeElement === document.body) {
-        from.current?.focus();
-      }
-    };
-  }, [apps]);
-
-  /** Up and down the items. The pattern a menu is read by, and the reason the blanket key handler
-   *  above had to go: these presses are the menu's own, not a way out of it. */
-  const walk = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-    e.preventDefault();
-    const items = [...e.currentTarget.querySelectorAll<HTMLElement>(".files__menuitem")];
-    const at = items.indexOf(document.activeElement as HTMLElement);
-    const step = e.key === "ArrowDown" ? 1 : -1;
-    // Round, because a menu is short and a reader who has walked to the end of one means to go on.
-    items[(at + step + items.length) % items.length]?.focus();
-  };
 
   const act = (go: () => Promise<void>) => {
     onClose();
@@ -910,57 +860,31 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: 
   };
 
   return (
-    <div
-      className="files__menu"
-      style={{ left: at.x, top: at.y }}
-      role="menu"
-      ref={box}
-      onKeyDown={walk}
-    >
+    // The face is handed over because the items are replaced whole when the applications come back,
+    // and the reader would otherwise be left standing on a button that is no longer there.
+    <Menu at={at} face={apps} onClose={onClose}>
       {apps === null ? (
         <>
           {naming !== undefined && dir && (
             <>
-              <button
-                className="files__menuitem"
-                role="menuitem"
-                onClick={() => pick(() => naming.onMake(false))}
-              >
+              <MenuItem onClick={() => pick(() => naming.onMake(false))}>
                 {t("files.newFile")}
-              </button>
-              <button
-                className="files__menuitem"
-                role="menuitem"
-                onClick={() => pick(() => naming.onMake(true))}
-              >
+              </MenuItem>
+              <MenuItem onClick={() => pick(() => naming.onMake(true))}>
                 {t("files.newFolder")}
-              </button>
+              </MenuItem>
             </>
           )}
-          {rename !== null && (
-            <button className="files__menuitem" role="menuitem" onClick={() => pick(rename)}>
-              {t("files.rename")}
-            </button>
-          )}
+          {rename !== null && <MenuItem onClick={() => pick(rename)}>{t("files.rename")}</MenuItem>}
           {!dir && (
             <>
-              <button
-                className="files__menuitem"
-                role="menuitem"
-                onClick={() => act(() => folderOpenFile(projectId, root, path))}
-              >
+              <MenuItem onClick={() => act(() => folderOpenFile(projectId, root, path))}>
                 {t("files.openWith")}
-              </button>
-              <button className="files__menuitem" role="menuitem" onClick={choose}>
-                {t("files.chooseApp")}
-              </button>
-              <button
-                className="files__menuitem"
-                role="menuitem"
-                onClick={() => act(() => folderRevealFile(projectId, root, path))}
-              >
+              </MenuItem>
+              <MenuItem onClick={choose}>{t("files.chooseApp")}</MenuItem>
+              <MenuItem onClick={() => act(() => folderRevealFile(projectId, root, path))}>
                 {t("files.reveal")}
-              </button>
+              </MenuItem>
             </>
           )}
           {/* Over a folder as much as over a file: the bin takes one whole, and the undo brings it
@@ -971,31 +895,25 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: 
               rather than handing it to something else: a press meant for the row above must not be
               able to land on this one by half a pixel. */}
           {path.length > 0 && (
-            <button
-              className="files__menuitem files__menuitem--apart"
-              role="menuitem"
-              onClick={() => { onClose(); onTrash(); }}
-            >
+            <MenuItem apart onClick={() => { onClose(); onTrash(); }}>
               {t("files.trash")}
-            </button>
+            </MenuItem>
           )}
         </>
       ) : (
         apps.map((app) => (
-          <button
+          <MenuItem
             key={app.path}
-            className="files__menuitem"
-            role="menuitem"
             onClick={() => act(() => folderOpenFileWith(projectId, root, path, app.path))}
           >
             {/* The one the file would have opened with anyway is said to be that, not just put
                 first: a list whose order carries the meaning loses it the moment somebody reads
                 from the middle. */}
             {app.usual ? tf("files.appUsual", { name: app.name }) : app.name}
-          </button>
+          </MenuItem>
         ))
       )}
-    </div>
+    </Menu>
   );
 }
 
@@ -1787,8 +1705,10 @@ function EncodingMenu({ at, onPick, onClose }: {
   }, []);
 
   useEffect(() => {
-    // The same rule the file menu is closed by: anything outside it is the reader moving on, and
-    // anything inside is the first half of choosing (`FileMenu`).
+    // The same rule the menus are closed by: anything outside it is the reader moving on, and
+    // anything inside is the first half of choosing (`../components/Menu`). Held here rather than
+    // taken from the shell, because this list is walked by neither the arrows nor Escape alone —
+    // any key at all is the reader moving on from it.
     const close = (event: Event) => {
       if (event.target instanceof Node && box.current?.contains(event.target)) return;
       onClose();
@@ -1804,11 +1724,11 @@ function EncodingMenu({ at, onPick, onClose }: {
   }, [onClose]);
 
   return (
-    <div className="files__menu" style={{ left: at.x, top: at.y }} role="menu" ref={box}>
+    <div className="menu" style={{ left: at.x, top: at.y }} role="menu" ref={box}>
       {names.map((one) => (
         <button
           key={one}
-          className="files__menuitem"
+          className="menu__item"
           role="menuitem"
           onClick={() => onPick(one)}
         >

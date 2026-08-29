@@ -1678,7 +1678,7 @@ describe("the file face", () => {
     await stood();
     await menuOn(button("a.md"));
     // Opened on its first item, because a list nothing is standing on is one every key falls out of.
-    const items = [...document.querySelectorAll<HTMLElement>(".files__menuitem")];
+    const items = [...document.querySelectorAll<HTMLElement>(".menu__item")];
     expect(items.length).toBeGreaterThan(1);
     expect(document.activeElement).toBe(items[0]);
     await press(document.activeElement!, "ArrowDown");

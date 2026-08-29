@@ -747,25 +747,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-accent-text); cursor: pointer;
 }
 .files__hand:hover { text-decoration: underline; }
-/* What can be done with a file that is not reading it here. Placed where the pointer was, and above
-   everything, because it is about the row it was opened on and nothing else. */
-.files__menu {
-  position: fixed; z-index: 20;
-  display: flex; flex-direction: column;
-  padding: var(--s-1) 0;
-  background: var(--c-surface); border: 1px solid var(--c-border);
-  border-radius: var(--r-md); box-shadow: var(--shadow-md);
-}
-.files__menuitem {
-  padding: var(--s-1) var(--s-3);
-  background: none; border: 0;
-  color: var(--c-text); font-size: var(--fs-sm); text-align: left; white-space: nowrap;
-  cursor: pointer;
-}
-.files__menuitem:hover { background: var(--c-surface-sunken); }
-/* The item that changes the folder, held off from the ones that only hand the file to something
-   else. The gap is the whole of the separation: a rule would draw a heading over a group of one. */
-.files__menuitem--apart { margin-top: var(--s-1); border-top: 1px solid var(--c-border); padding-top: var(--s-2); }
 /* The same road out of the file being read, where there is no row under the pointer to open the
    menu on. Quiet, like the control beside it: what makes it safe to sit there is that it asks
    (`../files/TrashAsk`) and that the bin gives it back. */

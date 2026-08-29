@@ -26,6 +26,7 @@ import { invoke } from "../core/ipc";
 import type { PaneDrawnDto, PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf, tn } from "../core/i18n";
+import { pasteIntoTerminal } from "../talk/terminal";
 
 /**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
@@ -417,6 +418,25 @@ export function TerminalFace({
       return was;
     });
   }, []);
+
+  /**
+   * Hand a file the panel is showing to the pane the reader is working in — the reverse of
+   * `pathClicked`, and the same pair of doors read the other way round.
+   *
+   * **The pane is the one with the focus**, which is what "this pane" means anywhere else on this
+   * face: the panel is one thing beside as many panes as the page holds, and a reader who has just
+   * been typing in one has already said which. A face with nothing running in the focused pane
+   * hands nothing down, and the row's menu then draws no item for it (`../files/FilesPanel`).
+   *
+   * The file is already inside a folder the project is bound to — it is a row of this panel — so
+   * there is nothing to carry: what a pane's own drop has to do first (`./TerminalPane`) is done
+   * here by the file being where it is. The path is pasted and no newline is sent.
+   */
+  const handOver = useMemo(() => {
+    const session = layout.frames.find((one) => one.id === layout.focus)?.session ?? null;
+    if (session === null) return undefined;
+    return (whole: string) => { void pasteIntoTerminal(session, whole).catch(() => {}); };
+  }, [layout.focus, layout.frames]);
 
   const opened = useCallback((frame: string, session: string, folder: string | null) => {
     startNow.current.delete(frame);
@@ -924,6 +944,7 @@ export function TerminalFace({
               // a file clicked in a pane opens the face it is read in.
               onTab={(which) => { takeTab(which); wantSide(true); }}
               onClose={() => wantSide(false)}
+              onHandOver={handOver}
             />
           </div>
         )}

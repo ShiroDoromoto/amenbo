@@ -564,6 +564,7 @@ export const ko: Translation = {
     "files.read": "읽기",
     "files.reopenWith": "문자 인코딩을 지정해 다시 열기",
     "files.lineEndingMixed": "줄바꿈 혼재",
+    "files.handOver": "작업 중인 창에 넘기기",
     "files.openWith": "늘 쓰는 앱으로 열기",
     "files.chooseApp": "앱을 골라서 열기",
     "files.appUsual": "{name} (늘 쓰는 앱)",

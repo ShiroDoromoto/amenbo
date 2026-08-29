@@ -586,6 +586,7 @@ export const fr: Translation = {
     "files.read": "Lire",
     "files.reopenWith": "Rouvrir avec un encodage",
     "files.lineEndingMixed": "Fins de ligne mélangées",
+    "files.handOver": "Transmettre au volet où je travaille",
     "files.openWith": "Ouvrir avec l'application habituelle",
     "files.chooseApp": "Ouvrir avec une application de mon choix",
     "files.appUsual": "{name} (celle habituelle)",

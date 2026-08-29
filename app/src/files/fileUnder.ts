@@ -15,7 +15,7 @@
  */
 export function fileUnder(root: string, cwd: string | null, target: string): string[] | null {
   if (target === "") return null;
-  const sep = root.includes("\\") && !root.includes("/") ? "\\" : "/";
+  const sep = separator(root);
   const parts = (path: string) => path.split(/[\\/]+/).filter((p) => p !== "" && p !== ".");
   const absolute = /^([a-zA-Z]:[\\/]|[\\/])/.test(target);
   const from = absolute ? "" : (cwd ?? root);
@@ -35,6 +35,25 @@ export function fileUnder(root: string, cwd: string | null, target: string): str
   if (wanted.length <= under.length) return null;
   if (!under.every((part, i) => part === wanted[i])) return null;
   return wanted.slice(under.length);
+}
+
+/**
+ * The whole path a row names, written the way the folder it is under is written — the other
+ * direction of `fileUnder`, for handing a file to something that is not this face.
+ *
+ * What reads it is a shell, and a shell is on one machine: a folder spelt with backslashes is a
+ * Windows path, and joining it with slashes would hand somebody a path their own machine has to
+ * guess at.
+ */
+export function fileAt(root: string, path: string[]): string {
+  const sep = separator(root);
+  return [root.replace(/[\\/]+$/, ""), ...path].join(sep);
+}
+
+/** Which slash the folder is written with. A path with no slash in it at all is read as the one
+ *  every machine but Windows takes, which is also the one Windows itself accepts. */
+function separator(root: string): string {
+  return root.includes("\\") && !root.includes("/") ? "\\" : "/";
 }
 
 /**

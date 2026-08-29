@@ -568,6 +568,7 @@ export const id: Translation = {
     "files.read": "Baca",
     "files.reopenWith": "Buka ulang dengan pengodean",
     "files.lineEndingMixed": "Akhir baris campuran",
+    "files.handOver": "Serahkan ke panel tempat saya bekerja",
     "files.openWith": "Buka dengan aplikasi biasa",
     "files.chooseApp": "Buka dengan aplikasi pilihan saya",
     "files.appUsual": "{name} (yang biasa)",

@@ -594,6 +594,7 @@ export const ru: Translation = {
     "files.read": "Читать",
     "files.reopenWith": "Открыть заново в другой кодировке",
     "files.lineEndingMixed": "Смешанные переводы строк",
+    "files.handOver": "Передать в панель, где я работаю",
     "files.openWith": "Открыть в обычном приложении",
     "files.chooseApp": "Открыть в выбранном приложении",
     "files.appUsual": "{name} (обычное)",

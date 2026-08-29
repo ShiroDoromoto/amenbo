@@ -1676,6 +1676,36 @@ describe("the file face", () => {
     expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
   });
 
+  /** The reverse of a path drawn in a pane opening the file here: the row hands the file to what is
+   *  running, as the whole path, which is the only spelling a shell can do anything with. */
+  it("hands the file to the pane as the whole path it is at", async () => {
+    const handed: string[] = [];
+    await drawOpen({ onHandOver: (whole) => handed.push(whole) });
+    await menuOn(button("a.md"));
+    await click(button(t("files.handOver")));
+    expect(handed).toEqual([`${ROOT}/a.md`]);
+    // And the menu is gone: the file has been handed over, and there is nothing more to pick.
+    expect(button(t("files.openWith"))).toBeUndefined();
+  });
+
+  /** A panel drawn beside a face with nothing running has nowhere to hand a file to, and an item
+   *  that answers nothing is worse than an item that is not there. */
+  it("offers no hand-over where there is no pane to hand one to", async () => {
+    await drawOpen();
+    await menuOn(button("a.md"));
+    expect(button(t("files.openWith"))).toBeDefined();
+    expect(button(t("files.handOver"))).toBeUndefined();
+  });
+
+  /** What can be handed over is a file. A folder is not a thing an agent is given the path of and
+   *  told to read, and the menu over one draws what can be written into it instead. */
+  it("offers no hand-over over a folder", async () => {
+    hoisted.entries[""] = [{ name: "notes", isDir: true, ignored: false }];
+    await drawOpen({ onHandOver: () => {} });
+    await menuOn(button("notes"));
+    expect(button(t("files.handOver"))).toBeUndefined();
+  });
+
   it("leaves the menu open while the arrows are walking it", async () => {
     await stood();
     await menuOn(button("a.md"));

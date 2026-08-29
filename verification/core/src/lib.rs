@@ -2275,6 +2275,19 @@ const REGISTRY: &[OpSpec] = &[
     // given, so the marked line appearing at all is a newline that went in blind. Where such a build
     // would have answered the first thing the program asked, this reading is the whole of the guard.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "handed-over", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
+    // And what the row above that pane says about it afterwards. It is the other half of the ending
+    // `handed-over`'s absent side reads: the sentence was left in the input box, and the reader is
+    // told so rather than left with a screen that looks exactly like one which was handed its
+    // sentence properly.
+    //
+    // **Nothing is quoted, because the words are the interface's own.** What the row says is drawn in
+    // whatever language the machine is set to, so a road naming it would hold on one machine — the
+    // rule every reading here is written around. The sentence is described in the instruction instead
+    // and left to an eye, the way the lamp's faces are (`dot`).
+    //
+    // It takes no argument for the reason `face-badge` takes none: there is one row above one pane,
+    // and the whole of what is being read is whether it is saying this.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "unsent", required: &[], refs: &[], strings: &[], binds: false },
     // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
     // ceiling on how many a page may hold, and this is how many are actually standing there. The two
     // part company on exactly the thing worth defending — a face that filled the ceiling with empty

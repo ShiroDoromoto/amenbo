@@ -10,8 +10,16 @@
 # So the sentence goes in, and the newline waits for the pane to draw the sentence back — or, where a
 # program acknowledges a paste without ever showing it, to answer for it on the look after it landed.
 # Where the pane does neither, Amenbo gives up after a minute and leaves the sentence sitting in the
-# input box, one keypress from being sent by the person whose terminal it is. Nothing is taken away and no apology
-# is drawn: what is there is what the reader would have typed themselves.
+# input box, one keypress from being sent by the person whose terminal it is. Nothing is taken away
+# and nothing is written into the pane: what is there is what the reader would have typed themselves.
+#
+# ── And the reader is told ───────────────────────────────────────────────────────────────────────
+# A sentence left in an input box is invisible on a screen that never drew it, so the pane at the end
+# of this road looks exactly like a pane that was handed its sentence properly. What tells the two
+# apart is the row above it, which says the sentence has not been sent and that one keypress sends
+# it. That is the second half of the road, and the half a build drops quietly: withholding the
+# newline correctly and saying nothing about it leaves a reader with a terminal waiting on them and
+# no way to know it.
 #
 # ── Why the line is this line ────────────────────────────────────────────────────────────────────
 # It has to show nothing, answer nothing, and hand back everything. Turning the terminal's own echo
@@ -32,15 +40,15 @@
 # So the frame draws the row a command is registered under: where a machine can start one thing there
 # is no row to write anything under, and where it can start none there is none either.
 id: not-have-your-agents-first-question-answered-for-you
-title: A pane that neither shows the opening sentence nor answers for it is never sent a newline, and the sentence is left for the reader
+title: A pane that neither shows the opening sentence nor answers for it is never sent a newline, and the row above it says the sentence is waiting on the reader
 description: >
   Amenbo tells whatever runs in a pane to read `amenbo agent --json` first, and where the launch line
   is the reader's own the sentence follows the command into the pane rather than riding in as an
   argument. It is submitted on one condition — that the pane has drawn it back, or answered the paste
   the moment it landed — because a program that opens by asking something would read a newline as the
   answer. The road registers a command that shows nothing of what it is written and says nothing when
-  it arrives, but hands back every line it is given, waits out the minute Amenbo spends trying, and
-  reads that nothing was ever sent.
+  it arrives, but hands back every line it is given, waits out the minute Amenbo spends trying, reads
+  that nothing was ever sent, and reads the row above the pane telling the reader so.
 
 given:
   - type: action
@@ -110,3 +118,18 @@ steps_gui:
     with:
       given-back: SCENARIO back>
       present: false
+
+  # And the reader is told. The pane is silent about the sentence by construction — that is what the
+  # registered line is for — so without this step the road would prove the newline was withheld and
+  # leave the reader of that pane with nothing to go on.
+  - type: assert
+    domain: terminal
+    op: unsent
+
+  # The lamp says the same thing at the other end of the row, and it is read on its own because it is
+  # what carries across a screen of panes: a reader with eight of these is not reading eight rows.
+  - type: assert
+    domain: terminal
+    op: dot
+    with:
+      face: calling

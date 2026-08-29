@@ -3020,6 +3020,12 @@ impl Instructor {
                     req(with, "given-back")?
                 ),
             },
+            // What the row says once the hand-over has given up. It is described rather than quoted:
+            // these are the interface's own words, drawn in the machine's language, and the operator
+            // is told what the row means rather than which letters to find.
+            (Domain::Terminal, "unsent") =>
+                "On the row above that pane, confirm it is now saying the opening sentence was not sent — words to the effect that it has not been sent yet and that pressing return sends it, in the language the machine is set to, with a pause mark in front of them. It is the row above the pane and never the pane itself: nothing Amenbo says goes into a terminal it is reading. Confirm too that the row is still naming the pane and what it is on, and has not been given over to this alone."
+                    .to_string(),
             // How many panes are standing on the page. Counted rather than read: the boxes carry no
             // words of the road's, and the whole of what this asks is how many of them there are.
             //

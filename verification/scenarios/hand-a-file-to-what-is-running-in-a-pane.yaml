@@ -1,0 +1,147 @@
+# Getting a file to the thing working in a pane, which is the one hand-over that stays inside Amenbo.
+#
+# An agent reads the folder it was pointed at and nothing else. So "here, look at this" is not a
+# sentence a person can finish by naming a file on their desktop: what they hand over has to be
+# inside that folder, and it has to be named by a path the agent can open. Both halves of this road
+# end in the same place — the whole path, standing in the line the person types into.
+#
+# ── Why the newline is the reading and not a detail ──────────────────────────────────────────────
+# What arrives is put in front of the person, never sent for them. The screen at that moment may be a
+# first-run question, and one of the answers really found on one ran a script off the network, so a
+# build that pressed return on somebody's behalf would be answering a question nobody read. That is why every reading here is of the input line rather than of what a program
+# printed: the two look alike on a shot and mean opposite things.
+#
+# ── Why the two halves are one goal ──────────────────────────────────────────────────────────────
+# A file already in the folder and a file from the machine reach the pane by different doors and end
+# identically. The first needs no carrying — it is a row of the panel, so it is already somewhere the
+# agent may read — and the second is carried into the project's own inbox first, because a path
+# under `/tmp` is a path the agent would be asked to be allowed to read, and asking is
+# the thing this road exists to remove.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no terminal road here and no gap in one. A drop is the operating system's, the menu is
+# drawn where the pointer is, and what is under test is a line standing unsent on a screen — none of
+# the three is a thing a binary can be asked for.
+id: hand-a-file-to-what-is-running-in-a-pane
+title: A file reaches what is running in the pane, as a path it is allowed to read
+description: >
+  Open a pane in the project's folder and get a file to what is running in it, both ways round: drag
+  one in from the machine, and pick the item on a row of the panel beside it. The dragged one lands
+  in the project's own inbox and the one already there is handed over where it stands, and both put
+  the whole path in the line the person types into — unsent, for them to send.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Workshop
+    as: workshop
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: workshop
+      project: workshop
+
+  # The file the second half hands over. It is inside the bound folder from the start, which is what
+  # makes that half a hand-over and not a carry.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: workshop
+      path: notes/watering.md
+      content: |
+        SCENARIO the greenhouse is watered on Tuesdays
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The pane every step below is about. A plain shell rather than an agent: what is under test is
+  # where the path lands and that nothing sent it, and an agent would answer the line on its own.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The half that comes from outside. The operator brings the file, because a drop reads the disk
+  # they are sitting at and nothing this run laid down is reachable from there.
+  - type: action
+    domain: terminal
+    op: drop-in
+    with:
+      brings: handed.txt
+
+  # Where it landed, read off the path itself. The inbox is the whole of the answer: not `/tmp`,
+  # which the agent would have to be let into, and not loose in the folder, where the next `git add`
+  # would sweep it into somebody's commit.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: .amenbo-inbox
+
+  # And that it is the file that was dropped. The path is read in two goes because one reading
+  # proving both would have to spell a folder named after the day, which no road can know.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: handed.txt
+
+  # The panel, which is the other half's door — and, on the way, the proof that what was dropped
+  # landed inside the folder rather than somewhere the panel cannot see.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: .amenbo-inbox
+      section: tree
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: hand-to-pane
+
+  # The second path, on the same line. It is read by the file's own name rather than by the folder,
+  # since this one was never carried anywhere — being where it already was is the point of it.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: watering.md

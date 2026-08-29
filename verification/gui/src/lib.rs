@@ -823,7 +823,11 @@ impl Instructor {
             // drawing that session and on no other screen — which is what lets the absent half be
             // read as well: with the ledger up, the pane is hidden, and words that are hidden are
             // words that are not on the shot.
-            (Domain::Terminal, "pane") | (Domain::Terminal, "label") => {
+            (Domain::Terminal, "pane")
+            | (Domain::Terminal, "label")
+            // What is standing in the input line is on the same screen as what a program printed:
+            // one shot, one reading, and the sentence is where the difference between them lives.
+            | (Domain::Terminal, "in-the-box") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
             // The folder the question offers, read by the name the road gave it. The buttons carry the
@@ -1506,6 +1510,14 @@ impl Instructor {
                     req(with, "text")?
                 )
             }
+            // A file let go over a pane. It comes from outside for the reason the file face's drop does:
+            // a drop reads the disk the operator is sitting at, and nothing the run laid down is
+            // anywhere a hand can reach from there. What it lands as is not said here — where it goes
+            // is Amenbo's own answer, and the step that reads the input line is where that is settled.
+            (Domain::Terminal, "drop-in") => format!(
+                "From outside Amenbo — a file manager, the desktop, anywhere on this machine — drag a file named \"{}\" over the pane that has a terminal running in it, and let it go there.",
+                req(with, "brings")?
+            ),
             // A command run for its output, which is what the steps after it read. The clearing is
             // said first because it is what makes "the ref" a place on the screen rather than one of
             // several, and the waiting is said last because a press on a half-drawn line is a press
@@ -2033,6 +2045,12 @@ impl Instructor {
                 // `door` has already turned away anything that is not one of the three.
                 _ => "In that menu, press the item that shows the file in the file manager.".to_string(),
             },
+            // The item that hands the file the other way — into Amenbo rather than out of it. It is
+            // described by where the file goes, the same as the three above, and the line says what
+            // is to be left alone: the path arrives where a person types, and sending it is theirs.
+            (Domain::Files, "hand-to-pane") =>
+                "In that menu, press the item that hands the file to the pane being worked in. The menu goes, and the path the file is at appears in the pane's input line — leave it there, and press nothing else."
+                    .to_string(),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -2858,6 +2876,19 @@ impl Instructor {
                     .to_string(),
                 false => "In the pair of segments at the top of the window, confirm the one that shows the terminal is wearing no mark at all."
                     .to_string(),
+            },
+            // What is standing where a person types, with nothing run. Both halves are said: the words
+            // being there, and the line not having gone — a build that sent the newline would draw
+            // whatever the program did with it, and the input line would be empty again.
+            (Domain::Terminal, "in-the-box") => match present(with) {
+                true => format!(
+                    "On the pane that has a terminal running in it, confirm \"{}\" is standing in the line you would type into — and that it has not been sent: nothing ran, and the words are still there to be edited.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "On the pane that has a terminal running in it, confirm \"{}\" is not in the line you would type into.",
+                    req(with, "shows")?
+                ),
             },
             (Domain::Terminal, "pane") => match present(with) {
                 true => format!(
@@ -3959,6 +3990,46 @@ steps_gui:
         assert_eq!(
             ins.expectation(&steps[3]),
             Some(Expectation { text: "Raise the tunnel".to_string(), present: true })
+        );
+    }
+
+    /// **What is standing in the input line and what a program printed are one screen and two
+    /// readings.** Both are read off the same shot, so nothing but the sentence tells the operator
+    /// which they are being asked for — and the difference is the whole of what a hand-over owes: a
+    /// build that sent the newline would have drawn what the program did with it, leaving the line
+    /// empty, and a road that read either as the other would go green over exactly that.
+    #[test]
+    fn what_is_standing_unsent_is_asked_for_as_unsent() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: files
+    op: hand-to-pane
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with: { shows: /work/notes.md }
+  - type: assert
+    domain: terminal
+    op: pane
+    with: { shows: /work/notes.md }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+
+        assert!(lines[0].contains("hands the file to the pane"), "got: {}", lines[0]);
+        // The item leaves the path for the person, so the line says to leave it alone.
+        assert!(lines[0].contains("leave it there"), "got: {}", lines[0]);
+        assert!(lines[1].contains("not been sent"), "got: {}", lines[1]);
+        assert_ne!(lines[1], lines[2], "the two readings are one screen and must not be one line");
+
+        // And it is read off the shot, the same as what a program printed: the words are on it.
+        assert_eq!(
+            ins.expectation(&steps[1]),
+            Some(Expectation { text: "/work/notes.md".to_string(), present: true })
         );
     }
 

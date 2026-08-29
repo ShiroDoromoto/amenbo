@@ -2034,6 +2034,25 @@ const REGISTRY: &[OpSpec] = &[
     // the step before this one made it — but a road that comes *back* to a pane it left does, because
     // by then every box on the page has a terminal in it and "the pane" names three of them.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
+    // A file dragged in from outside and let go over a pane. It is the file face's `drop-in` aimed at
+    // the other half of the screen, and it answers a different question: there the reader chose the
+    // folder it lands in, and here nobody did — the file is carried into the project's own inbox and
+    // the path it is at now is put where the reader types.
+    //
+    // `brings` is a name rather than a path, for the reason the file face's is: a drop reads the disk
+    // the operator is sitting at, and nothing a run lays down is anywhere a hand can reach from
+    // there. Which pane is not named — a road drops on the one it just opened, and a road with two
+    // says which by what it typed into them.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drop-in", required: &["brings"], refs: &[], strings: &["brings"], binds: false },
+    // What is standing in the pane's input line, **unsent**. It is not `pane` with a different
+    // sentence: that one reads what a program printed, and this reads what nothing has run yet.
+    //
+    // The difference is the whole of what a hand-over owes. A path put in front of an agent is a path
+    // the person still has to send, and a build that sent the newline for them would have answered
+    // whatever the screen was asking at that moment — which on a first run is a question one of the
+    // real answers to ran a script off the network. A reading that could not tell the
+    // two apart would go green over exactly that.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "in-the-box", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // A command run in the pane, and waited on until what it printed is drawn. It is not `type-line`
     // with a longer word in it: that step's line is the reader's own and is written to be *left* on
     // the screen — the shell is not meant to know it — and this is a program being asked for output
@@ -2536,6 +2555,15 @@ const REGISTRY: &[OpSpec] = &[
     // item, for the reason `note` and `section` are named that way: the wording is the interface's
     // own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "hand-over", required: &["door"], refs: &[], strings: &["door"], binds: false },
+    // The one item on that menu that hands the file to something inside Amenbo rather than out to the
+    // machine: what is running in the pane the reader is working in. It takes no args
+    // because there is nothing to name — the file is the row the menu was opened on, and which pane
+    // is the face's own answer rather than a road's.
+    //
+    // It is its own op and not a fourth `door` for the reason the three above are one: those three
+    // end off Amenbo's window and stop at the hand-over, and this one ends **on** it, in the pane,
+    // where a shot can settle what happened. `terminal in-the-box` is what reads it.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "hand-to-pane", required: &[], refs: &[], strings: &[], binds: false },
     // And what the press left. No shot settles it, and that is the point rather than a gap: what a
     // hand-over ends in is off Amenbo's own window — an application that came forward, or an
     // operating system's chooser drawn by the system — and the run shoots the window under test. The

@@ -68,6 +68,12 @@ export type PaneEvents = {
    *  person is owed here is that it is theirs to send — a box holding it looks exactly like a box
    *  that was emptied by the program reading it (`AMB-D-805`). */
   unsent(session: string): void;
+  /** That sentence has gone out of the input box, on the reader's own Enter. What the row was owed
+   *  while it sat there was that it was theirs to send, and there is nothing left to send: a row
+   *  still saying so would point them at a keypress that now does nothing. It is not the agent having
+   *  read it — that is the agent's own word (`AMB-D-805`) — and a pane can send the sentence to a
+   *  program that never says it. */
+  sent(session: string): void;
   /** A file path drawn in this pane was clicked, as it was drawn. Where it leads is not the pane's to
    *  say: a relative one is read against the folder this session is in, and only the window knows
    *  whether that lands inside the folder the file face is rooted at (`AMB-T-3630`). */
@@ -499,7 +505,17 @@ export async function mountTerminal(
     // — and the answer cannot come back, so a later Enter is left alone rather than paying a round
     // trip per keystroke to be told nothing.
     owed = false;
-    void invoke("pty_brief", { session }).catch(() => {});
+    // The id is read out once here: nothing is owed before the host has answered with one, so this is
+    // never the null it starts as, and holding it keeps the answer landing on the pane that asked.
+    const its = session;
+    if (its === null) return;
+    void invoke<boolean>("pty_brief", { session: its })
+      // Only where something actually went: the host holds the sentence and is the one that can say
+      // whether this press was the one that sent it.
+      .then((went) => {
+        if (went) on.sent(its);
+      })
+      .catch(() => {});
   });
 
   // The first line a person sends into this pane names its frame, so a pane is called something before

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionSaidDto } from "../bindings/bindings";
-import { closed, NO_SESSIONS, opened, said, seen, unsent } from "./sessions";
+import { closed, NO_SESSIONS, opened, said, seen, sent, unsent } from "./sessions";
 
 const AT = "2026-08-24T09:00:00Z";
 
@@ -86,11 +86,23 @@ describe("the sessions the window is running", () => {
     }
   });
 
+  it("lets the sentence go when it is sent, without waiting for a word that may never come", () => {
+    // The notice is about the input box, not about the agent. A pane can send the sentence to a
+    // program that never runs Amenbo's command — and a notice waiting on that word would stand for
+    // the life of the pane, pointing the reader at a keypress that does nothing.
+    let map = unsent(opened(NO_SESSIONS, { session: "pane-1", startedAt: AT }), "pane-1");
+    map = sent(map, "pane-1");
+    expect(map.get("pane-1")?.unsent).toBe(false);
+    // And what the pane has said about its work is untouched: this is one field's news.
+    expect(map.get("pane-1")).toMatchObject({ note: null, waiting: null });
+  });
+
   it("says nothing about a pane it is not holding", () => {
     // The hand-over gives up only after a minute of looking at the pane, so this cannot be the first
     // thing heard about a session — an id nobody opened is one nothing is recorded for.
     const map = unsent(NO_SESSIONS, "pane-9");
     expect(map.size).toBe(0);
+    expect(sent(NO_SESSIONS, "pane-9").size).toBe(0);
   });
 
   it("keeps nothing of a session whose terminal has closed", () => {

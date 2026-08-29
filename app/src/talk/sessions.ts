@@ -145,6 +145,23 @@ export function unsent(sessions: Sessions, session: string): Sessions {
   return known ? withEntry(sessions, { ...known, unsent: true }) : sessions;
 }
 
+/**
+ * Record that the sentence has gone out of this pane's input box (`crate::pty`).
+ *
+ * **It is the box the notice was about, and the box is empty now.** What was owed the reader while it
+ * sat there was that it was theirs to send; a row still saying so after the sending would point them
+ * at a keypress that does nothing.
+ *
+ * It is not the same news as the agent having read it — that is settled by the agent saying so
+ * (`AMB-D-805`), and a pane can send the sentence to a program that never runs the command. Which is
+ * why this is written on the sending rather than waited for: the word that would take the notice back
+ * may never be said, and the notice would stand for the life of the pane.
+ */
+export function sent(sessions: Sessions, session: string): Sessions {
+  const known = sessions.get(session);
+  return known ? withEntry(sessions, { ...known, unsent: false }) : sessions;
+}
+
 /** Record that a person has looked at this pane. */
 export function seen(sessions: Sessions, session: string, at: string): Sessions {
   const known = sessions.get(session);

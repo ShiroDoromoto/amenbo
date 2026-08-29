@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionSaidDto } from "../bindings/bindings";
-import { closed, NO_SESSIONS, opened, said, seen } from "./sessions";
+import { closed, NO_SESSIONS, opened, said, seen, unsent } from "./sessions";
 
 const AT = "2026-08-24T09:00:00Z";
 
@@ -70,6 +70,27 @@ describe("the sessions the window is running", () => {
 
     map = said(map, statement({ session: "pane-2", verb: "note", text: "on it" }));
     expect(waiting()).toBe(0);
+  });
+
+  it("holds the sentence left in the input box, and lets it go the moment the pane speaks", () => {
+    let map = opened(NO_SESSIONS, { session: "pane-1", startedAt: AT });
+    expect(map.get("pane-1")?.unsent).toBe(false);
+    map = unsent(map, "pane-1");
+    expect(map.get("pane-1")?.unsent).toBe(true);
+
+    // Every verb of this layer is Amenbo's own command, run in this pane. An agent that says a word
+    // of it has plainly been told where it is working — including the one that only names the frame.
+    for (const verb of ["name", "note", "waiting", "finished"] as const) {
+      const spoke = said(unsent(map, "pane-1"), statement({ verb, text: "anything" }));
+      expect(spoke.get("pane-1")?.unsent).toBe(false);
+    }
+  });
+
+  it("says nothing about a pane it is not holding", () => {
+    // The hand-over gives up only after a minute of looking at the pane, so this cannot be the first
+    // thing heard about a session — an id nobody opened is one nothing is recorded for.
+    const map = unsent(NO_SESSIONS, "pane-9");
+    expect(map.size).toBe(0);
   });
 
   it("keeps nothing of a session whose terminal has closed", () => {

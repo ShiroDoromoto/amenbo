@@ -1404,7 +1404,8 @@ body.dragging-row { user-select: none; }
   .plate__dot[data-face="calling"],
   .plate__dot[data-face="calling"]::after,
   .plate[data-say="waiting"] .plate__mark--say,
-  .plate[data-say="premise"] .plate__mark--say {
+  .plate[data-say="premise"] .plate__mark--say,
+  .plate[data-say="unsent"] .plate__mark--say {
     animation: none;
   }
 }
@@ -1466,7 +1467,8 @@ body.dragging-row { user-select: none; }
 /* A person's turn has come. Nothing else on the row is asking for anything, so nothing else is drawn
    to be noticed (`AMB-D-748`). */
 .plate[data-say="waiting"] .plate__say,
-.plate[data-say="premise"] .plate__say {
+.plate[data-say="premise"] .plate__say,
+.plate[data-say="unsent"] .plate__say {
   color: var(--c-text);
 }
 /* The mark in front of those words blinks, to the same beat and the same faintness as the lamp at the
@@ -1474,7 +1476,8 @@ body.dragging-row { user-select: none; }
    two. It is the mark and not the words: where the pane is narrow the words are not drawn at all, and
    what is left has to go on saying that somebody is needed (`../talk/nameplate.ts`). */
 .plate[data-say="waiting"] .plate__mark--say,
-.plate[data-say="premise"] .plate__mark--say {
+.plate[data-say="premise"] .plate__mark--say,
+.plate[data-say="unsent"] .plate__mark--say {
   animation: plate-blink var(--blink) infinite;
   animation-delay: var(--phase, 0s);
 }

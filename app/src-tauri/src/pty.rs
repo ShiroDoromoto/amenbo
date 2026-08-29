@@ -81,6 +81,16 @@ const DIR_ENV: &str = amenbo_core::session::DIR_VAR;
 /// `SessionSaidDto`, and like the output it goes to the talk window alone.
 const SAID_EVENT: &str = "session://said";
 
+/// The event saying the opening instruction was left in the pane's input box unsent. The payload is
+/// the session's id as a string, and it is emitted once, at the end of the hand-over.
+///
+/// **Only [`crate::handover::Handover::LeftForTheReader`] is reported.** `Sent` has nothing to say —
+/// the sentence went in and the pane is as it should be — and `Gone` has nobody to say it to: the
+/// terminal ended, so there is no input box holding anything, no AI running in the pane to be
+/// missing its premise, and no keypress a person could make that would change either. What is left
+/// is the one ending a reader can act on, and what they act with is one Enter.
+const UNSENT_EVENT: &str = "pty://unsent";
+
 /// How often the drop box is looked in. A statement is a person-scale event — an agent says a handful
 /// in a session — so this is slow enough to cost nothing and quick enough that a pane's label does not
 /// visibly lag what the agent just said.
@@ -359,10 +369,16 @@ fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instructio
             },
             || std::thread::sleep(SETTLE),
         );
-        // Said once, at the end. Nothing downstream acts on it — the sentence being left in the input
-        // box is a finished state and not a failure — but which of the three happened is the one thing
-        // a person reading a pane that behaved oddly cannot work out from the screen.
+        // Said once, at the end. Which of the three happened is the one thing a person reading a pane
+        // that behaved oddly cannot work out from the screen, and the log is where all three are kept.
         log::debug!("opening instruction for session {session}: {ended:?}");
+        // The one of the three the reader is told about, because it is the one they can finish. A
+        // sentence left in the input box is not a failure — it is a finished state needing a keypress
+        // — and a screen holding one is indistinguishable from a screen that was handed its sentence,
+        // so the row above the pane says which it is (`app/src/talk/nameplate.ts`).
+        if ended == crate::handover::Handover::LeftForTheReader {
+            let _ = app.emit_to(pane.target().as_str(), UNSENT_EVENT, &session);
+        }
     });
 }
 

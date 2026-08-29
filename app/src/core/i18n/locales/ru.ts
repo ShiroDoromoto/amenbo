@@ -532,6 +532,7 @@ export const ru: Translation = {
     "talk.idle": "Обсуждение", "talk.holding": "задач: {n}",
     "talk.finished": "готово: {n}", "talk.premiseBroken": "Предпосылка перестала выполняться",
     "talk.quiet": "тихо {n} мин",
+    "talk.unsent": "Ещё не отправлено. Нажмите Enter, чтобы отправить.",
     "face.switch": "Что показывает это окно",
     "face.tasks": "Задачи",
     "face.terminal": "Терминал",

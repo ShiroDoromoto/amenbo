@@ -1,0 +1,150 @@
+# The sentence nobody could send for you, sent by the one press that settles it.
+#
+# Where Amenbo cannot get its opening sentence into a pane, it stops rather than guessing: the words
+# go in, the newline is withheld, and the sentence sits in the agent's input box waiting for the
+# person whose terminal it is. Its sibling road ends there
+# (`not-have-your-agents-first-question-answered-for-you`), and rightly — that ending is the guard,
+# and nothing about it is changed by this. **This road is what happens next.**
+#
+# What the withholding could never find out by looking is whether the pane is showing an input box
+# at all, or a program's own first question with the sentence sitting unread beneath it. A person
+# sending a line of their own settles that outright: they can see the box, and they put something in
+# it themselves. So their line goes through untouched, and the sentence follows behind it — this
+# being the one place the newline goes out with the paste, because the press that earned it has
+# already answered everything the newline could have answered by mistake.
+#
+# ── The second line is the whole of the reading ──────────────────────────────────────────────────
+# A pane in this state is holding the sentence in the terminal's own input buffer, so the reader's
+# return flushes their line and the sentence together — on a build with no rescue in it at all. One
+# line coming back therefore proves nothing, and a road that read for one would go green over the
+# very thing it exists to catch.
+#
+# So the registered line numbers what it hands back. The first numbered line is the reader's press
+# emptying the buffer, and it appears either way; the **second** can only be a newline that Amenbo
+# sent afterwards, which is the rescue and nothing else.
+#
+# ── Why the line is this line ────────────────────────────────────────────────────────────────────
+# It has to show nothing, answer nothing, and hand back everything — the same three jobs the sibling
+# road's line does, for the same reasons, plus the counting. Turning the terminal's own echo off is
+# what makes the pane silent about what was written into it, which is the state a program drawing
+# its own interface is in, on a machine where no such program need be installed. Saying nothing at
+# the moment the paste lands is what line buffering gives for free: nothing is handed back until a
+# newline arrives, and none does until a person sends one — which is the reading that says the paste
+# was never answered and the sentence was never sent. It prints once as it starts because a pane
+# nothing has written to is not pasted into at all, so a road that skipped that would pass on a
+# build with no hand-over in it whatsoever.
+#
+# ── Why the machine is stood up first ────────────────────────────────────────────────────────────
+# So the frame draws the row a command is registered under: where a machine can start one thing there
+# is no row to write anything under, and where it can start none there is none either.
+id: send-the-sentence-your-pane-was-left-holding
+title: A sentence Amenbo could not get into a pane is sent by the reader's own return, behind the line they sent
+description: >
+  Amenbo tells whatever runs in a pane to read `amenbo agent --json` first, and withholds the newline
+  where the pane neither shows the sentence nor answers for it — leaving the words in the input box
+  rather than answering a question it cannot see. The road opens such a pane, waits out the minute
+  and reads that nothing was ever sent, then sends a line of its own and reads that the sentence went
+  out behind it: on a second line handed back, which nothing but a newline Amenbo sent afterwards can
+  put there. The pane stops asking for a person at the end of it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lockkeeper
+    as: lockkeeper
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: lockhouse
+      project: lockkeeper
+
+  # Two, so there is a row to register under: with one thing to start there is no choice to draw, and
+  # with none there is no row.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lockkeeper
+
+  # Shows nothing, hands back everything, numbers what it hands back, and prints once so there is a
+  # pane worth pasting into at all. Each of the four does a job — see the head of the file.
+  - type: action
+    domain: terminal
+    op: register-start
+    with:
+      name: Counted log
+      line: stty -echo; printf 'SCENARIO the pane is ready\n'; awk '{ print "SCENARIO back " NR "> " $0 }'
+
+  - type: action
+    domain: terminal
+    op: open-registered
+    with:
+      name: Counted log
+
+  # The program is up and has drawn, which is what makes the pane one Amenbo will write into. Without
+  # this the road could pass on a build that never tried.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane is ready
+
+  # And nothing was sent, through the whole minute Amenbo spends trying. The rescue is only a rescue
+  # if there was something to rescue: a build that had sent the newline blind would have answered
+  # whatever the pane was asking, and this road would be reading its own step rather than the app's.
+  - type: assert
+    domain: terminal
+    op: handed-over
+    with:
+      given-back: SCENARIO back 1>
+      present: false
+
+  # The reader is told, which is what makes the press ahead an informed one rather than a lucky one.
+  - type: assert
+    domain: terminal
+    op: unsent
+
+  # The press. The line is the reader's own and goes through untouched — what it is for is being on
+  # the screen, and being the first thing that settles what the pane is called.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: my own first line
+
+  # And the sentence went out behind it. The second numbered line is the reading and the first is not:
+  # the first is this pane's input buffer emptying, which the reader's return does on any build, and
+  # only a newline Amenbo sent after theirs can put a second one there.
+  - type: assert
+    domain: terminal
+    op: handed-over
+    with:
+      given-back: SCENARIO back 2>
+
+  # And the pane has stopped asking for a person: there is nothing left in the box for them to send.
+  # It is read at the lamp rather than at the row because the two are one signal drawn twice — the
+  # notice the step above read is what lit this — and the lamp is the half that is not written in the
+  # machine's own language, so it reads the same wherever the run is done. A row still asking for a
+  # press after the sentence has gone is a reader being pointed at a keypress that does nothing.
+  - type: assert
+    domain: terminal
+    op: dot
+    with:
+      face: out

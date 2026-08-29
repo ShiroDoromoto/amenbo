@@ -47,7 +47,10 @@
 //!
 //! **Running out of patience leaves the sentence where it is.** It is sitting in the agent's input
 //! box needing one keypress, and taking it away again to apologise would be worse than saying
-//! nothing.
+//! nothing. What is said instead is said outside the pane: the row above it carries that the
+//! sentence is unsent and that Enter sends it (`crate::pty`, `app/src/talk/nameplate.ts`). Writing
+//! it into the pane is the one place it cannot go — that is the screen this loop is reading, and a
+//! line of Amenbo's own there is a pane answering itself.
 //!
 //! **The fact ends this before the patience does.** Whether the agent has the canon is settled by
 //! whether it ran `amenbo agent`, which it says itself (`AMB-D-805`) — and against that, everything
@@ -55,9 +58,9 @@
 //! the fact arrives: there is nothing left to hand over, and a paste into a pane whose agent is
 //! already working is one the person has to clear out of the box themselves.
 //!
-//! **It is asked, never answered.** [`Handover::Sent`] says a newline went out, not that anything
-//! came of it — the screen it was read off is the very thing this is not trusting — so nothing here
-//! ever tells the pane it has been briefed.
+//! **It is asked, never answered.** [`crate::handover::Handover::Sent`] says a newline went out, not
+//! that anything came of it — the screen it was read off is the very thing this is not trusting — so
+//! nothing here ever tells the pane it has been briefed.
 
 /// The bytes that open and close a bracketed paste. A program that has turned bracketed paste on
 /// reads what is between them as text and never as keys; one that has not sees the markers as

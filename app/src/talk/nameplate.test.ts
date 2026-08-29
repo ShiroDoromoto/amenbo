@@ -12,7 +12,7 @@ import {
   type Dot,
   type Held, standsAsTurn,
 } from "./nameplate";
-import { NO_SESSIONS, opened, said, type Sessions } from "./sessions";
+import { NO_SESSIONS, opened, said, unsent, type Sessions } from "./sessions";
 
 const AT = "2026-08-24T09:00:00Z";
 
@@ -110,6 +110,19 @@ describe("the one thing said on the right", () => {
     expect(sayOf([held()], sessions.get("pane-1"))).toEqual({ kind: "note", text: "reading the store" });
   });
 
+  it("says the opening sentence is unsent, under everything the pane derived or declared", () => {
+    const left = unsent(opened(NO_SESSIONS, { session: "pane-1", startedAt: AT }), "pane-1");
+    // The pane it is news in: nothing else has been said about this session at all.
+    expect(sayOf([], left.get("pane-1"))).toEqual({ kind: "unsent" });
+    // A premise the ledger derived is a live fact; the sentence never going in is an old one.
+    expect(sayOf([held({ ready: false })], left.get("pane-1"))).toEqual({ kind: "premise" });
+    // The mark is the pause: what is left where the row is too narrow for words is "somebody is
+    // needed here", which is as true of this as of a turn handed over.
+    expect(sayText({ kind: "unsent" }, EN).mark).toBe("pause");
+    // And the words are kept for a hover, since the row may have shown none of them.
+    expect(sayText({ kind: "unsent" }, EN).title).toBe(sayText({ kind: "unsent" }, EN).text);
+  });
+
   it("says nothing where nothing was said", () => {
     // Silence is silence. It is not a claim that nothing needs a hand (`AMB-D-748`).
     expect(sayOf([], undefined)).toEqual({ kind: "silent" });
@@ -180,10 +193,13 @@ describe("the row on the page", () => {
 
 describe("what counts as a turn standing", () => {
   it("is what the row leads with when a person is needed, and nothing else", () => {
-    // The two a person is needed for: the agent handing a turn over, and the ledger saying what the
-    // pane holds is no longer ready.
+    // The three a person is needed for: the agent handing a turn over, the ledger saying what the
+    // pane holds is no longer ready, and the opening sentence still sitting in the input box.
     expect(standsAsTurn({ kind: "waiting", text: "which of the two" })).toBe(true);
     expect(standsAsTurn({ kind: "premise" })).toBe(true);
+    // Nothing at all happens in a pane whose opening sentence is still sitting in its input box, and
+    // one keypress is the whole of what it is waiting for.
+    expect(standsAsTurn({ kind: "unsent" })).toBe(true);
     // The two that are not. Silence least of all: it is not a claim about anything (`AMB-D-748`).
     expect(standsAsTurn({ kind: "note", text: "running the tests" })).toBe(false);
     expect(standsAsTurn({ kind: "silent" })).toBe(false);
@@ -205,6 +221,7 @@ describe("which face the lamp is on", () => {
   it("calls for both of the reasons the row leads with", () => {
     expect(faceOf({ kind: "waiting", text: "which of the two" }, false)).toBe("calling");
     expect(faceOf({ kind: "premise" }, false)).toBe("calling");
+    expect(faceOf({ kind: "unsent" }, false)).toBe("calling");
   });
 
   it("puts the turn over the stream, because that is the one to act on", () => {

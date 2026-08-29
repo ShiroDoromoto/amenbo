@@ -529,6 +529,7 @@ export const pl: Translation = {
     "talk.idle": "W rozmowie", "talk.holding": "zadania: {n}",
     "talk.finished": "ukończone: {n}", "talk.premiseBroken": "Założenie przestało obowiązywać",
     "talk.quiet": "cisza od {n} min",
+    "talk.unsent": "Jeszcze nie wysłano. Naciśnij Enter, aby wysłać.",
     "face.switch": "Co pokazuje to okno",
     "face.tasks": "Zadania",
     "face.terminal": "Terminal",

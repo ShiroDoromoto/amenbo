@@ -513,6 +513,7 @@ export const de: Translation = {
     "talk.idle": "Im Gespräch", "talk.holding": "{n} Aufgaben",
     "talk.finished": "{n} erledigt", "talk.premiseBroken": "Eine Voraussetzung ist weggefallen",
     "talk.quiet": "{n} Min. still",
+    "talk.unsent": "Noch nicht gesendet. Zum Senden Enter drücken.",
     "face.switch": "Was dieses Fenster zeigt",
     "face.tasks": "Aufgaben",
     "face.terminal": "Terminal",

@@ -524,6 +524,7 @@ export const es: Translation = {
     "talk.idle": "En conversación", "talk.holding": "{n} tareas",
     "talk.finished": "{n} terminadas", "talk.premiseBroken": "Se ha roto una premisa",
     "talk.quiet": "{n} min sin actividad",
+    "talk.unsent": "Aún sin enviar. Pulsa Intro para enviarlo.",
     "face.switch": "Qué muestra esta ventana",
     "face.tasks": "Tareas",
     "face.terminal": "Terminal",

@@ -26,7 +26,7 @@ import {
   type Say,
 } from "./nameplate";
 import { movingAt, quietFor, STILL_AFTER_MS } from "./moving";
-import { closed, NO_SESSIONS, opened, said, type Sessions } from "./sessions";
+import { closed, NO_SESSIONS, opened, said, unsent as leftUnsent, type Sessions } from "./sessions";
 
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
@@ -38,6 +38,8 @@ export type Plate = {
   output(): void;
   /** The agent said something about its session. */
   said(statement: SessionSaidDto): void;
+  /** The sentence Amenbo opens an agent with was left in this pane's input box, unsent. */
+  unsent(session: string): void;
   /** The program in the terminal has exited. */
   closed(session: string): void;
   /** The frames have been named afresh — what a naming answered with. */
@@ -243,6 +245,13 @@ export function mountPlate(
     output: tookOutput,
     said: (statement) => {
       sessions = said(sessions, statement);
+      tellWaiting();
+      redraw();
+    },
+    unsent: (session) => {
+      sessions = leftUnsent(sessions, session);
+      // A person is needed here, so the badge on the face switch and the dot on the page hear about
+      // it the same way they hear about a handed-over turn (`./nameplate`).
       tellWaiting();
       redraw();
     },

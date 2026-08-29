@@ -515,6 +515,7 @@ export const ja: Translation = {
     "talk.idle": "相談中", "talk.holding": "{n}件",
     "talk.finished": "済 {n}件", "talk.premiseBroken": "前提が崩れています",
     "talk.quiet": "{n}分 動きなし",
+    "talk.unsent": "まだ送られていません。Enter で送れます",
     "face.switch": "タスク／ターミナル",
     "face.tasks": "タスク",
     "face.terminal": "ターミナル",

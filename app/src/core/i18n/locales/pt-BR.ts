@@ -525,6 +525,7 @@ export const ptBR: Translation = {
     "talk.idle": "Em conversa", "talk.holding": "{n} tarefas",
     "talk.finished": "{n} concluídas", "talk.premiseBroken": "Uma premissa deixou de valer",
     "talk.quiet": "quieto há {n} min",
+    "talk.unsent": "Ainda não enviado. Pressione Enter para enviar.",
     "face.switch": "O que esta janela mostra",
     "face.tasks": "Tarefas",
     "face.terminal": "Terminal",

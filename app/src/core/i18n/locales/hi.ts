@@ -503,6 +503,7 @@ export const hi: Translation = {
     "talk.idle": "बातचीत जारी", "talk.holding": "{n} कार्य",
     "talk.finished": "{n} पूरे", "talk.premiseBroken": "एक पूर्वशर्त टूट गई है",
     "talk.quiet": "{n} मिनट से शांत",
+    "talk.unsent": "अभी भेजा नहीं गया। भेजने के लिए Enter दबाएँ।",
     "face.switch": "यह विंडो क्या दिखाती है",
     "face.tasks": "कार्य",
     "face.terminal": "टर्मिनल",

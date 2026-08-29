@@ -502,6 +502,7 @@ export const ko: Translation = {
     "talk.idle": "상의 중", "talk.holding": "{n}건",
     "talk.finished": "완료 {n}건", "talk.premiseBroken": "전제가 무너졌습니다",
     "talk.quiet": "{n}분째 조용함",
+    "talk.unsent": "아직 보내지 않았습니다. Enter 를 누르면 보냅니다.",
     "face.switch": "이 창이 보여 주는 화면",
     "face.tasks": "작업",
     "face.terminal": "터미널",

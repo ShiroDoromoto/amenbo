@@ -42,7 +42,11 @@ vi.mock("../talk/agent", () => ({
     return Promise.resolve(() => {});
   },
 }));
-vi.mock("../talk/terminal", () => ({
+// The terminal is stubbed except for the one thing this is about: how a path is written down
+// (`../talk/terminal`). Quoting it is what the pane hands over, so a stub of that would leave the
+// road's last step tested nowhere.
+vi.mock("../talk/terminal", async (actual) => ({
+  ...(await actual<typeof import("../talk/terminal")>()),
   endTerminal: vi.fn(async () => {}),
   pasteIntoTerminal: vi.fn(async (session: string, text: string) => {
     hoisted.pasted.push({ session, text });
@@ -193,9 +197,25 @@ describe("handing a pane a file", () => {
       { project: 3, root: "/work/here", paths: ["/Users/somebody/Desktop/shot.png"] },
     ]);
     expect(hoisted.pasted).toEqual([
-      { session: "session-7", text: "/work/here/.amenbo-inbox/2026-08-29/shot.png" },
+      { session: "session-7", text: "'/work/here/.amenbo-inbox/2026-08-29/shot.png'" },
     ]);
     expect(surface(), "the surface stayed after the drop").toBeNull();
+  });
+
+  it("quotes each path on its own, so the space between two is not the space inside one", async () => {
+    await pane();
+    await opened();
+    hoisted.inboxed = {
+      arrived: ["/work/here/.amenbo-inbox/2026-08-29/a shot.png", "/work/here/.amenbo-inbox/2026-08-29/it's shot.png"],
+      stopped: null,
+    };
+
+    await drop(["/Users/somebody/Desktop/a shot.png", "/Users/somebody/Desktop/it's shot.png"]);
+
+    expect(hoisted.pasted[0]?.text).toBe(
+      "'/work/here/.amenbo-inbox/2026-08-29/a shot.png' "
+      + "'/work/here/.amenbo-inbox/2026-08-29/it'\\''s shot.png'",
+    );
   });
 
   it("takes the folder off the session, not off the slot it was handed", async () => {
@@ -247,7 +267,7 @@ describe("handing a pane a file", () => {
       { project: 3, root: "/work/here", paths: ["/Users/somebody/Documents/notes.md"] },
     ]);
     expect(hoisted.pasted).toEqual([
-      { session: "session-7", text: "/work/here/.amenbo-inbox/2026-08-29/notes.md" },
+      { session: "session-7", text: "'/work/here/.amenbo-inbox/2026-08-29/notes.md'" },
     ]);
   });
 

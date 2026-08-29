@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
-import { endTerminal, pasteIntoTerminal } from "../talk/terminal";
+import { endTerminal, pasteIntoTerminal, quotedPath } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import { confirmDialog, pickFiles } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
@@ -49,12 +49,16 @@ async function heldHere(session: string | null): Promise<readonly number[]> {
  *
  * **Nothing is typed for the reader.** The paths are pasted and the newline is not sent
  * (`../talk/terminal`), so what happens next is theirs.
+ *
+ * Each path is quoted on its own. A screenshot's name has spaces in it on all three machines, and
+ * with several of them the space between two paths would otherwise be the same character as the
+ * space inside one (`AMB-D-801`).
  */
 async function handOver(project: number, folder: string, session: string, paths: string[]) {
   try {
     const inboxed = await folderInbox(project, folder, paths);
     if (inboxed.arrived.length > 0) {
-      await pasteIntoTerminal(session, inboxed.arrived.join(" "));
+      await pasteIntoTerminal(session, inboxed.arrived.map((one) => quotedPath(one)).join(" "));
     }
     const line = stoppedLine(inboxed);
     if (line !== null) pushNotice(line);

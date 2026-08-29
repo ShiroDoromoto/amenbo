@@ -551,6 +551,8 @@ export const vi: Translation = {
     "face.rename": "Đổi tên khung này",
     "face.needsYou": "đang chờ bạn",
     "face.handHere": "Thả để chuyển cho khung này",
+    "face.more": "Thêm",
+    "face.upload": "Tải lên",
     "files.tab": "Tệp",
     "files.memo": "Trang ghi",
     "files.memoWide": "Viết rộng",

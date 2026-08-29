@@ -574,6 +574,8 @@ export const pl: Translation = {
     "face.rename": "Zmień nazwę tego panelu",
     "face.needsYou": "czeka na Ciebie",
     "face.handHere": "Upuść, aby przekazać to temu panelowi",
+    "face.more": "Więcej",
+    "face.upload": "Prześlij",
     "files.tab": "Pliki",
     "files.memo": "Strona",
     "files.memoWide": "Pisz szeroko",

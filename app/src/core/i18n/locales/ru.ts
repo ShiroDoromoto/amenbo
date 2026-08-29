@@ -577,6 +577,8 @@ export const ru: Translation = {
     "face.rename": "Переименовать эту панель",
     "face.needsYou": "ждёт вас",
     "face.handHere": "Отпустите, чтобы передать это панели",
+    "face.more": "Ещё",
+    "face.upload": "Загрузить",
     "files.tab": "Файлы",
     "files.memo": "Страница",
     "files.memoWide": "Писать широко",

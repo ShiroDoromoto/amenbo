@@ -548,6 +548,8 @@ export const nl: Translation = {
     "face.rename": "Dit deelvenster hernoemen",
     "face.needsYou": "wacht op je",
     "face.handHere": "Laat los om het aan dit deelvenster te geven",
+    "face.more": "Meer",
+    "face.upload": "Uploaden",
     "files.tab": "Bestanden",
     "files.memo": "De pagina",
     "files.memoWide": "Breed schrijven",

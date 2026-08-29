@@ -574,6 +574,8 @@ export const uk: Translation = {
     "face.rename": "Перейменувати цю панель",
     "face.needsYou": "чекає на вас",
     "face.handHere": "Відпустіть, щоб передати це панелі",
+    "face.more": "Ще",
+    "face.upload": "Завантажити",
     "files.tab": "Файли",
     "files.memo": "Сторінка",
     "files.memoWide": "Писати широко",

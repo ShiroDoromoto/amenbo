@@ -569,6 +569,8 @@ export const fr: Translation = {
     "face.rename": "Renommer ce volet",
     "face.needsYou": "vous attend",
     "face.handHere": "Déposez pour le confier à ce volet",
+    "face.more": "Plus",
+    "face.upload": "Téléverser",
     "files.tab": "Fichiers",
     "files.memo": "La page",
     "files.memoWide": "Écrire en grand",

@@ -560,6 +560,8 @@ export const ja: Translation = {
     "face.rename": "このペインの名前を変える",
     "face.needsYou": "手が要ります",
     "face.handHere": "落とすと、このペインへ渡します",
+    "face.more": "その他",
+    "face.upload": "アップロード",
     "files.tab": "フォルダ",
     "files.memo": "メモ",
     "files.memoWide": "広く書く",

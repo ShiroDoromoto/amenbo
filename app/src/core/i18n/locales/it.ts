@@ -569,6 +569,8 @@ export const it: Translation = {
     "face.rename": "Rinomina questo riquadro",
     "face.needsYou": "ti sta aspettando",
     "face.handHere": "Rilascia per consegnarlo a questo riquadro",
+    "face.more": "Altro",
+    "face.upload": "Carica",
     "files.tab": "File",
     "files.memo": "La pagina",
     "files.memoWide": "Scrivi in grande",

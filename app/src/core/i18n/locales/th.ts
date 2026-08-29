@@ -551,6 +551,8 @@ export const th: Translation = {
     "face.rename": "เปลี่ยนชื่อบานหน้าต่างนี้",
     "face.needsYou": "กำลังรอคุณอยู่",
     "face.handHere": "ปล่อยเพื่อส่งให้บานหน้าต่างนี้",
+    "face.more": "เพิ่มเติม",
+    "face.upload": "อัปโหลด",
     "files.tab": "ไฟล์",
     "files.memo": "หน้าบันทึก",
     "files.memoWide": "เขียนแบบกว้าง",

@@ -547,6 +547,7 @@ export const zhHans: Translation = {
     "face.whichFolder": "这个窗格在哪个文件夹里工作？",
     "face.rename": "重命名此窗格",
     "face.needsYou": "在等你",
+    "face.handHere": "松开即可交给这个窗格",
     "files.tab": "文件",
     "files.memo": "便笺",
     "files.memoWide": "写得宽一些",

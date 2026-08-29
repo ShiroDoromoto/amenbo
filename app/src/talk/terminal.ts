@@ -255,6 +255,42 @@ async function draw(term: Terminal, start: PaneStart): Promise<PtySessionDto> {
   });
 }
 
+/** The bytes that open and close a bracketed paste. A program that has turned bracketed paste on
+ *  reads what is between them as text and never as keys (`crate::handover`). */
+const PASTE_OPEN = "\x1b[200~";
+const PASTE_CLOSE = "\x1b[201~";
+
+/**
+ * Put `text` in the input box of whatever is running in a terminal, as a paste.
+ *
+ * **Nothing is submitted.** The newline is left out for the reason the handover leaves it out
+ * (`AMB-D-793`): what is on the screen at that moment may be a first-run question, and a carriage
+ * return would answer it — a "1" that runs `curl … | sh` was one of the choices actually found there.
+ * A person is sitting in front of this pane, so leaving the text where they can read it and press
+ * Enter is the whole of what is owed.
+ *
+ * A write that cannot land is nothing to say: the session ended between the drop and this, and the
+ * pane already draws what a terminal ends with.
+ */
+export async function pasteIntoTerminal(session: string, text: string): Promise<void> {
+  await invoke<void>("pty_write", { session, data: `${PASTE_OPEN}${text}${PASTE_CLOSE}` });
+}
+
+/**
+ * End the program in a terminal.
+ *
+ * **It is the only way out.** Taking a pane away never ends one — that is a pane moving, and the
+ * session outlives it (`AMB-D-753`) — so short of this a terminal ends when the program in it decides
+ * to, which is the one thing a runaway will not do.
+ *
+ * What is on the screen stays as it is. The host tells the pane the program has closed, the same way
+ * it does when one exits on its own, and the pane draws what a terminal ends with: its last output,
+ * and the way to open another.
+ */
+export async function endTerminal(session: string): Promise<void> {
+  await invoke<void>("pty_close", { session });
+}
+
 /**
  * Fill `host` with a terminal — the one already running, or a new one — and return the way to take
  * the pane away again.
@@ -272,21 +308,6 @@ async function draw(term: Terminal, start: PaneStart): Promise<PtySessionDto> {
  * There is no other way to end a pane, because there is no way yet to end a terminal: nothing in the
  * interface says "close this", and a pane going away is always the pane moving (`AMB-T-3632`).
  */
-/**
- * End the program in a terminal.
- *
- * **It is the only way out.** Taking a pane away never ends one — that is a pane moving, and the
- * session outlives it (`AMB-D-753`) — so short of this a terminal ends when the program in it decides
- * to, which is the one thing a runaway will not do.
- *
- * What is on the screen stays as it is. The host tells the pane the program has closed, the same way
- * it does when one exits on its own, and the pane draws what a terminal ends with: its last output,
- * and the way to open another.
- */
-export async function endTerminal(session: string): Promise<void> {
-  await invoke<void>("pty_close", { session });
-}
-
 export async function mountTerminal(
   host: HTMLElement,
   on: PaneEvents,

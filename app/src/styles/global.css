@@ -234,7 +234,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* One slot. It holds the label row and the pane under it. There is one per pane and no more — what is
    not open is not a box on the screen (`../talk/layout`). */
-.slot { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.slot { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+/* The surface a file is handed to the pane on, drawn over the whole slot while a drag hangs on it
+   (`../shell/TerminalPane`). It takes no pointer events: the host resolves the point it was given
+   against whatever is under it, and a surface that answered would hide the pane from its own
+   highlight. */
+.slot__handing {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--s-3); text-align: center;
+  border: 1.5px dashed var(--c-accent); border-radius: var(--r-lg);
+  background: var(--c-accent-weak); color: var(--c-accent-text);
+  font-size: var(--fs-sm); font-weight: var(--fw-bold);
+}
 /* What is said about this terminal, and the one control a running pane has. One row, because ending
    it is the last thing there is to say about it. */
 .slot__bar { display: flex; align-items: center; gap: var(--s-2); }

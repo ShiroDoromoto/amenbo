@@ -568,6 +568,7 @@ export const fr: Translation = {
     "face.whichFolder": "Dans quel dossier ce volet travaille-t-il ?",
     "face.rename": "Renommer ce volet",
     "face.needsYou": "vous attend",
+    "face.handHere": "Déposez pour le confier à ce volet",
     "files.tab": "Fichiers",
     "files.memo": "La page",
     "files.memoWide": "Écrire en grand",

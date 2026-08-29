@@ -1681,9 +1681,15 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
 /**
  * The encodings a file can be reopened in, as a list to pick from.
  *
+ * **This is the items, not the box** — the same shell the file rows' menu wears
+ * (`../components/Menu`). Written on its own it closed on every key, which is the bug `AMB-D-780`
+ * took out of the other one and left standing here: a reader walking the list with the arrows shut
+ * it on the way past.
+ *
  * **The list comes from the host.** Which encodings may be offered is which ones can be written
  * back, and that is `crate::encoding`'s to say — a copy kept here would go on offering one the day
- * it stopped being written (`AMB-D-773`).
+ * it stopped being written (`AMB-D-773`). It arrives after the box is drawn, so the names are what
+ * the shell is told its face is: the item the reader was standing on is gone the moment they land.
  *
  * A file that is not clean is still on this road, and is the road's whole point: a guess that went
  * wrong is exactly the file whose bytes and text no longer say the same thing.
@@ -1694,7 +1700,6 @@ function EncodingMenu({ at, onPick, onClose }: {
   onClose: () => void;
 }) {
   const [names, setNames] = useState<string[]>([]);
-  const box = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -1704,38 +1709,12 @@ function EncodingMenu({ at, onPick, onClose }: {
     return () => { alive = false; };
   }, []);
 
-  useEffect(() => {
-    // The same rule the menus are closed by: anything outside it is the reader moving on, and
-    // anything inside is the first half of choosing (`../components/Menu`). Held here rather than
-    // taken from the shell, because this list is walked by neither the arrows nor Escape alone —
-    // any key at all is the reader moving on from it.
-    const close = (event: Event) => {
-      if (event.target instanceof Node && box.current?.contains(event.target)) return;
-      onClose();
-    };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", close);
-    window.addEventListener("blur", close);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", close);
-      window.removeEventListener("blur", close);
-    };
-  }, [onClose]);
-
   return (
-    <div className="menu" style={{ left: at.x, top: at.y }} role="menu" ref={box}>
+    <Menu at={at} face={names} onClose={onClose}>
       {names.map((one) => (
-        <button
-          key={one}
-          className="menu__item"
-          role="menuitem"
-          onClick={() => onPick(one)}
-        >
-          {one}
-        </button>
+        <MenuItem key={one} onClick={() => onPick(one)}>{one}</MenuItem>
       ))}
-    </div>
+    </Menu>
   );
 }
 

@@ -304,7 +304,8 @@ one build produces alongside the app and one installer carries with it. The exec
 asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
 The screen tool is the input primitive too, called by whoever drives the screen between steps: its
-`find` / `click-named` / `click` / `dblclick` / `type` / `key` / `set-date` carry out the action steps the
+`find` / `click-named` / `right-click-named` / `click` / `right-click` / `dblclick` / `type` / `key` /
+`set-date` carry out the action steps the
 checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
 at all — the proof it waits for is a shot it throws away, since an app the system has taken up is
 not yet an app with a window, and a walk that started between the two would fail on its first step.
@@ -319,6 +320,8 @@ by a human from the evidence, not by the exit code.
 element on screen with the name it answers to and where it stands, and `click-named <pid> <name>`
 clicks the one of that name — bringing that pid's app to the front first, since a press lands on
 whatever is frontmost where it is aimed and anything that took the front would swallow it silently.
+`right-click-named` is the same press with the other button, which is the only way to reach a menu
+drawn where the pointer is: until it is up there is no name on the screen to aim at.
 The screen is a webview, so both read it through the accessibility tree the app serves once asked.
 Both read one window and not the app, and take the same `--window <title>` a road's step does — an
 app drawing two draws two screens, and a name reached on the wrong one is a check that passed without

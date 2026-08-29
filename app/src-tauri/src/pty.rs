@@ -35,6 +35,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
@@ -129,6 +130,18 @@ struct Pane {
     target: Mutex<String>,
     /// The tail of what the terminal has written, for whatever pane draws it next ([`RECENT`]).
     recent: Mutex<VecDeque<u8>>,
+    /// Whether the agent in this pane has read Amenbo's canon — whether it ran `amenbo agent` here
+    /// (`AMB-D-805`).
+    ///
+    /// **This is the state, and the drop box is not.** The fact arrives as one statement passing
+    /// through, and the file it arrived in is swept on age by whichever Amenbo comes up next
+    /// ([`sweep`]) — so a pane that had gone a day without a word would read as never briefed, and be
+    /// handed the sentence a second time. What the box carries is only ever read forwards; once it is
+    /// read it is held here, where nothing else can take it away.
+    ///
+    /// **Nothing this process does raises it.** A newline sent because the screen looked right is a
+    /// guess, and a guess is what this exists to stop standing in for the fact.
+    briefed: AtomicBool,
 }
 
 impl Pane {
@@ -136,7 +149,28 @@ impl Pane {
         Self {
             target: Mutex::new(target.to_owned()),
             recent: Mutex::new(VecDeque::new()),
+            briefed: AtomicBool::new(false),
         }
+    }
+
+    /// Take in one statement on its way to the window.
+    ///
+    /// One of them is the pane's own business as well as the person's: the fact that `amenbo agent`
+    /// ran here. Every other verb is something an agent is telling a person, and passes straight
+    /// through.
+    fn take_in(&self, said: &amenbo_core::session::Said) {
+        if matches!(said.statement, amenbo_core::session::Statement::Briefed) {
+            self.briefed.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Whether the agent in this pane has the canon.
+    ///
+    /// Ordering is relaxed because there is nothing beside it to be ordered against: one bit, written
+    /// once by the thread watching the drop box and read by the hand-over — which is looking every
+    /// half-second and owes nothing to being told on the exact pass it happened.
+    fn briefed(&self) -> bool {
+        self.briefed.load(Ordering::Relaxed)
     }
 
     /// The window the chunks are going to right now.
@@ -350,6 +384,7 @@ fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instructio
         let ended = crate::handover::hand_over(
             &instruction,
             TRIES,
+            || pane.briefed(),
             || open(&app).then(|| pane.screen()),
             |bytes| {
                 let terminals = app.state::<Terminals>();
@@ -605,6 +640,10 @@ fn listen(app: tauri::AppHandle, session: String, pane: Arc<Pane>, dir: std::pat
             // written to, and the next look is 200ms away.
             for said in amenbo_core::session::said_after(&dir, last.as_deref()).unwrap_or_default() {
                 last = Some(said.name.clone());
+                // The pane keeps what is its own before the window is told: this thread is the only
+                // reader of the box, so a statement passed on without being taken in here is one
+                // nothing keeps (`AMB-D-805`).
+                pane.take_in(&said);
                 let dto = SessionSaidDto::of(&session, said);
                 // To the window drawing the pane, which is where the output goes and for the same
                 // reason: the terminal is drawn in whichever window is its home right now, and a
@@ -1043,6 +1082,38 @@ mod tests {
         sweep_in(&dir, std::time::Duration::ZERO);
         assert!(!box_one.exists(), "the drop box and the statements in it are gone");
         assert!(not_ours.is_dir(), "and what was never ours was not touched");
+    }
+
+    /// The one statement a pane keeps for itself, taken off the same drop box the window reads.
+    ///
+    /// What a person is told and what the pane knows come out of one pass over the box, so this walks
+    /// the real statements rather than the verb alone: everything an agent says about its work goes
+    /// past without leaving a mark, and the fact that it ran `amenbo agent` leaves one.
+    #[test]
+    fn only_the_fact_that_the_agent_ran_leaves_the_pane_briefed() {
+        use amenbo_core::session::{say, Statement, Surface};
+
+        let dir = amenbo_scratch::scratch("pty-briefed");
+        let surface = Surface { session: "a-session".into(), dir: dir.clone() };
+        let pane = Pane::new("main");
+
+        for spoken in [
+            Statement::Note("reading the canon".into()),
+            Statement::Waiting("which way?".into()),
+            Statement::Finished("done".into()),
+        ] {
+            say(&surface, &spoken).expect("said");
+        }
+        for said in amenbo_core::session::said_after(&dir, None).expect("read") {
+            pane.take_in(&said);
+        }
+        assert!(!pane.briefed(), "nothing an agent says about its work is the fact");
+
+        say(&surface, &Statement::Briefed).expect("said");
+        for said in amenbo_core::session::said_after(&dir, None).expect("read") {
+            pane.take_in(&said);
+        }
+        assert!(pane.briefed(), "and the fact itself is");
     }
 
     /// A session id has to be unique across restarts of the app, which is the case a counter gets

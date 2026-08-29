@@ -1097,6 +1097,26 @@ describe("the file face", () => {
     expect(container.textContent).toContain("あ");
   });
 
+  /** The list of encodings wore a box of its own, and that box closed on every key — the bug
+   *  `AMB-D-780` took out of the file rows' menu and left standing here. */
+  it("leaves the encodings open while the arrows are walking them", async () => {
+    hoisted.file = aFile({ text: "a", encoding: "windows-1252" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    await click(button("windows-1252"));
+    await settle();
+    expect(button("Shift_JIS")).toBeDefined();
+
+    await press(document.activeElement!, "ArrowDown");
+    await settle();
+    expect(button("Shift_JIS")).toBeDefined();
+
+    await press(document.body, "Escape");
+    await settle();
+    expect(button("Shift_JIS")).toBeUndefined();
+  });
+
   /** A file whose bytes and text no longer say the same thing is exactly the file a wrong guess
    *  produces, so the road out of a wrong guess has to be open on it. */
   it("offers the encodings on a file it could not save", async () => {

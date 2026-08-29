@@ -547,6 +547,7 @@ export const tr: Translation = {
     "face.whichFolder": "Bu bölme hangi klasörde çalışıyor?",
     "face.rename": "Bu bölmeyi yeniden adlandır",
     "face.needsYou": "sizi bekliyor",
+    "face.handHere": "Bu bölmeye vermek için bırakın",
     "files.tab": "Dosyalar",
     "files.memo": "Sayfa",
     "files.memoWide": "Geniş yaz",

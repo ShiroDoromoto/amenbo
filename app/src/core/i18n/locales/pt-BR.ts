@@ -569,6 +569,7 @@ export const ptBR: Translation = {
     "face.whichFolder": "Em qual pasta este painel trabalha?",
     "face.rename": "Renomear este painel",
     "face.needsYou": "esperando por você",
+    "face.handHere": "Solte para entregar a este painel",
     "files.tab": "Arquivos",
     "files.memo": "A página",
     "files.memoWide": "Escrever amplo",

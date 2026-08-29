@@ -550,6 +550,7 @@ export const id: Translation = {
     "face.whichFolder": "Panel ini bekerja di folder yang mana?",
     "face.rename": "Ganti nama panel ini",
     "face.needsYou": "menunggu Anda",
+    "face.handHere": "Lepaskan untuk menyerahkannya ke panel ini",
     "files.tab": "Berkas",
     "files.memo": "Halaman",
     "files.memoWide": "Tulis melebar",

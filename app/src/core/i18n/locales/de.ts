@@ -557,6 +557,7 @@ export const de: Translation = {
     "face.whichFolder": "In welchem Ordner arbeitet dieser Bereich?",
     "face.rename": "Diesen Bereich umbenennen",
     "face.needsYou": "wartet auf Sie",
+    "face.handHere": "Loslassen, um es diesem Bereich zu übergeben",
     "files.tab": "Dateien",
     "files.memo": "Die Seite",
     "files.memoWide": "Breit schreiben",

@@ -550,6 +550,7 @@ export const th: Translation = {
     "face.whichFolder": "บานหน้าต่างนี้ทำงานในโฟลเดอร์ใด",
     "face.rename": "เปลี่ยนชื่อบานหน้าต่างนี้",
     "face.needsYou": "กำลังรอคุณอยู่",
+    "face.handHere": "ปล่อยเพื่อส่งให้บานหน้าต่างนี้",
     "files.tab": "ไฟล์",
     "files.memo": "หน้าบันทึก",
     "files.memoWide": "เขียนแบบกว้าง",

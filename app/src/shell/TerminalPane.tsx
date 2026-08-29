@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
-import { endTerminal } from "../talk/terminal";
+import { endTerminal, pasteIntoTerminal } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import { confirmDialog } from "../core/dialog";
+import { watchHostDrop } from "../core/hostDrop";
+import { folderInbox } from "../files/folder";
+import { stoppedLine } from "../files/stopped";
+import { pushNotice } from "../core/notice";
 import { PaneDropAsk } from "./PaneDropAsk";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
 import type { SessionSaidDto, SessionWorkDto } from "../bindings/bindings";
-import { currentLang, t } from "../core/i18n";
+import { currentLang, errText, t } from "../core/i18n";
 import { invoke } from "../core/ipc";
 import { setStatus } from "../core/mutations";
 import { Icon } from "../components/Icon";
@@ -30,6 +34,34 @@ async function heldHere(session: string | null): Promise<readonly number[]> {
   return invoke<SessionWorkDto>("session_work", { session })
     .then((work) => work.holding)
     .catch(() => []);
+}
+
+/**
+ * Take what was dropped on a pane into the project's own inbox, and put where it landed in front of
+ * whatever is running there (`AMB-D-800`).
+ *
+ * **The folder is the one the session was opened in**, which is a folder the project is bound to —
+ * the host proves it against the store before writing anything (`crate::folder_write::folder_inbox`).
+ * Where inside it the files go is Amenbo's own answer and not this side's, which is why what comes
+ * back is whole paths: a name the day already held is numbered rather than refused, so what arrived
+ * is not always what was dropped.
+ *
+ * **Nothing is typed for the reader.** The paths are pasted and the newline is not sent
+ * (`../talk/terminal`), so what happens next is theirs.
+ */
+async function handOver(project: number, folder: string, session: string, paths: string[]) {
+  try {
+    const inboxed = await folderInbox(project, folder, paths);
+    if (inboxed.arrived.length > 0) {
+      await pasteIntoTerminal(session, inboxed.arrived.join(" "));
+    }
+    const line = stoppedLine(inboxed);
+    if (line !== null) pushNotice(line);
+  } catch (e: unknown) {
+    // The host's own sentence: the folder having gone since the pane opened in it is the whole of
+    // what this can be, and it is worth saying rather than swallowing.
+    pushNotice(errText(e));
+  }
 }
 
 /**
@@ -99,6 +131,13 @@ export function TerminalPane({
   // anything — what is held is read at the press and not before, so there is nothing here to keep
   // true between one and the next.
   const [asking, setAsking] = useState<readonly number[] | null>(null);
+  // The folder the terminal here actually runs in, which is what a file handed to this pane is taken
+  // into. It comes off the session rather than off `start` for the reason the row above does: a pane
+  // that took up a running terminal is drawing one that was opened somewhere else.
+  const [folder, setFolder] = useState<string | null>(null);
+  // Whether a drag from outside is over this pane. It is the whole of the receiving surface: nothing
+  // is drawn until something is being carried, and what is carried is only known while it hangs there.
+  const [handing, setHanding] = useState(false);
 
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
@@ -151,6 +190,7 @@ export function TerminalPane({
         // the one this slot was handed.
         plate.opened(session, startedAt, where ?? start.cwd ?? null);
         setLive(session);
+        setFolder(where ?? start.cwd ?? null);
         // Where the terminal actually runs, which is not always the folder this slot was handed: a
         // pane that took one up learns it from the session (`../talk/layout`).
         on.current.onOpened(frame, session, where ?? start.cwd ?? null);
@@ -212,9 +252,36 @@ export function TerminalPane({
     plateRef.current?.named(names);
   }, [names]);
 
+  // Files dragged in from the desktop, which the host hands over as paths (`../core/hostDrop`).
+  //
+  // **The watch stands only while there is a terminal here to hand them to.** A slot with nothing
+  // running in it has nowhere to put a path, and a surface that lit up over one would be a promise
+  // the pane cannot keep. It is taken up per pane and matched on this pane's own frame, so a drop
+  // that landed on the pane beside it is one this watch is never told about.
+  useEffect(() => {
+    if (live === null || folder === null) return;
+    let alive = true;
+    let stop: (() => void) | null = null;
+    void watchHostDrop({
+      select: `[data-hand="${frame}"]`,
+      over: ({ el }) => { if (alive) setHanding(el !== null); },
+      leave: () => { if (alive) setHanding(false); },
+      drop: (_at, paths) => {
+        if (!alive) return;
+        setHanding(false);
+        void handOver(project, folder, live, paths);
+      },
+    }).then((off) => { if (alive) stop = off; else off(); });
+    return () => {
+      alive = false;
+      stop?.();
+    };
+  }, [frame, project, live, folder]);
+
   return (
     <div
       className={`slot${focused ? " slot--focused" : ""}`}
+      data-hand={frame}
       onMouseDown={() => onFocus(frame)}
     >
       {/* What is said about this terminal, and the one control the place has. They share the row
@@ -234,6 +301,10 @@ export function TerminalPane({
           <Icon name="close" />
         </button>
       </div>
+      {/* The receiving surface, drawn over the pane while a drag hangs on it and never otherwise. It
+          takes no pointer events: what is under the drag has to stay the pane, or the point the host
+          resolves would land on the surface itself and the highlight would flicker itself away. */}
+      {handing && <div className="slot__handing">{t("face.handHere")}</div>}
       {asking !== null && (
         <PaneDropAsk
           holding={asking}

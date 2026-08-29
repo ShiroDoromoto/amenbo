@@ -46,6 +46,7 @@ vi.mock("../talk/terminal", () => ({
   endTerminal: vi.fn(async (session: string) => {
     hoisted.ended.push(session);
   }),
+  pasteIntoTerminal: vi.fn(async () => {}),
 }));
 vi.mock("../core/dialog", () => ({
   confirmDialog: vi.fn(async () => {

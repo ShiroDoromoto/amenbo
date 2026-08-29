@@ -44,6 +44,10 @@ const CLOSED_EVENT = "pty://closed";
 // the surface layer is a vocabulary, and a verb of it is exactly as good as its word.
 const SAID_EVENT = "session://said";
 
+// The opening instruction was left in this pane's input box unsent (`crate::pty`). It arrives once,
+// only for the ending a person can finish, and it carries the session's id and nothing else.
+const UNSENT_EVENT = "pty://unsent";
+
 /**
  * What a pane tells the window it is in. The window holds what is known about its sessions and what its
  * frames are called; a pane is where those things happen, not where they are kept.
@@ -60,6 +64,10 @@ export type PaneEvents = {
   output(): void;
   /** The agent said something about its session. */
   said(statement: SessionSaidDto): void;
+  /** The sentence Amenbo opens an agent with is sitting in this pane's input box, unsent. What the
+   *  person is owed here is that it is theirs to send — a box holding it looks exactly like a box
+   *  that was emptied by the program reading it (`AMB-D-805`). */
+  unsent(session: string): void;
   /** A file path drawn in this pane was clicked, as it was drawn. Where it leads is not the pane's to
    *  say: a relative one is read against the folder this session is in, and only the window knows
    *  whether that lands inside the folder the file face is rooted at (`AMB-T-3630`). */
@@ -408,6 +416,11 @@ export async function mountTerminal(
   const unlistenClosed = await listen<string>(CLOSED_EVENT, ({ payload }) => {
     if (payload === session) on.closed(payload);
   });
+  // Nothing is held for this one the way the output and the statements are. The hand-over gives up
+  // only after a minute of looking at the pane, so this cannot arrive before the id it is about.
+  const unlistenUnsent = await listen<string>(UNSENT_EVENT, ({ payload }) => {
+    if (payload === session) on.unsent(payload);
+  });
   // Statements are held the same way the output is, and for the same reason: the host starts watching
   // the drop box the moment it opens the terminal, so the first thing an agent says can be on its way
   // before the id it was said under is known here.
@@ -517,6 +530,7 @@ export async function mountTerminal(
     void unlistenOutput();
     void unlistenClosed();
     void unlistenSaid();
+    void unlistenUnsent();
     term.dispose();
   };
 }

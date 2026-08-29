@@ -35,6 +35,10 @@ export type Session = {
   readonly waiting: string | null;
   /** When a person last looked at this pane (RFC3339 UTC), or null if they have not since it spoke. */
   readonly seen: string | null;
+  /** Whether the sentence Amenbo opens an agent with is sitting in this pane's input box, unsent.
+   *  It is the window's own doing and not a guess: the host handed the sentence over itself and says
+   *  how that ended (`crate::pty`). */
+  readonly unsent: boolean;
 };
 
 export type Sessions = ReadonlyMap<string, Session>;
@@ -70,6 +74,7 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
     note: null,
     waiting: null,
     seen: null,
+    unsent: false,
   });
 }
 
@@ -98,27 +103,46 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
     note: null,
     waiting: null,
     seen: null,
+    unsent: false,
   };
   // The folder moves with the agent, so the newest statement's is the current one.
   const folder = statement.cwd ?? entry.folder;
+  // **An agent that has spoken at all has the sentence.** Every verb of this layer is a word of
+  // Amenbo's own, said by running Amenbo's command in this pane — so a statement of any kind, from a
+  // note to a name, is an agent that knows where it is working. That is the one thing a sentence left
+  // in the input box says is missing, and it is taken back the way a turn is: by working, not by a
+  // word for taking it back.
+  const spoke: Session = { ...entry, folder, unsent: false };
   switch (statement.verb) {
     case "note":
       // Saying what it is doing now is the agent back at work: whatever it was waiting for, it is not
       // waiting any more. Nothing else is read into a note.
-      return withEntry(sessions, { ...entry, folder, note: statement.text ?? null, waiting: null });
+      return withEntry(sessions, { ...spoke, note: statement.text ?? null, waiting: null });
     case "waiting":
       // A turn nobody has looked at yet: what `seen` answers is whether the person has been back since
       // the pane last spoke, so a new turn puts that question back.
-      return withEntry(sessions, { ...entry, folder, waiting: statement.text ?? null, seen: null });
+      return withEntry(sessions, { ...spoke, waiting: statement.text ?? null, seen: null });
     case "finished":
       // What came of the work is the last thing the session has to say about what it is doing, and it
       // is nobody's turn any more.
-      return withEntry(sessions, { ...entry, folder, note: statement.text ?? null, waiting: null });
+      return withEntry(sessions, { ...spoke, note: statement.text ?? null, waiting: null });
     default:
       // `name` moves the frame's name, which is nothing about the session — but it still says where
       // the agent is.
-      return withEntry(sessions, { ...entry, folder });
+      return withEntry(sessions, spoke);
   }
+}
+
+/**
+ * Record that this pane's opening sentence was left in its input box, unsent (`crate::pty`).
+ *
+ * It is written only for a session the window is holding. Unlike a statement, this cannot be the
+ * first thing heard about one: the host gives up on the hand-over only after a minute of looking at
+ * the pane, and the pane it is about was registered before the first of those looks.
+ */
+export function unsent(sessions: Sessions, session: string): Sessions {
+  const known = sessions.get(session);
+  return known ? withEntry(sessions, { ...known, unsent: true }) : sessions;
 }
 
 /** Record that a person has looked at this pane. */

@@ -506,6 +506,7 @@ export const id: Translation = {
     "talk.idle": "Sedang berdiskusi", "talk.holding": "{n} tugas",
     "talk.finished": "{n} selesai", "talk.premiseBroken": "Sebuah prasyarat sudah tidak berlaku",
     "talk.quiet": "hening {n} mnt",
+    "talk.unsent": "Belum terkirim. Tekan Enter untuk mengirimnya.",
     "face.switch": "Yang ditampilkan jendela ini",
     "face.tasks": "Tugas",
     "face.terminal": "Terminal",

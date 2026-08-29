@@ -503,6 +503,7 @@ export const nl: Translation = {
     "talk.idle": "In gesprek", "talk.holding": "{n} taken",
     "talk.finished": "{n} klaar", "talk.premiseBroken": "Een aanname klopt niet meer",
     "talk.quiet": "{n} min stil",
+    "talk.unsent": "Nog niet verzonden. Druk op Enter om te verzenden.",
     "face.switch": "Wat dit venster toont",
     "face.tasks": "Taken",
     "face.terminal": "Terminal",

@@ -137,6 +137,7 @@ const events: PaneEvents = {
   said: () => {
     heard.said += 1;
   },
+  unsent: () => {},
   path: () => {},
   closed: () => {
     heard.closed += 1;

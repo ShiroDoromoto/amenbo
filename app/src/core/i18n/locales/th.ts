@@ -506,6 +506,7 @@ export const th: Translation = {
     "talk.idle": "กำลังปรึกษากันอยู่", "talk.holding": "{n} งาน",
     "talk.finished": "เสร็จ {n}", "talk.premiseBroken": "เงื่อนไขตั้งต้นไม่เป็นจริงแล้ว",
     "talk.quiet": "เงียบมา {n} นาที",
+    "talk.unsent": "ยังไม่ได้ส่ง กด Enter เพื่อส่ง",
     "face.switch": "หน้าต่างนี้กำลังแสดงอะไร",
     "face.tasks": "งาน",
     "face.terminal": "เทอร์มินัล",

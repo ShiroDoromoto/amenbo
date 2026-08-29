@@ -59,6 +59,17 @@ describe("what the plate says about a turn standing in its pane", () => {
     expect(told, "the face went and the badge was left standing").toEqual([true, false]);
   });
 
+  it("calls a person for a sentence left in the input box, and stops once the pane speaks", () => {
+    // Nothing at all happens in this pane until somebody presses Enter, so the badge is owed it the
+    // same way it is owed a turn the agent handed over (`AMB-D-805`).
+    plate.opened("pane-1", AT, null);
+    plate.unsent("pane-1");
+    expect(told).toEqual([true]);
+
+    plate.said(say({ verb: "note", text: "reading the store" }));
+    expect(told, "the agent spoke Amenbo's own words and was still called unsent").toEqual([true, false]);
+  });
+
   it("says nothing at all to a pane nobody is waiting on", () => {
     plate.opened("pane-1", AT, null);
     plate.said(say({ verb: "finished", text: "it landed" }));

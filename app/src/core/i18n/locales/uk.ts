@@ -529,6 +529,7 @@ export const uk: Translation = {
     "talk.idle": "Обговорення", "talk.holding": "завдань: {n}",
     "talk.finished": "готово: {n}", "talk.premiseBroken": "Передумова перестала виконуватися",
     "talk.quiet": "тихо {n} хв",
+    "talk.unsent": "Ще не надіслано. Натисніть Enter, щоб надіслати.",
     "face.switch": "Що показує це вікно",
     "face.tasks": "Завдання",
     "face.terminal": "Термінал",

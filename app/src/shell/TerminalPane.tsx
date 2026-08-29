@@ -216,6 +216,9 @@ export function TerminalPane({
         plate.said(statement);
         on.current.onSaid(statement);
       },
+      // Straight to the row and nowhere else. What it says is about this pane's own session, and the
+      // face has nothing to do with a sentence sitting in an input box.
+      unsent: (session) => plate.unsent(session),
       closed: (session) => {
         plate.closed(session);
         setEnded(true);

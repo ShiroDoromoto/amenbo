@@ -503,6 +503,7 @@ export const tr: Translation = {
     "talk.idle": "Konuşuluyor", "talk.holding": "{n} görev",
     "talk.finished": "{n} tamamlandı", "talk.premiseBroken": "Bir ön koşul artık geçerli değil",
     "talk.quiet": "{n} dk sessiz",
+    "talk.unsent": "Henüz gönderilmedi. Göndermek için Enter’a basın.",
     "face.switch": "Bu pencerenin gösterdiği",
     "face.tasks": "Görevler",
     "face.terminal": "Terminal",

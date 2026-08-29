@@ -47,7 +47,10 @@
 //!
 //! **Running out of patience leaves the sentence where it is.** It is sitting in the agent's input
 //! box needing one keypress, and taking it away again to apologise would be worse than saying
-//! nothing.
+//! nothing. What is said instead is said outside the pane: the row above it carries that the
+//! sentence is unsent and that Enter sends it (`crate::pty`, `app/src/talk/nameplate.ts`). Writing
+//! it into the pane is the one place it cannot go — that is the screen this loop is reading, and a
+//! line of Amenbo's own there is a pane answering itself.
 
 /// The bytes that open and close a bracketed paste. A program that has turned bracketed paste on
 /// reads what is between them as text and never as keys; one that has not sees the markers as

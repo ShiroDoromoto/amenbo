@@ -524,6 +524,7 @@ export const fr: Translation = {
     "talk.idle": "En conversation", "talk.holding": "{n} tâches",
     "talk.finished": "{n} terminées", "talk.premiseBroken": "Une prémisse ne tient plus",
     "talk.quiet": "silencieux depuis {n} min",
+    "talk.unsent": "Pas encore envoyé. Appuyez sur Entrée pour l’envoyer.",
     "face.switch": "Ce que montre cette fenêtre",
     "face.tasks": "Tâches",
     "face.terminal": "Terminal",

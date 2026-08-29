@@ -45,6 +45,19 @@
 //! program not yet reading is text that turns up twice later, as Crush's did by keeping it in the
 //! kernel's buffer and drawing it once it started (`AMB-T-3819`).
 //!
+//! **A screen that never stands still is pasted into anyway, once, after a wait** (`AMB-D-802`). A
+//! program repainting something of its own — a spinner, a clock — never holds the same bytes for
+//! three looks running, so a rule that waited for stillness would hold the sentence back forever and
+//! there would be nothing in the box for a person to send either. What ten seconds of unbroken
+//! movement does say is that the program is up and reading, which is the one thing the stillness was
+//! being asked for.
+//!
+//! **What it costs is the second test, and that is paid rather than stretched.** On a screen nothing
+//! was going to leave alone, movement after a paste says nothing about the paste — so from that point
+//! only the words appearing submit the sentence. A screen already pasted into on its own stillness is
+//! not pasted into again this way: it has the sentence, and a second copy is what `AMB-T-4008` found
+//! six of.
+//!
 //! **Running out of patience leaves the sentence where it is.** It is sitting in the agent's input
 //! box needing one keypress, and taking it away again to apologise would be worse than saying
 //! nothing. What is said instead is said outside the pane: the row above it carries that the
@@ -89,6 +102,15 @@ const HEAD: usize = 14;
 /// pause this long is one a program mid-startup does not take, while a program waiting for input
 /// takes it forever.
 const STILL: usize = 3;
+
+/// How many looks a screen gets to stand still before the sentence goes into it anyway.
+///
+/// With [`crate::pty`]'s half-second between looks this is ten seconds of a pane that has not held
+/// the same bytes twice — long enough that nothing merely starting up is being written into, short
+/// enough that most of the patience is left for the words to come back. A program still drawing its
+/// interface goes quiet between the pieces; one that has been moving for this long is moving because
+/// moving is what it does.
+const RESTLESS: usize = 20;
 
 /// How this ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,6 +221,10 @@ pub fn hand_over(
     // The screen the sentence last went into, and whether that paste's answer falls due this look.
     let mut pasted_into: Option<u64> = None;
     let mut answer_due = false;
+    // Whether the sentence went into a screen that never stood still. It is its own flag rather than
+    // a reading of `pasted_into`, which on a moving screen names a screen that is already gone by the
+    // next look — and what this has to answer is "has it had one", not "was it this one".
+    let mut pasted_blind = false;
 
     for pass in 0..tries {
         // First, and before the screen is looked at: the fact outranks anything read off one, so a
@@ -214,7 +240,11 @@ pub fn hand_over(
         stood = if now == held { stood + 1 } else { 1 };
         held = now;
 
-        if std::mem::take(&mut answer_due) {
+        if pasted_blind {
+            // The sentence is in a pane that will not hold still, so the only thing left that can
+            // submit it is the words coming back. Movement here is the program's own and says
+            // nothing, and a second copy of the sentence is worse than none.
+        } else if std::mem::take(&mut answer_due) {
             // Owed on this look and no later: the pane was standing still when the sentence went in,
             // so nothing but the sentence was going to move it.
             if Some(now) != pasted_into {
@@ -226,6 +256,14 @@ pub fn hand_over(
             }
             pasted_into = Some(now);
             answer_due = true;
+        } else if pass + 1 >= RESTLESS && now != nothing && pasted_into.is_none() {
+            // Nothing has stood still in ten seconds and nothing has been written into this pane yet.
+            // The program is up and reading, so the sentence goes in — and from here it is judged on
+            // the words alone (`AMB-D-802`).
+            if !send(&bytes) {
+                return Handover::Gone;
+            }
+            pasted_blind = true;
         }
 
         // No pause after the last pass: what follows it is the answer, not another look.
@@ -266,6 +304,10 @@ mod tests {
         /// The look the fact arrives on, counting from one — the pass on which this agent has run
         /// `amenbo agent`. `None` for one that never does.
         briefed_on: Cell<Option<usize>>,
+        /// The look from which it draws something of its own on every single look — a spinner, a
+        /// clock — so that no two looks running ever find the same screen. `None` for one that only
+        /// ever draws what `own` gives it.
+        restless_from: Cell<Option<usize>>,
         /// How many looks have been taken, which is what `briefed_on` is measured against.
         looks: Cell<usize>,
     }
@@ -279,7 +321,23 @@ mod tests {
                 takes,
                 briefed_on: Cell::new(None),
                 looks: Cell::new(0),
+                restless_from: Cell::new(None),
             }
+        }
+
+        /// One that never stops drawing. It has come up — the prompt is there on the first look — and
+        /// then goes on repainting from `from`, which is the screen the stillness rule is never
+        /// satisfied by. `from` is 1 for one that was never still at all, and later for one that
+        /// stood long enough to be written into and then started moving.
+        fn restless_from(takes: Takes, from: usize) -> Self {
+            let one = Self::waiting(takes);
+            one.restless_from.set(Some(from));
+            one
+        }
+
+        /// One that has never stood still since it came up.
+        fn restless(takes: Takes) -> Self {
+            Self::restless_from(takes, 1)
         }
 
         /// One that runs `amenbo agent` on the given look, whatever else it is drawing.
@@ -320,6 +378,11 @@ mod tests {
             || {
                 if let Some(next) = agent.own.borrow_mut().pop_front() {
                     agent.drawn.borrow_mut().extend_from_slice(next);
+                }
+                // What it repaints does not matter and is not searched for; that it is different every
+                // look is the whole of what makes it restless.
+                if agent.restless_from.get().is_some_and(|from| agent.looks.get() >= from) {
+                    agent.drawn.borrow_mut().push(b'.');
                 }
                 Some(agent.drawn.borrow().clone())
             },
@@ -365,6 +428,38 @@ mod tests {
         assert_eq!(walk(&agent, "Before you act on any request", 12), Handover::LeftForTheReader);
         assert!(!agent.submitted(), "nothing was submitted");
         assert_eq!(agent.pastes(), 1, "and it was not collected one copy per look");
+    }
+
+    #[test]
+    fn a_screen_that_never_stands_still_is_pasted_into_and_submitted_on_the_words() {
+        // A program repainting something of its own never holds the same bytes for three looks, so
+        // the stillness rule alone would leave the sentence unsent and the input box empty — nothing
+        // for a person to send either (`AMB-D-802`).
+        let agent = Agent::restless(Takes::Echoes);
+        assert_eq!(walk(&agent, "Before you act on any request", 60), Handover::Sent);
+        assert_eq!(agent.pastes(), 1, "the sentence went in once");
+        assert!(agent.submitted(), "and the words coming back sent it");
+    }
+
+    #[test]
+    fn a_screen_that_never_stands_still_is_pasted_into_once_however_long_it_moves() {
+        // The one that shows nothing back. The sentence is left in the box for the person — and it is
+        // one sentence, not one per look: a screen that moves every time would otherwise collect a
+        // copy per pass, which is the six `AMB-T-4008` found.
+        let agent = Agent::restless(Takes::Swallows);
+        assert_eq!(walk(&agent, "Before you act on any request", 60), Handover::LeftForTheReader);
+        assert_eq!(agent.pastes(), 1);
+        assert!(!agent.submitted(), "and nothing was submitted into a pane that showed nothing");
+    }
+
+    #[test]
+    fn a_screen_that_answered_nothing_while_still_is_not_pasted_into_again_when_it_moves() {
+        // It stood still, took the sentence, showed nothing — and then started drawing and never
+        // stopped. The waiting-out rule must not read that as a pane owed a sentence: it has one, and
+        // a second would be the doubling this whole module is arranged against.
+        let agent = Agent::restless_from(Takes::Swallows, 5);
+        assert_eq!(walk(&agent, "Before you act on any request", 60), Handover::LeftForTheReader);
+        assert_eq!(agent.pastes(), 1, "the one it took while standing still, and no other");
     }
 
     #[test]

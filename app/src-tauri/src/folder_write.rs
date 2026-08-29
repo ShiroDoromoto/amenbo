@@ -27,9 +27,16 @@ use std::path::{Path, PathBuf};
 
 use amenbo_core::binding::canonical_dir;
 
-use crate::dto::{DropEffectDto, FolderCarriedDto, FolderStopDto, FolderStoppedDto};
+use crate::dto::{
+    DropEffectDto, FolderCarriedDto, FolderInboxedDto, FolderStopDto, FolderStoppedDto,
+};
 use crate::error::CmdError;
-use crate::folder_fence::{gone, rooted, under};
+use crate::folder_fence::{gone, root_of, rooted, under};
+
+/// The folder Amenbo puts what it was handed in, directly under the folder the project is bound to
+/// (`AMB-D-800`). A sibling of the `.amenbo` marker rather than something under it, because that
+/// marker is a file and not a folder (`amenbo_core::binding`).
+const INBOX_DIR: &str = ".amenbo-inbox";
 
 /// The most bytes one name may take. Every filesystem worth naming stops at 255, and the ones that
 /// stop earlier answer for themselves when the name is used.
@@ -170,6 +177,100 @@ pub fn folder_import(
     Ok(carried(&from, &into, one))
 }
 
+/// Take files in without asking where they should go: they land in `.amenbo-inbox/<the day>/` under
+/// the folder the project is bound to, and the answer is the paths they are at now (`AMB-D-800`).
+///
+/// **The landing is Amenbo's and not the caller's**, which is the whole of what separates this from
+/// [`folder_import`]. A reader who hands a file to a terminal pane has not picked a row to drop it
+/// on, so "that name is already there" has nowhere to send them — the name is numbered here and the
+/// carry goes through, where a drop onto a chosen folder rightly stops. It lands inside the
+/// project's folder rather than in `/tmp` because what is being handed the path is an agent that may
+/// only read the folder it was pointed at.
+///
+/// The place is made when it is not there, and the run that makes it leaves a `.gitignore` of `*`
+/// inside it. The reader's own `.gitignore` is never touched: it is a file git is following, so
+/// anything Amenbo wrote into it would turn up in somebody's commit.
+#[tauri::command]
+pub fn folder_inbox(
+    project_id: i64,
+    root: String,
+    paths: Vec<String>,
+) -> Result<FolderInboxedDto, CmdError> {
+    let root = root_of(project_id, &root)?;
+    let into = inbox(&root)?;
+    let from: Vec<PathBuf> = paths.iter().map(|path| levelled(Path::new(path))).collect();
+    Ok(inboxed(&from, &into))
+}
+
+/// Today's folder in the inbox, with the inbox itself made under it if neither is there.
+///
+/// **The `.gitignore` goes in on the run that makes the inbox, and never again.** A reader who
+/// deletes it has said something, and writing it back would be arguing with them. Cutting a folder
+/// per day is what stops the numbering climbing forever, and it is what leaves a person something
+/// they can delete in one press.
+fn inbox(root: &Path) -> Result<PathBuf, CmdError> {
+    let place = root.join(INBOX_DIR);
+    match std::fs::create_dir(&place) {
+        Ok(()) => std::fs::write(place.join(".gitignore"), "*\n")
+            .map_err(|e| made(e, ".gitignore"))?,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(made(e, INBOX_DIR)),
+    }
+    let day = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let into = place.join(&day);
+    std::fs::create_dir_all(&into).map_err(|e| made(e, &day))?;
+    Ok(into)
+}
+
+/// The carry a handed-over file makes: the same rows in the same order, stopping on the first that
+/// will not go — except that a name already in the folder is not one of the things that stops it.
+fn inboxed(from: &[PathBuf], into: &Path) -> FolderInboxedDto {
+    let mut arrived = Vec::new();
+    for path in from {
+        let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+            return FolderInboxedDto { arrived, stopped: Some(nameless(path)) };
+        };
+        let mut nth = 1;
+        loop {
+            let under = numbered(&name, nth);
+            match carried_one(path, into, &under, copy_one) {
+                None => {
+                    arrived.push(into.join(&under).to_string_lossy().into_owned());
+                    break;
+                }
+                // The one refusal this door answers for itself. Nobody chose the folder, so the
+                // reader has no next move to make with it — the name is shifted and handed back.
+                Some((Some(FolderStopDto::Taken), _)) => nth += 1,
+                Some((code, why)) => {
+                    let stopped = FolderStoppedDto { name, code, why };
+                    return FolderInboxedDto { arrived, stopped: Some(stopped) };
+                }
+            }
+        }
+    }
+    FolderInboxedDto { arrived, stopped: None }
+}
+
+/// The nth spelling of a name: the first is the name itself, and after that the number goes in
+/// front of the extension — `screenshot.png`, then `screenshot-2.png`.
+///
+/// It is Amenbo's own spelling because there is no other to borrow. Numbering a clash is a file
+/// manager's doing rather than an operating system's, and Finder, Explorer and Nautilus each write
+/// it differently; none of them is reachable from the `fs::copy` this carry is made of, and the one
+/// call that would be is Windows' alone (`AMB-D-800`).
+fn numbered(name: &str, nth: u32) -> String {
+    if nth < 2 {
+        return name.to_string();
+    }
+    let at = Path::new(name);
+    match (at.file_stem(), at.extension()) {
+        (Some(stem), Some(ext)) => {
+            format!("{}-{nth}.{}", stem.to_string_lossy(), ext.to_string_lossy())
+        }
+        _ => format!("{name}-{nth}"),
+    }
+}
+
 /// Put these rows on the machine's clipboard, as the files they are (`AMB-D-796`).
 ///
 /// The rows are named the way every other door here names them — segments under one of the
@@ -280,36 +381,50 @@ fn carried(
 ) -> FolderCarriedDto {
     let mut arrived = Vec::new();
     for path in from {
-        // A path with no last name is not a row: a drop can hand over a whole volume, and there is
-        // no name to give what would be carried in.
         let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
-            let name = path.to_string_lossy().into_owned();
-            let why = "this has no name to carry it in under".to_string();
-            let stopped = FolderStoppedDto { name, code: Some(FolderStopDto::Nameless), why };
-            return FolderCarriedDto { arrived, stopped: Some(stopped) };
+            return FolderCarriedDto { arrived, stopped: Some(nameless(path)) };
         };
-        let target = into.join(&name);
-
-        // A folder cannot be carried into itself: the copy would be writing into what it is reading,
-        // and the move would be asking the kernel to make a folder its own child.
-        //
-        // The three Amenbo decides carry a code as well as a sentence, and the machine's carry the
-        // sentence alone: what a refusal made here means is the same every time and can be put in the
-        // reader's language, where what a filesystem says is its own words in its own (`crate::dto`).
-        let stopped = if into.starts_with(path) {
-            Some((Some(FolderStopDto::Inside), "a folder cannot be moved inside itself".to_string()))
-        } else if holds(&target) {
-            Some((Some(FolderStopDto::Taken), format!("{name} is already there")))
-        } else {
-            one(path, &target).err().map(|e| (None, e.to_string()))
-        };
-
-        if let Some((code, why)) = stopped {
+        if let Some((code, why)) = carried_one(path, into, &name, one) {
             return FolderCarriedDto { arrived, stopped: Some(FolderStoppedDto { name, code, why }) };
         }
         arrived.push(name);
     }
     FolderCarriedDto { arrived, stopped: None }
+}
+
+/// One row of a carry, under the name it is to land as. `None` is the row arrived.
+///
+/// The two refusals Amenbo makes are made before anything is written, and each carries a code as
+/// well as a sentence; the machine's carries the sentence alone. What a refusal made here means is
+/// the same every time and can be put in the reader's language, where what a filesystem says is its
+/// own words in its own (`crate::dto`).
+fn carried_one(
+    path: &Path,
+    into: &Path,
+    name: &str,
+    one: fn(&Path, &Path) -> std::io::Result<()>,
+) -> Option<(Option<FolderStopDto>, String)> {
+    // A folder cannot be carried into itself: the copy would be writing into what it is reading, and
+    // the move would be asking the kernel to make a folder its own child.
+    if into.starts_with(path) {
+        let why = "a folder cannot be moved inside itself".to_string();
+        return Some((Some(FolderStopDto::Inside), why));
+    }
+    let target = into.join(name);
+    if holds(&target) {
+        return Some((Some(FolderStopDto::Taken), format!("{name} is already there")));
+    }
+    one(path, &target).err().map(|e| (None, e.to_string()))
+}
+
+/// The refusal for a path with no last name: a drop can hand over a whole volume, and there is no
+/// name to give what would be carried in.
+fn nameless(path: &Path) -> FolderStoppedDto {
+    FolderStoppedDto {
+        name: path.to_string_lossy().into_owned(),
+        code: Some(FolderStopDto::Nameless),
+        why: "this has no name to carry it in under".to_string(),
+    }
 }
 
 /// Move one row, and copy it instead where the kernel says the two ends are not the same disk.
@@ -671,6 +786,64 @@ mod tests {
         );
         assert!(answer.arrived.is_empty());
         assert_eq!(answer.stopped.expect("it is inside itself").name, "carried");
+    }
+
+    /// The place is Amenbo's to make, and the run that makes it leaves the one file that keeps what
+    /// lands there out of somebody's commit — inside the place itself, never in the reader's own.
+    #[test]
+    fn the_place_is_made_with_a_gitignore_of_its_own() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path();
+        std::fs::write(root.join(".gitignore"), b"node_modules\n").expect("the reader's own");
+
+        let day = inbox(root).expect("the place");
+        assert!(day.is_dir());
+        assert_eq!(day.parent().expect("the inbox"), root.join(INBOX_DIR));
+        let ignore = root.join(INBOX_DIR).join(".gitignore");
+        assert_eq!(std::fs::read_to_string(&ignore).expect("the file"), "*\n");
+        assert_eq!(
+            std::fs::read_to_string(root.join(".gitignore")).expect("the file"),
+            "node_modules\n",
+            "the reader's own is not written into",
+        );
+
+        // Asking again is the ordinary case: the same folder, and nothing written back over what a
+        // reader deleted.
+        std::fs::remove_file(&ignore).expect("the reader deletes it");
+        assert_eq!(inbox(root).expect("the place"), day);
+        assert!(!holds(&ignore), "what a reader deleted stays deleted");
+    }
+
+    /// Nobody chose where these went, so "that name is already there" has nowhere to send the
+    /// reader: the name is numbered and the carry goes through.
+    #[test]
+    fn a_name_already_there_is_numbered_rather_than_refused() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let into = dir.path().join("into");
+        std::fs::create_dir(&into).expect("a folder");
+        let from = dir.path().join("shot.png");
+        std::fs::write(&from, b"mine").expect("a file");
+
+        let answer = inboxed(&[from.clone(), from.clone(), from], &into);
+        assert!(answer.stopped.is_none());
+        let names: Vec<String> = answer
+            .arrived
+            .iter()
+            .map(|at| Path::new(at).file_name().expect("a name").to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["shot.png", "shot-2.png", "shot-3.png"]);
+        // The answer is whole paths, because what asked for it writes them into a terminal.
+        assert!(answer.arrived.iter().all(|at| Path::new(at).is_file()));
+    }
+
+    /// The number goes where a reader would put it: in front of the extension, and on the end when
+    /// there is not one.
+    #[test]
+    fn the_number_goes_in_front_of_the_extension() {
+        assert_eq!(numbered("shot.png", 1), "shot.png");
+        assert_eq!(numbered("shot.png", 2), "shot-2.png");
+        assert_eq!(numbered("README", 3), "README-3");
+        assert_eq!(numbered(".env", 2), ".env-2");
     }
 
     /// Moving on one disk is a rename, and a rename takes the source away. The other half — the

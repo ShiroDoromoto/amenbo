@@ -558,6 +558,7 @@ pub fn run() {
       trash::folder_trash,
       trash::folder_untrash,
       folder_write::folder_import,
+      folder_write::folder_inbox,
       folder_write::folder_clip_copy,
       folder_write::folder_clip_paste,
       pty::pty_open,

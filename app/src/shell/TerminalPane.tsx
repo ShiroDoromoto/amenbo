@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import { endTerminal, pasteIntoTerminal } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
-import { confirmDialog } from "../core/dialog";
+import { confirmDialog, pickFiles } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { folderInbox } from "../files/folder";
 import { stoppedLine } from "../files/stopped";
 import { pushNotice } from "../core/notice";
+import { Menu, MenuItem } from "../components/Menu";
 import { PaneDropAsk } from "./PaneDropAsk";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
@@ -135,6 +136,9 @@ export function TerminalPane({
   // into. It comes off the session rather than off `start` for the reason the row above does: a pane
   // that took up a running terminal is drawing one that was opened somewhere else.
   const [folder, setFolder] = useState<string | null>(null);
+  // Where the row's menu was opened, while it is open. It is placed at the press rather than under
+  // the button for the reason every other menu in the app is (`../components/Menu`).
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   // Whether a drag from outside is over this pane. It is the whole of the receiving surface: nothing
   // is drawn until something is being carried, and what is carried is only known while it hangs there.
   const [handing, setHanding] = useState(false);
@@ -292,6 +296,21 @@ export function TerminalPane({
         {/* The line above the pane, which is empty until there is a session to say something about
             — and holds the row's width open either way, so the control does not walk across it. */}
         <div className="slot__plate" ref={labelRef} />
+        {/* What the row can do besides end the place. It is drawn only while a terminal is running,
+            because everything in it is a way of handing that terminal something — and it is a menu
+            rather than a row of buttons so that a face split four ways does not draw the same button
+            four times over. */}
+        {live !== null && folder !== null && (
+          <button
+            className="slot__more"
+            title={t("face.more")}
+            aria-label={t("face.more")}
+            aria-haspopup="menu"
+            onClick={(e) => setMenuAt({ x: e.clientX, y: e.clientY })}
+          >
+            <Icon name="more" />
+          </button>
+        )}
         <button
           className="slot__end"
           title={t("face.drop")}
@@ -301,6 +320,24 @@ export function TerminalPane({
           <Icon name="close" />
         </button>
       </div>
+      {menuAt !== null && live !== null && folder !== null && (
+        <Menu at={menuAt} onClose={() => setMenuAt(null)}>
+          {/* The other way in, for a reader whose file is not somewhere they can drag it from. It
+              ends where the drop ends: the file is carried into the project's inbox and the path it
+              is at now is put in front of the agent. */}
+          <MenuItem
+            onClick={() => {
+              setMenuAt(null);
+              void pickFiles().then((paths) => {
+                if (paths.length > 0) return handOver(project, folder, live, paths);
+              });
+            }}
+          >
+            <Icon name="inbox" />
+            {t("face.upload")}
+          </MenuItem>
+        </Menu>
+      )}
       {/* The receiving surface, drawn over the pane while a drag hangs on it and never otherwise. It
           takes no pointer events: what is under the drag has to stay the pane, or the point the host
           resolves would land on the surface itself and the highlight would flicker itself away. */}

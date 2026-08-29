@@ -548,6 +548,8 @@ export const tr: Translation = {
     "face.rename": "Bu bölmeyi yeniden adlandır",
     "face.needsYou": "sizi bekliyor",
     "face.handHere": "Bu bölmeye vermek için bırakın",
+    "face.more": "Daha fazla",
+    "face.upload": "Yükle",
     "files.tab": "Dosyalar",
     "files.memo": "Sayfa",
     "files.memoWide": "Geniş yaz",

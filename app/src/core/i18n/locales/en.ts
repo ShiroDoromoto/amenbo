@@ -623,6 +623,8 @@ const ui = {
   "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",
   "face.handHere": "Drop to hand it to this pane",
+  "face.more": "More",
+  "face.upload": "Upload",
   // The file face beside the terminal's pane: the project's folder, folded, with what git says
   // about each row drawn as a colour rather than as words (`AMB-D-785`). What a file turns out not
   // to be is said in its own words — a binary is not a failure, it is simply not something a panel

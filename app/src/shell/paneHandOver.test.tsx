@@ -32,6 +32,8 @@ const hoisted = vi.hoisted(() => ({
   pasted: [] as Array<{ session: string; text: string }>,
   /** The lines the pane put on the screen. */
   noticed: [] as string[],
+  /** What the machine's own picker answers with. */
+  picked: [] as string[],
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -59,6 +61,10 @@ vi.mock("../files/folder", () => ({
     return hoisted.inboxed;
   }),
 }));
+vi.mock("../core/dialog", () => ({
+  confirmDialog: vi.fn(async () => true),
+  pickFiles: vi.fn(async () => hoisted.picked),
+}));
 vi.mock("../core/notice", () => ({
   pushNotice: vi.fn((msg: string) => { hoisted.noticed.push(msg); }),
 }));
@@ -82,6 +88,7 @@ beforeEach(() => {
   hoisted.carryFails = false;
   hoisted.pasted = [];
   hoisted.noticed = [];
+  hoisted.picked = [];
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -135,6 +142,16 @@ const drop = async (paths: string[]) => {
   await act(async () => {
     hoisted.watch?.drop?.({ x: 0, y: 0, el: slot()! }, paths, "default");
   });
+  await act(async () => { await Promise.resolve(); });
+};
+
+/** The way into the row's menu, while the row carries one. */
+const more = () => container.querySelector<HTMLButtonElement>(".slot__more");
+/** Open it, and press the item at `nth`. */
+const chooseInMenu = async (nth: number) => {
+  await act(async () => { more()?.click(); });
+  const items = document.querySelectorAll<HTMLButtonElement>(".menu__item");
+  await act(async () => { items[nth]?.click(); });
   await act(async () => { await Promise.resolve(); });
 };
 
@@ -205,6 +222,43 @@ describe("handing a pane a file", () => {
     expect(hoisted.pasted).toHaveLength(1);
     expect(hoisted.noticed, "a carry that stopped part-way said nothing").toHaveLength(1);
     expect(hoisted.noticed[0]).toContain("two.png");
+  });
+
+  it("keeps the row's menu off a place with nothing running in it", async () => {
+    await pane(false);
+    expect(more(), "a place with nothing running in it offered to be handed a file").toBeNull();
+  });
+
+  it("puts the row's menu up once a terminal is running", async () => {
+    await pane();
+    await opened();
+    expect(more(), "a running pane had no way to be handed anything but a drop").not.toBeNull();
+  });
+
+  it("carries what was chosen from the machine's picker down the same road", async () => {
+    await pane();
+    await opened();
+    hoisted.picked = ["/Users/somebody/Documents/notes.md"];
+    hoisted.inboxed = { arrived: ["/work/here/.amenbo-inbox/2026-08-29/notes.md"], stopped: null };
+
+    await chooseInMenu(0);
+
+    expect(hoisted.carried).toEqual([
+      { project: 3, root: "/work/here", paths: ["/Users/somebody/Documents/notes.md"] },
+    ]);
+    expect(hoisted.pasted).toEqual([
+      { session: "session-7", text: "/work/here/.amenbo-inbox/2026-08-29/notes.md" },
+    ]);
+  });
+
+  it("does nothing where the picker was cancelled", async () => {
+    await pane();
+    await opened();
+
+    await chooseInMenu(0);
+
+    expect(hoisted.carried, "an empty pick was carried anyway").toEqual([]);
+    expect(hoisted.pasted).toEqual([]);
   });
 
   it("says the refusal rather than swallowing it, and pastes nothing", async () => {

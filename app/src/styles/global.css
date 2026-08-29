@@ -267,6 +267,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
 }
 .slot__end:hover { color: var(--c-text); }
+/* The row's menu, which holds what the pane can be handed rather than what it can be rid of. It is
+   drawn the same quiet way as the control beside it: a face split four ways draws this row four
+   times, and two loud buttons in each would be eight things competing with the terminals. */
+.slot__more {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+}
+.slot__more:hover { color: var(--c-text); }
 
 /* The question that control asks when the session in the pane is still holding something
    (`../shell/PaneDropAsk`). Its own block rather than a share of the modals in `components.css`: this

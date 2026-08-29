@@ -548,6 +548,8 @@ export const hi: Translation = {
     "face.rename": "इस पैन का नाम बदलें",
     "face.needsYou": "आपकी प्रतीक्षा में",
     "face.handHere": "इस पेन को सौंपने के लिए छोड़ें",
+    "face.more": "और",
+    "face.upload": "अपलोड करें",
     "files.tab": "फ़ाइलें",
     "files.memo": "पन्ना",
     "files.memoWide": "बड़े में लिखें",

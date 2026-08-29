@@ -551,6 +551,8 @@ export const id: Translation = {
     "face.rename": "Ganti nama panel ini",
     "face.needsYou": "menunggu Anda",
     "face.handHere": "Lepaskan untuk menyerahkannya ke panel ini",
+    "face.more": "Lainnya",
+    "face.upload": "Unggah",
     "files.tab": "Berkas",
     "files.memo": "Halaman",
     "files.memoWide": "Tulis melebar",

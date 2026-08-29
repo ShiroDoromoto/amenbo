@@ -547,6 +547,8 @@ export const ko: Translation = {
     "face.rename": "이 페인 이름 바꾸기",
     "face.needsYou": "사용자를 기다리는 중",
     "face.handHere": "여기에 놓으면 이 창에 전달합니다",
+    "face.more": "더 보기",
+    "face.upload": "업로드",
     "files.tab": "파일",
     "files.memo": "메모",
     "files.memoWide": "넓게 쓰기",

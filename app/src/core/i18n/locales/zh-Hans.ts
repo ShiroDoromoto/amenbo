@@ -548,6 +548,8 @@ export const zhHans: Translation = {
     "face.rename": "重命名此窗格",
     "face.needsYou": "在等你",
     "face.handHere": "松开即可交给这个窗格",
+    "face.more": "更多",
+    "face.upload": "上传",
     "files.tab": "文件",
     "files.memo": "便笺",
     "files.memoWide": "写得宽一些",

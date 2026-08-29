@@ -37,6 +37,7 @@ export type IconName =
   | "chevronDown"
   | "plus"
   | "menu"
+  | "more"
   | "refresh"
   | "arrowUp"
   | "arrowDown"
@@ -275,6 +276,16 @@ const ART: Record<IconName, ReactNode> = {
   // ----- the marks on the frame of a screen, which point at a move rather than at a record -----
   // Three rules — the sidebar, folded away and brought back.
   menu: <path d="M3.6 6.8h16.8M3.6 12h16.8M3.6 17.2h16.8" />,
+  // Three dots in a row — the menu a row carries, as against the three lines above, which open the
+  // rail. Two menus that looked the same would be two presses a reader has to tell apart by where
+  // they are.
+  more: (
+    <>
+      <circle cx="5.6" cy="12" r="1.15" />
+      <circle cx="12" cy="12" r="1.15" />
+      <circle cx="18.4" cy="12" r="1.15" />
+    </>
+  ),
   // An arrow come full circle — read this screen again from the store.
   refresh: (
     <>

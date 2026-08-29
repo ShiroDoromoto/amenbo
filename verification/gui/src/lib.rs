@@ -22,8 +22,8 @@
 //! (`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to its own world.
 //!
 //! The screen tool is the input primitive too, called by whoever drives the screen between steps:
-//! its `find` / `click-named` / `click` / `dblclick` / `drag` / `type` / `key` carry out the action
-//! steps the checklist names.
+//! its `find` / `click-named` / `right-click-named` / `click` / `right-click` / `dblclick` / `drag` /
+//! `type` / `key` carry out the action steps the checklist names.
 //!
 //! One step is nobody's to carry out at the screen: `store run-again` ends this run of the app and
 //! brings another up on the same store ([`launch::Gui::run_again`]), which is how a road reads what

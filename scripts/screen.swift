@@ -437,6 +437,20 @@ func find(pid: Int, name: String?, window: String?) {
 /// display, a permission dialog — swallows the click and the run still exits 0. A shot says so by
 /// failing; a click cannot, so it is not asked to.
 func clickNamed(pid: Int, name: String, window: String?) {
+    let p = pointOf(pid: pid, name: name, window: window)
+    click(x: p.x, y: p.y)
+}
+
+/// The same, with the other button: what a row's own menu is opened by, and the only way to reach one
+/// from here. A menu drawn where the pointer is has no name to aim at until it is up.
+func rightClickNamed(pid: Int, name: String, window: String?) {
+    let p = pointOf(pid: pid, name: name, window: window)
+    rightClick(x: p.x, y: p.y)
+}
+
+/// Where a name stands, with the app brought to the front — the arithmetic both named presses share,
+/// and the refusals they share with it.
+func pointOf(pid: Int, name: String, window: String?) -> CGPoint {
     front(pid: pid, window: window)
     let found = named(name, among: windowElements(pid: pid, window: window))
     guard let first = found.first else { fail("nothing on screen is called \(name)") }
@@ -453,7 +467,7 @@ func clickNamed(pid: Int, name: String, window: String?) {
         let places = found.map { "\(Int($0.frame.minX)),\(Int($0.frame.minY))" }.joined(separator: " ")
         fail("\(found.count) elements are called \(oneLine(first.name)), in different places — at \(places); click a point instead")
     }
-    click(x: overlap.midX, y: overlap.midY)
+    return CGPoint(x: overlap.midX, y: overlap.midY)
 }
 
 /// Move onto the point before pressing, so an element that expects a hover first (a button's hover
@@ -468,8 +482,8 @@ func hover(_ p: CGPoint) {
 /// difference between two clicks and a double click: the events are otherwise identical, and what is
 /// listening reads the count off the field rather than timing the pair itself. A drag's events carry
 /// it too — a webview handed a `pointerdown` whose count is zero has been handed a press nobody made.
-func mouse(_ phase: CGEventType, at p: CGPoint, clickState: Int64 = 1) {
-    let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: .left)
+func mouse(_ phase: CGEventType, at p: CGPoint, clickState: Int64 = 1, button: CGMouseButton = .left) {
+    let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: button)
     e?.setIntegerValueField(.mouseEventClickState, value: clickState)
     e?.post(tap: .cghidEventTap)
 }
@@ -486,6 +500,22 @@ func click(x: Double, y: Double) {
     let p = CGPoint(x: x, y: y)
     hover(p)
     press(at: p, clickState: 1)
+}
+
+/// The press a row's own menu comes up on. The button is the whole difference — the same move, the
+/// same hover before it — and it is sent as a press rather than through the accessibility API for the
+/// reason every other press here is: what comes up has to come up the way it does for a person.
+///
+/// **A control-click is not this.** macOS raises the same menu for one, and a webview is handed a
+/// `contextmenu` either way, but the modifier stays down for whatever is sent next unless it is let
+/// go of — and a run that failed between the two would leave the machine holding a key nobody pressed.
+func rightClick(x: Double, y: Double) {
+    let p = CGPoint(x: x, y: y)
+    hover(p)
+    for phase in [CGEventType.rightMouseDown, CGEventType.rightMouseUp] {
+        mouse(phase, at: p, button: .right)
+        usleep(60_000)
+    }
 }
 
 /// A native open/save dialog opens the row you are pointing at on a double click and on nothing else
@@ -667,7 +697,7 @@ func setDate(pid: Int, name: String, day: String, window: String?) {
 
 let (window, args) = takeWindow(CommandLine.arguments)
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|drag|type|key|set-date|trusted> … [--window <title>]")
+    fail("usage: screen <front|shot|read|find|click-named|right-click-named|click|right-click|dblclick|drag|type|key|set-date|trusted> … [--window <title>]")
 }
 
 switch args[1] {
@@ -686,9 +716,15 @@ case "find":
 case "click-named":
     guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen click-named <pid> <name> [--window <title>]") }
     clickNamed(pid: pid, name: args[3], window: window)
+case "right-click-named":
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen right-click-named <pid> <name> [--window <title>]") }
+    rightClickNamed(pid: pid, name: args[3], window: window)
 case "click":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen click <x> <y>") }
     click(x: x, y: y)
+case "right-click":
+    guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen right-click <x> <y>") }
+    rightClick(x: x, y: y)
 case "dblclick":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen dblclick <x> <y>") }
     doubleClick(x: x, y: y)

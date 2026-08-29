@@ -62,7 +62,7 @@ import { asksBeforeTrash } from "./askBeforeTrash";
 import { TrashAsk } from "./TrashAsk";
 import { FileEditor } from "./FileEditor";
 import { MemoPage } from "./MemoPage";
-import { fileUnderAny } from "./fileUnder";
+import { fileAt, fileUnderAny } from "./fileUnder";
 import { gitMarks, type GitMark } from "./gitMark";
 import { sectionsOf } from "./sections";
 import { Icon } from "../components/Icon";
@@ -169,7 +169,7 @@ function segmentsOf(into: string): string[] {
   return into === "" ? [] : into.split("/");
 }
 
-export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose }: {
+export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose, onHandOver }: {
   /** The project whose folder the face is rooted at; nothing is drawn without one. */
   projectId: number | null;
   /** Leave the terminal face for the ledger — what a reference or a record means when it is clicked. */
@@ -194,6 +194,14 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   onTab: (tab: "files" | "memo") => void;
   /** Put the panel away. What opens it again is the top row, which is where it was opened from. */
   onClose: () => void;
+  /**
+   * Hand a file to the pane the reader is working in, as the whole path it is at — the reverse of a
+   * path drawn in a pane opening the file here (`../shell/TerminalFace`).
+   *
+   * Which pane that is, and whether there is one at all, is the terminal face's own answer: with
+   * none, none of this is handed down and the row's menu draws no item for it.
+   */
+  onHandOver?: (whole: string) => void;
 }) {
   // `0` names no project, which is what the folder read then answers with: none. A window with no
   // project on it draws the invitation, the same as one whose project has no folder.
@@ -466,6 +474,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
         onKey={onKey}
         close={close}
         aside={aside}
+        onHandOver={onHandOver}
       />
     );
   }
@@ -518,6 +527,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
           }}
           onClose={() => setMenu(null)}
           onTrash={() => askTrash(menu.root, menu.path)}
+          onHandOver={onHandOver}
         />
       )}
     </div>
@@ -775,7 +785,7 @@ function FolderSection({
  * are about a file's own kind, and a menu that offered them over a folder would be offering to open a
  * directory in a text editor. What is left over a folder is what can be written into it.
  */
-function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: {
+function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash, onHandOver }: {
   projectId: number;
   root: string;
   path: string[];
@@ -791,6 +801,15 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: 
   onClose: () => void;
   /** Send this row to the machine's bin — asked about first, unless the reader turned that off. */
   onTrash: () => void;
+  /**
+   * Hand the file to the pane the reader is working in, as the whole path it is at
+   * (`../shell/TerminalFace`).
+   *
+   * **Absent where there is no pane to hand it to**, and then the item is not drawn: the panel is
+   * open beside a terminal face with nothing running in it as readily as beside one with four, and
+   * an item that answers nothing is worse than an item that is not there.
+   */
+  onHandOver?: (whole: string) => void;
 }) {
   // The applications to pick from, once they have been asked for and there are any — the second
   // face of this one menu, drawn where the OS has no chooser to draw it for us.
@@ -837,6 +856,15 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: 
           {rename !== null && <MenuItem onClick={() => pick(rename)}>{t("files.rename")}</MenuItem>}
           {!dir && (
             <>
+              {/* The one door that goes the other way: everything under it hands the file out to
+                  the machine, and this hands it to what is running in the pane — which is the
+                  reverse of a path drawn in a pane opening the file here (`../shell/TerminalFace`).
+                  It is first because it is the one whose answer stays inside the app. */}
+              {onHandOver !== undefined && (
+                <MenuItem onClick={() => { onClose(); onHandOver(fileAt(root, path)); }}>
+                  {t("files.handOver")}
+                </MenuItem>
+              )}
               <MenuItem onClick={() => act(() => folderOpenFile(projectId, root, path))}>
                 {t("files.openWith")}
               </MenuItem>
@@ -1253,7 +1281,9 @@ function changedUnderneath(e: unknown): boolean {
 }
 
 /** One file, as far as a panel can show it. */
-function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKey, close, aside }: {
+function FileReader({
+  projectId, root, path, onBack, onOpenLedger, onTrash, onKey, close, aside, onHandOver,
+}: {
   projectId: number;
   root: string;
   path: string[];
@@ -1269,6 +1299,8 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
   close: ReactNode;
   /** The question about the bin and the last refusal, both of which outlive this state. */
   aside: ReactNode;
+  /** Hand this file to the pane being worked in, where there is one (`./FilesPanel`). */
+  onHandOver?: (whole: string) => void;
 }) {
   const [file, setFile] = useState<FolderFileDto | null>(null);
   // Why the file did not open, in the reader's own language. A link is not a broken file: the host
@@ -1624,6 +1656,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
           at={menu}
           onClose={() => setMenu(null)}
           onTrash={onTrash}
+          onHandOver={onHandOver}
         />
       )}
       {picking !== null && (

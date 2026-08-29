@@ -593,6 +593,7 @@ export const pl: Translation = {
     "files.read": "Czytaj",
     "files.reopenWith": "Otwórz ponownie z kodowaniem",
     "files.lineEndingMixed": "Mieszane końce wierszy",
+    "files.handOver": "Przekaż do panelu, w którym pracuję",
     "files.openWith": "Otwórz w zwykłej aplikacji",
     "files.chooseApp": "Otwórz w wybranej aplikacji",
     "files.appUsual": "{name} (ta zwykła)",

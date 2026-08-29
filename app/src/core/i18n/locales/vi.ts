@@ -570,6 +570,7 @@ export const vi: Translation = {
     "files.read": "Đọc",
     "files.reopenWith": "Mở lại với một bảng mã",
     "files.lineEndingMixed": "Ký tự xuống dòng lẫn lộn",
+    "files.handOver": "Đưa sang khung tôi đang làm việc",
     "files.openWith": "Mở bằng ứng dụng thường dùng",
     "files.chooseApp": "Mở bằng ứng dụng tôi chọn",
     "files.appUsual": "{name} (ứng dụng thường dùng)",

@@ -577,6 +577,7 @@ export const de: Translation = {
     "files.read": "Lesen",
     "files.reopenWith": "Mit einer Kodierung neu öffnen",
     "files.lineEndingMixed": "Gemischte Zeilenenden",
+    "files.handOver": "An das Fenster geben, in dem ich arbeite",
     "files.openWith": "Mit der üblichen App öffnen",
     "files.chooseApp": "Mit einer ausgewählten App öffnen",
     "files.appUsual": "{name} (die übliche)",

@@ -567,6 +567,7 @@ export const nl: Translation = {
     "files.read": "Lezen",
     "files.reopenWith": "Opnieuw openen met een codering",
     "files.lineEndingMixed": "Gemengde regeleindes",
+    "files.handOver": "Doorgeven aan het paneel waarin ik werk",
     "files.openWith": "Openen met de gebruikelijke app",
     "files.chooseApp": "Openen met een app naar keuze",
     "files.appUsual": "{name} (de gebruikelijke)",

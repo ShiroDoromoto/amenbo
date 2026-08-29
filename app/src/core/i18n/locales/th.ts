@@ -570,6 +570,7 @@ export const th: Translation = {
     "files.read": "อ่าน",
     "files.reopenWith": "เปิดใหม่ด้วยการเข้ารหัสที่เลือก",
     "files.lineEndingMixed": "ท้ายบรรทัดปนกัน",
+    "files.handOver": "ส่งให้แผงที่กำลังทำงานอยู่",
     "files.openWith": "เปิดด้วยแอปที่ใช้ประจำ",
     "files.chooseApp": "เปิดด้วยแอปที่เลือกเอง",
     "files.appUsual": "{name} (แอปที่ใช้ประจำ)",

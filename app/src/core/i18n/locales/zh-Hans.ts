@@ -567,6 +567,7 @@ export const zhHans: Translation = {
     "files.read": "阅读",
     "files.reopenWith": "指定字符编码重新打开",
     "files.lineEndingMixed": "换行符混用",
+    "files.handOver": "交给我正在用的窗格",
     "files.openWith": "用常用的应用打开",
     "files.chooseApp": "用我选的应用打开",
     "files.appUsual": "{name}（常用的）",

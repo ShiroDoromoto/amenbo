@@ -567,6 +567,7 @@ export const zhHant: Translation = {
     "files.read": "閱讀",
     "files.reopenWith": "指定字元編碼重新開啟",
     "files.lineEndingMixed": "換行符混用",
+    "files.handOver": "交給我正在用的窗格",
     "files.openWith": "用常用的應用程式開啟",
     "files.chooseApp": "用我選的應用程式開啟",
     "files.appUsual": "{name}（常用的）",

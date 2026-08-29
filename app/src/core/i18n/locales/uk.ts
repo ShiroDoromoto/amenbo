@@ -593,6 +593,7 @@ export const uk: Translation = {
     "files.read": "Читати",
     "files.reopenWith": "Відкрити заново в іншому кодуванні",
     "files.lineEndingMixed": "Мішані кінці рядків",
+    "files.handOver": "Передати в панель, де я працюю",
     "files.openWith": "Відкрити у звичайній програмі",
     "files.chooseApp": "Відкрити у вибраній програмі",
     "files.appUsual": "{name} (звична)",

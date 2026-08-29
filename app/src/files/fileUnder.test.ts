@@ -5,7 +5,7 @@
 // Getting this wrong shows up as a click that opens a file the face cannot answer for — the thing
 // `AMB-D-747` is about.
 import { describe, expect, it } from "vitest";
-import { fileUnder, fileUnderAny } from "./fileUnder";
+import { fileAt, fileUnder, fileUnderAny } from "./fileUnder";
 
 const ROOT = "/work/repo";
 
@@ -71,5 +71,26 @@ describe("a path drawn in a pane, against every folder the project is bound to",
   it("opens nothing where it lands outside all of them", () => {
     expect(fileUnderAny(ROOTS, "/work/repo", "../../etc/passwd")).toBeNull();
     expect(fileUnderAny([], "/work/repo", "/work/repo/a.md")).toBeNull();
+  });
+});
+
+describe("the whole path a row names", () => {
+  it("is written with the slash the folder it is under is written with", () => {
+    expect(fileAt(ROOT, ["src", "main.rs"])).toBe("/work/repo/src/main.rs");
+    // A folder with no slash but a backslash is a Windows path, and a shell there is handed one.
+    expect(fileAt("C:\\work\\repo", ["src", "main.rs"])).toBe("C:\\work\\repo\\src\\main.rs");
+  });
+
+  it("is the bound folder itself where the row is its own", () => {
+    expect(fileAt(ROOT, [])).toBe(ROOT);
+    // A folder recorded with a trailing slash names the same folder, and joining it raw would put
+    // two of them in the middle of the path.
+    expect(fileAt("/work/repo/", ["a.md"])).toBe("/work/repo/a.md");
+  });
+
+  /** The two directions answer about the same file: what `fileUnder` reads out of a whole path is
+   *  what this puts back into one. */
+  it("is read back to the segments it was made of", () => {
+    expect(fileUnder(ROOT, null, fileAt(ROOT, ["src", "main.rs"]))).toEqual(["src", "main.rs"]);
   });
 });

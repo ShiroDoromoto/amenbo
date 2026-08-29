@@ -589,6 +589,7 @@ export const ptBR: Translation = {
     "files.read": "Ler",
     "files.reopenWith": "Reabrir com uma codificação",
     "files.lineEndingMixed": "Fins de linha misturados",
+    "files.handOver": "Passar para o painel em que estou",
     "files.openWith": "Abrir com o aplicativo de sempre",
     "files.chooseApp": "Abrir com um aplicativo à minha escolha",
     "files.appUsual": "{name} (o de sempre)",

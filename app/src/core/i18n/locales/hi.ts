@@ -567,6 +567,7 @@ export const hi: Translation = {
     "files.read": "पढ़ें",
     "files.reopenWith": "किसी एन्कोडिंग के साथ फिर से खोलें",
     "files.lineEndingMixed": "मिली-जुली पंक्ति-अंत",
+    "files.handOver": "जिस पैन में काम कर रहा हूँ उसे दें",
     "files.openWith": "सामान्य ऐप में खोलें",
     "files.chooseApp": "चुने हुए ऐप में खोलें",
     "files.appUsual": "{name} (सामान्य वाला)",

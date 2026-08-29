@@ -646,6 +646,7 @@ const ui = {
   "files.read": "Read",
   "files.reopenWith": "Reopen with an encoding",
   "files.lineEndingMixed": "Mixed newlines",
+  "files.handOver": "Hand to the pane I am working in",
   "files.openWith": "Open with the usual application",
   "files.chooseApp": "Open with an application I pick",
   "files.appUsual": "{name} (the usual one)",

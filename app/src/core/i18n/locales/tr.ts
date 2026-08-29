@@ -567,6 +567,7 @@ export const tr: Translation = {
     "files.read": "Oku",
     "files.reopenWith": "Bir kodlamayla yeniden aç",
     "files.lineEndingMixed": "Karışık satır sonları",
+    "files.handOver": "Çalıştığım bölmeye ver",
     "files.openWith": "Her zamanki uygulamayla aç",
     "files.chooseApp": "Seçtiğim uygulamayla aç",
     "files.appUsual": "{name} (her zamanki)",

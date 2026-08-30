@@ -18,6 +18,17 @@
 # under `/tmp` is a path the agent would be asked to be allowed to read, and asking is
 # the thing this road exists to remove.
 #
+# ── Why the inside half is walked first ──────────────────────────────────────────────────────────
+# What is already inside is handed over where it stands and is not taken in at all, and the whole of
+# that is a thing *not* happening: no copy, and not even the folder a copy would land in. A reading of "not happening" needs the screen to have nothing there to begin with, and the
+# outside half puts the inbox on the tree the moment it is walked. So the order is the reading: the
+# inside half runs against a folder with no inbox in it, and the outside half is what puts one there.
+#
+# Copying it instead would leave the reader with two of the same file, and the copy is the one nobody
+# would ever see change — the inbox carries a `.gitignore` of `*`, so a fix made in it shows neither
+# in git's diff nor on the rows the panel colours. That is why the path is read twice
+# over: for the name, and for the inbox not being in it.
+#
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no terminal road here and no gap in one. A drop is the operating system's, the menu is
 # drawn where the pointer is, and what is under test is a line standing unsent on a screen — none of
@@ -25,10 +36,11 @@
 id: hand-a-file-to-what-is-running-in-a-pane
 title: A file reaches what is running in the pane, as a path it is allowed to read
 description: >
-  Open a pane in the project's folder and get a file to what is running in it, both ways round: drag
-  one in from the machine, and pick the item on a row of the panel beside it. The dragged one lands
-  in the project's own inbox and the one already there is handed over where it stands, and both put
-  the whole path in the line the person types into — unsent, for them to send.
+  Open a pane in the project's folder and get a file to what is running in it, both ways round: pick
+  the item on a row of the panel beside it, and drag one in from the machine. The one already there
+  is handed over where it stands and nothing is written for it, the dragged one lands in the
+  project's own inbox, and both put the whole path in the line the person types into — unsent, for
+  them to send.
 
 given:
   - type: action
@@ -45,7 +57,7 @@ given:
       dir: workshop
       project: workshop
 
-  # The file the second half hands over. It is inside the bound folder from the start, which is what
+  # The file the first half hands over. It is inside the bound folder from the start, which is what
   # makes that half a hand-over and not a carry.
   - type: action
     domain: repo
@@ -75,6 +87,75 @@ steps_gui:
     domain: terminal
     op: open-shell
 
+  # The panel, which is the first half's door.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # Nothing has been handed over yet and there is no inbox. This is the reading the two after the
+  # hand-over are measured against — without it, "no inbox was made" would be said of a folder that
+  # might never have had one made for any reason at all.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: .amenbo-inbox
+      section: tree
+      present: false
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: hand-to-pane
+
+  # The path, read by the file's own name. This one was never carried anywhere — being where it
+  # already was is the point of it.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: watering.md
+
+  # And read again for what must not be in it. The name alone would say the same thing whether the
+  # file was handed over or copied, since a copy keeps the name it came with: the inbox being absent
+  # from the path is the only part of the line that tells the two apart.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: .amenbo-inbox
+      present: false
+
+  # And nothing was written for it — not the copy, and not the folder a copy would have landed in.
+  # The panel draws ignored rows like any other, so an inbox made here would be standing on the tree.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: .amenbo-inbox
+      section: tree
+      present: false
+
   # The half that comes from outside. The operator brings the file, because a drop reads the disk
   # they are sitting at and nothing this run laid down is reachable from there.
   - type: action
@@ -100,48 +181,20 @@ steps_gui:
     with:
       shows: handed.txt
 
-  # The panel, which is the other half's door — and, on the way, the proof that what was dropped
-  # landed inside the folder rather than somewhere the panel cannot see.
-  - type: action
+  # Both are standing on the one line, each answered its own way. The first path surviving the second
+  # hand-over is the half a reading taken before the drop cannot carry, and it is the shape a reader
+  # who hands over several things in a row actually gets.
+  - type: assert
     domain: terminal
-    op: show-side
+    op: in-the-box
     with:
-      side: files
+      shows: watering.md
 
-  - type: action
-    domain: files
-    op: tree
-    with:
-      open: true
-
+  # And the inbox is on the tree now, which is what makes the three readings above it a difference
+  # rather than a folder the panel simply never draws.
   - type: assert
     domain: files
     op: listed
     with:
       name: .amenbo-inbox
       section: tree
-
-  - type: action
-    domain: files
-    op: enter
-    with:
-      name: notes
-
-  - type: action
-    domain: files
-    op: menu
-    with:
-      name: watering.md
-      section: tree
-
-  - type: action
-    domain: files
-    op: hand-to-pane
-
-  # The second path, on the same line. It is read by the file's own name rather than by the folder,
-  # since this one was never carried anywhere — being where it already was is the point of it.
-  - type: assert
-    domain: terminal
-    op: in-the-box
-    with:
-      shows: watering.md

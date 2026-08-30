@@ -148,7 +148,19 @@ describe("handing a file from the panel to a pane", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
     // The pane the reader is standing on, not the first one on the page.
-    expect(hoisted.pasted).toEqual([{ session: "s-b", text: "/work/a/notes.md" }]);
+    expect(hoisted.pasted).toEqual([{ session: "s-b", text: "'/work/a/notes.md'" }]);
+  });
+
+  /** The same quoting a pane's own drop does (`AMB-D-801`): a screenshot's name has spaces in it on
+   *  all three machines, and an unquoted path splits into two words before the reader sees it. */
+  it("quotes the path it hands over", async () => {
+    await mount();
+    await focusPane("b");
+    await act(async () => {
+      hoisted.handOver?.("/work/a/it's a shot.png");
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hoisted.pasted).toEqual([{ session: "s-b", text: "'/work/a/it'\\''s a shot.png'" }]);
   });
 
   it("hands the panel nothing where the pane being worked in has nothing running", async () => {

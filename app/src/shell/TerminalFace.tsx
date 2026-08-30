@@ -26,7 +26,7 @@ import { invoke } from "../core/ipc";
 import type { PaneDrawnDto, PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf, tn } from "../core/i18n";
-import { pasteIntoTerminal } from "../talk/terminal";
+import { pasteIntoTerminal, quotedPath } from "../talk/terminal";
 
 /**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
@@ -431,11 +431,17 @@ export function TerminalFace({
    * The file is already inside a folder the project is bound to — it is a row of this panel — so
    * there is nothing to carry: what a pane's own drop has to do first (`./TerminalPane`) is done
    * here by the file being where it is. The path is pasted and no newline is sent.
+   *
+   * The path is quoted, the same way a pane's own drop quotes one (`./TerminalPane`, `AMB-D-801`):
+   * this is the same handover read the other way round, and a shell splits a name with a space in it
+   * whichever door the path came through.
    */
   const handOver = useMemo(() => {
     const session = layout.frames.find((one) => one.id === layout.focus)?.session ?? null;
     if (session === null) return undefined;
-    return (whole: string) => { void pasteIntoTerminal(session, whole).catch(() => {}); };
+    return (whole: string) => {
+      void pasteIntoTerminal(session, quotedPath(whole)).catch(() => {});
+    };
   }, [layout.focus, layout.frames]);
 
   const opened = useCallback((frame: string, session: string, folder: string | null) => {

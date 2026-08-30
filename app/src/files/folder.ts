@@ -280,9 +280,13 @@ export async function folderImport(
 }
 
 /**
- * Hand files to the project without picking where they go: the host puts them in
- * `.amenbo-inbox/<the day>/` under `root` and says what paths they are at now
+ * Hand files to the project without picking where they go: the host puts the ones from outside in
+ * `.amenbo-inbox/<the day>/` under `root` and says what paths they are all at now
  * (`crate::folder_write::folder_inbox`).
+ *
+ * **What is already under `root` is not taken in** (`AMB-D-808`): its own path comes back, since a
+ * copy would leave the reader with two of the same file and only one of them would ever be seen to
+ * change. Both kinds arrive mixed together, in the order they were handed over.
  *
  * `paths` are the host's own, the way a drop hands them over. `root` is one of the project's bound
  * folders and the host proves it against the store; nothing else about the landing is this side's

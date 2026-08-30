@@ -31,7 +31,7 @@ use crate::dto::{
     DropEffectDto, FolderCarriedDto, FolderInboxedDto, FolderStopDto, FolderStoppedDto,
 };
 use crate::error::CmdError;
-use crate::folder_fence::{gone, root_of, rooted, under};
+use crate::folder_fence::{gone, plain, root_of, rooted, under};
 
 /// The folder Amenbo puts what it was handed in, directly under the folder the project is bound to
 /// (`AMB-D-800`). A sibling of the `.amenbo` marker rather than something under it, because that
@@ -177,8 +177,12 @@ pub fn folder_import(
     Ok(carried(&from, &into, one))
 }
 
-/// Take files in without asking where they should go: they land in `.amenbo-inbox/<the day>/` under
-/// the folder the project is bound to, and the answer is the paths they are at now (`AMB-D-800`).
+/// Take files in without asking where they should go: the ones from outside land in
+/// `.amenbo-inbox/<the day>/` under the folder the project is bound to, and the answer is the paths
+/// they are all at now (`AMB-D-800`, `AMB-D-808`).
+///
+/// **What is already under that folder is not taken in** — its own path is what comes back, and the
+/// two kinds arrive mixed together in the order they were handed over ([`inboxed`] says why).
 ///
 /// **The landing is Amenbo's and not the caller's**, which is the whole of what separates this from
 /// [`folder_import`]. A reader who hands a file to a terminal pane has not picked a row to drop it
@@ -197,9 +201,8 @@ pub fn folder_inbox(
     paths: Vec<String>,
 ) -> Result<FolderInboxedDto, CmdError> {
     let root = root_of(project_id, &root)?;
-    let into = inbox(&root)?;
     let from: Vec<PathBuf> = paths.iter().map(|path| levelled(Path::new(path))).collect();
-    Ok(inboxed(&from, &into))
+    inboxed(&from, &root)
 }
 
 /// Today's folder in the inbox, with the inbox itself made under it if neither is there.
@@ -224,11 +227,35 @@ fn inbox(root: &Path) -> Result<PathBuf, CmdError> {
 
 /// The carry a handed-over file makes: the same rows in the same order, stopping on the first that
 /// will not go — except that a name already in the folder is not one of the things that stops it.
-fn inboxed(from: &[PathBuf], into: &Path) -> FolderInboxedDto {
+///
+/// **A row already under `root` is not carried at all** (`AMB-D-808`): what goes back for it is the
+/// path it is at now. Taking it in would leave the reader with two of the same file, and the one the
+/// pane was handed is the one nobody sees change — `.amenbo-inbox` carries a `.gitignore` of `*`, so
+/// a fix made in the copy shows neither in git's diff nor in the row of what changed (`AMB-D-785`).
+/// A folder handed over that way costs more still, since [`copy_one`] duplicates the whole tree
+/// under it. The reason `AMB-D-800` put the landing inside the project's folder — that an agent may
+/// only read the folder it was pointed at — was never about a file already in there.
+///
+/// **The place is made only when something is actually to be taken in**, so handing over what is
+/// already inside writes nothing at all, the dated folder included.
+///
+/// Inside is judged by spelling and the spelling alone: a link is not followed, matching what
+/// [`levelled`] resolves and what `AMB-D-782` keeps out of every other door here.
+fn inboxed(from: &[PathBuf], root: &Path) -> Result<FolderInboxedDto, CmdError> {
+    let outside = |path: &PathBuf| !plain(path).starts_with(plain(root));
+    let into = from.iter().any(outside).then(|| inbox(root)).transpose()?;
     let mut arrived = Vec::new();
     for path in from {
+        let into = match &into {
+            Some(into) if outside(path) => into,
+            // Already inside: nothing is copied, and the path it is at now is what gets handed back.
+            _ => {
+                arrived.push(path.to_string_lossy().into_owned());
+                continue;
+            }
+        };
         let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
-            return FolderInboxedDto { arrived, stopped: Some(nameless(path)) };
+            return Ok(FolderInboxedDto { arrived, stopped: Some(nameless(path)) });
         };
         let mut nth = 1;
         loop {
@@ -243,12 +270,12 @@ fn inboxed(from: &[PathBuf], into: &Path) -> FolderInboxedDto {
                 Some((Some(FolderStopDto::Taken), _)) => nth += 1,
                 Some((code, why)) => {
                     let stopped = FolderStoppedDto { name, code, why };
-                    return FolderInboxedDto { arrived, stopped: Some(stopped) };
+                    return Ok(FolderInboxedDto { arrived, stopped: Some(stopped) });
                 }
             }
         }
     }
-    FolderInboxedDto { arrived, stopped: None }
+    Ok(FolderInboxedDto { arrived, stopped: None })
 }
 
 /// The nth spelling of a name: the first is the name itself, and after that the number goes in
@@ -819,12 +846,12 @@ mod tests {
     #[test]
     fn a_name_already_there_is_numbered_rather_than_refused() {
         let dir = tempfile::tempdir().expect("a temp dir");
-        let into = dir.path().join("into");
-        std::fs::create_dir(&into).expect("a folder");
+        let root = dir.path().join("work");
+        std::fs::create_dir(&root).expect("a folder");
         let from = dir.path().join("shot.png");
         std::fs::write(&from, b"mine").expect("a file");
 
-        let answer = inboxed(&[from.clone(), from.clone(), from], &into);
+        let answer = inboxed(&[from.clone(), from.clone(), from], &root).expect("the carry");
         assert!(answer.stopped.is_none());
         let names: Vec<String> = answer
             .arrived
@@ -858,5 +885,48 @@ mod tests {
         move_one(&from, &to).expect("the move");
         assert!(!holds(&from));
         assert_eq!(std::fs::read(&to).expect("the file"), b"mine");
+    }
+
+    /// A file the pane's own folder already holds is handed back where it is: no copy is made, and
+    /// nothing at all is written into the reader's folder — not even the place a copy would land in.
+    #[test]
+    fn what_is_already_inside_is_handed_back_rather_than_taken_in() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path().join("work");
+        std::fs::create_dir_all(root.join("src")).expect("a folder");
+        let mine = root.join("src/note.md");
+        std::fs::write(&mine, b"mine").expect("a file");
+
+        let answer = inboxed(std::slice::from_ref(&mine), &root).expect("the carry");
+        assert!(answer.stopped.is_none());
+        assert_eq!(answer.arrived, [mine.to_string_lossy()]);
+        assert!(!holds(&root.join(INBOX_DIR)), "nothing is made for a carry that carries nothing");
+        // A folder is the same answer, and the tree under it is not duplicated.
+        let answer = inboxed(&[root.join("src")], &root).expect("the carry");
+        assert_eq!(answer.arrived, [root.join("src").to_string_lossy()]);
+        assert!(!holds(&root.join(INBOX_DIR)));
+    }
+
+    /// Inside and outside come back mixed in the order they were handed over, each answered its own
+    /// way — the one where it already is, the other where it was put.
+    #[test]
+    fn the_two_kinds_keep_the_order_they_were_handed_in() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path().join("work");
+        std::fs::create_dir(&root).expect("a folder");
+        let mine = root.join("note.md");
+        std::fs::write(&mine, b"mine").expect("a file");
+        let theirs = dir.path().join("shot.png");
+        std::fs::write(&theirs, b"theirs").expect("a file");
+
+        let answer = inboxed(&[theirs.clone(), mine.clone(), theirs], &root).expect("the carry");
+        assert!(answer.stopped.is_none());
+        let at: Vec<&Path> = answer.arrived.iter().map(Path::new).collect();
+        assert_eq!(at[1], mine, "the one already inside is answered where it is");
+        assert_eq!(at[0].file_name().expect("a name"), "shot.png");
+        assert_eq!(at[2].file_name().expect("a name"), "shot-2.png");
+        for one in [at[0], at[2]] {
+            assert!(one.starts_with(root.join(INBOX_DIR)), "the outside ones landed in the inbox");
+        }
     }
 }

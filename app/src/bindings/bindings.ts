@@ -609,11 +609,14 @@ mime: string, };
  * back as whole paths rather than as names. Where they landed is Amenbo's own choice and not the
  * caller's (`AMB-D-800`), so a face told only the names would have to build the path back out of a
  * decision it does not hold; and what it does with the answer is write the path into a terminal.
+ * A row that was already inside the folder did not land anywhere at all (`AMB-D-808`), which whole
+ * paths carry and names could not.
  */
 export type FolderInboxedDto = { 
 /**
- * The whole paths the files are at now, in the order they got there. A name the folder already
- * held is numbered rather than refused, so a path here need not end in the name it came with.
+ * The whole paths the files are at now, in the order they were handed over. A name the landing
+ * already held is numbered rather than refused, so a path here need not end in the name it came
+ * with — and one that was already inside the folder is the path it was handed over as.
  */
 arrived: Array<string>, 
 /**

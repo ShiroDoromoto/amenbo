@@ -305,6 +305,7 @@ amenbo task list --filter "draft:yes" --json
 # no mailbox workflow, its own device-global number space)
 amenbo decision add --title "SQLite as the source of truth" \
   --body "the local SQLite store is the single truth source" --project "Website refresh"
+amenbo decision add --title "…" --body "…" --dim "Area=Core"  # or classify it as you record it
 amenbo decision accept AMB-D-<n>              # proposed -> accepted
 amenbo decision accept AMB-D-<n> --reason "agreed after the perf review" # ...and note why (reason lands as a decision comment)
 amenbo decision reject AMB-D-<n> --reason "the simpler one covers it" # proposed -> rejected, with a reason comment

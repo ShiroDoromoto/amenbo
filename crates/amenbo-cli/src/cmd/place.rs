@@ -3,6 +3,7 @@
 
 use amenbo_core::Store;
 use amenbo_core::config::Paths;
+use amenbo_core::model::ClassifiedSide;
 
 use crate::PROJECT_OVERRIDE;
 use crate::cli::*;
@@ -165,19 +166,28 @@ pub(crate) fn resolve_bound_folder(store: &Store, project_id: i64, token: &str) 
     }
 }
 
-/// Resolve `--dim <axis>=<value>` pairs into the value ids to file a new task under, in the order given.
-/// The axis is looked up **inside the task's own project** — axes are per-project, so a name two projects
-/// share must not resolve to the neighbour's — and the value inside that axis, the same rules `dimension
-/// set` uses.
+/// Resolve `--dim <axis>=<value>` pairs into the value ids to file a new record under, in the order
+/// given. The axis is looked up **inside the record's own project** — axes are per-project, so a name two
+/// projects share must not resolve to the neighbour's — and the value inside that axis, the same rules
+/// `dimension set` uses. `side` is which of the two classified entities is being created, tasks and
+/// decisions taking the same flag through here (`AMB-D-781`).
 ///
-/// Two refusals, both before anything is written:
+/// Three refusals, all before anything is written:
 /// - a pair that is not `<axis>=<value>` (split on the first `=`, so a value may contain one);
+/// - an axis that does not classify this side (`applies_to`, `AMB-D-789`) — a value written on the side
+///   its axis does not run on classifies nothing, so it is refused the way `dim:` refuses it rather than
+///   filed as a row that means nothing;
 /// - the same axis named twice. An axis holds one value, so the second would silently replace the first,
 ///   and which one the caller meant is not ours to pick.
 ///
-/// `=none` is not accepted here, unlike the `dim:` filter: there it selects the tasks with no value on
-/// that axis, and clearing an axis that was never set is what a new task already is.
-pub(crate) fn resolve_dim_pairs(store: &Store, project_id: i64, pairs: &[String]) -> Result<Vec<i64>, CliError> {
+/// `=none` is not accepted here, unlike the `dim:` filter: there it selects the records with no value on
+/// that axis, and clearing an axis that was never set is what a new record already is.
+pub(crate) fn resolve_dim_pairs(
+    store: &Store,
+    project_id: i64,
+    pairs: &[String],
+    side: ClassifiedSide,
+) -> Result<Vec<i64>, CliError> {
     let mut value_ids = Vec::with_capacity(pairs.len());
     let mut axes: Vec<i64> = Vec::new();
     for pair in pairs {
@@ -187,6 +197,16 @@ pub(crate) fn resolve_dim_pairs(store: &Store, project_id: i64, pairs: &[String]
             )));
         };
         let dimension_id = store.resolve_dimension(Some(project_id), axis).map_err(CliError::from)?;
+        let classifies = store
+            .dimension(dimension_id)
+            .map_err(CliError::from)?
+            .is_some_and(|d| side.accepted().contains(&d.applies_to));
+        if !classifies {
+            return Err(CliError::from(amenbo_core::Error::invalid(format!(
+                "dimension '{axis}' does not classify {}, so `--dim` cannot file one under it",
+                side.plural()
+            ))));
+        }
         if axes.contains(&dimension_id) {
             return Err(CliError::from(amenbo_core::Error::invalid(
                 format!("--dim names the axis `{axis}` twice — an axis holds one value, so pass it once"),

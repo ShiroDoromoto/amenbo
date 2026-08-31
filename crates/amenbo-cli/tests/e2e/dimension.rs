@@ -100,6 +100,60 @@ fn task_add_files_the_new_task_under_the_axes_it_names() {
     assert_eq!(all["count"], 1, "a refused create leaves no unclassified task behind: {all}");
 }
 
+/// `decision add --dim <axis>=<value>` is the same flag on the other classified side (`AMB-D-781`): a
+/// decision is classified as it is recorded, so a required axis is filled before `decision accept` reads
+/// it and turns the acceptance away. The refusals are the task side's, plus the one this side has of its
+/// own — an axis narrowed off decisions (`applies_to`, `AMB-D-789`) classifies nothing here, so it is
+/// refused rather than written as a row that means nothing.
+#[test]
+fn decision_add_files_the_new_decision_under_the_axes_it_names() {
+    let cli = Cli::new();
+    let pid = id_str(&cli.json(&["project", "add", "--name", "決定分類PJ", "--json"])["project"]["id"]);
+    // An axis is born with nothing to answer with, so the demand is raised once it has values.
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "テーマ", "--json"]);
+    cli.json(&["dimension", "value-add", "テーマ", "--name", "対話ウィンドウ", "--json"]);
+    cli.json(&["dimension", "value-add", "テーマ", "--name", "メイン", "--json"]);
+    cli.json(&["dimension", "update", "テーマ", "--required", "true", "--json"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "影響半径", "--json"]);
+    cli.json(&["dimension", "value-add", "影響半径", "--name", "広い", "--json"]);
+    // The axis that runs on tasks alone — what this side has to turn away.
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "占有", "--applies-to", "task", "--json"]);
+    cli.json(&["dimension", "value-add", "占有", "--name", "iOS", "--json"]);
+
+    // Two axes at once, read back from another process through the decision-side filter.
+    let did = id_str(&cli.json(&[
+        "decision", "add", "--project", &pid, "--title", "窓をどう建てるか", "--body", "根拠",
+        "--dim", "テーマ=対話ウィンドウ", "--dim", "影響半径=広い", "--json",
+    ])["decision"]["id"]);
+    let filed = cli.json(&["decision", "list", "--project", &pid, "--filter", "dim:テーマ=対話ウィンドウ dim:影響半径=広い", "--json"]);
+    assert_eq!(filed["count"], 1, "both axes were filed at creation: {filed}");
+    assert_eq!(id_str(&filed["decisions"][0]["id"]), did);
+
+    // The required axis is filled, so the acceptance the empty one would have been turned away for goes through.
+    let (accepted, code) = cli.run(&["decision", "accept", &decision_ref(&did), "--json"]);
+    assert_eq!(code, 0, "a decision classified at creation accepts straight away: {accepted}");
+
+    // An axis narrowed off decisions: refused, naming the axis and the side rather than the value.
+    let (err, code) = cli.run_err(&["decision", "add", "--project", &pid, "--title", "レーン", "--body", "根拠", "--dim", "占有=iOS"]);
+    assert_ne!(code, 0, "an axis that does not classify decisions is refused: {err}");
+    assert!(err.contains("占有"), "the refusal names the axis: {err}");
+    assert!(err.contains("decisions"), "and the side it does not classify: {err}");
+
+    // The task side's refusals, on this side too — an axis named twice, an unresolvable value, a bare axis.
+    for bad in [
+        vec!["--dim", "テーマ=対話ウィンドウ", "--dim", "テーマ=メイン"],
+        vec!["--dim", "テーマ=無い値"],
+        vec!["--dim", "テーマ"],
+    ] {
+        let mut argv = vec!["decision", "add", "--project", &pid, "--title", "断られる", "--body", "根拠", "--json"];
+        argv.extend(bad.iter().copied());
+        let (out, code) = cli.run(&argv);
+        assert_ne!(code, 0, "refused before the decision exists: {out}");
+    }
+    let all = cli.json(&["decision", "list", "--project", &pid, "--json"]);
+    assert_eq!(all["count"], 1, "a refused create leaves no unclassified decision behind: {all}");
+}
+
 /// Only values on a time axis (role: time_axis) carry a period `[start_on, end_on]`. value-add /
 /// value-update write it, list / show print it for humans, and dates on any other axis are turned away by
 /// the CLI gatekeeper (core just writes the columns) — all across processes, so persistence is included.

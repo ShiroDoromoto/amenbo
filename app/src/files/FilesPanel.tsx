@@ -507,6 +507,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
           onRead={(path) => { setEdit(null); setReading({ root: one.path, path }); }}
           onMenu={(path, dir, x, y) => setMenu({ root: one.path, path, dir, x, y })}
           onTrash={(path) => askTrash(one.path, path)}
+          chosen={reading !== null && reading.root === one.path ? reading.path.join("/") : null}
         />
       ))}
       {menu !== null && (
@@ -583,6 +584,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
  */
 function FolderSection({
   projectId, root, label, bound, landing, opened, onOpened, edit, onEdit, onRead, onMenu, onTrash,
+  chosen,
 }: {
   projectId: number;
   root: string;
@@ -593,8 +595,9 @@ function FolderSection({
   /** Where a dragged file would land, anywhere on the panel — a section draws the highlight only
    *  where the landing is one of its own (`landed`). */
   landing: Landing | null;
-  /** How this folder's tree is opened. The panel holds it so that it outlives the section, which is
-   *  unmounted for as long as a file is being read (`Opened`). */
+  /** How this folder's tree is opened. The panel holds it rather than the section, so that it
+   *  outlives a section unmounted by anything at all — a folder unbound and bound back, a project
+   *  switched away from and returned to (`Opened`). */
   opened: Opened;
   /** Change it — handed the way it stands, because two of these can land in one render: unfolding
    *  the way to a name being made is the tree and one folder inside it, said at once. */
@@ -607,6 +610,10 @@ function FolderSection({
   onMenu: (path: string[], dir: boolean, x: number, y: number) => void;
   /** Put one row of this folder in the machine's bin. */
   onTrash: (path: string[]) => void;
+  /** The row of this folder whose file is being read, or nothing where the file being read is in
+   *  another folder — or where none is. The panel works out which section it belongs to, since it
+   *  is the panel that knows what is open. */
+  chosen: string | null;
 }) {
   const [changes, setChanges] = useState<FolderChangesDto>(
     { root, capped: false, unwatched: false, gone: false },
@@ -614,10 +621,10 @@ function FolderSection({
   // How many times the host has said this folder moved. Everything read off the disk watches it.
   const [moved, setMoved] = useState(0);
   const [git, setGit] = useState<GitEntryDto[]>([]);
-  // How this tree stands: the panel's answer, because the section is unmounted while a file is
-  // being read and would lose it (`Opened`). Nothing until a reader has been on a row is what puts
-  // the tab stop on the first one the moment the panel is drawn, rather than leaving a reader to
-  // Tab through the tree to find out where they are.
+  // How this tree stands: the panel's answer, because a section that was unmounted would lose it
+  // (`Opened`). Nothing until a reader has been on a row is what puts the tab stop on the first one
+  // the moment the panel is drawn, rather than leaving a reader to Tab through the tree to find out
+  // where they are.
   const { treeOpen, open, cursor } = opened;
   const gone = !bound || changes.gone;
 
@@ -772,6 +779,7 @@ function FolderSection({
             onTrash={onTrash}
             cursor={cursor}
             onCursor={(key) => onOpened((was) => ({ ...was, cursor: key }))}
+            chosen={chosen}
           />
         )}
       </section>
@@ -948,17 +956,23 @@ function useLedgerNav(onOpenLedger?: () => void): RefNav {
  * this"; the colour is "git says this moved". A row is rarely both — what is ignored has no status
  * to show — but nothing here stops them, because nothing about either one depends on the other.
  */
-function rowClass(base: string, ignored: boolean, mark: GitMark | null): string {
+function rowClass(
+  base: string,
+  ignored: boolean,
+  mark: GitMark | null,
+  chosen: boolean,
+): string {
   let all = base;
   if (ignored) all += ` ${base}--ignored`;
   if (mark !== null) all += ` ${base}--git ${base}--git-${mark}`;
+  if (chosen) all += ` ${base}--chosen`;
   return all;
 }
 
 /** One folder's worth of names, and whatever of it has been opened. */
 function Level({
   projectId, root, path, landing, marks, moved, open, onOpen, naming, onRead, onMenu,
-  onTrash, cursor, onCursor,
+  onTrash, cursor, onCursor, chosen,
 }: {
   projectId: number;
   root: string;
@@ -978,7 +992,7 @@ function Level({
   moved: number;
   /** Which folders of the whole section are unfolded, as their paths joined. The panel holds it
    *  (`Opened`) because opening one is also something the section does on a reader's behalf, and
-   *  because it has to outlive a section that is unmounted while a file is being read. */
+   *  because it has to outlive the section being unmounted. */
   open: string[];
   onOpen: (key: string) => void;
   /** The name being typed anywhere in this section, passed down for the same reason `landing` is:
@@ -999,6 +1013,14 @@ function Level({
    */
   cursor: string | null;
   onCursor: (key: string) => void;
+  /**
+   * The row of this section whose file is being read, as its path joined — or nothing.
+   *
+   * It is a mark on the tree and not a place in it: the file panel lies over the tree rather than
+   * replacing it (`AMB-D-815`), so the row a reader opened is on the screen the whole time they are
+   * reading it, and without a mark it is one name among the rest.
+   */
+  chosen: string | null;
 }) {
   const [names, setNames] = useState<FolderEntryDto[]>([]);
   const making = makingIn(naming.edit, root, path);
@@ -1162,7 +1184,7 @@ function Level({
             {one.isDir
               ? (
                 <>
-                  <span className={rowClass("files__dir", one.ignored, mark)}>
+                  <span className={rowClass("files__dir", one.ignored, mark, chosen === key)}>
                     <span className="files__twisty">
                       <Icon name={open.includes(key) ? "chevronDown" : "chevronRight"} />
                     </span>
@@ -1184,12 +1206,13 @@ function Level({
                       onTrash={onTrash}
                       cursor={cursor}
                       onCursor={onCursor}
+                      chosen={chosen}
                     />
                   )}
                 </>
               )
               : (
-                <span className={rowClass("files__file", one.ignored, mark)}>
+                <span className={rowClass("files__file", one.ignored, mark, chosen === key)}>
                   {/* Empty, and there anyway: it is what puts the name at the same place as the
                       name of the folder above it (`../styles/global.css`). */}
                   <span className="files__twisty" />

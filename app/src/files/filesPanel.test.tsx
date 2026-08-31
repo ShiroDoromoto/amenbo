@@ -731,6 +731,33 @@ describe("the file face", () => {
     expect(labelOf(stop()!)).toBe("main.rs");
   });
 
+  // The tree stays on the screen while a file is read (`AMB-D-815`), so the row that was opened has
+  // to say so: without a mark it is one name among the rest, and the panel over it is about a file
+  // the reader can no longer point to.
+  it("marks the row whose file is being read, and unmarks it when the file goes", async () => {
+    hoisted.entries[""] = [
+      { name: "a.md", isDir: false, ignored: false },
+      { name: "b.md", isDir: false, ignored: false },
+    ];
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+
+    const chosen = () => container.querySelector(".files__file--chosen")?.textContent;
+    expect(chosen()).toContain("a.md");
+
+    // The other file, so that the mark is shown to move rather than merely to exist.
+    await click(pressable(t("files.back")));
+    await settle();
+    await click(button("b.md"));
+    await settle();
+    expect(chosen()).toContain("b.md");
+
+    await click(pressable(t("files.back")));
+    await settle();
+    expect(container.querySelector(".files__file--chosen")).toBeNull();
+  });
+
   // Two things are over the page once a file is open, so "back" has to mean one of them at a time.
   // Both on the same key, because a reader pressing it twice is saying the same thing twice.
   it("takes one layer per Escape — the file first, and the panel after it", async () => {

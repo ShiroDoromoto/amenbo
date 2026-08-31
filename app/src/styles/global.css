@@ -641,26 +641,61 @@ button { font: inherit; color: inherit; cursor: pointer; }
    role and the one tab stop the whole tree has; what is drawn on the line is the element inside it
    (`app/src/files/FilesPanel.tsx`). */
 .files__item { cursor: pointer; }
-/* Where the tab stop is says which row a reader is on, so it is drawn on the line and not on the
-   item holding it: an open folder's item is the box around every row below it as well, and an
-   outline there rings the whole subtree instead of the one row that has the focus. */
-.files__item:focus-visible > .files__file, .files__item:focus > .files__file,
-.files__item:focus-visible > .files__dir, .files__item:focus > .files__dir {
-  outline: 1px solid var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
-}
+/* And no ring of its own. What is drawn for the focus is the line inside it (below); left to the
+   browser's default, the item would draw a second one around the whole subtree — which is the ring
+   the line was moved out of in the first place. */
+.files__item:focus, .files__item:focus-visible { outline: none; }
 /* A row is one line and never wraps: the name is what is read, and a path that folded would push
    the next row off the panel. Centred rather than on the baseline, because the first thing on the
-   line is a fixed box and not a letter — an empty one has no baseline to sit a name against. */
+   line is a fixed box and not a letter — an empty one has no baseline to sit a name against.
+   **22px, and set as a height rather than won with padding.** The line box is `--fs-sm` × `--lh`
+   = 19.5px, and the 2.5px left over does not divide into two whole pixels; a height lands on the
+   figure itself and leaves the centring to say where the text goes. 22px is also what the mark at
+   the head of the row asks for — `--icon-sm` is 16px, which sits with 3px above and below. */
 .files__file, .files__dir {
   display: flex; align-items: center; gap: var(--s-2);
-  width: 100%; padding: 0; border: 0; background: none;
+  width: 100%; min-height: 22px; padding: 0 var(--s-1); border: 0; background: none;
+  border-radius: var(--r-sm);
   color: var(--c-text); text-align: left;
+}
+/* **The three answers a row gives, told apart by the ground under it.** A band and not a colour on
+   the name: a mark made of the name's own letters is as wide as the name happens to be, so two rows
+   in the same tree say the same thing at two sizes, and a short name says it faintly.
+
+   The row whose file is being read (`AMB-D-815`). Of the three it is the only one that says
+   something about the work rather than about where the reader's hand is at this instant — so it
+   takes the accent's own pair rather than a shade of the ground, and it is the one the other two
+   stand aside for. `:not` and not the order they are written in: these selectors reach the row
+   through the item holding it and this one does not, so nothing but saying so would keep it. */
+.files__file--chosen, .files__dir--chosen {
+  background: var(--c-accent-weak); color: var(--c-accent-text);
+}
+/* Where the tab stop is says which row a reader is on, so it is drawn on the line and not on the
+   item holding it: an open folder's item is the box around every row below it as well, and an
+   outline there rings the whole subtree instead of the one row that has the focus.
+   The ring is drawn inside the row rather than 2px outside it — held off the edge, at the height
+   these rows are, it all but touches the names above and below. */
+.files__item:focus-visible > .files__file, .files__item:focus > .files__file,
+.files__item:focus-visible > .files__dir, .files__item:focus > .files__dir {
+  outline: 1px solid var(--c-accent); outline-offset: -1px;
+}
+.files__item:focus-visible > .files__file:not(.files__file--chosen),
+.files__item:focus > .files__file:not(.files__file--chosen),
+.files__item:focus-visible > .files__dir:not(.files__dir--chosen),
+.files__item:focus > .files__dir:not(.files__dir--chosen) {
+  background: var(--c-surface-sunken);
 }
 /* The row under the pointer, and only that one. `:hover` matches every item the pointer is inside,
    and an open folder's item contains the rows below it, so pointing at a file deep in the tree lit
-   up every folder on the way down to it. The innermost one is the row being pointed at. */
+   up every folder on the way down to it. The innermost one is the row being pointed at.
+   The name still moves colour on the row being read, where the ground cannot: a row that answered
+   the pointer with nothing reads as a row that cannot be pressed. */
 .files__item:hover:not(:has(.files__item:hover)) > .files__file,
 .files__item:hover:not(:has(.files__item:hover)) > .files__dir { color: var(--c-accent); }
+.files__item:hover:not(:has(.files__item:hover)) > .files__file:not(.files__file--chosen),
+.files__item:hover:not(:has(.files__item:hover)) > .files__dir:not(.files__dir--chosen) {
+  background: var(--c-surface-sunken);
+}
 /* One that has been opened. It stays on the list — what was pointed at was pointed at — and says
    for itself that it has been seen (`app/src/files/pointed.ts`). */
 .files__file--read .files__name { color: var(--c-text-muted); }
@@ -680,7 +715,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
    what is being named sits among names, and the ones already there are what a person is choosing
    against (`app/src/files/FilesPanel.tsx`). */
 .files__namebox {
-  width: 100%; padding: 0; border: 0; background: none;
+  width: 100%; min-height: 22px; padding: 0 var(--s-1); border: 0; background: none;
   color: var(--c-text); font: inherit;
 }
 .files__namebox:focus-visible, .files__namebox:focus {

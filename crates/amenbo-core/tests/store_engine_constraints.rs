@@ -85,7 +85,7 @@ fn a_foreign_key_refuses_a_dangling_reference_at_commit() {
         let tx = e.write()?;
         tx.put_record("task", 1, &[("title", text("real"))])?;
         // The blocker names a task that does not exist.
-        tx.put_record("dependency", 1, &[("task_id", text("1")), ("blocked_by_id", text("999"))])?;
+        tx.put_record("task_dependency", 1, &[("task_id", text("1")), ("blocked_by_id", text("999"))])?;
         tx.commit()
     })();
     assert!(dangling.is_err(), "the edge's blocked_by_id names no task — the commit is refused");
@@ -101,7 +101,7 @@ fn a_deferred_foreign_key_allows_child_before_parent() {
     let e = StoreEngine::open_in_memory().unwrap();
     let tx = e.write().unwrap();
     // Edge first, its blocker task second — order that an immediate FK would reject.
-    tx.put_record("dependency", 1, &[("task_id", text("1")), ("blocked_by_id", text("2"))]).unwrap();
+    tx.put_record("task_dependency", 1, &[("task_id", text("1")), ("blocked_by_id", text("2"))]).unwrap();
     tx.put_record("task", 1, &[("title", text("a"))]).unwrap();
     tx.put_record("task", 2, &[("title", text("b"))]).unwrap();
     tx.commit().unwrap();

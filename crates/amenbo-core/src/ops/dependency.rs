@@ -79,7 +79,7 @@ pub fn remove(tx: &WriteTx<'_>, task_id: i64, blocked_by_id: i64) -> Result<bool
     let Some(id) = read::dependency_id(tx.conn(), task_id, blocked_by_id)? else {
         return Ok(false);
     };
-    tx.delete_record("dependency", id)?;
+    tx.delete_record("task_dependency", id)?;
     Ok(true)
 }
 

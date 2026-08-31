@@ -112,7 +112,7 @@ fn a_subtree_delete_reports_every_child_row() {
         "its comment went with it, and the feed says so: {rows:?}"
     );
     assert!(
-        rows.iter().any(|r| r.dataset == "dependency" && r.op == "delete"),
+        rows.iter().any(|r| r.dataset == "task_dependency" && r.op == "delete"),
         "so did the dependency edge naming it: {rows:?}"
     );
 }

@@ -50,7 +50,7 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   task: ["tasks"],
   task_comment: ["tasks"], // the comment count shows on the task card
   task_commit: ["tasks"], // the recorded commit SHAs show on the task detail pane
-  dependency: ["tasks"], // adding or dropping one changes the ready/blocked display
+  task_dependency: ["tasks"], // adding or dropping one changes the ready/blocked display
   dimension: ["tasks"],
   dimension_value: ["tasks"],
   task_dimension_value: ["tasks"], // a dimension value is a board column and a list filter

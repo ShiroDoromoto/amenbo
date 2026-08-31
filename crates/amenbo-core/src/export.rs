@@ -163,8 +163,8 @@ fn stream_table(
         })?),
     };
 
-    let mut bundle = bundle.filter(|_| dataset.table == ATTACHMENT_TABLE);
-    if !table_exists(conn, dataset.table)? {
+    let mut bundle = bundle.filter(|_| dataset.name == ATTACHMENT_TABLE);
+    if !table_exists(conn, dataset.name)? {
         w.write_all(b"[]")?;
         return Ok(());
     }
@@ -175,7 +175,7 @@ fn stream_table(
     let cols: Vec<&str> =
         std::iter::once("id").chain(dataset.all_columns().map(|c| c.name)).collect();
     let select_list = cols.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(", ");
-    let table = dataset.table;
+    let table = dataset.name;
     // Both conditions are `AND`ed, and the narrowing is never the one dropped: a caller that names rows
     // still gets only the ones its window may see, so an id guessed from outside comes back as nothing
     // rather than as a row.
@@ -302,7 +302,7 @@ pub fn stream_store_tables(
         if i > 0 {
             w.write_all(b",")?;
         }
-        write_json(w, &dataset.table)?;
+        write_json(w, &dataset.name)?;
         w.write_all(b":")?;
         stream_table(conn, dataset, scope, None, w, bundle.as_deref_mut(), progress)?;
     }
@@ -328,7 +328,7 @@ pub fn stream_picked_rows(
     w: &mut impl Write,
 ) -> Result<()> {
     w.write_all(b"{")?;
-    write_json(w, &dataset.table)?;
+    write_json(w, &dataset.name)?;
     w.write_all(b":")?;
     stream_table(conn, dataset, scope, Some(ids), w, None, &mut crate::progress::ignore)?;
     w.write_all(b"}")?;

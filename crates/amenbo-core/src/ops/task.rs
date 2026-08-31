@@ -458,7 +458,7 @@ pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
         tx.delete_record("task_comment", comment_id)?;
     }
     for edge_id in read::task_dependency_ids(tx.conn(), id)? {
-        tx.delete_record("dependency", edge_id)?;
+        tx.delete_record("task_dependency", edge_id)?;
     }
     for commit_id in read::task_commit_ids(tx.conn(), id)? {
         tx.delete_record("task_commit", commit_id)?;

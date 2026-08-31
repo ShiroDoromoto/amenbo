@@ -82,14 +82,15 @@ pub struct Column {
     pub decl: &'static str,
 }
 
-/// A record type the engine reads and writes: its stable dataset key, its read-model table, and its
-/// columns. These are the tables `export`/`archive` carry, as opposed to the device-local plain tables.
+/// A record type the engine reads and writes: its name — which is at once its stable dataset key and
+/// its read-model table — and its columns. These are the tables `export`/`archive` carry, as opposed to
+/// the device-local plain tables.
 pub struct Dataset {
-    /// The dataset's stable key (`task`, `decision`, …) — the name a reader and `export` speak, never the
-    /// physical table name.
+    /// The dataset's name — one word for both halves of what it is: the stable key a reader, the change
+    /// feed and `sync records` speak, and the read-model table `export` writes. They were once two
+    /// fields, and the one entry where they differed sent the two roads out under different names
+    /// (`AMB-D-807`).
     pub name: &'static str,
-    /// Read-model table name.
-    pub table: &'static str,
     /// Type-specific columns (the universal [`AUDIT`] columns are appended to every table and are
     /// not repeated here). All are writable through the engine's field-write path; `id` never is.
     pub columns: &'static [Column],
@@ -124,12 +125,12 @@ impl Dataset {
     /// registry entry, not by naming it in source, so its table and columns are not statically known,
     /// while the one column it does need is the same `INTEGER PRIMARY KEY` on every table.
     pub fn as_table(&self) -> super::sql::Table {
-        super::sql::Table::new(self.table, self.table)
+        super::sql::Table::new(self.name, self.name)
     }
 
     /// This dataset's row key — see [`as_table`](Self::as_table).
     pub fn id_col(&self) -> super::sql::Col<super::sql::Int> {
-        super::sql::Col::new(self.table, self.table, "id")
+        super::sql::Col::new(self.name, self.name, "id")
     }
 }
 
@@ -352,16 +353,17 @@ macro_rules! column_type {
 /// generated from it — the DDL ([`DATASETS`], whence `CREATE TABLE` and the write whitelist) and the
 /// typed identifier readers name it by ([`mod@col`]). They cannot drift, because there is no second place
 /// to say it: renaming a column here is a compile error at every reader that still spells the old name.
-/// A line is `<column>: <kind>`; the kinds are the constructors above. Every table also gets `id` and
-/// the universal [`AUDIT`] columns without declaring them. A table-level constraint follows the braces
-/// as `=> "<sql>"`, the way a plain table's does ([`Dataset::constraint`]).
+/// An entry opens with one word, which is the dataset's key *and* its table — they were once declared
+/// separately, and the single entry where they differed is what `AMB-D-807` folded. A line inside is
+/// `<column>: <kind>`; the kinds are the constructors above. Every table also gets `id` and the universal
+/// [`AUDIT`] columns without declaring them. A table-level constraint follows the braces as
+/// `=> "<sql>"`, the way a plain table's does ([`Dataset::constraint`]).
 macro_rules! datasets {
-    ($(#[$meta:meta])* $($dataset:ident => $table:ident { $($cname:ident : $ckind:tt $(($($cargs:tt)*))?),+ $(,)? } $(=> $tc:literal)?)+) => {
+    ($(#[$meta:meta])* $($table:ident { $($cname:ident : $ckind:tt $(($($cargs:tt)*))?),+ $(,)? } $(=> $tc:literal)?)+) => {
         $(#[$meta])*
         pub const DATASETS: &[Dataset] = &[
             $(Dataset {
-                name: stringify!($dataset),
-                table: stringify!($table),
+                name: stringify!($table),
                 columns: &[$(column!($cname : $ckind $(($($cargs)*))?)),+],
                 constraint: { #[allow(unused_mut, unused_assignments)] let mut c = None; $(c = Some($tc);)? c },
             }),+
@@ -526,7 +528,7 @@ datasets! {
     /// their oracle independently of the code under test and seed non-empty values, or an
     /// empty-vs-empty compare hides a dropped column.
 
-    project => project {
+    project {
         name: col(REQ),
         notes: col(REQ),
         color: col(OPT),
@@ -536,7 +538,7 @@ datasets! {
         slug: col(SLUG),
     }
 
-    task => task {
+    task {
         title: col(REQ),
         notes: col(REQ),
         subtype: enum_col("default", "milestone"),
@@ -578,7 +580,7 @@ datasets! {
         at_binding_id: col(INT_OPT),
     }
 
-    decision => decision {
+    decision {
         project_id: fk("project", "RESTRICT"),
         title: col(REQ),
         body: col(REQ),
@@ -604,7 +606,7 @@ datasets! {
     // *first* (this decision stands on it, so overturning it puts this one up for review).
     // `decision_edge_pair` (below) keeps a pair from carrying two kinds at once — `supersedes`/`amends`
     // contradict, and both imply `builds_on`, so there is never a second edge to draw.
-    decision_edge => decision_edge {
+    decision_edge {
         decision_id: fk("decision", "RESTRICT"),
         target_decision_id: fk("decision", "RESTRICT"),
         kind: enum_col("supersedes", "amends", "builds_on"),
@@ -619,7 +621,7 @@ datasets! {
         drawn_at: ts_opt,
     }
 
-    decision_task_link => decision_task_link {
+    decision_task_link {
         decision_id: fk("decision", "RESTRICT"),
         task_id: fk("task", "RESTRICT"),
         // When the link was drawn — the intent column the premise-change judgement dates a link by
@@ -633,7 +635,7 @@ datasets! {
     }
 
     // Permanent task comments. A comment is always task-scoped and always carries a body.
-    task_comment => task_comment {
+    task_comment {
         task_id: fk("task", "RESTRICT"),
         author_kind: actor_kind,
         text: col(REQ),
@@ -646,7 +648,7 @@ datasets! {
 
     // Permanent comments on a decision record. Mirrors `task_comment`, but kept a **separate** table
     // rather than a polymorphic shared one so each row holds a real FK (`decision_id → decision.id`).
-    decision_comment => decision_comment {
+    decision_comment {
         decision_id: fk("decision", "RESTRICT"),
         author_kind: actor_kind,
         text: col(REQ),
@@ -654,7 +656,7 @@ datasets! {
         edited_at: ts_opt,
     }
 
-    dependency => task_dependency {
+    task_dependency {
         task_id: fk("task", "RESTRICT"),
         blocked_by_id: fk("task", "RESTRICT"),
         created_by_kind: actor_kind,
@@ -669,7 +671,7 @@ datasets! {
     // string and never reads git — the anchor from history back to a task. `sha` is the full-length
     // lower-case hex the ops layer normalises to and admits at the door (40 = SHA-1, 64 = SHA-256);
     // short forms, refs and revisions are refused before they can land.
-    task_commit => task_commit {
+    task_commit {
         task_id: fk("task", "RESTRICT"),
         sha: col(REQ),
         created_by_kind: actor_kind,
@@ -684,7 +686,7 @@ datasets! {
     // value on this axis belongs on its card (a property of the axis, not of the device — `AMB-D-651`);
     // `required` is whether a task may finish its creation without a value here (`AMB-D-734`);
     // `applies_to` is which of the two entities the axis classifies at all (`AMB-D-789`).
-    dimension => dimension {
+    dimension {
         project_id: fk("project", "RESTRICT"),
         name: col(REQ),
         notes: col(REQ),
@@ -709,7 +711,7 @@ datasets! {
         slug: col(SLUG),
     } => "UNIQUE (project_id, slug)"
 
-    dimension_value => dimension_value {
+    dimension_value {
         dimension_id: fk("dimension", "RESTRICT"),
         name: col(REQ),
         order_key: col(ORDER_KEY),
@@ -722,7 +724,7 @@ datasets! {
         end_on: date_opt,
     } => "UNIQUE (dimension_id, slug)"
 
-    task_dimension_value => task_dimension_value {
+    task_dimension_value {
         task_id: fk("task", "RESTRICT"),
         // Denormalised so the (task,dimension) single-select constraint and axis filters query
         // the row directly without joining through `dimension_value` (model.rs).
@@ -737,7 +739,7 @@ datasets! {
     // **The values are shared.** A decision answers an axis with one of the axis's own values, never with
     // a value raised for decisions, so `dimension` and `dimension_value` are untouched by this and one
     // axis reads the same on both sides.
-    decision_dimension_value => decision_dimension_value {
+    decision_dimension_value {
         decision_id: fk("decision", "RESTRICT"),
         // Denormalised for the reason the task side's is: the (decision,dimension) single-select
         // constraint and the axis filters read the row without joining through `dimension_value`.
@@ -748,7 +750,7 @@ datasets! {
     // Two-mode attachment (`blob` ingest / `url` link). The target is polymorphic
     // (`target_type` / `target_id`). Blob bytes never land here — the truth source carries only the
     // metadata; the content-addressed bytes live out-of-band.
-    attachment => attachment {
+    attachment {
         target_type: enum_col("task", "decision", "task_comment", "decision_comment"),
         // Polymorphic — no `REFERENCES` can branch on a sibling `target_type` column.
         target_id: col(KEY_REF),
@@ -778,7 +780,7 @@ datasets! {
     // row's uniqueness is a partial index of its own (`plugin_config_device`). CASCADE: a project's value is
     // *about* the project, so deleting the project retires it; the device row belongs to no project, so no
     // cascade reaches it.
-    plugin_config => plugin_config {
+    plugin_config {
         project_id: fk_opt("project", "CASCADE"),
         plugin: col(REQ),
         field_key: col(REQ),
@@ -797,7 +799,7 @@ datasets! {
     // filtering "the rows whose field is secret" would put the judgement on every path that ever reads
     // config — and the next path added would be written by someone who did not know to ask. A table left
     // out of `export`'s walk is left out whether or not anyone remembers it exists.
-    plugin_secret => plugin_secret {
+    plugin_secret {
         project_id: fk_opt("project", "CASCADE"),
         plugin: col(REQ),
         field_key: col(REQ),
@@ -816,22 +818,17 @@ datasets! {
     // for the whole device. The `(project_id, plugin)` pair is unique (`plugin_enable_pair` below), and the
     // device row's uniqueness is the partial `plugin_enable_device`. CASCADE: a project's row is *about*
     // the project; the device row is about no project, so no cascade reaches it.
-    plugin_enable => plugin_enable {
+    plugin_enable {
         project_id: fk_opt("project", "CASCADE"),
         plugin: col(REQ),
     }
 }
 
-/// The dataset a **record table** belongs to, or `None` when the table is not one of them — the
-/// whitelist the change feed's `update_hook` filters on: SQLite reports every row it touches, which
-/// includes `sqlite_sequence`, `store_meta` and the feed table itself. None of those are records a
-/// reader can re-read by id, and the feed table would feed on its own writes. Only the registry's
-/// tables pass.
-pub fn dataset_of_table(table: &str) -> Option<&'static str> {
-    DATASETS.iter().find(|d| d.table == table).map(|d| d.name)
-}
-
-/// Look up a dataset by its stable key.
+/// Look up a dataset by name — which is also the whitelist the change feed's `update_hook` filters on:
+/// SQLite reports every row the connection touches, which includes `sqlite_sequence`, `store_meta` and
+/// the feed table itself. None of those are records a reader can re-read by id, and the feed table would
+/// feed on its own writes. Only the registry's tables pass, and one lookup answers both questions
+/// because a dataset's key and its table are the same word (`AMB-D-807`).
 pub fn dataset(name: &str) -> Option<&'static Dataset> {
     DATASETS.iter().find(|d| d.name == name)
 }
@@ -1305,7 +1302,7 @@ fn plain_tables_ddl(tables: &[PlainTable]) -> String {
 fn tables_ddl(datasets: &[Dataset]) -> String {
     let mut sql = String::new();
     for d in datasets {
-        sql.push_str(&format!("CREATE TABLE IF NOT EXISTS {} (\n    id {RECORD_ID}", d.table));
+        sql.push_str(&format!("CREATE TABLE IF NOT EXISTS {} (\n    id {RECORD_ID}", d.name));
         for c in d.columns.iter().chain(AUDIT) {
             sql.push_str(&format!(",\n    {} {}", c.name, c.decl));
         }
@@ -1374,7 +1371,7 @@ pub fn table_ddl(d: &Dataset, table: &str) -> String {
 /// Naming the `id` column through `col::` would only say what the registry believes, which is precisely
 /// the belief under test.
 pub fn is_legacy_keyed(conn: &rusqlite::Connection) -> rusqlite::Result<bool> {
-    let tables: Vec<&str> = DATASETS.iter().map(|d| d.table).collect();
+    let tables: Vec<&str> = DATASETS.iter().map(|d| d.name).collect();
     let list = tables.iter().map(|t| format!("'{t}'")).collect::<Vec<_>>().join(",");
     conn.query_row(
         &format!(

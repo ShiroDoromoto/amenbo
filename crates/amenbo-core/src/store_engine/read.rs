@@ -1756,7 +1756,7 @@ pub fn record_exists(conn: &Connection, dataset: &str, id: i64) -> Result<bool> 
     // `col::` constant to name it with — the registry lookup below is what makes it a known table at all.
     let ds = super::schema::dataset(dataset).ok_or(StoreEngineError::UnknownDataset(dataset.to_string()))?;
     conn.query_row(
-        &format!("SELECT EXISTS(SELECT 1 FROM {} WHERE id = ?1)", ds.table),
+        &format!("SELECT EXISTS(SELECT 1 FROM {} WHERE id = ?1)", ds.name),
         [id],
         |r| r.get::<_, i64>(0),
     )
@@ -6375,7 +6375,7 @@ mod tests {
         let e = StoreEngine::open_in_memory_unchecked().unwrap();
         let edge = |id: i64, task: &str, blocker: &str| {
             let cols = vec![("task_id", text(task)), ("blocked_by_id", text(blocker))];
-            e.put_record("dependency", id, &cols).unwrap();
+            e.put_record("task_dependency", id, &cols).unwrap();
         };
         // Tasks a..f are 1..6: 1 → 2 → 3, and an unrelated 5 → 6.
         edge(1, "1", "2");

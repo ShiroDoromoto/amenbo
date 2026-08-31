@@ -350,7 +350,7 @@ mod tests {
         // The edge names both tasks, so both exist — the foreign keys on `task_id` /
         // `blocked_by_id` are deferred to commit, so the edge may be written before task 2 within the tx.
         tx.put_record("task", 2, &[("title", text("blocker"))]).unwrap();
-        tx.put_record("dependency", 1, &[("task_id", text("1")), ("blocked_by_id", text("2"))])
+        tx.put_record("task_dependency", 1, &[("task_id", text("1")), ("blocked_by_id", text("2"))])
             .unwrap();
         tx.commit().unwrap();
 
@@ -374,7 +374,7 @@ mod tests {
         let torn: Result<()> = (|| {
             let tx = e.write()?;
             tx.set_field("task", 1, "title", text("hello"))?;
-            tx.set_field("dependency", 1, "task_id", text("1"))?;
+            tx.set_field("task_dependency", 1, "task_id", text("1"))?;
             tx.set_field("task", 1, "does_not_exist", Value::Null)?; // fails here
             tx.commit()
         })();

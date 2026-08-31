@@ -158,7 +158,7 @@ pub fn task(t: &Task) -> Record {
 
 pub fn dependency(d: &TaskDependency) -> Record {
     Record::new(
-        "dependency",
+        "task_dependency",
         d.id,
         with_audit(
             vec![

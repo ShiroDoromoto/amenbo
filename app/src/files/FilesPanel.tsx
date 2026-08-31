@@ -1144,7 +1144,12 @@ function Level({
             {one.isDir
               ? (
                 <>
-                  <span className={rowClass("files__dir", one.ignored, mark)}>{one.name}</span>
+                  <span className={rowClass("files__dir", one.ignored, mark)}>
+                    <span className="files__twisty">
+                      <Icon name={open.includes(key) ? "chevronDown" : "chevronRight"} />
+                    </span>
+                    <span className="files__name">{one.name}</span>
+                  </span>
                   {open.includes(key) && (
                     <Level
                       projectId={projectId}
@@ -1167,6 +1172,9 @@ function Level({
               )
               : (
                 <span className={rowClass("files__file", one.ignored, mark)}>
+                  {/* Empty, and there anyway: it is what puts the name at the same place as the
+                      name of the folder above it (`../styles/global.css`). */}
+                  <span className="files__twisty" />
                   <span className="files__name">{one.name}</span>
                 </span>
               )}

@@ -45,7 +45,27 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             }, &dimension_values).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             warn_body(&detail.body); // non-blocking readability hint on write (stderr)
-            write_envelope(flags, "decision.add", "decision", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Recorded decision: {} ({})", d.title, decision_label(d.id)));
+            // A decision has no `task finish-creating` to be turned away at, so the one place it can be
+            // told that a required axis is still blank is the response to the create. The demand itself
+            // is read at `decision accept` (`AMB-D-790`), and the human who presses that is not the one
+            // who wrote this — so saying nothing here leaves the writer no moment to notice. It names,
+            // it does not refuse: the record is written either way.
+            let unmet = store.unmet_required_decision_axes(d.id).map_err(CliError::from)?;
+            let mut resource = serde_json::to_value(&detail).unwrap();
+            if !unmet.is_empty() {
+                if let Some(obj) = resource.as_object_mut() {
+                    obj.insert("unmet_required_dimensions".to_string(), json!(unmet));
+                }
+            }
+            write_envelope(flags, "decision.add", "decision", resource, None, false, format!("✓ Recorded decision: {} ({})", d.title, decision_label(d.id)));
+            if !unmet.is_empty() {
+                human(flags, format!(
+                    "  still to classify: {} — pass --dim <axis>=<value> here, or fill it in with `{} dimension set {} <axis> <value>` (accepting it is refused until then)",
+                    unmet.join(", "),
+                    Paths::command_name(),
+                    decision_label(d.id),
+                ));
+            }
         }
         DecisionCmd::List { project, filter, sort, limit, offset, with_body } => {
             let project_id = project.map(|p| store.resolve_project_ref(&p)).transpose().map_err(CliError::from)?;

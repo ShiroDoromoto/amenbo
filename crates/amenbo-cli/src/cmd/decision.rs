@@ -4,7 +4,7 @@
 use serde_json::json;
 
 use amenbo_core::config::Paths;
-use amenbo_core::model::{AttachmentTarget, TaskStatus};
+use amenbo_core::model::{AttachmentTarget, ClassifiedSide, TaskStatus};
 use amenbo_core::{ops, query, Store};
 
 use crate::cli::*;
@@ -12,7 +12,7 @@ use crate::cmd::arg::{body_arg, body_arg_opt};
 use crate::cmd::attach::attach_add;
 use crate::cmd::comment::{comment_line, comment_not_found, comment_section, resolve_live_decision_comment};
 use crate::cmd::labels::{decision_comment_label, decision_label, task_comment_label, task_label};
-use crate::cmd::place::project_or_bound;
+use crate::cmd::place::{project_or_bound, resolve_dim_pairs};
 use crate::cmd::premise::{attach_revisit, note_revisit, standing_on, warn_if_premise_added_to_reserved, warn_if_unsettled_under_reserved};
 use crate::cmd::task::resolve_task;
 use crate::output::{confirm, count_header, human, print_json, warn_body, write_envelope, CliError, Flags};
@@ -33,12 +33,16 @@ pub(crate) fn decision_ref_name(name: &Option<String>) -> &str {
 
 pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, CliError> {
     match sub {
-        DecisionCmd::Add { title, body, project } => {
+        DecisionCmd::Add { title, body, project, dim } => {
             let body = body_arg(body)?;
             let project_id = project_or_bound(store, project)?;
-            let d = store.add_decision(ops::decision::NewDecision {
+            // Resolved before the create, the way `task add`'s are: a misspelled axis or value — or one
+            // that does not classify decisions at all — is an error with no decision left behind to go
+            // and classify by hand.
+            let dimension_values = resolve_dim_pairs(store, project_id, &dim, ClassifiedSide::Decision)?;
+            let d = store.add_decision_with_dimensions(ops::decision::NewDecision {
                 title, body, project_id,
-            }).map_err(CliError::from)?;
+            }, &dimension_values).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             warn_body(&detail.body); // non-blocking readability hint on write (stderr)
             write_envelope(flags, "decision.add", "decision", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Recorded decision: {} ({})", d.title, decision_label(d.id)));

@@ -375,6 +375,20 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
    * the keyboard is standing on the tree, and the press falls through untouched when it is not.
    */
   const onKey = (e: ReactKeyboardEvent) => {
+    // **One press, one layer.** The file lying over the tree goes first and the panel itself after
+    // it, so the two things a reader might mean by "back" are told apart by how many times they
+    // press rather than by finding a different way out of each (`AMB-D-815`).
+    if (e.key === "Escape") {
+      // Not this panel's to take while something inside it is already answering to the same key: a
+      // menu and the question before a bin both close on Escape, and a press counted twice would
+      // carry the reader a layer past the one they asked for. A name being typed stops the press
+      // itself, so it never arrives here (`NameBox`).
+      if (asking !== null || (e.target as HTMLElement).closest('[role="menu"]') !== null) return;
+      e.preventDefault();
+      if (reading !== null) setReading(null);
+      else onClose();
+      return;
+    }
     if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
     const pressed = e.key.toLowerCase();
     if (pressed === "z") {
@@ -463,31 +477,17 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
       : <div className="files"><div className="files__top">{close}</div></div>;
   }
 
-  if (reading !== null) {
-    return (
-      <FileReader
-        projectId={projectId}
-        root={reading.root}
-        path={reading.path}
-        onBack={() => setReading(null)}
-        onOpenLedger={onOpenLedger}
-        onTrash={() => askTrash(reading.root, reading.path)}
-        onKey={onKey}
-        close={close}
-        aside={aside}
-        onHandOver={onHandOver}
-      />
-    );
-  }
-
   const top = <div className="files__top">{close}</div>;
 
   return (
     // Focusable so the panel can hold the key it hears, and taken off the tab order so that being
     // able to hold it costs nobody a stop on the way past (`AMB-D-780`).
     <div className="files" ref={box} tabIndex={-1} onKeyDown={onKey}>
-      {top}
-      {aside}
+      {/* The row and the question are the tree's while the tree is what is on top. A file being
+          read draws both itself, and two of each in the document is two crosses to close and two
+          questions to answer — one of them under a panel nobody can reach it through. */}
+      {reading === null && top}
+      {reading === null && aside}
       {sections.map((one) => (
         <FolderSection
           key={one.path}
@@ -528,6 +528,24 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
           }}
           onClose={() => setMenu(null)}
           onTrash={() => askTrash(menu.root, menu.path)}
+          onHandOver={onHandOver}
+        />
+      )}
+      {/* The file being read, lying over the tree rather than in place of it (`AMB-D-815`). The
+          tree stays mounted underneath — which folders are open, and which row the keyboard is on,
+          are what a reader comes back to — and a band of it is left showing on the left, so what
+          the panel is covering is on the screen and not only in the reader's memory. */}
+      {reading !== null && (
+        <FileReader
+          projectId={projectId}
+          root={reading.root}
+          path={reading.path}
+          onBack={() => setReading(null)}
+          onOpenLedger={onOpenLedger}
+          onTrash={() => askTrash(reading.root, reading.path)}
+          onKey={onKey}
+          close={close}
+          aside={aside}
           onHandOver={onHandOver}
         />
       )}

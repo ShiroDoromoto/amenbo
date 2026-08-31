@@ -691,9 +691,9 @@ describe("the file face", () => {
     expect(container.textContent).not.toContain("README.md");
   });
 
-  // Reading a file draws the reader where the tree was, so the tree is not on the page while it is
-  // open. What a reader did to it has to outlive that: the panel holds it, not the section
-  // (`./FilesPanel`).
+  // Reading a file draws the reader over the tree rather than in place of it (`AMB-D-815`), so the
+  // tree is still on the page while it is open. What a reader did to it has to outlive that: the
+  // panel holds it, not the section (`./FilesPanel`).
   it("keeps the tree as the reader left it while a file is being read", async () => {
     hoisted.entries[""] = [
       { name: "src", isDir: true, ignored: false },
@@ -717,8 +717,10 @@ describe("the file face", () => {
     await act(async () => { named("main.rs")!.focus(); });
     await click(button("a.md"));
     await settle();
-    // The tree is off the page while the file is up: that is what used to take its state with it.
-    expect(container.querySelector("[role=\"treeitem\"]")).toBeNull();
+    // Both at once: the file is up and the tree is still under it. Drawn in place of each other,
+    // the tree came off the page here, and its state went with it.
+    expect(pressable(t("files.back"))).toBeDefined();
+    expect(container.querySelector("[role=\"treeitem\"]")).not.toBeNull();
 
     await click(pressable(t("files.back")));
     await settle();
@@ -727,6 +729,27 @@ describe("the file face", () => {
     expect(pressable(t("files.tree"))?.getAttribute("aria-expanded")).toBe("true");
     expect(container.textContent).toContain("main.rs");
     expect(labelOf(stop()!)).toBe("main.rs");
+  });
+
+  // Two things are over the page once a file is open, so "back" has to mean one of them at a time.
+  // Both on the same key, because a reader pressing it twice is saying the same thing twice.
+  it("takes one layer per Escape — the file first, and the panel after it", async () => {
+    hoisted.entries[""] = [{ name: "a.md", isDir: false, ignored: false }];
+    let closed = 0;
+    await drawOpen({ onClose: () => { closed += 1; } });
+    await click(button("a.md"));
+    await settle();
+    expect(pressable(t("files.back"))).toBeDefined();
+
+    await press(container.querySelector(".files")!, "Escape");
+    await settle();
+    // The file is put away and the panel is not: one press, one layer.
+    expect(pressable(t("files.back"))).toBeUndefined();
+    expect(closed).toBe(0);
+
+    await press(container.querySelector(".files")!, "Escape");
+    await settle();
+    expect(closed).toBe(1);
   });
 
   // Held by the folder it is about, so a binding somebody removed must take its own answer with it

@@ -49,6 +49,7 @@ import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
 import { fileUrl } from "../core/fileUrl";
 import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
+import { asTyped } from "../core/keys";
 import { pushNotice } from "../core/notice";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
@@ -1251,6 +1252,7 @@ function NameBox({ initial, onName, onEnd }: {
   return (
     <>
       <input
+        {...asTyped}
         ref={box}
         className="files__namebox"
         aria-label={t("files.name")}

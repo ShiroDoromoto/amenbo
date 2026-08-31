@@ -713,8 +713,25 @@ button { font: inherit; color: inherit; cursor: pointer; }
    row whose colour did not move under the pointer reads as a row that cannot be pressed. */
 .files__item:hover:not(:has(.files__item:hover)) > .files__file--git .files__name,
 .files__item:hover:not(:has(.files__item:hover)) > .files__dir--git { color: var(--c-accent); }
-/* Reading one file: the way back, the name, and whatever the file turned out to be. */
-.files--reading { gap: var(--s-2); }
+/* Reading one file: the way back, the name, and whatever the file turned out to be.
+   It lies over the tree instead of replacing it (`AMB-D-815`), drawn the way the columns' own
+   drawers are — right against the edge, full height, on `--c-surface-2` under `--shadow-md` — so
+   that what a panel over the page looks like is one thing and not two.
+   The box it is measured against is the column (or, in a narrow window, the drawer holding it):
+   both are positioned and the tree between them is not, so the panel keeps its place while the
+   tree scrolls under it.
+   **The band is what is left showing.** 24px is a little under three levels of indent, so what
+   stays on the screen is the shape of the tree and the first letters of the names at its top
+   level. It is a fixed width rather than a share of the column because the column has a floor of
+   its own (`SIDE_MIN`, `app/src/talk/columns.ts`): 200px less this band is 176px, which is where
+   the panel is narrowest, and a share would go on eating into that as the column shrank. */
+.files--reading {
+  gap: var(--s-2);
+  position: absolute; inset: 0 0 0 auto; z-index: 2;
+  width: calc(100% - 24px);
+  background: var(--c-surface-2);
+  box-shadow: var(--shadow-md);
+}
 /* The name's own row — the way out on either side of it and nothing else between. Every control on
    this bar is as wide as its own words, so the name was the only thing that could give way when
    they shared a row, and on a panel of ordinary width it gave way to almost nothing: `run.sh` came

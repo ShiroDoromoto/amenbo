@@ -645,9 +645,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   outline: 1px solid var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
 }
 /* A row is one line and never wraps: the name is what is read, and a path that folded would push
-   the next row off the panel. */
+   the next row off the panel. Centred rather than on the baseline, because the first thing on the
+   line is a fixed box and not a letter — an empty one has no baseline to sit a name against. */
 .files__file, .files__dir {
-  display: flex; align-items: baseline; gap: var(--s-2);
+  display: flex; align-items: center; gap: var(--s-2);
   width: 100%; padding: 0; border: 0; background: none;
   color: var(--c-text); text-align: left;
 }
@@ -677,8 +678,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__namebox:focus-visible, .files__namebox:focus {
   outline: 1px solid var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
 }
-.files__dir::before { content: "▸ "; color: var(--c-text-muted); }
-.files__item[aria-expanded="true"] > .files__dir::before { content: "▾ "; }
+/* The box the open/shut mark is drawn in, at the head of every row of the tree — a folder's holds
+   the chevron and a file's is empty. It is a fixed width on both so that the names line up: a file
+   with nothing in front of it starts a whole box further left than the folder above it, which is a
+   larger step than one level of indent (8px) and so reads as a level rather than as a file
+   (`app/src/files/FilesPanel.tsx`). Muted, and kept muted under the pointer, because the row's own
+   colours — hover, git — are about the name. */
+.files__twisty {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--icon-sm); height: var(--icon-sm); flex: none;
+  color: var(--c-text-muted);
+}
 .files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* On the reading bar the name takes what the two controls beside it leave, which is the whole row.
    A name longer than that is still cut — there is no width that fits every name — but what it is cut

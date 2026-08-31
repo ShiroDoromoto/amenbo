@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { WakeDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
+import { asTyped } from "../core/keys";
 import { onAgentsInstalled, wakeRescan } from "./wake";
 import { SHELL } from "../talk/terminal";
 import { errText, t, tf } from "../core/i18n";
@@ -368,6 +369,7 @@ export function EmptySlot({
                 <label className="slot__field">
                   <span>{t("face.startName")}</span>
                   <input
+                    {...asTyped}
                     value={draft.name}
                     placeholder={t("face.startNamePh")}
                     onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -377,12 +379,10 @@ export function EmptySlot({
                 <label className="slot__field">
                   <span>{t("face.startLine")}</span>
                   <input
+                    {...asTyped}
                     value={draft.line}
                     placeholder={t("face.startLinePh")}
                     onChange={(e) => setDraft({ ...draft, line: e.target.value })}
-                    spellCheck={false}
-                    autoCapitalize="off"
-                    autoCorrect="off"
                   />
                 </label>
                 {/* Said before it is saved, not after it has been started: the line goes to the

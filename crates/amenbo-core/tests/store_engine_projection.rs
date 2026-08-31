@@ -97,13 +97,13 @@ fn hydrated(store: &Store) -> Database {
 }
 
 /// Project into a fresh in-memory engine and count, per dataset, the source records against the rows
-/// that landed. The dataset→table pairing comes from the schema registry, so it cannot drift from the
-/// tables the projection actually writes.
+/// that landed. Each name is looked up in the schema registry, so a dataset the registry does not carry
+/// is caught here rather than counted against a table that does not exist.
 fn count_parity(db: &Database, e: &StoreEngine) -> Vec<(&'static str, usize, usize)> {
     let sources: Vec<(&'static str, usize)> = vec![
         ("project", db.projects.len()),
         ("task", db.tasks.len()),
-        ("dependency", db.task_dependencies.len()),
+        ("task_dependency", db.task_dependencies.len()),
         ("task_commit", db.task_commits.len()),
         ("decision", db.decisions.len()),
         ("decision_edge", db.decision_edges.len()),
@@ -119,7 +119,7 @@ fn count_parity(db: &Database, e: &StoreEngine) -> Vec<(&'static str, usize, usi
     sources
         .into_iter()
         .map(|(dataset, source_total)| {
-            let table = store_engine::schema::dataset(dataset).expect("dataset is registered").table;
+            let table = store_engine::schema::dataset(dataset).expect("dataset is registered").name;
             let landed: i64 = e
                 .conn()
                 .query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))

@@ -560,11 +560,12 @@ pub(crate) fn drop_record(conn: &Connection, dataset: &str, row: i64) -> rusqlit
 pub fn rebuild(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute(&format!("DELETE FROM {DOC_TABLE}"), [])?;
     for face in FACES {
-        // The dataset's table comes from the registry, not from the face's own name, so a table renamed
-        // there is renamed here too.
+        // Looked up rather than taken from the face's own word: the registry is what says the dataset
+        // exists at all, so a face naming one that was renamed away fails here instead of querying a
+        // table that is not there.
         let table = super::schema::dataset(face.dataset)
             .expect("every indexed face names a registry dataset")
-            .table;
+            .name;
         // Read as optional: a face may sit on a nullable column (an attachment carries a filename or a
         // url, never both), and a NULL is the same absence as empty text — no row.
         let mut stmt = conn.prepare(&format!("SELECT id, {} FROM {table}", face.column))?;

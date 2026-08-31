@@ -97,8 +97,9 @@ pub type Result<T> = std::result::Result<T, StoreEngineError>;
 /// Carries the instruction and nothing more: which dataset, which id, which kind of change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RowChange {
-    /// The dataset's stable key (`task`, `decision`, …) — never the physical table name, which is an
-    /// implementation detail the reader does not speak.
+    /// The dataset's name (`task`, `decision`, …) — the registry's one word for both the key a reader
+    /// speaks and the table it reads back from (`AMB-D-807`), so what the feed names is what
+    /// `sync records` answers to.
     pub dataset: &'static str,
     /// The row's id. Every record table is `INTEGER PRIMARY KEY AUTOINCREMENT`, so SQLite's rowid *is*
     /// the logical id the reader knows.
@@ -597,7 +598,7 @@ fn install_change_hook(conn: &Connection, changes: &ChangeBuffer) -> Result<()> 
         // The whitelist: SQLite also reports `sqlite_sequence`, `store_meta` and `change_feed` itself.
         // None of them are rows a reader re-reads by id, and the feed table would otherwise feed on its
         // own writes.
-        let Some(dataset) = schema::dataset_of_table(table) else { return };
+        let Some(dataset) = schema::dataset(table).map(|d| d.name) else { return };
         let op = match action {
             rusqlite::hooks::Action::SQLITE_INSERT => "insert",
             rusqlite::hooks::Action::SQLITE_UPDATE => "update",

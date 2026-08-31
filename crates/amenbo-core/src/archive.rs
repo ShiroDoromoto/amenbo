@@ -328,18 +328,18 @@ pub(crate) fn verify_snapshot_current_schema(path: &Path) -> Result<()> {
     integrity_check(&conn, path)?;
 
     for d in crate::store_engine::schema::DATASETS {
-        if !has_table(&conn, path, d.table)? {
-            let (file, table) = (path.display(), d.table);
+        if !has_table(&conn, path, d.name)? {
+            let (file, table) = (path.display(), d.name);
             return Err(Error::invalid(format!("snapshot {file} is missing read-model table `{table}`")));
         }
-        let held = columns_of(&conn, path, d.table)?;
+        let held = columns_of(&conn, path, d.name)?;
         if let Some(missing) = d.all_columns().map(|c| c.name).find(|c| !held.iter().any(|h| h == c)) {
-            let (file, table) = (path.display(), d.table);
+            let (file, table) = (path.display(), d.name);
             return Err(Error::invalid(
                 format!("snapshot {file} table `{table}` is missing column `{missing}` — it is of an older generation than this build's read model"),
             ));
         }
-        count_probe(&conn, path, d.table)?;
+        count_probe(&conn, path, d.name)?;
     }
     Ok(())
 }

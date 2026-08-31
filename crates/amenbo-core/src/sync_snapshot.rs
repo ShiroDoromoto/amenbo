@@ -180,7 +180,7 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "dimension_value" => "dimension_id IN (SELECT id FROM dimension WHERE project_id = ?1)",
 
         // Joins — every end inside, or the row stays home.
-        "dependency" => concat!(
+        "task_dependency" => concat!(
             "task_id IN (SELECT id FROM task WHERE project_id = ?1)",
             " AND blocked_by_id IN (SELECT id FROM task WHERE project_id = ?1)",
         ),
@@ -324,7 +324,7 @@ pub const RECORDS_PER_READ: usize = 500;
 /// now hold, so without this a carrier holding a handful of ids has nowhere to take them but a fresh
 /// snapshot of the whole window.
 ///
-/// `dataset` is the stable key the feed names (`task`, `dependency`, …
+/// `dataset` is the stable key the feed names (`task`, `task_dependency`, …
 /// [`FeedRow::dataset`](crate::store_engine::read::FeedRow::dataset)), so what a carrier read off the
 /// ledger is what it passes here. A key no carried dataset answers to is refused rather than served
 /// empty: an empty answer would read as "those rows are gone" and a carrier would delete what it holds.
@@ -955,7 +955,7 @@ mod tests {
 
         let doc = take(&db, Reach::window(mine));
         for dataset in export::datasets_carried_out() {
-            let rows = carried(&doc, dataset.table);
+            let rows = carried(&doc, dataset.name);
             assert!(
                 !rows.is_empty(),
                 "the seed leaves no row in `{}`, so this proves nothing about reading it back — fill it \
@@ -964,7 +964,7 @@ mod tests {
             );
             let read = read_back(&db, Reach::window(mine), dataset.name, &ids_of(&rows));
             assert_eq!(
-                carried(&read, dataset.table),
+                carried(&read, dataset.name),
                 rows,
                 "`{}` does not read back as the snapshot carries it",
                 dataset.name,
@@ -991,11 +991,11 @@ mod tests {
 
         let next_door = take(&db, Reach::window(theirs));
         for dataset in export::datasets_carried_out() {
-            let ids = ids_of(&carried(&next_door, dataset.table));
+            let ids = ids_of(&carried(&next_door, dataset.name));
             assert!(!ids.is_empty(), "`{}` has nothing next door to ask for", dataset.name);
             let read = read_back(&db, Reach::window(mine), dataset.name, &ids);
             assert_eq!(
-                carried(&read, dataset.table),
+                carried(&read, dataset.name),
                 Vec::<serde_json::Value>::new(),
                 "`{}` handed a window rows from the project next door",
                 dataset.name,

@@ -587,7 +587,7 @@ mod tests {
         }
         for (edge, task) in [(10, 1), (11, 3)] {
             e.put_record(
-                "dependency",
+                "task_dependency",
                 edge,
                 &[("task_id", Value::Integer(task)), ("blocked_by_id", Value::Integer(task))],
             )
@@ -643,7 +643,7 @@ mod tests {
             .unwrap();
         }
         e.put_record(
-            "dependency",
+            "task_dependency",
             10,
             &[("task_id", Value::Integer(1)), ("blocked_by_id", Value::Integer(2))],
         )

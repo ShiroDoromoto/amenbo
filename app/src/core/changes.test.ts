@@ -21,7 +21,7 @@ describe("foldScopes — folding datasets into invalidation scopes", () => {
     const { scopes, unknown } = foldScopes([
       row("task"),
       row("task_comment"),
-      row("dependency"),
+      row("task_dependency"),
       row("task_dimension_value"),
     ]);
     expect(unknown).toBe(false);

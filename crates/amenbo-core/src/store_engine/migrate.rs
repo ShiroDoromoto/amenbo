@@ -527,6 +527,28 @@ pub const STEPS: &[Step] = &[
              UPDATE dimension SET applies_to = 'both';",
         ),
     },
+    Step {
+        to: 33,
+        name: "rename the dependency dataset to task_dependency in the change feed",
+        // `AMB-D-807`. The registry used to carry a dataset's key and its table as two words, and
+        // `task_dependency` was the only entry where they differed: the feed named it `dependency` while
+        // the road that reads records back answered under `task_dependency`, so a carrier keyed the same
+        // record twice and a delete never landed. Folding the two into one word is what fixes it, and the
+        // rows already in the feed still carry the old key.
+        //
+        // **The rewrite and the switch have to land together.** A feed still saying `dependency` while
+        // `sync records` no longer answers to it is the same mismatch pointed the other way, so the
+        // rewrite rides in the release that folds the field — not a step of its own ahead of it.
+        //
+        // The feed is a 5,000-row window and would turn over on its own in a few days; those days are the
+        // ones a carrier would lose the edges written in them.
+        //
+        // Frozen text, like every step's: the registry may rename the dataset again tomorrow, and what
+        // this step rewrote must keep meaning what it meant.
+        apply: Apply::Sql(
+            "UPDATE change_feed SET dataset = 'task_dependency' WHERE dataset = 'dependency';",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to
@@ -1559,7 +1581,7 @@ mod tests {
         // every column it has, key included.
         let declared: Vec<(&str, Vec<&str>)> = schema::DATASETS
             .iter()
-            .map(|d| (d.table, d.all_columns().map(|c| c.name).collect()))
+            .map(|d| (d.name, d.all_columns().map(|c| c.name).collect()))
             .chain(
                 schema::PLAIN_TABLES
                     .iter()
@@ -2439,6 +2461,41 @@ mod tests {
             engine.get_meta(crate::store_engine::engine::META_FEED_WINDOWS_FROM).unwrap().as_deref(),
             Some("3"),
             "the three rows that predate the column are declared unattributable",
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// **v33 rewrites the feed rows the old dataset name left behind.** The registry now carries one word
+    /// for the key and the table alike (`AMB-D-807`), so a row still saying `dependency` names a dataset
+    /// `sync records` no longer answers to — the very mismatch the fold exists to end.
+    #[test]
+    fn the_step_that_folds_the_dataset_name_rewrites_the_feed_rows_that_predate_it() {
+        let dir = scratch("feed-dataset-fold");
+        let engine = store_at(&dir, 32);
+        for (id, dataset) in [(1, "dependency"), (2, "task"), (3, "dependency")] {
+            engine
+                .conn()
+                .execute(
+                    "INSERT INTO change_feed (id, dataset, row_id, op) VALUES (?1, ?2, ?1, 'insert')",
+                    rusqlite::params![id, dataset],
+                )
+                .unwrap();
+        }
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let named: Vec<String> = engine
+            .conn()
+            .prepare("SELECT dataset FROM change_feed ORDER BY id")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(
+            named,
+            ["task_dependency", "task", "task_dependency"],
+            "the edges are renamed and nothing else is touched",
         );
         std::fs::remove_dir_all(&dir).ok();
     }

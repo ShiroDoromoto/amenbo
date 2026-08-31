@@ -129,9 +129,32 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
     assert_eq!(filed["count"], 1, "both axes were filed at creation: {filed}");
     assert_eq!(id_str(&filed["decisions"][0]["id"]), did);
 
-    // The required axis is filled, so the acceptance the empty one would have been turned away for goes through.
+    // The required axis is filled, so the acceptance the empty one would have been turned away for goes
+    // through — and the response said nothing was left to fill in.
     let (accepted, code) = cli.run(&["decision", "accept", &decision_ref(&did), "--json"]);
     assert_eq!(code, 0, "a decision classified at creation accepts straight away: {accepted}");
+
+    // Recorded with the required axis left blank: written all the same, and the response names the axis
+    // rather than leaving the writer to find out when somebody else presses accept.
+    let blank = cli.json(&["decision", "add", "--project", &pid, "--title", "分類なし", "--body", "根拠", "--json"]);
+    assert_eq!(
+        blank["decision"]["unmet_required_dimensions"],
+        serde_json::json!(["テーマ"]),
+        "the create names what is still blank: {blank}"
+    );
+    let (said, code) = cli.run(&["decision", "add", "--project", &pid, "--title", "分類なし2", "--body", "根拠"]);
+    assert_eq!(code, 0, "naming it is not refusing it: {said}");
+    assert!(said.contains("テーマ"), "the human face names the axis too: {said}");
+    assert!(said.contains("--dim"), "and the way to fill it in: {said}");
+
+    // Nothing left blank, nothing said — the field is absent rather than an empty list, so a reader
+    // testing for it is testing for something to do.
+    assert!(
+        cli.json(&["decision", "add", "--project", &pid, "--title", "分類あり", "--body", "根拠", "--dim", "テーマ=メイン", "--json"])
+            ["decision"]["unmet_required_dimensions"]
+            .is_null(),
+        "a decision with every demand answered is told nothing",
+    );
 
     // An axis narrowed off decisions: refused, naming the axis and the side rather than the value.
     let (err, code) = cli.run_err(&["decision", "add", "--project", &pid, "--title", "レーン", "--body", "根拠", "--dim", "占有=iOS"]);
@@ -140,6 +163,7 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
     assert!(err.contains("decisions"), "and the side it does not classify: {err}");
 
     // The task side's refusals, on this side too — an axis named twice, an unresolvable value, a bare axis.
+    let before = cli.json(&["decision", "list", "--project", &pid, "--json"])["count"].clone();
     for bad in [
         vec!["--dim", "テーマ=対話ウィンドウ", "--dim", "テーマ=メイン"],
         vec!["--dim", "テーマ=無い値"],
@@ -151,7 +175,7 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
         assert_ne!(code, 0, "refused before the decision exists: {out}");
     }
     let all = cli.json(&["decision", "list", "--project", &pid, "--json"]);
-    assert_eq!(all["count"], 1, "a refused create leaves no unclassified decision behind: {all}");
+    assert_eq!(all["count"], before, "a refused create leaves no unclassified decision behind: {all}");
 }
 
 /// Only values on a time axis (role: time_axis) carry a period `[start_on, end_on]`. value-add /

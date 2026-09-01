@@ -45,26 +45,13 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             }, &dimension_values).map_err(CliError::from)?;
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             warn_body(&detail.body); // non-blocking readability hint on write (stderr)
-            // A decision has no `task finish-creating` to be turned away at, so the one place it can be
-            // told that a required axis is still blank is the response to the create. The demand itself
-            // is read at `decision accept` (`AMB-D-790`), and the human who presses that is not the one
-            // who wrote this — so saying nothing here leaves the writer no moment to notice. It names,
-            // it does not refuse: the record is written either way.
-            let unmet = store.unmet_required_decision_axes(d.id).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
-            if !unmet.is_empty() {
-                if let Some(obj) = resource.as_object_mut() {
-                    obj.insert("unmet_required_dimensions".to_string(), json!(unmet));
-                }
-            }
+            let unmet = unmet_on_new_decision(store, d.id, &mut resource)?;
             write_envelope(flags, "decision.add", "decision", resource, None, false, format!("✓ Recorded decision: {} ({})", d.title, decision_label(d.id)));
+            // The two ways in, because this command has both: the flag it was just typed with, and the
+            // command that fills an axis in afterwards.
             if !unmet.is_empty() {
-                human(flags, format!(
-                    "  still to classify: {} — pass --dim <axis>=<value> here, or fill it in with `{} dimension set {} <axis> <value>` (accepting it is refused until then)",
-                    unmet.join(", "),
-                    Paths::command_name(),
-                    decision_label(d.id),
-                ));
+                human(flags, still_to_classify(&unmet, d.id, "pass --dim <axis>=<value> here, or fill it in with"));
             }
         }
         DecisionCmd::List { project, filter, sort, limit, offset, with_body } => {
@@ -348,7 +335,14 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 (None, None) => return Err(comment_not_found(&comment)),
             };
             let detail = store.decision_detail(did).map_err(CliError::from)?;
-            write_envelope(flags, "decision.promote", "decision", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Promoted {source} to decision: {} ({})", detail.title, decision_label(did)));
+            let mut resource = serde_json::to_value(&detail).unwrap();
+            let unmet = unmet_on_new_decision(store, did, &mut resource)?;
+            write_envelope(flags, "decision.promote", "decision", resource, None, false, format!("✓ Promoted {source} to decision: {} ({})", detail.title, decision_label(did)));
+            // One way in, not two: a promotion carries no `--dim`, so naming one here would send the
+            // reader to a flag this command does not have.
+            if !unmet.is_empty() {
+                human(flags, still_to_classify(&unmet, did, "fill it in with"));
+            }
         }
         DecisionCmd::Comment { sub } => return decision_comment(store, flags, sub),
         DecisionCmd::Attach { id, source, url, name } => {
@@ -357,6 +351,41 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
         }
     }
     Ok(0)
+}
+
+/// The required axes a decision was just created blank on, folded into the response under
+/// `unmet_required_dimensions` and handed back for the human line to name (`AMB-D-790`).
+///
+/// **Both doors that create a decision go through here**, because both leave the same gap. A task hears
+/// this at `task finish-creating`, which its own writer types; a decision has no second stage, and the
+/// demand is read where it is settled — a press that belongs to whoever accepts it, not to whoever
+/// wrote it. Saying nothing at the create leaves the writer no moment to notice at all.
+///
+/// Nothing blank means the key is **absent** rather than an empty list: a reader testing for it is
+/// testing for something to do. It names, it does not refuse — the record is written either way.
+fn unmet_on_new_decision(
+    store: &Store,
+    decision_id: i64,
+    resource: &mut serde_json::Value,
+) -> Result<Vec<String>, CliError> {
+    let unmet = store.unmet_required_decision_axes(decision_id).map_err(CliError::from)?;
+    if !unmet.is_empty() {
+        if let Some(obj) = resource.as_object_mut() {
+            obj.insert("unmet_required_dimensions".to_string(), json!(unmet));
+        }
+    }
+    Ok(unmet)
+}
+
+/// The human-facing half of [`unmet_on_new_decision`]: the axes still blank, and the way in. `ways` is
+/// the caller's, since a promotion has no `--dim` to send anyone to and `add` does.
+fn still_to_classify(unmet: &[String], decision_id: i64, ways: &str) -> String {
+    format!(
+        "  still to classify: {} — {ways} `{} dimension set {} <axis> <value>` (accepting it is refused until then)",
+        unmet.join(", "),
+        Paths::command_name(),
+        decision_label(decision_id),
+    )
 }
 
 /// The task-comment side of `decision promote`: the comment's text becomes the body, its task's project

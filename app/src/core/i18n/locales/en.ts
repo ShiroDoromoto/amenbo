@@ -245,6 +245,8 @@ const ui = {
   "settings.facetNamesHint": "Changes the two roster names (Human / AI) (a blank field leaves that facet unchanged).",
   "settings.avatarChoose": "Choose image…", "settings.avatarReset": "Reset to identicon",
   "settings.avatarHint": "Register a face for Human and AI. Images are downscaled to 96px before saving (a per-facet identicon is used when unset).",
+  "settings.avatarImageFailed": "The image could not be loaded",
+  "settings.avatarCanvasFailed": "The canvas could not be initialized",
   "settings.appearance": "Appearance", "settings.theme": "Theme", "settings.language": "Language",
   "settings.defaultView": "Default view",
   "settings.defaultViewNote": "The view a new project opens in. Projects that already exist keep the view they have.",
@@ -520,6 +522,8 @@ const ui = {
   // to word, from the bare timestamp the backend sends (see core/i18n/format).
   // app / shell chrome
   "app.loadError": "Failed to load data.", "app.loading": "Loading…",
+  // A ```mermaid fence whose diagram could not be drawn: the raw source is shown in its place.
+  "mermaid.failed": "The diagram could not be drawn",
   // lint hook consent: the question Amenbo asks before writing into .git/hooks
   "hooks.title": "Keep Amenbo's refs out of your commits?",
   "hooks.why": "A ref like AMB-T-… means nothing outside the store that issued it. A git hook stops one before it reaches a commit.",

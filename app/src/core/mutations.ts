@@ -1113,14 +1113,14 @@ export async function fileToAvatarDataUrl(file: File, size = 96): Promise<string
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
       el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error("画像を読み込めませんでした"));
+      el.onerror = () => reject(new Error(t("settings.avatarImageFailed")));
       el.src = url;
     });
     const canvas = document.createElement("canvas");
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("canvas を初期化できませんでした");
+    if (!ctx) throw new Error(t("settings.avatarCanvasFailed"));
     // Crop the centre square, then draw it at size×size.
     const side = Math.min(img.width, img.height);
     const sx = (img.width - side) / 2;

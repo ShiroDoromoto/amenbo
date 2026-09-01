@@ -46,7 +46,7 @@ describe("Mermaid rendering", () => {
     });
     const failed = container.querySelector(".mermaid--failed");
     expect(failed).not.toBeNull();
-    expect(failed?.textContent).toContain("図の描画に失敗しました");
+    expect(failed?.textContent).toContain("The diagram could not be drawn");
     // The raw source is never lost.
     expect(failed?.textContent).toContain("graph TD");
   });

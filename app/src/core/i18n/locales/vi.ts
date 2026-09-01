@@ -601,7 +601,7 @@ export const vi: Translation = {
     "block.draft": "Chưa khởi động được (vẫn đang được tạo): hãy hoàn tất việc tạo trước",
     "chip.draft": "Đang được tạo",
     "premise.changed": "Tiền đề đã đổi sau khi bạn nhận việc: {detail}",
-    "premise.warn": "Tiền đề đã đổi sau khi bạn nhận việc: {detail}. Chỉ hoàn tất phần tự nó đứng vững, hoặc trả lại bằng cách đặt về todo.",
+    "premise.warn": "Tiền đề đã đổi sau khi bạn nhận việc: {detail}. Chỉ hoàn tất phần tự nó đứng vững, hoặc trả lại bằng cách đặt về “Cần làm”.",
     "premise.noLongerSettled": "không còn ngã ngũ",
     "detail.premiseChanged": "Đã đổi từ khi nhận việc",
     "detail.premiseChangedHint": "Những tiền đề đã dịch chuyển sau khi bạn nhận việc — mới được ghim vào, hoặc không còn ngã ngũ (tính sẵn sàng bị rút)",

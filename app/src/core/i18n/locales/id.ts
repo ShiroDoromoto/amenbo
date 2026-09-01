@@ -601,7 +601,7 @@ export const id: Translation = {
     "block.draft": "Tidak bisa mulai (masih dibuat): selesaikan pembuatannya dulu",
     "chip.draft": "Sedang dibuat",
     "premise.changed": "Premisnya berubah setelah Anda memesan ini: {detail}",
-    "premise.warn": "Premisnya berubah setelah Anda memesan ini: {detail}. Selesaikan hanya bagian yang berdiri sendiri, atau kembalikan dengan menyetelnya ke todo.",
+    "premise.warn": "Premisnya berubah setelah Anda memesan ini: {detail}. Selesaikan hanya bagian yang berdiri sendiri, atau kembalikan dengan menyetelnya ke “Akan dikerjakan”.",
     "premise.noLongerSettled": "tidak lagi selesai",
     "detail.premiseChanged": "Berubah sejak dipesan",
     "detail.premiseChangedHint": "Premis yang bergerak setelah Anda memesan ini — baru disematkan, atau tidak lagi selesai (kesiapannya ditarik)",

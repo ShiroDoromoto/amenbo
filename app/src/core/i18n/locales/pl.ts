@@ -636,7 +636,7 @@ export const pl: Translation = {
     "block.draft": "Nie może ruszyć (wciąż jest tworzone): najpierw zakończ tworzenie",
     "chip.draft": "W tworzeniu",
     "premise.changed": "Przesłanki zmieniły się po tym, jak to zarezerwowałeś: {detail}",
-    "premise.warn": "Przesłanki zmieniły się po tym, jak to zarezerwowałeś: {detail}. Dokończ tylko tę część, która broni się sama, albo oddaj zadanie, ustawiając je z powrotem na todo.",
+    "premise.warn": "Przesłanki zmieniły się po tym, jak to zarezerwowałeś: {detail}. Dokończ tylko tę część, która broni się sama, albo oddaj zadanie, ustawiając je z powrotem na „Do zrobienia”.",
     "premise.noLongerSettled": "już nierozstrzygnięta",
     "detail.premiseChanged": "Zmieniło się od rezerwacji",
     "detail.premiseChangedHint": "Przesłanki, które ruszyły się po Twojej rezerwacji — dopięte albo już nierozstrzygnięte (gotowość cofnięta)",

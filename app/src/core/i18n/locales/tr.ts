@@ -599,7 +599,7 @@ export const tr: Translation = {
     "block.draft": "Başlayamaz (hâlâ oluşturuluyor): önce oluşturmayı bitirin",
     "chip.draft": "Oluşturuluyor",
     "premise.changed": "Bunu üstlendikten sonra dayanaklar değişti: {detail}",
-    "premise.warn": "Bunu üstlendikten sonra dayanaklar değişti: {detail}. Yalnızca kendi başına ayakta duran kısmı bitirin ya da todo'ya alarak geri bırakın.",
+    "premise.warn": "Bunu üstlendikten sonra dayanaklar değişti: {detail}. Yalnızca kendi başına ayakta duran kısmı bitirin ya da “Yapılacak”a alarak geri bırakın.",
     "premise.noLongerSettled": "artık karara bağlı değil",
     "detail.premiseChanged": "Üstlenildiğinden beri değişti",
     "detail.premiseChangedHint": "Bunu üstlendikten sonra oynayan dayanaklar — yeni iliştirilmiş ya da artık karara bağlı olmayan (hazırlığı geri çekilmiş)",

@@ -147,6 +147,19 @@ function makingIn(edit: Edit | null, root: string, path: string[]): Edit & { kin
     : null;
 }
 
+/**
+ * Where a name's stem ends — the part of it a rename is usually about.
+ *
+ * The last dot and not the first: `archive.tar.gz` is renamed by changing `archive.tar`, and a name
+ * cut at the first dot would hand back a stem nobody meant. A dot at the very front is not one of
+ * these — `.gitignore` is a name, not an extension on an empty stem — and a name with no dot in it
+ * is all stem, so both answer with the whole length (the convention `./grammars` reads names by).
+ */
+function stemEnd(name: string): number {
+  const dot = name.lastIndexOf(".");
+  return dot <= 0 ? name.length : dot;
+}
+
 /** Whether an edit is the renaming of this row. */
 function renaming(edit: Edit | null, root: string, path: string[]): boolean {
   return edit?.kind === "rename" && edit.root === root && edit.path.join("/") === path.join("/");
@@ -1313,9 +1326,17 @@ function NameBox({ initial, onName, onEnd }: {
     onEnd(made);
   };
 
-  // The box is the reader's the moment it is drawn — it took the place of a row they right-clicked,
-  // and a box they had to click into first would be one they typed past.
-  useEffect(() => { box.current?.focus(); box.current?.select(); }, []);
+  // The box is the reader's the moment it is drawn — it took the place of a row they were standing
+  // on, and a box they had to click into first would be one they typed past.
+  //
+  // **Standing on the stem, not on the whole name.** Nearly every rename keeps the extension, and
+  // with it selected the first keystroke takes it away — so a reader who meant to retype four
+  // letters has to put `.md` back by hand. A name that is all stem is selected whole, which is what
+  // the box did for every name before.
+  useEffect(() => {
+    box.current?.focus();
+    box.current?.setSelectionRange(0, stemEnd(initial));
+  }, [initial]);
 
   const keep = () => {
     // An answer already on its way, or a box already closed. Neither is a second name to ask for.

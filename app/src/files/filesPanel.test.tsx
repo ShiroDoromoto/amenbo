@@ -1654,6 +1654,36 @@ describe("the file face", () => {
     rows()[0]!.focus();
   }
 
+  // Nearly every rename keeps the extension, so a box that hands back the whole name selected takes
+  // it away on the first keystroke.
+  it("stands on the stem of the name it is renaming, and on the whole of one that is all stem", async () => {
+    hoisted.entries = {
+      "": [
+        { name: "notes.md", isDir: false, ignored: false },
+        { name: "Makefile", isDir: false, ignored: false },
+        { name: ".gitignore", isDir: false, ignored: false },
+        { name: "archive.tar.gz", isDir: false, ignored: false },
+      ],
+    };
+    const selected = async (name: string) => {
+      await press(rows().find((one) => labelOf(one) === name)!, "F2");
+      await settle();
+      const box = namebox()!;
+      const held = box.value.slice(box.selectionStart ?? 0, box.selectionEnd ?? 0);
+      await press(box, "Escape");
+      await settle();
+      return held;
+    };
+    await drawOpen();
+
+    expect(await selected("notes.md")).toBe("notes");
+    // The last dot, not the first: renaming this one is changing `archive.tar`.
+    expect(await selected("archive.tar.gz")).toBe("archive.tar");
+    // No dot at all, and a dot at the very front — a name, not an extension on an empty stem.
+    expect(await selected("Makefile")).toBe("Makefile");
+    expect(await selected(".gitignore")).toBe(".gitignore");
+  });
+
   it("begins a rename on the row the keyboard is standing on, with F2", async () => {
     await stood();
     expect(at()).toBe("src");

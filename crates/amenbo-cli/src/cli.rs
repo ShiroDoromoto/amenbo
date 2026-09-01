@@ -1544,6 +1544,12 @@ pub enum DecisionCmd {
         /// project (name or ID; defaults to the bound project)
         #[arg(long)]
         project: Option<String>,
+        /// classify the new decision as `<axis>=<value>` — the same resolution as `dimension set` (id, or
+        /// an exact name, case-insensitive). Repeatable for different axes; an axis is single-select, so
+        /// naming one twice is refused, and so is an axis that does not classify decisions. A required
+        /// axis left empty is what `decision accept` refuses later, so fill it here.
+        #[arg(long = "dim", value_name = "AXIS=VALUE")]
+        dim: Vec<String>,
     },
     /// List decisions (filter by status:/superseded:/project:/number: (alias ref:, e.g. `D-<n>`/`#<n>`)/task: (the decisions a task rests on, e.g. `task:#<n>`)/`dim:<axis>=<value>` and its `time_axis:<value>` sugar (the same axes tasks are classified on: different axes AND, the same axis ORs, `=none` is unclassified)/decided_before:/decided_after: (the day a decision was accepted, YYYY-MM-DD or today/-30d; both ends inclusive), sort by decided/created/number/title/status). Words are not a key here — `amenbo search <word> --kind decision` finds where they are written
     List {

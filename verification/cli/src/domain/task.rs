@@ -19,7 +19,16 @@ impl Driver<'_> {
                     None => self.project_id,
                 }
                 .to_string();
-                let v = self.run_json(&["task", "add", "--title", title, "--project", &pid, "--json"])?;
+                // Classification the create itself carries. It is the same one transaction as the row,
+                // so a road that walks this is walking something the create→`dimension set` pair cannot
+                // stand in for: there is no moment in between where the task exists unclassified.
+                let mut args: Vec<String> =
+                    vec!["task".into(), "add".into(), "--title".into(), title.into(), "--project".into(), pid.clone(), "--json".into()];
+                if let Some(dim) = with.get("dimension").and_then(|v| v.as_str()) {
+                    args.push("--dim".into());
+                    args.push(format!("{dim}={}", req_str(with, "value")?));
+                }
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 let id = v["task"]["id"].as_i64().ok_or("task add did not report an id")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);

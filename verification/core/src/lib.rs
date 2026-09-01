@@ -2041,9 +2041,9 @@ const REGISTRY: &[OpSpec] = &[
     // by then every box on the page has a terminal in it and "the pane" names three of them.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
     // A file dragged in from outside and let go over a pane. It is the file face's `drop-in` aimed at
-    // the other half of the screen, and it answers a different question: there the reader chose the
-    // folder it lands in, and here nobody did — the file is carried into the project's own inbox and
-    // the path it is at now is put where the reader types.
+    // the other half of the screen, and it answers a different question: there the reader chose a
+    // folder for it to land in, and here nothing lands anywhere — the file stays where it is and the
+    // path it is at goes where the reader types.
     //
     // `brings` is a name rather than a path, for the reason the file face's is: a drop reads the disk
     // the operator is sitting at, and nothing a run lays down is anywhere a hand can reach from
@@ -2591,10 +2591,10 @@ const REGISTRY: &[OpSpec] = &[
     // item, for the reason `note` and `section` are named that way: the wording is the interface's
     // own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "hand-over", required: &["door"], refs: &[], strings: &["door"], binds: false },
-    // The one item on that menu that hands the file to something inside Amenbo rather than out to the
-    // machine: what is running in the pane the reader is working in. It takes no args
-    // because there is nothing to name — the file is the row the menu was opened on, and which pane
-    // is the face's own answer rather than a road's.
+    // The one item on that menu that goes to something inside Amenbo rather than out to the machine:
+    // what is running in the pane the reader is working in. It takes no args because there is nothing
+    // to name — what is named is the row the menu was opened on, a folder as readily as a file, and
+    // which pane is the face's own answer rather than a road's.
     //
     // It is its own op and not a fourth `door` for the reason the three above are one: those three
     // end off Amenbo's window and stop at the hand-over, and this one ends **on** it, in the pane,

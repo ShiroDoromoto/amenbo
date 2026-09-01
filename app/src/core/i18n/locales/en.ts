@@ -208,7 +208,7 @@ const ui = {
   "detail.noActivity": "No activity yet",
   "detail.commentPh": "Write a comment… (Markdown, Enter for newline)",
   "detail.commentHint": "Markdown · send with ⌘/Ctrl+Enter", "detail.send": "Send",
-  "detail.created": "Created", "detail.restoreHint": "deletion cannot be undone",
+  "detail.created": "Created", "detail.deleteNoUndo": "deletion cannot be undone",
   "detail.updated": "Updated", "detail.updatedHint": "any write moves this — a comment, a date, a title fix — not just a status change",
   "detail.delete": "Delete", "detail.deleteTip": "Delete this task (cannot be undone)",
   "detail.deleteConfirm": "Delete “{title}”?",
@@ -662,7 +662,7 @@ const ui = {
   // The state, as the chip and the detail row both name it (`AMB-D-558`).
   "chip.draft": "Being created",
   "premise.changed": "Premises changed after you reserved this: {detail}",
-  "premise.warn": "Premises changed after you reserved this (AMB-D-366): {detail}. Finish only the part that stands on its own, or hand it back by setting it to todo.",
+  "premise.warn": "Premises changed after you reserved this: {detail}. Finish only the part that stands on its own, or hand it back by setting it to todo.",
   "premise.noLongerSettled": "no longer settled",
   "detail.premiseChanged": "Changed since reserved",
   "detail.premiseChangedHint": "Premises that moved after you reserved this — pinned on, or no longer settled (readiness withdrawn)",

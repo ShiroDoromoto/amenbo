@@ -32,6 +32,26 @@ steps_cli:
       dimension: medium
       value: web
 
+  # A name no filter could ever reach is refused where it is written. A filter is cut on
+  # whitespace before it is cut on `:`, so `dim:<axis>=<value>` cannot be spelled at all for a name
+  # holding any — and a filing nothing can query is what this whole road says is not a classification.
+  # The second is the full-width space, which is a keystroke away on a Japanese keyboard and parts the
+  # filter exactly as the ASCII one does.
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: "print run"
+      refused: invalid_dimension_name_whitespace
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: medium
+      value: "large　format"
+      refused: invalid_dimension_name_whitespace
+
   # What the axis offers is exactly what was added to it, which is asked from both sides: a value
   # nobody defined must not be on offer either.
   - type: assert

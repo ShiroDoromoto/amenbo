@@ -168,18 +168,45 @@ fn slug_taken(what: &str, slug: &str, holder: i64) -> Error {
     )
 }
 
+/// The shape a name has to have: something once trimmed, and no whitespace left inside it
+/// (`AMB-D-819`). `what` is the noun the empty case is reported with, so the sentence names the axis or
+/// the value the caller was actually adding.
+///
+/// **Whitespace is refused because a name holding it cannot be filtered on.** `crate::query` cuts a
+/// filter on whitespace before it cuts it on `:`, so `dim:<axis>=<name>` cannot be written for such a
+/// name at all — the id and the slug still reach it, but the thing a person actually remembers stops
+/// working, and nothing on the screen says why.
+///
+/// **Every Unicode space, not the ASCII one alone.** The cut is `str::split_whitespace`, which parts on
+/// U+3000 as readily as on U+0020 — a name typed with a full-width space on a Japanese keyboard breaks
+/// in exactly the same way, and this store is named in Japanese throughout.
+fn checked_name(what: &str, name: &str) -> Result<String> {
+    let s = name.trim();
+    if s.is_empty() {
+        return Err(Error::invalid(format!("a {what} name cannot be empty")));
+    }
+    if s.chars().any(char::is_whitespace) {
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "'{s}' cannot be a name — leave the whitespace out, so a filter can name it after `dim:`"
+            ))
+            .coded(ErrorCode::InvalidDimensionNameWhitespace)
+            .with("name", s),
+        ));
+    }
+    Ok(s.to_string())
+}
+
 // ───────────────────────────── Dimensions (the axis itself) ─────────────────────────────
 
 pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimension> {
-    if new.name.trim().is_empty() {
-        return Err(Error::invalid("a dimension name cannot be empty"));
-    }
+    let name = checked_name("dimension", &new.name)?;
     if read::project(tx.conn(), project_id)?.is_none() {
         return Err(crate::ops::project::NOUN.not_found(project_id.to_string()));
     }
     // An axis is born with no values, so "required" here could never be met by anybody.
     if new.required {
-        return Err(unsatisfiable_required(&new.name));
+        return Err(unsatisfiable_required(&name));
     }
     let sibs = read::dimension_siblings(tx.conn(), project_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
@@ -201,7 +228,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimen
     let dimension = Dimension {
         id,
         project_id,
-        name: new.name.trim().to_string(),
+        name,
         notes: new.notes,
         cardinality: new.cardinality,
         ordered: new.ordered,
@@ -282,15 +309,14 @@ pub fn update(
     applies_to: Option<DimensionAppliesTo>,
     slug: Option<&str>,
 ) -> Result<Dimension> {
-    if let Some(n) = name {
-        if n.trim().is_empty() {
-            return Err(Error::invalid("a dimension name cannot be empty"));
-        }
-    }
+    let name = match name {
+        Some(n) => Some(checked_name("dimension", n)?),
+        None => None,
+    };
     let before = live_before(tx, id)?;
     let mut d = before.clone();
     if let Some(n) = name {
-        d.name = n.trim().to_string();
+        d.name = n;
     }
     if let Some(t) = notes {
         d.notes = t.to_string();
@@ -369,9 +395,7 @@ pub fn value_add(
     name: &str,
     slug: Option<&str>,
 ) -> Result<DimensionValue> {
-    if name.trim().is_empty() {
-        return Err(Error::invalid("a dimension value name cannot be empty"));
-    }
+    let name = checked_name("dimension value", name)?;
     live_before(tx, dimension_id)?;
     // Placed at the bottom whether or not the axis is ordered; when unordered it is merely carried
     // as a stable key (see the model).
@@ -396,7 +420,7 @@ pub fn value_add(
     let value = DimensionValue {
         id,
         dimension_id,
-        name: name.trim().to_string(),
+        name,
         slug: Some(slug),
         order_key,
         // Periods are filled in later with `value_set_dates`; a fresh value has none.
@@ -410,13 +434,10 @@ pub fn value_add(
 }
 
 pub fn value_rename(tx: &WriteTx<'_>, value_id: i64, name: &str) -> Result<DimensionValue> {
-    if name.trim().is_empty() {
-        return Err(Error::invalid("a dimension value name cannot be empty"));
-    }
+    let name = checked_name("dimension value", name)?;
     let before = live_value_before(tx, value_id)?;
     live_before(tx, before.dimension_id)?;
-    let after =
-        DimensionValue { name: name.trim().to_string(), updated_at: Timestamp::now(), ..before.clone() };
+    let after = DimensionValue { name, updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::dimension_value(&before), record::dimension_value(&after))?;
     Ok(after)
 }
@@ -895,6 +916,34 @@ mod tests {
         let born_value = value_add(tx, born.id, "つぎの値", None).unwrap();
         assert_eq!(born_value.id, after);
         assert_eq!(born_value.slug.as_deref(), Some(format!("v{after}-2").as_str()));
+    }
+
+    /// Whitespace inside a name is refused at all four doors, and trimmed off the edges (`AMB-D-819`).
+    /// A name is what a person filters by, and `dim:<axis>=<name>` is cut on whitespace before it is cut
+    /// on `:` — so a name holding any is one the filter can never reach.
+    #[test]
+    fn a_name_carries_no_whitespace_inside_it() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let d = add(tx, p, custom("軸")).unwrap();
+        let v = value_add(tx, d.id, "値", None).unwrap();
+        // Every kind of space the filter parts on, the full-width one included — this store is named in
+        // Japanese, where U+3000 is a keystroke away.
+        for bad in ["日本語の 表記", "日本語の\u{3000}表記", "a\tb", "a\nb"] {
+            let code = ErrorCode::InvalidDimensionNameWhitespace.as_str();
+            let err = add(tx, p, custom(bad)).unwrap_err();
+            assert_eq!(err.code(), code, "{bad:?} is refused on add");
+            let err = update(tx, d.id, Some(bad), None, None, None, None, None, None, None).unwrap_err();
+            assert_eq!(err.code(), code, "{bad:?} is refused on rename");
+            let err = value_add(tx, d.id, bad, None).unwrap_err();
+            assert_eq!(err.code(), code, "{bad:?} is refused on value-add");
+            let err = value_rename(tx, v.id, bad).unwrap_err();
+            assert_eq!(err.code(), code, "{bad:?} is refused on value-rename");
+        }
+        // The edges are the caller's slip, not their intent: they come off, and what is left is kept.
+        assert_eq!(add(tx, p, custom("  リリース\u{3000}")).unwrap().name, "リリース");
+        assert_eq!(value_add(tx, d.id, " 運用第2期 ", None).unwrap().name, "運用第2期");
     }
 
     /// The shape the door takes, and the shapes it does not (`AMB-D-735`).

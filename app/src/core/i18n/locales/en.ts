@@ -208,7 +208,7 @@ const ui = {
   "detail.noActivity": "No activity yet",
   "detail.commentPh": "Write a comment… (Markdown, Enter for newline)",
   "detail.commentHint": "Markdown · send with ⌘/Ctrl+Enter", "detail.send": "Send",
-  "detail.created": "Created", "detail.restoreHint": "deletion cannot be undone",
+  "detail.created": "Created", "detail.deleteNoUndo": "deletion cannot be undone",
   "detail.updated": "Updated", "detail.updatedHint": "any write moves this — a comment, a date, a title fix — not just a status change",
   "detail.delete": "Delete", "detail.deleteTip": "Delete this task (cannot be undone)",
   "detail.deleteConfirm": "Delete “{title}”?",
@@ -245,6 +245,8 @@ const ui = {
   "settings.facetNamesHint": "Changes the two roster names (Human / AI) (a blank field leaves that facet unchanged).",
   "settings.avatarChoose": "Choose image…", "settings.avatarReset": "Reset to identicon",
   "settings.avatarHint": "Register a face for Human and AI. Images are downscaled to 96px before saving (a per-facet identicon is used when unset).",
+  "settings.avatarImageFailed": "The image could not be loaded",
+  "settings.avatarCanvasFailed": "The canvas could not be initialized",
   "settings.appearance": "Appearance", "settings.theme": "Theme", "settings.language": "Language",
   "settings.defaultView": "Default view",
   "settings.defaultViewNote": "The view a new project opens in. Projects that already exist keep the view they have.",
@@ -708,6 +710,8 @@ const ui = {
   "talk.elevated.title": "Amenbo is running as administrator",
   "talk.elevated.body": "A terminal opened here inherits that, and an administrator does not follow the links scoop installs its packages behind. Those tools cannot be reached from this window — Amenbo will report them as not installed, though they are.",
   "talk.elevated.fix": "Quit Amenbo and start it again without “Run as administrator”, and they come back.",
+  // A ```mermaid fence whose diagram could not be drawn: the raw source is shown in its place.
+  "mermaid.failed": "The diagram could not be drawn",
   // lint hook consent: the question Amenbo asks before writing into .git/hooks
   "hooks.title": "Keep Amenbo's refs out of your commits?",
   "hooks.why": "A ref like AMB-T-… means nothing outside the store that issued it. A git hook stops one before it reaches a commit.",
@@ -846,7 +850,7 @@ const ui = {
   // The state, as the chip and the detail row both name it (`AMB-D-558`).
   "chip.draft": "Being created",
   "premise.changed": "Premises changed after you reserved this: {detail}",
-  "premise.warn": "Premises changed after you reserved this (AMB-D-366): {detail}. Finish only the part that stands on its own, or hand it back by setting it to todo.",
+  "premise.warn": "Premises changed after you reserved this: {detail}. Finish only the part that stands on its own, or hand it back by setting it to todo.",
   "premise.noLongerSettled": "no longer settled",
   "detail.premiseChanged": "Changed since reserved",
   "detail.premiseChangedHint": "Premises that moved after you reserved this — pinned on, or no longer settled (readiness withdrawn)",
@@ -936,6 +940,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_dimension_required_unset: "“{name}” is a required category, so a task's value on it cannot be cleared — assign another value instead.",
   invalid_dimension_slug_shape: "“{slug}” cannot be a key — use at most {max} lower-case letters, digits and hyphens, starting with a letter.",
   invalid_dimension_slug_taken: "“{slug}” is already the key of something else here — pick another.",
+  invalid_dimension_name_whitespace: "“{name}” cannot be a name — leave the spaces out, or write a hyphen instead.",
   invalid_task_required_dimension: "This task carries no value on {names}, which this project requires.",
   invalid_decision_required_dimension: "This decision carries no value on {names}, which this project requires.",
   invalid_dimension_values_unordered: "This category's values carry no order, so they cannot be re-ordered.",

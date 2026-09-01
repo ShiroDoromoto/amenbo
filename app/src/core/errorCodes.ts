@@ -72,6 +72,10 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // so both land on the screen.
   "invalid_dimension_slug_shape",
   "invalid_dimension_slug_taken",
+  // The refusal a name meets (`AMB-D-819`): whitespace inside it, which would leave the axis or the value
+  // unreachable by the one key a person actually remembers. Typed in the same panel as the slug, so it
+  // lands on the screen along with them.
+  "invalid_dimension_name_whitespace",
   "invalid_task_required_dimension",
   // Its decision twin: the same flag, read at the other door a record passes through once
   // (`decision accept`), and the decision pane is where that button is.

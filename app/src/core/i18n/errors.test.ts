@@ -79,7 +79,7 @@ describe("errLabel", () => {
 
   it("writes a Tauri-raised refusal in the reader's language, from its fields alone", () => {
     expect(errLabel(nestedTree, "ja")).toBe(
-      "このフォルダは既に Amenbo の管理ツリーの中にあります（/work/repo で紐付け済み）。サブフォルダを紐付けると上位のポインタが隠れます。",
+      "このフォルダは既に Amenbo の管理ツリーの中にあります（/work/repo で紐付け済み）。サブフォルダを紐付けると上位の目印（.amenbo）が隠れます。",
     );
     expect(errLabel(nestedTree, "en")).toContain("bound at /work/repo");
     // The English it arrives with is what a reader gets only where no template exists, so the
@@ -98,7 +98,7 @@ describe("errLabel", () => {
     );
     // Japanese joins a list with its own mark, and nothing of the English survives.
     expect(errLabel(notReady, "ja")).toBe(
-      "AMB-T-12 はまだ予約できません: AMB-T-9 が完了していません、AMB-D-4 が未確定です。裁定を待つか link を外してください",
+      "AMB-T-12 はまだ予約できません: AMB-T-9 が完了していません、AMB-D-4 が未確定です。裁定を待つかリンクを外してください",
     );
     expect(errLabel(notReady, "ja")).not.toContain("is not done");
   });

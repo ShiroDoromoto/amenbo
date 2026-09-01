@@ -73,7 +73,7 @@ fn generate(store: &mut Store, opts: &Opts) -> amenbo_core::Result<Summary> {
         },
     )?;
     let value_ids: Vec<i64> = (0..opts.values.max(1))
-        .map(|i| store.dimension_value_add(dimension.id, &format!("Stage {}", i + 1), None, None).map(|v| v.id))
+        .map(|i| store.dimension_value_add(dimension.id, &format!("Stage-{}", i + 1), None, None).map(|v| v.id))
         .collect::<amenbo_core::Result<_>>()?;
 
     let priorities = [Priority::High, Priority::Medium, Priority::Low];

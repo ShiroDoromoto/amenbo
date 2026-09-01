@@ -2380,8 +2380,18 @@ const REGISTRY: &[OpSpec] = &[
     // A file opened, from whichever section it is being pressed in. The row is named by the words it
     // draws, which is the file's own name.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "open", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
-    // And back out of it, which is the only way back: opening a file replaces the column.
+    // And back out of it, by the way drawn on the screen. It is one of two — the other is the key
+    // below — and this is the one a reader finds without knowing it is there.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "back", required: &[], refs: &[], strings: &[], binds: false },
+    // A key pressed on the file face. The vocabulary is closed at the driver rather than here: what
+    // a key does is the face's, and a road naming one the face has no answer for is a road nobody
+    // can walk.
+    //
+    // It is an op of its own and not an argument on the ops above, because what a key reaches is
+    // decided by where the reader is standing rather than by what is being asked for: the key that
+    // leaves takes one layer per press, so the same step means the file on one press and the panel
+    // on the next.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "press", required: &["key"], refs: &[], strings: &["key"], binds: false },
     // Which of its two forms a Markdown file is drawn in — what the text says (`rendered`), or the
     // text itself, hashes and all (`source`). Markdown is the only file with two, and the control is
     // drawn for it and for nothing else.

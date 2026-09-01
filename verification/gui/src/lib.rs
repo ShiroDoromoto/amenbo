@@ -1941,6 +1941,22 @@ impl Instructor {
             (Domain::Files, "back") =>
                 "Press the way back out of the file. The column returns to its two sections."
                     .to_string(),
+            // And the key, which is the other way back. What it reaches is decided by where the
+            // reader is standing, so the line says where that has to be — and says the click is
+            // only for when it is not, because a road that opened or pressed a row a step ago has
+            // left the keyboard on the panel already, and an operator told to click every time
+            // would be walking a road no reader walks.
+            //
+            // The vocabulary is closed here rather than in the registry — a key the face has no
+            // answer for is a road nobody can walk, and it fails on the way in rather than on a
+            // screen.
+            (Domain::Files, "press") => match req(with, "key")? {
+                "escape" => "With the keyboard standing on the panel — which is where a row just pressed, or a file just opened, has left it — press the key this machine leaves things with. It is one layer per press: what is drawn over the tree goes first, and the panel itself only once the tree is what is showing. Click a row of the folder's section first only if something outside the panel has been clicked since, because the terminal beside this column hears the same key as meaning something of its own."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `press` does not know the key `{other}`"))
+                }
+            },
             // The typing, put where it cannot land on top of what is already there: a road that reads the
             // file afterwards reads it for both, and an operator who typed over the middle of it would
             // leave one of the two readings answering for nothing.

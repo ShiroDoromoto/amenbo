@@ -230,9 +230,57 @@ steps_gui:
     with:
       note: link
 
+  # The other way out, and the one a reader already has under their hands. It takes one layer per
+  # press: what is drawn over the tree goes first, and the panel itself only once the tree is what
+  # is showing. Both presses are walked because it is the count that is the answer — a
+  # face that closed the whole column on the first press would carry a reader who meant "shut this
+  # file" away from the folder they came to look at, and a face that only ever shut the file would
+  # leave the panel with no way out but the pointer.
   - type: action
     domain: files
-    op: back
+    op: press
+    with:
+      key: escape
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: shared-notes.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: escape
+
+  - type: assert
+    domain: terminal
+    op: side
+    with:
+      side: files
+      present: false
+
+  # And back in, because the road is not finished. A panel opened again stands at the folder's first
+  # level, which is where every reader starts.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
 
   # The fourth file. The face knows it is a picture and refuses it anyway, which is a different answer
   # from the ones above — and it says what it measured, so the refusal cannot be read as a broken file.

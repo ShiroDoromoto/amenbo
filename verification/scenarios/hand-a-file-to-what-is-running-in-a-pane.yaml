@@ -23,24 +23,24 @@
 # so a fix made in it shows neither in git's diff nor on the rows the panel colours. A folder costs
 # the whole tree under it.
 #
-# ── Why three roads and not one ──────────────────────────────────────────────────────────────────
-# A file dragged in from the machine, a folder off a row of the panel, and a file off a row: three
-# doors and one answer. The drag is the one a carry could hide in most easily, so it is walked first,
-# on a line with nothing else standing on it — that is the only moment the path can be read for what
-# is *not* in it.
+# ── Why four roads and not one ───────────────────────────────────────────────────────────────────
+# A file dragged in from the machine, a hand full of them dragged in at once, a folder off a row of
+# the panel, and a file off a row: four doors and one answer. The drags go first, on a line with
+# nothing else standing on it — that is the only moment the path can be read for what is *not* in it,
+# and a hand full is where a carry would show worst, taking every one of them in.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no terminal road here and no gap in one. A drop is the operating system's, the menu is
 # drawn where the pointer is, and what is under test is a line standing unsent on a screen — none of
 # the three is a thing a binary can be asked for.
 id: hand-a-file-to-what-is-running-in-a-pane
-title: A file reaches what is running in the pane, as the path it is already at
+title: What is handed to the pane reaches it as the path it is already at
 description: >
-  Open a pane in the project's folder and get three things to what is running in it: a file dragged
-  in from the machine, a folder off a row of the panel beside it, and a file off a row. Nothing is
-  copied and nothing is moved — the dragged file's path is not under the project's folder afterwards,
-  and no landing is made for it — and all three put the whole path in the line the person types into,
-  unsent, for them to send.
+  Open a pane in the project's folder and get four things to what is running in it: a file dragged in
+  from the machine, a pair dragged in together, a folder off a row of the panel beside it, and a file
+  off a row. Nothing is copied and nothing is moved — no dragged path is under the project's folder
+  afterwards, and no landing is made for any of them — and all four put the whole path in the line
+  the person types into, unsent, for them to send.
 
 given:
   - type: action
@@ -143,6 +143,37 @@ steps_gui:
     with:
       name: .amenbo-inbox
       section: tree
+      present: false
+
+  # The same gesture with a hand full rather than one thing in it. It is one drop and not two: a pair
+  # picked up together and let go once puts both paths on the line side by side, and two drops one
+  # after the other would say nothing about what one hand full does.
+  - type: action
+    domain: terminal
+    op: drop-in
+    with:
+      brings: seeds.csv
+      beside: labels.txt
+
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: seeds.csv
+
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: labels.txt
+
+  # And still nothing under the project's folder, which is the reading a hand full could break where
+  # one thing did not: a carry that took the pair in would have put both under it.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: workshop
       present: false
 
   # The second road: a folder, named the same way a file is. Nothing is carried, so the tree under it

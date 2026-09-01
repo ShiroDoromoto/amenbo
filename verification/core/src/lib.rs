@@ -2049,7 +2049,12 @@ const REGISTRY: &[OpSpec] = &[
     // the operator is sitting at, and nothing a run lays down is anywhere a hand can reach from
     // there. Which pane is not named — a road drops on the one it just opened, and a road with two
     // says which by what it typed into them.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drop-in", required: &["brings"], refs: &[], strings: &["brings"], binds: false },
+    //
+    // `beside` is a second name carried in the same hand, and it is one arg rather than a second step
+    // because what it is about is the gesture: several things picked up together and let go once put
+    // every path on the line side by side, and two drops one after the other are two gestures that
+    // happen to end in the same place. Only the first can say what a hand full of files does.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drop-in", required: &["brings"], refs: &[], strings: &["beside", "brings"], binds: false },
     // What is standing in the pane's input line, **unsent**. It is not `pane` with a different
     // sentence: that one reads what a program printed, and this reads what nothing has run yet.
     //

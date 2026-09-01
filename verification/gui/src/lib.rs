@@ -2123,11 +2123,15 @@ impl Instructor {
                 // `door` has already turned away anything that is not one of the three.
                 _ => "In that menu, press the item that shows the file in the file manager.".to_string(),
             },
-            // The item that hands the file the other way — into Amenbo rather than out of it. It is
-            // described by where the file goes, the same as the three above, and the line says what
-            // is to be left alone: the path arrives where a person types, and sending it is theirs.
+            // The item that goes the other way — into Amenbo rather than out of it. It is described
+            // by where the path goes, the same as the three above, and the line says what is to be
+            // left alone: the path arrives where a person types, and sending it is theirs.
+            //
+            // **The row may be a folder as much as a file**, and the item says which it is in the
+            // interface's own words — so it is described here by what it does rather than named, the
+            // way every other item on this menu is.
             (Domain::Files, "hand-to-pane") =>
-                "In that menu, press the item that hands the file to the pane being worked in. The menu goes, and the path the file is at appears in the pane's input line — leave it there, and press nothing else."
+                "In that menu, press the item that pastes the row's path into the pane being worked in. The menu goes, and the path the row is at appears in the pane's input line — leave it there, and press nothing else."
                     .to_string(),
             _ => return Err(unmapped(domain, op)),
         })
@@ -4104,7 +4108,7 @@ steps_gui:
         let mut ins = Instructor::new();
         let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
 
-        assert!(lines[0].contains("hands the file to the pane"), "got: {}", lines[0]);
+        assert!(lines[0].contains("pastes the row's path into the pane"), "got: {}", lines[0]);
         // The item leaves the path for the person, so the line says to leave it alone.
         assert!(lines[0].contains("leave it there"), "got: {}", lines[0]);
         assert!(lines[1].contains("not been sent"), "got: {}", lines[1]);

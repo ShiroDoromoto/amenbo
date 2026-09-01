@@ -1,46 +1,46 @@
 # Getting a file to the thing working in a pane, which is the one hand-over that stays inside Amenbo.
 #
-# An agent reads the folder it was pointed at and nothing else. So "here, look at this" is not a
-# sentence a person can finish by naming a file on their desktop: what they hand over has to be
-# inside that folder, and it has to be named by a path the agent can open. Both halves of this road
-# end in the same place — the whole path, standing in the line the person types into.
+# What reaches the pane is a path and nothing else. Amenbo moves no bytes: the file or the folder
+# stays exactly where it is, and what lands in the line the person types into is where it stands.
+# Every road here ends in that same place.
 #
 # ── Why the newline is the reading and not a detail ──────────────────────────────────────────────
 # What arrives is put in front of the person, never sent for them. The screen at that moment may be a
 # first-run question, and one of the answers really found on one ran a script off the network, so a
-# build that pressed return on somebody's behalf would be answering a question nobody read. That is why every reading here is of the input line rather than of what a program
-# printed: the two look alike on a shot and mean opposite things.
+# build that pressed return on somebody's behalf would be answering a question nobody read. That is
+# why every reading here is of the input line rather than of what a program printed: the two look
+# alike on a shot and mean opposite things.
 #
-# ── Why the two halves are one goal ──────────────────────────────────────────────────────────────
-# A file already in the folder and a file from the machine reach the pane by different doors and end
-# identically. The first needs no carrying — it is a row of the panel, so it is already somewhere the
-# agent may read — and the second is carried into the project's own inbox first, because a path
-# under `/tmp` is a path the agent would be asked to be allowed to read, and asking is
-# the thing this road exists to remove.
+# ── Why "nothing was written" is read three times ────────────────────────────────────────────────
+# The whole of what this face promises is a thing *not* happening, and a thing not happening is only
+# a reading where the screen could have shown it. So the tree is read before anything is handed over
+# and again after the drag, and the path itself is read for the project's own folder not being in it.
+# A copy keeps the name it came with, so the name alone says the same thing either way; only the path
+# tells a hand-over from a carry.
 #
-# ── Why the inside half is walked first ──────────────────────────────────────────────────────────
-# What is already inside is handed over where it stands and is not taken in at all, and the whole of
-# that is a thing *not* happening: no copy, and not even the folder a copy would land in. A reading of "not happening" needs the screen to have nothing there to begin with, and the
-# outside half puts the inbox on the tree the moment it is walked. So the order is the reading: the
-# inside half runs against a folder with no inbox in it, and the outside half is what puts one there.
+# What a copy costs is why it is worth all three. Two of the same file, and the copy is the one
+# nobody ever sees change — a landing Amenbo makes under the project's folder is ignored wholesale,
+# so a fix made in it shows neither in git's diff nor on the rows the panel colours. A folder costs
+# the whole tree under it.
 #
-# Copying it instead would leave the reader with two of the same file, and the copy is the one nobody
-# would ever see change — the inbox carries a `.gitignore` of `*`, so a fix made in it shows neither
-# in git's diff nor on the rows the panel colours. That is why the path is read twice
-# over: for the name, and for the inbox not being in it.
+# ── Why three roads and not one ──────────────────────────────────────────────────────────────────
+# A file dragged in from the machine, a folder off a row of the panel, and a file off a row: three
+# doors and one answer. The drag is the one a carry could hide in most easily, so it is walked first,
+# on a line with nothing else standing on it — that is the only moment the path can be read for what
+# is *not* in it.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no terminal road here and no gap in one. A drop is the operating system's, the menu is
 # drawn where the pointer is, and what is under test is a line standing unsent on a screen — none of
 # the three is a thing a binary can be asked for.
 id: hand-a-file-to-what-is-running-in-a-pane
-title: A file reaches what is running in the pane, as a path it is allowed to read
+title: A file reaches what is running in the pane, as the path it is already at
 description: >
-  Open a pane in the project's folder and get a file to what is running in it, both ways round: pick
-  the item on a row of the panel beside it, and drag one in from the machine. The one already there
-  is handed over where it stands and nothing is written for it, the dragged one lands in the
-  project's own inbox, and both put the whole path in the line the person types into — unsent, for
-  them to send.
+  Open a pane in the project's folder and get three things to what is running in it: a file dragged
+  in from the machine, a folder off a row of the panel beside it, and a file off a row. Nothing is
+  copied and nothing is moved — the dragged file's path is not under the project's folder afterwards,
+  and no landing is made for it — and all three put the whole path in the line the person types into,
+  unsent, for them to send.
 
 given:
   - type: action
@@ -57,8 +57,8 @@ given:
       dir: workshop
       project: workshop
 
-  # The file the first half hands over. It is inside the bound folder from the start, which is what
-  # makes that half a hand-over and not a carry.
+  # The file the third road hands over, and the folder the second one does — one write makes both,
+  # since the folder is the one the file is written into.
   - type: action
     domain: repo
     op: write-file
@@ -87,7 +87,7 @@ steps_gui:
     domain: terminal
     op: open-shell
 
-  # The panel, which is the first half's door.
+  # The panel, which is the door the second and third roads come through.
   - type: action
     domain: terminal
     op: show-side
@@ -100,9 +100,9 @@ steps_gui:
     with:
       open: true
 
-  # Nothing has been handed over yet and there is no inbox. This is the reading the two after the
-  # hand-over are measured against — without it, "no inbox was made" would be said of a folder that
-  # might never have had one made for any reason at all.
+  # What the folder holds before anything is handed over. This is the reading the one after the drag
+  # is measured against — without it, "nothing was written" would be said of a folder that might
+  # never have had anything written in it for any reason at all.
   - type: assert
     domain: files
     op: listed
@@ -111,6 +111,62 @@ steps_gui:
       section: tree
       present: false
 
+  # The road in from the machine. The operator brings the file, because a drop reads the disk they
+  # are sitting at and nothing this run laid down is reachable from there.
+  - type: action
+    domain: terminal
+    op: drop-in
+    with:
+      brings: handed.txt
+
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: handed.txt
+
+  # And the whole of what changed, read off the one line that can carry it: the path is the one the
+  # file is at on the operator's own disk, so the project's folder is not in it. A carry puts it
+  # there under the same name, which is what makes this the reading that tells the two apart.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: workshop
+      present: false
+
+  # Nothing was made to hold it either — not a copy, and not the folder a copy would land in. The
+  # panel draws ignored rows like any other, so a landing made here would be on the tree.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: .amenbo-inbox
+      section: tree
+      present: false
+
+  # The second road: a folder, named the same way a file is. Nothing is carried, so the tree under it
+  # costs no more to name than one file does.
+  - type: action
+    domain: files
+    op: menu-on-folder
+    with:
+      name: notes
+      section: tree
+
+  - type: action
+    domain: files
+    op: hand-to-pane
+
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: notes
+
+  # The third road: a file off a row, which is where this face started. It is read on the same line
+  # as the two before it — a reader who hands over several things in a row gets them side by side,
+  # and a reading taken before the others would not say so.
   - type: action
     domain: files
     op: enter
@@ -128,73 +184,14 @@ steps_gui:
     domain: files
     op: hand-to-pane
 
-  # The path, read by the file's own name. This one was never carried anywhere — being where it
-  # already was is the point of it.
   - type: assert
     domain: terminal
     op: in-the-box
     with:
       shows: watering.md
 
-  # And read again for what must not be in it. The name alone would say the same thing whether the
-  # file was handed over or copied, since a copy keeps the name it came with: the inbox being absent
-  # from the path is the only part of the line that tells the two apart.
-  - type: assert
-    domain: terminal
-    op: in-the-box
-    with:
-      shows: .amenbo-inbox
-      present: false
-
-  # And nothing was written for it — not the copy, and not the folder a copy would have landed in.
-  # The panel draws ignored rows like any other, so an inbox made here would be standing on the tree.
-  - type: assert
-    domain: files
-    op: listed
-    with:
-      name: .amenbo-inbox
-      section: tree
-      present: false
-
-  # The half that comes from outside. The operator brings the file, because a drop reads the disk
-  # they are sitting at and nothing this run laid down is reachable from there.
-  - type: action
-    domain: terminal
-    op: drop-in
-    with:
-      brings: handed.txt
-
-  # Where it landed, read off the path itself. The inbox is the whole of the answer: not `/tmp`,
-  # which the agent would have to be let into, and not loose in the folder, where the next `git add`
-  # would sweep it into somebody's commit.
-  - type: assert
-    domain: terminal
-    op: in-the-box
-    with:
-      shows: .amenbo-inbox
-
-  # And that it is the file that was dropped. The path is read in two goes because one reading
-  # proving both would have to spell a folder named after the day, which no road can know.
   - type: assert
     domain: terminal
     op: in-the-box
     with:
       shows: handed.txt
-
-  # Both are standing on the one line, each answered its own way. The first path surviving the second
-  # hand-over is the half a reading taken before the drop cannot carry, and it is the shape a reader
-  # who hands over several things in a row actually gets.
-  - type: assert
-    domain: terminal
-    op: in-the-box
-    with:
-      shows: watering.md
-
-  # And the inbox is on the tree now, which is what makes the three readings above it a difference
-  # rather than a folder the panel simply never draws.
-  - type: assert
-    domain: files
-    op: listed
-    with:
-      name: .amenbo-inbox
-      section: tree

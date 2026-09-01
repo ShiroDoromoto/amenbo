@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import { endTerminal, pasteIntoTerminal, quotedPath } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
-import { confirmDialog, pickFiles } from "../core/dialog";
+import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { pushNotice } from "../core/notice";
 import { Menu, MenuItem } from "../components/Menu";
@@ -319,15 +319,27 @@ export function TerminalPane({
       {menuAt !== null && live !== null && (
         <Menu at={menuAt} onClose={() => setMenuAt(null)}>
           {/* The other way in, for a reader whose file is not somewhere they can drag it from. It
-              ends where the drop ends: the path the file is at is put in front of the agent. */}
+              ends where the drop ends: the path the thing is at is put in front of the agent.
+              It is two items because the machine's picker takes `directory` as a yes or a no —
+              one window cannot offer both — so the choice is made before the window opens
+              (`../core/dialog`). */}
           <MenuItem
             onClick={() => {
               setMenuAt(null);
               void pickFiles().then((paths) => handOver(live, paths));
             }}
           >
-            <Icon name="inbox" />
-            {t("face.upload")}
+            <Icon name="document" />
+            {t("files.pasteFilePath")}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setMenuAt(null);
+              void pickFolders().then((paths) => handOver(live, paths));
+            }}
+          >
+            <Icon name="folder" />
+            {t("files.pasteFolderPath")}
           </MenuItem>
         </Menu>
       )}

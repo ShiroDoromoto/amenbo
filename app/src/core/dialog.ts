@@ -19,9 +19,23 @@ export async function confirmDialog(message: string): Promise<boolean> {
  * go down the same road, and the two answers being one is what keeps either of them explainable.
  */
 export async function pickFiles(): Promise<string[]> {
+  return await picked(false);
+}
+
+/**
+ * The same, for folders. It is a second door rather than a flag on the first because the machine's
+ * picker takes `directory` as a yes or a no: one window cannot offer files and folders together, so
+ * whoever opens it has already decided which they are after (`@tauri-apps/plugin-dialog`).
+ */
+export async function pickFolders(): Promise<string[]> {
+  return await picked(true);
+}
+
+/** The one call both doors are: what the picker answered, as a list either way. */
+async function picked(directory: boolean): Promise<string[]> {
   if (!inTauri()) return [];
   const { open } = await import("@tauri-apps/plugin-dialog");
-  const picked = await open({ multiple: true, directory: false });
-  if (typeof picked === "string") return [picked];
-  return Array.isArray(picked) ? picked.filter((one) => typeof one === "string") : [];
+  const chosen = await open({ multiple: true, directory });
+  if (typeof chosen === "string") return [chosen];
+  return Array.isArray(chosen) ? chosen.filter((one) => typeof one === "string") : [];
 }

@@ -906,17 +906,19 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash, on
             </>
           )}
           {rename !== null && <MenuItem onClick={() => pick(rename)}>{t("files.rename")}</MenuItem>}
+          {/* The one door that goes the other way: everything beside it hands the row out to the
+              machine, and this puts the path it is at in front of what is running in the pane —
+              which is the reverse of a path drawn in a pane opening the file here
+              (`../shell/TerminalFace`). It is first because it is the one whose answer stays inside
+              the app, and it is over a folder as much as over a file: nothing is carried, so a
+              folder costs no more to name than a file does (`AMB-D-820`). */}
+          {onHandOver !== undefined && (
+            <MenuItem onClick={() => { onClose(); onHandOver(fileAt(root, path)); }}>
+              {dir ? t("files.pasteFolderPath") : t("files.pasteFilePath")}
+            </MenuItem>
+          )}
           {!dir && (
             <>
-              {/* The one door that goes the other way: everything under it hands the file out to
-                  the machine, and this hands it to what is running in the pane — which is the
-                  reverse of a path drawn in a pane opening the file here (`../shell/TerminalFace`).
-                  It is first because it is the one whose answer stays inside the app. */}
-              {onHandOver !== undefined && (
-                <MenuItem onClick={() => { onClose(); onHandOver(fileAt(root, path)); }}>
-                  {t("files.handOver")}
-                </MenuItem>
-              )}
               <MenuItem onClick={() => act(() => folderOpenFile(projectId, root, path))}>
                 {t("files.openWith")}
               </MenuItem>

@@ -1188,6 +1188,7 @@ function Level({
                     <span className="files__twisty">
                       <Icon name={open.includes(key) ? "chevronDown" : "chevronRight"} />
                     </span>
+                    <span className="files__kind"><Icon name="folder" /></span>
                     <span className="files__name">{one.name}</span>
                   </span>
                   {open.includes(key) && (
@@ -1216,6 +1217,10 @@ function Level({
                   {/* Empty, and there anyway: it is what puts the name at the same place as the
                       name of the folder above it (`../styles/global.css`). */}
                   <span className="files__twisty" />
+                  {/* One mark for every file and no second one for what kind it is. A row says
+                      whether it is a folder or a file, which is the whole of what has to be read
+                      without reading the name; an icon per extension is a legend to learn. */}
+                  <span className="files__kind"><Icon name="document" /></span>
                   <span className="files__name">{one.name}</span>
                 </span>
               )}

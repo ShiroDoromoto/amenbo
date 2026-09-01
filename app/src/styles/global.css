@@ -732,6 +732,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   width: var(--icon-sm); height: var(--icon-sm); flex: none;
   color: var(--c-text-muted);
 }
+/* What kind of thing the row is — a folder or a file — said as a drawing, so that it is read
+   before the name rather than out of it. Muted with the mark beside it: the head of the row is one
+   weight of grey and the name is what carries the row's colours (hover, git, the file being read),
+   so a row is scanned as a shape and then read as a word. */
+.files__kind { display: inline-flex; flex: none; color: var(--c-text-muted); }
 .files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* On the reading bar the name takes what the two controls beside it leave, which is the whole row.
    A name longer than that is still cut — there is no width that fits every name — but what it is cut

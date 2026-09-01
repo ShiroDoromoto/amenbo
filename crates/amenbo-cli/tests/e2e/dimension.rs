@@ -178,6 +178,40 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
     assert_eq!(all["count"], before, "a refused create leaves no unclassified decision behind: {all}");
 }
 
+/// The other door that records a decision. `decision promote` raises one out of a comment, and it
+/// leaves the same gap `decision add` did: the demand is read where the decision is settled, by
+/// somebody else. So the response names the axes still blank here too — and names one way in rather
+/// than two, since a promotion carries no `--dim` to send anyone to.
+#[test]
+fn promoting_a_comment_names_the_required_axes_too() {
+    let cli = Cli::new();
+    let pid = id_str(&cli.json(&["project", "add", "--name", "昇格PJ", "--json"])["project"]["id"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "テーマ", "--json"]);
+    cli.json(&["dimension", "value-add", "テーマ", "--name", "メイン", "--json"]);
+    cli.json(&["dimension", "update", "テーマ", "--required", "true", "--json"]);
+
+    let tid = id_str(&cli.json(&["task", "add", "--project", &pid, "--title", "土台", "--json"])["task"]["id"]);
+    let cid = id_str(&cli.json(&["comment", "add", &task_ref(&tid), "--text", "UTC で保存する", "--json"])["comment"]["id"]);
+
+    let response = cli.json(&[
+        "decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC", "--json",
+    ]);
+    let promoted = &response["decision"];
+    assert_eq!(
+        promoted["unmet_required_dimensions"],
+        serde_json::json!(["テーマ"]),
+        "the promotion names what is still blank: {promoted}"
+    );
+
+    // The human face says it too, and points at the one command that fills it in — a promotion has no
+    // flag of its own to offer.
+    let (said, code) = cli.run(&["decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC2"]);
+    assert_eq!(code, 0, "naming it is not refusing it: {said}");
+    assert!(said.contains("テーマ"), "the axis is named: {said}");
+    assert!(said.contains("dimension set"), "and the way to fill it in: {said}");
+    assert!(!said.contains("--dim"), "but not a flag this command does not have: {said}");
+}
+
 /// Only values on a time axis (role: time_axis) carry a period `[start_on, end_on]`. value-add /
 /// value-update write it, list / show print it for humans, and dates on any other axis are turned away by
 /// the CLI gatekeeper (core just writes the columns) — all across processes, so persistence is included.

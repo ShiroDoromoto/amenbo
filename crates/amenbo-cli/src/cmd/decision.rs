@@ -4,7 +4,7 @@
 use serde_json::json;
 
 use amenbo_core::config::Paths;
-use amenbo_core::model::{AttachmentTarget, TaskStatus};
+use amenbo_core::model::{AttachmentTarget, ClassifiedSide, TaskStatus};
 use amenbo_core::{activity_log, ops, query, Store};
 
 use crate::cli::*;
@@ -13,7 +13,7 @@ use crate::cmd::attach::attach_add;
 use crate::cmd::comment::{comment_line, comment_not_found, comment_section, resolve_live_decision_comment};
 use crate::cmd::labels::{decision_comment_label, decision_label, task_comment_label, task_label};
 use crate::cmd::outbox::emit_decision_event;
-use crate::cmd::place::project_or_bound;
+use crate::cmd::place::{project_or_bound, resolve_dim_pairs};
 use crate::cmd::premise::{attach_revisit, note_revisit, standing_on, warn_if_premise_added_to_reserved, warn_if_unsettled_under_reserved};
 use crate::cmd::task::resolve_task;
 use crate::output::{confirm, count_header, human, print_json, warn_body, write_envelope, CliError, Flags};
@@ -34,18 +34,29 @@ pub(crate) fn decision_ref_name(name: &Option<String>) -> &str {
 
 pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Result<i32, CliError> {
     match sub {
-        DecisionCmd::Add { title, body, project } => {
+        DecisionCmd::Add { title, body, project, dim } => {
             let body = body_arg(body)?;
             let project_id = project_or_bound(store, project)?;
-            let d = store.add_decision(ops::decision::NewDecision {
+            // Resolved before the create, the way `task add`'s are: a misspelled axis or value — or one
+            // that does not classify decisions at all — is an error with no decision left behind to go
+            // and classify by hand.
+            let dimension_values = resolve_dim_pairs(store, project_id, &dim, ClassifiedSide::Decision)?;
+            let d = store.add_decision_with_dimensions(ops::decision::NewDecision {
                 title, body, project_id,
-            }).map_err(CliError::from)?;
+            }, &dimension_values).map_err(CliError::from)?;
             // The proposal is a moment, and the column cannot hold it: `status` says a decision is
             // proposed and `status_changed_at` is overwritten by the verdict (`AMB-T-3639`).
             emit_decision_event(store, flags, d.id, activity_log::event::decision_proposed(&d.title));
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             warn_body(&detail.body); // non-blocking readability hint on write (stderr)
-            write_envelope(flags, "decision.add", "decision", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Recorded decision: {} ({})", d.title, decision_label(d.id)));
+            let mut resource = serde_json::to_value(&detail).unwrap();
+            let unmet = unmet_on_new_decision(store, d.id, &mut resource)?;
+            write_envelope(flags, "decision.add", "decision", resource, None, false, format!("✓ Recorded decision: {} ({})", d.title, decision_label(d.id)));
+            // The two ways in, because this command has both: the flag it was just typed with, and the
+            // command that fills an axis in afterwards.
+            if !unmet.is_empty() {
+                human(flags, still_to_classify(&unmet, d.id, "pass --dim <axis>=<value> here, or fill it in with"));
+            }
         }
         DecisionCmd::List { project, filter, sort, limit, offset, with_body } => {
             let project_id = project.map(|p| store.resolve_project_ref(&p)).transpose().map_err(CliError::from)?;
@@ -332,7 +343,14 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             let title = store.decision_detail(did).map_err(CliError::from)?.title;
             emit_decision_event(store, flags, did, activity_log::event::decision_proposed(&title));
             let detail = store.decision_detail(did).map_err(CliError::from)?;
-            write_envelope(flags, "decision.promote", "decision", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Promoted {source} to decision: {} ({})", detail.title, decision_label(did)));
+            let mut resource = serde_json::to_value(&detail).unwrap();
+            let unmet = unmet_on_new_decision(store, did, &mut resource)?;
+            write_envelope(flags, "decision.promote", "decision", resource, None, false, format!("✓ Promoted {source} to decision: {} ({})", detail.title, decision_label(did)));
+            // One way in, not two: a promotion carries no `--dim`, so naming one here would send the
+            // reader to a flag this command does not have.
+            if !unmet.is_empty() {
+                human(flags, still_to_classify(&unmet, did, "fill it in with"));
+            }
         }
         DecisionCmd::Comment { sub } => return decision_comment(store, flags, sub),
         DecisionCmd::Attach { id, source, url, name } => {
@@ -341,6 +359,41 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
         }
     }
     Ok(0)
+}
+
+/// The required axes a decision was just created blank on, folded into the response under
+/// `unmet_required_dimensions` and handed back for the human line to name (`AMB-D-790`).
+///
+/// **Both doors that create a decision go through here**, because both leave the same gap. A task hears
+/// this at `task finish-creating`, which its own writer types; a decision has no second stage, and the
+/// demand is read where it is settled — a press that belongs to whoever accepts it, not to whoever
+/// wrote it. Saying nothing at the create leaves the writer no moment to notice at all.
+///
+/// Nothing blank means the key is **absent** rather than an empty list: a reader testing for it is
+/// testing for something to do. It names, it does not refuse — the record is written either way.
+fn unmet_on_new_decision(
+    store: &Store,
+    decision_id: i64,
+    resource: &mut serde_json::Value,
+) -> Result<Vec<String>, CliError> {
+    let unmet = store.unmet_required_decision_axes(decision_id).map_err(CliError::from)?;
+    if !unmet.is_empty() {
+        if let Some(obj) = resource.as_object_mut() {
+            obj.insert("unmet_required_dimensions".to_string(), json!(unmet));
+        }
+    }
+    Ok(unmet)
+}
+
+/// The human-facing half of [`unmet_on_new_decision`]: the axes still blank, and the way in. `ways` is
+/// the caller's, since a promotion has no `--dim` to send anyone to and `add` does.
+fn still_to_classify(unmet: &[String], decision_id: i64, ways: &str) -> String {
+    format!(
+        "  still to classify: {} — {ways} `{} dimension set {} <axis> <value>` (accepting it is refused until then)",
+        unmet.join(", "),
+        Paths::command_name(),
+        decision_label(decision_id),
+    )
 }
 
 /// The task-comment side of `decision promote`: the comment's text becomes the body, its task's project

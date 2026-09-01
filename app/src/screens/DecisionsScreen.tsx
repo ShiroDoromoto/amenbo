@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type Decision, type DecisionStatus } from "../core/snapshot";
+import { getSnapshot, type Decision, type DecisionStatus } from "../core/snapshot";
 import { addDecision, fetchProjectDecisionDimensionAssignments } from "../core/mutations";
 import { dataAdapter } from "../mock/adapter";
 import { useDecisionPage, useDecisionSearchIds } from "../core/reads";
@@ -280,16 +280,32 @@ function DecisionCard({ d, selected, onSelect }: {
   );
 }
 
-function DecisionCompose({ projectId, onDone }: { projectId: number; onDone: () => void }) {
+// Recording a decision, and the one demand the form has to carry. A required axis is read where a
+// decision is settled (`AMB-D-790`), and that press belongs to whoever accepts it — not to whoever
+// wrote it. So the form asks here, while the writer is still in front of it, rather than letting the
+// record go out blank and the acceptance come back refused at somebody else.
+//
+// Only the **required** axes draw a select. The rest are the detail pane's, where they can be filled in
+// at leisure; putting every axis here would turn recording a decision into a form to work through.
+export function DecisionCompose({ projectId, onDone }: { projectId: number; onDone: () => void }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [values, setValues] = useState<Record<number, number>>({});
+
+  // The decision side alone (`AMB-D-789`): an axis narrowed to tasks demands nothing of a decision, and
+  // holding this button on one would ask for a value no decision can carry.
+  const project = getSnapshot().projects.find((p) => p.id === projectId);
+  const demanded = axesFor("decision", project?.dimensions ?? []).filter((d) => d.required);
+  const unmet = demanded.filter((d) => values[d.id] === undefined);
 
   async function submit() {
-    if (!title.trim()) return;
+    if (!title.trim() || unmet.length > 0) return;
     setBusy(true);
     try {
-      await addDecision(projectId, title.trim(), body);
+      // The values ride with the create, so a decision filed under an axis never exists without it —
+      // the same transaction the CLI's `--dim` writes in.
+      await addDecision(projectId, title.trim(), body, demanded.map((d) => values[d.id]));
       onDone();
     } finally {
       setBusy(false);
@@ -312,11 +328,45 @@ function DecisionCompose({ projectId, onDone }: { projectId: number; onDone: () 
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
-      <div style={{ display: "flex", gap: 8 }}>
-        <button className="feed__action" disabled={busy || !title.trim()} onClick={() => void submit()}>
+      {demanded.map((dim) => (
+        <div key={dim.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span className="detail__flabel" style={{ whiteSpace: "nowrap" }}>{dim.name}</span>
+          <select
+            className="inlineselect"
+            value={values[dim.id] ?? ""}
+            onChange={(e) => {
+              const valueId = Number(e.target.value);
+              setValues((m) => {
+                const n = { ...m };
+                if (valueId) n[dim.id] = valueId;
+                else delete n[dim.id];
+                return n;
+              });
+            }}
+          >
+            <option value="">{t("detail.none")}</option>
+            {dim.values.map((v) => (
+              <option key={v.id} value={v.id}>{v.name}</option>
+            ))}
+          </select>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <button
+          className="feed__action"
+          disabled={busy || !title.trim() || unmet.length > 0}
+          onClick={() => void submit()}
+        >
           {t("dec.add")}
         </button>
         <button className="feed__action" onClick={onDone}>{t("dec.cancel")}</button>
+        {/* Why the button is held, named rather than left to a tooltip — the selects are right above.
+            The sentence is the task pane's, because it is the same sentence: fill these in first. */}
+        {unmet.length > 0 && (
+          <span className="faint">
+            {tf("detail.finishCreatingBlocked", { names: unmet.map((d) => d.name).join(", ") })}
+          </span>
+        )}
       </div>
     </div>
   );

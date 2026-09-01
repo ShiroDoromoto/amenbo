@@ -561,6 +561,19 @@ impl Store {
         Ok(out)
     }
 
+    /// The names of the project's required axes a decision carries no value on, in display order
+    /// (`AMB-D-790`). Empty means every demand this project makes of a decision is answered — which is
+    /// the same question `decision accept` asks at its door, put here so a surface can ask it without
+    /// having to be turned away first. A decision that is gone answers with nothing to fill in.
+    pub fn unmet_required_decision_axes(&self, decision_id: i64) -> Result<Vec<String>> {
+        self.reachable_decision(decision_id)?;
+        let conn = self.engine.conn();
+        let Some(decision) = crate::store_engine::read::decision(conn, decision_id)? else {
+            return Ok(Vec::new());
+        };
+        crate::ops::decision::unmet_required_axes(conn, &decision)
+    }
+
     /// A single dimension; `None` if there is none (a row exists ⇒ it is live).
     pub fn dimension(&self, id: i64) -> Result<Option<crate::model::Dimension>> {
         self.reachable(&format!("dimension #{id}"), |c| super::owner::dimension(c, id))?;

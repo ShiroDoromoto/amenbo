@@ -4,7 +4,7 @@
 use serde_json::json;
 
 use amenbo_core::config::Paths;
-use amenbo_core::model::{ActorKind, AttachmentTarget, TaskStatus};
+use amenbo_core::model::{ActorKind, AttachmentTarget, ClassifiedSide, TaskStatus};
 use amenbo_core::{activity_log, ops, query, time, Store};
 
 use crate::cli::*;
@@ -59,7 +59,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
             let priority = match priority { Some(p) => Some(parse_priority(&p)?), None => None };
             // Resolved before the create, like `--to` above: a misspelled axis or value is an error with
             // no task left behind to go and classify by hand.
-            let dimension_values = resolve_dim_pairs(store, project_id, &dim)?;
+            let dimension_values = resolve_dim_pairs(store, project_id, &dim, ClassifiedSide::Task)?;
             // Resolved before the create for the same reason `--to` and `--dim` are: a folder name that
             // answers to nothing is an error with no task left behind to go and correct.
             let at_binding_id = match at {

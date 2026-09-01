@@ -1118,13 +1118,35 @@ impl Store {
 
     /// Create a decision (one operation = one transaction). A decision's conversational number comes
     /// from `next_id` in a number space of its own, separate from tasks, and that read happens
-    /// inside this transaction.
+    /// inside this transaction. To classify at creation, call [`Self::add_decision_with_dimensions`] —
+    /// this is that, with nothing named.
     pub fn add_decision(
         &mut self,
         input: crate::ops::decision::NewDecision,
     ) -> Result<crate::model::Decision> {
+        self.add_decision_with_dimensions(input, &[])
+    }
+
+    /// [`Self::add_decision`], with classification the caller already decided on — the decision side of
+    /// [`Self::add_task_with_dimensions`] (`AMB-D-781`), and one transaction for the same reason: a
+    /// decision filed under an axis can never commit without it, and a create that fails leaves no
+    /// half-classified decision behind. The ids are resolved by the surface (a value is named by the axis
+    /// it lives on, and that resolution belongs where the names are); here they are applied in the order
+    /// given. There is no default to defer to on this side — the time axis fills a task's axis, not a
+    /// decision's — so what the caller names is all that lands.
+    pub fn add_decision_with_dimensions(
+        &mut self,
+        input: crate::ops::decision::NewDecision,
+        value_ids: &[i64],
+    ) -> Result<crate::model::Decision> {
         self.write_one(&[WriteTarget::NewIn(Some(input.project_id))], |tx| {
-            crate::ops::decision::add(tx, input)
+            let decision = crate::ops::decision::add(tx, input)?;
+            // An axis is single-select, so naming one twice is last-wins rather than two rows; the
+            // surface is where that is refused, with the names to say which axis was named twice.
+            for &value_id in value_ids {
+                crate::ops::dimension::set_on_decision(tx, decision.id, value_id)?;
+            }
+            Ok(decision)
         })
     }
 

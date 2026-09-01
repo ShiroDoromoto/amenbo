@@ -203,16 +203,7 @@ pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(
 /// the decisions a project settled before it raised the flag are left alone — raising one does not
 /// reach back and unsettle anything, and no other operation asks again.
 fn refuse_unmet_required_axes(tx: &WriteTx<'_>, decision: &Decision) -> Result<()> {
-    let mut empty = Vec::new();
-    for (axis_id, name) in read::required_dimensions(
-        tx.conn(),
-        decision.project_id,
-        crate::model::ClassifiedSide::Decision,
-    )? {
-        if read::decision_assignment_ids_on_axis(tx.conn(), decision.id, axis_id)?.is_empty() {
-            empty.push(name);
-        }
-    }
+    let empty = unmet_required_axes(tx.conn(), decision)?;
     if empty.is_empty() {
         return Ok(());
     }
@@ -224,6 +215,27 @@ fn refuse_unmet_required_axes(tx: &WriteTx<'_>, decision: &Decision) -> Result<(
         .coded(ErrorCode::InvalidDecisionRequiredDimension)
         .with("names", empty.join(", ")),
     ))
+}
+
+/// The names of the project's required axes this decision carries no value on, in display order
+/// (`AMB-D-734`, `AMB-D-790`) — the twin of `ops::task`'s `unmet_required_axes`, and the answer
+/// both the door above refuses with and the creation reports back. Only the axes that classify
+/// decisions are asked: an axis narrowed to tasks means nothing here (`AMB-D-789`). Empty is the pass.
+///
+/// It takes a plain connection rather than a transaction, because the two callers stand in different
+/// places: the door reads it inside the write it is guarding, so a flag raised meanwhile is either seen
+/// or lands after the commit; the creation reads it once the decision is already written, where there
+/// is nothing left to guard and the answer is a report.
+pub fn unmet_required_axes(conn: &rusqlite::Connection, decision: &Decision) -> Result<Vec<String>> {
+    let mut empty = Vec::new();
+    for (axis_id, name) in
+        read::required_dimensions(conn, decision.project_id, crate::model::ClassifiedSide::Decision)?
+    {
+        if read::decision_assignment_ids_on_axis(conn, decision.id, axis_id)?.is_empty() {
+            empty.push(name);
+        }
+    }
+    Ok(empty)
 }
 
 /// Reject a decision (`Proposed` → `Rejected`). Idempotent when it is already `Rejected`.

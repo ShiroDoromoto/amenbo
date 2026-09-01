@@ -231,6 +231,8 @@ export const ja: Translation = {
     "settings.facetNamesHint": "名簿の 2 表示名（人間 / AI）を変更します（空欄はその facet を据え置き）。",
     "settings.avatarChoose": "画像を選ぶ…", "settings.avatarReset": "identicon に戻す",
     "settings.avatarHint": "人間 / AI それぞれの顔を登録できます。画像は 96px に縮小して保存します（未設定なら facet ごとの identicon）。",
+    "settings.avatarImageFailed": "画像を読み込めませんでした",
+    "settings.avatarCanvasFailed": "canvas を初期化できませんでした",
     "settings.appearance": "外観", "settings.theme": "テーマ", "settings.language": "言語",
     "settings.defaultView": "既定のビュー",
     "settings.defaultViewNote": "新しく作るプロジェクトが開くビュー。すでにあるプロジェクトは、それぞれのビューのままです。",
@@ -493,6 +495,7 @@ export const ja: Translation = {
     "act.nDecisions.other": "決定{n}件",
     "act.nameless": "（削除済み）",
     "app.loadError": "データを読み込めませんでした。", "app.loading": "読み込み中…",
+    "mermaid.failed": "図の描画に失敗しました",
     // lint hook consent: the question Amenbo asks before writing into .git/hooks
     "hooks.title": "コミットに Amenbo の参照が混ざらないようにしますか？",
     "hooks.why": "AMB-T-… のような参照は、それを発行したストアの外では何も意味しません。git のフックを置いて、コミットに混ざる前に止めます。",

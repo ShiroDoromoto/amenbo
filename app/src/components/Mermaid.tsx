@@ -9,13 +9,14 @@
 // Both converge on the same fallback — no diagram, the raw source shown instead.
 
 import { Component, useEffect, useState, type ReactNode } from "react";
+import { t } from "../core/i18n";
 import { renderMermaid } from "./mermaidRender";
 
 /** The fallback when rendering fails: the raw source instead of the diagram, so nothing is lost (the CLI shows the same). */
 function MermaidFallback({ source }: { source: string }) {
   return (
-    <div className="mermaid mermaid--failed" role="img" aria-label="図の描画に失敗しました">
-      <p className="mermaid__note">図の描画に失敗しました</p>
+    <div className="mermaid mermaid--failed" role="img" aria-label={t("mermaid.failed")}>
+      <p className="mermaid__note">{t("mermaid.failed")}</p>
       <pre className="mermaid__source">
         <code>{source}</code>
       </pre>

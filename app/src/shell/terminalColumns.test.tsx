@@ -25,7 +25,7 @@ vi.mock("../core/boundFolders", () => ({
 }));
 
 import { TerminalFace } from "./TerminalFace";
-import { PANE_MIN, RAIL_DEFAULT, SIDE_DEFAULT } from "../talk/columns";
+import { RAIL_DEFAULT, SIDE_DEFAULT } from "../talk/columns";
 import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -121,25 +121,14 @@ describe("closing a column, and opening it again", () => {
   });
 });
 
-describe("a window with no room for columns", () => {
-  // Narrow enough that both columns together leave the middle under one pane's worth of floor
-  // (`../talk/columns`) — which is the whole of it: the count that was asked for is not in it.
-  const NO_ROOM = PANE_MIN + RAIL_DEFAULT + SIDE_DEFAULT - 1;
-
-  it("draws neither of them over the panes until one is asked for", async () => {
-    window.innerWidth = NO_ROOM;
+describe("the narrowest window the application opens", () => {
+  // 960px is the floor (`app/src-tauri/tauri.conf.json`), and the three floors together are 640px —
+  // so a column never has to stop being one (`AMB-D-816`).
+  it("draws both columns beside the panes, and no drawer over them", async () => {
+    window.innerWidth = 960;
     await mount();
-    expect(q(".termface__column--rail")).toBeNull();
-    expect(q(".termface__drawer")).toBeNull();
-    await click(bar(t("face.rail")));
-    expect(q(".termface__drawer")).not.toBeNull();
-  });
-
-  it("puts a drawer away again on the press that opened it", async () => {
-    window.innerWidth = NO_ROOM;
-    await mount();
-    await click(bar(t("face.rail")));
-    await click(bar(t("face.rail")));
+    expect(q(".termface__column--rail")).not.toBeNull();
+    expect(q(".termface__column--side")).not.toBeNull();
     expect(q(".termface__drawer")).toBeNull();
   });
 });

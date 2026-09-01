@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 // What the columns beside the panes have to keep true: a width that survives a wider screen and an
-// older build, a wish that is remembered, and the one rule about when a column stops being one.
+// older build, a wish that is remembered, and a ceiling that leaves the middle its floor.
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clampRailWidth, clampSideWidth, getRailShown, getRailWidth, getSideShown, getSideTab, getSideWidth,
   PANE_MIN, RAIL_DEFAULT, RAIL_MIN, setRailShown, setRailWidth, setSideShown, setSideTab,
-  setSideWidth, sidesAreDrawers, SIDE_DEFAULT, SIDE_MIN,
+  setSideWidth, railMax, sideMax, SIDE_DEFAULT, SIDE_MIN,
 } from "./columns";
 
 beforeEach(() => {
@@ -82,28 +82,34 @@ describe("which half of the file face is up", () => {
   });
 });
 
-describe("the sides", () => {
-  it("stay columns while a pane's worth of floor is left in the middle", () => {
-    const room = PANE_MIN + RAIL_DEFAULT + SIDE_DEFAULT;
-    expect(sidesAreDrawers(room, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
-    expect(sidesAreDrawers(room - 1, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
+describe("a column's ceiling", () => {
+  // The room, not a share of the window. 0.3 and 0.4 of the narrowest window the application opens
+  // leave 288px in the middle — under the floor a pane is drawn at.
+  it("is what the window has left once the other column and a pane's floor are out of it", () => {
+    window.innerWidth = 960;
+    expect(railMax(SIDE_DEFAULT)).toBe(960 - SIDE_DEFAULT - PANE_MIN);
+    expect(sideMax(RAIL_DEFAULT)).toBe(960 - RAIL_DEFAULT - PANE_MIN);
   });
 
-  it("answer the same on one window whatever count was asked for", () => {
-    // The count is not in it, so nothing about it can flip the answer. A window that suits two
-    // across keeps its columns at eight, where the panes are cramped — that is the choice of
-    // whoever pressed for eight, and taking the rail away would not undo it.
-    const room = 2 * PANE_MIN + RAIL_DEFAULT + SIDE_DEFAULT;
-    expect(sidesAreDrawers(room, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
-    // And a window with no floor left folds them however few panes were asked for.
-    const tight = PANE_MIN + RAIL_DEFAULT + SIDE_DEFAULT - 1;
-    expect(sidesAreDrawers(tight, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
+  // Closing a column is what makes room, so what it is taking is nought and the other may have it.
+  it("grows by what a column the person closed is no longer taking", () => {
+    window.innerWidth = 960;
+    expect(sideMax(0)).toBe(960 - PANE_MIN);
   });
 
-  it("are columns again once a closed one stops taking width", () => {
-    const tight = PANE_MIN + SIDE_DEFAULT;
-    expect(sidesAreDrawers(tight, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
-    // The rail closed: what it would have taken is room the panes now have.
-    expect(sidesAreDrawers(tight, 0, SIDE_DEFAULT)).toBe(false);
+  // The middle is what the ceiling is for: dragged to it, a pane still has its floor.
+  it("leaves the middle its floor when both columns are dragged out to it", () => {
+    window.innerWidth = 960;
+    const side = clampSideWidth(9999, RAIL_DEFAULT);
+    const rail = clampRailWidth(9999, side);
+    expect(960 - rail - side).toBeGreaterThanOrEqual(PANE_MIN);
+  });
+
+  // A floor is a floor. On a window too narrow for one there is nothing to be done by making the
+  // column narrower than it is drawable at.
+  it("never falls below the column's own floor", () => {
+    window.innerWidth = 400;
+    expect(railMax(SIDE_DEFAULT)).toBe(RAIL_MIN);
+    expect(sideMax(RAIL_DEFAULT)).toBe(SIDE_MIN);
   });
 });

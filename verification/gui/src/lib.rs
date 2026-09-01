@@ -1542,10 +1542,18 @@ impl Instructor {
             // a drop reads the disk the operator is sitting at, and nothing the run laid down is
             // anywhere a hand can reach from there. What it lands as is not said here — where it goes
             // is Amenbo's own answer, and the step that reads the input line is where that is settled.
-            (Domain::Terminal, "drop-in") => format!(
-                "From outside Amenbo — a file manager, the desktop, anywhere on this machine — drag a file named \"{}\" over the pane that has a terminal running in it, and let it go there.",
-                req(with, "brings")?
-            ),
+            (Domain::Terminal, "drop-in") => match with.get("beside").and_then(|v| v.as_str()) {
+                None => format!(
+                    "From outside Amenbo — a file manager, the desktop, anywhere on this machine — drag a file named \"{}\" over the pane that has a terminal running in it, and let it go there.",
+                    req(with, "brings")?
+                ),
+                // One hand and one movement, said twice over, because a pair let go one after the
+                // other is two drops and proves something else entirely.
+                Some(beside) => format!(
+                    "From outside Amenbo — a file manager, the desktop, anywhere on this machine — select a file named \"{}\" and a file named \"{beside}\" together, drag the pair over the pane that has a terminal running in it in one movement, and let them both go there.",
+                    req(with, "brings")?
+                ),
+            },
             // A command run for its output, which is what the steps after it read. The clearing is
             // said first because it is what makes "the ref" a place on the screen rather than one of
             // several, and the waiting is said last because a press on a half-drawn line is a press
@@ -4119,6 +4127,39 @@ steps_gui:
             ins.expectation(&steps[1]),
             Some(Expectation { text: "/work/notes.md".to_string(), present: true })
         );
+    }
+
+    /// **A hand full and a hand with one thing in it are two gestures, and the line has to say which.**
+    /// Two files let go one after the other end on the same input line as a pair let go together, so
+    /// an instruction that named them one at a time would be walked as two drops and read as proof of
+    /// something nobody asked about. The pair form says the selecting, the one movement and the one
+    /// release, because each of the three is a place an operator would otherwise split it.
+    #[test]
+    fn a_pair_dragged_in_together_is_one_movement_and_says_so() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: terminal
+    op: drop-in
+    with: { brings: seeds.csv }
+  - type: action
+    domain: terminal
+    op: drop-in
+    with: { brings: seeds.csv, beside: labels.txt }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+
+        assert!(lines[0].contains("drag a file named \"seeds.csv\""), "got: {}", lines[0]);
+        assert!(!lines[0].contains("labels.txt"), "got: {}", lines[0]);
+
+        assert!(lines[1].contains("\"seeds.csv\""), "got: {}", lines[1]);
+        assert!(lines[1].contains("\"labels.txt\""), "got: {}", lines[1]);
+        assert!(lines[1].contains("together"), "the selecting is what makes it one hand: {}", lines[1]);
+        assert!(lines[1].contains("one movement"), "got: {}", lines[1]);
     }
 
     /// **The three ways out of a file's menu are three different sentences, and none of them is shot.**

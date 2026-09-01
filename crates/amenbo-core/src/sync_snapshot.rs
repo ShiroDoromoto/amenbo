@@ -905,7 +905,7 @@ mod tests {
                 )
                 .unwrap()
                 .id;
-            let value = s.dimension_value_add(axis, "a value", None, None).unwrap().id;
+            let value = s.dimension_value_add(axis, "a-value", None, None).unwrap().id;
             s.set_task_dimension_value(task, value).unwrap();
             s.set_decision_dimension_value(newer, value).unwrap();
 

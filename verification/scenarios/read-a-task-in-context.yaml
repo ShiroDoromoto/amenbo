@@ -108,7 +108,7 @@ steps_cli:
     op: value-add
     with:
       dimension: bucket
-      value: SCENARIO — the release this goes out in
+      value: SCENARIO-the-release-this-goes-out-in
 
   - type: action
     domain: dimension
@@ -116,7 +116,7 @@ steps_cli:
     with:
       target: seed
       dimension: bucket
-      value: SCENARIO — the release this goes out in
+      value: SCENARIO-the-release-this-goes-out-in
 
   - type: assert
     domain: task
@@ -132,4 +132,4 @@ steps_cli:
     with:
       target: seed
       field: dimensions.0.value
-      equals: SCENARIO — the release this goes out in
+      equals: SCENARIO-the-release-this-goes-out-in

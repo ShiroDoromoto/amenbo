@@ -650,6 +650,7 @@ export const nl: Translation = {
     invalid_dimension_required_unset: "‘{name}’ is een verplichte categorie, dus de waarde van een taak daarop kan niet leeggemaakt worden — kies in plaats daarvan een andere waarde.",
     invalid_dimension_slug_shape: "„{slug}” kan geen sleutel zijn — maximaal {max} kleine letters, cijfers en koppeltekens, beginnend met een letter.",
     invalid_dimension_slug_taken: "„{slug}” is hier al de sleutel van iets anders — kies een andere.",
+    invalid_dimension_name_whitespace: "„{name}” kan geen naam zijn — laat de spaties weg of zet er een koppelteken voor in de plaats.",
     invalid_task_required_dimension: "Deze taak draagt geen waarde op {names}, wat dit project vereist.",
     invalid_decision_required_dimension: "Deze beslissing draagt geen waarde op {names}, wat dit project vereist.",
     invalid_dimension_values_unordered:

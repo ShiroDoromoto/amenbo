@@ -650,6 +650,7 @@ export const th: Translation = {
     invalid_dimension_required_unset: "«{name}» เป็นหมวดที่จำเป็น จึงล้างค่าของงานในหมวดนี้ไม่ได้ กรุณาเลือกค่าอื่นแทน",
     invalid_dimension_slug_shape: "“{slug}” ใช้เป็นคีย์ไม่ได้ — ใช้ตัวพิมพ์เล็ก ตัวเลข และยัติภังค์ ไม่เกิน {max} ตัว และขึ้นต้นด้วยตัวอักษร",
     invalid_dimension_slug_taken: "“{slug}” เป็นคีย์ของสิ่งอื่นที่นี่อยู่แล้ว — เลือกคีย์อื่น",
+    invalid_dimension_name_whitespace: "“{name}” ใช้เป็นชื่อไม่ได้ — เอาช่องว่างออก หรือใช้ยัติภังค์แทน",
     invalid_task_required_dimension: "งานนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
     invalid_decision_required_dimension: "การตัดสินใจนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
     invalid_dimension_values_unordered: "ค่าของหมวดนี้ไม่มีลำดับ จึงจัดเรียงใหม่ไม่ได้",

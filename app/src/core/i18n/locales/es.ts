@@ -677,6 +677,7 @@ export const es: Translation = {
     invalid_dimension_required_unset: "«{name}» es una categoría obligatoria, así que el valor de una tarea en ella no se puede vaciar: elige otro valor.",
     invalid_dimension_slug_shape: "«{slug}» no sirve como clave: usa como mucho {max} letras minúsculas, dígitos y guiones, empezando por una letra.",
     invalid_dimension_slug_taken: "«{slug}» ya es la clave de otra cosa aquí: elige otra.",
+    invalid_dimension_name_whitespace: "«{name}» no sirve como nombre: quita los espacios o pon un guion en su lugar.",
     invalid_task_required_dimension: "Esta tarea no lleva ningún valor en {names}, que este proyecto exige.",
     invalid_decision_required_dimension: "Esta decisión no lleva ningún valor en {names}, que este proyecto exige.",
     invalid_dimension_values_unordered:

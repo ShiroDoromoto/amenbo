@@ -649,6 +649,7 @@ export const tr: Translation = {
     invalid_dimension_required_unset: "«{name}» zorunlu bir kategori, bu yüzden bir görevin oradaki değeri boşaltılamaz — bunun yerine başka bir değer seçin.",
     invalid_dimension_slug_shape: "“{slug}” anahtar olamaz — en çok {max} küçük harf, rakam ve tire kullanın, bir harfle başlayın.",
     invalid_dimension_slug_taken: "“{slug}” burada başka bir şeyin anahtarı — başka bir tane seçin.",
+    invalid_dimension_name_whitespace: "“{name}” ad olamaz — boşlukları kaldırın ya da yerine tire koyun.",
     invalid_task_required_dimension: "Bu görev {names} alanında değer taşımıyor, oysa bu proje onu zorunlu tutuyor.",
     invalid_decision_required_dimension: "Bu karar {names} alanında değer taşımıyor, oysa bu proje onu zorunlu tutuyor.",
     invalid_dimension_values_unordered: "Bu kategorinin değerleri sıralı değil, bu yüzden yeniden sıralanamaz.",

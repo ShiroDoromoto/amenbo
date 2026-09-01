@@ -651,6 +651,7 @@ export const id: Translation = {
     invalid_dimension_required_unset: "«{name}» adalah kategori wajib, jadi nilai tugas di sana tidak bisa dikosongkan — pilih nilai lain.",
     invalid_dimension_slug_shape: "«{slug}» tidak bisa jadi kunci — pakai maksimal {max} huruf kecil, angka, dan tanda hubung, diawali huruf.",
     invalid_dimension_slug_taken: "«{slug}» sudah jadi kunci hal lain di sini — pilih yang lain.",
+    invalid_dimension_name_whitespace: "«{name}» tidak bisa jadi nama — hilangkan spasinya, atau ganti dengan tanda hubung.",
     invalid_task_required_dimension: "Tugas ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
     invalid_decision_required_dimension: "Keputusan ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
     invalid_dimension_values_unordered: "Nilai kategori ini tidak berurutan, jadi tidak bisa diurutkan ulang.",

@@ -620,13 +620,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__none { margin: 0; color: var(--c-text-muted); }
 .files__list { list-style: none; margin: 0; padding: 0; }
 .files__list--tree { padding-left: var(--s-3); }
-/* One row of the tree, and the box holding the level under it where it is a folder. It carries the
-   role and the one tab stop the whole tree has; what is drawn on the line is the element inside it
-   (`app/src/files/FilesPanel.tsx`). */
+/* One row of the tree, however far down it is: the rows of every open folder are lines of the one
+   list, so how deep a row stands is a number on the row and the step is taken here rather than by a
+   list inside a list (`app/src/files/FilesPanel.tsx`). The margin and not padding, so that the row's
+   own box — its ground under the pointer, the ring around it — begins where its name does. */
+.files__list--tree > li { margin-left: calc(var(--depth, 0) * var(--s-3)); }
 .files__item { cursor: pointer; }
 /* And no ring of its own. What is drawn for the focus is the line inside it (below); left to the
-   browser's default, the item would draw a second one around the whole subtree — which is the ring
-   the line was moved out of in the first place. */
+   browser's default, the item would draw a second ring outside the one the line already carries. */
 .files__item:focus, .files__item:focus-visible { outline: none; }
 /* A row is one line and never wraps: the name is what is read, and a path that folded would push
    the next row off the panel. Centred rather than on the baseline, because the first thing on the
@@ -654,8 +655,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-accent-weak); color: var(--c-accent-text);
 }
 /* Where the tab stop is says which row a reader is on, so it is drawn on the line and not on the
-   item holding it: an open folder's item is the box around every row below it as well, and an
-   outline there rings the whole subtree instead of the one row that has the focus.
+   item holding it: the line is what carries the row's ground, and a ring around the item would
+   stand outside it.
    The ring is drawn inside the row rather than 2px outside it — held off the edge, at the height
    these rows are, it all but touches the names above and below. */
 .files__item:focus-visible > .files__file, .files__item:focus > .files__file,
@@ -668,15 +669,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__item:focus > .files__dir:not(.files__dir--chosen) {
   background: var(--c-surface-sunken);
 }
-/* The row under the pointer, and only that one. `:hover` matches every item the pointer is inside,
-   and an open folder's item contains the rows below it, so pointing at a file deep in the tree lit
-   up every folder on the way down to it. The innermost one is the row being pointed at.
+/* The row under the pointer. One row is inside no other — they are all lines of one list — so the
+   pointer is in exactly the row it is pointing at.
    The name still moves colour on the row being read, where the ground cannot: a row that answered
    the pointer with nothing reads as a row that cannot be pressed. */
-.files__item:hover:not(:has(.files__item:hover)) > .files__file,
-.files__item:hover:not(:has(.files__item:hover)) > .files__dir { color: var(--c-accent); }
-.files__item:hover:not(:has(.files__item:hover)) > .files__file:not(.files__file--chosen),
-.files__item:hover:not(:has(.files__item:hover)) > .files__dir:not(.files__dir--chosen) {
+.files__item:hover > .files__file,
+.files__item:hover > .files__dir { color: var(--c-accent); }
+.files__item:hover > .files__file:not(.files__file--chosen),
+.files__item:hover > .files__dir:not(.files__dir--chosen) {
   background: var(--c-surface-sunken);
 }
 /* One that has been opened. It stays on the list — what was pointed at was pointed at — and says
@@ -688,7 +688,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__file--ignored, .files__dir--ignored { opacity: 0.55; }
 /* The folder a file dragged in from the desktop would land in. The host says where the pointer is
    and nothing more, so this highlight is the panel's own answer, redrawn on every move it is told
-   about (`app/src/core/hostDrop.ts`). */
+   about (`app/src/core/hostDrop.ts`).
+   **The folder's own row, and not the rows under it.** The rows are siblings, each one inside the
+   folder above it standing a step further in, so a box drawn around a whole run of them is a
+   staircase. What the highlight has to say is which folder is about to receive the files, and the
+   row carrying that folder's name is where that is read. */
 .files__into, .files__row--into {
   outline: 1px solid var(--c-accent);
   outline-offset: 2px;
@@ -734,8 +738,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__file--git-untracked, .files__dir--git-untracked { --git: var(--c-git-untracked); }
 /* The pointer still wins, said again here because these rules come after the hover above and a
    row whose colour did not move under the pointer reads as a row that cannot be pressed. */
-.files__item:hover:not(:has(.files__item:hover)) > .files__file--git .files__name,
-.files__item:hover:not(:has(.files__item:hover)) > .files__dir--git { color: var(--c-accent); }
+.files__item:hover > .files__file--git .files__name,
+.files__item:hover > .files__dir--git { color: var(--c-accent); }
 /* Reading one file: the way back, the name, and whatever the file turned out to be.
    It lies over the tree instead of replacing it (`AMB-D-815`), drawn the way the columns' own
    drawers are — right against the edge, full height, on `--c-surface-2` under `--shadow-md` — so

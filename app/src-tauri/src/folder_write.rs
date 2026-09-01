@@ -27,16 +27,9 @@ use std::path::{Path, PathBuf};
 
 use amenbo_core::binding::canonical_dir;
 
-use crate::dto::{
-    DropEffectDto, FolderCarriedDto, FolderInboxedDto, FolderStopDto, FolderStoppedDto,
-};
+use crate::dto::{DropEffectDto, FolderCarriedDto, FolderStopDto, FolderStoppedDto};
 use crate::error::CmdError;
-use crate::folder_fence::{gone, plain, root_of, rooted, under};
-
-/// The folder Amenbo puts what it was handed in, directly under the folder the project is bound to
-/// (`AMB-D-800`). A sibling of the `.amenbo` marker rather than something under it, because that
-/// marker is a file and not a folder (`amenbo_core::binding`).
-const INBOX_DIR: &str = ".amenbo-inbox";
+use crate::folder_fence::{gone, rooted, under};
 
 /// The most bytes one name may take. Every filesystem worth naming stops at 255, and the ones that
 /// stop earlier answer for themselves when the name is used.
@@ -175,127 +168,6 @@ pub fn folder_import(
     let from: Vec<PathBuf> = paths.iter().map(|path| levelled(Path::new(path))).collect();
     let one = if matches!(effect, DropEffectDto::Move) { move_one } else { copy_one };
     Ok(carried(&from, &into, one))
-}
-
-/// Take files in without asking where they should go: the ones from outside land in
-/// `.amenbo-inbox/<the day>/` under the folder the project is bound to, and the answer is the paths
-/// they are all at now (`AMB-D-800`, `AMB-D-808`).
-///
-/// **What is already under that folder is not taken in** — its own path is what comes back, and the
-/// two kinds arrive mixed together in the order they were handed over ([`inboxed`] says why).
-///
-/// **The landing is Amenbo's and not the caller's**, which is the whole of what separates this from
-/// [`folder_import`]. A reader who hands a file to a terminal pane has not picked a row to drop it
-/// on, so "that name is already there" has nowhere to send them — the name is numbered here and the
-/// carry goes through, where a drop onto a chosen folder rightly stops. It lands inside the
-/// project's folder rather than in `/tmp` because what is being handed the path is an agent that may
-/// only read the folder it was pointed at.
-///
-/// The place is made when it is not there, and the run that makes it leaves a `.gitignore` of `*`
-/// inside it. The reader's own `.gitignore` is never touched: it is a file git is following, so
-/// anything Amenbo wrote into it would turn up in somebody's commit.
-#[tauri::command]
-pub fn folder_inbox(
-    project_id: i64,
-    root: String,
-    paths: Vec<String>,
-) -> Result<FolderInboxedDto, CmdError> {
-    let root = root_of(project_id, &root)?;
-    let from: Vec<PathBuf> = paths.iter().map(|path| levelled(Path::new(path))).collect();
-    inboxed(&from, &root)
-}
-
-/// Today's folder in the inbox, with the inbox itself made under it if neither is there.
-///
-/// **The `.gitignore` goes in on the run that makes the inbox, and never again.** A reader who
-/// deletes it has said something, and writing it back would be arguing with them. Cutting a folder
-/// per day is what stops the numbering climbing forever, and it is what leaves a person something
-/// they can delete in one press.
-fn inbox(root: &Path) -> Result<PathBuf, CmdError> {
-    let place = root.join(INBOX_DIR);
-    match std::fs::create_dir(&place) {
-        Ok(()) => std::fs::write(place.join(".gitignore"), "*\n")
-            .map_err(|e| made(e, ".gitignore"))?,
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-        Err(e) => return Err(made(e, INBOX_DIR)),
-    }
-    let day = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let into = place.join(&day);
-    std::fs::create_dir_all(&into).map_err(|e| made(e, &day))?;
-    Ok(into)
-}
-
-/// The carry a handed-over file makes: the same rows in the same order, stopping on the first that
-/// will not go — except that a name already in the folder is not one of the things that stops it.
-///
-/// **A row already under `root` is not carried at all** (`AMB-D-808`): what goes back for it is the
-/// path it is at now. Taking it in would leave the reader with two of the same file, and the one the
-/// pane was handed is the one nobody sees change — `.amenbo-inbox` carries a `.gitignore` of `*`, so
-/// a fix made in the copy shows neither in git's diff nor in the row of what changed (`AMB-D-785`).
-/// A folder handed over that way costs more still, since [`copy_one`] duplicates the whole tree
-/// under it. The reason `AMB-D-800` put the landing inside the project's folder — that an agent may
-/// only read the folder it was pointed at — was never about a file already in there.
-///
-/// **The place is made only when something is actually to be taken in**, so handing over what is
-/// already inside writes nothing at all, the dated folder included.
-///
-/// Inside is judged by spelling and the spelling alone: a link is not followed, matching what
-/// [`levelled`] resolves and what `AMB-D-782` keeps out of every other door here.
-fn inboxed(from: &[PathBuf], root: &Path) -> Result<FolderInboxedDto, CmdError> {
-    let outside = |path: &PathBuf| !plain(path).starts_with(plain(root));
-    let into = from.iter().any(outside).then(|| inbox(root)).transpose()?;
-    let mut arrived = Vec::new();
-    for path in from {
-        let into = match &into {
-            Some(into) if outside(path) => into,
-            // Already inside: nothing is copied, and the path it is at now is what gets handed back.
-            _ => {
-                arrived.push(path.to_string_lossy().into_owned());
-                continue;
-            }
-        };
-        let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
-            return Ok(FolderInboxedDto { arrived, stopped: Some(nameless(path)) });
-        };
-        let mut nth = 1;
-        loop {
-            let under = numbered(&name, nth);
-            match carried_one(path, into, &under, copy_one) {
-                None => {
-                    arrived.push(into.join(&under).to_string_lossy().into_owned());
-                    break;
-                }
-                // The one refusal this door answers for itself. Nobody chose the folder, so the
-                // reader has no next move to make with it — the name is shifted and handed back.
-                Some((Some(FolderStopDto::Taken), _)) => nth += 1,
-                Some((code, why)) => {
-                    let stopped = FolderStoppedDto { name, code, why };
-                    return Ok(FolderInboxedDto { arrived, stopped: Some(stopped) });
-                }
-            }
-        }
-    }
-    Ok(FolderInboxedDto { arrived, stopped: None })
-}
-
-/// The nth spelling of a name: the first is the name itself, and after that the number goes in
-/// front of the extension — `screenshot.png`, then `screenshot-2.png`.
-///
-/// It is Amenbo's own spelling because there is no other to borrow. Numbering a clash is a file
-/// manager's doing rather than an operating system's, and Finder, Explorer and Nautilus each write
-/// it differently; none of them is reachable from the `fs::copy` this carry is made of, and the one
-/// call that would be is Windows' alone (`AMB-D-800`).
-fn numbered(name: &str, nth: u32) -> String {
-    if nth < 2 {
-        return name.to_string();
-    }
-    let at = Path::new(name);
-    match (at.file_stem(), at.extension()) {
-        (Some(stem), Some(ext)) => {
-            format!("{}-{nth}.{}", stem.to_string_lossy(), ext.to_string_lossy())
-        }
-        _ => format!("{name}-{nth}"),
-    }
 }
 
 /// Put these rows on the machine's clipboard, as the files they are (`AMB-D-796`).
@@ -815,64 +687,6 @@ mod tests {
         assert_eq!(answer.stopped.expect("it is inside itself").name, "carried");
     }
 
-    /// The place is Amenbo's to make, and the run that makes it leaves the one file that keeps what
-    /// lands there out of somebody's commit — inside the place itself, never in the reader's own.
-    #[test]
-    fn the_place_is_made_with_a_gitignore_of_its_own() {
-        let dir = tempfile::tempdir().expect("a temp dir");
-        let root = dir.path();
-        std::fs::write(root.join(".gitignore"), b"node_modules\n").expect("the reader's own");
-
-        let day = inbox(root).expect("the place");
-        assert!(day.is_dir());
-        assert_eq!(day.parent().expect("the inbox"), root.join(INBOX_DIR));
-        let ignore = root.join(INBOX_DIR).join(".gitignore");
-        assert_eq!(std::fs::read_to_string(&ignore).expect("the file"), "*\n");
-        assert_eq!(
-            std::fs::read_to_string(root.join(".gitignore")).expect("the file"),
-            "node_modules\n",
-            "the reader's own is not written into",
-        );
-
-        // Asking again is the ordinary case: the same folder, and nothing written back over what a
-        // reader deleted.
-        std::fs::remove_file(&ignore).expect("the reader deletes it");
-        assert_eq!(inbox(root).expect("the place"), day);
-        assert!(!holds(&ignore), "what a reader deleted stays deleted");
-    }
-
-    /// Nobody chose where these went, so "that name is already there" has nowhere to send the
-    /// reader: the name is numbered and the carry goes through.
-    #[test]
-    fn a_name_already_there_is_numbered_rather_than_refused() {
-        let dir = tempfile::tempdir().expect("a temp dir");
-        let root = dir.path().join("work");
-        std::fs::create_dir(&root).expect("a folder");
-        let from = dir.path().join("shot.png");
-        std::fs::write(&from, b"mine").expect("a file");
-
-        let answer = inboxed(&[from.clone(), from.clone(), from], &root).expect("the carry");
-        assert!(answer.stopped.is_none());
-        let names: Vec<String> = answer
-            .arrived
-            .iter()
-            .map(|at| Path::new(at).file_name().expect("a name").to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(names, ["shot.png", "shot-2.png", "shot-3.png"]);
-        // The answer is whole paths, because what asked for it writes them into a terminal.
-        assert!(answer.arrived.iter().all(|at| Path::new(at).is_file()));
-    }
-
-    /// The number goes where a reader would put it: in front of the extension, and on the end when
-    /// there is not one.
-    #[test]
-    fn the_number_goes_in_front_of_the_extension() {
-        assert_eq!(numbered("shot.png", 1), "shot.png");
-        assert_eq!(numbered("shot.png", 2), "shot-2.png");
-        assert_eq!(numbered("README", 3), "README-3");
-        assert_eq!(numbered(".env", 2), ".env-2");
-    }
-
     /// Moving on one disk is a rename, and a rename takes the source away. The other half — the
     /// copy a move falls back to across disks — cannot be asked for with one temp folder.
     #[test]
@@ -885,48 +699,5 @@ mod tests {
         move_one(&from, &to).expect("the move");
         assert!(!holds(&from));
         assert_eq!(std::fs::read(&to).expect("the file"), b"mine");
-    }
-
-    /// A file the pane's own folder already holds is handed back where it is: no copy is made, and
-    /// nothing at all is written into the reader's folder — not even the place a copy would land in.
-    #[test]
-    fn what_is_already_inside_is_handed_back_rather_than_taken_in() {
-        let dir = tempfile::tempdir().expect("a temp dir");
-        let root = dir.path().join("work");
-        std::fs::create_dir_all(root.join("src")).expect("a folder");
-        let mine = root.join("src/note.md");
-        std::fs::write(&mine, b"mine").expect("a file");
-
-        let answer = inboxed(std::slice::from_ref(&mine), &root).expect("the carry");
-        assert!(answer.stopped.is_none());
-        assert_eq!(answer.arrived, [mine.to_string_lossy()]);
-        assert!(!holds(&root.join(INBOX_DIR)), "nothing is made for a carry that carries nothing");
-        // A folder is the same answer, and the tree under it is not duplicated.
-        let answer = inboxed(&[root.join("src")], &root).expect("the carry");
-        assert_eq!(answer.arrived, [root.join("src").to_string_lossy()]);
-        assert!(!holds(&root.join(INBOX_DIR)));
-    }
-
-    /// Inside and outside come back mixed in the order they were handed over, each answered its own
-    /// way — the one where it already is, the other where it was put.
-    #[test]
-    fn the_two_kinds_keep_the_order_they_were_handed_in() {
-        let dir = tempfile::tempdir().expect("a temp dir");
-        let root = dir.path().join("work");
-        std::fs::create_dir(&root).expect("a folder");
-        let mine = root.join("note.md");
-        std::fs::write(&mine, b"mine").expect("a file");
-        let theirs = dir.path().join("shot.png");
-        std::fs::write(&theirs, b"theirs").expect("a file");
-
-        let answer = inboxed(&[theirs.clone(), mine.clone(), theirs], &root).expect("the carry");
-        assert!(answer.stopped.is_none());
-        let at: Vec<&Path> = answer.arrived.iter().map(Path::new).collect();
-        assert_eq!(at[1], mine, "the one already inside is answered where it is");
-        assert_eq!(at[0].file_name().expect("a name"), "shot.png");
-        assert_eq!(at[2].file_name().expect("a name"), "shot-2.png");
-        for one in [at[0], at[2]] {
-            assert!(one.starts_with(root.join(INBOX_DIR)), "the outside ones landed in the inbox");
-        }
     }
 }

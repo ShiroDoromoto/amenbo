@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 // Handing a pane a file by dropping it on one.
 //
-// The pane is a real terminal and the agent in it reads the folder it was opened in, so a file from
-// the desktop has to be *in* that folder before it can be read at all — which is why the drop carries
-// it into the project's own inbox and hands back where it landed (`AMB-D-800`). What is pinned here
-// is the shape of that: the surface is only offered where there is a terminal to hand something to,
-// a drop on the pane beside this one is not this pane's, and what comes back is put in front of the
-// reader rather than run for them.
+// Nothing is moved and nothing is copied: what goes into the terminal is where the file or the
+// folder is now, exactly as the drop handed it over (`AMB-D-820`). What is pinned here is the shape
+// of that: the surface is only offered where there is a terminal to hand something to, a drop on the
+// pane beside this one is not this pane's, and the path is put in front of the reader rather than
+// run for them.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,14 +21,10 @@ const hoisted = vi.hoisted(() => ({
   events: null as PaneEvents | null,
   /** The drop watch this pane took up, while it holds one. */
   watch: null as HostDropWatch | null,
-  /** What the carry into the inbox was asked for, in the order it was asked. */
-  carried: [] as Array<{ project: number; root: string; paths: string[] }>,
-  /** What that carry answers with. */
-  inboxed: { arrived: [] as string[], stopped: null as { code: string; name: string; why: string } | null },
-  /** Whether the host refuses it outright. */
-  carryFails: false,
   /** What was put in front of the reader, as the pane asked for it. */
   pasted: [] as Array<{ session: string; text: string }>,
+  /** Whether the terminal refuses what is pasted into it. */
+  pasteFails: false,
   /** The lines the pane put on the screen. */
   noticed: [] as string[],
   /** What the machine's own picker answers with. */
@@ -49,6 +44,7 @@ vi.mock("../talk/terminal", async (actual) => ({
   ...(await actual<typeof import("../talk/terminal")>()),
   endTerminal: vi.fn(async () => {}),
   pasteIntoTerminal: vi.fn(async (session: string, text: string) => {
+    if (hoisted.pasteFails) throw new Error("that terminal is not there any more");
     hoisted.pasted.push({ session, text });
   }),
 }));
@@ -56,13 +52,6 @@ vi.mock("../core/hostDrop", () => ({
   watchHostDrop: vi.fn(async (watch: HostDropWatch) => {
     hoisted.watch = watch;
     return () => { hoisted.watch = null; };
-  }),
-}));
-vi.mock("../files/folder", () => ({
-  folderInbox: vi.fn(async (project: number, root: string, paths: string[]) => {
-    hoisted.carried.push({ project, root, paths });
-    if (hoisted.carryFails) throw new Error("that folder is not there any more");
-    return hoisted.inboxed;
   }),
 }));
 vi.mock("../core/dialog", () => ({
@@ -87,10 +76,8 @@ let root: Root;
 beforeEach(() => {
   hoisted.events = null;
   hoisted.watch = null;
-  hoisted.carried = [];
-  hoisted.inboxed = { arrived: [], stopped: null };
-  hoisted.carryFails = false;
   hoisted.pasted = [];
+  hoisted.pasteFails = false;
   hoisted.noticed = [];
   hoisted.picked = [];
   container = document.createElement("div");
@@ -126,9 +113,9 @@ async function pane(autoStart = true): Promise<void> {
 }
 
 /** The host opens a terminal in the pane, which is what puts the watch up. */
-async function opened(folder: string | null = "/work/here"): Promise<void> {
+async function opened(): Promise<void> {
   await act(async () => {
-    hoisted.events?.opened("session-7", "2026-08-29T00:00:00Z", folder);
+    hoisted.events?.opened("session-7", "2026-08-29T00:00:00Z", "/work/here");
   });
   await act(async () => { await Promise.resolve(); });
 }
@@ -185,63 +172,40 @@ describe("handing a pane a file", () => {
     expect(surface(), "the surface stayed after the drag had gone").toBeNull();
   });
 
-  it("carries what landed into the folder the terminal runs in, and pastes where it went", async () => {
+  it("pastes where what landed already is, leaving it where it is", async () => {
     await pane();
     await opened();
-    hoisted.inboxed = { arrived: ["/work/here/.amenbo-inbox/2026-08-29/shot.png"], stopped: null };
 
     await over(slot());
     await drop(["/Users/somebody/Desktop/shot.png"]);
 
-    expect(hoisted.carried).toEqual([
-      { project: 3, root: "/work/here", paths: ["/Users/somebody/Desktop/shot.png"] },
-    ]);
     expect(hoisted.pasted).toEqual([
-      { session: "session-7", text: "'/work/here/.amenbo-inbox/2026-08-29/shot.png'" },
+      { session: "session-7", text: "'/Users/somebody/Desktop/shot.png'" },
     ]);
     expect(surface(), "the surface stayed after the drop").toBeNull();
+  });
+
+  it("pastes a folder's path the same way a file's, without copying the tree under it", async () => {
+    await pane();
+    await opened();
+
+    await drop(["/Users/somebody/Projects/notes"]);
+
+    expect(hoisted.pasted).toEqual([
+      { session: "session-7", text: "'/Users/somebody/Projects/notes'" },
+    ]);
   });
 
   it("quotes each path on its own, so the space between two is not the space inside one", async () => {
     await pane();
     await opened();
-    hoisted.inboxed = {
-      arrived: ["/work/here/.amenbo-inbox/2026-08-29/a shot.png", "/work/here/.amenbo-inbox/2026-08-29/it's shot.png"],
-      stopped: null,
-    };
 
     await drop(["/Users/somebody/Desktop/a shot.png", "/Users/somebody/Desktop/it's shot.png"]);
 
     expect(hoisted.pasted[0]?.text).toBe(
-      "'/work/here/.amenbo-inbox/2026-08-29/a shot.png' "
-      + "'/work/here/.amenbo-inbox/2026-08-29/it'\\''s shot.png'",
+      "'/Users/somebody/Desktop/a shot.png' "
+      + "'/Users/somebody/Desktop/it'\\''s shot.png'",
     );
-  });
-
-  it("takes the folder off the session, not off the slot it was handed", async () => {
-    await pane();
-    // A pane that took up a terminal draws one that was opened somewhere else (`AMB-D-753`).
-    await opened("/work/elsewhere");
-    hoisted.inboxed = { arrived: ["/work/elsewhere/.amenbo-inbox/2026-08-29/shot.png"], stopped: null };
-
-    await drop(["/Users/somebody/Desktop/shot.png"]);
-
-    expect(hoisted.carried[0]?.root).toBe("/work/elsewhere");
-  });
-
-  it("says what stopped a carry, and still pastes what got there", async () => {
-    await pane();
-    await opened();
-    hoisted.inboxed = {
-      arrived: ["/work/here/.amenbo-inbox/2026-08-29/one.png"],
-      stopped: { code: "nameless", name: "two.png", why: "that has no name" },
-    };
-
-    await drop(["/Users/somebody/Desktop/one.png", "/Users/somebody/Desktop/two.png"]);
-
-    expect(hoisted.pasted).toHaveLength(1);
-    expect(hoisted.noticed, "a carry that stopped part-way said nothing").toHaveLength(1);
-    expect(hoisted.noticed[0]).toContain("two.png");
   });
 
   it("keeps the row's menu off a place with nothing running in it", async () => {
@@ -255,19 +219,15 @@ describe("handing a pane a file", () => {
     expect(more(), "a running pane had no way to be handed anything but a drop").not.toBeNull();
   });
 
-  it("carries what was chosen from the machine's picker down the same road", async () => {
+  it("pastes what was chosen from the machine's picker down the same road", async () => {
     await pane();
     await opened();
     hoisted.picked = ["/Users/somebody/Documents/notes.md"];
-    hoisted.inboxed = { arrived: ["/work/here/.amenbo-inbox/2026-08-29/notes.md"], stopped: null };
 
     await chooseInMenu(0);
 
-    expect(hoisted.carried).toEqual([
-      { project: 3, root: "/work/here", paths: ["/Users/somebody/Documents/notes.md"] },
-    ]);
     expect(hoisted.pasted).toEqual([
-      { session: "session-7", text: "'/work/here/.amenbo-inbox/2026-08-29/notes.md'" },
+      { session: "session-7", text: "'/Users/somebody/Documents/notes.md'" },
     ]);
   });
 
@@ -277,18 +237,17 @@ describe("handing a pane a file", () => {
 
     await chooseInMenu(0);
 
-    expect(hoisted.carried, "an empty pick was carried anyway").toEqual([]);
-    expect(hoisted.pasted).toEqual([]);
+    expect(hoisted.pasted, "an empty pick was pasted anyway").toEqual([]);
   });
 
-  it("says the refusal rather than swallowing it, and pastes nothing", async () => {
+  it("says the refusal rather than swallowing it", async () => {
     await pane();
     await opened();
-    hoisted.carryFails = true;
+    hoisted.pasteFails = true;
 
     await drop(["/Users/somebody/Desktop/shot.png"]);
 
-    expect(hoisted.pasted, "a path was pasted for a carry that never happened").toEqual([]);
+    expect(hoisted.pasted, "a path landed for a paste that never happened").toEqual([]);
     expect(hoisted.noticed).toHaveLength(1);
   });
 });

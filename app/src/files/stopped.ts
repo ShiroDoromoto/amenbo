@@ -1,14 +1,12 @@
-// What to say about a carry that stopped part-way — the one sentence both doors into a folder end at.
+// What to say about a carry that stopped part-way — the one sentence a drop onto a chosen folder
+// ends at (`crate::folder_write::folder_import`).
 //
 // A carry is not one act: it takes the rows it was given in order and stops on the first that will
-// not go, so what a reader has to be told is where it got to and why it got no further. Both the
-// drop onto a chosen folder (`crate::folder_write::folder_import`) and the hand-over into the
-// project's own inbox (`… ::folder_inbox`) answer in that shape, and a reader who dropped on a row
-// and one who handed a pane a file are owed the same sentence for the same refusal.
+// not go, so what a reader has to be told is where it got to and why it got no further.
 import type { FolderStoppedDto } from "../bindings/bindings";
 import { formatNumber, t, tf } from "../core/i18n";
 
-/** The shape both carries answer in: what got there, and the one it stopped on. */
+/** The shape a carry answers in: what got there, and the one it stopped on. */
 export type Carry = { arrived: readonly unknown[]; stopped: FolderStoppedDto | null };
 
 /**

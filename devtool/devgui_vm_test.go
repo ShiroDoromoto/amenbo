@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -111,10 +112,12 @@ func TestInstancesFromReadsListingsAlone(t *testing.T) {
 }
 
 // TestVMTaskDevGUIPathsTakeBothHalvesInOrder pins the guest teardown to the same two halves, in the
-// same order, the host teardown takes: the bundle first, the store second.
+// same order, the host teardown takes — the bundle first, the store second — and to the bound folder
+// after them, which only the guest has. A teardown that leaves the folder leaves a pointer naming a
+// store it has just deleted.
 func TestVMTaskDevGUIPathsTakeBothHalvesInOrder(t *testing.T) {
 	got := vmTaskDevGUIPaths("2131")
-	want := taskDevGUIPaths(vmGuestHome, macAppsDir, "2131")
+	want := append(taskDevGUIPaths(vmGuestHome, macAppsDir, "2131"), vmTaskWorkDir("2131"))
 	if len(got) != len(want) {
 		t.Fatalf("guest paths = %v, want %v", got, want)
 	}
@@ -122,5 +125,49 @@ func TestVMTaskDevGUIPathsTakeBothHalvesInOrder(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("guest path %d = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+// TestVMTaskWorkDirIsOneFolderPerInstance pins the folder to the instance and to somewhere outside
+// the store: two instances sharing one folder is the shape that made `--actor ai` unusable in the
+// guest, and a folder inside the store rides into the next instance when the store is cloned.
+func TestVMTaskWorkDirIsOneFolderPerInstance(t *testing.T) {
+	a, b := vmTaskWorkDir("2131"), vmTaskWorkDir("2132")
+	if a == b {
+		t.Errorf("two instances share the folder %q", a)
+	}
+	for _, dir := range []string{a, b} {
+		if dir == vmGuestHome || filepath.Dir(dir) != vmGuestHome {
+			t.Errorf("work dir %q is not a folder of its own beside the guest's home", dir)
+		}
+		if strings.HasPrefix(dir, vmTaskDevAppData("2131")) || strings.HasPrefix(dir, vmTaskDevAppData("2132")) {
+			t.Errorf("work dir %q is inside a store, which a clone would carry into the next instance", dir)
+		}
+	}
+}
+
+// TestLowestProjectIDPicksTheSmallestID pins the pick to the smallest id rather than to the first
+// row: the order of the listing is the CLI's to change, and a folder that binds somewhere else after
+// an unrelated release is worse than one that binds to a project nobody wanted.
+func TestLowestProjectIDPicksTheSmallestID(t *testing.T) {
+	got, err := lowestProjectID(`{"count":3,"projects":[{"id":7},{"id":2},{"id":5}]}`)
+	if err != nil {
+		t.Fatalf("lowestProjectID: %v", err)
+	}
+	if got != "2" {
+		t.Errorf("lowestProjectID = %q, want %q", got, "2")
+	}
+}
+
+// TestLowestProjectIDTellsAnEmptyStoreFromAnUnreadableOne pins the two answers apart. An empty store
+// is a store waiting for its first project — the caller raises one — while a listing that could not
+// be read is a failure, and a "0" out of either is an id bind would go looking for and not find.
+func TestLowestProjectIDTellsAnEmptyStoreFromAnUnreadableOne(t *testing.T) {
+	got, err := lowestProjectID(`{"count":0,"projects":[]}`)
+	if err != nil || got != "" {
+		t.Errorf("lowestProjectID of an empty store = %q, %v, want \"\", nil", got, err)
+	}
+	if got, err := lowestProjectID("not json"); err == nil {
+		t.Errorf("lowestProjectID of a non-document = %q, want an error", got)
 	}
 }

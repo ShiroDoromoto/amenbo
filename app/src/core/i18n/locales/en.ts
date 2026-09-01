@@ -626,9 +626,8 @@ const ui = {
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",
-  "face.handHere": "Drop to hand it to this pane",
+  "face.handHere": "Drop to paste the path",
   "face.more": "More",
-  "face.upload": "Upload",
   // The file face beside the terminal's pane: the project's folder, folded, with what git says
   // about each row drawn as a colour rather than as words (`AMB-D-785`). What a file turns out not
   // to be is said in its own words — a binary is not a failure, it is simply not something a panel
@@ -650,7 +649,8 @@ const ui = {
   "files.read": "Read",
   "files.reopenWith": "Reopen with an encoding",
   "files.lineEndingMixed": "Mixed newlines",
-  "files.handOver": "Hand to the pane I am working in",
+  "files.pasteFilePath": "Paste the file's path",
+  "files.pasteFolderPath": "Paste the folder's path",
   "files.openWith": "Open with the usual application",
   "files.chooseApp": "Open with an application I pick",
   "files.appUsual": "{name} (the usual one)",

@@ -1903,15 +1903,16 @@ describe("the file face", () => {
     expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
   });
 
-  /** The reverse of a path drawn in a pane opening the file here: the row hands the file to what is
-   *  running, as the whole path, which is the only spelling a shell can do anything with. */
+  /** The reverse of a path drawn in a pane opening the file here: the row puts the whole path in
+   *  front of what is running, which is the only spelling a shell can do anything with. */
   it("hands the file to the pane as the whole path it is at", async () => {
     const handed: string[] = [];
     await drawOpen({ onHandOver: (whole) => handed.push(whole) });
     await menuOn(button("a.md"));
-    await click(button(t("files.handOver")));
+    await click(button(t("files.pasteFilePath")));
     expect(handed).toEqual([`${ROOT}/a.md`]);
-    // And the menu is gone: the file has been handed over, and there is nothing more to pick.
+    // And the menu is gone: the path has been put in front of the agent, and there is nothing more
+    // to pick.
     expect(button(t("files.openWith"))).toBeUndefined();
   });
 
@@ -1921,16 +1922,20 @@ describe("the file face", () => {
     await drawOpen();
     await menuOn(button("a.md"));
     expect(button(t("files.openWith"))).toBeDefined();
-    expect(button(t("files.handOver"))).toBeUndefined();
+    expect(button(t("files.pasteFilePath"))).toBeUndefined();
   });
 
-  /** What can be handed over is a file. A folder is not a thing an agent is given the path of and
-   *  told to read, and the menu over one draws what can be written into it instead. */
-  it("offers no hand-over over a folder", async () => {
+  /** A folder is named the same way a file is: nothing is carried, so the tree under it costs no
+   *  more to name than one file does (`AMB-D-820`). What the row says is which of the two it is. */
+  it("hands a folder over too, and says so in the item's own words", async () => {
+    const handed: string[] = [];
     hoisted.entries[""] = [{ name: "notes", isDir: true, ignored: false }];
-    await drawOpen({ onHandOver: () => {} });
+    await drawOpen({ onHandOver: (whole) => handed.push(whole) });
     await menuOn(button("notes"));
-    expect(button(t("files.handOver"))).toBeUndefined();
+    expect(button(t("files.pasteFilePath")), "a folder was offered the file's wording")
+      .toBeUndefined();
+    await click(button(t("files.pasteFolderPath")));
+    expect(handed).toEqual([`${ROOT}/notes`]);
   });
 
   it("leaves the menu open while the arrows are walking it", async () => {

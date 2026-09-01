@@ -27,8 +27,10 @@ const hoisted = vi.hoisted(() => ({
   pasteFails: false,
   /** The lines the pane put on the screen. */
   noticed: [] as string[],
-  /** What the machine's own picker answers with. */
+  /** What the machine's own file picker answers with. */
   picked: [] as string[],
+  /** And its folder picker, which is a second window rather than the same one. */
+  pickedFolders: [] as string[],
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -57,6 +59,7 @@ vi.mock("../core/hostDrop", () => ({
 vi.mock("../core/dialog", () => ({
   confirmDialog: vi.fn(async () => true),
   pickFiles: vi.fn(async () => hoisted.picked),
+  pickFolders: vi.fn(async () => hoisted.pickedFolders),
 }));
 vi.mock("../core/notice", () => ({
   pushNotice: vi.fn((msg: string) => { hoisted.noticed.push(msg); }),
@@ -80,6 +83,7 @@ beforeEach(() => {
   hoisted.pasteFails = false;
   hoisted.noticed = [];
   hoisted.picked = [];
+  hoisted.pickedFolders = [];
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -228,6 +232,20 @@ describe("handing a pane a file", () => {
 
     expect(hoisted.pasted).toEqual([
       { session: "session-7", text: "'/Users/somebody/Documents/notes.md'" },
+    ]);
+  });
+
+  /** Two items and not one, because the machine's picker takes `directory` as a yes or a no: one
+   *  window cannot offer files and folders together (`../core/dialog`). */
+  it("opens a second window for a folder, and pastes that path the same way", async () => {
+    await pane();
+    await opened();
+    hoisted.pickedFolders = ["/Users/somebody/Projects/notes"];
+
+    await chooseInMenu(1);
+
+    expect(hoisted.pasted).toEqual([
+      { session: "session-7", text: "'/Users/somebody/Projects/notes'" },
     ]);
   });
 

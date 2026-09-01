@@ -26,17 +26,29 @@
 # — a unit test over the rename itself (`crate::folder_write`) — and the name written here is a
 # different word, which is the change a shot can actually answer for.
 #
+# ── The two doors onto the box ───────────────────────────────────────────────────────────────────
+# The menu is one of them and the keyboard is the other, and the road walks both because the box is
+# all they share: F2 opens it on the row the keyboard is standing on, and which row that is comes
+# from the letter pressed a step earlier — the walk that goes to the next row whose name begins with
+# it. Neither key can be read on its own. A letter moves nothing a shot can tell apart from a row
+# that was already stood on, and F2 opens a box that says nothing about how the keyboard got there.
+# Together they can: the letter walks past `watering.md` to `README.md`, F2 opens the box on
+# whatever it landed on, and the name typed there is the reading. A letter that moved nothing would
+# rename the folder instead, and the two readings below would catch it — the new name would be on a
+# folder rather than a file, and `README.md` would still be standing.
+#
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no second road here. Making a file at a shell is the shell's own vocabulary, and Amenbo is
 # the subject of none of it.
 id: name-a-file-without-leaving-amenbo
-title: A folder, a file in it and a new name for it are all made from the panel, and a name the machine will not hold is refused where it was typed
+title: A folder, a file in it and a new name for it are all made from the panel — from the menu and from the keyboard — and a name the machine will not hold is refused where it was typed
 description: >
   Open the terminal face on a project with a folder, unfold that folder's section, and make a folder
   from the heading at the top of the tree and a file inside it from the folder's own row — typing each
-  name into the box that takes a row's place. Write a new name over the file's, changing only the
-  letters' case. Then ask twice for names the machine will not give: the one that is already there,
-  and one that is not a name at all.
+  name into the box that takes a row's place. Write a new name over one file's from the menu, and over
+  another's from the keyboard alone: a letter walks the tree to that row, F2 opens the box on it.
+  Then ask twice for names the machine will not give: the one that is already there, and one that is
+  not a name at all.
 
 given:
   - type: action
@@ -53,8 +65,9 @@ given:
       dir: greenhouse
       project: greenhouse
 
-  # One file, so the folder is a folder and not an empty pointer. Nothing on the road reads it — what
-  # the road makes is made beside it.
+  # One file, so the folder is a folder and not an empty pointer — and the row the keyboard road
+  # walks to. It is the last row of the three the tree ends up drawing, which is what lets the letter
+  # be read: the walk has to pass a row to reach it.
   - type: action
     domain: repo
     op: write-file
@@ -132,6 +145,46 @@ steps_gui:
     with:
       name: watering.md
       section: tree
+
+  # ── the same box, opened from the keyboard ────────────────────────────────────────────────────
+  # The keyboard is on the `seedlings` row: opening a folder is a press on its row, and a row
+  # pressed is a row stood on. From there the letter walks past `watering.md` — the row below —
+  # to `README.md`, which is the whole point of the key: the row it reaches is not the next one.
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: r
+
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: f2
+
+  - type: action
+    domain: files
+    op: rename
+    with:
+      by: key
+      name: guide.md
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: guide.md
+      section: tree
+
+  # And the old name gone, which is what says the letter walked: a key that moved nothing would have
+  # opened the box on `seedlings` and renamed the folder, leaving this row exactly where it is.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: README.md
+      section: tree
+      present: false
 
   # ── the name written over the one that is there ───────────────────────────────────────────────
   - type: action

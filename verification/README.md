@@ -768,6 +768,17 @@ holds, `unnameable` for one the machine will not take at all — and both are re
 open, which is where the reader is looking when either arrives.
 `name-a-file-without-leaving-amenbo` is the road.
 
+**The box has a second door, and `press` is how the road walks it.** `press` names a key by what the
+face does with it, and the vocabulary is closed in the driver rather than in the registry: a key the
+face has no answer for fails on the way in instead of in front of a screen. Three keys are in it.
+`escape` is the panel's and takes one layer per press. `f2` and a single letter are a row's, and do
+nothing at all unless the keyboard is standing on one — a letter walks to the next row whose name
+begins with it, and F2 opens the naming box on wherever that left the keyboard. `rename` then types,
+under `by: key` so that the line says the box rather than a menu nothing put on the screen. The two
+keys are only readable together: a letter moves nothing a shot can tell from a row already stood on,
+and a box says nothing about how the keyboard reached it. The road presses a letter that walks past
+the row below to a further one, and the name that comes out says where it landed.
+
 **A rename that changes only the letters' case is not readable here.** Every screen reading is folded
 to one case before the shot and the expectation meet, so a row that was never renamed answers exactly
 like one that was. It is the rename most worth walking — a machine that reads the two names as one is

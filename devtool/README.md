@@ -221,9 +221,29 @@ command exists, and without it you are asking for the route that has one already
   of a session. A store already in there is left alone, and everything past that
   reports and carries on — an instance that opens empty is a poorer screen, not
   a reason to fail the placing that asked.
+- **The instance gets a folder of its own, bound to a project in its store** —
+  `/Users/admin/amenbo-work-<id>`, which is where `devgui cli --vm` runs. An
+  `.amenbo` pointer names exactly one store, so a single one in the guest's home
+  belongs to one instance and is refused for every other (`pointer_other_store`),
+  and that refusal is what `--actor ai` hits: the facet draws its reach from the
+  pointer of the folder it stands in. It goes beside the store rather than inside
+  it, because a throwaway store is a whole-directory clone and a pointer left in
+  there would ride into the next instance. Binding is a human's act and is done
+  under that facet, `--force`d past whatever the home still holds; the project is
+  the store's lowest-numbered one, and re-pointing it is one command:
+  `devtool devgui cli <id> --vm -- --actor human bind --project <n> --force`. A
+  store holding no project at all gets one raised in the folder instead (`init`,
+  which binds as it goes) — the same move `make verify INIT=1` makes on its own
+  throwaway store.
+  **No CLI is built for this** — placing a bundle should not wait on a second
+  toolchain run — so a checkout with no debug build yet leaves the folder cut and
+  unbound, and the first `devgui cli --vm` binds it.
 - **The guest layout mirrors this machine's exactly** (`/Applications` bundle,
   `~/Library/Application Support` store), so what addresses an instance by path
-  reads the same on both sides and only the machine it is asked of changes.
+  reads the same on both sides and only the machine it is asked of changes. The
+  bound folder is the one thing the guest holds that the host has no counterpart
+  for: on this machine every instance's store is a directory of its own, so a
+  pointer beside one is already one instance's and no other's.
 - **Nothing lands on this machine.** The bundle is read out of the build
   directory, so the host `/Applications` and the host app-data are untouched —
   and `devgui rm` reclaims neither of the guest's halves. Throwing the VM away is
@@ -263,6 +283,7 @@ Details worth knowing:
   rm` reclaims with the rest of the instance. In the worktree that same pointer
   would be a live one for *any* Amenbo run there, the production binary
   included, which is the reach the worktree is kept outside the repo to deny.
+  (`--vm` runs in the instance's bound folder instead — see below.)
 - **The binary still introduces itself by its own channel** (it was not built
   with `AMENBO_APP_NAME`), so what is keyed to the channel rather than the store
   — the command name in guidance text, the perf log's default — reads as
@@ -277,6 +298,22 @@ sent across — the guest holds no toolchain, and the two machines are the same
 arch — and run in there, pointed at that store the same way. It is sent on every
 run, because the reason the CLI is rebuilt first is that the tree it seeds a
 store for keeps moving.
+
+Where it runs is the one place the two routes part: **in the guest it runs in the
+instance's bound folder** (`/Users/admin/amenbo-work-<id>`), not in the store.
+That is what makes `--actor ai` usable in there at all — a facet reaches only the
+project the pointer of its folder names — so the examples above are the same ones
+with `ai` in them:
+
+```sh
+devtool devgui cli 696 --vm -- --actor ai task add --title 'due today' --due today
+```
+
+The folder is cut and bound by `devgui install --vm`, and by this command when it
+finds one missing (an instance can be seeded before a bundle is ever put in
+there). It is bound to the store's lowest-numbered project; re-point it with
+`--actor human bind --project <n> --force`, which lands there like any other
+command run through here.
 
 macOS only, like everything else about the per-task instance.
 
@@ -352,9 +389,11 @@ remove it — the instance writes its store back on the way out, and the removal
 that reported it reclaimed reads as green while the leftover returns minutes
 later.
 
-`--vm` takes the instance in the guest, the same two halves the same way.
-Throwing the VM away (`devtool vm rm`) takes every instance in there at once, so
-this is for reclaiming one while the clone goes on being used.
+`--vm` takes the instance in the guest, the same two halves the same way, plus
+the bound folder that only the guest has — a pointer left behind would name a
+store that has just been deleted. Throwing the VM away (`devtool vm rm`) takes
+every instance in there at once, so this is for reclaiming one while the clone
+goes on being used.
 
 ### `devtool devgui sweep [--yes] [--vm]`
 
@@ -377,8 +416,10 @@ a store behind under a number nobody will type again.
 Only the digits form an instance: a hand-made `amenbo (dev wip).app` is
 somebody's own, and the shared `amenbo (dev)` app is permanent.
 
-`--vm` sweeps the guest instead, and **it can only be asked from here**: what
-makes an instance live is a checkout, and the checkouts are on this machine.
+`--vm` sweeps the guest instead — an orphan's bound folder goes with its halves,
+though a folder alone is never what makes an instance show up in the listing —
+and **it can only be asked from here**: what makes an instance live is a
+checkout, and the checkouts are on this machine.
 Asked inside the guest, git has nothing to answer with — and a sweep that cannot
 tell live from orphan refuses rather than guess, so it would simply never run.
 

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -34,14 +36,34 @@ const vmStagingDir = "/tmp"
 // VM route puts nothing on this machine at all.
 const guiBundleBuildDir = "app/src-tauri/target/release/bundle/macos"
 
-// vmTaskDevBundle and vmTaskDevAppData are the two places an instance occupies in the guest — the
-// same two the host holds (taskDevGUIPaths), under the guest's own home.
+// vmTaskDevBundle and vmTaskDevAppData are the two places an instance occupies on both machines —
+// the ones the host holds (taskDevGUIPaths), read under the guest's own home. The third place is
+// the guest's alone (vmTaskWorkDir).
 func vmTaskDevBundle(id string) string {
 	return filepath.Join(macAppsDir, taskDevBundle(id)+".app")
 }
 
 func vmTaskDevAppData(id string) string {
 	return appDataDir(vmGuestHome, taskDevAppData(id))
+}
+
+// vmTaskWorkDir is the folder in the guest an instance is worked *from* — its own bound folder, and
+// the one thing an instance holds in there that the host route has no counterpart for.
+//
+// A `.amenbo` pointer names exactly one store, so where it sits decides who is able to stand on it,
+// and both of the places it could have gone are places it must not:
+//
+//   - **Not the guest's home.** One pointer at /Users/admin belongs to whichever instance wrote it,
+//     and every other instance's CLI walks up into it and is refused for naming a store that is not
+//     its own (`pointer_other_store`). That is the shape the guest had, and it is why
+//     `--actor ai` reached nothing in there at all — the facet draws its reach from the pointer of
+//     the folder it stands in, so `--actor human --project <n>` was standing in for it, on a road
+//     no AI can walk.
+//   - **Not inside the store.** A throwaway store is made by cloning the shared dev app-data whole,
+//     so a pointer left in there rides into the clone and the next instance is born holding the
+//     previous one's.
+func vmTaskWorkDir(id string) string {
+	return filepath.Join(vmGuestHome, "amenbo-work-"+id)
 }
 
 // shq quotes one word for the guest's shell. Everything sent over ssh is joined and handed to a
@@ -80,6 +102,7 @@ func devGUIInstallVM(id string) error {
 		return err
 	}
 	vmSeedAppData(ip, id)
+	vmSeedWorkDir(ip, id, worktree)
 
 	dest := vmTaskDevBundle(id)
 	logf("  dev GUI : open it in there — `devtool vm exec -- open -a %s`", shq(dest))
@@ -174,6 +197,136 @@ func vmSeedAppData(ip, id string) {
 		return
 	}
 	logf("  dev GUI : app-data %s cloned into %s from this machine's shared dev store", filepath.Base(dst), vmCloneName)
+}
+
+// vmSeedWorkDir cuts the instance's own folder in the guest and binds it to a project in that
+// instance's store, so the AI facet has somewhere to stand (vmTaskWorkDir says why the folder has to
+// be its own).
+//
+// Every arm reports and returns, the way the app-data seeding above it does: an instance whose
+// folder could not be bound is a poorer one to drive — its CLI has to be told which project by hand
+// — never a reason to fail the placing that asked.
+//
+// The CLI is not built for this: the bundle placing is not a step anyone should have to wait on a
+// second toolchain run for. If this checkout has no debug build yet the folder is left cut and
+// unbound, and the first `devgui cli --vm` — which rebuilds and sends one anyway — binds it.
+func vmSeedWorkDir(ip, id, worktree string) {
+	dir := vmTaskWorkDir(id)
+	bound, err := vmCutWorkDir(ip, dir)
+	if err != nil {
+		logf("  dev GUI : warning — %v; its CLI will run unbound", err)
+		return
+	}
+	if bound {
+		logf("  dev GUI : %s is bound already in %s — left as it is", filepath.Base(dir), vmCloneName)
+		return
+	}
+	bin, err := vmSendCLI(ip, id, worktree, true)
+	if err != nil {
+		logf("  dev GUI : %s is cut but not bound yet (%v) — the first `devtool devgui cli %s --vm` binds it", filepath.Base(dir), err, id)
+		return
+	}
+	vmBindWorkDir(ip, id, bin, dir)
+}
+
+// vmCutWorkDir makes the instance's folder in the guest if it is not there, and answers whether it
+// already holds a pointer. A folder that has one is left exactly as it is: it is the session's own
+// binding, and re-pointing it under a run that only meant to place a bundle would move the store
+// every command after it writes.
+func vmCutWorkDir(ip, dir string) (bound bool, err error) {
+	out, err := sshRun(ip, "mkdir -p "+shq(dir)+" && { [ -e "+shq(dir)+"/.amenbo ] && echo yes || echo no; }")
+	if err != nil {
+		return false, fmt.Errorf("cutting %s in %s: %w", dir, vmCloneName, err)
+	}
+	return strings.TrimSpace(out) == "yes", nil
+}
+
+// vmBindWorkDir points the instance's folder at a project of the instance's store, with a CLI that
+// is already in the guest.
+//
+// **Setting a folder up is a human's act**, so that is the facet the bind is done under — the same
+// reading scripts/verify-cli.sh makes of its own INIT=1. `--force` goes with it because the guest's
+// home may still hold a pointer from before instances had folders of their own, and a bind or an
+// init under an already-managed tree is otherwise refused as one that would shadow it.
+//
+// What it binds to is the store's lowest-numbered project. A throwaway store is a clone of the
+// shared dev app-data, so which of its projects a screen wants is not something this can know; what
+// it can do is pick the same one every time and name it in the log. Re-pointing is one command:
+// `devtool devgui cli <id> --vm -- --actor human bind --project <n> --force`.
+//
+// A store with no project at all — an instance seeded by a CLI run before any bundle was placed —
+// gets one raised in the folder instead, which is the same move `make verify INIT=1` makes on its
+// own throwaway store, and `init` binds the folder as it goes.
+func vmBindWorkDir(ip, id, guestBin, dir string) {
+	store := vmTaskDevAppData(id)
+	project, err := vmGuestProject(ip, guestBin, store)
+	if err != nil {
+		logf("  dev GUI : warning — %v; %s is left unbound", err, filepath.Base(dir))
+		return
+	}
+	amenbo := "--actor human bind --project " + shq(project) + " --force"
+	done := fmt.Sprintf("  dev GUI : %s is bound to project %s of %s", dir, project, filepath.Base(store))
+	if project == "" {
+		amenbo = "init --name dev --actor human --force"
+		done = fmt.Sprintf("  dev GUI : %s holds the project raised in the empty store %s", dir, filepath.Base(store))
+	}
+	cmd := "cd " + shq(dir) + " && " + storeEnv + "=" + shq(store) + " " + shq(guestBin) + " " + amenbo
+	if _, err := sshRun(ip, cmd); err != nil {
+		logf("  dev GUI : warning — binding %s in %s failed (%v); its CLI will run unbound", dir, vmCloneName, err)
+		return
+	}
+	logf("%s", done)
+}
+
+// vmGuestProject answers with the lowest-numbered project of the instance's store, asked of the CLI
+// in the guest rather than read off the database here: a project id is a per-store primary key, and
+// that store is one this machine never opens.
+//
+// It is asked from the staging dir, which is the one place in the guest outside the home: a read run
+// anywhere under /Users/admin would walk up into a pointer left there by an older instance and be
+// refused for naming another store — the very failure this folder exists to end, and one the bind
+// itself is exempt from because a bind is how a folder gets out of it.
+func vmGuestProject(ip, guestBin, store string) (string, error) {
+	cmd := "cd " + shq(vmStagingDir) + " && " + storeEnv + "=" + shq(store) + " " + shq(guestBin) +
+		" --actor human project list --json"
+	out, err := sshRun(ip, cmd)
+	if err != nil {
+		return "", fmt.Errorf("asking %s which projects the instance's store holds: %w", vmCloneName, err)
+	}
+	project, err := lowestProjectID(out)
+	if err != nil {
+		return "", fmt.Errorf("reading the projects of %s back: %w", filepath.Base(store), err)
+	}
+	return project, nil
+}
+
+// lowestProjectID picks the smallest id out of a `project list --json` document, as the string the
+// bind is given. Smallest rather than first: the order of the listing is the CLI's to change, and a
+// folder that binds somewhere else after an unrelated release is worse than one that binds to a
+// project nobody wanted.
+//
+// A store holding no project answers with the empty string and **no error** — it is a store waiting
+// for its first project, which is a shape the caller answers by raising one, not a listing that
+// failed to be read.
+func lowestProjectID(listing string) (string, error) {
+	var doc struct {
+		Projects []struct {
+			ID int64 `json:"id"`
+		} `json:"projects"`
+	}
+	if err := json.Unmarshal([]byte(listing), &doc); err != nil {
+		return "", err
+	}
+	lowest := int64(0)
+	for _, p := range doc.Projects {
+		if lowest == 0 || p.ID < lowest {
+			lowest = p.ID
+		}
+	}
+	if lowest == 0 {
+		return "", nil
+	}
+	return strconv.FormatInt(lowest, 10), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -303,8 +456,12 @@ func vmDevGUIShot(id string, front bool) error {
 //
 // The CLI is this checkout's own build, sent across: the guest holds no toolchain, and the two
 // machines are the same arch, so what is built here runs there. It is pointed at the store with
-// `AMENBO_HOME` and run in that store's own directory — the same two moves the host route makes,
-// for the same reasons (see taskCLI).
+// `AMENBO_HOME`, the way the host route points its own (see taskCLI).
+//
+// Where it runs is the one place the two routes part: the host route runs in the store's own
+// directory, and this one runs in the instance's bound folder (vmTaskWorkDir). On this machine every
+// instance's store is a folder of its own, so a pointer beside one is one instance's and no other's;
+// in the guest that same reading put every instance on the one home directory they share.
 func vmTaskCLI(id string, noBuild bool, argv []string) (int, error) {
 	if len(argv) == 0 {
 		return 0, fmt.Errorf("nothing to run — `devtool devgui cli %s --vm -- <amenbo args…>`", id)
@@ -313,19 +470,11 @@ func vmTaskCLI(id string, noBuild bool, argv []string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if _, err := os.Stat(worktree); err != nil {
-		return 0, fmt.Errorf("no worktree for task %s (%s missing) — cut one with the `worktree` plugin first", id, worktree)
-	}
-	if !noBuild {
-		if _, err := run(worktree, "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
-			return 0, fmt.Errorf("build the task's CLI: %w", err)
-		}
-	}
-	bin := taskCLIBin(worktree)
-	if _, err := os.Stat(bin); err != nil {
-		return 0, fmt.Errorf("no CLI at %s — drop --no-build so it is built", bin)
-	}
 	ip, err := vmIP()
+	if err != nil {
+		return 0, err
+	}
+	guestBin, err := vmSendCLI(ip, id, worktree, noBuild)
 	if err != nil {
 		return 0, err
 	}
@@ -336,28 +485,58 @@ func vmTaskCLI(id string, noBuild bool, argv []string) (int, error) {
 	if _, err := sshRun(ip, "mkdir -p "+shq(store)); err != nil {
 		return 0, fmt.Errorf("make the task's store dir in %s: %w", vmCloneName, err)
 	}
-	guestBin := filepath.Join(vmGuestHome, "amenbo-cli-"+id)
-	// Sent every run rather than once: the CLI is rebuilt above precisely because the tree it
-	// seeds a store for keeps moving, and a stale copy in there would write what the old code wrote.
-	scpArgs := append(sshOpts(), bin, vmUser+"@"+ip+":"+guestBin)
-	if _, err := run("", "scp", scpArgs...); err != nil {
-		return 0, fmt.Errorf("sending the CLI to %s: %w", vmCloneName, err)
+	// The folder is cut here as well as at placing, because an instance can be seeded before its
+	// bundle is ever put in there — and a run that cannot stand anywhere is one that fails at the
+	// `cd` below rather than reporting and carrying on.
+	dir := vmTaskWorkDir(id)
+	bound, err := vmCutWorkDir(ip, dir)
+	if err != nil {
+		return 0, err
+	}
+	if !bound {
+		vmBindWorkDir(ip, id, guestBin, dir)
 	}
 
 	quoted := make([]string, 0, len(argv))
 	for _, a := range argv {
 		quoted = append(quoted, shq(a))
 	}
-	cmd := "cd " + shq(store) + " && " + storeEnv + "=" + shq(store) + " " + shq(guestBin) + " " + strings.Join(quoted, " ")
+	cmd := "cd " + shq(dir) + " && " + storeEnv + "=" + shq(store) + " " + shq(guestBin) + " " + strings.Join(quoted, " ")
 	logf("  store   : %s:%s", vmCloneName, store)
+	logf("  folder  : %s:%s", vmCloneName, dir)
 	logf("  cli     : %s %s", guestBin, strings.Join(argv, " "))
 	return runThrough("", nil, "ssh", sshArgs(ip, cmd)...)
 }
 
-// vmRemoveTaskDevGUI deletes one instance in the guest — the bundle and its app-data both, the same
-// two halves the host teardown takes.
+// vmSendCLI puts this checkout's CLI in the guest and answers with where it landed.
 //
-// A running instance is quit first and, if it will not go, both halves are left where they are:
+// It is sent on every run rather than once: the CLI is rebuilt first precisely because the tree it
+// seeds a store for keeps moving, and a stale copy in there would write what the old code wrote.
+func vmSendCLI(ip, id, worktree string, noBuild bool) (string, error) {
+	if _, err := os.Stat(worktree); err != nil {
+		return "", fmt.Errorf("no worktree for task %s (%s missing) — cut one with the `worktree` plugin first", id, worktree)
+	}
+	if !noBuild {
+		if _, err := run(worktree, "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
+			return "", fmt.Errorf("build the task's CLI: %w", err)
+		}
+	}
+	bin := taskCLIBin(worktree)
+	if _, err := os.Stat(bin); err != nil {
+		return "", fmt.Errorf("no CLI at %s — drop --no-build so it is built", bin)
+	}
+	guestBin := filepath.Join(vmGuestHome, "amenbo-cli-"+id)
+	scpArgs := append(sshOpts(), bin, vmUser+"@"+ip+":"+guestBin)
+	if _, err := run("", "scp", scpArgs...); err != nil {
+		return "", fmt.Errorf("sending the CLI to %s: %w", vmCloneName, err)
+	}
+	return guestBin, nil
+}
+
+// vmRemoveTaskDevGUI deletes one instance in the guest — the two halves the host teardown takes,
+// and the bound folder that only the guest has.
+//
+// A running instance is quit first and, if it will not go, every part is left where it is:
 // removing the store under a running app does not remove it (it writes its store back on the way
 // out), and a half-removed instance is the worse of the two outcomes.
 func vmRemoveTaskDevGUI(id string) error {
@@ -372,9 +551,11 @@ func vmRemoveTaskDevGUI(id string) error {
 }
 
 // vmTaskDevGUIPaths lists everything an instance occupies in the guest, in the order teardown
-// removes it — the guest's own reading of taskDevGUIPaths.
+// removes it — the guest's own reading of taskDevGUIPaths, plus the bound folder that exists only
+// in there. The folder is last because it is the smallest thing and the one whose absence is
+// hardest to notice: a pointer left behind names a store that teardown has just deleted.
 func vmTaskDevGUIPaths(id string) []string {
-	return []string{vmTaskDevBundle(id), vmTaskDevAppData(id)}
+	return append(taskDevGUIPaths(vmGuestHome, macAppsDir, id), vmTaskWorkDir(id))
 }
 
 // vmReclaim removes each of `paths` in the guest that is actually there and reports it. One round
@@ -465,7 +646,11 @@ func vmDevGUISweep(apply bool) error {
 			logf("  task %s: %v", inst.id, err)
 			continue
 		}
-		if err := vmReclaim(ip, inst.paths); err != nil {
+		// The bound folder rides along with the halves the listing found: it is not what makes an
+		// instance visible (a folder holding one JSON file is not evidence of a dev GUI), but it is
+		// this instance's, and a sweep that took the store and left the pointer to it is a sweep
+		// that leaves a name for something gone.
+		if err := vmReclaim(ip, append(slices.Clone(inst.paths), vmTaskWorkDir(inst.id))); err != nil {
 			logf("  task %s: %v", inst.id, err)
 			continue
 		}

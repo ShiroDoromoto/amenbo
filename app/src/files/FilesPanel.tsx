@@ -983,34 +983,39 @@ function rowClass(
 }
 
 /**
- * One line of the tree as it is drawn.
+ * One row of the tree.
  *
  * **A row is a line of one list and not a box holding the lines under it.** What is open is a flat
  * run of rows, in the order a reader goes down them, and how far down a row stands is a number on
  * the row rather than the depth of the box it sits in. That is what lets a row in the middle be
  * left out of the document without the ones below it going with it (`AMB-T-4108`).
+ *
+ * It is also the order the keys walk, which is why the walk holds up when a row on the screen and
+ * a row in the document stop being the same thing.
  */
+type Row = {
+  /** The row's path from the bound folder, joined — what everything about it is named by. */
+  key: string;
+  path: string[];
+  name: string;
+  isDir: boolean;
+  ignored: boolean;
+  /** The folder holding it, joined — what a drop or a paste on this row lands in. */
+  in: string;
+  /** How many folders down from the bound folder it stands, the first level being none. */
+  depth: number;
+  /** How many names the folder it came from holds, and which of them this is. */
+  setsize: number;
+  posinset: number;
+  /** Whether it is a folder standing open. */
+  unfolded: boolean;
+};
+
+/** One line of the tree as it is drawn: a row, or the box a name is being typed into. */
 type Line =
   /** A name being typed, at the top of the folder it is being made in. */
   | { kind: "make"; at: string; depth: number; dir: boolean }
-  | {
-    kind: "row";
-    /** The row's path from the bound folder, joined — what everything about it is named by. */
-    key: string;
-    path: string[];
-    name: string;
-    isDir: boolean;
-    ignored: boolean;
-    /** The folder holding it, joined — what a drop or a paste on this row lands in. */
-    in: string;
-    /** How many folders down from the bound folder it stands, the first level being none. */
-    depth: number;
-    /** How many names the folder it came from holds, and which of them this is. */
-    setsize: number;
-    posinset: number;
-    /** Whether it is a folder standing open. */
-    unfolded: boolean;
-  };
+  | ({ kind: "row" } & Row);
 
 /**
  * The folders whose names are on the screen: the bound folder, and every open one the way down to
@@ -1171,6 +1176,41 @@ function Tree({
     () => linesOf(levels, open, making, makingDir, []),
     [levels, open, making, makingDir],
   );
+  /**
+   * The rows alone, in the order a reader goes down them — what the keys walk.
+   *
+   * **The order the walk asks is this one and not the document's.** A row on the screen and a row
+   * in the document are about to stop being the same set of rows (`AMB-T-4108`), and a walk read
+   * off the document would then send End to the last row that happens to be drawn and leave a
+   * letter's match unfound because it is above or below the window.
+   */
+  const rows = useMemo(
+    () => lines.flatMap((line) => (line.kind === "row" ? [line] : [])),
+    [lines],
+  );
+
+  /**
+   * The row a press named, as one answer per press.
+   *
+   * **The press names a row; standing on it is what happens next.** They are two things because
+   * the row a press names need not be in the document at the moment it is pressed
+   * (`AMB-T-4108`) — the walk is over the rows, and the document is caught up with afterwards.
+   *
+   * **An answer and not a name**, because the same row can be named twice with something else in
+   * between: a reader who clicks one row and presses End again is asking to be taken back to the
+   * last row, and a bare key would read as the answer that was already given.
+   */
+  const [named, setNamed] = useState<{ key: string } | null>(null);
+  const tree = useRef<HTMLUListElement | null>(null);
+
+  // Stand on the row that was named. `focus` is what scrolls it into view where it is off the
+  // screen, which is the browser's own answer and the same one a reader gets from Tab.
+  useEffect(() => {
+    if (named === null) return;
+    tree.current
+      ?.querySelector<HTMLElement>(`[data-key="${CSS.escape(named.key)}"]`)
+      ?.focus();
+  }, [named]);
 
   /**
    * Walking the tree with the keys the tree pattern names, and no others (`AMB-D-780`).
@@ -1184,16 +1224,15 @@ function Tree({
    */
   const onKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    const tree = e.currentTarget;
-    const row = (e.target as HTMLElement).closest<HTMLElement>('[role="treeitem"]');
-    if (row === null || !tree.contains(row)) return;
-    const rows = [...tree.querySelectorAll<HTMLElement>('[role="treeitem"]')];
-    const at = rows.indexOf(row);
-    const key = row.dataset.key ?? "";
-    const here = key === "" ? [] : key.split("/");
-    // A folder is the row that says whether it is open; a file never carries the word at all.
-    const folded = row.getAttribute("aria-expanded");
-    const go = (to: HTMLElement | undefined) => to?.focus();
+    const on = (e.target as HTMLElement).closest<HTMLElement>('[role="treeitem"]');
+    if (on === null || !e.currentTarget.contains(on)) return;
+    // The row the press was on, found in the order the rows are drawn in. The press itself is the
+    // one thing the document has to answer for: whatever else is on the screen, a key arrives on a
+    // row that is.
+    const at = rows.findIndex((one) => one.key === (on.dataset.key ?? ""));
+    const here = rows[at];
+    if (here === undefined) return;
+    const go = (to: Row | undefined) => { if (to !== undefined) setNamed({ key: to.key }); };
     switch (e.key) {
       case "ArrowDown": e.preventDefault(); go(rows[at + 1]); break;
       case "ArrowUp": e.preventDefault(); go(rows[at - 1]); break;
@@ -1204,23 +1243,22 @@ function Tree({
       // move onto are not read off the disk yet.
       case "ArrowRight":
         e.preventDefault();
-        if (folded === "false") onOpen(key);
-        else if (folded === "true") go(rows[at + 1]);
+        if (here.isDir && !here.unfolded) onOpen(here.key);
+        else if (here.unfolded) go(rows[at + 1]);
         break;
       // And out of it: shut an open folder, or leave a row for the folder holding it — which is the
       // row whose path is this one's without its last name. A row at the top of the tree has none.
       case "ArrowLeft": {
         e.preventDefault();
-        if (folded === "true") { onOpen(key); break; }
-        if (here.length < 2) break;
-        const up = here.slice(0, -1).join("/");
-        go(rows.find((one) => one.dataset.key === up));
+        if (here.unfolded) { onOpen(here.key); break; }
+        if (here.in === "") break;
+        go(rows.find((one) => one.key === here.in));
         break;
       }
       case "Enter":
         e.preventDefault();
-        if (folded === null) onRead(here);
-        else onOpen(key);
+        if (here.isDir) onOpen(here.key);
+        else onRead(here.path);
         break;
       // Both keys, because which one a keyboard calls "delete" is the keyboard's answer: a Mac's
       // large one sends Backspace, and what it means on a row is the same thing either way. The bin
@@ -1228,29 +1266,26 @@ function Tree({
       case "Delete":
       case "Backspace":
         e.preventDefault();
-        onTrash(here);
+        onTrash(here.path);
         break;
       // Renaming, from the keyboard. Enter cannot be the key here — on a tree row it already means
       // open, which is the thing a reader presses it for; F2 is what the editors this tree is read
       // beside all answer to, and it collides with nothing.
       case "F2":
         e.preventDefault();
-        naming.rename(here);
+        naming.rename(here.path);
         break;
       default:
         // A letter typed on the tree is a way of walking it: the next row below whose name starts
         // that way, wrapping past the end, so that pressing the same letter again goes on to the
-        // one after it. Read off `data-key` and not the drawn row, because a row's own name is the
-        // last step of its path.
+        // one after it.
         if (e.key.length === 1 && e.key !== " ") {
           const want = e.key.toLowerCase();
-          const named = (one: HTMLElement) =>
-            (one.dataset.key ?? "").split("/").pop()?.toLowerCase() ?? "";
           // From the row after this one, all the way round to this one — so a tree with one match
           // stays where it is rather than reading as a key that did nothing.
           for (let step = 1; step <= rows.length; step += 1) {
             const to = rows[(at + step) % rows.length];
-            if (to !== undefined && named(to).startsWith(want)) {
+            if (to !== undefined && to.name.toLowerCase().startsWith(want)) {
               e.preventDefault();
               go(to);
               break;
@@ -1266,6 +1301,7 @@ function Tree({
 
   return (
     <ul
+      ref={tree}
       className="files__list files__list--tree"
       // One list, and every row of the tree a line of it. How deep a row is and how many it stands
       // among are said on the row itself, which is the shape a reader being read to hears the same

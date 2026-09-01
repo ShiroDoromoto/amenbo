@@ -1783,6 +1783,22 @@ describe("the file face", () => {
     expect(folder.style.getPropertyValue("--depth")).toBe("0");
   });
 
+  // Which row a press moves to is read off the rows in the order they are drawn, and standing on it
+  // is what happens after. So the same row can be asked for twice: a reader who steps away and
+  // presses the same key again is asking to be taken back where that key goes.
+  it("takes the reader back to the row a key names, however they left it", async () => {
+    await stood();
+    await press(rows()[0]!, "End");
+    expect(at()).toBe("a.md");
+
+    // Away from it, the way a pointer takes a reader — the tab stop follows, and the last press is
+    // still the one that named the last row.
+    await act(async () => { rows()[0]!.focus(); });
+    expect(at()).toBe("src");
+    await press(document.activeElement!, "End");
+    expect(at()).toBe("a.md");
+  });
+
   it("says how deep a row is, how many it stands among, and which one it is", async () => {
     await stood();
     await press(rows()[0]!, "ArrowRight");

@@ -1799,6 +1799,62 @@ describe("the file face", () => {
     expect(at()).toBe("a.md");
   });
 
+  // ── only what is in view ────────────────────────────────────────────────────────────────────
+  // Nothing caps what a folder answers with, so a tree opened on `node_modules` is thousands of
+  // rows. What is drawn is the run in view; the rest is stood in for by its height.
+
+  /** A folder of a hundred names, with the box it is drawn in laid out around it. */
+  async function tall(scrolled: number) {
+    hoisted.entries[""] = Array.from({ length: 100 }, (_, i) => ({
+      name: `f${String(i).padStart(3, "0")}.md`, isDir: false, ignored: false,
+    }));
+    await drawOpen();
+    // jsdom lays nothing out, so the two measurements the window is read off are stated: a box ten
+    // rows tall, with the list's top `scrolled` rows above it.
+    const box = container.querySelector<HTMLElement>(".files")!;
+    const list = container.querySelector<HTMLElement>('[role="tree"]')!;
+    Object.defineProperty(box, "clientHeight", { value: 10 * 22, configurable: true });
+    box.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    list.getBoundingClientRect = () => ({ top: -scrolled * 22 }) as DOMRect;
+    await act(async () => {
+      box.dispatchEvent(new Event("scroll"));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    return box;
+  }
+
+  const spacers = () =>
+    [...container.querySelectorAll<HTMLElement>('[role="tree"] > li[aria-hidden="true"]')]
+      .map((one) => one.style.height);
+
+  it("draws the rows in view and leaves the height of the rest behind", async () => {
+    await tall(20);
+    // The ten rows of the box, and six either side so that a scroll has somewhere to land before
+    // the next drawing catches up.
+    expect(rows()).toHaveLength(22);
+    expect(labelOf(rows()[0]!)).toBe("f014.md");
+    expect(labelOf(rows()[21]!)).toBe("f035.md");
+    // What a row says about itself is its place in the tree and not among the rows drawn — which
+    // is the whole of why the levels were flattened first (`AMB-T-4106`).
+    expect(rows()[0]!.getAttribute("aria-posinset")).toBe("15");
+    expect(rows()[0]!.getAttribute("aria-setsize")).toBe("100");
+    // And the rows that are not drawn are still as tall as they were.
+    expect(spacers()).toEqual([`${14 * 22}px`, `${64 * 22}px`]);
+    // The tree keeps its one stop, on a row that is in the document.
+    expect(rows().filter((one) => one.tabIndex === 0)).toHaveLength(1);
+  });
+
+  it("moves the box to a row a key named from outside the window", async () => {
+    const box = await tall(20);
+    expect(rows().some((one) => labelOf(one) === "f099.md")).toBe(false);
+
+    await press(rows()[0]!, "End");
+    // The last row stands 99 rows down the list, which starts 20 rows above the box: the box is
+    // moved just far enough to put its foot at the bottom of the box, and the drawing that follows
+    // is what the focus lands in.
+    expect(box.scrollTop).toBe((99 - 20) * 22 + 22 - 10 * 22);
+  });
+
   it("says how deep a row is, how many it stands among, and which one it is", async () => {
     await stood();
     await press(rows()[0]!, "ArrowRight");

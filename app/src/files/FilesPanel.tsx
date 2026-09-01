@@ -38,8 +38,10 @@
 // point falls in is worked out here (`../core/hostDrop`). Every folder in the tree is one, and so is
 // the tree itself; a file row belongs to the folder holding it, which is what makes dropping on the
 // name of a file mean the same as dropping just beside it.
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type {
+  CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject,
+} from "react";
 import type {
   FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
 } from "../bindings/bindings";
@@ -507,6 +509,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
           label={sections.length > 1 ? one.label : null}
           bound={one.exists}
           landing={landing}
+          scroller={box}
           opened={opened[one.path] ?? AT_FIRST}
           onOpened={(change) => setOpened((was) => ({
             ...was,
@@ -593,8 +596,8 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
  * tree below, so they stand beside the heading, above it.
  */
 function FolderSection({
-  projectId, root, label, bound, landing, opened, onOpened, edit, onEdit, onRead, onMenu, onTrash,
-  chosen,
+  projectId, root, label, bound, landing, scroller, opened, onOpened, edit, onEdit, onRead, onMenu,
+  onTrash, chosen,
 }: {
   projectId: number;
   root: string;
@@ -605,6 +608,9 @@ function FolderSection({
   /** Where a dragged file would land, anywhere on the panel — a section draws the highlight only
    *  where the landing is one of its own (`landed`). */
   landing: Landing | null;
+  /** The box the panel scrolls in — the panel's own, because every section is drawn in the one box
+   *  and what is in view of it is what each tree draws (`Tree`). */
+  scroller: RefObject<HTMLElement | null>;
   /** How this folder's tree is opened. The panel holds it rather than the section, so that it
    *  outlives a section unmounted by anything at all — a folder unbound and bound back, a project
    *  switched away from and returned to (`Opened`). */
@@ -777,6 +783,7 @@ function FolderSection({
             projectId={projectId}
             root={root}
             landing={landing}
+            scroller={scroller}
             marks={marks}
             moved={moved}
             open={open}
@@ -983,6 +990,28 @@ function rowClass(
 }
 
 /**
+ * How tall one row of the tree is drawn, in pixels.
+ *
+ * **The stylesheet's figure, written here as well** (`../styles/global.css`). Every row is the same
+ * height and none of them wraps, so where a row sits is a multiplication rather than something to
+ * be measured — which is what lets the rows nobody is looking at be left out of the document and
+ * still be stood in for by a box of the right size.
+ */
+const ROW = 22;
+
+/**
+ * How many rows above and below the window are drawn anyway.
+ *
+ * The window, the two boxes standing in for what is outside it and the scroll a key asks for are
+ * all this file's own — no library holds them (`AMB-D-817`).
+ *
+ * A scroll is told about after it has happened, so a window drawn exactly to the edges shows a band
+ * of nothing until the next drawing catches up. Six rows either way is a fifth of a panel's worth,
+ * which is more than one wheel notch moves.
+ */
+const SPARE = 6;
+
+/**
  * One row of the tree.
  *
  * **A row is a line of one list and not a box holding the lines under it.** What is open is a flat
@@ -1080,7 +1109,7 @@ function linesOf(
 
 /** One bound folder's tree: every open row of it, drawn as one list. */
 function Tree({
-  projectId, root, landing, marks, moved, open, onOpen, naming, onRead, onMenu,
+  projectId, root, landing, scroller, marks, moved, open, onOpen, naming, onRead, onMenu,
   onTrash, cursor, onCursor, chosen,
 }: {
   projectId: number;
@@ -1091,6 +1120,13 @@ function Tree({
    * drawing a moment ago.
    */
   landing: Landing | null;
+  /**
+   * The box the panel scrolls in.
+   *
+   * **The panel's and not the tree's**: every bound folder is drawn in the one box, one after
+   * another, so what is in view of a tree is a question about a box further out than any of them.
+   */
+  scroller: RefObject<HTMLElement | null>;
   /** What git says about a row, asked by its segments from the bound folder, and by whether it is a
    *  folder standing folded — which is the one case that answers for what is under it (`./gitMark`). */
   marks: (path: string[], folded?: boolean) => GitMark | null;
@@ -1203,14 +1239,97 @@ function Tree({
   const [named, setNamed] = useState<{ key: string } | null>(null);
   const tree = useRef<HTMLUListElement | null>(null);
 
-  // Stand on the row that was named. `focus` is what scrolls it into view where it is off the
-  // screen, which is the browser's own answer and the same one a reader gets from Tab.
+  /**
+   * Which run of the lines is in the document, or nothing for all of them.
+   *
+   * **Nothing until the box has been laid out**, and nothing again wherever it has no height to
+   * answer with: a box that has not been measured says nothing about what is in view, and drawing
+   * the whole tree is the answer that is never wrong.
+   */
+  const [win, setWin] = useState<{ from: number; to: number } | null>(null);
+
+  // What is in view, read off the box the panel scrolls in. Before the paint rather than after it,
+  // so that the first drawing of a tree is already the run that is on the screen.
+  useLayoutEffect(() => {
+    const box = scroller.current;
+    if (box === null) return;
+    const look = () => {
+      const ul = tree.current;
+      const tall = box.clientHeight;
+      if (ul === null || tall === 0) { setWin(null); return; }
+      // How far the list's top stands above the box's — negative while it is still below it, which
+      // is a first row of nought once it is floored.
+      const above = box.getBoundingClientRect().top - ul.getBoundingClientRect().top;
+      const first = Math.floor(above / ROW);
+      const from = Math.max(0, first - SPARE);
+      const to = Math.min(lines.length, first + Math.ceil(tall / ROW) + SPARE);
+      setWin((was) => (was !== null && was.from === from && was.to === to ? was : { from, to }));
+    };
+    look();
+    box.addEventListener("scroll", look, { passive: true });
+    if (typeof ResizeObserver === "undefined") return () => box.removeEventListener("scroll", look);
+    const sized = new ResizeObserver(look);
+    sized.observe(box);
+    return () => {
+      box.removeEventListener("scroll", look);
+      sized.disconnect();
+    };
+  }, [scroller, lines.length]);
+
+  /**
+   * The box a name is being typed into, as its place among the lines — or nothing.
+   *
+   * **It is drawn wherever the reader has scrolled to.** What is typed into the box lives in the
+   * box, so a window that dropped it would take a half-written name with it. Reaching it costs the
+   * rows between only for as long as a name is open, and a reader who has just begun typing one is
+   * looking at it.
+   */
+  const typing = useMemo(() => {
+    const edit = naming.edit;
+    if (edit === null || edit.root !== root) return -1;
+    const key = edit.kind === "rename" ? edit.path.join("/") : null;
+    return lines.findIndex((line) => (key === null
+      ? line.kind === "make"
+      : line.kind === "row" && line.key === key));
+  }, [lines, naming.edit, root]);
+
+  const from = Math.min(win?.from ?? 0, typing < 0 ? Infinity : typing);
+  const to = Math.max(win?.to ?? lines.length, typing + 1);
+  const drawn = useMemo(() => lines.slice(from, to), [lines, from, to]);
+
+  /**
+   * Which of the drawn rows holds the tree's one stop in the tab order.
+   *
+   * The row a reader was last on where it is drawn, and the first row on the screen where it is
+   * not: a tree whose only stop has been scrolled out of the document is one Tab walks straight
+   * past, and the reader has no way back into it.
+   */
+  const stop = useMemo(() => {
+    const keys = drawn.flatMap((line) => (line.kind === "row" ? [line.key] : []));
+    return keys.find((key) => key === cursor) ?? keys[0] ?? null;
+  }, [drawn, cursor]);
+
+  /**
+   * Stand on the row that was named.
+   *
+   * **Two turns where the row is not drawn.** The keys walk the rows and the window holds only
+   * some of them, so a row named from the far side of the tree has to be scrolled to before there
+   * is anything to stand on: the box is moved here, the drawing that follows puts the row in, and
+   * this runs again with it in hand. `focus` is what scrolls it the rest of the way where it is
+   * only half on the screen, which is the browser's own answer and the one Tab gives too.
+   */
   useEffect(() => {
     if (named === null) return;
-    tree.current
-      ?.querySelector<HTMLElement>(`[data-key="${CSS.escape(named.key)}"]`)
-      ?.focus();
-  }, [named]);
+    const ul = tree.current;
+    const row = ul?.querySelector<HTMLElement>(`[data-key="${CSS.escape(named.key)}"]`) ?? null;
+    if (row !== null) { row.focus(); return; }
+    const box = scroller.current;
+    const at = lines.findIndex((line) => line.kind === "row" && line.key === named.key);
+    if (ul === null || box === null || at < 0) return;
+    const y = ul.getBoundingClientRect().top - box.getBoundingClientRect().top + at * ROW;
+    if (y < 0) box.scrollTop += y;
+    else if (y + ROW > box.clientHeight) box.scrollTop += y + ROW - box.clientHeight;
+  }, [named, from, to]);
 
   /**
    * Walking the tree with the keys the tree pattern names, and no others (`AMB-D-780`).
@@ -1310,7 +1429,10 @@ function Tree({
       aria-label={t("files.tree")}
       onKeyDown={onKey}
     >
-      {lines.map((line) => {
+      {/* What the rows nobody is looking at leave behind: their height, so that the list is as tall
+          as the tree is and the scrollbar says how much of it there is. */}
+      {from > 0 && <li role="none" aria-hidden="true" style={{ height: from * ROW }} />}
+      {drawn.map((line) => {
         if (line.kind === "make") {
           return (
             <li key="make" role="none" style={step(line.depth)}>
@@ -1341,9 +1463,6 @@ function Tree({
         // Folded folders answer for what is under them (`AMB-D-795`); an open one leaves that to the
         // rows it is showing, and a file is only ever itself.
         const mark = marks(line.path, line.isDir && !line.unfolded);
-        // The tree's one stop, on the row a reader last stood on — or, before they have stood on
-        // any, on the first row of the first level.
-        const stands = cursor === null ? line.depth === 0 && line.posinset === 1 : cursor === line.key;
         // A folder answers for a drop, and so does a file's row — for the folder holding it, which
         // is why dropping on a name means the same as dropping in the space beside it. The rows are
         // siblings, so a file's row carries that folder itself rather than resolving up to it.
@@ -1363,7 +1482,7 @@ function Tree({
             aria-setsize={line.setsize}
             aria-posinset={line.posinset}
             aria-expanded={line.isDir ? line.unfolded : undefined}
-            tabIndex={stands ? 0 : -1}
+            tabIndex={line.key === stop ? 0 : -1}
             className={`files__item${lands ? " files__into" : ""}`}
             onClick={() => {
               if (line.isDir) onOpen(line.key);
@@ -1408,6 +1527,9 @@ function Tree({
           </li>
         );
       })}
+      {to < lines.length && (
+        <li role="none" aria-hidden="true" style={{ height: (lines.length - to) * ROW }} />
+      )}
     </ul>
   );
 }

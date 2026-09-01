@@ -614,9 +614,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); font-size: var(--fs-sm); font-weight: 600;
   text-align: left; background: none; border: 0;
 }
-.files__head--button { cursor: pointer; }
-.files__head--button::before { content: "▸ "; }
-.files__head--button[aria-expanded="true"]::before { content: "▾ "; }
+/* The mark is drawn rather than typed (`AMB-D-686`), and it sits in the same fixed box the rows
+   carry theirs in — so the heading and the first row under it open and shut with one shape at one
+   size. A row is laid out the same way, which is what puts the two marks in a column. */
+.files__head--button { cursor: pointer; display: flex; align-items: center; gap: var(--s-2); }
 .files__none { margin: 0; color: var(--c-text-muted); }
 .files__list { list-style: none; margin: 0; padding: 0; }
 .files__list--tree { padding-left: var(--s-3); }

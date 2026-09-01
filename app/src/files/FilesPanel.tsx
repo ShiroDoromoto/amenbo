@@ -772,6 +772,11 @@ function FolderSection({
             onMenu([], true, e.clientX, e.clientY);
           }}
         >
+          {/* The same box the rows carry their chevron in, so the mark over the tree is the mark
+              inside it — one drawing of open and shut, at one size (`AMB-D-686`). */}
+          <span className="files__twisty">
+            <Icon name={treeOpen ? "chevronDown" : "chevronRight"} />
+          </span>
           {t("files.tree")}
         </button>
         {/* The first level from the start, and each level under it only when it is opened: the

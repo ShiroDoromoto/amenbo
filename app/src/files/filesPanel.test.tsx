@@ -690,6 +690,21 @@ describe("the file face", () => {
     expect(container.textContent).not.toContain("README.md");
   });
 
+  // The heading is the row over the tree, so it opens and shuts with the mark the rows inside it
+  // carry — one drawing at one size, rather than a typed arrow whose size no rule reaches
+  // (`AMB-D-686`).
+  it("says on the heading whether the tree is open, with the mark the rows use", async () => {
+    await drawOpen();
+    const mark = () =>
+      pressable(t("files.tree"))?.querySelector(".files__twisty [data-icon]")
+        ?.getAttribute("data-icon");
+    expect(mark()).toBe("chevronDown");
+
+    await click(button(t("files.tree")));
+    await settle();
+    expect(mark()).toBe("chevronRight");
+  });
+
   // Reading a file draws the reader over the tree rather than in place of it (`AMB-D-815`), so the
   // tree is still on the page while it is open. What a reader did to it has to outlive that: the
   // panel holds it, not the section (`./FilesPanel`).

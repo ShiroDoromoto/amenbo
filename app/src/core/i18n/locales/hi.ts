@@ -649,6 +649,7 @@ export const hi: Translation = {
     invalid_dimension_required_unset: "«{name}» एक अनिवार्य श्रेणी है, इसलिए किसी कार्य का उसमें रखा मान खाली नहीं किया जा सकता — इसके बजाय दूसरा मान चुनें।",
     invalid_dimension_slug_shape: "«{slug}» कुंजी नहीं बन सकती — अधिकतम {max} छोटे अक्षर, अंक और हाइफ़न लिखें, और शुरुआत अक्षर से करें।",
     invalid_dimension_slug_taken: "«{slug}» यहाँ पहले से किसी और की कुंजी है — दूसरी चुनें।",
+    invalid_dimension_name_whitespace: "«{name}» नाम नहीं बन सकता — स्पेस हटा दें, या उनकी जगह हाइफ़न लिखें।",
     invalid_task_required_dimension: "इस कार्य का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
     invalid_decision_required_dimension: "इस निर्णय का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
     invalid_dimension_values_unordered:

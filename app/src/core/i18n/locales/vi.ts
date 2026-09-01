@@ -650,6 +650,7 @@ export const vi: Translation = {
     invalid_dimension_required_unset: "«{name}» là phân loại bắt buộc, nên giá trị của công việc ở đó không thể xoá trống — hãy chọn một giá trị khác.",
     invalid_dimension_slug_shape: "“{slug}” không dùng làm khoá được — tối đa {max} chữ thường, chữ số và dấu gạch nối, bắt đầu bằng một chữ cái.",
     invalid_dimension_slug_taken: "“{slug}” đã là khoá của thứ khác ở đây — hãy chọn khoá khác.",
+    invalid_dimension_name_whitespace: "“{name}” không dùng làm tên được — hãy bỏ khoảng trắng, hoặc thay bằng dấu gạch nối.",
     invalid_task_required_dimension: "Công việc này không mang giá trị nào ở {names}, thứ mà dự án này yêu cầu.",
     invalid_decision_required_dimension: "Quyết định này không mang giá trị nào ở {names}, thứ mà dự án này yêu cầu.",
     invalid_dimension_values_unordered: "Các giá trị của phân loại này không có thứ tự nên không thể sắp xếp lại.",

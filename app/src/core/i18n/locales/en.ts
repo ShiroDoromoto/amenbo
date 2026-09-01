@@ -727,6 +727,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_dimension_required_unset: "“{name}” is a required category, so a task's value on it cannot be cleared — assign another value instead.",
   invalid_dimension_slug_shape: "“{slug}” cannot be a key — use at most {max} lower-case letters, digits and hyphens, starting with a letter.",
   invalid_dimension_slug_taken: "“{slug}” is already the key of something else here — pick another.",
+  invalid_dimension_name_whitespace: "“{name}” cannot be a name — leave the spaces out, or write a hyphen instead.",
   invalid_task_required_dimension: "This task carries no value on {names}, which this project requires.",
   invalid_decision_required_dimension: "This decision carries no value on {names}, which this project requires.",
   invalid_dimension_values_unordered: "This category's values carry no order, so they cannot be re-ordered.",

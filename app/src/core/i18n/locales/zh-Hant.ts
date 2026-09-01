@@ -646,6 +646,7 @@ export const zhHant: Translation = {
     invalid_dimension_required_unset: "「{name}」是必填分類，任務在它上面的值不能清空，請改選其他值。",
     invalid_dimension_slug_shape: "「{slug}」不能作為鍵：最多 {max} 個小寫字母、數字和連字號，且以字母開頭。",
     invalid_dimension_slug_taken: "「{slug}」在這裡已經是別的東西的鍵了，請另選一個。",
+    invalid_dimension_name_whitespace: "「{name}」不能作為名稱：請去掉空格，或改用連字號。",
     invalid_task_required_dimension: "這個任務在 {names} 上沒有值，而本專案要求填寫。",
     invalid_decision_required_dimension: "這個決定在 {names} 上沒有值，而本專案要求填寫。",
     invalid_dimension_values_unordered: "此分類的值沒有順序，無法重新排列。",

@@ -669,6 +669,7 @@ export const ja: Translation = {
     invalid_dimension_required_unset: "「{name}」は必須の分類なので、タスクの値を空に戻せません。別の値を選んでください。",
     invalid_dimension_slug_shape: "「{slug}」はキーにできません。半角小文字・数字・ハイフンで{max}文字までにし、先頭は英小文字にしてください。",
     invalid_dimension_slug_taken: "「{slug}」はここで別のものが使っています。別のキーを選んでください。",
+    invalid_dimension_name_whitespace: "「{name}」は名前にできません。空白を外すか、ハイフンに置き換えてください。",
     invalid_task_required_dimension: "このタスクは {names} に値がありません。このプロジェクトが必須にしている分類です。",
     invalid_decision_required_dimension: "この決定は {names} に値がありません。このプロジェクトが必須にしている分類です。",
     invalid_dimension_values_unordered: "この分類の値は順序を持たないため、並べ替えできません。",

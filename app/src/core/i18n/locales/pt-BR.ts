@@ -677,6 +677,7 @@ export const ptBR: Translation = {
     invalid_dimension_required_unset: "«{name}» é uma categoria obrigatória, então o valor de uma tarefa nela não pode ser limpo: escolha outro valor.",
     invalid_dimension_slug_shape: "“{slug}” não serve como chave: use no máximo {max} letras minúsculas, dígitos e hifens, começando por uma letra.",
     invalid_dimension_slug_taken: "“{slug}” já é a chave de outra coisa aqui: escolha outra.",
+    invalid_dimension_name_whitespace: "“{name}” não serve como nome: tire os espaços ou ponha um hífen no lugar.",
     invalid_task_required_dimension: "Esta tarefa não carrega valor algum em {names}, que este projeto exige.",
     invalid_decision_required_dimension: "Esta decisão não carrega valor algum em {names}, que este projeto exige.",
     invalid_dimension_values_unordered: "Os valores desta categoria não têm ordem, então não dá para reordená-los.",

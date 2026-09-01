@@ -599,7 +599,7 @@ export const nl: Translation = {
     "block.draft": "Kan niet beginnen (wordt nog aangemaakt): rond het aanmaken eerst af",
     "chip.draft": "Wordt aangemaakt",
     "premise.changed": "De gronden zijn veranderd nadat je dit reserveerde: {detail}",
-    "premise.warn": "De gronden zijn veranderd nadat je dit reserveerde: {detail}. Maak alleen het deel af dat op zichzelf staat, of geef het terug door het op todo te zetten.",
+    "premise.warn": "De gronden zijn veranderd nadat je dit reserveerde: {detail}. Maak alleen het deel af dat op zichzelf staat, of geef het terug door het op “Te doen” te zetten.",
     "premise.noLongerSettled": "niet langer beslecht",
     "detail.premiseChanged": "Veranderd sinds de reservering",
     "detail.premiseChangedHint": "Gronden die bewogen nadat je dit reserveerde — er vastgeprikt, of niet langer beslecht (de gereedheid is ingetrokken)",

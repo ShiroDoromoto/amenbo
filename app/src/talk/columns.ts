@@ -13,9 +13,9 @@
 // and on the way out, so a value written by an older build or a wider screen cannot come back as a
 // column with no room left beside it (`AMB-D-312`, `../core/sidebarWidth`).
 //
-// **What is kept is the wish, not what is on the screen.** A column can be a column or a drawer, and
-// which of those it is depends on how much room there is; whether the person wants it at all does
-// not. So the flag says whether they asked for it, and `sidesAreDrawers` says how it is drawn.
+// **A column is always a column.** It never lies over the panes, because the room for it is always
+// there: the window's own floor is 960px and the three floors together are 640px, and the ceilings
+// below are what keep the middle from being dragged away (`AMB-D-816`).
 //
 // **Which half of the file face is up is kept the same way.** It is a thing about the person rather
 // than about the work — the same reading that put the agent a pane starts with on this device
@@ -25,10 +25,10 @@
 /**
  * The least width a terminal is worth drawing in.
  *
- * It is what the middle is measured against: the columns beside the panes are drawers exactly when
- * keeping them as columns would take the page below this. Rounded rather than derived — what a
- * terminal needs is however many columns of text the program in it expects, and no number this side
- * can compute answers that.
+ * It is what the middle is kept at: a column's ceiling is whatever the window has left once this
+ * and the column on the other side are out of it. Rounded rather than derived — what a terminal
+ * needs is however many columns of text the program in it expects, and no number this side can
+ * compute answers that.
  */
 export const PANE_MIN = 320;
 
@@ -47,27 +47,39 @@ export const RAIL_DEFAULT = 160;
 export const SIDE_MIN = 200;
 export const SIDE_DEFAULT = 256;
 
-/** The most a column may take: a fraction of the window, and never less than its own floor — a
- *  window too narrow for the floor is a window where the sides are drawers anyway. */
-function ceiling(share: number, floor: number): number {
-  const cap = typeof window === "undefined" ? 520 : Math.round(window.innerWidth * share);
-  return Math.max(cap, floor);
+/**
+ * The most a column may take: whatever the window has left once the column on the other side and a
+ * pane's floor are out of it, and never less than its own floor (`AMB-D-816`).
+ *
+ * **Room, not a share of the window.** A share cannot answer this: 0.3 and 0.4 of a 960px window are
+ * 288px and 384px, and a person who drags both out is left with 288px in the middle — under the
+ * floor a pane is drawn at, on the narrowest window the application opens. Measured against the
+ * room, dragging a column simply stops where the middle would start giving way.
+ *
+ * `other` is what the column on the other side is taking, which is zero for one that is closed:
+ * closing a column is what makes room, so it counts. Where it is not known — a width read back
+ * before the face has drawn — the other side's floor stands in for it, which is the least it can
+ * ever be taking while it is open.
+ */
+function ceiling(other: number, floor: number): number {
+  const room = typeof window === "undefined" ? 1280 : window.innerWidth;
+  return Math.max(room - other - PANE_MIN, floor);
 }
 
-export function railMax(): number {
-  return ceiling(0.3, RAIL_MIN);
+export function railMax(side: number = SIDE_MIN): number {
+  return ceiling(side, RAIL_MIN);
 }
 
-export function sideMax(): number {
-  return ceiling(0.4, SIDE_MIN);
+export function sideMax(rail: number = RAIL_MIN): number {
+  return ceiling(rail, SIDE_MIN);
 }
 
-export function clampRailWidth(px: number): number {
-  return Math.min(Math.max(px, RAIL_MIN), railMax());
+export function clampRailWidth(px: number, side: number = SIDE_MIN): number {
+  return Math.min(Math.max(px, RAIL_MIN), railMax(side));
 }
 
-export function clampSideWidth(px: number): number {
-  return Math.min(Math.max(px, SIDE_MIN), sideMax());
+export function clampSideWidth(px: number, rail: number = RAIL_MIN): number {
+  return Math.min(Math.max(px, SIDE_MIN), sideMax(rail));
 }
 
 /** A width this device has kept, clamped, or where it starts when nothing has been kept. */
@@ -87,20 +99,20 @@ function keepWidth(key: string, px: number, clamp: (px: number) => number): numb
   return taken;
 }
 
-export function getRailWidth(): number {
-  return keptWidth(RAIL_WIDTH, RAIL_DEFAULT, clampRailWidth);
+export function getRailWidth(side: number = SIDE_MIN): number {
+  return keptWidth(RAIL_WIDTH, RAIL_DEFAULT, (px) => clampRailWidth(px, side));
 }
 
-export function setRailWidth(px: number): number {
-  return keepWidth(RAIL_WIDTH, px, clampRailWidth);
+export function setRailWidth(px: number, side: number = SIDE_MIN): number {
+  return keepWidth(RAIL_WIDTH, px, (one) => clampRailWidth(one, side));
 }
 
-export function getSideWidth(): number {
-  return keptWidth(SIDE_WIDTH, SIDE_DEFAULT, clampSideWidth);
+export function getSideWidth(rail: number = RAIL_MIN): number {
+  return keptWidth(SIDE_WIDTH, SIDE_DEFAULT, (px) => clampSideWidth(px, rail));
 }
 
-export function setSideWidth(px: number): number {
-  return keepWidth(SIDE_WIDTH, px, clampSideWidth);
+export function setSideWidth(px: number, rail: number = RAIL_MIN): number {
+  return keepWidth(SIDE_WIDTH, px, (one) => clampSideWidth(one, rail));
 }
 
 /** Whether a column has been asked for. Both start shown: the face has always drawn them, and a
@@ -161,29 +173,3 @@ export function setSideTab(which: SideTab): SideTab {
   return which;
 }
 
-/**
- * Whether the columns beside the panes are drawers rather than columns.
- *
- * **It is decided by room and by nothing else.** What is measured is whether a pane's worth of
- * floor is left in the middle — not whether the count that was asked for would fit across it. The
- * count is deliberately not in it: it would make the width a window needs jump as the count goes
- * up, so the same window would fold its columns at one count and keep them at another, and on a
- * window sitting near that boundary opening the rail, opening the memo or dragging an edge would
- * each flip the answer. Nor is somebody rescued by the fold: closing both columns hands the panes
- * only what those columns were taking, split across the count, which does not turn a pane too
- * narrow to read into one that reads — it takes the rail away for nothing. What is protected is
- * that the middle does not collapse. Making the chosen count comfortable is not this side's to
- * promise: a count that is cramped on a narrow window is the choice of whoever pressed for it.
- *
- * Asking for one pane is not asking for the rail to go away either — somebody who splits a wide
- * screen down to one terminal wants that terminal large, and a face that closed the rail on them
- * would be answering a question nobody asked.
- *
- * `rail` and `side` are the widths those columns would take if they were columns, which is zero for
- * one the person has closed: closing a column is what makes room, so it has to count. They are the
- * wish rather than what is drawn, so this cannot answer itself — a drawer that took no width would
- * make the window wide enough for columns, which would make it a column again.
- */
-export function sidesAreDrawers(width: number, rail: number, side: number): boolean {
-  return width - rail - side < PANE_MIN;
-}

@@ -1,7 +1,6 @@
 # The readable key an axis and each of its values carry, and what it is for: being typed somewhere
-# Amenbo is not. A display name here is written in Japanese and has spaces in it, and an id
-# (`AMB-DIM-7`) goes anywhere but says nothing — so the key is the third thing, the one that is both
-# stable and legible. What makes it worth a road of its own is that the key is the half nothing else
+# Amenbo is not. A display name here is written in Japanese, and an id (`AMB-DIM-7`) goes anywhere
+# but says nothing — so the key is the third thing, the one that is both stable and legible. What makes it worth a road of its own is that the key is the half nothing else
 # would notice going wrong: a build where the door stopped taking one reads exactly like a build
 # where nobody ever named a key, since every row is born with the one its id gives it and every
 # reading finds a key standing there either way.

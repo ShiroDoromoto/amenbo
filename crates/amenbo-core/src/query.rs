@@ -19,11 +19,12 @@ fn parse_filter_tokens(expr: &str, mut apply: impl FnMut(&str, &str) -> Result<(
     for token in expr.split_whitespace() {
         // The whitespace split happens first, so a value holding a space never arrives whole: it
         // arrives as a bare fragment with no `:` in it, which reads exactly like a typo. Nothing
-        // looks at quotes or backslashes, so there is no way to write such a value — the one road
-        // is the value's id. Name both readings, or the writer cannot tell which one they hit.
+        // looks at quotes or backslashes, so there is no way to write such a value — the roads are
+        // the value's slug and its id, neither of which can hold whitespace. Name both readings, or
+        // the writer cannot tell which one they hit.
         let (key, value) = token.split_once(':').ok_or_else(|| {
             Error::invalid(format!(
-                "filter '{token}' must be in key:value form — either a mistyped token, or a value holding whitespace (the split comes before any quoting, so such a value cannot be written: name it by its id instead)"
+                "filter '{token}' must be in key:value form — either a mistyped token, or a value holding whitespace (the split comes before any quoting, so such a value cannot be written: name it by its slug or its id instead, neither of which can hold whitespace)"
             ))
         })?;
         apply(key, value)?;
@@ -2700,8 +2701,8 @@ mod filter_tests {
 
     /// A value holding whitespace is cut apart by the split before any key sees it, so its tail
     /// reaches the parser as a bare fragment — the very shape a typo makes. The message names both
-    /// readings and points at the id, which is the only way such a value can be written at all. The
-    /// task face and the decision face share one skeleton, so the answer is the same on both.
+    /// readings and points at the slug and the id, the two ways such a value can be written at all.
+    /// The task face and the decision face share one skeleton, so the answer is the same on both.
     #[test]
     fn a_value_holding_whitespace_is_told_apart_from_a_typo() {
         let day = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
@@ -2715,7 +2716,10 @@ mod filter_tests {
                 message.contains("whitespace"),
                 "and the cause the fragment cannot show on its own: {message}",
             );
-            assert!(message.contains("its id"), "and the one road that carries such a value: {message}");
+            assert!(
+                message.contains("its slug") && message.contains("its id"),
+                "and both roads that carry such a value: {message}",
+            );
         }
 
         let fragment = Filter::parse("dim:リリース=AI 起票導線", day).unwrap_err().to_string();

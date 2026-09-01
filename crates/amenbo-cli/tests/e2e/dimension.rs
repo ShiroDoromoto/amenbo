@@ -562,6 +562,44 @@ fn a_slug_is_the_readable_key_an_axis_and_its_values_answer_to() {
     assert_eq!(id_str(&hit["task_dimension_value"]["value_id"]), vid);
 }
 
+/// A name a filter can reach (`AMB-D-819`). `--filter` is cut on whitespace before it is cut on `:`, so
+/// `dim:<axis>=<name>` can never be written for a name holding any — the id and the key would still
+/// reach it, but the one thing a person remembers would not. The door refuses it at all four places a
+/// name is written, and what gets through is a name the filter finds.
+#[test]
+fn a_name_holding_whitespace_is_refused_so_a_filter_can_still_reach_it() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "空白PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    let refused = |args: &[&str]| {
+        let (out, code) = cli.run_err(args);
+        assert_ne!(code, 0, "{args:?} is refused");
+        let out: Value = serde_json::from_str(&out).expect("the refusal is JSON");
+        assert_eq!(out["error"]["code"], "invalid_dimension_name_whitespace", "{args:?}");
+    };
+
+    // The axis, at creation and at rename. The second is the full-width space a Japanese keyboard
+    // reaches for, which `split_whitespace` parts on exactly as it parts on U+0020.
+    refused(&["dimension", "add", "--project", &pid, "--name", "リリース 分類", "--json"]);
+    let axis = cli.json(&["dimension", "add", "--project", &pid, "--name", "リリース", "--json"]);
+    let did = id_str(&axis["dimension"]["id"]);
+    refused(&["dimension", "update", &did, "--name", "リリース\u{3000}分類", "--json"]);
+
+    // And the value, at both of its doors.
+    refused(&["dimension", "value-add", &did, "--name", "日本語の 表記を揃える", "--json"]);
+    cli.json(&["dimension", "value-add", &did, "--name", "日本語の表記を揃える", "--json"]);
+    refused(&["dimension", "value-update", &did, "日本語の表記を揃える", "--name", "日本語の 表記", "--json"]);
+
+    // Which is what the door is for: the name that got through is one `dim:` can name.
+    cli.json(&[
+        "task", "add", "--title", "T", "--project", &pid,
+        "--dim", "リリース=日本語の表記を揃える", "--json",
+    ]);
+    let listed = cli.json(&["task", "list", "--filter", "dim:リリース=日本語の表記を揃える", "--json"]);
+    assert_eq!(listed["count"], 1, "the name reaches its tasks through the filter");
+}
+
 /// A new task defaults to the era on its project's time axis that **covers today** — automation, not a
 /// requirement. With no era over today it is created unassigned, and the default can be cleared or overridden.
 #[test]

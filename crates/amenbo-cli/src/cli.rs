@@ -1090,6 +1090,7 @@ pub enum DimensionCmd {
         /// project (name or ID; defaults to the bound project)
         #[arg(long)]
         project: Option<String>,
+        /// display name for this axis (no whitespace: a filter names it as `dim:<axis>=<value>`)
         #[arg(long)]
         name: String,
         /// description / notes (Markdown)
@@ -1129,6 +1130,7 @@ pub enum DimensionCmd {
     Update {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
+        /// rename this axis (no whitespace: a filter names it as `dim:<axis>=<value>`)
         #[arg(long)]
         name: Option<String>,
         #[arg(long)]
@@ -1175,6 +1177,7 @@ pub enum DimensionCmd {
     ValueAdd {
         /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
+        /// display name for this value (no whitespace: a filter names it as `dim:<axis>=<value>`)
         #[arg(long)]
         name: String,
         /// first day of the value's period (time-axis dimensions only)
@@ -1193,6 +1196,7 @@ pub enum DimensionCmd {
         dimension: String,
         /// value ref (AMB-DIMV-n), slug or name (within the dimension)
         value: String,
+        /// rename this value (no whitespace: a filter names it as `dim:<axis>=<value>`)
         #[arg(long)]
         name: Option<String>,
         /// first day of the value's period (time-axis dimensions only)

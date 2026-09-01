@@ -706,12 +706,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__item:hover > .files__dir:not(.files__dir--chosen) {
   background: var(--c-surface-sunken);
 }
-/* One that has been opened. It stays on the list — what was pointed at was pointed at — and says
-   for itself that it has been seen (`app/src/files/pointed.ts`). */
-.files__file--read .files__name { color: var(--c-text-muted); }
 /* A name the repository's ignore rules cover. It is on the list because what git does not record is
    still something somebody wrote, and it is faint because that is the whole of what the mark says
-   (`AMB-D-786`). Not the muted colour above: that one means a file has been read. */
+   (`AMB-D-786`). Faint over the whole row rather than a colour on the name, because the name's
+   colour is already spoken for by what git says about the row (below). */
 .files__file--ignored, .files__dir--ignored { opacity: 0.55; }
 /* The folder a file dragged in from the desktop would land in. The host says where the pointer is
    and nothing more, so this highlight is the panel's own answer, redrawn on every move it is told

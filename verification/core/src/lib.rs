@@ -2554,14 +2554,21 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "name", required: &["as", "name"], refs: &[], strings: &["as", "name"], binds: false },
     // And the same box over a name that is already there, from the item that opens it. What is typed
     // is the whole new name and not a change to the old one: the box opens holding what the row is
-    // called, selected, so a name typed into it replaces that.
+    // called, and what a step names is what the box is to be left holding — not the letters typed to
+    // get there. The two differ, because the box picks out the part before the last dot rather than
+    // the whole name, and the driver's line is what says so.
     //
     // **A name changed only in its letters' case is not a rename a road can read.** Every reading on
     // a screen road is folded to one case before the shot and the expectation meet, so a row that was
     // never renamed draws the same answer as one that was. It is the rename most worth walking — a
     // machine that reads two such names as one is the machine that would refuse it — which is why it
     // is said here: a road that named one would go green over a face that had done nothing.
-    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "rename", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    //
+    // `by` says which door the box was opened by — the menu (left out, and the usual one) or the key
+    // (`by: key`, where `press` with `f2` opened it a step earlier). Only the words differ: a step
+    // that named the menu after a key had opened the box would send an operator hunting for a menu
+    // nothing put on the screen.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "rename", required: &["name"], refs: &[], strings: &["name", "by"], binds: false },
 
     // ── handing a file to the machine ─────────────────────────────────────────────────────────────
     // The three ways out of this face that are not reading the file here, and all three are the

@@ -1941,11 +1941,15 @@ impl Instructor {
             (Domain::Files, "back") =>
                 "Press the way back out of the file. The column returns to its two sections."
                     .to_string(),
-            // And the key, which is the other way back. What it reaches is decided by where the
-            // reader is standing, so the line says where that has to be — and says the click is
-            // only for when it is not, because a road that opened or pressed a row a step ago has
-            // left the keyboard on the panel already, and an operator told to click every time
-            // would be walking a road no reader walks.
+            // The keys. What each one reaches is decided by where the reader is standing, so every
+            // line here says where that has to be — and says the click is only for when it is not,
+            // because a road that opened or pressed a row a step ago has left the keyboard where
+            // the key wants it already, and an operator told to click every time would be walking
+            // a road no reader walks.
+            //
+            // Three of them, and they stand at two different heights: the key that leaves is the
+            // panel's and takes one layer per press, while F2 and a letter are a row's and do
+            // nothing at all unless the keyboard is on one.
             //
             // The vocabulary is closed here rather than in the registry — a key the face has no
             // answer for is a road nobody can walk, and it fails on the way in rather than on a
@@ -1953,6 +1957,19 @@ impl Instructor {
             (Domain::Files, "press") => match req(with, "key")? {
                 "escape" => "With the keyboard standing on the panel — which is where a row just pressed, or a file just opened, has left it — press the key this machine leaves things with. It is one layer per press: what is drawn over the tree goes first, and the panel itself only once the tree is what is showing. Click a row of the folder's section first only if something outside the panel has been clicked since, because the terminal beside this column hears the same key as meaning something of its own."
                     .to_string(),
+                // The key that renames. It is the second door onto the box the menu opens — the
+                // typing is `rename` either way — and which row it opens the box on is decided by
+                // where the keyboard is standing, so the line says how a row comes to be stood on
+                // rather than naming one: telling an operator to click the row would move the
+                // keyboard off whatever the step before had walked it to.
+                "f2" => "With the keyboard standing on a row of the folder's section — the click that opens a folder leaves it there, and so does a letter typed on the tree — press F2. A box takes that row's place, holding the name the row has. Type nothing into it here — the row it opened on is what this step is for, and what goes into the box is the step after it."
+                    .to_string(),
+                // A letter, which walks the tree rather than doing anything to a row. Any single
+                // character is the vocabulary, because the face answers every one of them the same
+                // way; the space is the one it hands back, so it is out.
+                other if other.chars().count() == 1 && other != " " => format!(
+                    "With the keyboard standing on a row of the folder's section — the click that opens a folder leaves it there — press \"{other}\". The keyboard moves down to the next row whose name begins with that letter, wrapping past the last row round to the first. Nothing is opened and no name changes: what moves is which row the keyboard is standing on."
+                ),
                 other => {
                     return Err(format!("action `press` does not know the key `{other}`"))
                 }
@@ -2062,10 +2079,27 @@ impl Instructor {
             ),
             // The same box over a name already on the row, which is why the line says the old one goes: a
             // box that opened holding the old name would otherwise be read as one to add to.
-            (Domain::Files, "rename") => format!(
-                "In that menu, press the item that changes the name. The box opens with the name that is there, selected — type \"{}\" over it and press Enter.",
-                req(with, "name")?
-            ),
+            //
+            // **What the box selects is not the whole name.** It opens with the part before the last
+            // dot picked out, so that renaming `archive.tar.gz` is a matter of typing — and an
+            // operator who typed a whole name over that selection would leave the extension standing
+            // twice. So the line asks for the selection to be widened before anything is typed.
+            (Domain::Files, "rename") => match with.get("by").and_then(|v| v.as_str()) {
+                // The box the key opened. The menu is not named, because there is none: `press`
+                // with `f2` left the box standing on the row the keyboard was on, and this is the
+                // typing that half of the move stops short of.
+                Some("key") => format!(
+                    "The box standing where the row was is holding the name that is there, with the part before the last dot selected. Select the whole of it, type \"{}\" so the box holds that and nothing else, and press Enter.",
+                    req(with, "name")?
+                ),
+                Some("menu") | None => format!(
+                    "In that menu, press the item that changes the name. The box opens holding the name that is there, with the part before the last dot selected. Select the whole of it, type \"{}\" so the box holds that and nothing else, and press Enter.",
+                    req(with, "name")?
+                ),
+                Some(other) => {
+                    return Err(format!("`by` does not know `{other}` — it is menu or key"))
+                }
+            },
             // Handing the file to the machine. On a row the menu is a right-click, and it is drawn on files alone
             // — a folder's row opens a level — so the step names a row the way every other one here does, and says
             // where the menu comes up, since nothing else on this face does.

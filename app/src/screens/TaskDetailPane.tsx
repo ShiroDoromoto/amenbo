@@ -535,7 +535,7 @@ export function TaskDetailPane({
                 <span title={t("detail.updatedHint")}>{exactLabel(task.updatedAt)}</span>
               </>
             )}
-            {" · "}id {task.id} · {t("detail.restoreHint")}
+            {" · "}id {task.id} · {t("detail.deleteNoUndo")}
           </div>
           <div className="detail__danger">
             <button className="btn btn--danger" onClick={removeTask} title={t("detail.deleteTip")}><Icon name="trash" /> {t("detail.delete")}</button>

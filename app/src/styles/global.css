@@ -624,8 +624,35 @@ button { font: inherit; color: inherit; cursor: pointer; }
    list, so how deep a row stands is a number on the row and the step is taken here rather than by a
    list inside a list (`app/src/files/FilesPanel.tsx`). The margin and not padding, so that the row's
    own box — its ground under the pointer, the ring around it — begins where its name does. */
-.files__list--tree > li { margin-left: calc(var(--depth, 0) * var(--s-3)); }
+.files__list--tree > li {
+  position: relative;
+  margin-left: calc(var(--depth, 0) * var(--s-3));
+}
 .files__item { cursor: pointer; }
+/* One line for each folder a row stands inside, drawn in the space the indent left in front of it:
+   the band runs from the tree's own edge to the row's, and a line falls every step, so the last of
+   them is at the left edge of the folder holding the row.
+
+   **A step of 8px is too small to read a depth off**, and a row is often the only thing on the
+   screen — a folder of sixty names fills a panel, and then nothing in view says how deep it is. The
+   lines say it at a glance: one per level, counted rather than measured.
+
+   **Only while the pointer is on the tree**, which is what VS Code does by default and for the same
+   reason: four or five permanent verticals in a column 256px wide compete with the names. And it is
+   the pointer, so nothing is drawn for a reader who is not looking for it. */
+.files__item::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: calc(-1 * var(--depth, 0) * var(--s-3));
+  width: calc(var(--depth, 0) * var(--s-3));
+  background: repeating-linear-gradient(
+    to right, var(--c-border) 0 1px, transparent 1px var(--s-3)
+  );
+  opacity: 0;
+  pointer-events: none;
+}
+.files__list--tree:hover .files__item::before { opacity: 1; }
 /* And no ring of its own. What is drawn for the focus is the line inside it (below); left to the
    browser's default, the item would draw a second ring outside the one the line already carries. */
 .files__item:focus, .files__item:focus-visible { outline: none; }

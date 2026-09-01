@@ -1461,10 +1461,19 @@ export async function removeTaskCommit(taskId: number, sha: string): Promise<voi
 /**
  * Record a decision (Proposed, under project_id). Decisions exist only inside Tauri — the mock fixtures
  * have none — so in browser iteration every decision call below is a no-op.
+ *
+ * `dimensionValueIds` classifies it as it is recorded, riding in the same transaction as the row: a
+ * decision filed under an axis never exists without it, and an axis the project requires is answered
+ * before `decision accept` reads it (`AMB-D-790`).
  */
-export async function addDecision(projectId: number, title: string, body: string): Promise<void> {
+export async function addDecision(
+  projectId: number,
+  title: string,
+  body: string,
+  dimensionValueIds: number[] = [],
+): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("decision_add", { projectId, title, body });
+  return invokeAck("decision_add", { projectId, title, body, dimensionValueIds });
 }
 
 /** Add a comment to a decision record (its own decision_comment table). */

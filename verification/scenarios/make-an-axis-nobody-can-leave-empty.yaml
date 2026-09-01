@@ -9,7 +9,9 @@
 # the creation that left the answer out, on the acceptance that left it out, on the supersession that
 # would settle a decision the same way, on the hand that would take the answer back off one task at
 # a time, on the removal that would take it off every task at once, and on the removal that would
-# leave the axis with nothing to answer with at all.
+# leave the axis with nothing to answer with at all. The screen meets the decision's half one step
+# earlier than the terminal does: it will not record a blank decision at all, because the press that
+# reads the demand belongs to whoever accepts it and the writer would never be standing there.
 id: make-an-axis-nobody-can-leave-empty
 title: An axis marked required turns away the creation and the acceptance that left it empty, and holds the answer on once it is there
 description: >
@@ -385,11 +387,10 @@ steps_cli:
 steps_gui:
   # The screen's half, and it is a different half. A terminal meets the refusals as codes on an exit
   # status; this face has no code to give back, so what it does instead is hold the controls — the box
-  # that would raise a demand nobody could answer, the button that would end a creation the demand is
-  # not met on, and the removal that will not go until it has been told where the tasks land. A held
-  # control is a thing only a screen can be asked about, which is why the road here is those three and
-  # not the codes again — and beside them the one refusal this face hands back rather than holds, on
-  # the decision pane, whose settling button is drawn live and answers the press.
+  # that would raise a demand nobody could answer, the button that would end a task's creation while
+  # the demand is not met, the button that would record a decision the same way, and the removal that
+  # will not go until it has been told where the tasks land. A held control is a thing only a screen
+  # can be asked about, which is why the road here is those four and not the codes again.
   - type: action
     domain: dimension
     op: required
@@ -449,58 +450,18 @@ steps_gui:
       field: draft
       equals: false
 
-  # The same demand on the other kind of record, in the pane the record keeps for itself. This one is
-  # not a held control but a refused press: the decision pane draws its settling button live and hands
-  # the refusal back with the categories named, where the task pane shuts the button before the press.
-  # The two sit on different screens either way, so a road that walked only the task's would leave the
-  # decision side of the demand unwalked on the one face where the difference is visible at all.
+  # The same demand on the other kind of record, and on this face it is met one screen earlier. A
+  # terminal can record a decision blank and be turned away at the acceptance; the form will not let
+  # one out that way, because the press that reads the demand belongs to whoever accepts it and the
+  # writer would never be standing there to see it. So the control the screen holds is the one that
+  # records — the decision twin of the task's held finish-creating, on a different screen, which is why
+  # a road that walked only the task's would leave this unwalked.
   - type: action
     domain: decision
     op: create
     with:
-      title: SCENARIO SEED — ruled on with the answer missing
-    as: ruling
-
-  - type: action
-    domain: decision
-    op: accept
-    with:
-      target: ruling
+      title: SCENARIO SEED — recorded with the answer missing
       refused: invalid_decision_required_dimension
-
-  # And the press left it where it was rather than settling it half way, which is the half a refused
-  # press has to be read for and a held control never needs asking about.
-  - type: assert
-    domain: decision
-    op: field
-    with:
-      target: ruling
-      field: status
-      equals: proposed
-
-  # Answered from the decision's own pane, where the control for the axis sits — the same place the
-  # refusal names, which is what makes it something a reader can act on.
-  - type: action
-    domain: dimension
-    op: set
-    with:
-      target: ruling
-      dimension: Medium
-      value: print
-
-  - type: action
-    domain: decision
-    op: accept
-    with:
-      target: ruling
-
-  - type: assert
-    domain: decision
-    op: field
-    with:
-      target: ruling
-      field: status
-      equals: accepted
 
   # And the other control this face holds: the value the answer was given cannot simply be removed
   # while the answer stands on it, so the manager asks where the tasks go and carries them there. A

@@ -817,6 +817,14 @@ impl Instructor {
                 self.target_label(with),
                 file_named(with)?
             ),
+            // The form the demand bites at, where a project will not have a decision left blank on an
+            // axis. The task side's twin is the button that ends a creation: both are controls the
+            // screen holds shut, so what the reader is sent to find is a shut control and the axes
+            // named beside it — not a refusal to press for.
+            (Domain::Decision, "create") if with.contains_key("refused") => format!(
+                "Begin recording a decision titled \"{}\" and find the button that records it shut, with the categories still to answer named beside it.",
+                req(with, "title")?
+            ),
             (Domain::Decision, "create") => {
                 format!("Create a decision titled \"{}\".", req(with, "title")?)
             }

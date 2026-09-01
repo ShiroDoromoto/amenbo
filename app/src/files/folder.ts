@@ -16,7 +16,7 @@
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
   DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
-  FolderInboxedDto, FolderRestoredDto, FolderTrashedDto, GitEntryDto,
+  FolderRestoredDto, FolderTrashedDto, GitEntryDto,
 } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
@@ -277,33 +277,6 @@ export async function folderImport(
 ): Promise<FolderCarriedDto> {
   if (!inTauri()) return { arrived: [], stopped: null };
   return await invoke<FolderCarriedDto>("folder_import", { projectId, paths, toRoot, to, effect });
-}
-
-/**
- * Hand files to the project without picking where they go: the host puts the ones from outside in
- * `.amenbo-inbox/<the day>/` under `root` and says what paths they are all at now
- * (`crate::folder_write::folder_inbox`).
- *
- * **What is already under `root` is not taken in** (`AMB-D-808`): its own path comes back, since a
- * copy would leave the reader with two of the same file and only one of them would ever be seen to
- * change. Both kinds arrive mixed together, in the order they were handed over.
- *
- * `paths` are the host's own, the way a drop hands them over. `root` is one of the project's bound
- * folders and the host proves it against the store; nothing else about the landing is this side's
- * to name — where inside it they go is `AMB-D-800`'s and the host's.
- *
- * **A name already in the folder does not stop this one.** Nobody chose a row to drop onto, so
- * there is nowhere to send a reader who is told the name is taken: the second `shot.png` of a day
- * lands as `shot-2.png`, and the answer says so by coming back as whole paths. What the caller does
- * with them is write them into a terminal, which is why they are whole.
- */
-export async function folderInbox(
-  projectId: number,
-  root: string,
-  paths: string[],
-): Promise<FolderInboxedDto> {
-  if (!inTauri()) return { arrived: [], stopped: null };
-  return await invoke<FolderInboxedDto>("folder_inbox", { projectId, root, paths });
 }
 
 /**

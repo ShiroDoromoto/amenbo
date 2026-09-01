@@ -603,28 +603,6 @@ export type FolderImageDto = {
 mime: string, };
 
 /**
- * Where the files a reader handed a pane ended up (`crate::folder_write::folder_inbox`).
- *
- * The same line through the list a carry answers with, and for the same reason — but the rows come
- * back as whole paths rather than as names. Where they landed is Amenbo's own choice and not the
- * caller's (`AMB-D-800`), so a face told only the names would have to build the path back out of a
- * decision it does not hold; and what it does with the answer is write the path into a terminal.
- * A row that was already inside the folder did not land anywhere at all (`AMB-D-808`), which whole
- * paths carry and names could not.
- */
-export type FolderInboxedDto = { 
-/**
- * The whole paths the files are at now, in the order they were handed over. A name the landing
- * already held is numbered rather than refused, so a path here need not end in the name it came
- * with — and one that was already inside the folder is the path it was handed over as.
- */
-arrived: Array<string>, 
-/**
- * The one it stopped on, named as it came. Absent when the whole list arrived.
- */
-stopped: FolderStoppedDto | null, };
-
-/**
  * How a file's lines end — the wire form of [`crate::encoding::LineEnding`].
  *
  * `mixed` is a value of its own rather than the commoner of the two rounded up, because an editor

@@ -4,8 +4,6 @@ import { endTerminal, pasteIntoTerminal, quotedPath } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import { confirmDialog, pickFiles } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
-import { folderInbox } from "../files/folder";
-import { stoppedLine } from "../files/stopped";
 import { pushNotice } from "../core/notice";
 import { Menu, MenuItem } from "../components/Menu";
 import { PaneDropAsk } from "./PaneDropAsk";
@@ -38,14 +36,12 @@ async function heldHere(session: string | null): Promise<readonly number[]> {
 }
 
 /**
- * Take what was dropped on a pane into the project's own inbox, and put where it landed in front of
- * whatever is running there (`AMB-D-800`).
+ * Put the paths of what was dropped on a pane in front of whatever is running there (`AMB-D-820`).
  *
- * **The folder is the one the session was opened in**, which is a folder the project is bound to —
- * the host proves it against the store before writing anything (`crate::folder_write::folder_inbox`).
- * Where inside it the files go is Amenbo's own answer and not this side's, which is why what comes
- * back is whole paths: a name the day already held is numbered rather than refused, so what arrived
- * is not always what was dropped.
+ * **Nothing is moved and nothing is copied**, so the host is not asked anything: what goes into the
+ * terminal is where the file or the folder is now, exactly as the drop handed it over. A copy would
+ * leave the reader with two of the same file and only one of them would ever be seen to change — a
+ * fix made in the other shows neither in git's diff nor in the row of what changed (`AMB-D-785`).
  *
  * **Nothing is typed for the reader.** The paths are pasted and the newline is not sent
  * (`../talk/terminal`), so what happens next is theirs.
@@ -54,17 +50,13 @@ async function heldHere(session: string | null): Promise<readonly number[]> {
  * with several of them the space between two paths would otherwise be the same character as the
  * space inside one (`AMB-D-801`).
  */
-async function handOver(project: number, folder: string, session: string, paths: string[]) {
+async function handOver(session: string, paths: string[]) {
+  if (paths.length === 0) return;
   try {
-    const inboxed = await folderInbox(project, folder, paths);
-    if (inboxed.arrived.length > 0) {
-      await pasteIntoTerminal(session, inboxed.arrived.map((one) => quotedPath(one)).join(" "));
-    }
-    const line = stoppedLine(inboxed);
-    if (line !== null) pushNotice(line);
+    await pasteIntoTerminal(session, paths.map((one) => quotedPath(one)).join(" "));
   } catch (e: unknown) {
-    // The host's own sentence: the folder having gone since the pane opened in it is the whole of
-    // what this can be, and it is worth saying rather than swallowing.
+    // The terminal having ended between the drop and the paste is the whole of what this can be,
+    // and it is worth saying rather than swallowing.
     pushNotice(errText(e));
   }
 }
@@ -136,10 +128,6 @@ export function TerminalPane({
   // anything — what is held is read at the press and not before, so there is nothing here to keep
   // true between one and the next.
   const [asking, setAsking] = useState<readonly number[] | null>(null);
-  // The folder the terminal here actually runs in, which is what a file handed to this pane is taken
-  // into. It comes off the session rather than off `start` for the reason the row above does: a pane
-  // that took up a running terminal is drawing one that was opened somewhere else.
-  const [folder, setFolder] = useState<string | null>(null);
   // Where the row's menu was opened, while it is open. It is placed at the press rather than under
   // the button for the reason every other menu in the app is (`../components/Menu`).
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -198,7 +186,6 @@ export function TerminalPane({
         // the one this slot was handed.
         plate.opened(session, startedAt, where ?? start.cwd ?? null);
         setLive(session);
-        setFolder(where ?? start.cwd ?? null);
         // Where the terminal actually runs, which is not always the folder this slot was handed: a
         // pane that took one up learns it from the session (`../talk/layout`).
         on.current.onOpened(frame, session, where ?? start.cwd ?? null);
@@ -272,7 +259,7 @@ export function TerminalPane({
   // the pane cannot keep. It is taken up per pane and matched on this pane's own frame, so a drop
   // that landed on the pane beside it is one this watch is never told about.
   useEffect(() => {
-    if (live === null || folder === null) return;
+    if (live === null) return;
     let alive = true;
     let stop: (() => void) | null = null;
     void watchHostDrop({
@@ -282,14 +269,14 @@ export function TerminalPane({
       drop: (_at, paths) => {
         if (!alive) return;
         setHanding(false);
-        void handOver(project, folder, live, paths);
+        void handOver(live, paths);
       },
     }).then((off) => { if (alive) stop = off; else off(); });
     return () => {
       alive = false;
       stop?.();
     };
-  }, [frame, project, live, folder]);
+  }, [frame, live]);
 
   return (
     <div
@@ -309,7 +296,7 @@ export function TerminalPane({
             because everything in it is a way of handing that terminal something — and it is a menu
             rather than a row of buttons so that a face split four ways does not draw the same button
             four times over. */}
-        {live !== null && folder !== null && (
+        {live !== null && (
           <button
             className="slot__more"
             title={t("face.more")}
@@ -329,17 +316,14 @@ export function TerminalPane({
           <Icon name="close" />
         </button>
       </div>
-      {menuAt !== null && live !== null && folder !== null && (
+      {menuAt !== null && live !== null && (
         <Menu at={menuAt} onClose={() => setMenuAt(null)}>
           {/* The other way in, for a reader whose file is not somewhere they can drag it from. It
-              ends where the drop ends: the file is carried into the project's inbox and the path it
-              is at now is put in front of the agent. */}
+              ends where the drop ends: the path the file is at is put in front of the agent. */}
           <MenuItem
             onClick={() => {
               setMenuAt(null);
-              void pickFiles().then((paths) => {
-                if (paths.length > 0) return handOver(project, folder, live, paths);
-              });
+              void pickFiles().then((paths) => handOver(live, paths));
             }}
           >
             <Icon name="inbox" />

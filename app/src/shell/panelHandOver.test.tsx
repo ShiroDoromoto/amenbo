@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// Handing a file from the panel to the pane the reader is working in (`AMB-D-800`).
+// Handing a file from the panel to the pane the reader is working in (`AMB-D-820`).
 //
-// The file is already inside a folder the project is bound to, so nothing is carried: what the face
-// has to get right is **which** pane, and that is the one thing no unit below it can answer. The
+// Nothing is carried — what goes into the terminal is the path the file is at — so what the face has
+// to get right is **which** pane, and that is the one thing no unit below it can answer. The
 // panel is one thing beside as many panes as the page holds, and a face that handed the file to the
 // first of them draws exactly like one that hands it to the focused one.
 //

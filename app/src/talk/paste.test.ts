@@ -25,11 +25,11 @@ vi.mock("../core/ipc", () => ({
 
 describe("putting text in a terminal's input box", () => {
   it("pastes it, and sends nothing that would submit it", async () => {
-    await pasteIntoTerminal("session-7", "/work/here/.amenbo-inbox/2026-08-29/shot.png");
+    await pasteIntoTerminal("session-7", "/Users/somebody/Desktop/shot.png");
 
     expect(hoisted.written).toEqual([{
       session: "session-7",
-      data: "\x1b[200~/work/here/.amenbo-inbox/2026-08-29/shot.png\x1b[201~",
+      data: "\x1b[200~/Users/somebody/Desktop/shot.png\x1b[201~",
     }]);
     expect(hoisted.written[0]?.data, "a newline went with the paste").not.toMatch(/[\r\n]/);
   });

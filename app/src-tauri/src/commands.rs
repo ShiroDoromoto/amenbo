@@ -2034,11 +2034,19 @@ pub fn task_commit_remove(task_id: i64, sha: String) -> Result<WriteAck, CmdErro
 
 /// Record a decision (Proposed), created under `project_id`. The GUI's actor is always human.
 #[tauri::command]
-pub fn decision_add(project_id: i64, title: String, body: Option<String>) -> Result<WriteAck, CmdError> {
+pub fn decision_add(
+    project_id: i64,
+    title: String,
+    body: Option<String>,
+    dimension_value_ids: Option<Vec<i64>>,
+) -> Result<WriteAck, CmdError> {
     let id = with_store_mut(|store| {
-        let d = store.add_decision(amenbo_core::ops::decision::NewDecision {
+        // The classification rides in the create's own transaction, the way `task add --dim` does it:
+        // a decision filed under an axis can never commit without it, and a refused create leaves no
+        // half-classified decision behind.
+        let d = store.add_decision_with_dimensions(amenbo_core::ops::decision::NewDecision {
             title, body: body.unwrap_or_default(), project_id,
-        })?;
+        }, &dimension_value_ids.unwrap_or_default())?;
         Ok(d.id)
     })?;
     Ok(WriteAck::new(&["decisions"]).decision(id))
@@ -6875,7 +6883,7 @@ mod tests {
 
         let task = task_add(Some(project_id), "実装".into(), None, None, None).unwrap().tasks[0];
         finish_creating(task);
-        let did = decision_add(project_id, "決めごと".into(), Some("結論".into())).unwrap().decisions[0];
+        let did = decision_add(project_id, "決めごと".into(), Some("結論".into()), None).unwrap().decisions[0];
         decision_set_link(did, task, true).unwrap();
 
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
@@ -7211,7 +7219,7 @@ mod tests {
             .unwrap();
             p.id
         };
-        let did = decision_add(project_id, "決めごと".into(), Some("結論".into()))
+        let did = decision_add(project_id, "決めごと".into(), Some("結論".into()), None)
             .unwrap()
             .decisions[0];
 
@@ -7265,7 +7273,7 @@ mod tests {
                 .unwrap()
                 .id
         };
-        let add = |title: &str| decision_add(project_id, title.into(), Some("結論".into())).unwrap().decisions[0];
+        let add = |title: &str| decision_add(project_id, title.into(), Some("結論".into()), None).unwrap().decisions[0];
         let card = |id: i64| decisions_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
         let old = add("UTC で保存する");

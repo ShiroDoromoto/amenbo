@@ -20,7 +20,8 @@
 //   swift screen.swift click <x> <y>             left-click at a screen point
 //   swift screen.swift dblclick <x> <y>          double-click at a screen point (what opens a dialog's row)
 //   swift screen.swift type "text"               type into the focused element (Unicode direct, so no IME)
-//   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 125=Down / 126=Up)
+//   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 51=Backspace / 121=Page Down)
+//   swift screen.swift scroll <pid> <dx> <dy>    turn a wheel over that app's window (+dy is back toward the top)
 //   swift screen.swift set-date <pid> <name> <yyyy-mm-dd>  put a day into the date field of that name
 //   swift screen.swift trusted                   whether the accessibility permission is granted (prompts if not)
 //
@@ -54,10 +55,13 @@ func fail(_ msg: String) -> Never {
 // The window: found here, shot here, and never handed out
 // ---------------------------------------------------------------------------
 
-/// windowID answers with the substantial window of the given pid — the real one, not a title bar or
-/// a shadow. A window behind another Space is not counted as on-screen, so an app that has not been
-/// fronted comes back empty.
-func windowID(pid: Int) -> Int {
+/// window answers with the substantial window of the given pid — the real one, not a title bar or
+/// a shadow — as the id `screencapture` is aimed with and the frame a pointer is aimed into. A window
+/// behind another Space is not counted as on-screen, so an app that has not been fronted comes back
+/// empty.
+///
+/// Both are spent in this file and neither leaves it: a caller names an app by its pid alone.
+func window(pid: Int) -> (id: Int, frame: CGRect) {
     guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
         fail("could not read the window list")
     }
@@ -65,10 +69,15 @@ func windowID(pid: Int) -> Int {
         guard let owner = w[kCGWindowOwnerPID as String] as? Int, owner == pid,
               let id = w[kCGWindowNumber as String] as? Int,
               let b = w[kCGWindowBounds as String] as? [String: Any],
+              let x = b["X"] as? Double,
+              let y = b["Y"] as? Double,
+              let width = b["Width"] as? Double,
               let height = b["Height"] as? Double,
               height > 200 // drop the incidental windows: shadows, tooltips and the like
         else { continue }
-        return id
+        // Bounds come back in the same top-left space a mouse event is posted into, so the frame is
+        // aimable as it stands.
+        return (id, CGRect(x: x, y: y, width: width, height: height))
     }
     fail("no window for pid \(pid) — is the app running, on screen and in front?")
 }
@@ -91,7 +100,7 @@ func front(pid: Int) {
 /// Shoot the app's window into `path`. The id `screencapture -l` takes is resolved and spent here,
 /// so a caller shoots by pid and holds no window of its own.
 func shot(pid: Int, path: String) {
-    let id = windowID(pid: pid)
+    let id = window(pid: pid).id
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
     // -x is silent, -l shoots the one window rather than a display (a window on a second monitor is
@@ -428,10 +437,55 @@ func type(_ s: String) {
     }
 }
 
+/// One keycode, pressed and released. No modifier goes with it — what a key here can say is one key.
+///
+/// Not every key arrives. Return, Tab, Backspace and Page Down reach the webview; Page Up, Home, End
+/// and the arrows were posted the same way and nothing moved. So a key is not the way to walk a page:
+/// `scroll` is, and it goes where these do not.
 func key(_ code: CGKeyCode) {
     CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: true)?.post(tap: .cghidEventTap)
     usleep(40_000)
     CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false)?.post(tap: .cghidEventTap)
+}
+
+/// Turn a wheel over the app's window.
+///
+/// This is the way back up a page. Page Down is the one scrolling key that reaches the webview, so a
+/// road that walked down a pane could not return to what it had passed — and reopening the pane does
+/// not reset it either, the position being kept. A wheel is not a key, and arrives where they do not.
+///
+/// A wheel event lands wherever the pointer is rather than on whatever holds focus, so the app is
+/// fronted and the pointer put in the middle of its window first — the same reason `click-named`
+/// fronts before it presses. The middle is where a pane's scrollable body is; something else that
+/// scrolls is reached by clicking into it first and scrolling after.
+///
+/// Positive is the way back: `scroll <pid> 0 800` goes 800 points up the page, and toward its left
+/// across. The amount is in points, and it is delivered as a run of short turns rather than one
+/// jump — a webview animates each turn, and a single large delta arrives mid-animation and is
+/// swallowed. Rounding is carried along the run, so what is asked for is what is delivered.
+func scroll(pid: Int, dx: Double, dy: Double) {
+    // Refused rather than trusted: an amount no screen is that tall would run the turns below for as
+    // long as it took to overflow, which is a hang where a sentence belongs.
+    guard dx.isFinite, dy.isFinite, abs(dx) <= 100_000, abs(dy) <= 100_000 else {
+        fail("scroll takes an amount in points, and \(dx),\(dy) is longer than any screen")
+    }
+    front(pid: pid)
+    let frame = window(pid: pid).frame
+    hover(CGPoint(x: frame.midX, y: frame.midY))
+
+    let perTurn = 60.0 // about what one notch of a wheel moves
+    let turns = Int((max(abs(dx), abs(dy)) / perTurn).rounded(.up))
+    guard turns > 0 else { return }
+    // How much of the total has been delivered by the end of turn `upto` — so the rounding of each
+    // turn is carried into the next rather than dropped, and the run adds up to what was asked for.
+    let sent = { (total: Double, upto: Int) in (total * Double(upto) / Double(turns)).rounded() }
+    for i in 1...turns {
+        let x = Int32(sent(dx, i) - sent(dx, i - 1))
+        let y = Int32(sent(dy, i) - sent(dy, i - 1))
+        CGEvent(scrollWheelEvent2Source: src, units: .pixel, wheelCount: 2, wheel1: y, wheel2: x, wheel3: 0)?
+            .post(tap: .cghidEventTap)
+        usleep(30_000)
+    }
 }
 
 /// The date element in this app whose day can be written — the picker panel's, once it is open.
@@ -533,7 +587,7 @@ func setDate(pid: Int, name: String, day: String) {
 
 let args = CommandLine.arguments
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|type|key|set-date|trusted> …")
+    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|type|key|scroll|set-date|trusted> …")
 }
 
 switch args[1] {
@@ -564,6 +618,11 @@ case "type":
 case "key":
     guard args.count == 3, let code = UInt16(args[2]) else { fail("usage: screen key <keycode>") }
     key(CGKeyCode(code))
+case "scroll":
+    guard args.count == 5, let pid = Int(args[2]), let dx = Double(args[3]), let dy = Double(args[4]) else {
+        fail("usage: screen scroll <pid> <dx> <dy>")
+    }
+    scroll(pid: pid, dx: dx, dy: dy)
 case "set-date":
     guard args.count == 5, let pid = Int(args[2]) else { fail("usage: screen set-date <pid> <name> <yyyy-mm-dd>") }
     setDate(pid: pid, name: args[3], day: args[4])

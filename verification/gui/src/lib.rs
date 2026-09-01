@@ -18,8 +18,8 @@
 //! (`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to its own world.
 //!
 //! The screen tool is the input primitive too, called by whoever drives the screen between steps:
-//! its `find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the action steps
-//! the checklist names.
+//! its `find` / `click-named` / `click` / `dblclick` / `type` / `key` / `scroll` carry out the action
+//! steps the checklist names.
 //!
 //! The pure part — turning a step into an instruction and an expectation, and walking a scenario
 //! into per-step evidence with a verdict — is separated from the side effects (running the tool)

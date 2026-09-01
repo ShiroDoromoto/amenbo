@@ -39,7 +39,7 @@
 // the tree itself; a file row belongs to the folder holding it, which is what makes dropping on the
 // name of a file mean the same as dropping just beside it.
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import type {
   FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
 } from "../bindings/bindings";
@@ -123,7 +123,7 @@ type Opened = {
  * before seeing anything, and a press that asks for what somebody came for need not be asked.
  *
  * `open` stays empty, which is what makes it the **first** level and not the whole tree: the levels
- * under it cost a read each and are asked for when somebody opens them (`Level`).
+ * under it cost a read each and are asked for when somebody opens them (`Tree`).
  */
 const AT_FIRST: Opened = { treeOpen: true, open: [], cursor: null };
 
@@ -139,13 +139,6 @@ type Naming = {
    *  pointer in their hand to open one with. */
   rename: (path: string[]) => void;
 };
-
-/** Whether an edit is the making of a name in this folder of this section. */
-function makingIn(edit: Edit | null, root: string, path: string[]): Edit & { kind: "make" } | null {
-  return edit?.kind === "make" && edit.root === root && edit.into.join("/") === path.join("/")
-    ? edit
-    : null;
-}
 
 /**
  * Where a name's stem ends — the part of it a rename is usually about.
@@ -585,7 +578,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
  *
  * **The news is a number, not a payload.** What the host says when the folder moves carries no
  * rows (`AMB-D-785`), so what a section does with it is count: `moved` goes up, and everything read
- * off the disk — git's answer here, the names of each open level in `Level` — is asked for again
+ * off the disk — git's answer here, the names of each open level in `Tree` — is asked for again
  * because it changed. One counter rather than a refresh per reader, because a folder moving is one
  * fact and they would all be reacting to it.
  *
@@ -780,10 +773,9 @@ function FolderSection({
             is a repository read to draw rows nobody has asked for. Folding the whole tree away is
             still a press, and it stops the reads the same way. */}
         {treeOpen && (
-          <Level
+          <Tree
             projectId={projectId}
             root={root}
-            path={[]}
             landing={landing}
             marks={marks}
             moved={moved}
@@ -990,24 +982,114 @@ function rowClass(
   return all;
 }
 
-/** One folder's worth of names, and whatever of it has been opened. */
-function Level({
-  projectId, root, path, landing, marks, moved, open, onOpen, naming, onRead, onMenu,
+/**
+ * One line of the tree as it is drawn.
+ *
+ * **A row is a line of one list and not a box holding the lines under it.** What is open is a flat
+ * run of rows, in the order a reader goes down them, and how far down a row stands is a number on
+ * the row rather than the depth of the box it sits in. That is what lets a row in the middle be
+ * left out of the document without the ones below it going with it (`AMB-T-4108`).
+ */
+type Line =
+  /** A name being typed, at the top of the folder it is being made in. */
+  | { kind: "make"; at: string; depth: number; dir: boolean }
+  | {
+    kind: "row";
+    /** The row's path from the bound folder, joined — what everything about it is named by. */
+    key: string;
+    path: string[];
+    name: string;
+    isDir: boolean;
+    ignored: boolean;
+    /** The folder holding it, joined — what a drop or a paste on this row lands in. */
+    in: string;
+    /** How many folders down from the bound folder it stands, the first level being none. */
+    depth: number;
+    /** How many names the folder it came from holds, and which of them this is. */
+    setsize: number;
+    posinset: number;
+    /** Whether it is a folder standing open. */
+    unfolded: boolean;
+  };
+
+/**
+ * The folders whose names are on the screen: the bound folder, and every open one the way down to
+ * which is open too.
+ *
+ * A folder left open inside one that was folded shut is not read — it is not drawn, and the reader
+ * gets it back the way they left it when they open the way to it again.
+ */
+function shownFolders(open: string[]): string[] {
+  const reachable = (key: string): boolean => {
+    const at = key.split("/");
+    for (let n = 1; n < at.length; n += 1) {
+      if (!open.includes(at.slice(0, n).join("/"))) return false;
+    }
+    return true;
+  };
+  return ["", ...open.filter(reachable)];
+}
+
+/**
+ * Every row on the screen, in the order they are read in — each folder's names in place of the row
+ * that opened it.
+ *
+ * The walk is the same one `shownFolders` makes, so what is drawn and what is read off the disk
+ * cannot drift apart.
+ */
+function linesOf(
+  levels: Record<string, { rows: FolderEntryDto[] }>,
+  open: string[],
+  making: string | null,
+  makingDir: boolean,
+  at: string[],
+): Line[] {
+  const from = at.join("/");
+  // Above the names rather than among them: where a new name would sort is decided by what is
+  // typed, and a box that moved as the letters arrived would be a box nobody could read.
+  const out: Line[] = making === from
+    ? [{ kind: "make", at: from, depth: at.length, dir: makingDir }]
+    : [];
+  const names = levels[from]?.rows ?? [];
+  names.forEach((one, i) => {
+    const path = [...at, one.name];
+    const key = path.join("/");
+    const unfolded = one.isDir && open.includes(key);
+    out.push({
+      kind: "row",
+      key,
+      path,
+      name: one.name,
+      isDir: one.isDir,
+      ignored: one.ignored,
+      in: from,
+      depth: at.length,
+      setsize: names.length,
+      posinset: i + 1,
+      unfolded,
+    });
+    if (unfolded) out.push(...linesOf(levels, open, making, makingDir, path));
+  });
+  return out;
+}
+
+/** One bound folder's tree: every open row of it, drawn as one list. */
+function Tree({
+  projectId, root, landing, marks, moved, open, onOpen, naming, onRead, onMenu,
   onTrash, cursor, onCursor, chosen,
 }: {
   projectId: number;
   root: string;
-  path: string[];
   /**
-   * Where a file being dragged in would land — passed down whole rather than resolved per level,
-   * because a drag hangs over one folder on the whole panel and every level has to be able to stop
-   * drawing the highlight it was drawing a moment ago.
+   * Where a file being dragged in would land — the whole panel's, because a drag hangs over one
+   * folder of one section and every other row has to be able to stop drawing the highlight it was
+   * drawing a moment ago.
    */
   landing: Landing | null;
   /** What git says about a row, asked by its segments from the bound folder, and by whether it is a
    *  folder standing folded — which is the one case that answers for what is under it (`./gitMark`). */
   marks: (path: string[], folded?: boolean) => GitMark | null;
-  /** How many times the folder has moved. The names are read again on each — a file the agent just
+  /** How many times the folder has moved. Every level is read again on each — a file the agent just
    *  wrote is a row that has to appear without anybody folding the tree and opening it again, and a
    *  row that just went to the bin is one that has to stop being drawn. */
   moved: number;
@@ -1016,8 +1098,7 @@ function Level({
    *  because it has to outlive the section being unmounted. */
   open: string[];
   onOpen: (key: string) => void;
-  /** The name being typed anywhere in this section, passed down for the same reason `landing` is:
-   *  every level has to be able to stop drawing the box it was drawing a moment ago. */
+  /** The name being typed in this section, or nothing. */
   naming: Naming;
   onRead: (path: string[]) => void;
   onMenu: (path: string[], dir: boolean, x: number, y: number) => void;
@@ -1043,17 +1124,60 @@ function Level({
    */
   chosen: string | null;
 }) {
-  const [names, setNames] = useState<FolderEntryDto[]>([]);
-  const making = makingIn(naming.edit, root, path);
-  const top = path.length === 0;
+  /**
+   * The names of every folder on the screen, each with the reading of the section they were taken
+   * at.
+   *
+   * **One holding for the tree, not one per level.** The rows are drawn as one list, so what they
+   * are made of has to be in one place; the reading each level was taken at is what keeps a folder
+   * that has just been opened from asking again for the levels that were already read, and what
+   * makes every one of them ask again when the folder moves.
+   */
+  const [levels, setLevels] = useState<Record<string, { at: number; rows: FolderEntryDto[] }>>({});
+  // The name being made in this section, and the folder it is being made in.
+  const make = naming.edit?.kind === "make" && naming.edit.root === root ? naming.edit : null;
+  const making = make === null ? null : make.into.join("/");
+  const makingDir = make?.dir ?? false;
+  // Held across renders, because it is what the read below watches: rebuilt every time, it would
+  // run that effect on every render the panel makes for any reason at all.
+  const shown = useMemo(() => shownFolders(open), [open]);
+
+  useEffect(() => {
+    let alive = true;
+    for (const key of shown) {
+      if (levels[key]?.at === moved) continue;
+      void folderEntries(projectId, root, segmentsOf(key))
+        .then((rows) => {
+          if (alive) setLevels((was) => ({ ...was, [key]: { at: moved, rows } }));
+        })
+        .catch(() => {
+          if (alive) setLevels((was) => ({ ...was, [key]: { at: moved, rows: [] } }));
+        });
+    }
+    // A folder nobody is looking at any more is let go of, so that opening it again reads it: what
+    // is held here is what is on the screen, and a level kept for a folder that is shut is a list
+    // of names growing with every folder the reader has ever opened.
+    if (Object.keys(levels).some((key) => !shown.includes(key))) {
+      setLevels((was) => Object.fromEntries(
+        Object.entries(was).filter(([key]) => shown.includes(key)),
+      ));
+    }
+    return () => { alive = false; };
+    // `levels` is what the effect writes, and reading it here is only to skip what is already in
+    // hand — watching it would run this again for every level that came back.
+  }, [projectId, root, shown, moved]);
+
+  const lines = useMemo(
+    () => linesOf(levels, open, making, makingDir, []),
+    [levels, open, making, makingDir],
+  );
 
   /**
    * Walking the tree with the keys the tree pattern names, and no others (`AMB-D-780`).
    *
-   * **Read off the drawn rows rather than off the names held here.** What is next below an open
-   * folder is its first child, which is another level's list and not this one's — the document
-   * already holds them in the one order a reader sees, so the walk asks it instead of rebuilding
-   * that order out of state spread across every level.
+   * **Read off the drawn rows.** They are one list in the order a reader sees, so what is next below
+   * an open folder is the next row and nothing has to be rebuilt to find it. The folder holding a
+   * row is no box around it, so the way out of one is found by the row's path.
    *
    * A key with a modifier on it is not this tree's: the panel around it hears undo (`FilesPanel`),
    * and what the reader means by ⌘ or Ctrl is the machine's word, never a row's.
@@ -1083,12 +1207,16 @@ function Level({
         if (folded === "false") onOpen(key);
         else if (folded === "true") go(rows[at + 1]);
         break;
-      // And out of it: shut an open folder, or leave a row for the folder holding it.
-      case "ArrowLeft":
+      // And out of it: shut an open folder, or leave a row for the folder holding it — which is the
+      // row whose path is this one's without its last name. A row at the top of the tree has none.
+      case "ArrowLeft": {
         e.preventDefault();
-        if (folded === "true") onOpen(key);
-        else go(row.parentElement?.closest<HTMLElement>('[role="treeitem"]') ?? undefined);
+        if (folded === "true") { onOpen(key); break; }
+        if (here.length < 2) break;
+        const up = here.slice(0, -1).join("/");
+        go(rows.find((one) => one.dataset.key === up));
         break;
+      }
       case "Enter":
         e.preventDefault();
         if (folded === null) onRead(here);
@@ -1112,8 +1240,8 @@ function Level({
       default:
         // A letter typed on the tree is a way of walking it: the next row below whose name starts
         // that way, wrapping past the end, so that pressing the same letter again goes on to the
-        // one after it. Read off `data-key` and not the drawn row — an open folder's row holds the
-        // text of everything under it, and its own name is the last step of its path.
+        // one after it. Read off `data-key` and not the drawn row, because a row's own name is the
+        // last step of its path.
         if (e.key.length === 1 && e.key !== " ") {
           const want = e.key.toLowerCase();
           const named = (one: HTMLElement) =>
@@ -1133,87 +1261,77 @@ function Level({
     }
   };
 
-  useEffect(() => {
-    let alive = true;
-    void folderEntries(projectId, root, path)
-      .then((rows) => { if (alive) setNames(rows); })
-      .catch(() => { if (alive) setNames([]); });
-    return () => { alive = false; };
-    // `path` is rebuilt by the parent on every render, so the array itself is not what to watch.
-  }, [projectId, root, path.join("/"), moved]);
+  /** How far in a line is drawn. The step itself is the stylesheet's (`../styles/global.css`). */
+  const step = (depth: number) => ({ "--depth": depth } as CSSProperties);
 
   return (
     <ul
       className="files__list files__list--tree"
-      // The tree is the outermost list; every list inside one is a group of the row above it. The
-      // pair is what tells a reader being read to that they are in a tree at all, and how deep — the
-      // nesting a sighted reader takes off the indent (`AMB-D-780`).
-      role={top ? "tree" : "group"}
-      aria-label={top ? t("files.tree") : undefined}
-      onKeyDown={top ? onKey : undefined}
+      // One list, and every row of the tree a line of it. How deep a row is and how many it stands
+      // among are said on the row itself, which is the shape a reader being read to hears the same
+      // tree in (`AMB-D-780`).
+      role="tree"
+      aria-label={t("files.tree")}
+      onKeyDown={onKey}
     >
-      {/* The name being made, at the top of the folder it is being made in. Above the names rather
-          than among them: where it would sort is decided by what is typed, and a box that moved as
-          the letters arrived would be a box nobody could read what they had written in. */}
-      {making !== null && (
-        <li role="none">
-          <NameBox
-            initial=""
-            onName={(name) => folderMake(projectId, root, [...path, name], making.dir)}
-            onEnd={naming.end}
-          />
-        </li>
-      )}
-      {names.map((one, i) => {
-        // A folder answers for a drop, and what it answers for is everything drawn under it — which
-        // is the row itself and, once it is open, the level inside it. That is why the mark sits on
-        // the item and not on the button: a file row inside a folder resolves upwards to that
-        // folder, so dropping on a name means the same as dropping in the space beside it.
-        const here = [...path, one.name];
-        const key = here.join("/");
-        const into = one.isDir ? key : undefined;
-        // Folded folders answer for what is under them (`AMB-D-795`); an open one leaves that to the
-        // rows it is showing, and a file is only ever itself.
-        const mark = marks(here, one.isDir && !open.includes(key));
-        // The row is the box while its name is being written over. Drawn in place of the row rather
-        // than beside it: what is being changed is this name, and two of them on the screen at once
-        // would leave a reader wondering which one they were about to keep.
-        if (renaming(naming.edit, root, here)) {
+      {lines.map((line) => {
+        if (line.kind === "make") {
           return (
-            <li key={one.name} role="none">
+            <li key="make" role="none" style={step(line.depth)}>
               <NameBox
-                initial={one.name}
-                onName={(name) => folderRename(projectId, root, here, name)}
+                initial=""
+                onName={(name) => folderMake(
+                  projectId, root, [...segmentsOf(line.at), name], line.dir,
+                )}
                 onEnd={naming.end}
               />
             </li>
           );
         }
-        // The row is the item, and the name inside it is what is drawn. They are two elements
-        // because a folder's item also holds the level under it: one element being both the line
-        // and the box around the lines below would lay the two out side by side.
+        // The row is the box while its name is being written over. Drawn in place of the row rather
+        // than beside it: what is being changed is this name, and two of them on the screen at once
+        // would leave a reader wondering which one they were about to keep.
+        if (renaming(naming.edit, root, line.path)) {
+          return (
+            <li key={line.key} role="none" style={step(line.depth)}>
+              <NameBox
+                initial={line.name}
+                onName={(name) => folderRename(projectId, root, line.path, name)}
+                onEnd={naming.end}
+              />
+            </li>
+          );
+        }
+        // Folded folders answer for what is under them (`AMB-D-795`); an open one leaves that to the
+        // rows it is showing, and a file is only ever itself.
+        const mark = marks(line.path, line.isDir && !line.unfolded);
+        // The tree's one stop, on the row a reader last stood on — or, before they have stood on
+        // any, on the first row of the first level.
+        const stands = cursor === null ? line.depth === 0 && line.posinset === 1 : cursor === line.key;
+        // A folder answers for a drop, and so does a file's row — for the folder holding it, which
+        // is why dropping on a name means the same as dropping in the space beside it. The rows are
+        // siblings, so a file's row carries that folder itself rather than resolving up to it.
+        const into = line.isDir ? line.key : line.in;
+        const lands = landed(landing, root, line.isDir ? line.key : undefined);
         return (
           <li
-            key={one.name}
+            key={line.key}
             role="treeitem"
-            data-key={key}
+            data-key={line.key}
             data-root={root}
             data-into={into}
-            // Depth, length and place. All three because this tree is read a level at a time: what
-            // is not on the screen is not in the document either, so nothing but these says how far
-            // down a row is or how many it stands among.
-            aria-level={path.length + 1}
-            aria-setsize={names.length}
-            aria-posinset={i + 1}
-            aria-expanded={one.isDir ? open.includes(key) : undefined}
-            tabIndex={(cursor === null ? top && i === 0 : cursor === key) ? 0 : -1}
-            className={`files__item${landed(landing, root, into) ? " files__into" : ""}`}
-            // Stopped at each row, because an item inside an open folder is an item inside this one
-            // too: left to bubble, one press would open the row and every folder above it.
-            onClick={(e) => {
-              e.stopPropagation();
-              if (one.isDir) onOpen(key);
-              else onRead(here);
+            style={step(line.depth)}
+            // Depth, length and place. All three because the rows are one flat list: nothing about
+            // where a row sits in the document says how far down it is or how many it stands among.
+            aria-level={line.depth + 1}
+            aria-setsize={line.setsize}
+            aria-posinset={line.posinset}
+            aria-expanded={line.isDir ? line.unfolded : undefined}
+            tabIndex={stands ? 0 : -1}
+            className={`files__item${lands ? " files__into" : ""}`}
+            onClick={() => {
+              if (line.isDir) onOpen(line.key);
+              else onRead(line.path);
             }}
             // Stood on before the menu opens, because the row a menu is about is the row a reader
             // comes back to when it closes — and a right-click is not a press the browser moves the
@@ -1222,46 +1340,25 @@ function Level({
               e.preventDefault();
               e.stopPropagation();
               e.currentTarget.focus();
-              onMenu(here, one.isDir, e.clientX, e.clientY);
+              onMenu(line.path, line.isDir, e.clientX, e.clientY);
             }}
             // Where the tab stop follows to, however the row was reached — the arrows move the
             // focus and this is what moves the stop after it, so tabbing away and back returns to
             // the row a reader was on rather than to the top of the tree.
-            onFocus={(e) => { if (e.target === e.currentTarget) onCursor(key); }}
+            onFocus={(e) => { if (e.target === e.currentTarget) onCursor(line.key); }}
           >
-            {one.isDir
+            {line.isDir
               ? (
-                <>
-                  <span className={rowClass("files__dir", one.ignored, mark, chosen === key)}>
-                    <span className="files__twisty">
-                      <Icon name={open.includes(key) ? "chevronDown" : "chevronRight"} />
-                    </span>
-                    <span className="files__kind"><Icon name="folder" /></span>
-                    <span className="files__name">{one.name}</span>
+                <span className={rowClass("files__dir", line.ignored, mark, chosen === line.key)}>
+                  <span className="files__twisty">
+                    <Icon name={line.unfolded ? "chevronDown" : "chevronRight"} />
                   </span>
-                  {open.includes(key) && (
-                    <Level
-                      projectId={projectId}
-                      root={root}
-                      path={here}
-                      landing={landing}
-                      marks={marks}
-                      moved={moved}
-                      open={open}
-                      onOpen={onOpen}
-                      naming={naming}
-                      onRead={onRead}
-                      onMenu={onMenu}
-                      onTrash={onTrash}
-                      cursor={cursor}
-                      onCursor={onCursor}
-                      chosen={chosen}
-                    />
-                  )}
-                </>
+                  <span className="files__kind"><Icon name="folder" /></span>
+                  <span className="files__name">{line.name}</span>
+                </span>
               )
               : (
-                <span className={rowClass("files__file", one.ignored, mark, chosen === key)}>
+                <span className={rowClass("files__file", line.ignored, mark, chosen === line.key)}>
                   {/* Empty, and there anyway: it is what puts the name at the same place as the
                       name of the folder above it (`../styles/global.css`). */}
                   <span className="files__twisty" />
@@ -1269,7 +1366,7 @@ function Level({
                       whether it is a folder or a file, which is the whole of what has to be read
                       without reading the name; an icon per extension is a legend to learn. */}
                   <span className="files__kind"><Icon name="document" /></span>
-                  <span className="files__name">{one.name}</span>
+                  <span className="files__name">{line.name}</span>
                 </span>
               )}
           </li>

@@ -312,9 +312,8 @@ const megabytes = (n: number) =>
  * A control by the words on it: a button, or one of the tree's rows.
  *
  * The rows are items rather than buttons, because the whole tree carries one stop in the tab order
- * instead of one per row (`./FilesPanel`). What a row is called is read off its own line and not off
- * its text, since an open folder's text holds every name under it — matched on that, a press meant
- * for a file inside would land on the folder around it.
+ * instead of one per row (`./FilesPanel`). What a row is called is read off its own line rather than
+ * off the item holding it, which is where the name a row is found by is drawn.
  */
 const button = (text: string): HTMLElement | undefined =>
   [...container.querySelectorAll<HTMLElement>("button, [role=\"treeitem\"]")]
@@ -709,8 +708,7 @@ describe("the file face", () => {
     const stop = () =>
       [...container.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")]
         .find((one) => one.tabIndex === 0);
-    // By its own name and not by the text of the row: an open folder's text holds every name under
-    // it, so `main.rs` matched loosely is the `src` row around it.
+    // By its own name and not loosely, so that a row is found by the whole of what it is called.
     const named = (name: string) =>
       [...container.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")]
         .find((one) => labelOf(one) === name);
@@ -1765,13 +1763,33 @@ describe("the file face", () => {
     expect(at()).toBe("src");
   });
 
+  // Every row of every open folder is a line of one list. Nothing here is about how it looks — it is
+  // what lets a row in the middle be left out of the document without the ones below it going with
+  // it, which is what drawing only the rows on the screen asks for (`AMB-T-4108`).
+  it("draws the open rows as one list and not as a box inside a box", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowRight");
+    await settle();
+    const tree = container.querySelector("[role=\"tree\"]")!;
+    expect(container.querySelectorAll("[role=\"tree\"], [role=\"group\"]")).toHaveLength(1);
+    // The row inside the folder is the list's own line, not something the folder's row holds.
+    expect([...tree.children]).toHaveLength(3);
+    const folder = rows()[0]!;
+    expect(folder.querySelector("[role=\"treeitem\"]")).toBeNull();
+    expect(labelOf(folder)).toBe("src");
+    // And the step is the row's own, so that a row drawn on its own still stands where it belongs.
+    expect(rows().find((one) => labelOf(one) === "main.rs")!.style.getPropertyValue("--depth"))
+      .toBe("1");
+    expect(folder.style.getPropertyValue("--depth")).toBe("0");
+  });
+
   it("says how deep a row is, how many it stands among, and which one it is", async () => {
     await stood();
     await press(rows()[0]!, "ArrowRight");
     await settle();
     const inside = rows().find((one) => labelOf(one) === "main.rs")!;
-    // The tree is read a level at a time, so what is not on the screen is not in the document
-    // either — nothing but these says how far down a row is or how many it stands among.
+    // The rows are one flat list, so nothing about where a row sits in the document says how far
+    // down it is or how many it stands among.
     expect(inside.getAttribute("aria-level")).toBe("2");
     expect(inside.getAttribute("aria-setsize")).toBe("1");
     expect(inside.getAttribute("aria-posinset")).toBe("1");

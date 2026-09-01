@@ -134,6 +134,10 @@ type Naming = {
   /** End it. `made` says whether the folder now holds something it did not, which is what tells the
    *  levels under it to look again rather than wait for the host to say the folder moved. */
   end: (made: boolean) => void;
+  /** Begin renaming one row of this section, named by its path from the bound folder. It is here
+   *  rather than only on the row's menu because a reader walking the tree with the arrows has no
+   *  pointer in their hand to open one with. */
+  rename: (path: string[]) => void;
 };
 
 /** Whether an edit is the making of a name in this folder of this section. */
@@ -636,6 +640,10 @@ function FolderSection({
       if (made) setMoved((n) => n + 1);
       onEdit(null);
     },
+    // The bound folder itself is no row anybody may rename here — it is the binding, and where a
+    // binding is changed is the project's own settings. Said again on this road because the menu's
+    // road says it too, and the keyboard reaches rows the menu was never opened on.
+    rename: (path) => { if (path.length > 0) onEdit({ kind: "rename", root, path }); },
   };
 
   // The panel says which folder a name is being made in; unfolding the way to it is this section's
@@ -1081,7 +1089,34 @@ function Level({
         e.preventDefault();
         onTrash(here);
         break;
-      default: break;
+      // Renaming, from the keyboard. Enter cannot be the key here — on a tree row it already means
+      // open, which is the thing a reader presses it for; F2 is what the editors this tree is read
+      // beside all answer to, and it collides with nothing.
+      case "F2":
+        e.preventDefault();
+        naming.rename(here);
+        break;
+      default:
+        // A letter typed on the tree is a way of walking it: the next row below whose name starts
+        // that way, wrapping past the end, so that pressing the same letter again goes on to the
+        // one after it. Read off `data-key` and not the drawn row — an open folder's row holds the
+        // text of everything under it, and its own name is the last step of its path.
+        if (e.key.length === 1 && e.key !== " ") {
+          const want = e.key.toLowerCase();
+          const named = (one: HTMLElement) =>
+            (one.dataset.key ?? "").split("/").pop()?.toLowerCase() ?? "";
+          // From the row after this one, all the way round to this one — so a tree with one match
+          // stays where it is rather than reading as a key that did nothing.
+          for (let step = 1; step <= rows.length; step += 1) {
+            const to = rows[(at + step) % rows.length];
+            if (to !== undefined && named(to).startsWith(want)) {
+              e.preventDefault();
+              go(to);
+              break;
+            }
+          }
+        }
+        break;
     }
   };
 

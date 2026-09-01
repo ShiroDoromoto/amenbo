@@ -1654,6 +1654,48 @@ describe("the file face", () => {
     rows()[0]!.focus();
   }
 
+  it("begins a rename on the row the keyboard is standing on, with F2", async () => {
+    await stood();
+    expect(at()).toBe("src");
+
+    await press(rows()[0]!, "F2");
+    await settle();
+    // The row became the box, holding the name it had — a rename starts from what is there.
+    expect(namebox()?.value).toBe("src");
+  });
+
+  // The pattern every tree is walked by once it is longer than the screen. Read off the row's own
+  // path and not its drawn text: an open folder's row holds the text of everything under it.
+  it("jumps to the next row starting with the letter that was typed, and round again", async () => {
+    hoisted.entries = {
+      "": [
+        { name: "src", isDir: true, ignored: false },
+        { name: "a.md", isDir: false, ignored: false },
+        { name: "styles.css", isDir: false, ignored: false },
+      ],
+      src: [{ name: "main.rs", isDir: false, ignored: false }],
+    };
+    await drawOpen();
+    rows()[0]!.focus();
+    expect(at()).toBe("src");
+
+    // Forward from where the reader is standing, so the row they are on is not the answer.
+    await press(document.activeElement!, "s");
+    expect(at()).toBe("styles.css");
+
+    // And on round the end, back to the other one — pressing the letter again goes on rather than
+    // sticking on the first match.
+    await press(document.activeElement!, "s");
+    expect(at()).toBe("src");
+
+    // A letter nothing starts with leaves the reader where they were.
+    await press(document.activeElement!, "z");
+    expect(at()).toBe("src");
+
+    await press(document.activeElement!, "a");
+    expect(at()).toBe("a.md");
+  });
+
   it("carries one stop in the tab order for the whole tree, not one for every row", async () => {
     await stood();
     await press(rows()[0]!, "ArrowRight");

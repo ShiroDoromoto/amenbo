@@ -17,7 +17,16 @@ impl Driver<'_> {
                     Some(_) => self.resolve_key(with, "project")?.to_string(),
                     None => self.project_id.to_string(),
                 };
-                let v = self.run_json(&["decision", "add", "--title", title, "--project", &pid, "--json"])?;
+                // The decision side of the same flag, and the side where it also answers a demand: an
+                // axis the project requires is read at the acceptance, so filling it here is what keeps
+                // the refusal off somebody else's press.
+                let mut args: Vec<String> =
+                    vec!["decision".into(), "add".into(), "--title".into(), title.into(), "--project".into(), pid.clone(), "--json".into()];
+                if let Some(dim) = with.get("dimension").and_then(|v| v.as_str()) {
+                    args.push("--dim".into());
+                    args.push(format!("{dim}={}", req_str(with, "value")?));
+                }
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 let id = v["decision"]["id"].as_i64().ok_or("decision add did not report an id")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);

@@ -747,6 +747,17 @@ impl Instructor {
 
     fn action(&self, domain: Domain, op: &str, with: &Args) -> Result<String, String> {
         Ok(match (domain, op) {
+            // Classifying at creation is a flag, and this face has no form field for it: the board's
+            // new-card control takes a title. A road that means to walk it belongs on the terminal's
+            // side, so this fails closed rather than quietly instructing a reader to file the task and
+            // classify it afterwards — which is a different road, and one `classify-work-along-an-axis`
+            // already walks.
+            (Domain::Task, "create") if with.contains_key("dimension") => {
+                return Err(
+                    "the board's create takes a title alone — classifying at creation is the terminal's road"
+                        .to_string(),
+                )
+            }
             (Domain::Task, "create") => {
                 format!("Create a task titled \"{}\" on the board.", req(with, "title")?)
             }
@@ -816,6 +827,15 @@ impl Instructor {
                 "Open the task \"{}\" and attach a file named \"{}\" to it, from the attachments section on its pane.",
                 self.target_label(with),
                 file_named(with)?
+            ),
+            // The form's own selects, answered before the record goes in. It is one move rather than
+            // two: what is chosen is written with the decision, so the line sends a reader to the form
+            // and not to the pane afterwards.
+            (Domain::Decision, "create") if with.contains_key("dimension") => format!(
+                "Begin recording a decision titled \"{}\", choose \"{}\" for the category \"{}\" in the same form, and record it.",
+                req(with, "title")?,
+                req(with, "value")?,
+                req(with, "dimension")?
             ),
             // The form the demand bites at, where a project will not have a decision left blank on an
             // axis. The task side's twin is the button that ends a creation: both are controls the

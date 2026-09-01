@@ -274,7 +274,10 @@ const REGISTRY: &[OpSpec] = &[
     // the run does not itself stand in — a board with a card on it is a different screen from an
     // empty one, and which project it is drawn for is the whole question where a road walks to a
     // named project. Left out, it is the run's own project like everything else.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
+    // `dimension` / `value` classify it as it is created — the flag the create itself carries, which
+    // is a different road from filing the record and classifying it afterwards: what the two name is
+    // written in one transaction, so there is no moment where the record exists unclassified.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "create", required: &["title"], refs: &["project"], strings: &["title", "dimension", "value"], binds: true },
     // The other half of that creation. Between the two the task is on the board and in every listing,
     // out of the mailbox and refused a reservation, so a road that means to hand work over walks this
     // step — and one that reserves has to, or it meets the guard instead. It names the task and
@@ -432,7 +435,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "commit-rm", required: &["target", "sha"], refs: &["target"], strings: &["sha"], binds: false },
     // `project` names the shelf it is filed on, for a scenario about where a record ends up; left
     // out, it is the run's own project like everything else.
-    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
+    // Classified as it is recorded, the same way a task is — and on this side it is also how a
+    // required axis is answered before the acceptance reads it, since a decision has no second stage
+    // for its writer to be turned away at.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &["project"], strings: &["title", "dimension", "value"], binds: true },
     // A decision's own life: the body is edited while it is still proposed, accepting freezes it,
     // and the link is what makes it a task's premise.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "edit", required: &["target", "body"], refs: &["target"], strings: &["body"], binds: false },

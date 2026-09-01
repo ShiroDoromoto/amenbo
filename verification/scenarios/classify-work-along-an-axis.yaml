@@ -182,6 +182,27 @@ steps_cli:
       field: title
       equals: SCENARIO SEED — the printed piece
 
+  # And the other way in: filed as it is created, rather than created and then filed. It is one
+  # command and one transaction, so there is no moment where the record is on the board carrying no
+  # answer — which is the whole difference from the pair above, and the reason it is walked rather
+  # than assumed to be the same road.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — filed as it was made
+      dimension: medium
+      value: print
+    as: born_filed
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:medium=print"
+      target: born_filed
+      present: true
+
   # One axis, and not only tasks on it. A decision is filed under the same axis with the same values,
   # which is the whole of what "one classification model" means — a second set of values raised for
   # decisions would be two models wearing one name. It is read back the way the tasks above are, through
@@ -193,6 +214,27 @@ steps_cli:
     with:
       title: SCENARIO SEED — print goes to the same house
     as: ruling
+
+  # The same create-and-file on this side, because it is the same flag and has to answer alike. It
+  # matters more here than on the board: an axis a project requires is read where a decision is
+  # settled, and that press belongs to whoever accepts it — so filing at the create is the only moment
+  # its writer has.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — recorded already filed
+      dimension: medium
+      value: web
+    as: born_filed_ruling
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "dim:medium=web"
+      target: born_filed_ruling
+      present: true
 
   - type: action
     domain: dimension

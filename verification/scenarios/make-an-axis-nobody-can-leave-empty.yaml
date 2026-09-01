@@ -463,6 +463,32 @@ steps_gui:
       title: SCENARIO SEED — recorded with the answer missing
       refused: invalid_decision_required_dimension
 
+  # Answered where the form asks, and the same control that was shut lets the record through. The
+  # answer goes in with the decision rather than after it, which is what the demand being met at the
+  # form means at all — and the settling that a blank one would have been turned away at now passes.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — recorded with the answer given
+      dimension: Medium
+      value: print
+    as: ruling
+
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: ruling
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: ruling
+      field: status
+      equals: accepted
+
   # And the other control this face holds: the value the answer was given cannot simply be removed
   # while the answer stands on it, so the manager asks where the tasks go and carries them there. A
   # terminal names the destination on the command line; here it is a control that has to be found, and

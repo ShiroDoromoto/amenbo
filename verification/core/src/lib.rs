@@ -472,6 +472,19 @@ const REGISTRY: &[OpSpec] = &[
     // Narrowing takes no filing away, only the offer, which is why a road that walks it reads the
     // filings back afterwards rather than treating the narrowing as a delete.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "applies-to", required: &["dimension", "side"], refs: &[], strings: &["dimension", "side"], binds: false },
+    // Which axis is the project's time axis — the role that makes a value's period mean anything, and
+    // that puts the era containing today on a task and a decision as each is created. It is a flag like
+    // the two above it, `time_axis: false` taking the role away again, and it is a move of its own
+    // rather than an arg on `create` for the reason `rekey` is: the screen names an axis the time axis
+    // from the manager, on an axis that already exists, so a road that wrote the role at birth could
+    // not be walked there.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "time-axis", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
+    // The window one value of that axis covers — `start` and `end` as `YYYY-MM-DD`, either one alone
+    // leaving that side open. A period is payload of the time-axis role and not an attribute any value
+    // carries, so this is written after the role is named, and on that axis's values alone. Like the
+    // role, it is set on a value that already exists: that is the door the screen has, its date fields
+    // sitting on the value in the manager.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "period", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value", "start", "end"], binds: false },
     // Renaming that key afterwards — the axis's own, or one of its values' where `value` names one.
     // It is a move of its own rather than an arg on the ops above, because naming a key at birth and
     // renaming one are two different doors: the screen has only the second, so a road that wrote the
@@ -2674,6 +2687,14 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Dimension, "value-add"),
     (Domain::Dimension, "set"),
     (Domain::Dimension, "show-on-card"),
+    // And which axis is the project's time axis, with the windows its values already cover. A screen
+    // road about the era is watching the era arrive on a record nobody was asked about, and that
+    // reader set the axis up on some earlier day — designating it is a road of its own, on the manager,
+    // and one walked here would prove that road rather than this one. A window is the payload of the
+    // same role, so a value that already carries one is part of the same world; a road that means to
+    // watch a window being written still writes that one itself.
+    (Domain::Dimension, "time-axis"),
+    (Domain::Dimension, "period"),
     // And the record on the other side, for a road that reads across both. A screen narrowed to one
     // project has to have a decision standing in another to leave out, and which project a decision
     // was filed under is nothing such a road proves — recording one is a road of its own.

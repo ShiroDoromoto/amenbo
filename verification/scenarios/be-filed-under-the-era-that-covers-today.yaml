@@ -1,0 +1,321 @@
+# Every other axis is a question somebody answers. The time axis answers itself: the era whose window
+# holds today goes onto a task and onto a decision as each one is made, which is how an axis a project
+# demands an answer on is never the thing holding a creation up. So what is walked here is not only
+# that the default lands, but that it lands exactly where it is earned — an era whose window covers
+# today, an axis nobody classified by hand, and a role the axis actually carries.
+#
+# The world is an axis already named the project's time axis, with one era behind it and one era whose
+# window is not written yet. Designating the axis is a road of its own on the manager, and a road that
+# walked it here would prove that one instead — but the window still to be written is this road's, on
+# both sides: the terminal writes it and reads what the next create carries, and the screen writes it
+# in the date field a reader writes it in and then reads the era off a card nobody was asked to fill.
+id: be-filed-under-the-era-that-covers-today
+title: The era whose window covers today is filed onto a task and a decision as each is made, and an era named by hand wins over it
+description: >
+  Give the era that is still running the day it started, and then make a task and a decision without
+  naming any era. Both come back filed under it, read through the filter rather than off a field, and
+  on screen the card carries it without the reader having been asked. The default is then held to its
+  edges: a record made while no window covered today carries nothing, and still carries nothing after
+  the window is written; a writer who names the closed era keeps it; the filing comes back off,
+  because this is automation and not a demand; and an axis the time-axis role is taken away from stops
+  writing anything at all.
+given:
+  # The axis a reader set up on some earlier day: named the project's time axis, carrying the era that
+  # closed years ago and the era that is still running. Only the second one's window is missing, which
+  # is what either road opens by writing.
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Era
+
+  - type: action
+    domain: dimension
+    op: time-axis
+    with:
+      dimension: Era
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Era
+      value: Founding
+
+  - type: action
+    domain: dimension
+    op: period
+    with:
+      dimension: Era
+      value: Founding
+      start: "2000-01-01"
+      end: "2000-12-31"
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Era
+      value: Ongoing
+
+  # The axis goes on the cards, because the screen's half of this road reads the era off one.
+  - type: action
+    domain: dimension
+    op: show-on-card
+    with:
+      dimension: Era
+
+  # One piece of ordinary work already on the board — what the screen road needs to arrive at columns
+  # rather than at the loop an empty project draws, since the way to add a card is in a column head.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the work already standing on the board
+    as: already_there
+
+steps_cli:
+  # Two eras on the axis and neither window covering today: the closed one is behind us, and the
+  # running one has no day written on it yet. So a task made now is filed under nothing — the default
+  # is a value the store works out from the windows, never the first value it finds on the axis.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — made while no window covered today
+    as: before_any_window
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Era=none"
+      target: before_any_window
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "time_axis:Founding"
+      target: before_any_window
+      present: false
+
+  # The day the running era began, and no end: an open window is what an era still running is written
+  # as. It covers today, and it will still cover today on whatever day this road is walked — a window
+  # closed on a date somebody typed would only cover today until it did not.
+  - type: action
+    domain: dimension
+    op: period
+    with:
+      dimension: Era
+      value: Ongoing
+      start: "2001-01-01"
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — filed under today's era without being asked
+    as: filed_by_itself
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "time_axis:Ongoing"
+      target: filed_by_itself
+      present: true
+
+  # The same answer through the general key. `time_axis:` is sugar for whichever axis carries the role,
+  # not for an axis called anything in particular, so asking both ways is what says the sugar reaches
+  # the very axis the default wrote on.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Era=Ongoing"
+      target: filed_by_itself
+      present: true
+
+  # The default is written as a record is made and never afterwards: the task from before the window
+  # was written is left where it stands. A backfill is a migration somebody runs, not something a
+  # window reaches back and does.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "time_axis:Ongoing"
+      target: before_any_window
+      present: false
+
+  # Named at the create, and the writer's era stands. The default is offered to an axis nobody
+  # answered, never written over an answer that was given.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — filed back into the founding era by hand
+      dimension: Era
+      value: Founding
+    as: backdated
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "time_axis:Founding"
+      target: backdated
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "time_axis:Ongoing"
+      target: backdated
+      present: false
+
+  # And it comes back off. What fills the axis is automation and not a demand, so a task can end up
+  # standing outside every era — the same as any other filing taken away.
+  - type: action
+    domain: dimension
+    op: unset
+    with:
+      target: filed_by_itself
+      dimension: Era
+      value: Ongoing
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "time_axis:Ongoing"
+      target: filed_by_itself
+      present: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Era=none"
+      target: filed_by_itself
+      present: true
+
+  # A decision is filed on the same axes a task is, and the era arrives on it the same way — as it is
+  # recorded, without being asked for. It matters more on this side: the demand for an answer is read
+  # where a decision is accepted, so an era nobody wrote would turn every acceptance away for a value
+  # the store could have settled itself.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — recorded inside today's era
+    as: ruling
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "time_axis:Ongoing"
+      target: ruling
+      present: true
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — recorded against the founding era
+      dimension: Era
+      value: Founding
+    as: backdated_ruling
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "time_axis:Founding"
+      target: backdated_ruling
+      present: true
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "time_axis:Ongoing"
+      target: backdated_ruling
+      present: false
+
+  # The role is what does all of this, and taking it away is what says so: the windows are still
+  # written on the values, and with no axis designated as the project's time axis there is no era for a
+  # create to read. The axis goes back to being one more question nobody answered.
+  - type: action
+    domain: dimension
+    op: time-axis
+    with:
+      dimension: Era
+      time_axis: false
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — made after the role was taken away
+    as: after_the_role_left
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Era=none"
+      target: after_the_role_left
+      present: true
+
+steps_gui:
+  # Arrive at the board rather than assume it: what a card draws is drawn on the opening, and the era
+  # this road is about is written onto a card at the moment the work is filed.
+  - type: action
+    domain: project
+    op: open
+    with:
+      project: cwd
+
+  # The same day written where a reader writes it — the date field on the value's own row, under the
+  # axis that carries the role. This is the whole set-up the screen half needs: from here on nobody
+  # answers anything about eras.
+  - type: action
+    domain: dimension
+    op: period
+    with:
+      dimension: Era
+      value: Ongoing
+      start: "2001-01-01"
+
+  # The board's way of making work takes a title and nothing else — there is no era to answer for, and
+  # that is the point rather than a gap. What the next step reads is what arrived without being asked.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — carded with an era nobody asked for
+    as: filed_by_itself
+
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: filed_by_itself
+      dimension: Era
+      value: Ongoing
+      present: true
+
+  # The era covering today and not simply the first era the axis offers: a build defaulting to whatever
+  # value stands at the top would put the founding era here.
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: filed_by_itself
+      dimension: Era
+      value: Founding
+      present: false

@@ -304,8 +304,8 @@ one build produces alongside the app and one installer carries with it. The exec
 asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
 The screen tool is the input primitive too, called by whoever drives the screen between steps: its
-`find` / `click-named` / `right-click-named` / `click` / `right-click` / `dblclick` / `type` / `key` /
-`set-date` carry out the action steps the
+`find` / `click-named` / `right-click-named` / `click` / `right-click` / `dblclick` / `drag` /
+`type` / `key` / `scroll` / `set-date` carry out the action steps the
 checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
 at all — the proof it waits for is a shot it throws away, since an app the system has taken up is
 not yet an app with a window, and a walk that started between the two would fail on its first step.
@@ -337,6 +337,15 @@ pixels. Anything wide swallows both, which is why aiming works until it is aimed
 the board's `＋` and the view tabs read as unreachable elements until the arithmetic was suspected
 instead.
 
+**A page is walked with `scroll <pid> <dx> <dy>`, not with the keys.** Page Down is the one scrolling
+key that reaches the webview — Page Up, Home, End and the arrows were posted the same way and nothing
+moved — so a road that went down a pane had no way back up to what it had passed, and reopening the
+pane does not reset it either, the position being kept. A wheel arrives where those keys do not.
+Positive is the way back: `scroll <pid> 0 800` goes 800 points up the page, and toward its left
+across. The pointer is put in the middle of the window first, since a wheel lands where it is
+pointing rather than on whatever holds focus; something else on the screen that scrolls is reached by
+clicking into it and scrolling after.
+
 **A day goes in through `set-date <pid> <name> <yyyy-mm-dd>` rather than through the keys.** A date
 field is one control with three numbered parts in it, and typing into it is a digit at a time — but
 every digit that leaves the value a valid day makes the app commit and redraw the field, and the
@@ -366,8 +375,8 @@ cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml 
 
 A screen road is walked by somebody, always. The run prints the step it is about to shoot and waits
 for a line on stdin; between the two, the screen belongs to whoever is driving — carry the step out
-by hand, or with the screen tool's `click-named` / `type` / `key` / `set-date`, and send the line once the screen
-is standing where the step says it should. There is no flag for running it any other way.
+by hand, or with the screen tool's `click-named` / `type` / `key` / `scroll` / `set-date`, and send the line
+once the screen is standing where the step says it should. There is no flag for running it any other way.
 
 **The hand-over comes before the step, the first one included.** That is what lets a road open with a
 check: a run starts on a store made for it a moment ago, so the screen a launch leaves behind is

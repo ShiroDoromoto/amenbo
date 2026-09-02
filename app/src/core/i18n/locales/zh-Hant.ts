@@ -585,6 +585,7 @@ export const zhHant: Translation = {
     "files.reveal": "在檔案管理器中顯示",
     "files.trash": "移到垃圾桶",
     "files.trashAsk": "要把 {name} 移到垃圾桶嗎？",
+    "files.trashAskMany.other": "要把 {n} 個項目移到垃圾桶嗎？",
     "files.trashUndoable": "檔案會進入這台電腦的垃圾桶，復原可以還原。",
     "files.trashQuiet": "不再詢問",
     "files.trashGo": "移動",

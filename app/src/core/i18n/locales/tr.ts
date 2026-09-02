@@ -585,6 +585,7 @@ export const tr: Translation = {
     "files.reveal": "Dosya yöneticisinde göster",
     "files.trash": "Çöp kutusuna taşı",
     "files.trashAsk": "{name} çöp kutusuna taşınsın mı?",
+    "files.trashAskMany.one": "{n} öğe çöp kutusuna taşınsın mı?", "files.trashAskMany.other": "{n} öğe çöp kutusuna taşınsın mı?",
     "files.trashUndoable": "Dosya bu bilgisayarın çöp kutusuna gider ve geri alınabilir.",
     "files.trashQuiet": "Bir daha sorma",
     "files.trashGo": "Taşı",

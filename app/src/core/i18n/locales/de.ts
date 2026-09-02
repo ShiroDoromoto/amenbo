@@ -595,6 +595,7 @@ export const de: Translation = {
     "files.reveal": "Im Dateimanager zeigen",
     "files.trash": "In den Papierkorb verschieben",
     "files.trashAsk": "{name} in den Papierkorb verschieben?",
+    "files.trashAskMany.one": "{n} Element in den Papierkorb verschieben?", "files.trashAskMany.other": "{n} Elemente in den Papierkorb verschieben?",
     "files.trashUndoable": "Die Datei landet im Papierkorb dieses Rechners und lässt sich zurückholen.",
     "files.trashQuiet": "Nicht mehr nachfragen",
     "files.trashGo": "Verschieben",

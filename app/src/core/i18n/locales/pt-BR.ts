@@ -607,6 +607,7 @@ export const ptBR: Translation = {
     "files.reveal": "Mostrar no gerenciador de arquivos",
     "files.trash": "Mover para a lixeira",
     "files.trashAsk": "Mover {name} para a lixeira?",
+    "files.trashAskMany.one": "Mover {n} item para a lixeira?", "files.trashAskMany.many": "Mover {n} itens para a lixeira?", "files.trashAskMany.other": "Mover {n} itens para a lixeira?",
     "files.trashUndoable": "Vai para a lixeira deste computador, e desfazer traz de volta.",
     "files.trashQuiet": "Não perguntar novamente",
     "files.trashGo": "Mover",

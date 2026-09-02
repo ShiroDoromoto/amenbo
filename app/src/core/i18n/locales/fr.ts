@@ -606,6 +606,7 @@ export const fr: Translation = {
     "files.reveal": "Afficher dans le gestionnaire de fichiers",
     "files.trash": "Mettre à la corbeille",
     "files.trashAsk": "Mettre {name} à la corbeille ?",
+    "files.trashAskMany.one": "Mettre {n} élément à la corbeille ?", "files.trashAskMany.many": "Mettre {n} éléments à la corbeille ?", "files.trashAskMany.other": "Mettre {n} éléments à la corbeille ?",
     "files.trashUndoable": "Le fichier va dans la corbeille de cet ordinateur, et annuler le ramène.",
     "files.trashQuiet": "Ne plus demander",
     "files.trashGo": "Mettre à la corbeille",

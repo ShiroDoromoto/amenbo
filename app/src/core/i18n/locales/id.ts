@@ -588,6 +588,7 @@ export const id: Translation = {
     "files.reveal": "Tampilkan di pengelola berkas",
     "files.trash": "Pindahkan ke tempat sampah",
     "files.trashAsk": "Pindahkan {name} ke tempat sampah?",
+    "files.trashAskMany.other": "Pindahkan {n} item ke tempat sampah?",
     "files.trashUndoable": "Berkas masuk ke tempat sampah komputer ini, dan urungkan mengembalikannya.",
     "files.trashQuiet": "Jangan tanya lagi",
     "files.trashGo": "Pindahkan",

@@ -585,6 +585,7 @@ export const zhHans: Translation = {
     "files.reveal": "在文件管理器中显示",
     "files.trash": "移到回收站",
     "files.trashAsk": "把 {name} 移到回收站吗？",
+    "files.trashAskMany.other": "把 {n} 项移到回收站吗？",
     "files.trashUndoable": "文件会进入这台电脑的回收站，撤销可以还原。",
     "files.trashQuiet": "不再询问",
     "files.trashGo": "移动",

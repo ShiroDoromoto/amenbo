@@ -606,6 +606,7 @@ export const it: Translation = {
     "files.reveal": "Mostra nel gestore file",
     "files.trash": "Sposta nel cestino",
     "files.trashAsk": "Spostare {name} nel cestino?",
+    "files.trashAskMany.one": "Spostare {n} elemento nel cestino?", "files.trashAskMany.many": "Spostare {n} elementi nel cestino?", "files.trashAskMany.other": "Spostare {n} elementi nel cestino?",
     "files.trashUndoable": "Va nel cestino di questo computer, e annulla lo riporta indietro.",
     "files.trashQuiet": "Non chiedere più",
     "files.trashGo": "Sposta",

@@ -239,7 +239,7 @@ vi.mock("../core/reads", async (importOriginal) => ({
 }));
 
 import { FilesPanel } from "./FilesPanel";
-import { type CmdError, errLabel, formatNumber, t, tf } from "../core/i18n";
+import { type CmdError, errLabel, formatNumber, t, tf, tn } from "../core/i18n";
 import { subscribeNotice } from "../core/notice";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -1851,11 +1851,11 @@ describe("the file face", () => {
   // what is tested is that they mean here what they mean there.
 
   /** A flat folder of four names, drawn and stood on. */
-  async function four() {
+  async function four(props: Partial<Props> = {}) {
     hoisted.entries = {
       "": ["a.md", "b.md", "c.md", "d.md"].map((name) => ({ name, isDir: false, ignored: false })),
     };
-    await drawOpen();
+    await drawOpen(props);
     rows()[0]!.focus();
   }
 
@@ -2015,6 +2015,152 @@ describe("the file face", () => {
     await press(rows()[0]!, "ArrowRight");
     await settle();
     expect(picked()).toEqual(["main.rs"]);
+  });
+
+  // ── acting on what is picked out ────────────────────────────────────────────────────────────
+  // Picking rows out is only worth anything if the doors act on them (`AMB-T-4230`). Which rows a
+  // door is about is the same answer everywhere: the ones picked out where the press was aimed at
+  // one of them, and the row it was aimed at alone where it was not.
+
+  /** Two of the four rows picked out, the way a reader gathers them one at a time. */
+  async function twoPicked() {
+    await four();
+    await clickWith(rowFor("a.md"), { ctrlKey: true });
+    await clickWith(rowFor("c.md"), { ctrlKey: true });
+    expect(picked()).toEqual(["a.md", "c.md"]);
+  }
+
+  it("copies every row that is picked out, in one press of the key", async () => {
+    await twoPicked();
+    await pressOn(rowFor("c.md"), "c");
+    expect(hoisted.asked).toContain(`clip-copy:${ROOT}:a.md,c.md`);
+  });
+
+  it("copies the one row a key was pressed on, where it is not one of the picked", async () => {
+    await twoPicked();
+    // The press is aimed at a row outside the selection: what a reader means by it is that row.
+    await pressOn(rowFor("b.md"), "c");
+    expect(hoisted.asked).toContain(`clip-copy:${ROOT}:b.md`);
+  });
+
+  it("copies every picked row off the menu as well as off the key", async () => {
+    await twoPicked();
+    await menuOn(rowFor("c.md"));
+    await click(button(t("files.copyPath")));
+    expect(hoisted.asked).toContain(`clip-copy:${ROOT}:a.md,c.md`);
+  });
+
+  it("puts down the selection when the menu is opened away from it", async () => {
+    await twoPicked();
+    await menuOn(rowFor("b.md"));
+    expect(picked()).toEqual(["b.md"]);
+    await click(button(t("files.copyPath")));
+    expect(hoisted.asked).toContain(`clip-copy:${ROOT}:b.md`);
+  });
+
+  it("bins every picked row in one press, and counts them in the question", async () => {
+    await twoPicked();
+    await menuOn(rowFor("a.md"));
+    await click(button(t("files.trash")));
+    // Counted rather than named: five names in front of a press already decided on is reading
+    // matter, and what a reader checks is how many.
+    expect(document.body.textContent).toContain(tn("files.trashAskMany", 2));
+    await click(anyButton(t("files.trashGo")));
+    // One press however many rows, which is what makes undo put back what the press took away.
+    expect(hoisted.asked).toContain(`trash:${ROOT}:a.md,c.md`);
+  });
+
+  it("names the one row where a bin is about one row", async () => {
+    await four();
+    await menuOn(rowFor("b.md"));
+    await click(button(t("files.trash")));
+    expect(document.body.textContent).toContain(tf("files.trashAsk", { name: "b.md" }));
+  });
+
+  it("bins every picked row from the key that means delete", async () => {
+    await twoPicked();
+    await press(rowFor("c.md")!, "Delete");
+    await click(anyButton(t("files.trashGo")));
+    expect(hoisted.asked).toContain(`trash:${ROOT}:a.md,c.md`);
+  });
+
+  it("opens every picked row with the machine's own answer", async () => {
+    await twoPicked();
+    await menuOn(rowFor("a.md"));
+    await click(button(t("files.openWith")));
+    await settle();
+    expect(hoisted.asked).toContain(`open:${ROOT}:a.md`);
+    expect(hoisted.asked).toContain(`open:${ROOT}:c.md`);
+  });
+
+  it("opens every picked row with the one application the reader chose", async () => {
+    hoisted.apps = [{ name: "Zed", path: "/Applications/Zed.app", usual: true }];
+    await twoPicked();
+    await menuOn(rowFor("a.md"));
+    await click(button(t("files.chooseApp")));
+    // The list is asked about the row the menu was opened on: what a person choosing an application
+    // for two files has chosen is one application.
+    expect(hoisted.asked).toContain(`ask:${ROOT}:a.md`);
+    await click(button(tf("files.appUsual", { name: "Zed" })));
+    await settle();
+    expect(hoisted.asked).toContain(`with:${ROOT}:a.md:/Applications/Zed.app`);
+    expect(hoisted.asked).toContain(`with:${ROOT}:c.md:/Applications/Zed.app`);
+  });
+
+  it("shows the picked rows where they live, one press per folder", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowRight");
+    await settle();
+    // Two rows of the bound folder and one inside `src`: three rows, two folders.
+    await clickWith(rowFor("main.rs"), { ctrlKey: true });
+    await clickWith(rowFor("a.md"), { ctrlKey: true });
+    expect(picked()).toEqual(["main.rs", "a.md"]);
+
+    await menuOn(rowFor("a.md"));
+    await click(button(t("files.reveal")));
+    await settle();
+    expect(hoisted.asked).toContain(`reveal:${ROOT}:src/main.rs`);
+    expect(hoisted.asked).toContain(`reveal:${ROOT}:a.md`);
+  });
+
+  it("asks the file manager once for rows that live in the same folder", async () => {
+    await twoPicked();
+    await menuOn(rowFor("a.md"));
+    await click(button(t("files.reveal")));
+    await settle();
+    // Showing a row is showing the folder holding it, and a file manager selects one row at a time:
+    // two presses on one folder would be the second undoing the first.
+    expect(hoisted.asked.filter((one) => one.startsWith("reveal:"))).toEqual([`reveal:${ROOT}:a.md`]);
+  });
+
+  it("draws no door that names one thing while several rows are picked out", async () => {
+    await four({ onHandOver: () => {} });
+    await clickWith(rowFor("a.md"), { ctrlKey: true });
+    await menuOn(rowFor("a.md"));
+    // One row: naming it and handing its path to a pane are both things to do.
+    expect(button(t("files.rename"))).toBeDefined();
+    expect(button(t("files.pasteFilePath"))).toBeDefined();
+
+    await click(button(t("files.rename")));
+    await clickWith(rowFor("c.md"), { ctrlKey: true });
+    await menuOn(rowFor("c.md"));
+    // Two: a rename over both would be a press to refuse afterwards, and a pane is handed one path.
+    expect(button(t("files.rename"))).toBeUndefined();
+    expect(button(t("files.pasteFilePath"))).toBeUndefined();
+    // What acts on several is still there.
+    expect(button(t("files.copyPath"))).toBeDefined();
+    expect(button(t("files.trash"))).toBeDefined();
+  });
+
+  it("bins the file being read and not what is picked out behind it", async () => {
+    await twoPicked();
+    // The file on the screen is one nobody picked out: the reading face is about one file.
+    await click(rowFor("b.md"));
+    await settle();
+    // The bin on the reading face, which wears the word as its title rather than on its face.
+    await click(container.querySelector(".files__trash"));
+    await click(anyButton(t("files.trashGo")));
+    expect(hoisted.asked).toContain(`trash:${ROOT}:b.md`);
   });
 
   // ── only what is in view ────────────────────────────────────────────────────────────────────

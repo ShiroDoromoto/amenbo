@@ -611,6 +611,7 @@ export const uk: Translation = {
     "files.reveal": "Показати у файловому менеджері",
     "files.trash": "Перемістити до кошика",
     "files.trashAsk": "Перемістити {name} до кошика?",
+    "files.trashAskMany.one": "Перемістити {n} об'єкт до кошика?", "files.trashAskMany.few": "Перемістити {n} об'єкти до кошика?", "files.trashAskMany.many": "Перемістити {n} об'єктів до кошика?", "files.trashAskMany.other": "Перемістити {n} об'єкта до кошика?",
     "files.trashUndoable": "Файл потрапить до кошика цього комп'ютера, і скасування поверне його.",
     "files.trashQuiet": "Більше не запитувати",
     "files.trashGo": "Перемістити",

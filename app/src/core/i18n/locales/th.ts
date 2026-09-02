@@ -588,6 +588,7 @@ export const th: Translation = {
     "files.reveal": "แสดงในตัวจัดการไฟล์",
     "files.trash": "ย้ายไปถังขยะ",
     "files.trashAsk": "ย้าย {name} ไปถังขยะไหม",
+    "files.trashAskMany.other": "ย้าย {n} รายการไปถังขยะไหม",
     "files.trashUndoable": "ไฟล์จะไปอยู่ในถังขยะของเครื่องนี้ และเลิกทำแล้วจะกลับมา",
     "files.trashQuiet": "ไม่ต้องถามอีก",
     "files.trashGo": "ย้าย",

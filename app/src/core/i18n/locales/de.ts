@@ -664,6 +664,7 @@ export const de: Translation = {
     invalid_dimension_slug_shape: "„{slug}“ eignet sich nicht als Schlüssel — höchstens {max} Kleinbuchstaben, Ziffern und Bindestriche, beginnend mit einem Buchstaben.",
     invalid_dimension_slug_taken: "„{slug}“ ist hier bereits der Schlüssel von etwas anderem — wählen Sie einen anderen.",
     invalid_dimension_name_whitespace: "„{name}“ eignet sich nicht als Name — lassen Sie die Leerzeichen weg oder schreiben Sie stattdessen einen Bindestrich.",
+    invalid_dimension_multi_time_axis: "„{name}“ ist die Zeitachse, und eine Zeitachse hält immer nur einen Wert — nehmen Sie ihr die Zeitachsen-Rolle, oder lassen Sie sie einfach auswählbar.",
     invalid_task_required_dimension: "Diese Aufgabe trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
     invalid_decision_required_dimension: "Diese Entscheidung trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
     invalid_dimension_values_unordered:

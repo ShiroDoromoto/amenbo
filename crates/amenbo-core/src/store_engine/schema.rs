@@ -679,9 +679,10 @@ datasets! {
 
     // The unified dimension model: three datasets that put every classification axis on one mechanism.
     // Every axis is a plain user-editable one — there are no built-in fixed axes (no `kind`), no locked
-    // values, no stable keys (no `builtin_key`). There are no tags either (multi-select, unordered): a
-    // dimension is single-select, so it is not a tag, and a free-form topic name is found through the word
-    // index instead (`search`). `ordered` says whether the axis's values have an order;
+    // values, no stable keys (no `builtin_key`). There are still no tags: `cardinality` is the axis's own
+    // answer to how many of its values one record may hold (`AMB-D-826`), so an axis that admits several
+    // is a declared set of choices and not a free-form topic name — that is still found through the word
+    // index (`search`). `ordered` says whether the axis's values have an order;
     // `role` is what nominates one axis as the project's time axis; `show_on_card` is whether a task's
     // value on this axis belongs on its card (a property of the axis, not of the device — `AMB-D-651`);
     // `required` is whether a task may finish its creation without a value here (`AMB-D-734`);
@@ -690,9 +691,9 @@ datasets! {
         project_id: fk("project", "RESTRICT"),
         name: col(REQ),
         notes: col(REQ),
-        // `single` is the only value the model admits; the column stays so reviving multi-select is
-        // just adding an enum branch — here and in `model::DimensionCardinality`.
-        cardinality: enum_col("single"),
+        // How many of the axis's values one record may hold (`AMB-D-826`). `single` is where every axis
+        // starts; `multi` is the axis's own answer that a record may sit on several of its values at once.
+        cardinality: enum_col("single", "multi"),
         ordered: bool_col,
         role: enum_col("none", "time_axis"),
         show_on_card: bool_col,

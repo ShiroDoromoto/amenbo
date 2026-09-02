@@ -651,6 +651,7 @@ export const th: Translation = {
     invalid_dimension_slug_shape: "“{slug}” ใช้เป็นคีย์ไม่ได้ — ใช้ตัวพิมพ์เล็ก ตัวเลข และยัติภังค์ ไม่เกิน {max} ตัว และขึ้นต้นด้วยตัวอักษร",
     invalid_dimension_slug_taken: "“{slug}” เป็นคีย์ของสิ่งอื่นที่นี่อยู่แล้ว — เลือกคีย์อื่น",
     invalid_dimension_name_whitespace: "“{name}” ใช้เป็นชื่อไม่ได้ — เอาช่องว่างออก หรือใช้ยัติภังค์แทน",
+    invalid_dimension_multi_time_axis: "“{name}” คือแกนเวลา และแกนเวลาถือค่าได้ทีละค่าเดียว — ถอดบทบาทแกนเวลาออก หรือปล่อยให้เลือกได้ค่าเดียว",
     invalid_task_required_dimension: "งานนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
     invalid_decision_required_dimension: "การตัดสินใจนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
     invalid_dimension_values_unordered: "ค่าของหมวดนี้ไม่มีลำดับ จึงจัดเรียงใหม่ไม่ได้",

@@ -4231,7 +4231,9 @@ pub fn task_dimension_assignments(conn: &Connection, task_id: i64) -> Result<Vec
 /// two values would be the join done the long way round.
 ///
 /// Ordered by the **axis**, not by when the assignment was made, so two tasks classified in a different
-/// order still read down the same columns.
+/// order still read down the same columns. A multi-select axis contributes one pair per value it was
+/// answered with (`AMB-D-826`), and those sort by the value — the axis's own order where it has one, so
+/// the row of chips reads the way the axis is written rather than the way it was filled in.
 pub fn task_classification(conn: &Connection, task_id: i64) -> Result<Vec<(String, String)>> {
     const TV: col::task_dimension_value::Cols = col::task_dimension_value::of("tv");
     const D: col::dimension::Cols = col::dimension::of("d");
@@ -4243,7 +4245,7 @@ pub fn task_classification(conn: &Connection, task_id: i64) -> Result<Vec<(Strin
     sql.join(D.table, same(D.id, TV.dimension_id))
         .join(V.table, same(V.id, TV.value_id))
         .push_where(Some(&Pred::eq(TV.task_id, task_id)))
-        .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+        .order_by([Sort::by(D.order_key), Sort::by(D.id), Sort::by(V.order_key), Sort::by(V.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let rows = stmt
         .query_map(rusqlite::params_from_iter(sql.params()), |r| {
@@ -4293,7 +4295,8 @@ pub fn decision_dimension_assignments(conn: &Connection, decision_id: i64) -> Re
 }
 
 /// What one decision is classified as, in words — [`task_classification`]'s twin, ordered by the **axis**
-/// for the same reason, and read by the face that prints a decision rather than joins.
+/// and then by the value for the same reasons, and read by the face that prints a decision rather than
+/// joins.
 pub fn decision_classification(conn: &Connection, decision_id: i64) -> Result<Vec<(String, String)>> {
     const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::of("dv");
     const D: col::dimension::Cols = col::dimension::of("d");
@@ -4305,7 +4308,7 @@ pub fn decision_classification(conn: &Connection, decision_id: i64) -> Result<Ve
     sql.join(D.table, same(D.id, DV.dimension_id))
         .join(V.table, same(V.id, DV.value_id))
         .push_where(Some(&Pred::eq(DV.decision_id, decision_id)))
-        .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+        .order_by([Sort::by(D.order_key), Sort::by(D.id), Sort::by(V.order_key), Sort::by(V.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let rows = stmt
         .query_map(rusqlite::params_from_iter(sql.params()), |r| {
@@ -5062,11 +5065,12 @@ pub fn dimension_value_ids(conn: &Connection, dimension_id: i64) -> Result<Vec<i
     select_ids(conn, DVAL.id, Some(&Pred::eq(DVAL.dimension_id, dimension_id)))
 }
 
-/// The live assignment of `task_id` on `dimension_id`, whatever value it names. Every dimension is
-/// single-select, so `ops::dimension::set` reads this to delete the outgoing assignment in the same
-/// transaction as the incoming one — the `(task, dimension)` one-row invariant is only an invariant if
-/// the two writes commit together. It is a set, not a row, because the invariant is what keeps it a row:
-/// a store that broke it must not silently keep the extra assignment.
+/// The live assignments of `task_id` on `dimension_id`, whatever values they name. On a single-select
+/// axis `ops::dimension::set` reads this to delete the outgoing assignment in the same transaction as
+/// the incoming one — the `(task, dimension)` one-row invariant is only an invariant if the two writes
+/// commit together. It is a set rather than a row for two reasons that now sit side by side: a
+/// multi-select axis legitimately holds several (`AMB-D-826`), and on a single-select one a store that
+/// broke the invariant must not have the extra assignment silently kept.
 pub fn assignment_ids_on_axis(
     conn: &Connection,
     task_id: i64,

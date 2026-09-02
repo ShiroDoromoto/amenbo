@@ -687,6 +687,7 @@ export const uk: Translation = {
     invalid_dimension_slug_shape: "«{slug}» не годиться як ключ — щонайбільше {max} малі літери, цифри й дефіси, починаючи з літери.",
     invalid_dimension_slug_taken: "«{slug}» тут уже належить іншому — виберіть інший ключ.",
     invalid_dimension_name_whitespace: "«{name}» не годиться як назва — приберіть пробіли або поставте замість них дефіс.",
+    invalid_dimension_multi_time_axis: "«{name}» — вісь часу, а вісь часу тримає одне значення за раз: зніміть з неї роль осі часу або залиште її з одиничним вибором.",
     invalid_task_required_dimension: "У цього завдання немає значення в {names}, якого вимагає цей проєкт.",
     invalid_decision_required_dimension: "У цього рішення немає значення в {names}, якого вимагає цей проєкт.",
     invalid_dimension_values_unordered: "Значення цієї категорії не впорядковані, тож переставити їх не можна.",

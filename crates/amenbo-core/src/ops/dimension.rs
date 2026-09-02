@@ -90,6 +90,59 @@ fn unsatisfiable_required(name: &str) -> Error {
     )
 }
 
+/// The refusal both doors to the pair share: a time axis is the mechanism that resolves one "current
+/// era" and writes it onto a new record ([`read::current_time_axis_value`]), so an axis that admits
+/// several values cannot be the one doing it — what to write, and what belonging to two eras at once
+/// means, would both be undefined (`AMB-D-826`). Written once so the sentence does not depend on which
+/// half moved: `add`, where the two arrive together, and `update`, where either can be flipped onto the
+/// other.
+fn time_axis_holds_one(name: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!(
+            "'{name}' is the time axis, and the time axis holds one value at a time — take the \
+             time-axis role off it, or leave it single-select"
+        ))
+        .coded(ErrorCode::InvalidDimensionMultiTimeAxis)
+        .with("name", name),
+    )
+}
+
+/// The refusal a demotion meets: going back to single-select would throw away every value but one, on
+/// every record answering with several (`AMB-D-826`). Raising the flag adds nothing and so is free; this
+/// is the direction that loses data, and it names the count so the caller knows the size of what it is
+/// being asked to decide — the shape `value_delete` takes when it demands `--reassign-to`.
+fn demotion_drops_values(name: &str, holders: usize) -> Error {
+    Error::Invalid(
+        Msg::new(format!(
+            "{holders} record(s) answer '{name}' with more than one value, so it cannot go back to \
+             single-select — clear the extra values off them first"
+        ))
+        .coded(ErrorCode::InvalidDimensionDemoteHolders)
+        .with("name", name)
+        .with("count", holders.to_string()),
+    )
+}
+
+/// How many records answer this axis with more than one value — what a demotion would have to throw
+/// away. Both sides are asked: the axis is one mechanism serving tasks and decisions alike
+/// (`AMB-D-781`), so a decision filed under three values is as much a holder as a task is.
+///
+/// Read through the project-wide assignment readers and counted here rather than in SQL: a demotion is
+/// a deliberate, rare act on one axis, and the rows it reads are that axis's alone.
+fn holders_of_several(tx: &WriteTx<'_>, axis: &Dimension) -> Result<usize> {
+    fn several(rows: Vec<(i64, i64)>) -> usize {
+        let mut per_holder: std::collections::HashMap<i64, usize> = std::collections::HashMap::new();
+        for (holder, _) in rows {
+            *per_holder.entry(holder).or_default() += 1;
+        }
+        per_holder.into_values().filter(|n| *n > 1).count()
+    }
+    let tasks = read::project_dimension_assignments(tx.conn(), axis.project_id, axis.id)?;
+    let decisions =
+        read::project_decision_dimension_assignments(tx.conn(), axis.project_id, axis.id)?;
+    Ok(several(tasks) + several(decisions))
+}
+
 /// The longest a slug may be. Long enough to read as a word, short enough for the places a slug is
 /// going — a branch name, a directory, an element of a D-Bus well-known name (`AMB-D-735`).
 const SLUG_MAX: usize = 24;
@@ -208,6 +261,10 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimen
     if new.required {
         return Err(unsatisfiable_required(&name));
     }
+    // The one door where the pair arrives already made; `update` is the other.
+    if new.role == DimensionRole::TimeAxis && new.cardinality == DimensionCardinality::Multi {
+        return Err(time_axis_holds_one(&name));
+    }
     let sibs = read::dimension_siblings(tx.conn(), project_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
     let now = Timestamp::now();
@@ -259,7 +316,8 @@ fn live_value_before(tx: &WriteTx<'_>, id: i64) -> Result<DimensionValue> {
         .ok_or_else(|| VALUE_NOUN.not_found(id.to_string()))
 }
 
-/// Update a dimension's name, notes, whether its values are ordered (`ordered`), its role (`role`),
+/// Update a dimension's name, notes, how many of its values one record may hold (`cardinality`),
+/// whether its values are ordered (`ordered`), its role (`role`),
 /// whether it belongs on the task card (`show_on_card`), whether it refuses to be left empty
 /// (`required`) and which entity it classifies (`applies_to`). Only the `Some` fields are written. The
 /// name is a display label, so it is free to change. Flipping `ordered` false→true brings the
@@ -282,6 +340,15 @@ fn live_value_before(tx: &WriteTx<'_>, id: i64) -> Result<DimensionValue> {
 /// nowhere else — but a draft left open on this project will now be held there until it carries a
 /// value, which the decision names as the cost it accepts.
 ///
+/// `cardinality` says how many of the axis's values one record may hold (`AMB-D-826`), and it is the
+/// one flag with a precondition in **each** direction. Widening single→multi takes nothing away and is
+/// free. Demoting multi→single would throw every value but one off every record answering with several,
+/// so it is refused while any such record stands, and the refusal names how many there are — the shape
+/// `value_delete` takes when it demands `--reassign-to`: what to keep is the caller's to decide, not
+/// this op's to guess. Either direction is refused on the time axis, whichever half moved: the era
+/// resolution reads one value, so `--time-axis` on a multi axis and `--cardinality multi` on the time
+/// axis are one refusal met from two sides.
+///
 /// `applies_to` narrows or widens which entity the axis classifies (`AMB-D-789`). Narrowing "both →
 /// one side" is free and **takes nothing away**: the assignments already made on the side that just
 /// stopped counting stay in their table and simply stop meaning anything — the same shape `role` takes
@@ -302,6 +369,7 @@ pub fn update(
     id: i64,
     name: Option<&str>,
     notes: Option<&str>,
+    cardinality: Option<DimensionCardinality>,
     ordered: Option<bool>,
     role: Option<DimensionRole>,
     show_on_card: Option<bool>,
@@ -321,6 +389,9 @@ pub fn update(
     if let Some(t) = notes {
         d.notes = t.to_string();
     }
+    if let Some(c) = cardinality {
+        d.cardinality = c;
+    }
     if let Some(o) = ordered {
         d.ordered = o;
     }
@@ -338,6 +409,19 @@ pub fn update(
     }
     if let Some(a) = applies_to {
         d.applies_to = a;
+    }
+    // Both halves of the pair are read off the axis as it *would* stand, so whichever of them this call
+    // moved meets the same refusal (`AMB-D-826`).
+    if d.role == DimensionRole::TimeAxis && d.cardinality == DimensionCardinality::Multi {
+        return Err(time_axis_holds_one(&d.name));
+    }
+    if before.cardinality == DimensionCardinality::Multi
+        && d.cardinality == DimensionCardinality::Single
+    {
+        let holders = holders_of_several(tx, &before)?;
+        if holders > 0 {
+            return Err(demotion_drops_values(&d.name, holders));
+        }
     }
     if let Some(named) = slug {
         let named = checked_slug(named)?;
@@ -638,11 +722,13 @@ pub(crate) fn delete_value_subtree(tx: &WriteTx<'_>, value_id: i64) -> Result<()
 
 // ───────────────────────────── Assignment to tasks ─────────────────────────────
 
-/// Assign a task to a dimension value. Every dimension is single-select, so `(task, dimension)` is
-/// constrained to a single row: an existing assignment to a different value is deleted and
-/// replaced. A noop when the same value is already assigned. Returns (row, created). The removal
-/// and the insert ride on **the same transaction** — commit them separately and a crash in between
-/// leaves zero or two rows for one task on one dimension, breaking the one-row invariant.
+/// Assign a task to a dimension value. What happens to what was there is the axis's own answer
+/// (`AMB-D-826`): on a single-select axis `(task, dimension)` is constrained to one row, so an existing
+/// assignment to a different value is deleted and replaced; on a multi-select one the task simply gains
+/// a row and keeps the values it had — taking one off is [`unset`], and nothing else. A noop when the
+/// same value is already assigned, either way. Returns (row, created). The removal and the insert ride
+/// on **the same transaction** — commit them separately and a crash in between leaves zero or two rows
+/// for one task on a single-select axis, breaking the one-row invariant.
 pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensionValue, bool)> {
     let Some(task) = read::task(tx.conn(), task_id)? else {
         return Err(crate::ops::task::NOUN.not_found(task_id.to_string()));
@@ -667,10 +753,13 @@ pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensi
         return Ok((existing, false));
     }
 
-    // Drop the existing assignment on this axis (a different value) first, keeping it to one row.
+    // Drop the existing assignment on this axis (a different value) first, keeping it to one row — on a
+    // single-select axis. A multi-select one is meant to accumulate, so nothing is dropped.
     let now = Timestamp::now();
-    for id in read::assignment_ids_on_axis(tx.conn(), task_id, dimension_id)? {
-        tx.delete_record("task_dimension_value", id)?;
+    if axis.cardinality == DimensionCardinality::Single {
+        for id in read::assignment_ids_on_axis(tx.conn(), task_id, dimension_id)? {
+            tx.delete_record("task_dimension_value", id)?;
+        }
     }
 
     let tv = TaskDimensionValue {
@@ -688,11 +777,16 @@ pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensi
 /// Remove a task's assignment to a particular dimension value (a hard delete). A noop when it is
 /// not assigned. Returns changed.
 ///
-/// **A required axis has no way back to empty** (`AMB-D-734`). Moving the task to another value on the
-/// same axis is `set`, which replaces the assignment rather than clearing it; what this would do is
-/// leave the axis blank, which is the one state the flag exists to forbid. Refusing here rather than
+/// **A required axis has no way back to empty** (`AMB-D-734`). On a single-select axis, moving the task
+/// to another value is `set`, which replaces the assignment rather than clearing it; what this would do
+/// is leave the axis blank, which is the one state the flag exists to forbid. Refusing here rather than
 /// at the next `finish_creating` keeps the task from being emptied out behind the premise's back — the
 /// premise is read once, at the door, and a task already through it would never be asked again.
+///
+/// **What the flag demands is one value, not this value** (`AMB-D-826`). So it is the *last* one that
+/// is held: a task answering a multi-select axis with three values gives two of them up freely, and the
+/// refusal arrives when the axis would go blank — the same state, reached by the same door, whatever
+/// the axis admits.
 pub fn unset(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<bool> {
     let Some(id) = read::assignment_id(tx.conn(), task_id, value_id)? else {
         return Ok(false);
@@ -701,7 +795,7 @@ pub fn unset(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<bool> {
         .ok_or_else(|| VALUE_NOUN.not_found(value_id.to_string()))?;
     let axis = read::dimension(tx.conn(), dimension_id)?
         .ok_or_else(|| NOUN.not_found(dimension_id.to_string()))?;
-    if axis.required {
+    if axis.required && read::assignment_ids_on_axis(tx.conn(), task_id, dimension_id)?.len() <= 1 {
         return Err(Error::Invalid(
             Msg::new(format!(
                 "'{}' is a required category, so a task's value on it cannot be cleared — assign \
@@ -718,9 +812,10 @@ pub fn unset(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<bool> {
 
 // ───────────────────────────── Assignment to decisions ─────────────────────────────
 
-/// Assign a decision to a dimension value — [`set`]'s twin on the decision side (`AMB-D-781`), with the
-/// same single-select `(decision, dimension)` one-row rule and the same one-transaction replacement.
-/// A noop when the same value is already assigned. Returns (row, created).
+/// Assign a decision to a dimension value — [`set`]'s twin on the decision side (`AMB-D-781`), reading
+/// the axis's `cardinality` the same way (`AMB-D-826`): one row per `(decision, dimension)` on a
+/// single-select axis, replaced in one transaction, and an added row on a multi-select one. A noop when
+/// the same value is already assigned. Returns (row, created).
 ///
 /// **No `required` here.** The flag bites at the two doors a record passes through once —
 /// `task::finish_creating` and `decision::accept` (`AMB-D-790`) — and this is neither. So an axis being
@@ -754,10 +849,13 @@ pub fn set_on_decision(
         return Ok((existing, false));
     }
 
-    // Drop the existing assignment on this axis (a different value) first, keeping it to one row.
+    // Drop the existing assignment on this axis (a different value) first, keeping it to one row — on a
+    // single-select axis, for the reason the task side gives.
     let now = Timestamp::now();
-    for id in read::decision_assignment_ids_on_axis(tx.conn(), decision_id, dimension_id)? {
-        tx.delete_record("decision_dimension_value", id)?;
+    if axis.cardinality == DimensionCardinality::Single {
+        for id in read::decision_assignment_ids_on_axis(tx.conn(), decision_id, dimension_id)? {
+            tx.delete_record("decision_dimension_value", id)?;
+        }
     }
 
     let dv = DecisionDimensionValue {
@@ -904,7 +1002,7 @@ mod tests {
         let squatter = add(tx, p, custom("先客")).unwrap();
         // Take the slug the *next* axis would otherwise be born with.
         let next = squatter.id + 1;
-        update(tx, squatter.id, None, None, None, None, None, None, None, Some(&format!("d{next}")))
+        update(tx, squatter.id, None, None, None, None, None, None, None, None, Some(&format!("d{next}")))
             .unwrap();
         let born = add(tx, p, custom("あと")).unwrap();
         assert_eq!(born.id, next);
@@ -934,7 +1032,7 @@ mod tests {
             let code = ErrorCode::InvalidDimensionNameWhitespace.as_str();
             let err = add(tx, p, custom(bad)).unwrap_err();
             assert_eq!(err.code(), code, "{bad:?} is refused on add");
-            let err = update(tx, d.id, Some(bad), None, None, None, None, None, None, None).unwrap_err();
+            let err = update(tx, d.id, Some(bad), None, None, None, None, None, None, None, None).unwrap_err();
             assert_eq!(err.code(), code, "{bad:?} is refused on rename");
             let err = value_add(tx, d.id, bad, None).unwrap_err();
             assert_eq!(err.code(), code, "{bad:?} is refused on value-add");
@@ -954,7 +1052,7 @@ mod tests {
         let p = project_named(tx, "PJ");
         let d = add(tx, p, custom("軸")).unwrap();
         for good in ["release", "run-2", "a", &"a".repeat(SLUG_MAX)] {
-            update(tx, d.id, None, None, None, None, None, None, None, Some(good)).unwrap();
+            update(tx, d.id, None, None, None, None, None, None, None, None, Some(good)).unwrap();
             assert_eq!(dim(tx, d.id).slug.as_deref(), Some(good));
         }
         for bad in [
@@ -967,7 +1065,7 @@ mod tests {
             "re lease",      // nor is a space
             &"a".repeat(SLUG_MAX + 1),
         ] {
-            let err = update(tx, d.id, None, None, None, None, None, None, None, Some(bad)).unwrap_err();
+            let err = update(tx, d.id, None, None, None, None, None, None, None, None, Some(bad)).unwrap_err();
             assert_eq!(err.code(), ErrorCode::InvalidDimensionSlugShape.as_str(), "{bad:?} is refused");
         }
     }
@@ -982,12 +1080,12 @@ mod tests {
         let q = project_named(tx, "QJ");
         let d1 = add(tx, p, NewDimension { slug: Some("phase".into()), ..custom("フェーズ") }).unwrap();
         let d2 = add(tx, p, custom("製品")).unwrap();
-        let err = update(tx, d2.id, None, None, None, None, None, None, None, Some("phase")).unwrap_err();
+        let err = update(tx, d2.id, None, None, None, None, None, None, None, None, Some("phase")).unwrap_err();
         assert_eq!(err.code(), ErrorCode::InvalidDimensionSlugTaken.as_str());
         // Another project is another reach.
         add(tx, q, NewDimension { slug: Some("phase".into()), ..custom("フェーズ") }).unwrap();
         // Naming an axis the slug it already holds is not a collision with itself.
-        update(tx, d1.id, None, None, None, None, None, None, None, Some("phase")).unwrap();
+        update(tx, d1.id, None, None, None, None, None, None, None, None, Some("phase")).unwrap();
 
         let v1 = value_add(tx, d1.id, "運用第2期", Some("ops2")).unwrap();
         let v2 = value_add(tx, d1.id, "運用第1期", None).unwrap();
@@ -1046,7 +1144,7 @@ mod tests {
         let p = project_named(tx, "PJ");
         let d1 = add(tx, p, custom("D1")).unwrap();
         let d2 = add(tx, p, custom("D2")).unwrap();
-        update(tx, d1.id, Some("分類"), None, None, None, None, None, None, None).unwrap();
+        update(tx, d1.id, Some("分類"), None, None, None, None, None, None, None, None).unwrap();
         assert_eq!(dim(tx, d1.id).name, "分類");
         // Resolves by name or by id (exact match).
         assert_eq!(read::resolve_dimension_in(tx.conn(), None, "分類").unwrap(), vec![d1.id]);
@@ -1213,13 +1311,13 @@ mod tests {
 
         // Nominate it later and the very same dates start acting as windows. Name and notes are
         // left as they were.
-        let named = update(tx, d.id, None, None, None, Some(DimensionRole::TimeAxis), None, None, None, None).unwrap();
+        let named = update(tx, d.id, None, None, None, None, Some(DimensionRole::TimeAxis), None, None, None, None).unwrap();
         assert_eq!(named.name, "時代");
         assert_eq!(current(tx, p, day("2026-07-09")).unwrap(), now.id);
 
         // Un-nominate it and it steps out of the resolution; the dates stay in their columns but
         // stop meaning anything.
-        update(tx, d.id, None, None, None, Some(DimensionRole::None), None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, Some(DimensionRole::None), None, None, None, None).unwrap();
         assert!(current(tx, p, day("2026-07-09")).is_none());
         assert_eq!(val(tx, now.id).start_on, Some(day("2026-07-08")));
     }
@@ -1238,7 +1336,7 @@ mod tests {
 
         // Turn `ordered` on and `order_key` takes effect, so values can be reordered. Name and
         // notes are left as they were.
-        let updated = update(tx, d.id, None, None, Some(true), None, None, None, None, None).unwrap();
+        let updated = update(tx, d.id, None, None, None, Some(true), None, None, None, None, None).unwrap();
         assert!(updated.ordered);
         assert_eq!(updated.name, "カテゴリー");
         value_move(tx, b.id, Position::Top).unwrap();
@@ -1247,7 +1345,7 @@ mod tests {
 
         // Turn `ordered` back off and the values fall back to a stable ascending-id order rather
         // than `order_key`, so the reordering stops showing.
-        update(tx, d.id, None, None, Some(false), None, None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, Some(false), None, None, None, None, None).unwrap();
         assert!(!dim(tx, d.id).ordered);
         let mut expected = [("A", &a.id), ("B", &b.id)];
         expected.sort_by(|x, y| x.1.cmp(y.1));
@@ -1270,7 +1368,7 @@ mod tests {
 
         // Raise the flag and it is the axis that carries it — name, notes, order and role are not
         // touched on the way through.
-        let raised = update(tx, d.id, None, None, None, None, Some(true), None, None, None).unwrap();
+        let raised = update(tx, d.id, None, None, None, None, None, Some(true), None, None, None).unwrap();
         assert!(raised.show_on_card);
         assert_eq!(raised.name, "カテゴリー");
         assert!(raised.ordered);
@@ -1278,12 +1376,12 @@ mod tests {
         assert!(dim(tx, d.id).show_on_card, "and it is what was written, not just what came back");
 
         // Lower it again. Nothing about the axis remembers it was ever up.
-        update(tx, d.id, None, None, None, None, Some(false), None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, None, Some(false), None, None, None).unwrap();
         assert!(!dim(tx, d.id).show_on_card);
 
         // An update that says nothing about the flag leaves it where it stands.
-        update(tx, d.id, None, None, None, None, Some(true), None, None, None).unwrap();
-        update(tx, d.id, Some("区分"), None, None, None, None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, None, Some(true), None, None, None).unwrap();
+        update(tx, d.id, Some("区分"), None, None, None, None, None, None, None, None).unwrap();
         let after = dim(tx, d.id);
         assert_eq!(after.name, "区分");
         assert!(after.show_on_card, "an unmentioned flag is not cleared");
@@ -1305,19 +1403,19 @@ mod tests {
         // Narrow it to the work side. The axis offers no values, and that is no obstacle — the one
         // thing `required` would refuse here, this flag has no opinion about.
         let narrowed =
-            update(tx, d.id, None, None, None, None, None, None, Some(DimensionAppliesTo::Task), None)
+            update(tx, d.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Task), None)
                 .unwrap();
         assert_eq!(narrowed.applies_to, DimensionAppliesTo::Task);
         assert!(!narrowed.applies_to.on_decision());
         assert_eq!(dim(tx, d.id).applies_to, DimensionAppliesTo::Task, "and it is what was written");
 
         // Moving it to the other side is just as free; nothing checks what is already assigned.
-        update(tx, d.id, None, None, None, None, None, None, Some(DimensionAppliesTo::Decision), None)
+        update(tx, d.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Decision), None)
             .unwrap();
         assert_eq!(dim(tx, d.id).applies_to, DimensionAppliesTo::Decision);
 
         // An update that says nothing about it leaves it where it stands.
-        update(tx, d.id, Some("排他レーン"), None, None, None, None, None, None, None).unwrap();
+        update(tx, d.id, Some("排他レーン"), None, None, None, None, None, None, None, None).unwrap();
         let after = dim(tx, d.id);
         assert_eq!(after.name, "排他レーン");
         assert_eq!(after.applies_to, DimensionAppliesTo::Decision, "an unmentioned flag is not cleared");
@@ -1336,7 +1434,7 @@ mod tests {
         let t = task_in(tx, "実機で試す", p);
         set(tx, t, v.id).unwrap();
 
-        update(tx, d.id, None, None, None, None, None, None, Some(DimensionAppliesTo::Decision), None)
+        update(tx, d.id, None, None, None, None, None, None, None, Some(DimensionAppliesTo::Decision), None)
             .unwrap();
 
         let live = read::assignment_ids_on_axis(tx.conn(), t, d.id).unwrap();
@@ -1361,22 +1459,22 @@ mod tests {
         let d = add(tx, p, custom("プロダクト")).unwrap();
         assert!(!dim(tx, d.id).required, "a new axis demands nothing");
         assert!(
-            update(tx, d.id, None, None, None, None, None, Some(true), None, None).is_err(),
+            update(tx, d.id, None, None, None, None, None, None, Some(true), None, None).is_err(),
             "an axis offering no values cannot be required"
         );
 
         // Give it something to answer with and the same call goes through.
         value_add(tx, d.id, "Amenbo本体", None).unwrap();
-        let raised = update(tx, d.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        let raised = update(tx, d.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
         assert!(raised.required);
         assert_eq!(raised.name, "プロダクト", "nothing else on the axis moved with the flag");
         assert!(dim(tx, d.id).required, "and it is what was written, not just what came back");
 
         // Lowering it is free, and an update that says nothing about it leaves it standing.
-        update(tx, d.id, None, None, None, None, None, Some(false), None, None).unwrap();
+        update(tx, d.id, None, None, None, None, None, None, Some(false), None, None).unwrap();
         assert!(!dim(tx, d.id).required);
-        update(tx, d.id, None, None, None, None, None, Some(true), None, None).unwrap();
-        update(tx, d.id, Some("製品"), None, None, None, None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, d.id, Some("製品"), None, None, None, None, None, None, None, None).unwrap();
         assert!(dim(tx, d.id).required, "an unmentioned flag is not cleared");
     }
 
@@ -1397,7 +1495,7 @@ mod tests {
         assert!(unset(tx, t, core.id).unwrap());
         set(tx, t, core.id).unwrap();
 
-        update(tx, axis.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
         assert!(unset(tx, t, core.id).is_err(), "a required axis cannot be emptied");
         // Moving to another value on the same axis is `set`, and it still works — the axis stays answered.
         set(tx, t, site.id).unwrap();
@@ -1421,7 +1519,7 @@ mod tests {
         let core = value_add(tx, axis.id, "Amenbo本体", None).unwrap();
         let site = value_add(tx, axis.id, "Amenboサイト", None).unwrap();
         set(tx, t, core.id).unwrap();
-        update(tx, axis.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
 
         // Down to the last one is fine — the axis can still be answered. Nobody answers with this one,
         // so it goes without anywhere to send anyone.
@@ -1437,7 +1535,7 @@ mod tests {
         );
 
         // Lowering the flag is the way out, and then the value is ordinary again.
-        update(tx, axis.id, None, None, None, None, None, Some(false), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(false), None, None).unwrap();
         value_delete(tx, core.id, None).unwrap();
         assert!(val_opt(tx, core.id).is_none());
     }
@@ -1458,7 +1556,7 @@ mod tests {
         let other = add(tx, p, custom("プロダクト")).unwrap();
         let core = value_add(tx, other.id, "Amenbo本体", None).unwrap();
         set(tx, t, theme.id).unwrap();
-        update(tx, axis.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
 
         let assignment = read::assignment_id(tx.conn(), t, theme.id).unwrap().unwrap();
 
@@ -1523,7 +1621,7 @@ mod tests {
         let p = project_named(tx, "PJ");
         let axis = add(tx, p, custom("プロダクト")).unwrap();
         let core = value_add(tx, axis.id, "Amenbo本体", None).unwrap();
-        update(tx, axis.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
         delete(tx, axis.id).unwrap();
         assert!(val_opt(tx, core.id).is_none());
     }
@@ -1568,8 +1666,8 @@ mod tests {
         let p = project_named(tx, "PJ");
         let t = task_in(tx, "task", p);
 
-        // Every dimension is single-select: setting a different value drops the previous assignment
-        // and keeps it to one row.
+        // A dimension is single-select unless its raiser says otherwise: setting a different value drops
+        // the previous assignment and keeps it to one row.
         let cat = add(tx, p, custom("カテゴリー")).unwrap();
         let a = value_add(tx, cat.id, "A", None).unwrap();
         let b = value_add(tx, cat.id, "B", None).unwrap();
@@ -1665,7 +1763,7 @@ mod tests {
         let axis = add(tx, p, custom("カテゴリー")).unwrap();
         let a = value_add(tx, axis.id, "A", None).unwrap();
         let b = value_add(tx, axis.id, "B", None).unwrap();
-        update(tx, axis.id, None, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
         set_on_decision(tx, k, a.id).unwrap();
         assert!(unset_on_decision(tx, k, a.id).unwrap(), "a decision's value on a required axis clears");
 
@@ -1730,5 +1828,186 @@ mod tests {
             read::decision_assignment_id(tx.conn(), k, v.id).unwrap().is_none(),
             "on either side — an axis is swept value by value, so the decision rows leave with them"
         );
+    }
+
+    /// The axis's own answer to how many of its values a record may hold (`AMB-D-826`): single replaces,
+    /// multi accumulates, and taking one off is `unset` either way. Both sides of the axis read the same
+    /// flag (`AMB-D-781`).
+    #[test]
+    fn a_multi_axis_gathers_values_where_a_single_one_replaces() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let t = task_in(tx, "task", p);
+        let k = mk_decision_in(tx, "決定", p);
+        let axis = add(tx, p, custom("プロダクト")).unwrap();
+        let core = value_add(tx, axis.id, "Amenbo本体", None).unwrap();
+        let site = value_add(tx, axis.id, "Amenboサイト", None).unwrap();
+
+        // Single-select while nobody has said otherwise: the second value takes the first one's place.
+        set(tx, t, core.id).unwrap();
+        set(tx, t, site.id).unwrap();
+        assert_eq!(read::task_dimension_assignments(tx.conn(), t).unwrap(), vec![(axis.id, site.id)]);
+
+        update(tx, axis.id, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None)
+            .unwrap();
+
+        // From here the axis gathers: the value that was there stays, and the new one joins it.
+        set(tx, t, core.id).unwrap();
+        assert_eq!(
+            read::task_dimension_assignments(tx.conn(), t).unwrap(),
+            vec![(axis.id, site.id), (axis.id, core.id)],
+            "a multi axis keeps what it had",
+        );
+        let (_, created) = set(tx, t, core.id).unwrap();
+        assert!(!created, "setting the same value again is still idempotent");
+
+        // The decision side reads the same flag.
+        set_on_decision(tx, k, core.id).unwrap();
+        set_on_decision(tx, k, site.id).unwrap();
+        assert_eq!(
+            read::decision_dimension_assignments(tx.conn(), k).unwrap(),
+            vec![(axis.id, core.id), (axis.id, site.id)],
+        );
+
+        // And what is printed lines the values of one axis up, ordered by the axis's own order.
+        assert_eq!(
+            read::task_classification(tx.conn(), t).unwrap(),
+            vec![
+                ("プロダクト".to_string(), "Amenbo本体".to_string()),
+                ("プロダクト".to_string(), "Amenboサイト".to_string()),
+            ],
+        );
+
+        // Taking one value off leaves the rest — the removal is `unset`, and nothing else.
+        assert!(unset(tx, t, site.id).unwrap());
+        assert_eq!(read::task_dimension_assignments(tx.conn(), t).unwrap(), vec![(axis.id, core.id)]);
+    }
+
+    /// `required` is met by one value or more (`AMB-D-826`, `AMB-D-734`): a task answering a multi axis
+    /// with three gives two of them up freely, and it is the last one the flag holds.
+    #[test]
+    fn a_required_multi_axis_holds_only_the_last_value() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let t = task_in(tx, "task", p);
+        let axis = add(tx, p, custom("プロダクト")).unwrap();
+        let core = value_add(tx, axis.id, "Amenbo本体", None).unwrap();
+        let site = value_add(tx, axis.id, "Amenboサイト", None).unwrap();
+        update(
+            tx,
+            axis.id,
+            None,
+            None,
+            Some(DimensionCardinality::Multi),
+            None,
+            None,
+            None,
+            Some(true),
+            None,
+            None,
+        )
+        .unwrap();
+        set(tx, t, core.id).unwrap();
+        set(tx, t, site.id).unwrap();
+
+        assert!(unset(tx, t, site.id).unwrap(), "one of several goes freely");
+        assert!(unset(tx, t, core.id).is_err(), "the last one is what a required axis holds");
+        assert_eq!(read::task_dimension_assignments(tx.conn(), t).unwrap(), vec![(axis.id, core.id)]);
+
+        // And the creation premise reads the same "one or more": the task is answered, so it passes.
+        assert!(crate::ops::task::finish_creating(tx, t).is_ok());
+    }
+
+    /// The time axis holds one value at a time (`AMB-D-826`), and the refusal is the same whichever half
+    /// of the pair moved — `add` where they arrive together, `update` from either side.
+    #[test]
+    fn the_time_axis_refuses_to_admit_several_values() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+
+        let born = NewDimension {
+            role: DimensionRole::TimeAxis,
+            cardinality: DimensionCardinality::Multi,
+            ..custom("時代")
+        };
+        assert!(add(tx, p, born).is_err(), "the pair is refused where it arrives already made");
+
+        // Multi first, then nominated as the time axis.
+        let wide = add(
+            tx,
+            p,
+            NewDimension { cardinality: DimensionCardinality::Multi, ..custom("プロダクト") },
+        )
+        .unwrap();
+        assert!(
+            update(tx, wide.id, None, None, None, None, Some(DimensionRole::TimeAxis), None, None, None, None)
+                .is_err(),
+            "and refused from the role's side",
+        );
+
+        // Time axis first, then widened.
+        let era = add(tx, p, NewDimension { role: DimensionRole::TimeAxis, ..custom("フェーズ") }).unwrap();
+        assert!(
+            update(tx, era.id, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None)
+                .is_err(),
+            "and from the cardinality's side",
+        );
+        assert_eq!(dim(tx, era.id).cardinality, DimensionCardinality::Single, "the refusal wrote nothing");
+    }
+
+    /// A demotion throws values away, so it asks first and names how many records it would take them
+    /// from (`AMB-D-826`) — both sides of the axis counted, since both answer it.
+    #[test]
+    fn demoting_a_multi_axis_is_refused_while_records_answer_with_several() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let t = task_in(tx, "task", p);
+        let k = mk_decision_in(tx, "決定", p);
+        let axis = add(
+            tx,
+            p,
+            NewDimension { cardinality: DimensionCardinality::Multi, ..custom("プロダクト") },
+        )
+        .unwrap();
+        let core = value_add(tx, axis.id, "Amenbo本体", None).unwrap();
+        let site = value_add(tx, axis.id, "Amenboサイト", None).unwrap();
+
+        // Nobody answers with several yet, so the demotion is an ordinary edit — and widening back is free.
+        set(tx, t, core.id).unwrap();
+        update(tx, axis.id, None, None, Some(DimensionCardinality::Single), None, None, None, None, None, None)
+            .unwrap();
+        update(tx, axis.id, None, None, Some(DimensionCardinality::Multi), None, None, None, None, None, None)
+            .unwrap();
+
+        set(tx, t, site.id).unwrap();
+        set_on_decision(tx, k, core.id).unwrap();
+        set_on_decision(tx, k, site.id).unwrap();
+        let refused = update(
+            tx,
+            axis.id,
+            None,
+            None,
+            Some(DimensionCardinality::Single),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(refused.to_string().contains('2'), "the refusal names the count: {refused}");
+        assert_eq!(dim(tx, axis.id).cardinality, DimensionCardinality::Multi, "and wrote nothing");
+
+        // Clearing the extra values off both is what opens the way.
+        assert!(unset(tx, t, site.id).unwrap());
+        assert!(unset_on_decision(tx, k, site.id).unwrap());
+        update(tx, axis.id, None, None, Some(DimensionCardinality::Single), None, None, None, None, None, None)
+            .unwrap();
+        assert_eq!(dim(tx, axis.id).cardinality, DimensionCardinality::Single);
     }
 }

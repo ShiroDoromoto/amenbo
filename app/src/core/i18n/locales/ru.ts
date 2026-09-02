@@ -690,6 +690,7 @@ export const ru: Translation = {
     invalid_dimension_slug_shape: "«{slug}» не годится в качестве ключа — не более {max} строчных букв, цифр и дефисов, начиная с буквы.",
     invalid_dimension_slug_taken: "«{slug}» здесь уже занят другим — выберите другой ключ.",
     invalid_dimension_name_whitespace: "«{name}» не годится в качестве имени — уберите пробелы или поставьте вместо них дефис.",
+    invalid_dimension_multi_time_axis: "«{name}» — ось времени, а ось времени держит одно значение за раз: снимите с неё роль оси времени или оставьте её с единственным выбором.",
     invalid_task_required_dimension: "У этой задачи нет значения в {names}, которого требует этот проект.",
     invalid_decision_required_dimension: "У этого решения нет значения в {names}, которого требует этот проект.",
     invalid_dimension_values_unordered: "Значения этой категории не упорядочены, поэтому их нельзя переставить.",

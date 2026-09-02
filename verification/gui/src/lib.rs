@@ -1591,6 +1591,18 @@ impl Instructor {
                     ),
                 }
             }
+            // What the last copy left, put into a pane's line. The pane is named the way the drop
+            // above names one, and the line ends where the drop's does: nothing is sent, because what
+            // a hand-over owes is a line the person still has to send themselves.
+            (Domain::Terminal, "paste") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Click into {pane}, then press the key this machine pastes with. What the last copy put on the clipboard appears in that pane's input line — leave it there, and press nothing else."
+                )
+            }
             // A command run for its output, which is what the steps after it read. The clearing is
             // said first because it is what makes "the ref" a place on the screen rather than one of
             // several, and the waiting is said last because a press on a half-drawn line is a press
@@ -2026,6 +2038,13 @@ impl Instructor {
                 "Click into the text of the file, put the caret at the very end of it, press Enter and type \"{}\" on the new line.",
                 req(with, "types")?
             ),
+            // The same box filled from the clipboard. Where the caret goes is said the way the typing
+            // says it, and for the same reason: what is already in the file is half of what the road
+            // reads afterwards. What arrives is not named, because a road cannot name it — that is the
+            // whole of why this is a step rather than a longer `edit`.
+            (Domain::Files, "paste-into-editor") =>
+                "Click into the text of the file, put the caret at the very end of it, press Enter, then press the key this machine pastes with. What the last copy put on the clipboard goes in on the new line."
+                    .to_string(),
             // And the keeping. The control is named by what it does rather than quoted, the same as
             // every other item on this face — and the line says where it is, since a reader who has just
             // been typing is looking at the text and not at the row above it.
@@ -2177,6 +2196,12 @@ impl Instructor {
             // way every other item on this menu is.
             (Domain::Files, "hand-to-pane") =>
                 "In that menu, press the item that pastes the row's path into the pane being worked in. The menu goes, and the path the row is at appears in the pane's input line — leave it there, and press nothing else."
+                    .to_string(),
+            // The item that copies. Nothing on the screen answers it, so the line says that too: an
+            // operator watching for something to happen would otherwise read a working press as a
+            // failed one and stop the run on the step before the one that reads it.
+            (Domain::Files, "copy-path") =>
+                "In that menu, press the item that copies the row's path. The menu goes and nothing else on the screen changes — what the press left is on this machine's clipboard, and the step that pastes it is where it is read."
                     .to_string(),
             // The same hand-over made by hand. No menu is opened: the row itself is taken hold of and
             // carried, which is what the step says twice over — the press, and the pointer being over

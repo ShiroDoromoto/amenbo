@@ -12,8 +12,9 @@
 # answered counts what it still offers, so the last open value does not close while the demand is up.
 # The screen's half is the four faces reading one flag to four ends, which is a thing only a screen
 # can be asked about: the filter offers a closed value, the record's own picker leaves it out while
-# still drawing the one that record carries, the board keeps a column only while cards are in it, and
-# the classification panel draws every value and is alone in offering the way back.
+# still drawing the one that record carries, the board keeps a column only while cards are in it and
+# lets no card be dropped into it, and the classification panel draws every value and is alone in
+# offering the way back.
 id: retire-a-value-and-keep-what-is-filed-under-it
 title: A value closed on a category stops taking new records and keeps everything already filed under it, and only deleting takes that away
 description: >
@@ -345,6 +346,31 @@ steps_gui:
       axis: Release
       value: v18
       present: true
+
+  # And keeps it without taking anything into it. The column is the board's own door onto the filing —
+  # a card carried across and let go is filed under the value on the heading — so a column standing
+  # open to that would be a way around the picker that stopped offering the value. Nothing is said and
+  # nothing comes back: the column is no drop target at all, and the card is left where it came from.
+  - type: action
+    domain: task
+    op: drop-into-column
+    with:
+      target: fresh
+      axis: Release
+      value: v18
+      refused: invalid_dimension_set_closed_value
+
+  # Read where the drop would have shown, which is the record's own picker rather than the board: a
+  # value a record carries is drawn there as the field's answer, the way v18 stands on the record that
+  # carried it all along. This one draws nothing, so nothing was filed.
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      target: fresh
+      dimension: Release
+      value: v18
+      present: false
 
   # And loses it once the last card leaves. Closed with nothing filed under it, the value has no column
   # to keep — which is what stops a category that keeps retiring values from growing a board of empty

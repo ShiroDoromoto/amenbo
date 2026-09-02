@@ -1001,6 +1001,11 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The period and the "current" mark, carried only by the values of a time_axis dimension.
    The current era shows as a border plus a pale accent background. */
 .dimmgr__val--current { border-color: var(--c-accent); background: color-mix(in srgb, var(--c-accent) 12%, var(--c-surface)); }
+/* A closed value (`AMB-D-829`): still here, still named, and no longer among what a record is filed
+   under. Faded rather than struck through — this is the one face that shows every value, and the row
+   stays as editable as the others. */
+.dimmgr__val--closed { opacity: 0.6; }
+.dimmgr__val--closed .dimmgr__valname { text-decoration: line-through; text-decoration-color: var(--c-text-muted); }
 .dimmgr__period { display: inline-flex; align-items: center; gap: 2px; margin: 0 2px; font-size: var(--fs-xs); }
 .dimmgr__date { background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-size: var(--fs-xs); }
 .dimmgr__date:hover { border-color: var(--c-border); }

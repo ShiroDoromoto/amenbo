@@ -7,23 +7,28 @@ import { fetchProjectDimensionAssignments } from "../core/mutations";
 import { useStore } from "../store/store";
 import { todayStr } from "../core/calendar";
 import { currentTimeAxisValueId, isTimeAxis } from "../core/timeAxis";
+import { isClosable } from "../core/closable";
 import type { DimensionDto, DimensionValueDto } from "../bindings/bindings";
 import { Icon } from "../components/Icon";
 
 // The management panel for classification (unified dimensions), reached from the board's axis bar as a modal of its
 // own. It exposes renaming a dimension, editing its notes and removing it; renaming and removing its values; the
 // ordered toggle, the toggle that lets one record answer with several values (cardinality: multi), the toggle that
-// names an axis the time axis (role: time_axis), the toggle that puts an axis on the
+// names an axis the time axis (role: time_axis), the toggle that lets its values be closed instead of deleted
+// (role: closable), the toggle that puts an axis on the
 // task card, the toggle that makes an axis refuse to be left empty, and, on an ordered dimension, reordering the
 // values. Removing a value from a required axis is the one of those that asks a question first: the tasks answering
-// with it have to be told which other value they move to, and the axis's last value is out of reach entirely, core
-// keeping it so the demand stays answerable.
+// with it have to be told which other value they move to, and the last value such an axis still offers is out of
+// reach entirely — to closing as much as to deleting — core keeping it so the demand stays answerable.
 // Beside each name sits its readable key (`AMB-D-735`) — what the axis or the value answers to outside
 // Amenbo, where a Japanese display name with spaces in it cannot go. A key is born with the row (derived from its
 // id) and is edited here, never cleared; a key core refuses puts the field back and says why in a toast.
 // Only on a named time axis do the values grow period fields (start/end date) and a "current" marker — a
 // period is payload of the time-axis role, so no other axis shows dates. Naming one is not forced to be unique:
-// core folds "the current era" to a single answer using the order of the dimensions.
+// core folds "the current era" to a single answer using the order of the dimensions. A closable axis's values
+// grow the other role's payload in the same place: the button that closes one and opens it again (`AMB-D-829`).
+// This is the one face that shows a closed value at all — the picker hides it, the board drops its column once
+// the last card leaves, and only here can it be brought back.
 export function DimensionManager({ projectId, onClose }: { projectId: number; onClose: () => void }) {
   const snap = useSyncExternalStore(subscribe, getSnapshot);
   const store = useStore();
@@ -108,6 +113,18 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
           />
           {t("dimmgr.timeAxis")}
         </label>
+        {/* Whether this axis retires its values by closing them rather than deleting them
+            (`AMB-D-829`). It sits beside the time-axis switch because the two are the same field —
+            an axis holds one role — so ticking this one unticks that one, and the values keep
+            whatever they were closed at if the role is later given up. */}
+        <label className="dimmgr__ordered" title={t("dimmgr.closableHint")}>
+          <input
+            type="checkbox"
+            checked={isClosable(dim)}
+            onChange={(e) => store.setDimensionClosable(dim.id, e.target.checked)}
+          />
+          {t("dimmgr.closable")}
+        </label>
         {/* Whether this axis rides on the task card. It sits beside the others because it is the same
             kind of thing: an answer the axis carries, so it moves for everyone at once and not just for
             whoever ticked it (`AMB-D-651`). */}
@@ -173,6 +190,7 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
             siblings={dim.values.filter((o) => o.id !== v.id)}
             ordered={dim.ordered}
             timeAxis={isTimeAxis(dim)}
+            closable={isClosable(dim)}
             current={v.id === currentId}
             onMoveUp={i > 0 ? () => store.moveDimensionValue(v.id, { before: dim.values[i - 1].id }) : undefined}
             onMoveDown={
@@ -193,7 +211,7 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
   );
 }
 
-function ValueRow({ value, store, projectId, dimensionId, required, siblings, ordered, timeAxis, current, onMoveUp, onMoveDown }: {
+function ValueRow({ value, store, projectId, dimensionId, required, siblings, ordered, timeAxis, closable, current, onMoveUp, onMoveDown }: {
   value: DimensionValueDto;
   store: ReturnType<typeof useStore>;
   projectId: number;
@@ -202,6 +220,8 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
   siblings: DimensionValueDto[];
   ordered: boolean;
   timeAxis: boolean;
+  /** Does this value's axis carry the closable role? Only there is closing offered (`AMB-D-829`). */
+  closable: boolean;
   current: boolean;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
@@ -210,10 +230,13 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
   // `null` is not asking; a number is the answer chosen so far, and 0 stands for "asked, nothing
   // chosen yet" so the button that carries it out can stay shut until one is.
   const [moveTo, setMoveTo] = useState<number | null>(null);
-  // The last value of a required axis does not go at any price — core keeps it so the demand stays
-  // answerable, and lowering the demand is the way out. Said on the button rather than found by
-  // pressing it, the way the box that raises the demand says why it is off.
-  const stuck = required && siblings.length === 0;
+  // The last value a required axis still offers does not go at any price — core keeps it so the demand
+  // stays answerable, and lowering the demand is the way out. Said on the button rather than found by
+  // pressing it, the way the box that raises the demand says why it is off. Closed values do not count
+  // towards what the axis offers (`AMB-D-829`), so an axis whose other values are all closed is as stuck
+  // as one with no other values at all — and this holds the closing button as well as the delete one,
+  // both being ways to leave a required axis unanswerable.
+  const stuck = required && siblings.every((o) => o.closed);
   async function removeValue() {
     // A required axis will not let the value take its tasks' answers with it, so the panel asks where
     // they go before it asks whether to delete — and only where there are any. The count is read at
@@ -235,7 +258,7 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
   const setPeriod = (start: string | undefined, end: string | undefined) =>
     store.setDimensionValuePeriod(value.id, start || undefined, end || undefined);
   return (
-    <div className={`dimmgr__val ${current ? "dimmgr__val--current" : ""}`}>
+    <div className={`dimmgr__val ${current ? "dimmgr__val--current" : ""} ${value.closed ? "dimmgr__val--closed" : ""}`.trim()}>
       {ordered && (
         <span className="dimmgr__reorder">
           <button
@@ -292,11 +315,27 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
           )}
         </span>
       )}
+      {/* Closing and reopening (`AMB-D-829`), offered only where the axis carries the role. It sits
+          beside "delete value" because the two are the pair the panel puts in front of a reader: a
+          closed value keeps everything filed under it and stops taking new records, a deleted one takes
+          the classification with it. Reopening is free, so the button flips rather than disappearing —
+          and closing the last value a required axis still offers is what core refuses, said here on the
+          button rather than found by pressing it. */}
+      {closable && (
+        <button
+          className="feed__action"
+          disabled={!value.closed && stuck}
+          title={!value.closed && stuck ? t("dimmgr.lastOpenValueHint") : t("dimmgr.closeValueHint")}
+          onClick={() => store.setDimensionValueClosed(value.id, !value.closed)}
+        >
+          {value.closed ? t("dimmgr.reopenValue") : t("dimmgr.closeValue")}
+        </button>
+      )}
       {moveTo === null ? (
         <button
           className="feed__action dimmgr__danger"
           disabled={stuck}
-          title={stuck ? t("dimmgr.removeValueLastHint") : undefined}
+          title={stuck ? t("dimmgr.lastOpenValueHint") : undefined}
           onClick={removeValue}
         >
           {t("dimmgr.removeValue")}
@@ -311,7 +350,11 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
             onChange={(e) => setMoveTo(Number(e.target.value))}
           >
             <option value="" disabled>{t("dimmgr.reassignPick")}</option>
-            {siblings.map((o) => (
+            {/* Where the tasks land is a value they are newly filed under, so a closed one is not
+                offered (`AMB-D-829`) — the same cut the detail pane's picker makes. There is always
+                one to choose: a required axis holds its last open value, so the delete button that
+                opens this row is itself shut while every other value is closed. */}
+            {siblings.filter((o) => !o.closed).map((o) => (
               <option key={o.id} value={o.id}>{o.name}</option>
             ))}
           </select>

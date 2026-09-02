@@ -3926,13 +3926,17 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
 /// One dimension value of a project overview (in `order_key` order). `start_on`/`end_on` are the
 /// period of a `role: time_axis` value — carried for every value, meaningful only on a time_axis axis.
 /// `slug` is the readable key the value answers to outside Amenbo (`AMB-D-735`); it is `None` only for
-/// a row still being written, never for one the overview reads back.
+/// a row still being written, never for one the overview reads back. `closed` is the same shape one
+/// role further along: the payload of `role: closable` (`AMB-D-829`), carried for every value and
+/// meaningful only where the axis was nominated — a value nothing new is filed under, while everything
+/// already filed under it stays.
 pub struct DimensionValueRow {
     pub id: i64,
     pub name: String,
     pub slug: Option<String>,
     pub start_on: Option<NaiveDate>,
     pub end_on: Option<NaiveDate>,
+    pub closed: bool,
 }
 
 /// One dimension (classification axis) of a project overview: id/name/slug/notes plus its live values (in
@@ -4107,6 +4111,7 @@ fn overview_dimension_values(
     let mut sel = Select::new();
     let (dimension_id, id, name) = (sel.col(V.dimension_id), sel.col(V.id), sel.col(V.name));
     let (slug, start_on, end_on) = (sel.col(V.slug), sel.col(V.start_on), sel.col(V.end_on));
+    let closed = sel.col(V.closed);
     let mut sql = Sql::from(&sel, V.table);
     sql.join(D.table, same(D.id, V.dimension_id))
         .push_where(scoped(reach, D.project_id).as_ref())
@@ -4122,6 +4127,7 @@ fn overview_dimension_values(
                     slug: slug.get(r)?,
                     start_on: parse_card_date(start_on.get(r)?)?,
                     end_on: parse_card_date(end_on.get(r)?)?,
+                    closed: closed.get(r)?,
                 },
             ))
         })

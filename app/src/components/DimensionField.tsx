@@ -6,8 +6,18 @@
 // It holds no state. Both panes move first and let the write answer after, so what is drawn is the
 // map the pane keeps and rolls back — passing that in, rather than keeping a copy here, is what stops
 // the two from ever disagreeing about what "cleared" looks like.
-import type { DimensionDto } from "../bindings/bindings";
+//
+// A closed value is not offered (`AMB-D-829`): closing retires it from what a record is newly filed
+// under, which is exactly what this field does. What the record already carries is drawn whether or not
+// the value is closed — a value that vanished from the field could never be taken off or replaced, and
+// closing is meant to leave what was filed under it alone.
+import type { DimensionDto, DimensionValueDto } from "../bindings/bindings";
 import { t } from "../core/i18n";
+
+/** The values this field offers: the open ones, plus whatever the record already carries. */
+function offered(dim: DimensionDto, selected: readonly number[]): DimensionValueDto[] {
+  return dim.values.filter((v) => !v.closed || selected.includes(v.id));
+}
 
 export function DimensionField({ dim, selected, onSet, onUnset }: {
   dim: DimensionDto;
@@ -31,7 +41,7 @@ export function DimensionField({ dim, selected, onSet, onUnset }: {
         }}
       >
         <option value="">{t("detail.none")}</option>
-        {dim.values.map((v) => (
+        {offered(dim, selected).map((v) => (
           <option key={v.id} value={v.id}>{v.name}</option>
         ))}
       </select>
@@ -40,7 +50,7 @@ export function DimensionField({ dim, selected, onSet, onUnset }: {
   // The axis's own order, not the order the values were assigned in: a value added today would
   // otherwise sit at the end and the row would read differently on every record.
   const carried = dim.values.filter((v) => selected.includes(v.id));
-  const rest = dim.values.filter((v) => !selected.includes(v.id));
+  const rest = offered(dim, selected).filter((v) => !selected.includes(v.id));
   return (
     <span className="dimchips">
       {carried.length === 0 && rest.length === 0 && <span className="faint">{t("detail.none")}</span>}

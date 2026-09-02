@@ -475,17 +475,27 @@ export function BoardScreen({
 
       {view === "board" && groupingDim && (
         <div className="board" ref={boardRef}>
-          {groupingDim.values.map((v) => (
+          {/* A closed value keeps its column only while tasks are still in it (`AMB-D-829`). Closing it
+              retires it from what a task is newly filed under, and an axis that keeps raising values and
+              closing them — a release, a theme — would otherwise grow a board of empty columns nobody
+              can drop into. What was filed under it is a different matter: hiding a column with cards in
+              it would take those tasks off the board altogether, since the "no value" column holds only
+              the tasks carrying none. So the column stays until the last card leaves it, and it takes
+              no drop — core refuses to file anything new under a closed value. */}
+          {groupingDim.values
+            .map((v) => ({ v, cards: tasks.filter((tk) => dimAssign[tk.id] === v.id) }))
+            .filter(({ v, cards }) => !v.closed || cards.length > 0)
+            .map(({ v, cards }) => (
             <Column
               key={v.id}
               name={v.name}
-              cards={tasks.filter((tk) => dimAssign[tk.id] === v.id)}
+              cards={cards}
               chips={chips}
               selectedTaskId={selectedTaskId}
               onSelectTask={onSelectTask}
               onStatus={store.setStatus}
               onSeeAllList={() => setView("list")}
-              droppable
+              droppable={!v.closed}
               draggingId={draggingId}
               onCardDragStart={setDraggingId}
               onCardDragEnd={clearDragging}

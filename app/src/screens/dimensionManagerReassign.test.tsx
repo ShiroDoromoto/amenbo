@@ -13,8 +13,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 // The mock factories run before the module body, so the two values live inside the hoisted block and are
 // read back out of it — a const up here is not yet initialised when `vi.mock` reaches for it.
 const hoisted = vi.hoisted(() => {
-  const MAIN = { id: 901, name: "メイン", slug: "main" };
-  const THEME = { id: 902, name: "検索の作り直し", slug: "search" };
+  const MAIN = { id: 901, name: "メイン", slug: "main", closed: false };
+  const THEME = { id: 902, name: "検索の作り直し", slug: "search", closed: false };
   return {
   MAIN,
   THEME,

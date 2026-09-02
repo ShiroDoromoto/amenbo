@@ -8,7 +8,7 @@ describe("filters: user-defined classifications (unified dimension)", () => {
     id: 1, name: "カテゴリー", notes: "", cardinality: "single" as const, role: "none" as const, ordered: false,
     showOnCard: false, required: false,
     appliesTo: "both" as const,
-    values: [{ id: 11, name: "バグ" }, { id: 12, name: "機能" }],
+    values: [{ id: 11, name: "バグ", closed: false }, { id: 12, name: "機能", closed: false }],
   };
   const assign = { t1: { 1: [11] }, t2: { 1: [12] } };
   const dims = filterDimensions([dim], assign);
@@ -30,6 +30,19 @@ describe("filters: user-defined classifications (unified dimension)", () => {
     expect(passesFilters(t3, dims, { "dim:1": ["11"] })).toBe(false);
     expect(passesFilters(t3, dims, {})).toBe(true); // an unset filter narrows nothing
     expect(passesFilters(t3, dims, { "dim:1": [] })).toBe(true); // nor does one with nothing chosen on it
+  });
+
+  // Closing a value retires it from what a record is newly filed under and from nothing else
+  // (`AMB-D-829`). Asking what carried a finished release is the whole reason to close one rather than
+  // delete it, so the filter is the face that draws no distinction — unlike the picker and the board.
+  it("offers a closed value as a filter option like any other, and still matches on it", () => {
+    const retired = { ...dim, values: [dim.values[0], { ...dim.values[1], closed: true }] };
+    const withClosed = filterDimensions([retired], assign);
+    const axis = withClosed.find((d) => d.id === "dim:1")!;
+    const t2 = { id: "t2", title: "t" } as unknown as TaskCard;
+
+    expect(axis.options.map((o) => o.label())).toEqual(["バグ", "機能"]);
+    expect(passesFilters(t2, withClosed, { "dim:1": ["12"] })).toBe(true);
   });
 
   it("does not surface a classification axis with no values as a filter dimension (nothing to narrow)", () => {
@@ -122,7 +135,7 @@ describe("filters: the decisions tab narrows the same way the board does", () =>
     id: 1, name: "テーマ", notes: "", cardinality: "single" as const, role: "none" as const, ordered: false,
     showOnCard: false, required: false,
     appliesTo: "both" as const,
-    values: [{ id: 11, name: "メイン" }, { id: 12, name: "会話の窓" }],
+    values: [{ id: 11, name: "メイン", closed: false }, { id: 12, name: "会話の窓", closed: false }],
   };
   const assign = { 1: { 1: [11] }, 2: { 1: [12] } };
   const dims = decisionFilterDimensions([dim], assign);

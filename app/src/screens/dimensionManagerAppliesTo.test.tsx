@@ -13,7 +13,7 @@ const AXIS = {
   id: 900, name: "占有", slug: "occupancy", notes: "", cardinality: "single" as const,
   role: "none" as const, ordered: false,
   showOnCard: false, required: false, appliesTo: "both" as const,
-  values: [{ id: 901, name: "iOS", slug: "ios" }],
+  values: [{ id: 901, name: "iOS", slug: "ios", closed: false }],
 };
 
 const hoisted = vi.hoisted(() => ({

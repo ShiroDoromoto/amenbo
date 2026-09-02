@@ -183,10 +183,10 @@ export const CORE_SENTENCE_ERROR_CODES = [
  * instead, with its prose. */
 export const CORE_CLI_ONLY_ERROR_CODES = [
   // The three refusals closing a value raises (`AMB-D-829`): an axis nobody nominated closable, the last
-  // value a required axis still offers, and a closed value somebody tried to file a record under. Core
-  // carries the flag and no face reaches it yet — the classification panel has no close control and the
-  // CLI no close command — so nothing on a screen can be refused for these reasons. Whichever door lands
-  // one of them on a screen moves it into the sentence list above, with the prose it then owes.
+  // value a required axis still offers, and a closed value somebody tried to file a record under. The one
+  // door that reaches them is `dimension value-close` / `value-reopen` in the terminal; the classification
+  // panel has no close control, so nothing on a screen can be refused for these reasons. The day the panel
+  // grows one, these move into the sentence list above, with the prose they then owe.
   "invalid_dimension_close_not_closable",
   "invalid_dimension_close_last_open",
   "invalid_dimension_set_closed_value",

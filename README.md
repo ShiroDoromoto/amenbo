@@ -220,6 +220,15 @@ amenbo dimension update Area --show-on-card true
 # door, so raising it never disturbs a task already filed. The axis has to offer a
 # value before it can demand one.
 amenbo dimension update Area --required true
+# --closable marks an axis whose values get retired rather than deleted — a release, a
+# theme, anything the axis keeps raising and finishing. Closing a value files nothing
+# new under it and takes nothing away: the tasks already on it keep it, and a filter
+# naming it goes on answering, which a delete cannot do. Closed values leave the
+# listings until --closed asks for them; reopening is free on any axis.
+amenbo dimension update Release --closable true
+amenbo dimension value-close Release v18.0.0
+amenbo task list --filter "dim:Release=v18.0.0" --json   # still answers
+amenbo dimension value-reopen Release v18.0.0
 # An axis and each of its values also carry a slug: a readable key for naming one
 # outside Amenbo, where a display name may not go and an id says nothing. Lower-case
 # letters, digits and hyphens, starting with a letter. Nobody has to pick one — a row
@@ -227,7 +236,8 @@ amenbo dimension update Area --required true
 # outside has to type. A reference resolves by id, then slug, then name.
 amenbo dimension update Area --slug area
 amenbo dimension value-add Area --name "Design" --slug design
-amenbo dimension list --project "Website refresh" --json   # axes + their values, keys included
+amenbo dimension list --project "Website refresh" --json   # axes + their open values, keys included
+amenbo dimension list --project "Website refresh" --closed --json   # the closed ones too
 # Slice tasks by any axis. `dim:` repeats: different axes AND, the same axis twice
 # ORs. `=none` = unassigned on that axis; `time_axis:` is sugar for whichever axis
 # you marked --time-axis.

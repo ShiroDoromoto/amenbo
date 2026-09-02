@@ -595,6 +595,7 @@ export const uk: Translation = {
     "files.read": "Читати",
     "files.reopenWith": "Відкрити заново в іншому кодуванні",
     "files.lineEndingMixed": "Мішані кінці рядків",
+    "files.copyPath": "Скопіювати шлях",
     "files.pasteFilePath": "Вставити шлях файлу",
     "files.pasteFolderPath": "Вставити шлях теки",
     "files.openWith": "Відкрити у звичайній програмі",

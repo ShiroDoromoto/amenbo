@@ -568,6 +568,7 @@ export const ko: Translation = {
     "files.read": "읽기",
     "files.reopenWith": "문자 인코딩을 지정해 다시 열기",
     "files.lineEndingMixed": "줄바꿈 혼재",
+    "files.copyPath": "경로 복사",
     "files.pasteFilePath": "파일 경로 붙여넣기",
     "files.pasteFolderPath": "폴더 경로 붙여넣기",
     "files.openWith": "늘 쓰는 앱으로 열기",

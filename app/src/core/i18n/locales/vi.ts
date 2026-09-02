@@ -572,6 +572,7 @@ export const vi: Translation = {
     "files.read": "Đọc",
     "files.reopenWith": "Mở lại với một bảng mã",
     "files.lineEndingMixed": "Ký tự xuống dòng lẫn lộn",
+    "files.copyPath": "Sao chép đường dẫn",
     "files.pasteFilePath": "Dán đường dẫn của tệp",
     "files.pasteFolderPath": "Dán đường dẫn của thư mục",
     "files.openWith": "Mở bằng ứng dụng thường dùng",

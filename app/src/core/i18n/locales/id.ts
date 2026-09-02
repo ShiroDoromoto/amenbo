@@ -572,6 +572,7 @@ export const id: Translation = {
     "files.read": "Baca",
     "files.reopenWith": "Buka ulang dengan pengodean",
     "files.lineEndingMixed": "Akhir baris campuran",
+    "files.copyPath": "Salin jalur",
     "files.pasteFilePath": "Tempelkan jalur berkas",
     "files.pasteFolderPath": "Tempelkan jalur folder",
     "files.openWith": "Buka dengan aplikasi biasa",

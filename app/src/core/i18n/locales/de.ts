@@ -579,6 +579,7 @@ export const de: Translation = {
     "files.read": "Lesen",
     "files.reopenWith": "Mit einer Kodierung neu öffnen",
     "files.lineEndingMixed": "Gemischte Zeilenenden",
+    "files.copyPath": "Pfad kopieren",
     "files.pasteFilePath": "Pfad der Datei einfügen",
     "files.pasteFolderPath": "Pfad des Ordners einfügen",
     "files.openWith": "Mit der üblichen App öffnen",

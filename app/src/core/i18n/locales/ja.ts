@@ -581,6 +581,7 @@ export const ja: Translation = {
     "files.read": "読む",
     "files.reopenWith": "文字コードを指定して開き直す",
     "files.lineEndingMixed": "改行が混在",
+    "files.copyPath": "パスをコピー",
     "files.pasteFilePath": "ファイルのパスを貼る",
     "files.pasteFolderPath": "フォルダのパスを貼る",
     "files.openWith": "いつものアプリで開く",

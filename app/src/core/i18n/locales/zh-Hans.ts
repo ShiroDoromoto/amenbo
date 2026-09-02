@@ -569,6 +569,7 @@ export const zhHans: Translation = {
     "files.read": "阅读",
     "files.reopenWith": "指定字符编码重新打开",
     "files.lineEndingMixed": "换行符混用",
+    "files.copyPath": "复制路径",
     "files.pasteFilePath": "粘贴文件路径",
     "files.pasteFolderPath": "粘贴文件夹路径",
     "files.openWith": "用常用的应用打开",

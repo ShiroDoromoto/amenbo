@@ -569,6 +569,7 @@ export const hi: Translation = {
     "files.read": "पढ़ें",
     "files.reopenWith": "किसी एन्कोडिंग के साथ फिर से खोलें",
     "files.lineEndingMixed": "मिली-जुली पंक्ति-अंत",
+    "files.copyPath": "पथ कॉपी करें",
     "files.pasteFilePath": "फ़ाइल का पथ चिपकाएँ",
     "files.pasteFolderPath": "फ़ोल्डर का पथ चिपकाएँ",
     "files.openWith": "सामान्य ऐप में खोलें",

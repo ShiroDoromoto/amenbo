@@ -595,6 +595,7 @@ export const pl: Translation = {
     "files.read": "Czytaj",
     "files.reopenWith": "Otwórz ponownie z kodowaniem",
     "files.lineEndingMixed": "Mieszane końce wierszy",
+    "files.copyPath": "Kopiuj ścieżkę",
     "files.pasteFilePath": "Wklej ścieżkę pliku",
     "files.pasteFolderPath": "Wklej ścieżkę folderu",
     "files.openWith": "Otwórz w zwykłej aplikacji",

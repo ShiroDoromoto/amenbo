@@ -651,6 +651,9 @@ const ui = {
   "files.read": "Read",
   "files.reopenWith": "Reopen with an encoding",
   "files.lineEndingMixed": "Mixed newlines",
+  // One word for a file and for a folder: what is copied is the row, and a menu that named the two
+  // differently would be saying they were two different doors (`AMB-D-832`).
+  "files.copyPath": "Copy the path",
   "files.pasteFilePath": "Paste the file's path",
   "files.pasteFolderPath": "Paste the folder's path",
   "files.openWith": "Open with the usual application",

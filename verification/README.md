@@ -425,6 +425,9 @@ project put on the card, and nothing at all from the axis beside it that did not
 both values on the one card, the category missing from the row of buttons that cut the columns while
 the category beside it is still offered there, and the pair still drawn once the board is cut along
 that other one —
+`file-work-by-moving-its-card` walks that board as the place work is filed from rather than read on —
+the column standing before anything is in it, a card carried into it and another carried elsewhere,
+and the narrowing afterwards that comes back with the first and leaves out the second —
 `set-an-app-up-to-reach-this-project` walks the fold that holds the other way in — the app already reaching this
 project and the folder its entry names, beside the app reaching nothing, each row offering the one road its app can
 walk —

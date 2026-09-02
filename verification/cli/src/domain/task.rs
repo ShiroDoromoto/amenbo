@@ -194,8 +194,9 @@ impl Driver<'_> {
             }
             "found" => {
                 let target = self.resolve(with)?;
+                let words = self.query(with)?;
                 let hits = self.search(with)?;
-                judge_found("task", &format!("AMB-T-{target}"), req_str(with, "words")?, with, &hits["hits"])
+                judge_found("task", &format!("AMB-T-{target}"), &words, with, &hits["hits"])
             }
             "status-bucket" => {
                 let target = self.resolve(with)?;

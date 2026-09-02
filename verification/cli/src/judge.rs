@@ -54,6 +54,25 @@ pub(crate) fn judge_listing(
 }
 
 impl Driver<'_> {
+    /// What a step puts into the search: the `words` it wrote, or — where it wrote `number_of`
+    /// instead — the number the store gave the record that names, in the shape `spelled` asks for
+    /// (`bare` is `12`, `hash` is `#12`; both are spellings the search reads).
+    ///
+    /// A number is filled in here rather than written in the scenario because the store is the one
+    /// that issues it: a road knows which record it means, never what that record was numbered. The
+    /// loader has already held the step to exactly one of the two, so a missing `words` here is a
+    /// step that named the other.
+    pub(crate) fn query(&self, with: &Args) -> Result<String, String> {
+        if with.contains_key("number_of") {
+            let id = self.resolve_key(with, "number_of")?;
+            return Ok(match with.get("spelled").and_then(|v| v.as_str()) {
+                Some("hash") => format!("#{id}"),
+                _ => id.to_string(),
+            });
+        }
+        Ok(req_str(with, "words")?.to_string())
+    }
+
     /// The one read a `found` assert stands on: the words a step names, and the narrowings it may name
     /// beside them. Shared by both sides because a search crosses them — the same invocation answers for
     /// a task and for a decision, and only the ref it is judged against differs.
@@ -61,7 +80,7 @@ impl Driver<'_> {
     /// The words go over as separate arguments, which is how a person types them: a shell splits them,
     /// and the binary ANDs them.
     pub(crate) fn search(&self, with: &Args) -> Result<serde_json::Value, String> {
-        let words = req_str(with, "words")?;
+        let words = self.query(with)?;
         let mut args: Vec<String> = vec!["search".into()];
         args.extend(words.split_whitespace().map(str::to_string));
         for key in ["kind", "filter"] {
@@ -102,6 +121,10 @@ impl Driver<'_> {
 /// to the rows this record owns, so a step naming it is asserting that the answer carries the state and
 /// not merely the ref — which is what saves the reader the `show` the search was meant to replace.
 ///
+/// `first` asks the other thing an answer's shape says: that this record's row is the top of it. A
+/// number is answered by putting the record it names above whatever the words matched, so a build
+/// that merely included it somewhere would pass a step that only asked whether it was there.
+///
 /// The two questions a row is asked on the screen's road alone are turned away here instead of quietly
 /// passing. What a row *calls* a place and where the words are marked inside its excerpt are both drawn
 /// rather than reported: down this pipe the first is a `kind` and a comment ref for the reader to put
@@ -129,6 +152,28 @@ pub(crate) fn judge_found(
         Some(want) => mine.iter().any(|h| h["face"].as_str() == Some(want)),
         None => !mine.is_empty(),
     };
+    // Where in the answer it stands. Asked before `present`, since a step asking for the top is one
+    // that expects the record to be there — the two together would be asking for the top of an
+    // answer it is not in.
+    if opt_bool(with, "first").unwrap_or(false) {
+        if !opt_bool(with, "present").unwrap_or(true) {
+            return Err(
+                "`first` asks where a record stands in the answer, so it cannot be asked of one the step says is absent"
+                    .to_string(),
+            );
+        }
+        let top = rows.first().and_then(|h| h["ref"].as_str());
+        let leads = top == Some(id_ref);
+        return Ok(Outcome::assert(
+            leads,
+            format!(
+                "{noun} {id_ref} is asked for as `{words}`, and the answer leads with {} ({} row(s), expected {id_ref} at the top, {})",
+                top.unwrap_or("nothing at all"),
+                rows.len(),
+                if leads { "as expected" } else { "MISMATCH" }
+            ),
+        ));
+    }
     // Where the record stands, asked of the rows it owns. A step naming it is one that expects the
     // record to be there, so a row that is missing the state fails as loudly as a wrong one.
     if let Some(want) = with.get("standing").and_then(|v| v.as_str()) {
@@ -272,5 +317,45 @@ mod tests {
             };
             assert!(err.contains(key) && err.contains("steps_gui"), "got: {err}");
         }
+    }
+
+    /// A number is answered by putting the record it names above whatever the words matched, so the
+    /// step that walks that asks for the top of the answer and not for a place in it: a build that
+    /// stopped pinning would still have the record somewhere among its hits.
+    #[test]
+    fn the_top_of_the_answer_is_a_place_of_its_own() {
+        let with: Args = [("first".to_string(), serde_yaml::Value::from(true))].into();
+
+        let pinned = json!([
+            { "ref": "AMB-T-12", "face": "title" },
+            { "ref": "AMB-T-40", "face": "notes" },
+        ]);
+        assert!(judge_found("task", "AMB-T-12", "12", &with, &pinned).unwrap().pass);
+
+        let buried = json!([
+            { "ref": "AMB-T-40", "face": "notes" },
+            { "ref": "AMB-T-12", "face": "title" },
+        ]);
+        assert!(
+            !judge_found("task", "AMB-T-12", "12", &with, &buried).unwrap().pass,
+            "present but not leading is what this step exists to catch"
+        );
+
+        assert!(!judge_found("task", "AMB-T-12", "12", &with, &json!([])).unwrap().pass);
+    }
+
+    /// Asking where a record stands in an answer it is said to be absent from is two questions that
+    /// cannot both be meant, so it is turned away rather than answered either way.
+    #[test]
+    fn the_top_cannot_be_asked_of_a_record_the_step_says_is_absent() {
+        let with: Args = [
+            ("first".to_string(), serde_yaml::Value::from(true)),
+            ("present".to_string(), serde_yaml::Value::from(false)),
+        ]
+        .into();
+        let Err(err) = judge_found("task", "AMB-T-12", "12", &with, &json!([])) else {
+            panic!("the top of an answer a record is not in is not a question");
+        };
+        assert!(err.contains("absent"), "got: {err}");
     }
 }

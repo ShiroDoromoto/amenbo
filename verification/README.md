@@ -908,6 +908,20 @@ the GUI harness renders them into the line an eye closes, and the CLI driver ref
 either instead of passing over it. Silence would be worse than a red: a step that asked and was never
 answered reads exactly like one that was.
 
+**A number is a query no scenario can write.** The store issues it, so a road knows which record it
+means and never what that record was numbered — which is why the three steps that put something into a
+search box (`task found` / `decision found`, `task narrow`, `task open-hit`) take `number_of:` naming a
+binding in place of `words:`, and exactly one of the two. `spelled:` is the shape it goes in as, `bare`
+(`12`) or `hash` (`#12`), both of which the box reads. The two roads fill it in differently and for the
+same reason the rest of this section names: the CLI driver knows what the run created and substitutes
+the number, while the GUI harness renders its lines from the YAML alone — before any world stands up —
+so it names the record instead and the operator reads the number off the screen.
+
+What such a query is answered with is a record put at the **top** of the answer, ahead of whatever the
+words matched, so `first: true` on `found` asks for that place rather than for a place anywhere in it.
+The CLI driver reads the order off the hits; the GUI harness leaves it as a `Review`, a reading giving
+back which words are on a shot and never which line they were on.
+
 An argument can also mean two different things on the two roads, and `attach`'s `file:` is the one
 that does. To the CLI driver it is a path in the run's own folder, put there by a `repo write-file` a
 step earlier; on screen it is a **name** and nothing more — both ways in there (the picker and the

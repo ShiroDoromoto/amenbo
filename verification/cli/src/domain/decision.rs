@@ -141,8 +141,9 @@ impl Driver<'_> {
             }
             "found" => {
                 let target = self.resolve(with)?;
+                let words = self.query(with)?;
                 let hits = self.search(with)?;
-                judge_found("decision", &format!("AMB-D-{target}"), req_str(with, "words")?, with, &hits["hits"])
+                judge_found("decision", &format!("AMB-D-{target}"), &words, with, &hits["hits"])
             }
             "field" => {
                 let target = self.resolve(with)?;

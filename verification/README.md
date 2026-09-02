@@ -325,6 +325,14 @@ not the pace of them. The tool opens the field's picker, writes the day where th
 tabs back out so the panel is not standing over the rows beneath, and reads the field back — so a
 write that reached nothing is reported here rather than as a red assert on the day.
 
+**`--near <name>` says which row, where the field's own name does not.** A manager listing the values
+of an axis draws every row the same `Start date` and `End date`, so the name reaches one field per
+value and asking it to name itself more fully asks for a name that is not there. What is there is the
+value's own name, on that row: `set-date <pid> "Start date" 2001-01-01 --near Ongoing` writes into the
+`Start date` standing beside `Ongoing`. Same row is read off the frames the tree answers with at that
+moment — no shot, no scale, nothing that a screen having moved could put out — and a `--near` that
+leaves several fields, or none, is refused the same way an ambiguous name is.
+
 ### `--print` — read the road without a screen
 
 The screen road is written in YAML, but the sentences it turns into are written in Rust, so what a

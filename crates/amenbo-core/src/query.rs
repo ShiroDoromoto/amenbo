@@ -12,8 +12,9 @@ use crate::view::{DecisionCompact, DecisionRef, Ref, TaskCompact};
 // ───────────────────────── filter / sort skeleton (shared) ─────────────────────────
 
 /// Shared parsing skeleton for filter expressions written as space-separated `key:value` tokens.
-/// Each token is split on `:`; anything not in `key:value` form yields the same error. `apply` is
-/// called once per `(key, value)` and folds it into the caller's filter (unknown keys and bad
+/// Each token is split on `:`; anything not in `key:value` form is refused — a token that is
+/// nothing but digits is answered with `number:`, everything else with the general reading. `apply`
+/// is called once per `(key, value)` and folds it into the caller's filter (unknown keys and bad
 /// values are rejected by returning `Err` from `apply`).
 fn parse_filter_tokens(expr: &str, mut apply: impl FnMut(&str, &str) -> Result<()>) -> Result<()> {
     for token in expr.split_whitespace() {
@@ -23,6 +24,14 @@ fn parse_filter_tokens(expr: &str, mut apply: impl FnMut(&str, &str) -> Result<(
         // the value's slug and its id, neither of which can hold whitespace. Name both readings, or
         // the writer cannot tell which one they hit.
         let (key, value) = token.split_once(':').ok_or_else(|| {
+            // A token that is nothing but digits is a number someone is filtering by, not a typo.
+            // The key that reads one is `number:`, and this refusal is the only place the writer
+            // finds that out — the number itself is not one of the keys.
+            if token.chars().all(|c| c.is_ascii_digit()) {
+                return Error::invalid(format!(
+                    "filter '{token}' must be in key:value form — to filter by the conversational number, write `number:{token}`"
+                ));
+            }
             Error::invalid(format!(
                 "filter '{token}' must be in key:value form — either a mistyped token, or a value holding whitespace (the split comes before any quoting, so such a value cannot be written: name it by its slug or its id instead, neither of which can hold whitespace)"
             ))
@@ -2724,6 +2733,30 @@ mod filter_tests {
 
         let fragment = Filter::parse("dim:リリース=AI 起票導線", day).unwrap_err().to_string();
         assert!(fragment.contains("'起票導線'"), "the fragment is quoted as written: {fragment}");
+    }
+
+    /// A number is what someone filtering by a ref types first, and it is not one of the keys — so
+    /// it lands in the same refusal a typo does. There the general reading is no help: it names the
+    /// slug and the id, neither of which is what was typed. Answer a digits-only token with the key
+    /// that reads it. The task face and the decision face share one skeleton, so both say it.
+    #[test]
+    fn a_bare_number_is_answered_with_the_key_that_reads_it() {
+        let day = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+
+        for message in [
+            Filter::parse("4238", day).unwrap_err().to_string(),
+            DecisionFilter::parse("status:accepted 833", day).unwrap_err().to_string(),
+        ] {
+            assert!(message.contains("must be in key:value form"), "the grammar is still stated: {message}");
+            assert!(message.contains("number:"), "and the key that reads a number: {message}");
+            assert!(
+                !message.contains("whitespace"),
+                "the whitespace reading is not what a number needs: {message}",
+            );
+        }
+
+        let numbered = Filter::parse("4238", day).unwrap_err().to_string();
+        assert!(numbered.contains("`number:4238`"), "the key is spelled with the number typed: {numbered}");
     }
 
     /// `project:` takes an id or a **name** (the same entry point as `task add --project`). A

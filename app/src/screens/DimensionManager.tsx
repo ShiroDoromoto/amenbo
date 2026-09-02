@@ -12,7 +12,8 @@ import { Icon } from "../components/Icon";
 
 // The management panel for classification (unified dimensions), reached from the board's axis bar as a modal of its
 // own. It exposes renaming a dimension, editing its notes and removing it; renaming and removing its values; the
-// ordered toggle, the toggle that names an axis the time axis (role: time_axis), the toggle that puts an axis on the
+// ordered toggle, the toggle that lets one record answer with several values (cardinality: multi), the toggle that
+// names an axis the time axis (role: time_axis), the toggle that puts an axis on the
 // task card, the toggle that makes an axis refuse to be left empty, and, on an ordered dimension, reordering the
 // values. Removing a value from a required axis is the one of those that asks a question first: the tasks answering
 // with it have to be told which other value they move to, and the axis's last value is out of reach entirely, core
@@ -84,6 +85,20 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
             onChange={(e) => store.setDimensionOrdered(dim.id, e.target.checked)}
           />
           {t("dimmgr.ordered")}
+        </label>
+        {/* Whether one record may answer this axis with several of its values (`AMB-D-826`). It sits
+            next to the time-axis switch because the two refuse each other: the era is resolved to one
+            value, so an axis that admits several cannot be the one it is read off. Neither box is held
+            down for the other — core refuses the pair at whichever switch moved, and names the pair
+            rather than the half that moved. Lowering it back is refused while records still answer with
+            several, and that sentence carries the count. */}
+        <label className="dimmgr__ordered" title={t("dimmgr.multiHint")}>
+          <input
+            type="checkbox"
+            checked={dim.cardinality === "multi"}
+            onChange={(e) => store.setDimensionMulti(dim.id, e.target.checked)}
+          />
+          {t("dimmgr.multi")}
         </label>
         <label className="dimmgr__ordered" title={t("dimmgr.timeAxisHint")}>
           <input

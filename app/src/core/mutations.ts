@@ -1605,6 +1605,18 @@ export async function updateDimension(id: number, notes: string): Promise<void> 
   return invokeAck("dimension_update", { id, notes });
 }
 
+/**
+ * Let one record answer this dimension with several of its values, or hold it back to one
+ * (`AMB-D-826`). Raising it throws nothing away, so it always goes through; the way back down is
+ * refused while any task or decision still answers with several, and the refusal names how many
+ * (`invalid_dimension_demote_holders`). A multi-select axis cannot also be the time axis, which
+ * resolves one current era, so core refuses that pair at whichever of the two switches moved.
+ */
+export async function setDimensionMulti(id: number, multi: boolean): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_update", { id, multi });
+}
+
 /** Toggle whether a dimension's values are ordered. Turning it on is what makes reordering them (moveDimensionValue) work. */
 export async function setDimensionOrdered(id: number, ordered: boolean): Promise<void> {
   if (!inTauri()) return;

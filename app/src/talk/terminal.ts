@@ -341,6 +341,23 @@ export async function pasteIntoTerminal(session: string, text: string): Promise<
 }
 
 /**
+ * Put the keyboard on the terminal drawn in `host`.
+ *
+ * **Nothing else moves the keyboard into a pane.** A terminal takes it the way anything on a page
+ * does — the person presses it — and that is enough everywhere but one place: a file dropped from
+ * the desktop never presses the page at all (`../core/hostDrop`), so the pane it landed on can be
+ * the one being pointed at and still not be the one the next keystroke goes to (`AMB-T-4182`).
+ *
+ * What takes the focus is the box the emulator collects typing in — the only textarea a pane draws,
+ * which is why it is asked for that way rather than by a class name of xterm's own. A place with no
+ * terminal in it has none, and the focus then stays where it was: taking it off whatever holds it,
+ * to give it to nothing, is worse than leaving it alone.
+ */
+export function focusTerminal(host: HTMLElement | null): void {
+  host?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+}
+
+/**
  * End the program in a terminal.
  *
  * **It is the only way out.** Taking a pane away never ends one — that is a pane moving, and the

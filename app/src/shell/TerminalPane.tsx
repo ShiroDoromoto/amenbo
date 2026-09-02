@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
-import { endTerminal, pasteIntoTerminal, quotedPath } from "../talk/terminal";
+import { endTerminal, focusTerminal, pasteIntoTerminal, quotedPath } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
@@ -138,8 +138,8 @@ export function TerminalPane({
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
   // callback — that would take the terminal down to learn something it could have been told.
-  const on = useRef({ onOpened, onSaid, onPath, onClosed, onName, onWaiting });
-  on.current = { onOpened, onSaid, onPath, onClosed, onName, onWaiting };
+  const on = useRef({ onOpened, onSaid, onPath, onClosed, onName, onWaiting, onFocus });
+  on.current = { onOpened, onSaid, onPath, onClosed, onName, onWaiting, onFocus };
 
   /** Take the place away, once the person has said so. The terminal in it is ended first: a session
    *  whose pane has gone is one nobody can get back to. */
@@ -258,6 +258,12 @@ export function TerminalPane({
   // running in it has nowhere to put a path, and a surface that lit up over one would be a promise
   // the pane cannot keep. It is taken up per pane and matched on this pane's own frame, so a drop
   // that landed on the pane beside it is one this watch is never told about.
+  //
+  // **A drop is a person saying which pane they mean**, so both of the things that follow from
+  // saying it are done here. Neither happens on its own: the selection moves on `onMouseDown` and
+  // an outside drag never presses the page, and the focus is the browser's, which the same gesture
+  // never reaches either. Without them the path is pasted into this pane and the reader's next
+  // keystroke goes to the pane they were in before (`AMB-T-4182`).
   useEffect(() => {
     if (live === null) return;
     let alive = true;
@@ -269,6 +275,8 @@ export function TerminalPane({
       drop: (_at, paths) => {
         if (!alive) return;
         setHanding(false);
+        on.current.onFocus(frame);
+        focusTerminal(paneRef.current);
         void handOver(live, paths);
       },
     }).then((off) => { if (alive) stop = off; else off(); });

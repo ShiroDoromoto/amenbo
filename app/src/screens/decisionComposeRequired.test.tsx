@@ -17,6 +17,8 @@ const OPTIONAL = { ...REQUIRED, id: 910, name: "影響半径", required: false,
   values: [{ id: 911, name: "広い" }] };
 const WORK_ONLY = { ...REQUIRED, id: 920, name: "占有", appliesTo: "task",
   values: [{ id: 921, name: "iOS" }] };
+const TIME_AXIS = { ...REQUIRED, id: 930, name: "フェーズ", role: "time_axis",
+  values: [{ id: 931, name: "運用第2期", startOn: "2026-07-08" }] };
 
 const hoisted = vi.hoisted(() => ({
   /** The axes the project carries. */
@@ -105,6 +107,20 @@ describe("recording a decision under the axes its project demands", () => {
     hoisted.axes = [WORK_ONLY];
     await open();
     expect(selects()).toHaveLength(0);
+  });
+
+  // `AMB-D-147`: the era containing today goes on the decision as it is recorded, so asking for it here
+  // would cost a choice every time and land on the same value. Nothing is sent for it either — the
+  // create writes it, not the form.
+  it("does not ask for the time axis, which the create fills", async () => {
+    hoisted.axes = [TIME_AXIS];
+    await open();
+    await type("時代は訊かれない");
+    expect(selects()).toHaveLength(0);
+    expect(addButton().disabled).toBe(false);
+    await act(async () => { addButton().click(); });
+    await settle();
+    expect(hoisted.asked).toEqual(["時代は訊かれない:"]);
   });
 
   it("holds the button until the axis is answered, and names it", async () => {

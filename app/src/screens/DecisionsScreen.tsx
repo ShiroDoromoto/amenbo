@@ -5,6 +5,7 @@ import { dataAdapter } from "../mock/adapter";
 import { useDecisionPage, useDecisionSearchIds } from "../core/reads";
 import { useQuery } from "../core/query";
 import { axesFor } from "../core/appliesTo";
+import { isTimeAxis } from "../core/timeAxis";
 import { Pager, usePager } from "../components/Pager";
 import { errText, formatDay, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
@@ -285,7 +286,9 @@ function DecisionCard({ d, selected, onSelect }: {
 // wrote it. So the form asks here, while the writer is still in front of it, rather than letting the
 // record go out blank and the acceptance come back refused at somebody else.
 //
-// Only the **required** axes draw a select. The rest are the detail pane's, where they can be filled in
+// Only the **required** axes draw a select, and not the time axis among them: the store puts the era
+// containing today on a decision as it is recorded (`AMB-D-147`), so asking first would cost a choice
+// every time and land on the same value. The rest are the detail pane's, where they can be filled in
 // at leisure; putting every axis here would turn recording a decision into a form to work through.
 export function DecisionCompose({ projectId, onDone }: { projectId: number; onDone: () => void }) {
   const [title, setTitle] = useState("");
@@ -294,9 +297,13 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
   const [values, setValues] = useState<Record<number, number>>({});
 
   // The decision side alone (`AMB-D-789`): an axis narrowed to tasks demands nothing of a decision, and
-  // holding this button on one would ask for a value no decision can carry.
+  // holding this button on one would ask for a value no decision can carry. The time axis comes off for
+  // the opposite reason — the create fills it, so the answer is already there by the time anyone could
+  // be refused for it. A project with no era over today fills nothing and asks nothing, and the
+  // acceptance says so, exactly as it does on the task side.
   const project = getSnapshot().projects.find((p) => p.id === projectId);
-  const demanded = axesFor("decision", project?.dimensions ?? []).filter((d) => d.required);
+  const demanded = axesFor("decision", project?.dimensions ?? [])
+    .filter((d) => d.required && !isTimeAxis(d));
   const unmet = demanded.filter((d) => values[d.id] === undefined);
 
   async function submit() {

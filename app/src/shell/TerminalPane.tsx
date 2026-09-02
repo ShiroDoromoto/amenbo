@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
-import { endTerminal, focusTerminal, pasteIntoTerminal, quotedPath } from "../talk/terminal";
+import { endTerminal, focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
@@ -53,7 +53,7 @@ async function heldHere(session: string | null): Promise<readonly number[]> {
 async function handOver(session: string, paths: string[]) {
   if (paths.length === 0) return;
   try {
-    await pasteIntoTerminal(session, paths.map((one) => quotedPath(one)).join(" "));
+    await pasteIntoTerminal(session, quotedPaths(paths));
   } catch (e: unknown) {
     // The terminal having ended between the drop and the paste is the whole of what this can be,
     // and it is worth saying rather than swallowing.

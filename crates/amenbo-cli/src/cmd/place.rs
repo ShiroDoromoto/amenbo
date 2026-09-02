@@ -177,8 +177,10 @@ pub(crate) fn resolve_bound_folder(store: &Store, project_id: i64, token: &str) 
 /// - an axis that does not classify this side (`applies_to`, `AMB-D-789`) — a value written on the side
 ///   its axis does not run on classifies nothing, so it is refused the way `dim:` refuses it rather than
 ///   filed as a row that means nothing;
-/// - the same axis named twice. An axis holds one value, so the second would silently replace the first,
-///   and which one the caller meant is not ours to pick.
+/// - the same axis named twice, **on an axis that holds one value at a time**. There the second would
+///   silently replace the first, and which one the caller meant is not ours to pick. An axis that admits
+///   several takes both, which is what naming it twice asks for (`AMB-D-826`) — the same reading
+///   `dim:A=x dim:A=y` already has on the filter side.
 ///
 /// `=none` is not accepted here, unlike the `dim:` filter: there it selects the records with no value on
 /// that axis, and clearing an axis that was never set is what a new record already is.
@@ -197,17 +199,19 @@ pub(crate) fn resolve_dim_pairs(
             )));
         };
         let dimension_id = store.resolve_dimension(Some(project_id), axis).map_err(CliError::from)?;
-        let classifies = store
-            .dimension(dimension_id)
-            .map_err(CliError::from)?
-            .is_some_and(|d| side.accepted().contains(&d.applies_to));
+        // One read of the axis answers both questions below — which side it classifies, and how many of
+        // its values one record may hold.
+        let declared = store.dimension(dimension_id).map_err(CliError::from)?;
+        let classifies = declared.as_ref().is_some_and(|d| side.accepted().contains(&d.applies_to));
         if !classifies {
             return Err(CliError::from(amenbo_core::Error::invalid(format!(
                 "dimension '{axis}' does not classify {}, so `--dim` cannot file one under it",
                 side.plural()
             ))));
         }
-        if axes.contains(&dimension_id) {
+        let holds_several = declared
+            .is_some_and(|d| d.cardinality == amenbo_core::model::DimensionCardinality::Multi);
+        if !holds_several && axes.contains(&dimension_id) {
             return Err(CliError::from(amenbo_core::Error::invalid(
                 format!("--dim names the axis `{axis}` twice — an axis holds one value, so pass it once"),
             )));

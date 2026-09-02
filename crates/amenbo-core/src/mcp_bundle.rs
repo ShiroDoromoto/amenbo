@@ -97,7 +97,7 @@ pub fn manifest(server: &Server) -> String {
         // document a reader sees, and the lowercase spelling is the command's and the identifier's.
         // The folders are named below rather than here: they are a setting the reader can change, and
         // a description repeating them would go stale the first time they do.
-        "description": "Work your Amenbo projects from this app — their backlogs, their decisions \
+        "description": "Work your Amenbo projects from this app — their tasks, their decisions \
                         and the way to use them, for the folders set below.",
         "author": { "name": AUTHOR },
         // The one place this app differs from every other: the folders the server works in are the

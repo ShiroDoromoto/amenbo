@@ -5,7 +5,7 @@ use std::io::IsTerminal;
 
 use chrono::NaiveDate;
 
-use amenbo_core::model::{DimensionAppliesTo, Priority, View};
+use amenbo_core::model::{DimensionAppliesTo, DimensionCardinality, Priority, View};
 use amenbo_core::ops::Position;
 use amenbo_core::time;
 
@@ -47,6 +47,17 @@ pub(crate) fn parse_view(s: &str) -> Result<View, CliError> {
             exit: 2,
         }),
     }
+}
+
+/// How many of a classification axis's values one record may hold (`AMB-D-826`). Spelled out here for
+/// the reason the next one is: the refusal names the flag and lists what it takes.
+pub(crate) fn parse_cardinality(s: &str) -> Result<DimensionCardinality, CliError> {
+    DimensionCardinality::parse(s).ok_or_else(|| CliError {
+        code: "invalid_value",
+        message: format!("--cardinality value '{s}' is invalid."),
+        hint: Some("Specify one of: single | multi.".to_string()),
+        exit: 2,
+    })
 }
 
 /// Which side of the store a classification axis classifies (`AMB-D-789`). Spelled out here rather

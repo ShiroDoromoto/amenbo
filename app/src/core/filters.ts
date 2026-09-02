@@ -46,11 +46,15 @@ export type FilterSelection = Record<string, string[]>;
 const PRIORITIES: Priority[] = ["high", "medium", "low"];
 
 /**
- * Task — or decision — to (dimension id to assigned value id). Dimension and value ids are integer
- * keys, and so is the outer one, carried as a string because that is what a `Record` key is. One
- * shape for both sides: a classification is the same fact whichever of the two carries it.
+ * Task — or decision — to (dimension id to the value ids assigned on it). Dimension and value ids are
+ * integer keys, and so is the outer one, carried as a string because that is what a `Record` key is.
+ * One shape for both sides: a classification is the same fact whichever of the two carries it.
+ *
+ * The innermost value is a list because an axis may admit several at once (`AMB-D-826`); a
+ * single-select axis is the one-element case of the same shape, so nothing downstream branches on
+ * which kind of axis it is reading. An axis a record sits on no value of is absent, never `[]`.
  */
-export type DimAssignments = Record<string, Record<number, number>>;
+export type DimAssignments = Record<string, Record<number, number[]>>;
 
 /**
  * The axes the board filters on. The assignee options me / me-ai are decided by facet kind (in a
@@ -147,6 +151,11 @@ const DECISION_STATUSES: DecisionDto["status"][] = ["proposed", "accepted", "rej
  * The user-defined axes as filter dimensions, for whichever side is asking. An axis with no values
  * filters nothing, so it is left out. The CLI has the same dimension filter (`dim:axis=value` in
  * query.rs), which is what cliKey lines up with.
+ *
+ * **A closed value is offered like any other** (`AMB-D-829`). Closing retires a value from what a
+ * record is newly filed under — which is the picker's business, and the board's — and leaves every
+ * record already filed under it exactly where it was. Asking what carried a finished release is the
+ * whole reason to close one rather than delete it, so this is the one face that draws no distinction.
  */
 function customDimensions<T>(
   userDims: DimensionDto[],
@@ -163,7 +172,7 @@ function customDimensions<T>(
         // `FilterSelection` is one Record across all dimensions, so what it holds are strings; an integer key is carried in that form.
         value: String(v.id),
         label: () => v.name,
-        test: (item: T) => dimAssign[idOf(item)]?.[dim.id] === v.id,
+        test: (item: T) => dimAssign[idOf(item)]?.[dim.id]?.includes(v.id) ?? false,
       })),
     }));
 }

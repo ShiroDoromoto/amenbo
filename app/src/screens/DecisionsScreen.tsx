@@ -85,9 +85,9 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   // (`AMB-D-789`).
   const projectDims = axesFor("decision", dataAdapter.getProject(projectId)?.dimensions ?? []);
   const dimIdsKey = projectDims.map((d) => d.id).join(",");
-  // The assignments of every axis this side offers (decisionId→dimId→valueId), one query each, through
-  // the query cache rather than a bare effect: a value assigned elsewhere — the detail pane's selects,
-  // the CLI — acks with the "decisions" scope, and that is what brings the answer back.
+  // The assignments of every axis this side offers (decisionId→dimId→the values on it), one query each,
+  // through the query cache rather than a bare effect: a value assigned elsewhere — the detail pane's
+  // selects, the CLI — acks with the "decisions" scope, and that is what brings the answer back.
   const dimAssign = useQuery<DimAssignments>(
     ["decisionDimAssign", projectId, dimIdsKey],
     async () => {
@@ -98,7 +98,9 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
       );
       const m: DimAssignments = {};
       for (const { dimId, rows } of results) {
-        for (const r of rows) (m[r.decisionId] ??= {})[dimId] = r.valueId;
+        // An axis admitting several values at once (`AMB-D-826`) answers with several rows for the one
+        // decision, and they are collected rather than overwriting each other.
+        for (const r of rows) ((m[r.decisionId] ??= {})[dimId] ??= []).push(r.valueId);
       }
       return m;
     },
@@ -352,7 +354,10 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
             }}
           >
             <option value="">{t("detail.none")}</option>
-            {dim.values.map((v) => (
+            {/* Nothing here is carried yet — this is the create — so a closed value is simply left out
+                (`AMB-D-829`): it is exactly what a record may not be newly filed under, and core would
+                refuse the create it rode in on. */}
+            {dim.values.filter((v) => !v.closed).map((v) => (
               <option key={v.id} value={v.id}>{v.name}</option>
             ))}
           </select>

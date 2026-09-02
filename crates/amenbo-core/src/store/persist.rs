@@ -852,7 +852,8 @@ impl Store {
         self.write_one(&[WriteTarget::NewIn(Some(project_id))], |tx| crate::ops::dimension::add(tx, project_id, new))
     }
 
-    /// Update a dimension's name, notes, whether its values are ordered, its role, whether it
+    /// Update a dimension's name, notes, how many of its values one record may hold, whether its values
+    /// are ordered, its role, whether it
     /// belongs on the task card, whether it refuses to be left empty, which entity it classifies, and
     /// its slug (one operation = one transaction).
     #[allow(clippy::too_many_arguments)]
@@ -861,6 +862,7 @@ impl Store {
         id: i64,
         name: Option<&str>,
         notes: Option<&str>,
+        cardinality: Option<crate::model::DimensionCardinality>,
         ordered: Option<bool>,
         role: Option<crate::model::DimensionRole>,
         show_on_card: Option<bool>,
@@ -870,7 +872,8 @@ impl Store {
     ) -> Result<crate::model::Dimension> {
         self.write_one(&[WriteTarget::Dimension(id)], |tx| {
             crate::ops::dimension::update(
-                tx, id, name, notes, ordered, role, show_on_card, required, applies_to, slug,
+                tx, id, name, notes, cardinality, ordered, role, show_on_card, required, applies_to,
+                slug,
             )
         })
     }
@@ -942,6 +945,21 @@ impl Store {
                         crate::ops::dimension::VALUE_NOUN.not_found(value_id.to_string())
                     }),
             }
+        })
+    }
+
+    /// Close a dimension value, or open it again (one operation = one transaction). Closing retires the
+    /// value from what a record is newly filed under and leaves everything already filed under it where
+    /// it is (`AMB-D-829`); it asks for the axis's `closable` role, while opening back is free on any
+    /// axis. A door of its own rather than an arm of [`Self::dimension_value_update`], for the reason the
+    /// period has one: a value's fields are set one concern at a time.
+    pub fn dimension_value_set_closed(
+        &mut self,
+        value_id: i64,
+        closed: bool,
+    ) -> Result<crate::model::DimensionValue> {
+        self.write_one(&[WriteTarget::DimensionValue(value_id)], |tx| {
+            crate::ops::dimension::value_set_closed(tx, value_id, closed)
         })
     }
 

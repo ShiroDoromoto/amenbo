@@ -4,12 +4,14 @@ import type { DimensionDto, DimensionValueDto } from "../bindings/bindings";
 
 const value = (v: Partial<DimensionValueDto> & { id: number; label?: string }): DimensionValueDto => ({
   name: v.label ?? String(v.id),
+  closed: false,
   ...v,
 });
 const dim = (role: DimensionDto["role"], values: DimensionValueDto[]): DimensionDto => ({
   id: 1,
   name: "時代",
   notes: "",
+  cardinality: "single",
   role,
   ordered: true,
   showOnCard: false,

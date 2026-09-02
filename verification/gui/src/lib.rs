@@ -741,6 +741,13 @@ impl Instructor {
             (Domain::Dimension, "key") => {
                 Some(Expectation { text: arg_str(with, "equals")?.to_string(), present: true })
             }
+            // The axis's own name, which is what its button in that row is drawn with. Nothing else on
+            // a board opened plain carries it — a card draws values and not the axis they are on, and
+            // the filter chips are behind a control this road does not press — so the name being
+            // nowhere is the picker not offering it.
+            (Domain::Project, "groupable") => {
+                Some(Expectation { text: arg_str(with, "axis")?.to_string(), present: present(with) })
+            }
             _ => None,
         }
     }
@@ -992,6 +999,21 @@ impl Instructor {
                     ),
                     false => format!(
                         "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn off the box that makes the category demand an answer.",
+                    ),
+                }
+            }
+            // How many values one record may answer the category with, on the box beside the one above.
+            // Turning it off is the direction the store can refuse — a record still answering with
+            // several is not quietly emptied out — so a road walking that way is walking toward a
+            // refusal rather than toward a screen that changed.
+            (Domain::Dimension, "cardinality") => {
+                let dimension = req(with, "dimension")?;
+                match with.get("multi").and_then(|v| v.as_bool()).unwrap_or(true) {
+                    true => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn on the box that lets one task or decision answer it with several values.",
+                    ),
+                    false => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn off the box that lets one task or decision answer it with several values.",
                     ),
                 }
             }
@@ -1397,6 +1419,19 @@ impl Instructor {
                     self.target_label(with),
                     req(with, "dimension")?,
                     req(with, "value")?
+                ),
+            },
+            // The row of buttons that cut the columns, read for which axes it offers. It is the same row
+            // `group-by` presses, and the line says where to look rather than what the row is called:
+            // the label above it is a word of the interface, and the axis's name is the reader's own.
+            (Domain::Project, "groupable") => match present(with) {
+                true => format!(
+                    "Above the board, in the row of buttons that choose what its columns are cut along, confirm \"{}\" is one of them.",
+                    req(with, "axis")?
+                ),
+                false => format!(
+                    "Above the board, in the row of buttons that choose what its columns are cut along, confirm \"{}\" is not one of them — the name is nowhere on the board.",
+                    req(with, "axis")?
                 ),
             },
             // The fold, read for both of the things it does. Neither half is a reading's to close, so the

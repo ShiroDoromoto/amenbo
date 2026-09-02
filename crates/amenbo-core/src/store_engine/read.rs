@@ -5068,9 +5068,25 @@ pub fn current_time_axis_value(
 }
 
 /// The live values of one dimension — the subtree [`crate::ops::dimension::delete`] deletes
-/// child-first, each value taking the task assignments that name it.
+/// child-first, each value taking the task assignments that name it. **Every** value, closed ones
+/// included: an axis that is going takes all of them, and a closed value is a live row like any other
+/// (`AMB-D-829`).
 pub fn dimension_value_ids(conn: &Connection, dimension_id: i64) -> Result<Vec<i64>> {
     select_ids(conn, DVAL.id, Some(&Pred::eq(DVAL.dimension_id, dimension_id)))
+}
+
+/// The values of one dimension a record can still be filed under — [`dimension_value_ids`] without the
+/// closed ones (`AMB-D-829`). What the guards asking "does this axis still offer anything" read: an axis
+/// whose values are all closed offers nothing, however many rows it holds, so `required` may not be
+/// raised on it and its last open value may not be deleted out from under the flag.
+///
+/// The `closed` column bites on every axis, not only a `role: closable` one. Only that role can have a
+/// value closed in the first place ([`crate::ops::dimension::value_set_closed`]), and an axis that loses
+/// the role afterwards keeps whatever was closed under it closed — reopening is what is free, on any
+/// axis, so nothing is ever stranded.
+pub fn open_dimension_value_ids(conn: &Connection, dimension_id: i64) -> Result<Vec<i64>> {
+    let pred = Pred::eq(DVAL.dimension_id, dimension_id).and(Pred::eq(DVAL.closed, false));
+    select_ids(conn, DVAL.id, Some(&pred))
 }
 
 /// The live assignments of `task_id` on `dimension_id`, whatever values they name. On a single-select

@@ -2088,9 +2088,15 @@ impl Instructor {
             // the key wants it already, and an operator told to click every time would be walking
             // a road no reader walks.
             //
-            // Three of them, and they stand at two different heights: the key that leaves is the
-            // panel's and takes one layer per press, while F2 and a letter are a row's and do
-            // nothing at all unless the keyboard is on one.
+            // They stand at three different heights. The key that leaves is the panel's and takes
+            // one layer per press; F2 and a letter are the row the keyboard is on and do nothing at
+            // all unless it is on one; the bin and the copy are what the reader has picked out,
+            // which is the row they are standing on and every other row picked out with it.
+            //
+            // **The last two are why no line here tells anybody to click first.** A click without a
+            // key held puts the selection back to one row, so a step that opened with one would
+            // undo the picking the steps before it did — and the road would go green over a face
+            // that had never acted on more than a row.
             //
             // The vocabulary is closed here rather than in the registry — a key the face has no
             // answer for is a road nobody can walk, and it fails on the way in rather than on a
@@ -2111,6 +2117,17 @@ impl Instructor {
                 other if other.chars().count() == 1 && other != " " => format!(
                     "With the keyboard standing on a row of the folder's section — the click that opens a folder leaves it there — press \"{other}\". The keyboard moves down to the next row whose name begins with that letter, wrapping past the last row round to the first. Nothing is opened and no name changes: what moves is which row the keyboard is standing on."
                 ),
+                // The bin, reached from the tree rather than from the row above an opened file:
+                // that one is the file on the screen and leaves what is picked out alone, and this
+                // one is what the reader picked. The question is left standing for `answer`, the
+                // way the other bin leaves it.
+                "delete" => "With the keyboard standing on a row of the folder's section — the click that picked one out leaves it there — press the key this machine deletes with. Everything picked out goes to the bin together. If the panel asks first, leave the question standing and answer nothing; leave the box about not asking again unticked."
+                    .to_string(),
+                // And the copy. It is not `files copy` with the click left out: that one stands the
+                // keyboard on a named row, which is a copy of one row, and this is a copy of what
+                // was picked.
+                "copy" => "With the keyboard standing on a row of the folder's section — the click that picked one out leaves it there — press the key this machine copies with. Everything picked out goes on the clipboard in one copy, and nothing on the screen changes to say so."
+                    .to_string(),
                 other => {
                     return Err(format!("action `press` does not know the key `{other}`"))
                 }

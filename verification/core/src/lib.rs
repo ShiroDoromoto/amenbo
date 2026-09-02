@@ -1893,6 +1893,14 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Dimension, "value-add"),
     (Domain::Dimension, "set"),
     (Domain::Dimension, "show-on-card"),
+    // And which axis is the project's time axis, with the windows its values already cover. A screen
+    // road about the era is watching the era arrive on a record nobody was asked about, and that
+    // reader set the axis up on some earlier day — designating it is a road of its own, on the manager,
+    // and one walked here would prove that road rather than this one. A window is the payload of the
+    // same role, so a value that already carries one is part of the same world; a road that means to
+    // watch a window being written still writes that one itself.
+    (Domain::Dimension, "time-axis"),
+    (Domain::Dimension, "period"),
     // And the record on the other side, for a road that reads across both. A screen narrowed to one
     // project has to have a decision standing in another to leave out, and which project a decision
     // was filed under is nothing such a road proves — recording one is a road of its own.

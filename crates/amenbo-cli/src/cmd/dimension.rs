@@ -38,8 +38,10 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
         if ordered {
             s.push_str(", ordered");
         }
-        if matches!(role, DimensionRole::TimeAxis) {
-            s.push_str(", time-axis");
+        match role {
+            DimensionRole::TimeAxis => s.push_str(", time-axis"),
+            DimensionRole::Closable => s.push_str(", closable"),
+            DimensionRole::None => {}
         }
         if show_on_card {
             s.push_str(", show-on-card");
@@ -75,6 +77,66 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
         let fmt = |d: Option<NaiveDate>, open: &str| d.map(|d| d.to_string()).unwrap_or_else(|| open.to_string());
         Some(format!("[{} → {}]", fmt(s, "…"), fmt(e, "ongoing")))
     }
+    /// The role a `dimension add` was told to give the axis. `--time-axis` and `--closable` are the two
+    /// spellings of one slot — an axis holds one role (`AMB-D-829`) — and clap refuses them together, so
+    /// naming neither is what leaves the axis roleless.
+    fn added_role(time_axis: bool, closable: bool) -> DimensionRole {
+        match (time_axis, closable) {
+            (true, _) => DimensionRole::TimeAxis,
+            (_, true) => DimensionRole::Closable,
+            _ => DimensionRole::None,
+        }
+    }
+    /// The role a `dimension update` was told to move the axis to, read against the role it carries now.
+    /// The two flags name the same slot, so each says only its own half: a closable axis is already not the
+    /// time axis, so `--time-axis false` on one changes nothing and must not be read as "no role" — that
+    /// would take the closable nomination off an axis nobody asked about. `None` back means the slot was
+    /// not addressed.
+    fn merged_role(cur: DimensionRole, time_axis: Option<bool>, closable: Option<bool>) -> Option<DimensionRole> {
+        let mut role = cur;
+        if let Some(on) = time_axis {
+            role = if on {
+                DimensionRole::TimeAxis
+            } else if role == DimensionRole::TimeAxis {
+                DimensionRole::None
+            } else {
+                role
+            };
+        }
+        if let Some(on) = closable {
+            role = if on {
+                DimensionRole::Closable
+            } else if role == DimensionRole::Closable {
+                DimensionRole::None
+            } else {
+                role
+            };
+        }
+        (role != cur).then_some(role)
+    }
+    /// A closed value, marked wherever one is listed. Closed is a state of the value, not of its name, so
+    /// it reads beside the name rather than replacing it (`AMB-D-829`).
+    fn closed_line(v: &amenbo_core::model::DimensionValue) -> &'static str {
+        if v.closed {
+            "  [closed]"
+        } else {
+            ""
+        }
+    }
+    /// The values a listing shows. Closed is the value's way of being retired without being deleted, so
+    /// what a person reads by default is what they can still file under; `--closed` is how the ones that
+    /// were retired come back into view, to be read or reopened (`AMB-D-829`).
+    fn shown_values(
+        store: &Store,
+        dimension_id: i64,
+        closed: bool,
+    ) -> Result<Vec<amenbo_core::model::DimensionValue>, CliError> {
+        let mut vals = store.dimension_values(dimension_id).map_err(CliError::from)?;
+        if !closed {
+            vals.retain(|v| !v.closed);
+        }
+        Ok(vals)
+    }
     /// A period is the payload of the time_axis role, not a general feature of every axis. Core writes the
     /// physical columns as told, so the CLI surface is what guards the role.
     fn ensure_time_axis(store: &Store, dimension_id: i64) -> Result<(), CliError> {
@@ -100,7 +162,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
         (s, e)
     }
     match sub {
-        DimensionCmd::Add { project, name, notes, cardinality, ordered, time_axis, show_on_card, required, applies_to, slug } => {
+        DimensionCmd::Add { project, name, notes, cardinality, ordered, time_axis, closable, show_on_card, required, applies_to, slug } => {
             let pid = project_or_bound(store, project)?;
             let new = NewDimension {
                 name,
@@ -114,7 +176,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                     .transpose()?
                     .unwrap_or(DimensionCardinality::Single),
                 ordered,
-                role: if time_axis { DimensionRole::TimeAxis } else { DimensionRole::None },
+                role: added_role(time_axis, closable),
                 show_on_card,
                 // Core refuses this while the axis has no values, which a new one never does. The flag
                 // is here because `AMB-D-734` names this door as one of the two: passing it is how the
@@ -134,36 +196,36 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             let d = store.dimension_add(pid, new).map_err(CliError::from)?;
             write_envelope(flags, "dimension.add", "dimension", serde_json::to_value(&d).unwrap(), None, false, format!("✓ Created dimension: {} ({})", d.name, dimension_label(d.id)));
         }
-        DimensionCmd::List { project } => {
+        DimensionCmd::List { project, closed } => {
             let pid = project_or_bound(store, project)?;
             let dims: Vec<_> = store.dimensions(pid).map_err(CliError::from)?;
             if flags.json {
                 let mut out: Vec<serde_json::Value> = Vec::with_capacity(dims.len());
                 for d in &dims {
-                    let values = store.dimension_values(d.id).map_err(CliError::from)?;
+                    let values = shown_values(store, d.id, closed)?;
                     out.push(json!({ "dimension": serde_json::to_value(d).unwrap(), "values": values }));
                 }
                 print_json(&json!({ "count": out.len(), "dimensions": out }));
             } else {
                 human(flags, format!("{} dimension(s)", dims.len()));
                 for d in &dims {
-                    let vals = store.dimension_values(d.id).map_err(CliError::from)?;
+                    let vals = shown_values(store, d.id, closed)?;
                     human(flags, format!("  {}  {} [{}]  {} value(s)", dimension_label(d.id), named(&d.name, d.slug.as_ref()), kind_line(d.cardinality, d.ordered, d.role, d.show_on_card, d.required, d.applies_to), vals.len()));
                     for v in &vals {
                         let period = period_line(v).map(|p| format!("  {p}")).unwrap_or_default();
-                        human(flags, format!("      {}  {}{}", dimension_value_label(v.id), named(&v.name, v.slug.as_ref()), period));
+                        human(flags, format!("      {}  {}{}{}", dimension_value_label(v.id), named(&v.name, v.slug.as_ref()), period, closed_line(v)));
                     }
                 }
             }
         }
-        DimensionCmd::Show { id } => {
+        DimensionCmd::Show { id, closed } => {
             let did = store.resolve_dimension(None, &id).map_err(CliError::from)?;
             let d = store
                 .dimension(did)
                 .map_err(CliError::from)?
                 
                 .ok_or_else(|| { let r = dimension_label(did); CliError::from(amenbo_core::Error::not_found(format!("dimension '{r}' not found"))) })?;
-            let vals: Vec<_> = store.dimension_values(did).map_err(CliError::from)?;
+            let vals = shown_values(store, did, closed)?;
             if flags.json {
                 print_json(&json!({ "dimension": serde_json::to_value(&d).unwrap(), "values": serde_json::to_value(&vals).unwrap() }));
             } else {
@@ -177,12 +239,20 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 human(flags, format!("{} value(s)", vals.len()));
                 for v in &vals {
                     let period = period_line(v).map(|p| format!("  {p}")).unwrap_or_default();
-                    human(flags, format!("  {}  {}{}", dimension_value_label(v.id), named(&v.name, v.slug.as_ref()), period));
+                    human(flags, format!("  {}  {}{}{}", dimension_value_label(v.id), named(&v.name, v.slug.as_ref()), period, closed_line(v)));
                 }
             }
         }
-        DimensionCmd::Update { id, name, notes, cardinality, ordered, time_axis, show_on_card, required, applies_to, slug } => {
+        DimensionCmd::Update { id, name, notes, cardinality, ordered, time_axis, closable, show_on_card, required, applies_to, slug } => {
             let did = store.resolve_dimension(None, &id).map_err(CliError::from)?;
+            let cur_role = store
+                .dimension(did)
+                .map_err(CliError::from)?
+                .ok_or_else(|| { let r = dimension_label(did); CliError::from(amenbo_core::Error::not_found(format!("dimension '{r}' not found"))) })?
+                .role;
+            // Read off the merge, not off the flags: the two role flags share one slot, so one of them can
+            // be given and still address nothing (`--time-axis false` on a closable axis).
+            let role = merged_role(cur_role, time_axis, closable);
             let mut changed = Vec::new();
             if name.is_some() {
                 changed.push("name".to_string());
@@ -196,7 +266,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             if ordered.is_some() {
                 changed.push("ordered".to_string());
             }
-            if time_axis.is_some() {
+            if role.is_some() {
                 changed.push("role".to_string());
             }
             if show_on_card.is_some() {
@@ -211,8 +281,6 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             if slug.is_some() {
                 changed.push("slug".to_string());
             }
-            let role = time_axis
-                .map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
             let applies_to = applies_to.as_deref().map(parse_applies_to).transpose()?;
             let cardinality = cardinality.as_deref().map(parse_cardinality).transpose()?;
             let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), cardinality, ordered, role, show_on_card, required, applies_to, slug.as_deref()).map_err(CliError::from)?;
@@ -284,6 +352,20 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             let pos = pos_from_keys(top, bottom, before, after)?;
             let v = store.dimension_value_move(vid, pos).map_err(CliError::from)?;
             write_envelope(flags, "dimension.value-move", "dimension_value", serde_json::to_value(&v).unwrap(), Some(vec!["order_key".to_string()]), false, format!("✓ Moved value: {}", dimension_value_label(v.id)));
+        }
+        DimensionCmd::ValueClose { dimension, value } => {
+            let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;
+            let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
+            let v = store.dimension_value_set_closed(vid, true).map_err(CliError::from)?;
+            write_envelope(flags, "dimension.value-close", "dimension_value", serde_json::to_value(&v).unwrap(), Some(vec!["closed".to_string()]), false, format!("✓ Closed value: {} ({})", v.name, dimension_value_label(v.id)));
+        }
+        DimensionCmd::ValueReopen { dimension, value } => {
+            // A closed value is out of the default listing, so the name that names it here has to reach a
+            // closed one — which is exactly what `resolve_dimension_value` still does (`AMB-D-829`).
+            let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;
+            let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
+            let v = store.dimension_value_set_closed(vid, false).map_err(CliError::from)?;
+            write_envelope(flags, "dimension.value-reopen", "dimension_value", serde_json::to_value(&v).unwrap(), Some(vec!["closed".to_string()]), false, format!("✓ Reopened value: {} ({})", v.name, dimension_value_label(v.id)));
         }
         DimensionCmd::ValueRm { dimension, value, reassign_to } => {
             let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;

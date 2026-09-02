@@ -1043,6 +1043,9 @@ pub enum DimensionCmd {
         /// mark this axis as the project's time axis — its values carry periods
         #[arg(long)]
         time_axis: bool,
+        /// mark this axis as one whose values can be closed — retired without taking what is filed under them (one axis holds one role, so this and --time-axis are refused together)
+        #[arg(long, conflicts_with = "time_axis")]
+        closable: bool,
         /// mark this axis to show on the task card (default: not marked)
         #[arg(long)]
         show_on_card: bool,
@@ -1056,18 +1059,24 @@ pub enum DimensionCmd {
         #[arg(long)]
         slug: Option<String>,
     },
-    /// List a project's dimensions (display order) with their values
+    /// List a project's dimensions (display order) with their open values
     List {
         /// project (name or ID; defaults to the bound project)
         #[arg(long)]
         project: Option<String>,
+        /// list the closed values too (they are left out by default)
+        #[arg(long)]
+        closed: bool,
     },
-    /// Show a dimension (name, notes, cardinality/ordered/role/card/applies-to, values)
+    /// Show a dimension (name, notes, cardinality/ordered/role/card/applies-to, open values)
     Show {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
+        /// show the closed values too (they are left out by default)
+        #[arg(long)]
+        closed: bool,
     },
-    /// Update a dimension's name, notes, how many values one record may hold, value ordering, time-axis role, whether it goes on the task card, whether it must be answered, which side it classifies, and/or its slug (only the given fields change)
+    /// Update a dimension's name, notes, how many values one record may hold, value ordering, its role (time-axis / closable), whether it goes on the task card, whether it must be answered, which side it classifies, and/or its slug (only the given fields change)
     Update {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
@@ -1085,6 +1094,9 @@ pub enum DimensionCmd {
         /// whether this axis is the project's time axis (`--time-axis true|false`)
         #[arg(long)]
         time_axis: Option<bool>,
+        /// whether this axis's values can be closed (`--closable true|false`); an axis that gives the role up keeps whatever was closed under it closed
+        #[arg(long)]
+        closable: Option<bool>,
         /// whether this axis is marked to show on the task card (`--show-on-card true|false`)
         #[arg(long)]
         show_on_card: Option<bool>,
@@ -1174,9 +1186,26 @@ pub enum DimensionCmd {
         #[arg(long)]
         bottom: bool,
     },
+    /// Close a dimension value: nothing new is filed under it, and everything already filed keeps it.
+    /// Only an axis marked --closable can close one, and a required axis keeps one open value to offer
+    ValueClose {
+        /// dimension ref (AMB-DIM-n), slug or name
+        dimension: String,
+        /// value ref (AMB-DIMV-n), slug or name (within the dimension)
+        value: String,
+    },
+    /// Reopen a closed dimension value, so it takes new records again. Free on any axis, whatever role
+    /// it carries now
+    ValueReopen {
+        /// dimension ref (AMB-DIM-n), slug or name
+        dimension: String,
+        /// value ref (AMB-DIMV-n), slug or name (within the dimension)
+        value: String,
+    },
     /// Delete a dimension value permanently; its task assignments go with it unless --reassign-to
-    /// moves them. On a required axis: assignments demand --reassign-to, and the last value is refused
-    /// — lower the requirement first (alias: value-delete)
+    /// moves them. On a required axis: assignments demand --reassign-to, and the last open value is
+    /// refused (a closed one is not an answer, so it does not count) — lower the requirement first
+    /// (alias: value-delete)
     #[command(alias = "value-delete")]
     ValueRm {
         /// dimension ref (AMB-DIM-n), slug or name

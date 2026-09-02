@@ -8,7 +8,7 @@ use amenbo_core::ops::Ref;
 use amenbo_core::Store;
 
 use crate::cli::*;
-use crate::cmd::arg::{parse_applies_to, parse_date_opt, pos_from_keys};
+use crate::cmd::arg::{parse_applies_to, parse_cardinality, parse_date_opt, pos_from_keys};
 use crate::cmd::labels::{decision_label, dimension_label, dimension_value_label, task_label};
 use crate::cmd::place::project_or_bound;
 use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
@@ -100,13 +100,19 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
         (s, e)
     }
     match sub {
-        DimensionCmd::Add { project, name, notes, ordered, time_axis, show_on_card, required, applies_to, slug } => {
+        DimensionCmd::Add { project, name, notes, cardinality, ordered, time_axis, show_on_card, required, applies_to, slug } => {
             let pid = project_or_bound(store, project)?;
             let new = NewDimension {
                 name,
                 notes,
-                // A classification axis is single-select, always.
-                cardinality: DimensionCardinality::Single,
+                // Omitted leaves the axis holding one value at a time, which is where every axis starts
+                // (`AMB-D-826`). Naming `multi` here alongside `--time-axis` is refused by core: the era
+                // resolution reads one value.
+                cardinality: cardinality
+                    .as_deref()
+                    .map(parse_cardinality)
+                    .transpose()?
+                    .unwrap_or(DimensionCardinality::Single),
                 ordered,
                 role: if time_axis { DimensionRole::TimeAxis } else { DimensionRole::None },
                 show_on_card,
@@ -175,7 +181,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 }
             }
         }
-        DimensionCmd::Update { id, name, notes, ordered, time_axis, show_on_card, required, applies_to, slug } => {
+        DimensionCmd::Update { id, name, notes, cardinality, ordered, time_axis, show_on_card, required, applies_to, slug } => {
             let did = store.resolve_dimension(None, &id).map_err(CliError::from)?;
             let mut changed = Vec::new();
             if name.is_some() {
@@ -183,6 +189,9 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             }
             if notes.is_some() {
                 changed.push("notes".to_string());
+            }
+            if cardinality.is_some() {
+                changed.push("cardinality".to_string());
             }
             if ordered.is_some() {
                 changed.push("ordered".to_string());
@@ -205,7 +214,8 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             let role = time_axis
                 .map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
             let applies_to = applies_to.as_deref().map(parse_applies_to).transpose()?;
-            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), None, ordered, role, show_on_card, required, applies_to, slug.as_deref()).map_err(CliError::from)?;
+            let cardinality = cardinality.as_deref().map(parse_cardinality).transpose()?;
+            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), cardinality, ordered, role, show_on_card, required, applies_to, slug.as_deref()).map_err(CliError::from)?;
             write_envelope(flags, "dimension.update", "dimension", serde_json::to_value(&d).unwrap(), Some(changed), false, format!("✓ Updated dimension: {}", dimension_label(d.id)));
         }
         DimensionCmd::Move { id, before, after, top, bottom } => {

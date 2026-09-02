@@ -868,3 +868,101 @@ fn a_dim_on_the_side_its_axis_does_not_classify_is_refused_by_every_face() {
     assert_eq!(by_role["count"], 1, "the side it does classify still answers by role");
     assert_eq!(id_str(&by_role["decisions"][0]["id"]), did);
 }
+
+/// How many of an axis's values one record may hold is the axis's own answer (`AMB-D-826`), and this is
+/// the face that says it: `--cardinality` at creation and afterwards, `--dim` naming a multi axis several
+/// times in one creation, and `dimension set` adding where a single axis would have replaced.
+#[test]
+fn an_axis_can_be_told_to_hold_several_values_at_once() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "複数PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    // Born multi, and an axis nobody said anything about is born single.
+    let wide = cli.json(&["dimension", "add", "--project", &pid, "--name", "プロダクト", "--cardinality", "multi", "--json"]);
+    assert_eq!(wide["dimension"]["cardinality"], "multi");
+    let plain = cli.json(&["dimension", "add", "--project", &pid, "--name", "テーマ", "--json"]);
+    assert_eq!(plain["dimension"]["cardinality"], "single");
+    let (shown, _) = cli.run(&["dimension", "show", "プロダクト"]);
+    assert!(shown.contains("kind: multi"), "the axis says which it is: {shown}");
+
+    for name in ["本体", "サイト", "プラグイン"] {
+        cli.json(&["dimension", "value-add", "プロダクト", "--name", name, "--json"]);
+    }
+    cli.json(&["dimension", "value-add", "テーマ", "--name", "メイン", "--json"]);
+
+    // `--dim` names the multi axis three times in one creation, which a single axis refuses.
+    let t = cli.json(&["task", "add", "--title", "広く効く", "--project", &pid, "--dim", "プロダクト=本体", "--dim", "プロダクト=サイト", "--dim", "プロダクト=プラグイン", "--json"]);
+    let tid = format!("AMB-T-{}", id_str(&t["task"]["id"]));
+    let (shown, _) = cli.run(&["task", "show", &tid]);
+    assert!(
+        shown.contains("プロダクト=本体, プロダクト=サイト, プロダクト=プラグイン"),
+        "the three values line up under the one axis: {shown}"
+    );
+    let (err, code) = cli.run_err(&["task", "add", "--title", "狭い", "--project", &pid, "--dim", "テーマ=メイン", "--dim", "テーマ=メイン"]);
+    assert_ne!(code, 0, "a single axis named twice is still refused: {err}");
+    assert!(err.contains("テーマ"), "and the refusal names it: {err}");
+
+    // `dimension set` adds on a multi axis and replaces on a single one.
+    cli.json(&["dimension", "set", &tid, "テーマ", "メイン", "--json"]);
+    let (shown, _) = cli.run(&["task", "show", &tid]);
+    assert!(shown.contains("テーマ=メイン"), "the other axis is answered too: {shown}");
+    assert!(shown.contains("プロダクト=本体"), "and the multi axis kept everything it had: {shown}");
+}
+
+/// The two refusals `--cardinality` meets (`AMB-D-826`). The time axis resolves one current era, so it
+/// will not admit several — and the sentence names the **pair**, since on `update` the half being raised
+/// is the one that is not true yet. A demotion throws values away, so it is refused while any record
+/// answers with several, and it names how many.
+#[test]
+fn multi_is_refused_on_the_time_axis_and_a_demotion_names_what_it_would_drop() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "拒否PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    // Arriving already made.
+    let (err, code) = cli.run_err(&["dimension", "add", "--project", &pid, "--name", "時代", "--time-axis", "--cardinality", "multi"]);
+    assert_ne!(code, 0, "the pair is refused where it arrives together: {err}");
+
+    // Raised from either side, and the sentence is the same one both times.
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "時代", "--time-axis", "--json"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "プロダクト", "--cardinality", "multi", "--json"]);
+    let (from_cardinality, code) = cli.run_err(&["dimension", "update", "時代", "--cardinality", "multi"]);
+    assert_ne!(code, 0);
+    let (from_role, code) = cli.run_err(&["dimension", "update", "プロダクト", "--time-axis", "true"]);
+    assert_ne!(code, 0);
+    for err in [&from_cardinality, &from_role] {
+        assert!(
+            err.contains("cannot be both the time axis and multi-select"),
+            "the refusal names the pair rather than one half as though it held: {err}"
+        );
+    }
+
+    // A demotion with nobody answering twice is an ordinary edit.
+    cli.json(&["dimension", "value-add", "プロダクト", "--name", "本体", "--json"]);
+    cli.json(&["dimension", "value-add", "プロダクト", "--name", "サイト", "--json"]);
+    let t = cli.json(&["task", "add", "--title", "広く効く", "--project", &pid, "--dim", "プロダクト=本体", "--json"]);
+    let tid = format!("AMB-T-{}", id_str(&t["task"]["id"]));
+    let back = cli.json(&["dimension", "update", "プロダクト", "--cardinality", "single", "--json"]);
+    assert_eq!(back["dimension"]["cardinality"], "single");
+    assert_eq!(back["changed"], serde_json::json!(["cardinality"]));
+
+    // With one, it is refused and says how many records it would take values from.
+    cli.json(&["dimension", "update", "プロダクト", "--cardinality", "multi", "--json"]);
+    cli.json(&["dimension", "set", &tid, "プロダクト", "サイト", "--json"]);
+    let (err, code) = cli.run_err(&["dimension", "update", "プロダクト", "--cardinality", "single"]);
+    assert_ne!(code, 0, "the demotion is refused: {err}");
+    assert!(err.contains('1'), "and names the count: {err}");
+    assert_eq!(
+        cli.json(&["dimension", "show", "プロダクト", "--json"])["dimension"]["cardinality"],
+        "multi",
+        "the refusal wrote nothing"
+    );
+
+    // Clearing the extra value is what opens the way.
+    cli.json(&["dimension", "unset", &tid, "プロダクト", "サイト", "--json"]);
+    assert_eq!(
+        cli.json(&["dimension", "update", "プロダクト", "--cardinality", "single", "--json"])["dimension"]["cardinality"],
+        "single"
+    );
+}

@@ -678,7 +678,7 @@ export const ptBR: Translation = {
     invalid_dimension_slug_shape: "“{slug}” não serve como chave: use no máximo {max} letras minúsculas, dígitos e hifens, começando por uma letra.",
     invalid_dimension_slug_taken: "“{slug}” já é a chave de outra coisa aqui: escolha outra.",
     invalid_dimension_name_whitespace: "“{name}” não serve como nome: tire os espaços ou ponha um hífen no lugar.",
-    invalid_dimension_multi_time_axis: "“{name}” é o eixo do tempo, e um eixo do tempo segura um valor de cada vez: tire dele o papel de eixo do tempo, ou deixe-o de seleção única.",
+    invalid_dimension_multi_time_axis: "“{name}” não pode ser ao mesmo tempo o eixo do tempo e de seleção múltipla: um eixo do tempo segura um valor de cada vez, então tire dele o papel de eixo do tempo ou deixe-o de seleção única.",
     invalid_task_required_dimension: "Esta tarefa não carrega valor algum em {names}, que este projeto exige.",
     invalid_decision_required_dimension: "Esta decisão não carrega valor algum em {names}, que este projeto exige.",
     invalid_dimension_values_unordered: "Os valores desta categoria não têm ordem, então não dá para reordená-los.",

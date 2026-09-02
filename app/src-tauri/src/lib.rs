@@ -424,6 +424,7 @@ pub fn run() {
       commands::dimension_value_rename,
       commands::dimension_value_set_slug,
       commands::dimension_value_set_period,
+      commands::dimension_value_set_closed,
       commands::dimension_value_move,
       commands::dimension_value_rm,
       commands::task_set_dimension_value,

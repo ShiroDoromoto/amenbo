@@ -1655,6 +1655,18 @@ export async function updateDimension(id: number, notes: string): Promise<void> 
   return invokeAck("dimension_update", { id, notes });
 }
 
+/**
+ * Let one record answer this dimension with several of its values, or hold it back to one
+ * (`AMB-D-826`). Raising it throws nothing away, so it always goes through; the way back down is
+ * refused while any task or decision still answers with several, and the refusal names how many
+ * (`invalid_dimension_demote_holders`). A multi-select axis cannot also be the time axis, which
+ * resolves one current era, so core refuses that pair at whichever of the two switches moved.
+ */
+export async function setDimensionMulti(id: number, multi: boolean): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_update", { id, multi });
+}
+
 /** Toggle whether a dimension's values are ordered. Turning it on is what makes reordering them (moveDimensionValue) work. */
 export async function setDimensionOrdered(id: number, ordered: boolean): Promise<void> {
   if (!inTauri()) return;
@@ -1668,6 +1680,19 @@ export async function setDimensionOrdered(id: number, ordered: boolean): Promise
 export async function setDimensionTimeAxis(id: number, timeAxis: boolean): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("dimension_update", { id, timeAxis });
+}
+
+/**
+ * Let this dimension's values be closed rather than deleted, or take the role away (role: closable,
+ * `AMB-D-829`). A closed value keeps every record already filed under it and goes on resolving in a
+ * filter; what it stops doing is taking new ones. An axis holds one role, so naming it closable takes
+ * the time axis off it — the two switches write the same field, which is why they are never sent
+ * together. Taking the role away strands nothing: whatever was closed under it stays closed, and
+ * reopening is free on any axis.
+ */
+export async function setDimensionClosable(id: number, closable: boolean): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_update", { id, closable });
 }
 
 /**
@@ -1748,6 +1773,19 @@ export async function setDimensionValuePeriod(
   });
 }
 
+/**
+ * Close a value, or open it again (`AMB-D-829`). Closing retires it from what a record is newly filed
+ * under — the picker stops offering it and the board stops drawing an empty column for it — and takes
+ * nothing away: the tasks and decisions already on it keep it, and a filter naming it goes on
+ * resolving, which is the whole reason to close rather than delete. Core refuses closing on an axis
+ * nobody nominated closable, and on the last value a required axis still offers; reopening asks for
+ * nothing.
+ */
+export async function setDimensionValueClosed(valueId: number, closed: boolean): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_value_set_closed", { valueId, closed });
+}
+
 /** Delete a dimension value; the task assignments to it go with it, unless `reassignTo` names another
  * value of the same axis for them to move to — which a required axis demands whenever there are any. */
 export async function removeDimensionValue(valueId: number, reassignTo: number | null = null): Promise<void> {
@@ -1780,7 +1818,8 @@ export async function unsetTaskDimensionValue(taskId: number, valueId: number): 
   return invokeAck("task_unset_dimension_value", { taskId, valueId });
 }
 
-/** The dimension assignments a task currently carries (dimensionId → valueId), for the detail pane's current-value display. */
+/** The dimension assignments a task currently carries — one row per assignment, so a multi-select axis
+ * (`AMB-D-826`) answers with several naming the same dimension. The detail pane groups them by axis. */
 export async function fetchTaskDimensions(taskId: number): Promise<TaskDimensionAssignmentDto[]> {
   if (!inTauri()) return [];
   return invoke<TaskDimensionAssignmentDto[]>("task_dimensions", { taskId });
@@ -1798,13 +1837,16 @@ export async function unsetDecisionDimensionValue(decisionId: number, valueId: n
   return invokeAck("decision_unset_dimension_value", { decisionId, valueId });
 }
 
-/** The dimension assignments a decision currently carries (dimensionId → valueId), for the decision pane's current-value display. */
+/** The dimension assignments a decision currently carries — the decision side of `fetchTaskDimensions`,
+ * and several rows on one axis where that axis is multi-select (`AMB-D-826`). */
 export async function fetchDecisionDimensions(decisionId: number): Promise<DecisionDimensionAssignmentDto[]> {
   if (!inTauri()) return [];
   return invoke<DecisionDimensionAssignmentDto[]>("decision_dimensions", { decisionId });
 }
 
-/** All task assignments for one project × dimension (taskId → valueId) in a single call, so the board can group by value. */
+/** All task assignments for one project × dimension in a single call, so the board can group by value and
+ * draw the values its cards carry. One row per assignment: an axis admitting several values at once
+ * (`AMB-D-826`) answers with several rows for the one task, so a caller collects rather than overwrites. */
 export async function fetchProjectDimensionAssignments(
   projectId: number,
   dimensionId: number,
@@ -1816,7 +1858,8 @@ export async function fetchProjectDimensionAssignments(
   });
 }
 
-/** All decision assignments for one project × dimension (decisionId → valueId) in a single call, so the decisions tab can narrow by classification. */
+/** All decision assignments for one project × dimension in a single call, so the decisions tab can narrow
+ * by classification. One row per assignment, the way the task side answers. */
 export async function fetchProjectDecisionDimensionAssignments(
   projectId: number,
   dimensionId: number,

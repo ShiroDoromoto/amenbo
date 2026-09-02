@@ -1,0 +1,150 @@
+# Where work is filed from, when the reader is standing in front of it. A board cut along a category
+# draws a column for each of the category's values, and the move that files a task under one is to
+# pick its card up and put it there — no pane opened and no field found, the filing made out of where
+# the card is standing.
+#
+# It is the screen's road alone. A terminal files work by naming the two words, which is the road
+# `classify-work-along-an-axis` walks, and it has no card to carry anywhere. What the two share is
+# what the filing then means, and that is why this road ends where that one does — at the filter. A
+# card that only moved on a board would be a drawing; what makes the move a classification is that
+# narrowing by the value finds the work afterwards, and leaves out the work that went elsewhere.
+id: file-work-by-moving-its-card
+title: A task is filed under a value of a category by carrying its card into that column, and the filter finds it there afterwards
+description: >
+  Open a project holding two tasks filed under nothing and cut its board along a category. Each of the
+  category's values has a column standing ready, empty though it is — the cards are in the one that
+  holds what carries no value at all. Carry one card into one column and the other card into the
+  other, then narrow the board by the first value: the card carried there comes back, and the card
+  carried elsewhere is left out. Both halves are read, because a build that filed nothing would answer
+  the narrowing with an empty board, and one that filed everything under whichever value it met first
+  would answer it with both.
+# Two values, so that one card can be carried somewhere and the other somewhere else — with one value
+# a build filing everything under whatever it found first would read green. The category's key is
+# written out because the narrowing at the end is spelled in the CLI's grammar, which is the one name
+# the screen and the terminal share.
+given:
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Medium
+      slug: medium
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Medium
+      value: print
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Medium
+      value: web
+
+  # Filed under nothing, which is where the road starts: the whole claim is that the carrying is what
+  # files them, so a world that handed them their values would leave nothing for the move to do.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the printed piece
+    as: feature
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: feature
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the online piece
+    as: banner
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: banner
+
+steps_gui:
+  # Arrive at the board rather than assume it, and cut it along the category. The cut is what makes
+  # the columns the move needs: before it the board is split by status, and a card carried across
+  # that one would be changing what the work is rather than what it is filed under.
+  - type: action
+    domain: project
+    op: open
+    with:
+      project: cwd
+
+  - type: action
+    domain: project
+    op: group-by
+    with:
+      axis: Medium
+
+  # A place to carry a card into, standing before anything is in it. It is read rather than assumed
+  # because the road is about to depend on it: a board that drew columns only for the values already
+  # in use would leave a reader no way to file the first task under one at all.
+  - type: assert
+    domain: project
+    op: column
+    with:
+      axis: Medium
+      value: print
+      present: true
+
+  - type: action
+    domain: task
+    op: drop-into-column
+    with:
+      target: feature
+      axis: Medium
+      value: print
+
+  # And the other card somewhere else, which is what turns the reading at the end into a question. One
+  # card carried and one left where it was would be answered by a build that narrowed to everything.
+  - type: action
+    domain: task
+    op: drop-into-column
+    with:
+      target: banner
+      axis: Medium
+      value: web
+
+  # The filter, which is where a move on a board stops being a picture of one. It is spelled in the
+  # grammar the terminal writes, and what it comes back with is the work — so a build that drew the
+  # card under the heading without filing anything answers here and not before.
+  - type: action
+    domain: task
+    op: open-filters
+
+  - type: action
+    domain: task
+    op: choose-filter
+    with:
+      axis: dim:medium
+      value: print
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: feature
+      present: true
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: banner
+      present: false
+
+  - type: action
+    domain: task
+    op: close-filters

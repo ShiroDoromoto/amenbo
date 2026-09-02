@@ -10,9 +10,11 @@
 import type { DimensionDto } from "../bindings/bindings";
 import type { DimAssignments } from "../core/filters";
 
-/** One classification a card draws: the value assigned on an axis flagged for the card. */
+/** One classification a card draws: one value assigned on an axis flagged for the card. */
 export type CardChip = {
   dimId: number;
+  /** The value's own id. An axis may put several chips on one card, so the axis alone does not name one. */
+  valueId: number;
   /** The axis's name. Not drawn on the chip — it names the value in the tooltip. */
   axis: string;
   value: string;
@@ -26,6 +28,10 @@ export type CardChip = {
  * already says that value, and repeating it on every card under it spends density for nothing. Axes come
  * out in the order the project lists them, and an axis a task has no value on contributes no chip — a card
  * shows what it was given, never a placeholder for what it was not.
+ *
+ * An axis that admits several values at once (`AMB-D-826`) draws one chip per value it was given, in the
+ * axis's own order rather than the order the assignments were read in, so two cards on the same pair of
+ * values read the same way.
  */
 export function cardChips(
   dims: DimensionDto[],
@@ -38,8 +44,11 @@ export function cardChips(
   for (const [taskId, assigned] of Object.entries(assignments)) {
     const chips: CardChip[] = [];
     for (const d of shown) {
-      const name = d.values.find((v) => v.id === assigned[d.id])?.name;
-      if (name) chips.push({ dimId: d.id, axis: d.name, value: name });
+      const ids = assigned[d.id];
+      if (!ids) continue;
+      for (const v of d.values) {
+        if (ids.includes(v.id)) chips.push({ dimId: d.id, valueId: v.id, axis: d.name, value: v.name });
+      }
     }
     if (chips.length > 0) byTask[taskId] = chips;
   }

@@ -5,11 +5,12 @@ import type { TaskCard } from "../mock/types";
 
 describe("filters: user-defined classifications (unified dimension)", () => {
   const dim = {
-    id: 1, name: "カテゴリー", notes: "", role: "none" as const, ordered: false, showOnCard: false, required: false,
+    id: 1, name: "カテゴリー", notes: "", cardinality: "single" as const, role: "none" as const, ordered: false,
+    showOnCard: false, required: false,
     appliesTo: "both" as const,
-    values: [{ id: 11, name: "バグ" }, { id: 12, name: "機能" }],
+    values: [{ id: 11, name: "バグ", closed: false }, { id: 12, name: "機能", closed: false }],
   };
-  const assign = { t1: { 1: 11 }, t2: { 1: 12 } };
+  const assign = { t1: { 1: [11] }, t2: { 1: [12] } };
   const dims = filterDimensions([dim], assign);
   const custom = dims.find((d) => d.id === "dim:1")!;
 
@@ -31,10 +32,33 @@ describe("filters: user-defined classifications (unified dimension)", () => {
     expect(passesFilters(t3, dims, { "dim:1": [] })).toBe(true); // nor does one with nothing chosen on it
   });
 
+  // Closing a value retires it from what a record is newly filed under and from nothing else
+  // (`AMB-D-829`). Asking what carried a finished release is the whole reason to close one rather than
+  // delete it, so the filter is the face that draws no distinction — unlike the picker and the board.
+  it("offers a closed value as a filter option like any other, and still matches on it", () => {
+    const retired = { ...dim, values: [dim.values[0], { ...dim.values[1], closed: true }] };
+    const withClosed = filterDimensions([retired], assign);
+    const axis = withClosed.find((d) => d.id === "dim:1")!;
+    const t2 = { id: "t2", title: "t" } as unknown as TaskCard;
+
+    expect(axis.options.map((o) => o.label())).toEqual(["バグ", "機能"]);
+    expect(passesFilters(t2, withClosed, { "dim:1": ["12"] })).toBe(true);
+  });
+
   it("does not surface a classification axis with no values as a filter dimension (nothing to narrow)", () => {
     const empty = { ...dim, id: 2, values: [] };
     const only = filterDimensions([empty], {});
     expect(only.find((d) => d.id === "dim:2")).toBeUndefined();
+  });
+
+  // A task on several values of one axis (`AMB-D-826`) answers to each of them, and the values within one
+  // axis are ORed — so choosing either one keeps it, and it is not counted twice.
+  it("keeps a task carrying several values on one axis under any of them", () => {
+    const both = filterDimensions([{ ...dim, cardinality: "multi" as const }], { t9: { 1: [11, 12] } });
+    const t9 = { id: "t9", title: "t" } as unknown as TaskCard;
+    expect(passesFilters(t9, both, { "dim:1": ["11"] })).toBe(true);
+    expect(passesFilters(t9, both, { "dim:1": ["12"] })).toBe(true);
+    expect(passesFilters(t9, both, { "dim:1": ["11", "12"] })).toBe(true);
   });
 });
 
@@ -108,11 +132,12 @@ describe("parseRefQuery: recognizing ref numbers in the search box", () => {
 
 describe("filters: the decisions tab narrows the same way the board does", () => {
   const dim = {
-    id: 1, name: "テーマ", notes: "", role: "none" as const, ordered: false, showOnCard: false, required: false,
+    id: 1, name: "テーマ", notes: "", cardinality: "single" as const, role: "none" as const, ordered: false,
+    showOnCard: false, required: false,
     appliesTo: "both" as const,
-    values: [{ id: 11, name: "メイン" }, { id: 12, name: "会話の窓" }],
+    values: [{ id: 11, name: "メイン", closed: false }, { id: 12, name: "会話の窓", closed: false }],
   };
-  const assign = { 1: { 1: 11 }, 2: { 1: 12 } };
+  const assign = { 1: { 1: [11] }, 2: { 1: [12] } };
   const dims = decisionFilterDimensions([dim], assign);
   const decision = (id: number, status: string, supersededBy: unknown[] = []) =>
     ({ id, status, supersededBy }) as unknown as DecisionDto;

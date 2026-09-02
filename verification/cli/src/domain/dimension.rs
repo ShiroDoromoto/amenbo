@@ -111,6 +111,21 @@ impl Driver<'_> {
                 };
                 Ok(Outcome::action(note))
             }
+            // How many of the axis's values one record may answer it with. A flag like the two above
+            // it, and the one whose lowering the store can refuse: `--cardinality single` on an axis
+            // some record still answers with several is turned away with the count, rather than
+            // quietly dropping every value but one.
+            "cardinality" => {
+                let dimension = req_str(with, "dimension")?;
+                let several = opt_bool(with, "multi").unwrap_or(true);
+                let word = if several { "multi" } else { "single" };
+                self.run_json(&["dimension", "update", dimension, "--cardinality", word, "--json"])?;
+                let note = match several {
+                    true => format!("let one record answer `{dimension}` with several values"),
+                    false => format!("held `{dimension}` back to one value per record"),
+                };
+                Ok(Outcome::action(note))
+            }
             // Which side of the store the axis classifies at all. The answer is a word and not a
             // switch — there are three of them, and `both` is where every axis starts — so a road
             // takes this door to narrow, and takes it again with `both` to widen back.
@@ -134,6 +149,33 @@ impl Driver<'_> {
                 let note = match named {
                     true => format!("made `{dimension}` the project's time axis"),
                     false => format!("stopped `{dimension}` being the project's time axis"),
+                };
+                Ok(Outcome::action(note))
+            }
+            // Whether the axis retires its values by closing them instead of deleting them. The other
+            // nomination of the same slot the line above writes, so it is the same door: one axis, one
+            // role, and `closable: false` gives it up again.
+            "closable" => {
+                let dimension = req_str(with, "dimension")?;
+                let named = opt_bool(with, "closable").unwrap_or(true);
+                let flag = if named { "true" } else { "false" };
+                self.run_json(&["dimension", "update", dimension, "--closable", flag, "--json"])?;
+                let note = match named {
+                    true => format!("let `{dimension}` close its values instead of deleting them"),
+                    false => format!("stopped `{dimension}` closing its values"),
+                };
+                Ok(Outcome::action(note))
+            }
+            // Retiring one of the axis's values, and bringing it back. Two commands of their own rather
+            // than a flag on `value-update`: closing is a move a reader makes on a value, not a field
+            // they fill in, and the terminal spells it that way.
+            verb @ ("value-close" | "value-reopen") => {
+                let dimension = req_str(with, "dimension")?;
+                let value = req_str(with, "value")?;
+                self.run_json(&["dimension", verb, dimension, value, "--json"])?;
+                let note = match verb {
+                    "value-close" => format!("closed `{value}` on `{dimension}`"),
+                    _ => format!("opened `{value}` on `{dimension}` again"),
                 };
                 Ok(Outcome::action(note))
             }
@@ -222,6 +264,43 @@ impl Driver<'_> {
                         if found { "is" } else { "is not" },
                         side.map(|s| format!("offered to {s}s")).unwrap_or_else(|| "defined".to_string()),
                         if present { "it to be" } else { "it not to be" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            // Whether a value is closed, read off the listing that shows the retired ones too. `listed`
+            // above reads the default one, which leaves a closed value out — that is the whole of what
+            // the two ask apart, and asking this one there would find nothing and be unable to say
+            // whether the value was retired or gone.
+            "closed" => {
+                let dimension = req_str(with, "dimension")?;
+                let value = req_str(with, "value")?;
+                let want = opt_bool(with, "equals").unwrap_or(true);
+                let v = self.run_json(&["dimension", "list", "--closed", "--json"])?;
+                let held = v["dimensions"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+                    .iter()
+                    .find(|d| d["dimension"]["name"].as_str() == Some(dimension))
+                    .ok_or_else(|| format!("no axis named `{dimension}` to read a value off"))?
+                    ["values"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+                    .iter()
+                    .find(|v| v["name"].as_str() == Some(value))
+                    .ok_or_else(|| format!("`{dimension}` has no value named `{value}`"))?
+                    ["closed"]
+                    .as_bool()
+                    .unwrap_or(false);
+                let pass = held == want;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "`{value}` of `{dimension}` is {} (expected it {}, {})",
+                        if held { "closed" } else { "open" },
+                        if want { "closed" } else { "open" },
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))

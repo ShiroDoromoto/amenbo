@@ -197,9 +197,10 @@ pub struct FolderView {
     pub dir: String,
 }
 
-/// One axis a task is classified on, and the value it holds there (`AMB-D-101`) — both by name, because
-/// this is what a reader is shown. There is nothing else to carry: an axis is single-select, so one axis
-/// is one value.
+/// One axis a task is classified on, and one value it holds there (`AMB-D-101`) — both by name, because
+/// this is what a reader is shown. There is nothing else to carry: the pair *is* the classification. An
+/// axis that admits several values contributes one of these per value (`AMB-D-826`), so what changes
+/// there is how many rows carry the same axis name, not what a row says.
 #[derive(Clone, Debug, Serialize)]
 pub struct ClassifiedAs {
     /// The axis's name, as the dimension is called.

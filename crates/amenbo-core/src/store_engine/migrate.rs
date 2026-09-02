@@ -549,6 +549,16 @@ pub const STEPS: &[Step] = &[
             "UPDATE change_feed SET dataset = 'task_dependency' WHERE dataset = 'dependency';",
         ),
     },
+    Step {
+        to: 34,
+        name: "widen dimension.cardinality by one value, so an axis can admit several at once",
+        apply: Apply::Custom(admit_multi_cardinality),
+    },
+    Step {
+        to: 35,
+        name: "let an axis's values be closed: widen dimension.role, and give dimension_value its flag",
+        apply: Apply::Custom(let_a_value_be_closed),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to
@@ -922,6 +932,135 @@ fn admit_rejected_task_status(ctx: &Ctx<'_>) -> Result<()> {
     if before != after {
         return Err(super::StoreEngineError::UnrecognisedDdl { table: "task", expected: NARROW });
     }
+    Ok(())
+}
+
+/// v34: widen `dimension.cardinality`'s closed set by one value (`AMB-D-826`).
+///
+/// **Why this is not SQL, and not a rebuild either.** It is v9's case on another table: SQLite has no
+/// `ALTER TABLE … DROP CONSTRAINT`, and the rebuild-and-swap its documentation prescribes is closed for
+/// the reason [`admit_rejected_task_status`] gives at length — enforcement is on, three tables reference
+/// `dimension` (`dimension_value`, `task_dimension_value`, `decision_dimension_value`), and dropping a
+/// referenced table performs an implicit `DELETE` that fires their `RESTRICT`. So the table is left where
+/// it is and only its declaration is rewritten.
+///
+/// **The clause is frozen, the declaration around it is not.** `applies_to` reaches a store either as a
+/// column of its birth `CREATE TABLE` (registry order) or appended by v32's `ALTER TABLE`, so two stores
+/// at this version legitimately carry the same columns in a different order — the same reason v9 reads the
+/// declaration rather than writing one. What is frozen is the clause [`enum_col`](super::schema) emits,
+/// which has read the same since the baseline. A store that does not carry it is refused rather than
+/// guessed at.
+///
+/// The rewrite is checked both ways round it, as v9's is: the column list before and after must be
+/// identical, and `writable_schema` is shut before anything else can fail, since it is connection state
+/// that would outlive this step's rolled-back transaction.
+fn admit_multi_cardinality(ctx: &Ctx<'_>) -> Result<()> {
+    /// The closed set as every store from the baseline on declares it — frozen text, like every step's.
+    const NARROW: &str = "CHECK(cardinality IN ('', 'single'))";
+    /// The same set with the axis's other answer in it.
+    const WIDE: &str = "CHECK(cardinality IN ('', 'single', 'multi'))";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'dimension'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.contains(WIDE) {
+        // Already wide: a store born from a registry that carries the value, stamped back to an earlier
+        // version. Nothing to widen, and nothing wrong.
+        return Ok(());
+    }
+    if !declared.contains(NARROW) {
+        return Err(super::StoreEngineError::UnrecognisedDdl { table: "dimension", expected: NARROW });
+    }
+    let widened = declared.replace(NARROW, WIDE);
+
+    let before = column_names(ctx.tx, "dimension")?;
+    ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = ctx.tx.execute(
+        "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'dimension'",
+        [&widened],
+    );
+    // `RESET` both shuts the door and drops the connection's parsed schema, so the very next statement
+    // sees the widened `CHECK` instead of the one this connection read at open.
+    ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+    let after = column_names(ctx.tx, "dimension")?;
+    if before != after {
+        return Err(super::StoreEngineError::UnrecognisedDdl { table: "dimension", expected: NARROW });
+    }
+    Ok(())
+}
+
+/// v35: an axis whose values can be closed (`AMB-D-829`) — one role to nominate it, one flag per value
+/// to hold the answer.
+///
+/// **Two writes, one step, because they are one meaning.** The role without the column nominates an axis
+/// for something no value can say, and the column without the role is a flag no door would ever set. A
+/// store that carried one and not the other would be a shape this build has no name for.
+///
+/// **The role half is v9's case, met a third time.** SQLite has no `ALTER TABLE … DROP CONSTRAINT`, and
+/// the rebuild-and-swap its documentation prescribes is closed here for the reason
+/// [`admit_rejected_task_status`] gives at length — enforcement is on and three tables reference
+/// `dimension` with `RESTRICT`, so dropping it would fire them. So the declaration alone is rewritten,
+/// checked both ways round, with `writable_schema` shut before anything else can fail.
+///
+/// **The clause is frozen; this is a copy of v34's procedure and not a call into it.** A step is frozen
+/// at the meaning it had when it was written, so it names its own clause in its own text: fold the three
+/// rewrites into one helper and an edit to that helper would silently reach back into stores migrated
+/// years ago. What is not frozen is the declaration around the clause — `applies_to` reaches a store
+/// either from its birth `CREATE TABLE` or from v32's `ALTER TABLE`, so two stores at this version carry
+/// the same columns in a different order, which is why the text is read rather than written.
+///
+/// **The column half needs no backfill.** `closed` is a `BOOLEAN NOT NULL DEFAULT 0`, and `0` is exactly
+/// what every value in an upgrading store means: none of them was ever closed, because nothing could
+/// close one. That parts it from v32, whose `''` sentinel was no value a reader could hydrate.
+fn let_a_value_be_closed(ctx: &Ctx<'_>) -> Result<()> {
+    /// The closed set as every store from the baseline on declares it — frozen text, like every step's.
+    const NARROW: &str = "CHECK(role IN ('', 'none', 'time_axis'))";
+    /// The same set with the closable nomination in it.
+    const WIDE: &str = "CHECK(role IN ('', 'none', 'time_axis', 'closable'))";
+
+    let declared: String = ctx.tx.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'dimension'",
+        [],
+        |r| r.get(0),
+    )?;
+    if declared.contains(NARROW) {
+        let widened = declared.replace(NARROW, WIDE);
+        let before = column_names(ctx.tx, "dimension")?;
+        ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+        let wrote = ctx.tx.execute(
+            "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = 'dimension'",
+            [&widened],
+        );
+        // `RESET` both shuts the door and drops the connection's parsed schema, so the very next
+        // statement sees the widened `CHECK` instead of the one this connection read at open.
+        ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+        wrote?;
+        let after = column_names(ctx.tx, "dimension")?;
+        if before != after {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table: "dimension",
+                expected: NARROW,
+            });
+        }
+    } else if !declared.contains(WIDE) {
+        // Neither shape: a declaration this step has no name for, refused rather than guessed at. Already
+        // wide is the other way here — a store born from a registry that carries the value, stamped back
+        // to an earlier version — and there is nothing to widen and nothing wrong.
+        return Err(super::StoreEngineError::UnrecognisedDdl {
+            table: "dimension",
+            expected: NARROW,
+        });
+    }
+
+    // The value's half. Frozen text, as every step's is: the registry may rename the column tomorrow,
+    // and what this step added must keep meaning what it meant.
+    ctx.tx.execute_batch(
+        "ALTER TABLE dimension_value ADD COLUMN closed BOOLEAN NOT NULL DEFAULT 0 \
+             CHECK(closed IN (0, 1));",
+    )?;
     Ok(())
 }
 
@@ -2027,6 +2166,189 @@ mod tests {
 
         assert!(matches!(err, super::super::StoreEngineError::UnrecognisedDdl { table: "task", .. }), "{err}");
         assert_eq!(engine.format_version().unwrap(), 8, "the failed step left the version where it was");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The clause v34 rewrites, as every store from the baseline to v33 declares it.
+    const NARROW_CARDINALITY_SET: &str = " CHECK(cardinality IN ('', 'single'))";
+
+    /// v34 in full, on the store shape v33 left behind: `dimension.cardinality` admits one value, and the
+    /// axis's other answer (`AMB-D-826`) is not one of them.
+    ///
+    /// The rows hanging off the axis are the point, as they are in v9's test. Widening a `CHECK` has no
+    /// `ALTER TABLE`, and the rebuild-and-swap SQLite prescribes would drop a table three tables reference
+    /// with `RESTRICT` — so this asserts the value, the task assignment and the decision assignment are
+    /// still there afterwards. A step that took the documented route would fail at the drop, or empty them.
+    #[test]
+    fn the_cardinality_set_widens_without_disturbing_the_axis_or_what_hangs_off_it() {
+        let dir = scratch("cardinality-widen");
+        let engine = store_at(&dir, 33);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 'classified', 'todo', 1);
+                 INSERT INTO decision (id, title, project_id) VALUES (1, 'why', 1);
+                 INSERT INTO dimension (id, project_id, name, cardinality, applies_to) \
+                     VALUES (1, 1, 'プロダクト', 'single', 'both');
+                 INSERT INTO dimension_value (id, dimension_id, name) VALUES (1, 1, 'Amenbo本体');
+                 INSERT INTO task_dimension_value (task_id, dimension_id, value_id) VALUES (1, 1, 1);
+                 INSERT INTO decision_dimension_value (decision_id, dimension_id, value_id) VALUES (1, 1, 1);",
+            )
+            .unwrap();
+        let before = {
+            let tx = engine.conn().unchecked_transaction().unwrap();
+            column_names(&tx, "dimension").unwrap()
+        };
+        assert!(
+            engine.conn().execute("UPDATE dimension SET cardinality = 'multi' WHERE id = 1", []).is_err(),
+            "the store starts out refusing the value the step exists to admit"
+        );
+
+        let run = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert!(run.applied.iter().any(|s| s.contains("cardinality")), "v34 ran: {:?}", run.applied);
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let after = {
+            let tx = engine.conn().unchecked_transaction().unwrap();
+            column_names(&tx, "dimension").unwrap()
+        };
+        assert_eq!(before, after, "a constraint changed, not the shape");
+        engine
+            .conn()
+            .execute("UPDATE dimension SET cardinality = 'multi' WHERE id = 1", [])
+            .expect("the widened set admits the axis's other answer");
+        let count = |table: &str| {
+            engine
+                .conn()
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get::<_, i64>(0))
+                .unwrap()
+        };
+        assert_eq!(count("dimension"), 1, "no row moved");
+        assert_eq!(count("dimension_value"), 1, "the axis kept its values");
+        assert_eq!(count("task_dimension_value"), 1, "…and the task is still classified");
+        assert_eq!(count("decision_dimension_value"), 1, "…and so is the decision");
+        assert!(
+            engine.conn().execute("UPDATE dimension SET cardinality = 'many' WHERE id = 1", []).is_err(),
+            "the set is still closed — one value wider, not open"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The v34 twin of v9's refusal: a `dimension` declaration the step does not recognise stops the
+    /// chain rather than being written over, for the reason that test gives.
+    #[test]
+    fn a_dimension_table_the_step_does_not_recognise_stops_the_chain() {
+        let dir = scratch("cardinality-unknown");
+        let engine = store_declared_as(
+            &dir,
+            &frozen_or_panic(33).replace(NARROW_CARDINALITY_SET, ""),
+            33,
+        );
+
+        let err = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap_err();
+
+        assert!(
+            matches!(err, super::super::StoreEngineError::UnrecognisedDdl { table: "dimension", .. }),
+            "{err}"
+        );
+        assert_eq!(engine.format_version().unwrap(), 33, "the failed step left the version where it was");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The clause v35 rewrites, as every store from the baseline to v34 declares it.
+    const NARROW_ROLE_SET: &str = " CHECK(role IN ('', 'none', 'time_axis'))";
+
+    /// v35 in full, on the store shape v34 left behind: `dimension.role` knows two nominations and no
+    /// value carries a `closed` flag (`AMB-D-829`). Both halves are one step, so both are asserted from
+    /// one run — and the rows hanging off the axis are asserted with them, for the reason v9's and v34's
+    /// tests give: the declaration is rewritten in place precisely because the rebuild SQLite prescribes
+    /// would fire the `RESTRICT` of the three tables referencing `dimension`.
+    ///
+    /// **The values in the store come out open.** `0` is the column's default and what every value in an
+    /// upgrading store means — nothing could have closed one — so there is nothing to backfill and
+    /// nothing that quietly changed meaning.
+    #[test]
+    fn the_role_set_widens_and_every_value_arrives_open() {
+        let dir = scratch("closable-role");
+        let engine = store_at(&dir, 34);
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'A');
+                 INSERT INTO task (id, title, status, project_id) VALUES (1, 'classified', 'todo', 1);
+                 INSERT INTO decision (id, title, project_id) VALUES (1, 'why', 1);
+                 INSERT INTO dimension (id, project_id, name, cardinality, role, applies_to) \
+                     VALUES (1, 1, 'リリース', 'single', 'none', 'both');
+                 INSERT INTO dimension_value (id, dimension_id, name) VALUES (1, 1, 'v19');
+                 INSERT INTO task_dimension_value (task_id, dimension_id, value_id) VALUES (1, 1, 1);
+                 INSERT INTO decision_dimension_value (decision_id, dimension_id, value_id) VALUES (1, 1, 1);",
+            )
+            .unwrap();
+        let before = {
+            let tx = engine.conn().unchecked_transaction().unwrap();
+            column_names(&tx, "dimension").unwrap()
+        };
+        assert!(
+            engine.conn().execute("UPDATE dimension SET role = 'closable' WHERE id = 1", []).is_err(),
+            "the store starts out refusing the nomination the step exists to admit"
+        );
+
+        let run = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert!(run.applied.iter().any(|s| s.contains("closed")), "v35 ran: {:?}", run.applied);
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+        let after = {
+            let tx = engine.conn().unchecked_transaction().unwrap();
+            column_names(&tx, "dimension").unwrap()
+        };
+        assert_eq!(before, after, "on `dimension` a constraint changed, not the shape");
+        engine
+            .conn()
+            .execute("UPDATE dimension SET role = 'closable' WHERE id = 1", [])
+            .expect("the widened set admits the nomination");
+        assert!(
+            engine.conn().execute("UPDATE dimension SET role = 'retired' WHERE id = 1", []).is_err(),
+            "the set is still closed — one nomination wider, not open"
+        );
+
+        let closed: i64 = engine
+            .conn()
+            .query_row("SELECT closed FROM dimension_value WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(closed, 0, "the value the store already held arrives open");
+        assert!(
+            engine.conn().execute("UPDATE dimension_value SET closed = 2 WHERE id = 1", []).is_err(),
+            "and the flag holds itself to a truth value"
+        );
+        let count = |table: &str| {
+            engine
+                .conn()
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |r| r.get::<_, i64>(0))
+                .unwrap()
+        };
+        assert_eq!(count("dimension"), 1, "no row moved");
+        assert_eq!(count("dimension_value"), 1, "the axis kept its values");
+        assert_eq!(count("task_dimension_value"), 1, "…and the task is still classified");
+        assert_eq!(count("decision_dimension_value"), 1, "…and so is the decision");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The v35 twin of the refusal above: a `dimension` declaration carrying neither the narrow role set
+    /// nor the wide one stops the chain rather than being written over.
+    #[test]
+    fn a_dimension_role_the_step_does_not_recognise_stops_the_chain() {
+        let dir = scratch("closable-unknown");
+        let engine =
+            store_declared_as(&dir, &frozen_or_panic(34).replace(NARROW_ROLE_SET, ""), 34);
+
+        let err = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap_err();
+
+        assert!(
+            matches!(err, super::super::StoreEngineError::UnrecognisedDdl { table: "dimension", .. }),
+            "{err}"
+        );
+        assert_eq!(engine.format_version().unwrap(), 34, "the failed step left the version where it was");
         std::fs::remove_dir_all(&dir).ok();
     }
 

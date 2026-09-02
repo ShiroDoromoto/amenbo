@@ -1,0 +1,280 @@
+# Some work is not on one side of a question. A crash that lands on two platforms is filed under both
+# or under neither honestly, and a category that keeps one answer per record makes the reader pick a
+# representative — after which nothing in the store says the other one was ever true.
+#
+# So a category carries how many of its values one record may answer it with, and the
+# default is one. What this road walks is the other setting: a record answering two values at once,
+# read back through every face that reads a classification at all, and the two edges that setting
+# brings with it — a value taken back off without the rest going with it, and the way back down to one
+# answer refused while a record still holds several.
+#
+# The world is declared below because raising the flag is the classification manager's own road: what
+# is under test here is work already filed that way, which is the state a reader opens on. The
+# terminal road reads the filing and walks those two edges; the screen road reads the same world off
+# the board, where the two values are drawn on one card and the category is no longer offered as a way
+# to cut the columns — a column says where a task *is*, and this task is in two places.
+id: answer-one-category-with-several-values
+title: One record answers a category with several of its values at once, and every face reads all of them
+description: >
+  Open a project where one task is filed under two values of the same category. The filter finds it
+  under either one, which a store keeping one answer per record could not have produced. Taking one
+  of the two back off leaves the other standing, and holding the category back to one answer is
+  refused while the task still holds both — with the count of what would have been thrown away. On
+  the board the same task's card carries both values, and the category is missing from the row of
+  buttons that cut the columns, while a category that keeps one answer is still offered there.
+given:
+  # The category the work is filed on, and the one beside it that keeps a single answer. Nothing
+  # separates them but the flag, which is what makes the pair of grouping steps below a question about
+  # the flag rather than about these two categories.
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Platform
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Platform
+      value: ios
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Platform
+      value: android
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Platform
+      value: web
+
+  - type: action
+    domain: dimension
+    op: cardinality
+    with:
+      dimension: Platform
+
+  # Drawn on the cards, so the screen road can read the filing without opening anything. The flag is
+  # the category's own answer, so a board opened afterwards draws what the terminal decided.
+  - type: action
+    domain: dimension
+    op: show-on-card
+    with:
+      dimension: Platform
+
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Area
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Area
+      value: sync
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — the crash on both handsets
+    as: crash
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: crash
+
+  # Filed twice on the one category. The second filing is the whole world: on a category keeping one
+  # answer it would have taken the first one's place, and the road below would be reading a store that
+  # never held both.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: crash
+      dimension: Platform
+      value: ios
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: crash
+      dimension: Platform
+      value: android
+
+steps_cli:
+  # Both answers are there, asked one at a time: a filter naming one value is the question a reader
+  # actually types, and a store that had kept the last filing alone would answer one of these two and
+  # not the other.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Platform=ios"
+      target: crash
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Platform=android"
+      target: crash
+      present: true
+
+  # And nothing beyond what was filed: the category admitting several values is not the task carrying
+  # all of them.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Platform=web"
+      target: crash
+      present: false
+
+  # The way back down, while the task still answers with both. It is refused rather than carried out,
+  # because carrying it out would throw one of the two away — and the refusal names how many records
+  # are in that position, which is the size of what a reader is being asked to clear first.
+  - type: action
+    domain: dimension
+    op: cardinality
+    with:
+      dimension: Platform
+      multi: false
+      refused: invalid_dimension_demote_holders
+
+  # Nothing moved: a refusal that had half-written would leave the task on one value.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Platform=ios"
+      target: crash
+      present: true
+
+  # One of the two taken back off, which is the door a reader has for exactly the clearing the refusal
+  # asked for. The other filing is untouched — a store that had read the removal as "unfile this task
+  # from this category" would lose it too.
+  - type: action
+    domain: dimension
+    op: unset
+    with:
+      target: crash
+      dimension: Platform
+      value: ios
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Platform=ios"
+      target: crash
+      present: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Platform=android"
+      target: crash
+      present: true
+
+  # And now the way down goes through: what the guard was holding back was the loss, not the setting.
+  - type: action
+    domain: dimension
+    op: cardinality
+    with:
+      dimension: Platform
+      multi: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Platform=android"
+      target: crash
+      present: true
+
+steps_gui:
+  # Arrive at the board rather than assume it: what a card draws and what the column picker offers are
+  # both drawn on the opening.
+  - type: action
+    domain: project
+    op: open
+    with:
+      project: cwd
+
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: crash
+      dimension: Platform
+      value: ios
+      present: true
+
+  # The second value on the same card. A build drawing one chip per category would put one of these two
+  # on the card and settle for it, and which one it kept would be nobody's decision.
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: crash
+      dimension: Platform
+      value: android
+      present: true
+
+  # The other half of the setting, and the reason the board has to know about it at all: a column says
+  # where a task is, and this task is under two values at once, so the category is not one of the ways
+  # to cut the columns.
+  - type: assert
+    domain: project
+    op: groupable
+    with:
+      axis: Platform
+      present: false
+
+  # The category beside it keeps a single answer and is still offered, which is what says the picker is
+  # leaving one category out rather than having stopped offering categories.
+  - type: assert
+    domain: project
+    op: groupable
+    with:
+      axis: Area
+      present: true
+
+  # And it is offered for real: pressing it cuts the board, and the card that was carrying both values
+  # goes on carrying them through a split neither of them is part of.
+  - type: action
+    domain: project
+    op: group-by
+    with:
+      axis: Area
+
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: crash
+      dimension: Platform
+      value: ios
+      present: true
+
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: crash
+      dimension: Platform
+      value: android
+      present: true

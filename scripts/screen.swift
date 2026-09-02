@@ -25,7 +25,9 @@
 //   swift screen.swift scroll <pid> <dx> <dy>    turn a wheel over that app's window (+dy is back toward the top)
 //   swift screen.swift right-click <x> <y>       right-click at a screen point
 //   swift screen.swift right-click-named <pid> <name>  right-click what that name names
-//   swift screen.swift set-date <pid> <name> <yyyy-mm-dd>  put a day into the date field of that name
+//   swift screen.swift set-date <pid> <name> <yyyy-mm-dd> [--near <name>]
+//                                                put a day into the date field of that name, on the
+//                                                row that --near names when the name reaches several
 //   swift screen.swift trusted                   whether the accessibility permission is granted (prompts if not)
 //
 // Anything aimed at a pid also takes `--window <title>`, anywhere in the line. An app draws one
@@ -411,6 +413,26 @@ func named(_ wanted: String, among all: [Element]) -> [Element] {
     return exact.isEmpty ? all.filter { $0.name.contains(wanted) } : exact
 }
 
+/// The candidates standing on the same row as one of the anchors.
+///
+/// A row is what the screen has left where names run out. A manager listing the values of an axis
+/// draws every row the same two date fields, so `Start date` names as many fields as there are
+/// values and nothing in the name tells them apart — telling one of them to name itself more fully
+/// asks for a name that does not exist. What does separate them is the value's own name, which
+/// stands on that row and nowhere else, so the field is reached by what it stands beside.
+///
+/// Beside is read off the frames the tree answers with, now: a field and the name on its row share a
+/// band of the screen vertically. Those are this moment's positions rather than a shot's pixels, so
+/// neither the scale of the display nor a screen that has moved since enters the arithmetic — which
+/// is what keeps this a name being followed rather than a point being aimed at.
+func onTheRowOf(_ anchors: [Element], _ candidates: [Element]) -> [Element] {
+    candidates.filter { candidate in
+        anchors.contains { anchor in
+            candidate.frame.minY < anchor.frame.maxY && anchor.frame.minY < candidate.frame.maxY
+        }
+    }
+}
+
 /// A card's name carries the line breaks of the lines it folded, so it is shown escaped rather than
 /// broken across the message it is listed in.
 func oneLine(_ s: String) -> String {
@@ -701,7 +723,13 @@ func writableDay(pid: Int) -> AXUIElement? {
 /// The read-back is the point of the op rather than a nicety: a write that reached nothing would
 /// otherwise leave a screen showing the day it had before, and a step that asserts on that day would
 /// report the field as the thing that is broken.
-func setDate(pid: Int, name: String, day: String, window: String?) {
+///
+/// `near` names something standing on the field's own row, for the screens where the field's name
+/// does not reach one field. It is asked of every call that passes it, not only of the ambiguous
+/// ones: a caller saying which row it means has said where the field is, and a single field standing
+/// somewhere else is a screen that is not where the caller thinks it is — which is worth failing on
+/// rather than writing into.
+func setDate(pid: Int, name: String, day: String, window: String?, near: String?) {
     let stamp = DateFormatter()
     stamp.locale = Locale(identifier: "en_US_POSIX")
     stamp.timeZone = TimeZone(identifier: "UTC")
@@ -709,12 +737,22 @@ func setDate(pid: Int, name: String, day: String, window: String?) {
     guard let wanted = stamp.date(from: day) else { fail("\(day) is not a day — write it as yyyy-mm-dd") }
 
     front(pid: pid, window: window)
-    let fields = named(name, among: windowElements(pid: pid, window: window).filter { $0.role == "AXDateTimeArea" })
-    guard let field = fields.first else { fail("no date field on screen is called \(name)") }
+    let all = windowElements(pid: pid, window: window)
+    var fields = named(name, among: all.filter { $0.role == "AXDateTimeArea" })
+    if fields.isEmpty { fail("no date field on screen is called \(name)") }
+    if let near {
+        let anchors = named(near, among: all)
+        if anchors.isEmpty { fail("nothing on screen is called \(near), for a \(name) to stand beside") }
+        fields = onTheRowOf(anchors, fields)
+        if fields.isEmpty { fail("no date field called \(name) stands on a row with \(near)") }
+    }
     if fields.count > 1 {
         let names = fields.map { oneLine($0.name) }.joined(separator: " / ")
-        fail("\(fields.count) date fields hold \(name) — \(names); name one of them, or more of the one meant")
+        let onward = near.map { "name something that stands on the row of the one meant, rather than \($0)" }
+            ?? "name one of them, or say --near <a name on its row>"
+        fail("\(fields.count) date fields hold \(name) — \(names); \(onward)")
     }
+    let field = fields[0]
 
     // Open the picker, and wait for the element it brings: the panel is drawn by the app rather than
     // by the web process, so it arrives a moment after the press. A picker somebody left open is not
@@ -806,8 +844,10 @@ case "scroll":
     }
     scroll(pid: pid, window: window, dx: dx, dy: dy)
 case "set-date":
-    guard args.count == 5, let pid = Int(args[2]) else { fail("usage: screen set-date <pid> <name> <yyyy-mm-dd> [--window <title>]") }
-    setDate(pid: pid, name: args[3], day: args[4], window: window)
+    guard args.count == 5 || (args.count == 7 && args[5] == "--near"), let pid = Int(args[2]) else {
+        fail("usage: screen set-date <pid> <name> <yyyy-mm-dd> [--near <name>] [--window <title>]")
+    }
+    setDate(pid: pid, name: args[3], day: args[4], window: window, near: args.count == 7 ? args[6] : nil)
 case "trusted":
     // Without the permission, raise the dialog that leads to System Settings. Granting it does not
     // require restarting the parent app.

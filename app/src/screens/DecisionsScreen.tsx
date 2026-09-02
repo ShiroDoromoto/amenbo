@@ -354,7 +354,10 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
             }}
           >
             <option value="">{t("detail.none")}</option>
-            {dim.values.map((v) => (
+            {/* Nothing here is carried yet — this is the create — so a closed value is simply left out
+                (`AMB-D-829`): it is exactly what a record may not be newly filed under, and core would
+                refuse the create it rode in on. */}
+            {dim.values.filter((v) => !v.closed).map((v) => (
               <option key={v.id} value={v.id}>{v.name}</option>
             ))}
           </select>

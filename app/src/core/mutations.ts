@@ -1633,6 +1633,19 @@ export async function setDimensionTimeAxis(id: number, timeAxis: boolean): Promi
 }
 
 /**
+ * Let this dimension's values be closed rather than deleted, or take the role away (role: closable,
+ * `AMB-D-829`). A closed value keeps every record already filed under it and goes on resolving in a
+ * filter; what it stops doing is taking new ones. An axis holds one role, so naming it closable takes
+ * the time axis off it — the two switches write the same field, which is why they are never sent
+ * together. Taking the role away strands nothing: whatever was closed under it stays closed, and
+ * reopening is free on any axis.
+ */
+export async function setDimensionClosable(id: number, closable: boolean): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_update", { id, closable });
+}
+
+/**
  * Put this dimension on the task card, or take it off again. The answer belongs to the axis and not to
  * this device (`AMB-D-651`), so the toggle moves it for every face and every machine — which is why it
  * goes through the same op as the rest of the axis rather than into a local setting.
@@ -1708,6 +1721,19 @@ export async function setDimensionValuePeriod(
     startOn,
     endOn,
   });
+}
+
+/**
+ * Close a value, or open it again (`AMB-D-829`). Closing retires it from what a record is newly filed
+ * under — the picker stops offering it and the board stops drawing an empty column for it — and takes
+ * nothing away: the tasks and decisions already on it keep it, and a filter naming it goes on
+ * resolving, which is the whole reason to close rather than delete. Core refuses closing on an axis
+ * nobody nominated closable, and on the last value a required axis still offers; reopening asks for
+ * nothing.
+ */
+export async function setDimensionValueClosed(valueId: number, closed: boolean): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_value_set_closed", { valueId, closed });
 }
 
 /** Delete a dimension value; the task assignments to it go with it, unless `reassignTo` names another

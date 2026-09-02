@@ -14,7 +14,7 @@ const AXIS = {
   id: 900, name: "フェーズ", slug: "phase", notes: "", cardinality: "single" as const,
   role: "none" as const, ordered: false,
   showOnCard: false, required: false, appliesTo: "both" as const,
-  values: [{ id: 901, name: "運用第2期", slug: "ops2" }],
+  values: [{ id: 901, name: "運用第2期", slug: "ops2", closed: false }],
 };
 
 const hoisted = vi.hoisted(() => ({

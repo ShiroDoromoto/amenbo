@@ -48,7 +48,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
           id: 900, name: "プロダクト", slug: "product", notes: "", role: "none" as const,
           cardinality: hoisted.cardinality, ordered: false, showOnCard: false, required: false,
           appliesTo: "both" as const,
-          values: [{ id: 901, name: "Amenbo本体", slug: "amenbo" }],
+          values: [{ id: 901, name: "Amenbo本体", slug: "amenbo", closed: false }],
         };
         withAxis = { ...snap, projects: snap.projects.map((p) => (p.id === 1 ? { ...p, dimensions: [axis] } : p)) };
       }

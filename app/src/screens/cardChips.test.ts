@@ -20,7 +20,7 @@ const dim = (
   showOnCard,
   required: false,
   appliesTo: "both" as const,
-  values: values.map(([vid, vname]) => ({ id: vid, name: vname })),
+  values: values.map(([vid, vname]) => ({ id: vid, name: vname, closed: false })),
 });
 
 const PRODUCT = dim(1, "プロダクト", true, [[11, "Amenbo本体"], [12, "サイト"]]);

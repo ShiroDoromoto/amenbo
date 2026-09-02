@@ -84,6 +84,15 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // values (`AMB-D-826`). The same panel is where the switch is lowered, and the count the sentence
   // carries is the size of what the reader is being asked to clear first.
   "invalid_dimension_demote_holders",
+  // The three refusals closing a value raises (`AMB-D-829`). The panel holds the closable switch and the
+  // close button side by side, so a value can be asked to close on an axis whose role was just dropped
+  // elsewhere; it shuts the button on the last value a required axis still offers, and the refusal is the
+  // backstop under a panel drawn a moment ago. The third arrives at the pickers rather than here — a
+  // value closed on another face is gone from the select but may still be carried, and a record moving
+  // onto it is turned away.
+  "invalid_dimension_close_not_closable",
+  "invalid_dimension_close_last_open",
+  "invalid_dimension_set_closed_value",
   "invalid_task_required_dimension",
   // Its decision twin: the same flag, read at the other door a record passes through once
   // (`decision accept`), and the decision pane is where that button is.
@@ -182,14 +191,6 @@ export const CORE_SENTENCE_ERROR_CODES = [
  * — which is also why they owe no template. A code that reaches a screen belongs in the sentence list
  * instead, with its prose. */
 export const CORE_CLI_ONLY_ERROR_CODES = [
-  // The three refusals closing a value raises (`AMB-D-829`): an axis nobody nominated closable, the last
-  // value a required axis still offers, and a closed value somebody tried to file a record under. The one
-  // door that reaches them is `dimension value-close` / `value-reopen` in the terminal; the classification
-  // panel has no close control, so nothing on a screen can be refused for these reasons. The day the panel
-  // grows one, these move into the sentence list above, with the prose they then owe.
-  "invalid_dimension_close_not_closable",
-  "invalid_dimension_close_last_open",
-  "invalid_dimension_set_closed_value",
   "not_found_plugin_rollback_build",
   "invalid_plugin_rollback_manifest_absent",
   "invalid_plugin_rollback_manifest_unparsable",

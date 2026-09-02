@@ -401,6 +401,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
                         slug: v.slug.clone(),
                         start_on: v.start_on.map(|d| d.to_string()),
                         end_on: v.end_on.map(|d| d.to_string()),
+                        closed: v.closed,
                     })
                     .collect(),
             })
@@ -2739,7 +2740,9 @@ pub fn dimension_set_slug(id: i64, slug: String) -> Result<WriteAck, CmdError> {
 /// record hold several of this axis's values at once (`AMB-D-826`), and core refuses the way back
 /// down while any record still holds several, and refuses the pair `multi` × time axis at either
 /// door; turning `ordered` on makes reordering values (`dimension_value_move`) take
-/// effect; turning `time_axis` on makes that axis's values carry periods; turning `show_on_card` on
+/// effect; turning `time_axis` on makes that axis's values carry periods, and turning `closable` on
+/// lets them be closed instead of deleted (`AMB-D-829`) — one role per axis, so the two switches are
+/// the same field and never arrive together; turning `show_on_card` on
 /// puts this axis on every task card, for everyone (`AMB-D-651` — the axis holds the answer, not the
 /// device); turning `required` on makes a creation on this project wait until the axis is answered
 /// (`AMB-D-734`), and core refuses it on an axis that offers no values; narrowing `applies_to` takes
@@ -2753,11 +2756,25 @@ pub fn dimension_update(
     multi: Option<bool>,
     ordered: Option<bool>,
     time_axis: Option<bool>,
+    closable: Option<bool>,
     show_on_card: Option<bool>,
     required: Option<bool>,
     applies_to: Option<String>,
 ) -> Result<WriteAck, CmdError> {
-    let role = time_axis.map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
+    // The two nominations are one field, and an axis holds one role, so the panel moves one switch at a
+    // time and either arm alone says what the role becomes. Both at once is the screen's defect, not the
+    // person's — refused here rather than silently letting one win.
+    let role = match (time_axis, closable) {
+        (Some(_), Some(_)) => {
+            return Err(amenbo_core::Error::invalid(
+                "an axis holds one role: pass time_axis or closable, not both",
+            )
+            .into())
+        }
+        (Some(on), None) => Some(if on { DimensionRole::TimeAxis } else { DimensionRole::None }),
+        (None, Some(on)) => Some(if on { DimensionRole::Closable } else { DimensionRole::None }),
+        (None, None) => None,
+    };
     let cardinality = multi.map(|on| {
         if on { DimensionCardinality::Multi } else { DimensionCardinality::Single }
     });
@@ -2857,6 +2874,22 @@ pub fn dimension_value_set_period(
             .into());
         }
         store.dimension_value_update(value_id, None, None, Some((start, end)))?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]))
+}
+
+/// Close a dimension value, or open it again (`AMB-D-829`) — the panel's counterpart of the CLI's
+/// `dimension value-close` / `value-reopen`. Closing retires the value from what a record is newly filed
+/// under and takes nothing away: the records already on it keep it, its name, key and place stay, and a
+/// filter naming it goes on resolving. Unlike a period, the role is checked by core rather than here —
+/// closing *is* what the nomination means, so the refusal belongs at the door that writes it
+/// (`invalid_dimension_close_not_closable`), together with the one keeping a required axis answerable
+/// (`invalid_dimension_close_last_open`). Reopening asks for nothing.
+#[tauri::command]
+pub fn dimension_value_set_closed(value_id: i64, closed: bool) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.dimension_value_set_closed(value_id, closed)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))

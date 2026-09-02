@@ -279,7 +279,8 @@ export type DimensionDecisionValueDto = { decisionId: number, valueId: number, }
 
 /**
  * One unified dimension (classification axis), values included, so the GUI's dimension editor and
- * assignment selects render from real data. `role` is `none` or `time_axis` (phase); `cardinality`
+ * assignment selects render from real data. `role` is `none`, `time_axis` (phase) or `closable` —
+ * the axis whose values can be closed rather than deleted (`AMB-D-829`); `cardinality`
  * is `single` or `multi` — how many of the axis's values one record may hold (`AMB-D-826`), which is
  * what the detail pane reads to draw one select or a row of chips; `ordered`
  * says whether the values have an order; `showOnCard` says whether a task's value on this axis
@@ -342,7 +343,19 @@ startOn?: string,
 /**
  * End of the period, `YYYY-MM-DD` (inclusive). Omitted means "ongoing" (an open end).
  */
-endOn?: string, };
+endOn?: string, 
+/**
+ * Is this value closed — retired from what a record is newly filed under, while everything already
+ * filed under it stays (`AMB-D-829`)? It is the payload of `role: closable`, the way a period is the
+ * time axis's. Sent for every value, meaningful only where the axis carries that role — the shape
+ * the period fields already have.
+ *
+ * The screens read it to four different ends: the filter offers a closed value like any other
+ * (filtering by it is the whole point of closing rather than deleting), the value picker hides it
+ * unless the record already carries it, the board draws its column only while cards are still in it,
+ * and the classification panel shows every value with the switch that closes and reopens one.
+ */
+closed: boolean, };
 
 /**
  * What `doctor_fix` returns: what was cleaned up, and how much of it.

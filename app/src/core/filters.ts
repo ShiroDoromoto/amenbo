@@ -151,6 +151,11 @@ const DECISION_STATUSES: DecisionDto["status"][] = ["proposed", "accepted", "rej
  * The user-defined axes as filter dimensions, for whichever side is asking. An axis with no values
  * filters nothing, so it is left out. The CLI has the same dimension filter (`dim:axis=value` in
  * query.rs), which is what cliKey lines up with.
+ *
+ * **A closed value is offered like any other** (`AMB-D-829`). Closing retires a value from what a
+ * record is newly filed under — which is the picker's business, and the board's — and leaves every
+ * record already filed under it exactly where it was. Asking what carried a finished release is the
+ * whole reason to close one rather than delete it, so this is the one face that draws no distinction.
  */
 function customDimensions<T>(
   userDims: DimensionDto[],

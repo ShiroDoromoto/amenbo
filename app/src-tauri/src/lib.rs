@@ -560,6 +560,7 @@ pub fn run() {
       folder_write::folder_import,
       folder_write::folder_clip_copy,
       folder_write::folder_clip_paste,
+      clipboard::clip_files,
       pty::pty_open,
       pty::pty_sessions,
       pty::pty_close,

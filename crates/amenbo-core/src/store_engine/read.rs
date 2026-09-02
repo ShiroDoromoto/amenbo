@@ -5004,13 +5004,13 @@ pub fn dimension_id_of_value(conn: &Connection, value_id: i64) -> Result<Option<
 }
 
 /// The value of the project's time axis whose period covers `date`, or `None` — the "current era" a new
-/// task is placed on by default. Only a `role: time_axis` dimension has periods that mean anything, and
-/// only a value with at least one endpoint set covers any date at all (`DimensionValue::covers`: both
-/// ends open ⇒ covers nothing); an open end is unbounded on that side. Ties — overlapping windows, or a
-/// store with more than one time axis — resolve on the first axis in dimension order, then the axis's own
-/// value order (`order_key` when ordered, id when not). [`crate::store::Store::add_task`] reads this
-/// **inside** its write transaction, so the era it assigns and the task row it assigns it to commit
-/// together.
+/// task, and a decision newly recorded, are placed on by default. Only a `role: time_axis` dimension has
+/// periods that mean anything, and only a value with at least one endpoint set covers any date at all
+/// (`DimensionValue::covers`: both ends open ⇒ covers nothing); an open end is unbounded on that side.
+/// Ties — overlapping windows, or a store with more than one time axis — resolve on the first axis in
+/// dimension order, then the axis's own value order (`order_key` when ordered, id when not).
+/// [`crate::store::Store::add_task`] and [`crate::store::Store::add_decision`] read this **inside** their
+/// write transaction, so the era each assigns and the row it assigns it to commit together.
 pub fn current_time_axis_value(
     conn: &Connection,
     project_id: i64,

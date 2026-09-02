@@ -17,7 +17,7 @@
 //! |---|---|
 //! | macOS | `NSURL`s, written as file URLs |
 //! | Windows | `CF_HDROP` — a header and a run of wide paths, ended twice |
-//! | Linux | `text/uri-list` — `file://` lines |
+//! | Linux | `x-special/gnome-copied-files` and `text/uri-list` — `file://` lines in both |
 //!
 //! **Beside the files, the same copy carries the paths as plain words** (`AMB-D-832`). A pane is a
 //! terminal inside the webview, and the only shape it can be pasted into is text — so a copy that
@@ -301,15 +301,21 @@ pub fn take() -> Vec<PathBuf> {
 }
 
 // -------------------------------------------------------------------------------------------
-// Linux — `text/uri-list`, served by this process for as long as it is up.
+// Linux — two lists of files and the words beside them, served by this process for as long as it
+// is up.
 // -------------------------------------------------------------------------------------------
 
-/// Put these files on the clipboard as a `text/uri-list`, with their paths beside them as plain
-/// text.
+/// Put these files on the clipboard as the two lists a file manager may ask for, with their paths
+/// beside them as plain text.
 ///
-/// The list is the format every file manager on this desktop reads, and the lines are `file://`
-/// URLs rather than paths: a path with a space in it is a valid line and an invalid URL, and the
-/// reader on the other side is parsing URLs.
+/// The lines are `file://` URLs rather than paths in both: a path with a space in it is a valid
+/// line and an invalid URL, and the reader on the other side is parsing URLs.
+///
+/// **Two lists because "the format every file manager reads" is not one format.** `text/uri-list`
+/// is the registered one and Thunar and pcmanfm read it; Nautilus asks only for
+/// `x-special/gnome-copied-files` and, not finding it among the targets on offer, stops rather than
+/// falling back — so a copy carrying the registered format alone could not be pasted into the file
+/// manager most of this desktop ships with (`AMB-T-4219`).
 ///
 /// **Owning the selection is what lets one copy answer both questions.** The owner is asked for a
 /// target at the moment somebody pastes, so the several names text goes under are offered alongside
@@ -326,9 +332,15 @@ pub fn put(paths: &[PathBuf]) -> Result<(), String> {
         return Err("nothing to copy".to_string());
     }
     let list = uri_list(paths);
+    let gnome = gnome_copied_files(paths);
     let words = as_text(paths, "\n");
     let clipboard = gtk::Clipboard::get(&Atom::intern("CLIPBOARD"));
     let targets = [
+        gtk::TargetEntry::new(
+            "x-special/gnome-copied-files",
+            gtk::TargetFlags::empty(),
+            GNOME_FILES,
+        ),
         gtk::TargetEntry::new("text/uri-list", gtk::TargetFlags::empty(), URI_LIST),
         gtk::TargetEntry::new("text/plain", gtk::TargetFlags::empty(), PLAIN_TEXT),
         gtk::TargetEntry::new("text/plain;charset=utf-8", gtk::TargetFlags::empty(), PLAIN_TEXT),
@@ -338,6 +350,12 @@ pub fn put(paths: &[PathBuf]) -> Result<(), String> {
     clipboard.set_with_data(&targets, move |_, selection, asked| {
         if asked == URI_LIST {
             selection.set(&Atom::intern("text/uri-list"), 8, list.as_bytes());
+        } else if asked == GNOME_FILES {
+            selection.set(
+                &Atom::intern("x-special/gnome-copied-files"),
+                8,
+                gnome.as_bytes(),
+            );
         } else {
             // GTK writes the words in whichever of the text targets was asked for, `STRING` — which
             // is Latin-1 — included, so the encoding is not this side's to get right.
@@ -347,7 +365,7 @@ pub fn put(paths: &[PathBuf]) -> Result<(), String> {
     Ok(())
 }
 
-/// Which of the two answers a paste is asking for. The number is the one each target was registered
+/// Which of the answers a paste is asking for. The number is the one each target was registered
 /// under, and it is all the serving closure is told about the question.
 #[cfg(target_os = "linux")]
 const URI_LIST: u32 = 0;
@@ -355,6 +373,10 @@ const URI_LIST: u32 = 0;
 /// The paths as words. See [`URI_LIST`].
 #[cfg(target_os = "linux")]
 const PLAIN_TEXT: u32 = 1;
+
+/// The same files under the name Nautilus asks for. See [`URI_LIST`].
+#[cfg(target_os = "linux")]
+const GNOME_FILES: u32 = 2;
 
 /// The files on the clipboard, or none where what is on it is not files.
 #[cfg(target_os = "linux")]
@@ -374,6 +396,26 @@ pub fn take() -> Vec<PathBuf> {
 #[cfg(target_os = "linux")]
 fn uri_list(paths: &[PathBuf]) -> String {
     paths.iter().map(|path| as_uri(path)).collect::<Vec<_>>().join("\r\n")
+}
+
+/// The same files under the name Nautilus asks for: a verb, and then the URLs.
+///
+/// **It is not a `text/uri-list` with a word on top, however much it looks like one.** The verb says
+/// whether the files are to be copied or moved, which the registered format has no way to carry —
+/// so a cut and a copy are one target's two contents rather than two targets. Nothing in the panel
+/// cuts — `⌘C` is the only key that puts a file on the clipboard — so the verb is always `copy`.
+///
+/// The separator is a bare newline and there is none after the last line. `text/uri-list` asks for
+/// `\r\n` and this one does not: a reader splitting on `\n` alone would take the carriage return as
+/// the last character of the URL before it, and hand back a path with a byte no file has.
+#[cfg(target_os = "linux")]
+fn gnome_copied_files(paths: &[PathBuf]) -> String {
+    let mut out = String::from("copy");
+    for path in paths {
+        out.push('\n');
+        out.push_str(&as_uri(path));
+    }
+    out
 }
 
 /// One path as a `file://` URL, with everything a URL may not carry written as its bytes.
@@ -472,6 +514,30 @@ mod tests {
             PathBuf::from("/home/alice/notes/新しいファイル.md"),
         ];
         assert_eq!(from_uri_list(&uri_list(&paths)), paths);
+    }
+
+    /// The verb, the URLs under it, and no newline at the end — the shape Nautilus reads
+    /// (`AMB-T-4219`). The escaping is the one the registered format is written with, so a name
+    /// that needs it needs it here too.
+    #[test]
+    fn the_gnome_list_is_the_verb_and_then_the_urls() {
+        let paths = vec![
+            PathBuf::from("/tmp/src/a plain one.md"),
+            PathBuf::from("/tmp/src/100% done.md"),
+        ];
+        assert_eq!(
+            gnome_copied_files(&paths),
+            "copy\nfile:///tmp/src/a%20plain%20one.md\nfile:///tmp/src/100%25%20done.md",
+        );
+    }
+
+    /// One file is still a verb and a line, which is the ordinary copy.
+    #[test]
+    fn one_file_is_the_verb_and_one_line() {
+        assert_eq!(
+            gnome_copied_files(&[PathBuf::from("/tmp/one.md")]),
+            "copy\nfile:///tmp/one.md",
+        );
     }
 
     /// The format's own comment lines, and a line that is not a file at all.

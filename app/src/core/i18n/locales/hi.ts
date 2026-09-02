@@ -650,7 +650,7 @@ export const hi: Translation = {
     invalid_dimension_slug_shape: "«{slug}» कुंजी नहीं बन सकती — अधिकतम {max} छोटे अक्षर, अंक और हाइफ़न लिखें, और शुरुआत अक्षर से करें।",
     invalid_dimension_slug_taken: "«{slug}» यहाँ पहले से किसी और की कुंजी है — दूसरी चुनें।",
     invalid_dimension_name_whitespace: "«{name}» नाम नहीं बन सकता — स्पेस हटा दें, या उनकी जगह हाइफ़न लिखें।",
-    invalid_dimension_multi_time_axis: "«{name}» समय-अक्ष है, और समय-अक्ष एक बार में एक ही मान रखता है — इससे समय-अक्ष की भूमिका हटा दें, या इसे एकल-चयन ही रहने दें।",
+    invalid_dimension_multi_time_axis: "«{name}» एक साथ समय-अक्ष और बहु-चयन दोनों नहीं हो सकता — समय-अक्ष एक बार में एक ही मान रखता है, इसलिए इससे समय-अक्ष की भूमिका हटा दें, या इसे एकल-चयन ही रहने दें।",
     invalid_task_required_dimension: "इस कार्य का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
     invalid_decision_required_dimension: "इस निर्णय का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
     invalid_dimension_values_unordered:

@@ -678,7 +678,7 @@ export const it: Translation = {
     invalid_dimension_slug_shape: "«{slug}» non va bene come chiave: al massimo {max} lettere minuscole, cifre e trattini, a partire da una lettera.",
     invalid_dimension_slug_taken: "«{slug}» è già la chiave di qualcos'altro qui: scegline un'altra.",
     invalid_dimension_name_whitespace: "«{name}» non va bene come nome: togli gli spazi o mettici un trattino.",
-    invalid_dimension_multi_time_axis: "«{name}» è l'asse del tempo, e un asse del tempo tiene un valore alla volta: togligli il ruolo di asse del tempo, oppure lascialo a selezione singola.",
+    invalid_dimension_multi_time_axis: "«{name}» non può essere insieme asse del tempo e a selezione multipla: un asse del tempo tiene un valore alla volta, quindi togligli il ruolo di asse del tempo oppure lascialo a selezione singola.",
     invalid_task_required_dimension: "Questa attività non porta alcun valore su {names}, che questo progetto richiede.",
     invalid_decision_required_dimension: "Questa decisione non porta alcun valore su {names}, che questo progetto richiede.",
     invalid_dimension_values_unordered:

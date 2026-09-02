@@ -646,7 +646,7 @@ export const ko: Translation = {
     invalid_dimension_slug_shape: "「{slug}」은(는) 키로 쓸 수 없습니다. 소문자·숫자·하이픈으로 {max}자 이내, 첫 글자는 소문자로 적으세요.",
     invalid_dimension_slug_taken: "「{slug}」은(는) 여기서 이미 다른 것이 쓰고 있습니다. 다른 키를 고르세요.",
     invalid_dimension_name_whitespace: "「{name}」은(는) 이름으로 쓸 수 없습니다. 공백을 없애거나 하이픈으로 바꾸세요.",
-    invalid_dimension_multi_time_axis: "「{name}」은(는) 시간축이고, 시간축이 한 번에 가질 수 있는 값은 하나입니다. 시간축 역할을 떼거나, 단일 선택으로 두세요.",
+    invalid_dimension_multi_time_axis: "「{name}」은(는) 시간축과 복수 선택을 겸할 수 없습니다. 시간축이 한 번에 가질 수 있는 값은 하나이니, 시간축 역할을 떼거나 단일 선택으로 두세요.",
     invalid_task_required_dimension: "이 작업은 {names}에 값이 없습니다. 이 프로젝트가 필수로 두는 분류입니다.",
     invalid_decision_required_dimension: "이 결정은 {names}에 값이 없습니다. 이 프로젝트가 필수로 두는 분류입니다.",
     invalid_dimension_values_unordered: "이 분류의 값에는 순서가 없어 재정렬할 수 없습니다.",

@@ -160,9 +160,15 @@ export function BoardScreen({
   // (`AMB-D-789`) — filtered once, here, and everything downstream follows: the filter chips, the
   // grouping select, the cards' own chips and the assignments read for them.
   const projectDims = axesFor("task", project?.dimensions ?? []);
-  // If the grouping axis names a dimension id, that is what splits the columns ("status", or a deleted id, → null).
+  // The axes the columns may be split by. An axis that admits several values at once is not one of them
+  // (`AMB-D-826`): a column says where a task is, so a task sitting on three values of the grouping axis
+  // would be drawn in three columns at once. Narrowing by such an axis is the filter chips' job, and they
+  // still offer every axis. It is only the columns that need one answer per card.
+  const groupableDims = projectDims.filter((d) => d.cardinality !== "multi");
+  // If the grouping axis names a groupable dimension id, that is what splits the columns ("status", a
+  // deleted id, or an axis since turned multi-select → null).
   const groupingDimId =
-    typeof group === "number" && projectDims.some((d) => d.id === group) ? group : null;
+    typeof group === "number" && groupableDims.some((d) => d.id === group) ? group : null;
   // On a project switch, drop back to that project's default view (`project.view`). AppShell does not key
   // BoardScreen by projectId and so never remounts it, which means the useState initialiser does not re-run on a
   // switch — sync it here. The dep is projectId alone, so switching views inside one project does not fire it.
@@ -170,12 +176,15 @@ export function BoardScreen({
     const v = dataAdapter.getProject(projectId)?.view;
     if (v) setView(v);
   }, [projectId]);
-  // If the chosen dimension is gone (deleted from the manager), fall the now-dangling group back to status.
   const dimIdsKey = projectDims.map((d) => d.id).join(",");
+  // If the chosen dimension can no longer split the columns — deleted from the manager, or turned
+  // multi-select there — fall the now-dangling group back to status.
+  const groupableIdsKey = groupableDims.map((d) => d.id).join(",");
   useEffect(() => {
-    if (typeof group === "number" && !projectDims.some((d) => d.id === group)) setGroup(STATUS_GROUP);
-  }, [group, dimIdsKey]);
-  // Pull the chosen dimension's task assignments (taskId→valueId) from the read-model in one go (Tauri only).
+    if (typeof group === "number" && !groupableDims.some((d) => d.id === group)) setGroup(STATUS_GROUP);
+  }, [group, groupableIdsKey]);
+  // Pull the chosen dimension's task assignments (taskId→valueId) from the read-model in one go (Tauri
+  // only). One value per task, because only a single-select axis can be the one splitting the columns.
   useEffect(() => {
     if (!groupingDimId) { setDimAssign({}); return; }
     let alive = true;
@@ -203,7 +212,9 @@ export function BoardScreen({
       );
       const m: DimAssignments = {};
       for (const { dimId, rows } of results) {
-        for (const r of rows) (m[r.taskId] ??= {})[dimId] = r.valueId;
+        // One row per value, so an axis admitting several arrives as several rows for the one task
+        // (`AMB-D-826`) — collected into the list the axis's entry holds, rather than the last one winning.
+        for (const r of rows) ((m[r.taskId] ??= {})[dimId] ??= []).push(r.valueId);
       }
       return m;
     },
@@ -360,7 +371,7 @@ export function BoardScreen({
             >
               {t("filter.dim.status")}
             </button>
-            {projectDims.map((d) => (
+            {groupableDims.map((d) => (
               <button
                 key={d.id}
                 className={`filterchip ${group === d.id ? "filterchip--on" : ""}`}
@@ -758,7 +769,7 @@ const TaskCardView = memo(function TaskCardView({
       {chips && chips.length > 0 && (
         <div className="card__row">
           {chips.map((c) => (
-            <span key={c.dimId} className="chip chip--dim" title={`${c.axis}: ${c.value}`}>{c.value}</span>
+            <span key={c.valueId} className="chip chip--dim" title={`${c.axis}: ${c.value}`}>{c.value}</span>
           ))}
         </div>
       )}

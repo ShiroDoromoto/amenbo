@@ -652,7 +652,7 @@ export const id: Translation = {
     invalid_dimension_slug_shape: "«{slug}» tidak bisa jadi kunci — pakai maksimal {max} huruf kecil, angka, dan tanda hubung, diawali huruf.",
     invalid_dimension_slug_taken: "«{slug}» sudah jadi kunci hal lain di sini — pilih yang lain.",
     invalid_dimension_name_whitespace: "«{name}» tidak bisa jadi nama — hilangkan spasinya, atau ganti dengan tanda hubung.",
-    invalid_dimension_multi_time_axis: "«{name}» adalah sumbu waktu, dan sumbu waktu memegang satu nilai pada satu waktu — lepaskan peran sumbu waktu darinya, atau biarkan pilihan tunggal.",
+    invalid_dimension_multi_time_axis: "«{name}» tidak bisa sekaligus jadi sumbu waktu dan pilihan ganda — sumbu waktu memegang satu nilai pada satu waktu, jadi lepaskan peran sumbu waktu darinya, atau biarkan pilihan tunggal.",
     invalid_task_required_dimension: "Tugas ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
     invalid_decision_required_dimension: "Keputusan ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
     invalid_dimension_values_unordered: "Nilai kategori ini tidak berurutan, jadi tidak bisa diurutkan ulang.",

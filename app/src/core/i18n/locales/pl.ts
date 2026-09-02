@@ -687,7 +687,7 @@ export const pl: Translation = {
     invalid_dimension_slug_shape: "„{slug}” nie nadaje się na klucz — najwyżej {max} małe litery, cyfry i myślniki, zaczynając od litery.",
     invalid_dimension_slug_taken: "„{slug}” jest tu już kluczem czegoś innego — wybierz inny.",
     invalid_dimension_name_whitespace: "„{name}” nie nadaje się na nazwę — usuń spacje albo wpisz w ich miejsce myślnik.",
-    invalid_dimension_multi_time_axis: "„{name}” to oś czasu, a oś czasu trzyma jedną wartość naraz — zdejmij z niej rolę osi czasu albo zostaw ją jednokrotnego wyboru.",
+    invalid_dimension_multi_time_axis: "„{name}” nie może być zarazem osią czasu i wielokrotnego wyboru — oś czasu trzyma jedną wartość naraz, więc zdejmij z niej rolę osi czasu albo zostaw ją jednokrotnego wyboru.",
     invalid_task_required_dimension: "To zadanie nie ma wartości w {names}, czego wymaga ten projekt.",
     invalid_decision_required_dimension: "Ta decyzja nie ma wartości w {names}, czego wymaga ten projekt.",
     invalid_dimension_values_unordered: "Wartości tej kategorii nie mają kolejności, więc nie można ich przestawiać.",

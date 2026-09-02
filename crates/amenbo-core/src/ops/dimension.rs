@@ -95,12 +95,14 @@ fn unsatisfiable_required(name: &str) -> Error {
 /// several values cannot be the one doing it — what to write, and what belonging to two eras at once
 /// means, would both be undefined (`AMB-D-826`). Written once so the sentence does not depend on which
 /// half moved: `add`, where the two arrive together, and `update`, where either can be flipped onto the
-/// other.
+/// other. It names the **pair**, never one half as though it already held — on `update` the half being
+/// raised is the one that is not true yet, and a sentence asserting it would be describing a state the
+/// refusal is precisely preventing.
 fn time_axis_holds_one(name: &str) -> Error {
     Error::Invalid(
         Msg::new(format!(
-            "'{name}' is the time axis, and the time axis holds one value at a time — take the \
-             time-axis role off it, or leave it single-select"
+            "'{name}' cannot be both the time axis and multi-select — the time axis holds one value \
+             at a time, so drop the time-axis role, or leave it single-select"
         ))
         .coded(ErrorCode::InvalidDimensionMultiTimeAxis)
         .with("name", name),

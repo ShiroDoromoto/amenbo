@@ -40,12 +40,18 @@ export const REF_RE = /(?<![A-Za-z0-9])AMB-[TD]-\d+/gi;
  * Read a single ref, whole-string. Reading is the loose side: the bare `#<n>` / `T-<n>` / `D-<n>` forms are
  * still accepted, matching what core's parser takes, because text a user hands Amenbo directly — typing
  * into the search box — is not the foreign text the namespace guards against.
+ *
+ * `side` is what a number with no type code is read as. It carries nothing that says which space it is in,
+ * and the two number themselves apart (`AMB-D-29`), so `12` is task 12 as much as decision 12 — readable
+ * only where the side is already settled, which is a box that searches one of them (`AMB-D-833`). Called
+ * with no side, a bare number is not a ref at all and the caller is left to decide for itself.
  */
-export function parseRef(raw: string): { num: number; space: RefSpace } | null {
+export function parseRef(raw: string, side?: RefSpace): { num: number; space: RefSpace } | null {
   const s = raw.trim();
   let m: RegExpExecArray | null;
   if ((m = /^(?:AMB-)?[Tt]-(\d+)$/i.exec(s))) return { num: Number(m[1]), space: "task" };
   if ((m = /^(?:AMB-)?[Dd]-(\d+)$/i.exec(s))) return { num: Number(m[1]), space: "decision" };
+  if (side && (m = /^#?(\d+)$/.exec(s))) return { num: Number(m[1]), space: side };
   if ((m = /^#(\d+)$/.exec(s))) return { num: Number(m[1]), space: "task" };
   return null;
 }

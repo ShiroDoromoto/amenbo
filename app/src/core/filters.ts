@@ -192,14 +192,17 @@ export function passesFilters<T>(item: T, dims: FilterDimension<T>[], sel: Filte
 }
 
 /**
- * Read a number out of the search box: when the query is a reference, take it as an intent to filter
- * by that number. The grammar lives in `core/idref.ts` rather than here, so the box and body-text links
- * cannot drift apart. Anything unrecognised returns null and falls back to text search — the box does
- * double duty, and in number mode no text matching happens.
+ * Read a number out of the search box: when the query is a reference, take it as an intent to pin that
+ * record. The grammar lives in `core/idref.ts` rather than here, so the box and body-text links cannot
+ * drift apart. Anything unrecognised returns null.
+ *
+ * A pin is **added**, never a replacement — the box goes on matching words either way, so a number
+ * someone wrote in their notes still reaches them below the record it names (`AMB-D-833`). `side` is the
+ * one the box searches, which is what lets a number with no type code be read at all.
  */
 export type RefQuery = { num: number; space: "task" | "decision" };
-export function parseRefQuery(raw: string): RefQuery | null {
-  return parseRef(raw);
+export function parseRefQuery(raw: string, side?: "task" | "decision"): RefQuery | null {
+  return parseRef(raw, side);
 }
 
 /**

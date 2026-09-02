@@ -2207,9 +2207,10 @@ impl Instructor {
             ),
             // And a run of them in one press. Where the run starts is not named: it is wherever the
             // last press without Shift landed, which the road put there a step ago and the operator can
-            // see on the screen.
+            // see on the screen. Which way it runs is not said either — a reader reaches back up a tree
+            // as often as down it, and a line that said "down" would send them looking the wrong way.
             (Domain::Files, "pick-to") => format!(
-                "In {}, hold down Shift and click the row \"{}\". Every row from the one picked out last down to that one is picked out with it.",
+                "In {}, hold down Shift and click the row \"{}\". Every row between it and the one picked out last comes in with them, whichever way round the two stand.",
                 section(with)?,
                 req(with, "name")?
             ),

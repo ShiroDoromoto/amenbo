@@ -1034,6 +1034,9 @@ pub enum DimensionCmd {
         /// description / notes (Markdown)
         #[arg(long, default_value = "")]
         notes: String,
+        /// how many of this axis's values one record may hold: `single` or `multi` (default: single)
+        #[arg(long)]
+        cardinality: Option<String>,
         /// give the values an explicit order (default: unordered)
         #[arg(long)]
         ordered: bool,
@@ -1064,7 +1067,7 @@ pub enum DimensionCmd {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
     },
-    /// Update a dimension's name, notes, value ordering, time-axis role, whether it goes on the task card, whether it must be answered, which side it classifies, and/or its slug (only the given fields change)
+    /// Update a dimension's name, notes, how many values one record may hold, value ordering, time-axis role, whether it goes on the task card, whether it must be answered, which side it classifies, and/or its slug (only the given fields change)
     Update {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
@@ -1073,6 +1076,9 @@ pub enum DimensionCmd {
         name: Option<String>,
         #[arg(long)]
         notes: Option<String>,
+        /// how many of this axis's values one record may hold (`--cardinality single|multi`); going back to single is refused while records answer with several
+        #[arg(long)]
+        cardinality: Option<String>,
         /// whether the values carry an explicit order (`--ordered true|false`)
         #[arg(long)]
         ordered: Option<bool>,

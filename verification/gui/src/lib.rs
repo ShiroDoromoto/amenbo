@@ -2176,6 +2176,26 @@ impl Instructor {
             // the terminal beside this column hears the same key as meaning something of its own.
             // The copy, on the row named. The line says to stand on the row first, because the key
             // reaches nothing where nothing is standing.
+            // Picking rows out, one press at a time. The key is named by what it does and not by its
+            // glyph, the way every key on this face is: which one adds a row is the machine's answer,
+            // and an operator on a Mac and one on Windows press different keys to say the same thing.
+            //
+            // What was picked before is said to stay, because that is the whole of what separates this
+            // press from an ordinary one — and an operator who saw the earlier row go plain would be
+            // looking at the bug this step exists to catch.
+            (Domain::Files, "pick") => format!(
+                "In {}, hold down the key this machine adds to a selection with and click the row \"{}\". It is picked out alongside whatever was picked out before it, which stays as it was.",
+                section(with)?,
+                req(with, "name")?
+            ),
+            // And a run of them in one press. Where the run starts is not named: it is wherever the
+            // last press without Shift landed, which the road put there a step ago and the operator can
+            // see on the screen.
+            (Domain::Files, "pick-to") => format!(
+                "In {}, hold down Shift and click the row \"{}\". Every row from the one picked out last down to that one is picked out with it.",
+                section(with)?,
+                req(with, "name")?
+            ),
             (Domain::Files, "copy") => format!(
                 "In {}, click once on the row \"{}\" so the keyboard is standing on it, then press the key this machine copies with.",
                 section(with)?,

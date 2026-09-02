@@ -678,6 +678,7 @@ export const fr: Translation = {
     invalid_dimension_slug_shape: "« {slug} » ne convient pas comme clé : au plus {max} lettres minuscules, chiffres et traits d'union, en commençant par une lettre.",
     invalid_dimension_slug_taken: "« {slug} » est déjà la clé d'autre chose ici — choisissez-en une autre.",
     invalid_dimension_name_whitespace: "« {name} » ne convient pas comme nom — supprimez les espaces ou mettez un trait d'union à la place.",
+    invalid_dimension_multi_time_axis: "« {name} » est l'axe du temps, et un axe du temps ne porte qu'une valeur à la fois — retirez-lui le rôle d'axe du temps, ou laissez-le en sélection unique.",
     invalid_task_required_dimension: "Cette tâche ne porte aucune valeur sur {names}, ce que ce projet exige.",
     invalid_decision_required_dimension: "Cette décision ne porte aucune valeur sur {names}, ce que ce projet exige.",
     invalid_dimension_values_unordered:

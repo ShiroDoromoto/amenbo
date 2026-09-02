@@ -558,26 +558,36 @@ pub struct DecisionTaskLink {
 // Every axis a task can be classified along — phase, category, whatever the user invents — goes through
 // one mechanism: the Dimension.
 
-/// How many values of a dimension a task may hold. Single-select only: `(task, dimension)` is constrained
-/// to one row. A one-variant enum is kept so the physical column `dimension.cardinality` keeps its meaning
-/// in the type system — bringing multi-select back is then a matter of adding a variant.
+/// How many values of an axis one record may hold — the axis's own answer, like `show_on_card` and
+/// `required` (`AMB-D-826`). `Single` constrains `(task, dimension)` to one row and is where every axis
+/// starts and where every axis an upgrade brings in stays; `Multi` lets one record answer the axis with
+/// several of its values, so a record that genuinely spans a set of them is filed under all of them
+/// rather than under a representative one.
+///
+/// **`Multi` and `role: TimeAxis` do not go together.** A time axis resolves the "current era" to a
+/// single value ([`crate::store_engine::read::current_time_axis_value`]) and writes that one onto a new
+/// record; belonging to several eras leaves both halves of that undefined. `ops::dimension` refuses the
+/// pair at both doors it can be built through.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DimensionCardinality {
     #[default]
     Single,
+    Multi,
 }
 
 impl DimensionCardinality {
     pub fn as_str(&self) -> &'static str {
         match self {
             DimensionCardinality::Single => "single",
+            DimensionCardinality::Multi => "multi",
         }
     }
 
     pub fn parse(s: &str) -> Option<DimensionCardinality> {
         match s {
             "single" => Some(DimensionCardinality::Single),
+            "multi" => Some(DimensionCardinality::Multi),
             _ => None,
         }
     }
@@ -790,9 +800,9 @@ impl DimensionValue {
 }
 
 /// The assignment of a dimension value to a task — the join record. `dimension_id` is denormalised onto
-/// it so that ops and reads can enforce the single-select `(task, dimension)` one-row constraint, and
-/// filter on an axis directly, without joining through to the value. Removing an assignment deletes the
-/// row.
+/// it so that ops and reads can hold a single-select axis to its `(task, dimension)` one row, sweep a
+/// multi-select one's rows together (`AMB-D-826`), and filter on an axis directly, without joining
+/// through to the value. Removing an assignment deletes the row.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TaskDimensionValue {
     pub id: i64,

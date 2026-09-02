@@ -678,6 +678,7 @@ export const es: Translation = {
     invalid_dimension_slug_shape: "«{slug}» no sirve como clave: usa como mucho {max} letras minúsculas, dígitos y guiones, empezando por una letra.",
     invalid_dimension_slug_taken: "«{slug}» ya es la clave de otra cosa aquí: elige otra.",
     invalid_dimension_name_whitespace: "«{name}» no sirve como nombre: quita los espacios o pon un guion en su lugar.",
+    invalid_dimension_multi_time_axis: "«{name}» es el eje temporal, y un eje temporal solo sostiene un valor a la vez: quítale el rol de eje temporal, o déjalo de selección única.",
     invalid_task_required_dimension: "Esta tarea no lleva ningún valor en {names}, que este proyecto exige.",
     invalid_decision_required_dimension: "Esta decisión no lleva ningún valor en {names}, que este proyecto exige.",
     invalid_dimension_values_unordered:

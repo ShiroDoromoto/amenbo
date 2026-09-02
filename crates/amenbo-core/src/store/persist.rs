@@ -852,7 +852,8 @@ impl Store {
         self.write_one(&[WriteTarget::NewIn(Some(project_id))], |tx| crate::ops::dimension::add(tx, project_id, new))
     }
 
-    /// Update a dimension's name, notes, whether its values are ordered, its role, whether it
+    /// Update a dimension's name, notes, how many of its values one record may hold, whether its values
+    /// are ordered, its role, whether it
     /// belongs on the task card, whether it refuses to be left empty, which entity it classifies, and
     /// its slug (one operation = one transaction).
     #[allow(clippy::too_many_arguments)]
@@ -861,6 +862,7 @@ impl Store {
         id: i64,
         name: Option<&str>,
         notes: Option<&str>,
+        cardinality: Option<crate::model::DimensionCardinality>,
         ordered: Option<bool>,
         role: Option<crate::model::DimensionRole>,
         show_on_card: Option<bool>,
@@ -870,7 +872,8 @@ impl Store {
     ) -> Result<crate::model::Dimension> {
         self.write_one(&[WriteTarget::Dimension(id)], |tx| {
             crate::ops::dimension::update(
-                tx, id, name, notes, ordered, role, show_on_card, required, applies_to, slug,
+                tx, id, name, notes, cardinality, ordered, role, show_on_card, required, applies_to,
+                slug,
             )
         })
     }

@@ -686,7 +686,7 @@ mod tests {
         let settled = new_decision(tx, pid, "先に採択した決定");
         accept(tx, settled.id, None).unwrap();
 
-        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true), None, None)
+        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None)
             .unwrap();
         assert!(
             !accept(tx, settled.id, None).unwrap().1,
@@ -730,7 +730,7 @@ mod tests {
         )
         .unwrap();
         let value = crate::ops::dimension::value_add(tx, axis.id, "この一箇所", None).unwrap();
-        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true), None, None)
+        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None)
             .unwrap();
 
         // A proposed new side is a promotion, so it is asked — and refused before any edge is drawn.

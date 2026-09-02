@@ -134,8 +134,8 @@ steps_cli:
       present: true
 
   # Naming the axis twice asks for either value — the set the other filter keys spell with a comma,
-  # which a value's name cannot borrow because it is the user's own text. An axis is single-select, so
-  # reading the repetition as an AND would answer with nobody.
+  # which a value's name cannot borrow because it is the user's own text. This axis holds one value at a
+  # time, so reading the repetition as an AND would answer with nobody.
   - type: assert
     domain: task
     op: listed

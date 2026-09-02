@@ -23,7 +23,7 @@
 //!
 //! The screen tool is the input primitive too, called by whoever drives the screen between steps:
 //! its `find` / `click-named` / `right-click-named` / `click` / `right-click` / `dblclick` / `drag` /
-//! `type` / `key` carry out the action steps the checklist names.
+//! `type` / `key` / `scroll` carry out the action steps the checklist names.
 //!
 //! One step is nobody's to carry out at the screen: `store run-again` ends this run of the app and
 //! brings another up on the same store ([`launch::Gui::run_again`]), which is how a road reads what
@@ -1181,6 +1181,33 @@ impl Instructor {
                         "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and type \"{slug}\" into the field beside its name that holds its key.",
                     ),
                 }
+            }
+            // The window one value covers, written where a reader writes it: a pair of date controls on
+            // the value's own row in that same manager, drawn only under an axis carrying the time-axis
+            // role. An end nobody has written yet is a button saying so rather than an empty date field
+            // — the webview draws an empty one with today faint inside it, which reads as a period
+            // ending today — so the line says to press that side open before the date goes in. The end a
+            // step leaves out is left standing: writing one end is what an open period is written as.
+            (Domain::Dimension, "period") => {
+                let dimension = req(with, "dimension")?;
+                let value = req(with, "value")?;
+                let tail = match (arg_str(with, "start"), arg_str(with, "end")) {
+                    (Some(start), Some(end)) => {
+                        format!("set the day it starts to {start} and the day it ends to {end}")
+                    }
+                    (Some(start), None) => {
+                        format!("set the day it starts to {start}, leaving the other end as it is")
+                    }
+                    (None, Some(end)) => {
+                        format!("set the day it ends to {end}, leaving the other end as it is")
+                    }
+                    (None, None) => {
+                        return Err("action `period` names neither `start` nor `end`".to_string())
+                    }
+                };
+                format!(
+                    "Above the board, open the way into managing the project's categories, find the value \"{value}\" under \"{dimension}\", and in the pair of date controls on its row {tail}. An end carrying no date yet is a button saying so, which turns into a date field once pressed.",
+                )
             }
             // Filing a task or a decision under one of the axis's values, from its own pane. The screen
             // keeps one control per axis there, so the axis is named as well as the value: a line naming

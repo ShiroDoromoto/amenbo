@@ -1118,8 +1118,10 @@ impl Store {
 
     /// Create a decision (one operation = one transaction). A decision's conversational number comes
     /// from `next_id` in a number space of its own, separate from tasks, and that read happens
-    /// inside this transaction. To classify at creation, call [`Self::add_decision_with_dimensions`] —
-    /// this is that, with nothing named.
+    /// inside this transaction. Once the decision exists, if its project has a time axis
+    /// (`role: time_axis`) it is assigned by default to **the period that contains today**, exactly as a
+    /// task is — automation, not a requirement. To classify at creation, call
+    /// [`Self::add_decision_with_dimensions`] — this is that, with nothing named.
     pub fn add_decision(
         &mut self,
         input: crate::ops::decision::NewDecision,
@@ -1132,19 +1134,50 @@ impl Store {
     /// decision filed under an axis can never commit without it, and a create that fails leaves no
     /// half-classified decision behind. The ids are resolved by the surface (a value is named by the axis
     /// it lives on, and that resolution belongs where the names are); here they are applied in the order
-    /// given. There is no default to defer to on this side — the time axis fills a task's axis, not a
-    /// decision's — so what the caller names is all that lands.
+    /// given.
+    ///
+    /// **The time-axis default lands here too**, on the same terms as the task side: the era that
+    /// contains today fills the axis nobody named, and what the caller names wins over it. A decision is
+    /// classified on the same axes a task is (`AMB-D-781`), and a required one is read at
+    /// `decision accept` (`AMB-D-790`), so an era nobody wrote would hold up every acceptance for want
+    /// of a value the store can settle itself (`AMB-D-147` fills the axis rather than demanding it). The
+    /// day it reads is the day the decision is recorded, not the day it is accepted: `accept` is where
+    /// the requirement is read, and a write there would put a second job on that one point. A time axis
+    /// narrowed off decisions is left alone (`AMB-D-789`).
     pub fn add_decision_with_dimensions(
         &mut self,
         input: crate::ops::decision::NewDecision,
         value_ids: &[i64],
     ) -> Result<crate::model::Decision> {
+        let today = crate::time::today();
         self.write_one(&[WriteTarget::NewIn(Some(input.project_id))], |tx| {
             let decision = crate::ops::decision::add(tx, input)?;
             // An axis is single-select, so naming one twice is last-wins rather than two rows; the
             // surface is where that is refused, with the names to say which axis was named twice.
+            let mut named_axes: Vec<i64> = Vec::with_capacity(value_ids.len());
             for &value_id in value_ids {
-                crate::ops::dimension::set_on_decision(tx, decision.id, value_id)?;
+                let (dv, _) = crate::ops::dimension::set_on_decision(tx, decision.id, value_id)?;
+                named_axes.push(dv.dimension_id);
+            }
+            let value_id = crate::store_engine::read::current_time_axis_value(
+                tx.conn(),
+                decision.project_id,
+                today,
+            )?;
+            if let Some(value_id) = value_id {
+                let axis_id = crate::store_engine::read::dimension_id_of_value(tx.conn(), value_id)?;
+                let axis = match axis_id {
+                    Some(axis_id) => crate::store_engine::read::dimension(tx.conn(), axis_id)?,
+                    None => None,
+                };
+                // The axis has to classify decisions for a value on one to mean anything
+                // (`AMB-D-789`), and `--dim` is refused on the side an axis does not classify — so the
+                // default writes nothing the caller would have been turned away for naming.
+                if let Some(axis) = axis {
+                    if axis.applies_to.on_decision() && !named_axes.contains(&axis.id) {
+                        crate::ops::dimension::set_on_decision(tx, decision.id, value_id)?;
+                    }
+                }
             }
             Ok(decision)
         })

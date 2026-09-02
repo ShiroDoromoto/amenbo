@@ -124,6 +124,48 @@ impl Driver<'_> {
                 };
                 Ok(Outcome::action(note))
             }
+            // Which axis is the project's time axis. A flag like the two above it, and the same door —
+            // the axis exists first, and the role is named on it.
+            "time-axis" => {
+                let dimension = req_str(with, "dimension")?;
+                let named = opt_bool(with, "time_axis").unwrap_or(true);
+                let flag = if named { "true" } else { "false" };
+                self.run_json(&["dimension", "update", dimension, "--time-axis", flag, "--json"])?;
+                let note = match named {
+                    true => format!("made `{dimension}` the project's time axis"),
+                    false => format!("stopped `{dimension}` being the project's time axis"),
+                };
+                Ok(Outcome::action(note))
+            }
+            // The window one of its values covers. Either end alone is a period — an open end is
+            // unbounded on that side — so the road writes the ends it means and the command leaves the
+            // rest as it found them; writing neither would be a step that asked for nothing, and is
+            // refused here rather than sent as a command that changes nothing.
+            "period" => {
+                let dimension = req_str(with, "dimension")?;
+                let value = req_str(with, "value")?;
+                let start = with.get("start").and_then(|v| v.as_str());
+                let end = with.get("end").and_then(|v| v.as_str());
+                if start.is_none() && end.is_none() {
+                    return Err("action `period` names neither `start` nor `end`".to_string());
+                }
+                let mut args = vec!["dimension", "value-update", dimension, value];
+                if let Some(start) = start {
+                    args.extend_from_slice(&["--start", start]);
+                }
+                if let Some(end) = end {
+                    args.extend_from_slice(&["--end", end]);
+                }
+                args.push("--json");
+                self.run_json(&args)?;
+                let note = match (start, end) {
+                    (Some(s), Some(e)) => format!("gave `{value}` of `{dimension}` the period {s} — {e}"),
+                    (Some(s), None) => format!("started `{value}` of `{dimension}` at {s}, open-ended"),
+                    (None, Some(e)) => format!("ended `{value}` of `{dimension}` at {e}, open at the start"),
+                    (None, None) => unreachable!("the empty period is refused above"),
+                };
+                Ok(Outcome::action(note))
+            }
             // Filing a task or a decision under an axis, and taking it back off. The axis and value go
             // by name, which is what the command takes — a bare number there would be read as a name,
             // not an id. The target goes as a reference: the command takes either kind on that argument,

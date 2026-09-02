@@ -1015,6 +1015,103 @@ fn new_decision(title: &str, project_id: i64) -> crate::ops::decision::NewDecisi
     crate::ops::decision::NewDecision { title: title.into(), body: String::new(), project_id }
 }
 
+/// A decision picks up the time-axis default the way a task does: the era containing today lands on the
+/// axis nobody named, and an era the caller names wins over it. Both creation paths run through
+/// `add_decision_with_dimensions`, so `add_decision` gets the same era with nothing named.
+#[test]
+fn a_decision_defaults_to_the_current_era_and_a_named_one_beats_it() {
+    use crate::model::DimensionRole;
+    use crate::ops::dimension::NewDimension;
+
+    let (mut s, dir) = fresh_store("decision-with-dimensions");
+    let proj = s.project_add(project("PJ")).unwrap();
+
+    let assigned = |s: &Store, decision_id: i64| -> Vec<i64> {
+        let mut ids: Vec<i64> =
+            crate::store_engine::read::decision_dimension_assignments(s.engine.conn(), decision_id)
+                .unwrap()
+                .into_iter()
+                .map(|(_dimension_id, value_id)| value_id)
+                .collect();
+        ids.sort_unstable();
+        ids
+    };
+
+    let category = s
+        .dimension_add(proj.id, NewDimension { name: "カテゴリー".into(), ..NewDimension::default() })
+        .unwrap();
+    let bug = s.dimension_value_add(category.id, "バグ", None, None).unwrap();
+    let axis = s
+        .dimension_add(
+            proj.id,
+            NewDimension { name: "時代".into(), role: DimensionRole::TimeAxis, ordered: true, ..NewDimension::default() },
+        )
+        .unwrap();
+    let past = s.dimension_value_add(axis.id, "開発期", None, Some((None, Some(crate::time::today().pred_opt().unwrap())))).unwrap();
+    let current = s.dimension_value_add(axis.id, "運用第1期", None, Some((Some(crate::time::today()), None))).unwrap();
+
+    // Nothing named at all: the era covering today is written on its own.
+    let plain = s.add_decision(new_decision("既定つき", proj.id)).unwrap();
+    assert_eq!(assigned(&s, plain.id), vec![current.id], "the current era is assigned by default at creation");
+
+    // Another axis named, not the time axis: it lands, and the default still fills the era.
+    let filed = s.add_decision_with_dimensions(new_decision("分類つき", proj.id), &[bug.id]).unwrap();
+    let mut want = vec![bug.id, current.id];
+    want.sort_unstable();
+    assert_eq!(assigned(&s, filed.id), want, "what was named, plus the default on the axis nobody named");
+
+    // The time axis, named outright: the past era stands and today's is never written.
+    let backdated = s.add_decision_with_dimensions(new_decision("過去の時代", proj.id), &[past.id]).unwrap();
+    assert_eq!(assigned(&s, backdated.id), vec![past.id], "the named era wins; the default does not overwrite it");
+
+    // It commits with the decision, per operation — reopen as another process would and read it back.
+    drop(s);
+    let reopened = Store::open_at(Paths::at(dir.clone())).unwrap();
+    assert_eq!(assigned(&reopened, plain.id), vec![current.id]);
+    assert_eq!(assigned(&reopened, backdated.id), vec![past.id]);
+
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// A time axis narrowed off decisions (`AMB-D-789`) keeps its default to itself: `--dim` is refused on
+/// the side an axis does not classify, so the era is not written there behind the caller's back either.
+/// The task side of the same axis is untouched.
+#[test]
+fn the_era_default_leaves_a_time_axis_that_does_not_classify_decisions_alone() {
+    use crate::model::{DimensionAppliesTo, DimensionRole};
+    use crate::ops::dimension::NewDimension;
+
+    let (mut s, dir) = fresh_store("decision-era-applies-to");
+    let proj = s.project_add(project("PJ")).unwrap();
+    let axis = s
+        .dimension_add(
+            proj.id,
+            NewDimension {
+                name: "時代".into(),
+                role: DimensionRole::TimeAxis,
+                ordered: true,
+                applies_to: DimensionAppliesTo::Task,
+                ..NewDimension::default()
+            },
+        )
+        .unwrap();
+    let current = s
+        .dimension_value_add(axis.id, "運用第1期", None, Some((Some(crate::time::today()), None)))
+        .unwrap();
+
+    let filed = s.add_task(task("タスク", Some(proj.id))).unwrap();
+    let recorded = s.add_decision(new_decision("決定", proj.id)).unwrap();
+
+    let on_task =
+        crate::store_engine::read::task_dimension_assignments(s.engine.conn(), filed.id).unwrap();
+    assert_eq!(on_task, vec![(axis.id, current.id)], "the axis still classifies tasks, so the era lands there");
+    let on_decision =
+        crate::store_engine::read::decision_dimension_assignments(s.engine.conn(), recorded.id).unwrap();
+    assert!(on_decision.is_empty(), "and nothing is written on the side the axis does not classify");
+
+    fs::remove_dir_all(&dir).ok();
+}
+
 /// **One logical operation, one transaction**, for decisions too: each write commits to the truth
 /// source on its own. A decision's conversational number lives in its own space, separate from tasks',
 /// and is taken from `next_id` read **inside** that transaction, so consecutive adds number

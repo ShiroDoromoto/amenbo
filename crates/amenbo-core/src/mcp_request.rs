@@ -89,7 +89,7 @@ pub fn entry(app: &McpApp, server: &Server) -> String {
 /// they chose. Everything *else* in that file still stays; it is this one entry that is overwritten.
 pub fn add(app: &McpApp, server: &Server) -> String {
     format!(
-        "Please set Amenbo up in {label} as an MCP server, so you can work its backlog from here.\n\
+        "Please set Amenbo up in {label} as an MCP server, so you can work its tasks and decisions from here.\n\
          \n\
          In `{settings}`, put the entry below in place of any server already named `{name}` — replace \
          that entry whole, including the folders it lists, rather than adding to it. Keep every other \

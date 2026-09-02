@@ -5,7 +5,8 @@
 // folder is now, exactly as the drop handed it over (`AMB-D-820`). What is pinned here is the shape
 // of that: the surface is only offered where there is a terminal to hand something to, a drop on the
 // pane beside this one is not this pane's, and the path is put in front of the reader rather than
-// run for them.
+// run for them — and that a drop is a person saying which pane they mean, so the selection and the
+// keyboard both follow the path into it (`AMB-T-4182`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -31,11 +32,17 @@ const hoisted = vi.hoisted(() => ({
   picked: [] as string[],
   /** And its folder picker, which is a second window rather than the same one. */
   pickedFolders: [] as string[],
+  /** The frames the pane said were being worked in, in the order it said so. */
+  focused: [] as string[],
 }));
 
 vi.mock("../talk/agent", () => ({
-  mountAgentFrame: (_host: HTMLElement, _lang: string, on: PaneEvents) => {
+  mountAgentFrame: (host: HTMLElement, _lang: string, on: PaneEvents) => {
     hoisted.events = on;
+    // The box the emulator collects typing in, which is what the keyboard lands on. It is the one
+    // thing of the real terminal this stub keeps, because where the focus goes is what is being
+    // pinned here (`../talk/terminal`).
+    host.append(document.createElement("textarea"));
     return Promise.resolve(() => {});
   },
 }));
@@ -84,6 +91,7 @@ beforeEach(() => {
   hoisted.noticed = [];
   hoisted.picked = [];
   hoisted.pickedFolders = [];
+  hoisted.focused = [];
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -110,7 +118,7 @@ async function pane(autoStart = true): Promise<void> {
       onClosed: () => {},
       onDrop: () => {},
       onName: () => {},
-      onFocus: () => {},
+      onFocus: (id: string) => { hoisted.focused.push(id); },
       onWaiting: () => {},
     }));
   });
@@ -139,6 +147,9 @@ const drop = async (paths: string[]) => {
   });
   await act(async () => { await Promise.resolve(); });
 };
+
+/** The box the keyboard lands on, as the terminal in this pane draws one. */
+const typing = () => container.querySelector<HTMLTextAreaElement>(".termface__face textarea");
 
 /** The way into the row's menu, while the row carries one. */
 const more = () => container.querySelector<HTMLButtonElement>(".slot__more");
@@ -256,6 +267,32 @@ describe("handing a pane a file", () => {
     await chooseInMenu(0);
 
     expect(hoisted.pasted, "an empty pick was pasted anyway").toEqual([]);
+  });
+
+  it("takes the pane the drop landed on as the one being worked in", async () => {
+    await pane();
+    await opened();
+
+    await drop(["/Users/somebody/Desktop/shot.png"]);
+
+    expect(hoisted.focused, "the path went into a pane the face still called unselected")
+      .toEqual(["1"]);
+  });
+
+  it("moves the keyboard into it too, so the next keystroke goes where the path did", async () => {
+    await pane();
+    await opened();
+    // Somewhere else on the page holds the keyboard, which is what a drop from the desktop leaves
+    // untouched: the gesture never presses the page at all.
+    const elsewhere = document.createElement("input");
+    document.body.append(elsewhere);
+    elsewhere.focus();
+
+    await drop(["/Users/somebody/Desktop/shot.png"]);
+
+    expect(document.activeElement, "the reader would have typed into the pane they came from")
+      .toBe(typing());
+    elsewhere.remove();
   });
 
   it("says the refusal rather than swallowing it", async () => {

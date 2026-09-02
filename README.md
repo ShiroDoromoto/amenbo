@@ -275,7 +275,7 @@ amenbo attach save 3 --out ./spec.pdf           # write a blob's bytes to a file
 amenbo attach rm 3 --yes                        # remove (confirms without --yes; the file's bytes go with it once nothing else references them)
 
 # Re-home a task to another project (a task belongs to exactly one project)
-amenbo task move 12 --project "Backlog"
+amenbo task move 12 --project "Mobile app"
 
 # Commit SHAs: anchor a task to the git commits that implemented it (1 task : many).
 # amenbo stores each SHA opaquely — it never reads git or knows which forge it lives on;

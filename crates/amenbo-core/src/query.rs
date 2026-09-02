@@ -2403,7 +2403,7 @@ pub fn search(
     // The refs among the words, resolved to the records they name. A pin is a line of the **first** page,
     // and it takes its share of that page — a `--limit 5` is five lines whatever they are. Paging past
     // them walks the index alone, shifted by however many lines they took.
-    let pins = pinned(conn, project_id, &params.text)?;
+    let pins = pinned(conn, project_id, params.kind, &params.text)?;
     let offset = params.offset.unwrap_or(0);
     let limit = params.limit.unwrap_or(SEARCH_LIMIT_DEFAULT);
     let shown_pins = if offset == 0 { pins.clone() } else { Vec::new() };
@@ -2533,11 +2533,17 @@ fn stand(
 }
 
 /// The records the words name outright — a word written as a ref (`AMB-T-<n>` / `AMB-D-<n>`, the bare
-/// `T-<n>` / `D-<n>` included), read as the record it points at rather than as a word.
+/// `T-<n>` / `D-<n>` included) or as a number alone (`<n>` / `#<n>`), read as the record it points at
+/// rather than as a word.
 ///
 /// The **raw** words are read, not the folded terms: a ref is a spelling, and the fold has already
 /// lower-cased it. A ref naming nothing live, or something outside the reach, pins nothing — a search must
 /// not become a way to ask whether a record exists somewhere it cannot be read.
+///
+/// **A number alone names both sides.** It carries no type code, and the two sides number themselves
+/// apart (`AMB-D-29`), so `12` is task 12 as much as it is decision 12: both are pinned where both are
+/// live (`AMB-D-833`). `kind` is what narrows that — a search told which side it reads pins that side
+/// alone.
 ///
 /// `scope` is the search's project slot with the reach already folded in, so the one check answers for
 /// both. A pin is a line of the answer like any other: a search told to look in one project must not be
@@ -2545,43 +2551,69 @@ fn stand(
 fn pinned(
     conn: &rusqlite::Connection,
     scope: Option<i64>,
+    kind: Option<SearchKind>,
     text: &str,
 ) -> Result<Vec<SearchHit>> {
-    use crate::ops::task::{parse_typed_ref, TypedKind};
+    use crate::ops::task::{parse_number_ref, parse_typed_ref, TypedKind};
     let mut out = Vec::new();
     for word in text.split_whitespace() {
-        let Some((kind, number)) = parse_typed_ref(word) else { continue };
-        let is_task = kind == TypedKind::Task;
-        let dataset = if is_task {
-            crate::store_engine::search::DATASET_TASK
+        let named: Vec<(TypedKind, u32)> = if let Some(typed) = parse_typed_ref(word) {
+            vec![typed]
+        } else if let Some(number) = parse_number_ref(word) {
+            match kind {
+                Some(SearchKind::Task) => vec![(TypedKind::Task, number)],
+                Some(SearchKind::Decision) => vec![(TypedKind::Decision, number)],
+                None => vec![(TypedKind::Task, number), (TypedKind::Decision, number)],
+            }
         } else {
-            crate::store_engine::search::DATASET_DECISION
-        };
-        let id = i64::from(number);
-        let Some(head) = crate::store_engine::read::record_headline(conn, dataset, id)
-            .map_err(crate::error::engine_on(conn))?
-        else {
             continue;
         };
-        if scope.is_some_and(|pid| head.project_id != Some(pid)) {
-            continue;
+        for (side, number) in named {
+            if let Some(hit) = pin(conn, scope, side, number)? {
+                out.push(hit);
+            }
         }
-        out.push(SearchHit {
-            face: HitFace::Title,
-            kind: dataset.to_string(),
-            r#ref: if is_task { crate::idref::task(id) } else { crate::idref::decision(id) },
-            title: head.title.clone(),
-            comment: None,
-            at: Timestamp::parse_rfc3339(&head.at).unwrap_or_default(),
-            snippet: head.title,
-            // A pin was reached by the ref and not by the words, so there is nothing here that a word
-            // landed on. Its snippet is the title, which the row already carries beside it.
-            matches: Vec::new(),
-            // As for every other row, and for the same reason: `stand` reads it once the page is settled.
-            standing: None,
-        });
     }
     Ok(out)
+}
+
+/// The one line a pin puts at the top: the record `side` and `number` name, or `None` where nothing live
+/// carries that number, or where what does sits outside `scope`.
+fn pin(
+    conn: &rusqlite::Connection,
+    scope: Option<i64>,
+    side: crate::ops::task::TypedKind,
+    number: u32,
+) -> Result<Option<SearchHit>> {
+    let is_task = side == crate::ops::task::TypedKind::Task;
+    let dataset = if is_task {
+        crate::store_engine::search::DATASET_TASK
+    } else {
+        crate::store_engine::search::DATASET_DECISION
+    };
+    let id = i64::from(number);
+    let Some(head) = crate::store_engine::read::record_headline(conn, dataset, id)
+        .map_err(crate::error::engine_on(conn))?
+    else {
+        return Ok(None);
+    };
+    if scope.is_some_and(|pid| head.project_id != Some(pid)) {
+        return Ok(None);
+    }
+    Ok(Some(SearchHit {
+        face: HitFace::Title,
+        kind: dataset.to_string(),
+        r#ref: if is_task { crate::idref::task(id) } else { crate::idref::decision(id) },
+        title: head.title.clone(),
+        comment: None,
+        at: Timestamp::parse_rfc3339(&head.at).unwrap_or_default(),
+        snippet: head.title,
+        // A pin was reached by the ref and not by the words, so there is nothing here that a word
+        // landed on. Its snippet is the title, which the row already carries beside it.
+        matches: Vec::new(),
+        // As for every other row, and for the same reason: `stand` reads it once the page is settled.
+        standing: None,
+    }))
 }
 
 
@@ -3530,6 +3562,78 @@ mod filter_tests {
 
         let r = run(&crate::idref::task(9999));
         assert!(r.hits.is_empty(), "a ref naming nothing live pins nothing");
+    }
+
+    /// A number with no type code on it names **both** sides: the two number spaces run apart
+    /// (`AMB-D-29`), so nothing in `1` says which of them it is. Both live records are pinned, and
+    /// `--kind` is what cuts it down to one (`AMB-D-833`).
+    #[test]
+    fn a_bare_number_pins_both_sides_and_a_named_kind_pins_one() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pj = proj(tx, "PJ");
+        let t = worded_task(tx, "全文検索の索引", "", pj);
+        let d = worded_decision(tx, "索引の張り方", pj);
+        assert_eq!((t, d), (1, 1), "the sides number themselves apart, so 1 is a task and a decision both");
+        let only_a_task = worded_task(tx, "後で読む", "", pj);
+
+        let run = |text: &str, kind| {
+            search(
+                tx.conn(),
+                crate::reach::Reach::All,
+                SearchParams { text: text.to_string(), kind, ..Default::default() },
+            )
+            .unwrap()
+        };
+        let refs = |r: &SearchResult| r.hits.iter().map(|h| h.r#ref.clone()).collect::<Vec<_>>();
+
+        assert_eq!(
+            refs(&run("1", None)),
+            [crate::idref::task(t), crate::idref::decision(d)],
+            "the number alone pins the task and the decision it names"
+        );
+        assert_eq!(refs(&run("#1", None)), refs(&run("1", None)), "`#<n>` is the same number");
+
+        assert_eq!(
+            refs(&run("1", Some(SearchKind::Task))),
+            [crate::idref::task(t)],
+            "a search that says which side it reads pins that side alone"
+        );
+        assert_eq!(
+            refs(&run("1", Some(SearchKind::Decision))),
+            [crate::idref::decision(d)],
+            "and the other way round"
+        );
+
+        assert_eq!(
+            refs(&run(&only_a_task.to_string(), None)),
+            [crate::idref::task(only_a_task)],
+            "where only one side carries that number, only that one is pinned"
+        );
+        assert!(run("9999", None).hits.is_empty(), "a number naming nothing live pins nothing");
+    }
+
+    /// The pin is added, never a replacement: a number written in someone's notes still reaches them as
+    /// a word, below the record it names (`AMB-D-833`).
+    #[test]
+    fn a_bare_number_goes_on_searching_as_a_word() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pj = proj(tx, "PJ");
+        worded_task(tx, "全文検索の索引", "", pj);
+        let mentions = worded_task(tx, "後で読む", "4236 を読むこと", pj);
+
+        let r = search(
+            tx.conn(),
+            crate::reach::Reach::All,
+            SearchParams { text: "4236".to_string(), ..Default::default() },
+        )
+        .unwrap();
+        assert_eq!(
+            r.hits.iter().map(|h| h.r#ref.clone()).collect::<Vec<_>>(),
+            [crate::idref::task(mentions)],
+            "nothing is live at 4236, and the word still finds where it is written"
+        );
     }
 
     /// A decision carrying the word, for the cases that check both sides come back.

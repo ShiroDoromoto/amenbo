@@ -163,7 +163,9 @@ pub enum Command {
     /// case and kana spellings are brought together. Every word has to land somewhere on the record — not
     /// all on one face — and each face that carries one is a line, which is what makes the answer "here is
     /// where each of your words is written". A word written as a ref (`AMB-T-<n>` / `AMB-D-<n>`) pins that
-    /// record to the top, so holding a number takes the same command as holding a phrase.
+    /// record to the top, so holding a number takes the same command as holding a phrase. A number alone
+    /// (`12` / `#12`) is a ref as well: the two sides number themselves apart, so it pins the task and the
+    /// decision that carry it, and `--kind` keeps the side you named.
     Search {
         /// the words to look for (ANDed)
         #[arg(value_name = "WORD", required = true)]

@@ -590,6 +590,7 @@ export const es: Translation = {
     "files.read": "Leer",
     "files.reopenWith": "Volver a abrir con una codificación",
     "files.lineEndingMixed": "Saltos de línea mezclados",
+    "files.copyPath": "Copiar la ruta",
     "files.pasteFilePath": "Pegar la ruta del archivo",
     "files.pasteFolderPath": "Pegar la ruta de la carpeta",
     "files.openWith": "Abrir con la aplicación de siempre",

@@ -569,6 +569,7 @@ export const tr: Translation = {
     "files.read": "Oku",
     "files.reopenWith": "Bir kodlamayla yeniden aç",
     "files.lineEndingMixed": "Karışık satır sonları",
+    "files.copyPath": "Yolu kopyala",
     "files.pasteFilePath": "Dosyanın yolunu yapıştır",
     "files.pasteFolderPath": "Klasörün yolunu yapıştır",
     "files.openWith": "Her zamanki uygulamayla aç",

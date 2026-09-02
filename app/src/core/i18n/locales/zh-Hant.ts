@@ -569,6 +569,7 @@ export const zhHant: Translation = {
     "files.read": "閱讀",
     "files.reopenWith": "指定字元編碼重新開啟",
     "files.lineEndingMixed": "換行符混用",
+    "files.copyPath": "複製路徑",
     "files.pasteFilePath": "貼上檔案路徑",
     "files.pasteFolderPath": "貼上資料夾路徑",
     "files.openWith": "用常用的應用程式開啟",

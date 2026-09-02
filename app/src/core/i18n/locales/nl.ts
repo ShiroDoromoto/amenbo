@@ -569,6 +569,7 @@ export const nl: Translation = {
     "files.read": "Lezen",
     "files.reopenWith": "Opnieuw openen met een codering",
     "files.lineEndingMixed": "Gemengde regeleindes",
+    "files.copyPath": "Pad kopiëren",
     "files.pasteFilePath": "Pad van het bestand plakken",
     "files.pasteFolderPath": "Pad van de map plakken",
     "files.openWith": "Openen met de gebruikelijke app",

@@ -572,6 +572,7 @@ export const th: Translation = {
     "files.read": "อ่าน",
     "files.reopenWith": "เปิดใหม่ด้วยการเข้ารหัสที่เลือก",
     "files.lineEndingMixed": "ท้ายบรรทัดปนกัน",
+    "files.copyPath": "คัดลอกเส้นทาง",
     "files.pasteFilePath": "วางเส้นทางของไฟล์",
     "files.pasteFolderPath": "วางเส้นทางของโฟลเดอร์",
     "files.openWith": "เปิดด้วยแอปที่ใช้ประจำ",

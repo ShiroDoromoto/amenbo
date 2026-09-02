@@ -959,12 +959,25 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash, on
             </>
           )}
           {rename !== null && <MenuItem onClick={() => pick(rename)}>{t("files.rename")}</MenuItem>}
+          {/* What `⌘C` on the row already does, said out loud: the keys are how a reader who knows
+              them copies a path, and the menu is where everybody else looks (`AMB-D-832`). It puts
+              the file itself and the plain path on the machine's clipboard in one press, which is
+              why one word covers a folder as well as a file — what is copied is the row, and the
+              row is named the same either way. Nothing is drawn afterwards: a clipboard says what
+              it holds when it is pasted, and a line here would be read as something having gone
+              wrong. */}
+          <MenuItem onClick={() => act(() => folderClipCopy(projectId, root, [path]))}>
+            {t("files.copyPath")}
+          </MenuItem>
           {/* The one door that goes the other way: everything beside it hands the row out to the
               machine, and this puts the path it is at in front of what is running in the pane —
               which is the reverse of a path drawn in a pane opening the file here
-              (`../shell/TerminalFace`). It is first because it is the one whose answer stays inside
-              the app, and it is over a folder as much as over a file: nothing is carried, so a
-              folder costs no more to name than a file does (`AMB-D-820`). */}
+              (`../shell/TerminalFace`). It stands under the copy because the two are about the same
+              path, and under rather than over it because this one is gone wherever there is no pane
+              to hand anything to — the copy above would otherwise move up the menu depending on
+              what else is open. Of the doors here it is the one whose answer stays inside the app,
+              and it is over a folder as much as over a file: nothing is carried, so a folder costs
+              no more to name than a file does (`AMB-D-820`). */}
           {onHandOver !== undefined && (
             <MenuItem onClick={() => { onClose(); onHandOver(fileAt(root, path)); }}>
               {dir ? t("files.pasteFolderPath") : t("files.pasteFilePath")}

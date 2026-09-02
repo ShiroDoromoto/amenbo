@@ -590,6 +590,7 @@ export const fr: Translation = {
     "files.read": "Lire",
     "files.reopenWith": "Rouvrir avec un encodage",
     "files.lineEndingMixed": "Fins de ligne mélangées",
+    "files.copyPath": "Copier le chemin",
     "files.pasteFilePath": "Coller le chemin du fichier",
     "files.pasteFolderPath": "Coller le chemin du dossier",
     "files.openWith": "Ouvrir avec l'application habituelle",

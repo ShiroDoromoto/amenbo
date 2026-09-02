@@ -2499,6 +2499,38 @@ describe("a project bound to several folders", () => {
     expect(hoisted.asked).toContain(`clip-copy:${ROOT}:README.md`);
   });
 
+  /** The keys are how a reader who knows them copies a path; the menu is where everybody else
+   *  looks. Both reach the same copy, so what is on the clipboard afterwards cannot depend on which
+   *  of the two the reader used (`AMB-D-832`). */
+  it("copies the row the menu was opened on, the way the key does", async () => {
+    hoisted.entries = {
+      "": [
+        { name: "notes", isDir: true, ignored: false },
+        { name: "README.md", isDir: false, ignored: false },
+      ],
+    };
+    await drawOpen();
+    await menuOn(button("README.md"));
+    await click(button(t("files.copyPath")));
+    expect(hoisted.asked).toContain(`clip-copy:${ROOT}:README.md`);
+
+    // One word over a folder as well: what is copied is the row, and a second wording would be
+    // saying the two were different doors.
+    await menuOn(button("notes"));
+    await click(button(t("files.copyPath")));
+    expect(hoisted.asked).toContain(`clip-copy:${ROOT}:notes`);
+  });
+
+  /** The clipboard is the machine's, not the pane's, so the item stands whether or not there is a
+   *  pane beside the panel — which is also why it sits above the hand-over rather than below it. */
+  it("offers the copy where there is no pane to hand a path to", async () => {
+    await drawOpen();
+    await menuOn(button("a.md"));
+    expect(button(t("files.pasteFilePath"))).toBeUndefined();
+    await click(button(t("files.copyPath")));
+    expect(hoisted.asked).toContain(`clip-copy:${ROOT}:a.md`);
+  });
+
   /** The same rule a drop's landing follows: a file's row belongs to the folder holding it, so
    *  pasting on a name means the same as pasting beside it. */
   it("pastes into the folder the row is in, and into the folder the row is", async () => {

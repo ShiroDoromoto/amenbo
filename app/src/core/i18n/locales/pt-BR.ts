@@ -591,6 +591,7 @@ export const ptBR: Translation = {
     "files.read": "Ler",
     "files.reopenWith": "Reabrir com uma codificação",
     "files.lineEndingMixed": "Fins de linha misturados",
+    "files.copyPath": "Copiar o caminho",
     "files.pasteFilePath": "Colar o caminho do arquivo",
     "files.pasteFolderPath": "Colar o caminho da pasta",
     "files.openWith": "Abrir com o aplicativo de sempre",

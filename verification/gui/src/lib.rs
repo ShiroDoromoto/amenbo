@@ -1501,9 +1501,14 @@ impl Instructor {
             // cards are still in it — hiding it would take those tasks off the board — and goes once the
             // last one leaves, so an axis that keeps closing values does not grow columns nobody can
             // drop into.
+            //
+            // What is standing in the column is no part of the reading, which the line says out loud: an
+            // open value is drawn a column before anything is filed under it, and that empty column is
+            // what a road files the first card through. A line that asked for the cards would send the
+            // reader of such a road looking for a failure the board is not having.
             (Domain::Project, "column") => match present(with) {
                 true => format!(
-                    "On the board cut along \"{}\", confirm there is still a column headed \"{}\", with its cards in it.",
+                    "On the board cut along \"{}\", confirm there is a column headed \"{}\", with or without cards standing in it.",
                     req(with, "axis")?,
                     req(with, "value")?
                 ),

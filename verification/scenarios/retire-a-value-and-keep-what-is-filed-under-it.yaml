@@ -1,0 +1,409 @@
+# The other way a value of a category ends. Removing one has always been the only way, and it takes
+# the classification of everything filed under it along — after which nobody can ask what carried the
+# release that shipped, or what the theme that closed was about. Closing is the way that keeps the
+# answer: the value stops taking new records and changes in no other respect, so what was filed under
+# it is still filed under it and a filter naming it still resolves. The two are not the same act and
+# neither replaces the other, which is why this road walks both and reads them apart — a step that
+# only showed the value gone from a listing would read the same over a build that deleted it.
+#
+# The nomination is what makes closing available at all: it is a role the category carries, the way
+# the time axis is, so an axis nobody nominated is turned away rather than retiring a value quietly.
+# The way back is not nominated — reopening is free on any axis — and the demand that a category be
+# answered counts what it still offers, so the last open value does not close while the demand is up.
+# The screen's half is the four faces reading one flag to four ends, which is a thing only a screen
+# can be asked about: the filter offers a closed value, the record's own picker leaves it out while
+# still drawing the one that record carries, the board keeps a column only while cards are in it, and
+# the classification panel draws every value and is alone in offering the way back.
+id: retire-a-value-and-keep-what-is-filed-under-it
+title: A value closed on a category stops taking new records and keeps everything already filed under it, and only deleting takes that away
+description: >
+  Try to close a value on a category nobody nominated for it and be refused. Nominate it, close the
+  value, and read it apart from a deletion: gone from what the category offers, still there among what
+  it retired, and the task and the decision filed under it still answering with it where a filter names
+  it. Nothing new is filed under it — the record that would be is turned away — while the record that
+  already carries it goes on carrying it. Open it again and the door opens with it; close it again and
+  raise the demand that the category be answered, and the last value it still offers will not close,
+  nor be removed, however many closed ones stand behind it. The closed one is removed on the terms any
+  value is, and takes the classification with it, which is the whole of what closing did not do.
+# One category with two values, and the work already filed under one of them on both sides of the
+# store. Filing is `classify-work-along-an-axis`'s road and walking it again here would prove that road
+# twice and this one not at all, so the world carries it — and it has to be the world in any case:
+# what closing leaves alone is what was filed *before* it, which is a state no step of this road could
+# stand up after the fact. `v19` is left with nothing on it, which is what the board's half reads.
+given:
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Release
+      slug: release
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Release
+      value: v18
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Release
+      value: v19
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — the work v18 carried
+    as: shipped
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: shipped
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: shipped
+      dimension: Release
+      value: v18
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO WORLD — ruled on while v18 was open
+    as: ruling
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: ruling
+      dimension: Release
+      value: v18
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — the work still to be filed
+    as: fresh
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: fresh
+
+steps_cli:
+  # Closing is what the nomination *is*, so an axis nobody nominated has no way to do it — and is told
+  # so rather than left retiring the value quietly. What such an axis has is the removal it always had.
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v18
+      refused: invalid_dimension_close_not_closable
+
+  - type: action
+    domain: dimension
+    op: closable
+    with:
+      dimension: Release
+
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v18
+
+  # Retired, and not gone. Neither line says that alone — a value deleted is off the first listing just
+  # as surely — so what tells the two apart is reading both: off what the category offers, on what it
+  # kept.
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Release
+      value: v18
+      present: false
+
+  - type: assert
+    domain: dimension
+    op: closed
+    with:
+      dimension: Release
+      value: v18
+      equals: true
+
+  # And the whole reason to close one rather than delete it: what was filed under it before is filed
+  # under it still, and the filter naming it goes on resolving. One category and one set of values, so
+  # the reading is the same on the record the other side of the store keeps.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Release=v18"
+      target: shipped
+      present: true
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "dim:Release=v18"
+      target: ruling
+      present: true
+
+  # What it does stop is the arrival of a new one. Turned away rather than quietly ignored: a hand that
+  # asked for a classification and was given none would leave the record filed under nothing at all.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: fresh
+      dimension: Release
+      value: v18
+      refused: invalid_dimension_set_closed_value
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Release=v18"
+      target: fresh
+      present: false
+
+  # And asking again for the value a record already carries is the same nothing it always was — the
+  # guard is read after that, which is what makes closing safe to reach for on a value in use.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: shipped
+      dimension: Release
+      value: v18
+
+  # The way back, and it opens exactly the door that was shut. It asks for no nomination: an axis that
+  # gave the role up would otherwise strand every value closed under it.
+  - type: action
+    domain: dimension
+    op: value-reopen
+    with:
+      dimension: Release
+      value: v18
+
+  - type: assert
+    domain: dimension
+    op: closed
+    with:
+      dimension: Release
+      value: v18
+      equals: false
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: fresh
+      dimension: Release
+      value: v18
+
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v18
+
+  # A category that demands an answer has to keep one to give, and a closed value is not one of those —
+  # it takes nothing new. So the demand counts what is still open, and the last of *those* does not
+  # close, however many closed values stand on the axis behind it.
+  - type: action
+    domain: dimension
+    op: required
+    with:
+      dimension: Release
+
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v19
+      refused: invalid_dimension_close_last_open
+
+  - type: assert
+    domain: dimension
+    op: closed
+    with:
+      dimension: Release
+      value: v19
+      equals: false
+
+  # The removal counts the same way, which is where this road meets the one a required category is
+  # walked on (`make-an-axis-nobody-can-leave-empty`). Two values stand on this axis and the removal is
+  # still refused: what it counts is the one value the axis still offers, not the rows under it.
+  - type: action
+    domain: dimension
+    op: value-rm
+    with:
+      dimension: Release
+      value: v19
+      refused: invalid_value
+
+  # And the closed one goes, on the same terms any value does — letting it go takes nothing from a
+  # demand it was answering nothing with. What it does take is the classification of everything on it,
+  # which is exactly what closing had not: the records answer with somewhere else now, or with nothing.
+  - type: action
+    domain: dimension
+    op: value-rm
+    with:
+      dimension: Release
+      value: v18
+      to: v19
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Release=v19"
+      target: shipped
+      present: true
+
+steps_gui:
+  # The screen's half is the one flag read four ways, which is what only a screen can be asked. The
+  # terminal meets closing as a listing that leaves a value out; here it is a picker that stops offering
+  # it, a board that keeps its column only while cards are in it, a filter that offers it like any
+  # other, and a panel that draws it retired and is alone in offering the way back.
+  - type: action
+    domain: dimension
+    op: closable
+    with:
+      dimension: Release
+
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v18
+
+  # The panel, which is the face the closing was done on and the only one that draws a closed value at
+  # all. What it says is said twice — the row is struck through, and the button that closed the value
+  # now offers to open it — so a reader who has to find it again has somewhere to look.
+  - type: assert
+    domain: dimension
+    op: closed
+    with:
+      dimension: Release
+      value: v18
+      equals: true
+
+  # The picker, read on the two records it comes apart on. It is the door a record is newly filed
+  # through, so the closed value is not among what it offers — and the record already carrying it is
+  # drawn carrying it, or a value that vanished from the field could never be taken off or replaced.
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      target: fresh
+      dimension: Release
+      value: v18
+      present: false
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      target: shipped
+      dimension: Release
+      value: v18
+      present: true
+
+  # The board, cut along the category, and the reading is of the columns rather than of the cards. A
+  # closed value keeps its column while cards are still in it — hiding it would take that work off the
+  # board altogether, the column for "no value" holding only what carries none.
+  - type: action
+    domain: project
+    op: group-by
+    with:
+      axis: Release
+
+  - type: assert
+    domain: project
+    op: column
+    with:
+      axis: Release
+      value: v18
+      present: true
+
+  # And loses it once the last card leaves. Closed with nothing filed under it, the value has no column
+  # to keep — which is what stops a category that keeps retiring values from growing a board of empty
+  # columns nobody can drop a card into.
+  - type: action
+    domain: dimension
+    op: value-close
+    with:
+      dimension: Release
+      value: v19
+
+  - type: assert
+    domain: project
+    op: column
+    with:
+      axis: Release
+      value: v19
+      present: false
+
+  # The filter, and it is the one face that draws no distinction: asking what carried a finished
+  # release is the whole reason to close a value rather than delete it, so a closed one is offered to
+  # narrow by like any other, and the work filed under it comes back. It is walked here rather than
+  # earlier because a narrowing outlives the fold that puts its values away — every step after this one
+  # is standing on a board holding one card.
+  - type: action
+    domain: task
+    op: open-filters
+
+  - type: action
+    domain: task
+    op: choose-filter
+    with:
+      axis: dim:release
+      value: v18
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: shipped
+
+  - type: action
+    domain: task
+    op: close-filters
+
+  # And the way back, which is on the panel and nowhere else — the picker cannot offer what it hides,
+  # the board has no column left to press, and the filter narrows by a value rather than changing one.
+  # Read where it was pressed: the row is drawn like the category's others again.
+  - type: action
+    domain: dimension
+    op: value-reopen
+    with:
+      dimension: Release
+      value: v18
+
+  - type: assert
+    domain: dimension
+    op: closed
+    with:
+      dimension: Release
+      value: v18
+      equals: false

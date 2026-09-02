@@ -200,6 +200,19 @@ function segmentsOf(into: string): string[] {
 }
 
 /**
+ * The rows an act aimed at one row is about: the ones picked out, where that row is among them —
+ * and the row alone, where it is not.
+ *
+ * **One rule, read in two places.** The panel answers for the doors it draws — the menu, the keys —
+ * and the tree answers for a row taken hold of, because the gesture starts before the panel hears
+ * anything about it. Written twice they would drift, and a menu acting on five rows beside a drag
+ * carrying one is exactly the kind of drift nobody would notice until it mattered.
+ */
+function rowsAbout(picked: string[], path: string[]): string[][] {
+  return picked.includes(path.join("/")) ? picked.map(segmentsOf) : [path];
+}
+
+/**
  * Do one thing to each of the rows an act is about, in the order they were given.
  *
  * One after another rather than all at once: what is on the other side of these is the machine —
@@ -258,13 +271,13 @@ export function FilesPanel({
   /** Put the panel away. What opens it again is the top row, which is where it was opened from. */
   onClose: () => void;
   /**
-   * Hand a file to the pane the reader is working in, as the whole path it is at — the reverse of a
-   * path drawn in a pane opening the file here (`../shell/TerminalFace`).
+   * Hand rows to the pane the reader is working in, as the whole paths they are at — the reverse of
+   * a path drawn in a pane opening the file here (`../shell/TerminalFace`).
    *
    * Which pane that is, and whether there is one at all, is the terminal face's own answer: with
    * none, none of this is handed down and the row's menu draws no item for it.
    */
-  onHandOver?: (whole: string) => void;
+  onHandOver?: (wholes: string[]) => void;
   /**
    * Take hold of a row, so it can be carried to a pane and let go there (`./handDrag`).
    *
@@ -272,7 +285,7 @@ export function FilesPanel({
    * pane's session, which the panel cannot see — so what the panel does with it is hand it to every
    * row it draws. With none handed down, the rows are what they were: things to open.
    */
-  onCarry?: (whole: string, event: RowPress<HTMLElement>) => void;
+  onCarry?: (wholes: string[], event: RowPress<HTMLElement>) => void;
 }) {
   // `0` names no project, which is what the folder read then answers with: none. A window with no
   // project on it draws the invitation, the same as one whose project has no folder.
@@ -370,11 +383,8 @@ export function FilesPanel({
    * count in the question before the bin is what says how many rows a press is about, not how many
    * of them happen to be drawn.
    */
-  const actOn = (root: string, path: string[]): string[][] => {
-    const now = opened[root] ?? AT_FIRST;
-    if (!now.picked.includes(path.join("/"))) return [path];
-    return now.picked.map(segmentsOf);
-  };
+  const actOn = (root: string, path: string[]): string[][] =>
+    rowsAbout((opened[root] ?? AT_FIRST).picked, path);
 
   // Files dragged in from the desktop. The panel hears about them from the host rather than from
   // the DOM, so the highlight under the pointer — and the scroll when the pointer hangs at an edge —
@@ -738,8 +748,9 @@ function FolderSection({
    *  another folder — or where none is. The panel works out which section it belongs to, since it
    *  is the panel that knows what is open. */
   chosen: string | null;
-  /** Take hold of one of this folder's rows, to carry it to a pane (`./handDrag`). */
-  onCarry?: (whole: string, event: RowPress<HTMLElement>) => void;
+  /** Take hold of one of this folder's rows, to carry what the press is about to a pane
+   *  (`./handDrag`). */
+  onCarry?: (wholes: string[], event: RowPress<HTMLElement>) => void;
 }) {
   const [changes, setChanges] = useState<FolderChangesDto>(
     { root, capped: false, unwatched: false, gone: false },
@@ -965,9 +976,9 @@ function FileMenu({ projectId, root, path, about, dir, at, naming, onClose, onTr
    * doors there are, and a menu whose shape changed with what else was picked out would be a menu
    * a reader could not learn.
    *
-   * The doors that only make sense one at a time — naming, and handing a path to a pane — are drawn
-   * only where this is one row. There is nothing to be gained by offering a rename over five rows
-   * except a press that has to be refused afterwards.
+   * The doors that only make sense one at a time — writing a new name into a folder, and renaming —
+   * are drawn only where this is one row. There is nothing to be gained by offering a rename over
+   * five rows except a press that has to be refused afterwards.
    */
   about: string[][];
   /** Whether the row is a folder. It decides the whole of what the menu holds. */
@@ -990,7 +1001,7 @@ function FileMenu({ projectId, root, path, about, dir, at, naming, onClose, onTr
    * open beside a terminal face with nothing running in it as readily as beside one with four, and
    * an item that answers nothing is worse than an item that is not there.
    */
-  onHandOver?: (whole: string) => void;
+  onHandOver?: (wholes: string[]) => void;
 }) {
   // The applications to pick from, once they have been asked for and there are any — the second
   // face of this one menu, drawn where the OS has no chooser to draw it for us.
@@ -1062,12 +1073,17 @@ function FileMenu({ projectId, root, path, about, dir, at, naming, onClose, onTr
               and it is over a folder as much as over a file: nothing is carried, so a folder costs
               no more to name than a file does (`AMB-D-820`).
 
-              **One row at a time**: what a pane is handed is a path written the way a shell reads as
-              one thing, and the door is drawn only where there is one path to write
-              (`../shell/TerminalFace`). */}
-          {onHandOver !== undefined && alone && (
-            <MenuItem onClick={() => { onClose(); onHandOver(fileAt(root, path)); }}>
-              {dir ? t("files.pasteFolderPath") : t("files.pasteFilePath")}
+              Several rows go over together, quoted one by one with a space between them — the same
+              line a drop of several files puts in a pane (`../shell/TerminalFace`, `AMB-D-801`).
+              What they are called then says no kind: the rows a reader gathered can be a folder and
+              four files, and the panel is not told which of them are which (`Tree`). */}
+          {onHandOver !== undefined && (
+            <MenuItem
+              onClick={() => { onClose(); onHandOver(about.map((one) => fileAt(root, one))); }}
+            >
+              {alone
+                ? (dir ? t("files.pasteFolderPath") : t("files.pasteFilePath"))
+                : t("files.pastePaths")}
             </MenuItem>
           )}
           {/* The three doors out to the machine, each one taken for every row the menu is about.
@@ -1359,8 +1375,8 @@ function Tree({
    * reading it, and without a mark it is one name among the rest.
    */
   chosen: string | null;
-  /** Take hold of a row, to carry it to a pane (`./handDrag`). */
-  onCarry?: (whole: string, event: RowPress<HTMLElement>) => void;
+  /** Take hold of a row, to carry what the press is about to a pane (`./handDrag`). */
+  onCarry?: (wholes: string[], event: RowPress<HTMLElement>) => void;
 }) {
   /**
    * The names of every folder on the screen, each with the reading of the section they were taken
@@ -1772,7 +1788,15 @@ function Tree({
             // A row is a thing to open and a thing to carry, and which one a press turns out to be
             // is decided by how far it travels (`./handDrag`). A folder is carried the same way a
             // file is: what is handed over is a path, and the tree under it costs nothing to name.
-            onPointerDown={(e) => onCarry?.(fileAt(root, line.path), e)}
+            //
+            // What is taken hold of is what the press is about (`rowsAbout`): the rows picked out
+            // where this is one of them, and this row alone where it is not. The ghost that follows
+            // the pointer is still this row — the one under the hand is what a person is carrying,
+            // however many are coming with it.
+            onPointerDown={(e) => onCarry?.(
+              rowsAbout(picked, line.path).map((one) => fileAt(root, one)),
+              e,
+            )}
             // Stood on before the menu opens, because the row a menu is about is the row a reader
             // comes back to when it closes — and a right-click is not a press the browser moves the
             // focus for.
@@ -1970,7 +1994,7 @@ function FileReader({
   /** The question about the bin and the last refusal, both of which outlive this state. */
   aside: ReactNode;
   /** Hand this file to the pane being worked in, where there is one (`./FilesPanel`). */
-  onHandOver?: (whole: string) => void;
+  onHandOver?: (wholes: string[]) => void;
 }) {
   const [file, setFile] = useState<FolderFileDto | null>(null);
   // Why the file did not open, in the reader's own language. A link is not a broken file: the host

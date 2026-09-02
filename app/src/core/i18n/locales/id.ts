@@ -582,6 +582,7 @@ export const id: Translation = {
     "files.copyPath": "Salin jalur",
     "files.pasteFilePath": "Tempelkan jalur berkas",
     "files.pasteFolderPath": "Tempelkan jalur folder",
+    "files.pastePaths": "Tempelkan jalur",
     "files.openWith": "Buka dengan aplikasi biasa",
     "files.chooseApp": "Buka dengan aplikasi pilihan saya",
     "files.appUsual": "{name} (yang biasa)",

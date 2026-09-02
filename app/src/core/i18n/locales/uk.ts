@@ -605,6 +605,7 @@ export const uk: Translation = {
     "files.copyPath": "Скопіювати шлях",
     "files.pasteFilePath": "Вставити шлях файлу",
     "files.pasteFolderPath": "Вставити шлях теки",
+    "files.pastePaths": "Вставити шляхи",
     "files.openWith": "Відкрити у звичайній програмі",
     "files.chooseApp": "Відкрити у вибраній програмі",
     "files.appUsual": "{name} (звична)",

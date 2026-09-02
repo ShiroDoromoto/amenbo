@@ -605,6 +605,7 @@ export const pl: Translation = {
     "files.copyPath": "Kopiuj ścieżkę",
     "files.pasteFilePath": "Wklej ścieżkę pliku",
     "files.pasteFolderPath": "Wklej ścieżkę folderu",
+    "files.pastePaths": "Wklej ścieżki",
     "files.openWith": "Otwórz w zwykłej aplikacji",
     "files.chooseApp": "Otwórz w wybranej aplikacji",
     "files.appUsual": "{name} (ta zwykła)",

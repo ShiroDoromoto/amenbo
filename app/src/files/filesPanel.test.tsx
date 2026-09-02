@@ -2137,19 +2137,49 @@ describe("the file face", () => {
     await four({ onHandOver: () => {} });
     await clickWith(rowFor("a.md"), { ctrlKey: true });
     await menuOn(rowFor("a.md"));
-    // One row: naming it and handing its path to a pane are both things to do.
+    // One row: naming it is a thing to do, and the pane is offered the file's own wording.
     expect(button(t("files.rename"))).toBeDefined();
     expect(button(t("files.pasteFilePath"))).toBeDefined();
 
     await click(button(t("files.rename")));
     await clickWith(rowFor("c.md"), { ctrlKey: true });
     await menuOn(rowFor("c.md"));
-    // Two: a rename over both would be a press to refuse afterwards, and a pane is handed one path.
+    // Two: a rename over both would be a press to refuse afterwards.
     expect(button(t("files.rename"))).toBeUndefined();
-    expect(button(t("files.pasteFilePath"))).toBeUndefined();
     // What acts on several is still there.
     expect(button(t("files.copyPath"))).toBeDefined();
     expect(button(t("files.trash"))).toBeDefined();
+  });
+
+  it("hands every picked row to the pane, under a word that names no kind", async () => {
+    const handed: string[][] = [];
+    await four({ onHandOver: (wholes) => handed.push(wholes) });
+    await clickWith(rowFor("a.md"), { ctrlKey: true });
+    await clickWith(rowFor("c.md"), { ctrlKey: true });
+    await menuOn(rowFor("c.md"));
+    // The rows gathered can be a folder and four files, and the panel is not told which are which —
+    // so the word names no kind (`AMB-T-4242`).
+    expect(button(t("files.pasteFilePath"))).toBeUndefined();
+    await click(button(t("files.pastePaths")));
+    expect(handed).toEqual([[`${ROOT}/a.md`, `${ROOT}/c.md`]]);
+  });
+
+  it("carries every picked row when the hand takes hold of one of them", async () => {
+    const carried: string[][] = [];
+    await four({ onCarry: (wholes) => carried.push(wholes) });
+    await clickWith(rowFor("a.md"), { ctrlKey: true });
+    await clickWith(rowFor("c.md"), { ctrlKey: true });
+    await act(async () => {
+      rowFor("c.md")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+    expect(last(carried)).toEqual([`${ROOT}/a.md`, `${ROOT}/c.md`]);
+
+    // And a row taken hold of away from the selection is carried on its own — the same answer the
+    // menu gives when it is opened there.
+    await act(async () => {
+      rowFor("b.md")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+    expect(last(carried)).toEqual([`${ROOT}/b.md`]);
   });
 
   it("bins the file being read and not what is picked out behind it", async () => {
@@ -2255,11 +2285,11 @@ describe("the file face", () => {
   /** The reverse of a path drawn in a pane opening the file here: the row puts the whole path in
    *  front of what is running, which is the only spelling a shell can do anything with. */
   it("hands the file to the pane as the whole path it is at", async () => {
-    const handed: string[] = [];
-    await drawOpen({ onHandOver: (whole) => handed.push(whole) });
+    const handed: string[][] = [];
+    await drawOpen({ onHandOver: (wholes) => handed.push(wholes) });
     await menuOn(button("a.md"));
     await click(button(t("files.pasteFilePath")));
-    expect(handed).toEqual([`${ROOT}/a.md`]);
+    expect(handed).toEqual([[`${ROOT}/a.md`]]);
     // And the menu is gone: the path has been put in front of the agent, and there is nothing more
     // to pick.
     expect(button(t("files.openWith"))).toBeUndefined();
@@ -2277,14 +2307,14 @@ describe("the file face", () => {
   /** A folder is named the same way a file is: nothing is carried, so the tree under it costs no
    *  more to name than one file does (`AMB-D-820`). What the row says is which of the two it is. */
   it("hands a folder over too, and says so in the item's own words", async () => {
-    const handed: string[] = [];
+    const handed: string[][] = [];
     hoisted.entries[""] = [{ name: "notes", isDir: true, ignored: false }];
-    await drawOpen({ onHandOver: (whole) => handed.push(whole) });
+    await drawOpen({ onHandOver: (wholes) => handed.push(wholes) });
     await menuOn(button("notes"));
     expect(button(t("files.pasteFilePath")), "a folder was offered the file's wording")
       .toBeUndefined();
     await click(button(t("files.pasteFolderPath")));
-    expect(handed).toEqual([`${ROOT}/notes`]);
+    expect(handed).toEqual([[`${ROOT}/notes`]]);
   });
 
   it("leaves the menu open while the arrows are walking it", async () => {

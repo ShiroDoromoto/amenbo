@@ -601,6 +601,7 @@ export const ptBR: Translation = {
     "files.copyPath": "Copiar o caminho",
     "files.pasteFilePath": "Colar o caminho do arquivo",
     "files.pasteFolderPath": "Colar o caminho da pasta",
+    "files.pastePaths": "Colar os caminhos",
     "files.openWith": "Abrir com o aplicativo de sempre",
     "files.chooseApp": "Abrir com um aplicativo à minha escolha",
     "files.appUsual": "{name} (o de sempre)",

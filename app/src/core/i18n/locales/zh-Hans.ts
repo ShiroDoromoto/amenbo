@@ -579,6 +579,7 @@ export const zhHans: Translation = {
     "files.copyPath": "复制路径",
     "files.pasteFilePath": "粘贴文件路径",
     "files.pasteFolderPath": "粘贴文件夹路径",
+    "files.pastePaths": "粘贴路径",
     "files.openWith": "用常用的应用打开",
     "files.chooseApp": "用我选的应用打开",
     "files.appUsual": "{name}（常用的）",

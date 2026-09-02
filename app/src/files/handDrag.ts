@@ -6,8 +6,12 @@
 // lands in the pane being worked in and nowhere else (`../shell/TerminalFace`). A row in sight and a
 // pane in sight, and no way to put one in the other.
 //
-// What is carried is a path and nothing else (`AMB-D-820`), so this is the gesture and not the
-// handover: where the row came down is all it answers, and the face does the rest.
+// What is carried is paths and nothing else (`AMB-D-820`), so this is the gesture and not the
+// handover: where the rows came down is all it answers, and the face does the rest.
+//
+// **Paths and not a path**, because a reader can pick several rows out and carry them together
+// (`AMB-T-4242`). Which rows a press is about is the panel's answer, so what arrives here is
+// already the list — the gesture is the same whether it is one row or five.
 //
 // The two questions the webview's own drag used to answer are answered where every pointer drag on
 // this screen answers them (`../core/pointerDrag`); the two fences are the ones a card needs for the
@@ -67,14 +71,14 @@ function place(ghost: Ghost, at: { x: number; y: number }): void {
  * a row was being carried across the page is exactly the pane a press-time answer would get wrong.
  */
 export function useHandDrag(
-  onLand: (frame: string, whole: string) => void,
+  onLand: (frame: string, wholes: string[]) => void,
   takes: (frame: string) => boolean,
 ): {
   /** The pane the pointer is over while a row is held, or nothing — which is what draws the surface
    *  on that pane and on no other. */
   overFrame: string | null;
-  /** What a row hands its `pointerdown`, with the path it stands for. */
-  press: (whole: string, event: RowPress<HTMLElement>) => void;
+  /** What a row hands its `pointerdown`, with the paths the press is about. */
+  press: (wholes: string[], event: RowPress<HTMLElement>) => void;
 } {
   const [overFrame, setOverFrame] = useState<string | null>(null);
   // The gesture in flight. A ref rather than state: it moves with the pointer, and nothing on the
@@ -90,7 +94,7 @@ export function useHandDrag(
   // A press outliving the face would go on listening for a row that is gone.
   useEffect(() => () => held.current?.stop(), []);
 
-  const press = useCallback((whole: string, event: RowPress<HTMLElement>) => {
+  const press = useCallback((wholes: string[], event: RowPress<HTMLElement>) => {
     // The main button only. A right press on a row is its menu, and taking it would put the row in
     // hand with no gesture to put it down.
     if (event.button !== 0 || held.current !== null) return;
@@ -168,7 +172,7 @@ export function useHandDrag(
       if (!dragged) return;
       window.addEventListener("click", noClick, { capture: true, once: true });
       const over = paneUnder(to.x, to.y);
-      if (over !== null && can.current(over)) land.current(over, whole);
+      if (over !== null && can.current(over)) land.current(over, wholes);
     };
 
     const cancel = () => stop();

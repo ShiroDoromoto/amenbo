@@ -579,6 +579,7 @@ export const nl: Translation = {
     "files.copyPath": "Pad kopiëren",
     "files.pasteFilePath": "Pad van het bestand plakken",
     "files.pasteFolderPath": "Pad van de map plakken",
+    "files.pastePaths": "Paden plakken",
     "files.openWith": "Openen met de gebruikelijke app",
     "files.chooseApp": "Openen met een app naar keuze",
     "files.appUsual": "{name} (de gebruikelijke)",

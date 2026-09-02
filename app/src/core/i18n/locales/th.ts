@@ -582,6 +582,7 @@ export const th: Translation = {
     "files.copyPath": "คัดลอกเส้นทาง",
     "files.pasteFilePath": "วางเส้นทางของไฟล์",
     "files.pasteFolderPath": "วางเส้นทางของโฟลเดอร์",
+    "files.pastePaths": "วางเส้นทาง",
     "files.openWith": "เปิดด้วยแอปที่ใช้ประจำ",
     "files.chooseApp": "เปิดด้วยแอปที่เลือกเอง",
     "files.appUsual": "{name} (แอปที่ใช้ประจำ)",

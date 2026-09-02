@@ -589,6 +589,7 @@ export const de: Translation = {
     "files.copyPath": "Pfad kopieren",
     "files.pasteFilePath": "Pfad der Datei einfügen",
     "files.pasteFolderPath": "Pfad des Ordners einfügen",
+    "files.pastePaths": "Pfade einfügen",
     "files.openWith": "Mit der üblichen App öffnen",
     "files.chooseApp": "Mit einer ausgewählten App öffnen",
     "files.appUsual": "{name} (die übliche)",

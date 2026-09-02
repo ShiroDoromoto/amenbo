@@ -2618,6 +2618,21 @@ const REGISTRY: &[OpSpec] = &[
     // same key as its own.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "undo", required: &[], refs: &[], strings: &[], binds: false },
 
+    // ── picking rows out ──────────────────────────────────────────────────────────────────────────
+    // Which rows the next act is about, said by pressing them rather than by naming them on the act
+    // itself. What a key or a menu item does to "the files" is the question these roads ask, and a
+    // step that named the rows on the act would be asking a different one — whether the face can be
+    // told, one row at a time, which ones are meant.
+    //
+    // Two ops because the gestures are two questions. One row is the machine's own adding key, which
+    // is also the way a row leaves a selection; a run of them is Shift, measured from wherever the
+    // last press without it landed. Both name their row the way every row-addressed op here does.
+    //
+    // A screen road alone. What the binary is handed is the paths themselves, so there is nothing on
+    // that side to pick out.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "pick", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "pick-to", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+
     // ── the machine's own copy and paste ──────────────────────────────────────────────────────────
     // What `⌘C` and `⌘V` mean on this face is what they mean everywhere else on the machine, so the
     // clipboard they go through is the machine's and not a pocket of Amenbo's. Where a paste lands is

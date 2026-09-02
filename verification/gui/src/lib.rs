@@ -1526,12 +1526,13 @@ impl Instructor {
             //
             // Where the road named it, it is named by its own line, which is the only thing on a page
             // of panes that is the road's own. Where it did not, the pane is the one the step before
-            // opened — the box on the page with nothing on it — and saying so is the whole of what
-            // "the pane that has a terminal running in it" ever meant.
+            // opened — the box on the page with a prompt and nothing else on it. That is said by what
+            // is on it rather than by what it was opened for: on a page with a second pane already
+            // carrying the road's lines, "the pane the folder was opened in" names the wrong box.
             (Domain::Terminal, "type-line") => {
                 let pane = match arg_str(with, "shows") {
                     Some(shows) => format!("the pane showing \"{shows}\" — the one the road typed that line into, and not any of the others"),
-                    None => "the pane that has a terminal running in it — the one the folder was opened in, not the question beside it".to_string(),
+                    None => "the pane the step before opened — the box on the page with a prompt and nothing else on it, not the empty frame beside it".to_string(),
                 };
                 format!(
                     "Click into {pane} — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and, where the pane has not been named yet, being the name it takes.",
@@ -1542,18 +1543,27 @@ impl Instructor {
             // a drop reads the disk the operator is sitting at, and nothing the run laid down is
             // anywhere a hand can reach from there. What it lands as is not said here — where it goes
             // is Amenbo's own answer, and the step that reads the input line is where that is settled.
-            (Domain::Terminal, "drop-in") => match with.get("beside").and_then(|v| v.as_str()) {
-                None => format!(
-                    "From outside Amenbo — a file manager, the desktop, anywhere on this machine — drag a file named \"{}\" over the pane that has a terminal running in it, and let it go there.",
-                    req(with, "brings")?
-                ),
-                // One hand and one movement, said twice over, because a pair let go one after the
-                // other is two drops and proves something else entirely.
-                Some(beside) => format!(
-                    "From outside Amenbo — a file manager, the desktop, anywhere on this machine — select a file named \"{}\" and a file named \"{beside}\" together, drag the pair over the pane that has a terminal running in it in one movement, and let them both go there.",
-                    req(with, "brings")?
-                ),
-            },
+            (Domain::Terminal, "drop-in") => {
+                // Which pane it is let go over. A page with one has nothing to say here; a page with
+                // two is being told where the drop goes, because where it goes is what the steps
+                // after it read.
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                match with.get("beside").and_then(|v| v.as_str()) {
+                    None => format!(
+                        "From outside Amenbo — a file manager, the desktop, anywhere on this machine — drag a file named \"{}\" over {pane}, and let it go there.",
+                        req(with, "brings")?
+                    ),
+                    // One hand and one movement, said twice over, because a pair let go one after the
+                    // other is two drops and proves something else entirely.
+                    Some(beside) => format!(
+                        "From outside Amenbo — a file manager, the desktop, anywhere on this machine — select a file named \"{}\" and a file named \"{beside}\" together, drag the pair over {pane} in one movement, and let them both go there.",
+                        req(with, "brings")?
+                    ),
+                }
+            }
             // A command run for its output, which is what the steps after it read. The clearing is
             // said first because it is what makes "the ref" a place on the screen rather than one of
             // several, and the waiting is said last because a press on a half-drawn line is a press
@@ -2141,6 +2151,16 @@ impl Instructor {
             (Domain::Files, "hand-to-pane") =>
                 "In that menu, press the item that pastes the row's path into the pane being worked in. The menu goes, and the path the row is at appears in the pane's input line — leave it there, and press nothing else."
                     .to_string(),
+            // The same hand-over made by hand. No menu is opened: the row itself is taken hold of and
+            // carried, which is what the step says twice over — the press, and the pointer being over
+            // the pane before the hand lets go. Where it is let go is the whole of what this proves,
+            // so the pane is named and the surface it draws is read on the way past.
+            (Domain::Files, "carry-to-pane") => format!(
+                "In {}, press and hold on the row \"{}\" and drag it — without letting go — onto the pane showing \"{}\": that pane says it would take it. Let go there. The path the row is at appears in that pane's input line — leave it there, and press nothing else.",
+                section(with)?,
+                req(with, "name")?,
+                req(with, "onto")?
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -2970,16 +2990,29 @@ impl Instructor {
             // What is standing where a person types, with nothing run. Both halves are said: the words
             // being there, and the line not having gone — a build that sent the newline would draw
             // whatever the program did with it, and the input line would be empty again.
-            (Domain::Terminal, "in-the-box") => match present(with) {
-                true => format!(
-                    "On the pane that has a terminal running in it, confirm \"{}\" is standing in the line you would type into — and that it has not been sent: nothing ran, and the words are still there to be edited.",
-                    req(with, "shows")?
-                ),
-                false => format!(
-                    "On the pane that has a terminal running in it, confirm \"{}\" is not in the line you would type into.",
-                    req(with, "shows")?
-                ),
-            },
+            (Domain::Terminal, "in-the-box") => {
+                let pane = match arg_str(with, "on") {
+                    Some(on) => format!("the pane showing \"{on}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                match present(with) {
+                    true => format!(
+                        "On {pane}, confirm \"{}\" is standing in the line you would type into — and that it has not been sent: nothing ran, and the words are still there to be edited.",
+                        req(with, "shows")?
+                    ),
+                    false => format!(
+                        "On {pane}, confirm \"{}\" is not in the line you would type into.",
+                        req(with, "shows")?
+                    ),
+                }
+            }
+            // Which pane the reader is in, read as one thing off two marks. The frame says the face's
+            // answer and the cursor says the browser's, and a road that read only the first would go
+            // green on a pane that is drawn picked out and takes none of the typing.
+            (Domain::Terminal, "worked-in") => format!(
+                "Confirm the pane showing \"{}\" is the one being worked in: its frame is the one drawn picked out from the rest, and the block where you would type in it is filled in — the pane the keyboard is not in draws that block as an outline.",
+                req(with, "shows")?
+            ),
             (Domain::Terminal, "pane") => match present(with) {
                 true => format!(
                     "Confirm the line \"{}\" is on the screen, on the pane that printed it — the same pane, drawn here. What is on a pane stays where it was printed, so a pane whose terminal has since ended still carries it.",

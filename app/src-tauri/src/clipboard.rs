@@ -19,6 +19,11 @@
 //! | Windows | `CF_HDROP` — a header and a run of wide paths, ended twice |
 //! | Linux | `text/uri-list` — `file://` lines |
 //!
+//! **Beside the files, the same copy carries the paths as plain words** (`AMB-D-832`). A pane is a
+//! terminal inside the webview, and the only shape it can be pasted into is text — so a copy that
+//! held files alone would be a copy a pane had nothing to take from. The two shapes go on together
+//! in one copy on all three machines, and the pasting side picks the one it can read.
+//!
 //! ⚠ **On Linux the clipboard is this process, not the system.** X11 and Wayland both make the
 //! copying application the owner of the selection, serving it when somebody asks; the other two hand
 //! the bytes to the system and let go. So a copy made here survives Amenbo closing on macOS and
@@ -26,6 +31,19 @@
 //! missing here, and nothing in this module can paper over it.
 
 use std::path::PathBuf;
+
+/// The paths as the plain words that go on the clipboard beside the files (`AMB-D-832`).
+///
+/// **Nothing is quoted here.** Whether a path with a space in it needs quoting depends on where it
+/// is being pasted, and the clipboard cannot see that — a pane wants the quoting, an address bar
+/// and a chat window do not. So the words go on bare and the pane puts its own quoting on what it
+/// reads back.
+///
+/// The separator is the caller's because one machine disagrees: Notepad reads a run joined by `\n`
+/// as a single line, so Windows joins with `\r\n` and the other two with `\n` (`AMB-T-4218`).
+fn as_text(paths: &[PathBuf], separator: &str) -> String {
+    paths.iter().map(|path| path.to_string_lossy()).collect::<Vec<_>>().join(separator)
+}
 
 // -------------------------------------------------------------------------------------------
 // macOS — the pasteboard takes objects, and a file is an NSURL.
@@ -37,6 +55,12 @@ use std::path::PathBuf;
 /// arrives in Finder as the several files it is. Clearing first is not optional: the pasteboard is
 /// append-only within a change count, and skipping it would leave the last copy's files on with
 /// these.
+///
+/// The words go on **after** the files, as one `setString_forType` rather than a flavour per item.
+/// That is the only one of the four shapes that reads back whole everywhere (`AMB-T-4218`): the
+/// call lands the string on the first item, and both `NSPasteboard` and AppleScript hand back every
+/// path. Giving the text an item of its own breaks `the clipboard as string` outright, and giving
+/// each item its own path makes AppleScript hand back the first one alone.
 #[cfg(target_os = "macos")]
 pub fn put(paths: &[PathBuf]) -> Result<(), String> {
     put_on(&objc2_app_kit::NSPasteboard::generalPasteboard(), paths)
@@ -64,12 +88,13 @@ fn put_on(pasteboard: &objc2_app_kit::NSPasteboard, paths: &[PathBuf]) -> Result
     }
 
     pasteboard.clearContents();
-    let wrote = pasteboard.writeObjects(&NSArray::from_retained_slice(&urls));
-    if wrote {
-        Ok(())
-    } else {
-        Err("the pasteboard would not take them".to_string())
+    if !pasteboard.writeObjects(&NSArray::from_retained_slice(&urls)) {
+        return Err("the pasteboard would not take them".to_string());
     }
+    // SAFETY: the flavour's name is a constant AppKit defines and this only reads it.
+    let words = unsafe { objc2_app_kit::NSPasteboardTypeString };
+    pasteboard.setString_forType(&NSString::from_str(&as_text(paths, "\n")), words);
+    Ok(())
 }
 
 /// The files on the pasteboard, or none where what is on it is not files.
@@ -111,14 +136,22 @@ fn take_from(pasteboard: &objc2_app_kit::NSPasteboard) -> Vec<PathBuf> {
 // Windows — CF_HDROP, which is the format a file manager both writes and reads.
 // -------------------------------------------------------------------------------------------
 
-/// Put these files on the clipboard as `CF_HDROP`.
+/// Put these files on the clipboard as `CF_HDROP`, with their paths beside them as
+/// `CF_UNICODETEXT`.
 ///
 /// The block is a `DROPFILES` header followed by every path as wide characters, each ended with a
 /// NUL and the run ended with a second one. `fWide` says the paths are UTF-16 rather than the code
 /// page, which is the only reading under which a name outside it survives the trip.
 ///
-/// The memory is the clipboard's once `SetClipboardData` has taken it, so it is allocated movable
-/// and **not** freed here — freeing what was handed over is a double free the shell performs later.
+/// **Both formats go on inside one hold.** `SetClipboardData` may be called as many times as there
+/// are formats between opening and closing, and the shell pastes the files from the first while a
+/// text field takes the words from the second (`AMB-T-4218`). Windows fills in `CF_TEXT` and
+/// `CF_OEMTEXT` from the words by itself, and `Preferred DropEffect` is not needed for the paste to
+/// land.
+///
+/// The memory is the clipboard's once `SetClipboardData` has taken it, so both blocks are allocated
+/// movable and **not** freed here — freeing what was handed over is a double free the shell
+/// performs later.
 #[cfg(target_os = "windows")]
 pub fn put(paths: &[PathBuf]) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt as _;
@@ -140,16 +173,19 @@ pub fn put(paths: &[PathBuf]) -> Result<(), String> {
     }
     names.push(0);
 
+    let mut words: Vec<u16> = as_text(paths, "\r\n").encode_utf16().collect();
+    words.push(0);
+
     let head = std::mem::size_of::<DROPFILES>();
     let bytes = head + names.len() * std::mem::size_of::<u16>();
-    // SAFETY: every call below is on the handle this one answered with, and the block is written
+    // SAFETY: every call below is on a handle these calls answered with, and each block is written
     // once, while locked, before it is handed over.
     unsafe {
-        let block = GlobalAlloc(GMEM_MOVEABLE, bytes);
-        if block.is_null() {
+        let list = GlobalAlloc(GMEM_MOVEABLE, bytes);
+        if list.is_null() {
             return Err("there was no room for the list".to_string());
         }
-        let at = GlobalLock(block);
+        let at = GlobalLock(list);
         if at.is_null() {
             return Err("the list could not be written".to_string());
         }
@@ -164,16 +200,31 @@ pub fn put(paths: &[PathBuf]) -> Result<(), String> {
             at.cast::<u8>().add(head).cast::<u16>(),
             names.len(),
         );
-        GlobalUnlock(block);
+        GlobalUnlock(list);
+
+        let text = GlobalAlloc(GMEM_MOVEABLE, words.len() * std::mem::size_of::<u16>());
+        if text.is_null() {
+            return Err("there was no room for the paths".to_string());
+        }
+        let at = GlobalLock(text);
+        if at.is_null() {
+            return Err("the paths could not be written".to_string());
+        }
+        std::ptr::copy_nonoverlapping(words.as_ptr(), at.cast::<u16>(), words.len());
+        GlobalUnlock(text);
 
         if OpenClipboard(std::ptr::null_mut()) == 0 {
             return Err("the clipboard was busy".to_string());
         }
         EmptyClipboard();
-        let taken = SetClipboardData(CF_HDROP, block);
+        let took_files = SetClipboardData(CF_HDROP, list);
+        let took_words = SetClipboardData(CF_UNICODETEXT, text);
         CloseClipboard();
-        if taken.is_null() {
+        if took_files.is_null() {
             return Err("the clipboard would not take them".to_string());
+        }
+        if took_words.is_null() {
+            return Err("the clipboard would not take the paths".to_string());
         }
     }
     Ok(())
@@ -183,6 +234,10 @@ pub fn put(paths: &[PathBuf]) -> Result<(), String> {
 /// plain `u32`, and this is the one this module reads and writes.
 #[cfg(target_os = "windows")]
 const CF_HDROP: u32 = 15;
+
+/// The number wide text goes under, which is the shape the paths ride beside the files in.
+#[cfg(target_os = "windows")]
+const CF_UNICODETEXT: u32 = 13;
 
 /// The files on the clipboard, or none where what is on it is not files.
 #[cfg(target_os = "windows")]
@@ -230,11 +285,17 @@ pub fn take() -> Vec<PathBuf> {
 // Linux — `text/uri-list`, served by this process for as long as it is up.
 // -------------------------------------------------------------------------------------------
 
-/// Put these files on the clipboard as a `text/uri-list`.
+/// Put these files on the clipboard as a `text/uri-list`, with their paths beside them as plain
+/// text.
 ///
 /// The list is the format every file manager on this desktop reads, and the lines are `file://`
 /// URLs rather than paths: a path with a space in it is a valid line and an invalid URL, and the
 /// reader on the other side is parsing URLs.
+///
+/// **Owning the selection is what lets one copy answer both questions.** The owner is asked for a
+/// target at the moment somebody pastes, so the several names text goes under are offered alongside
+/// the list and answered from the same copy — a file manager asks for `text/uri-list`, a text field
+/// asks for one of the others, and neither knows the other was on offer (`AMB-T-4218`).
 ///
 /// ⚠ **What is stored is a promise to serve, not the bytes.** The selection belongs to this process
 /// until another application takes it, so what was copied goes when Amenbo goes (`AMB-D-796`).
@@ -246,13 +307,35 @@ pub fn put(paths: &[PathBuf]) -> Result<(), String> {
         return Err("nothing to copy".to_string());
     }
     let list = uri_list(paths);
+    let words = as_text(paths, "\n");
     let clipboard = gtk::Clipboard::get(&Atom::intern("CLIPBOARD"));
-    let targets = [gtk::TargetEntry::new("text/uri-list", gtk::TargetFlags::empty(), 0)];
-    clipboard.set_with_data(&targets, move |_, selection, _| {
-        selection.set(&Atom::intern("text/uri-list"), 8, list.as_bytes());
+    let targets = [
+        gtk::TargetEntry::new("text/uri-list", gtk::TargetFlags::empty(), URI_LIST),
+        gtk::TargetEntry::new("text/plain", gtk::TargetFlags::empty(), PLAIN_TEXT),
+        gtk::TargetEntry::new("text/plain;charset=utf-8", gtk::TargetFlags::empty(), PLAIN_TEXT),
+        gtk::TargetEntry::new("UTF8_STRING", gtk::TargetFlags::empty(), PLAIN_TEXT),
+        gtk::TargetEntry::new("STRING", gtk::TargetFlags::empty(), PLAIN_TEXT),
+    ];
+    clipboard.set_with_data(&targets, move |_, selection, asked| {
+        if asked == URI_LIST {
+            selection.set(&Atom::intern("text/uri-list"), 8, list.as_bytes());
+        } else {
+            // GTK writes the words in whichever of the text targets was asked for, `STRING` — which
+            // is Latin-1 — included, so the encoding is not this side's to get right.
+            let _ = selection.set_text(&words);
+        }
     });
     Ok(())
 }
+
+/// Which of the two answers a paste is asking for. The number is the one each target was registered
+/// under, and it is all the serving closure is told about the question.
+#[cfg(target_os = "linux")]
+const URI_LIST: u32 = 0;
+
+/// The paths as words. See [`URI_LIST`].
+#[cfg(target_os = "linux")]
+const PLAIN_TEXT: u32 = 1;
 
 /// The files on the clipboard, or none where what is on it is not files.
 #[cfg(target_os = "linux")]
@@ -329,6 +412,31 @@ fn unescape(text: &str) -> std::ffi::OsString {
         at += 1;
     }
     std::ffi::OsString::from_vec(out)
+}
+
+#[cfg(test)]
+mod text_tests {
+    use super::*;
+
+    /// The words are the paths themselves — whole, unquoted, one to a line. A reader who copies two
+    /// rows and pastes into a pane is pasting this, and anything added here would arrive there.
+    #[test]
+    fn the_words_are_the_bare_paths_one_to_a_line() {
+        let paths = vec![
+            PathBuf::from("/home/alice/notes/a plain one.md"),
+            PathBuf::from("/home/alice/notes/100% done.md"),
+        ];
+        assert_eq!(
+            as_text(&paths, "\n"),
+            "/home/alice/notes/a plain one.md\n/home/alice/notes/100% done.md",
+        );
+    }
+
+    /// One row is one line with no separator anywhere, which is the ordinary copy.
+    #[test]
+    fn one_path_is_the_line_by_itself() {
+        assert_eq!(as_text(&[PathBuf::from("/tmp/one.md")], "\r\n"), "/tmp/one.md");
+    }
 }
 
 #[cfg(all(test, target_os = "linux"))]
@@ -413,6 +521,33 @@ mod mac_tests {
         .join()
         .expect("the thread");
         assert_eq!(read, vec![one], "the same pasteboard, read from another thread");
+    }
+
+    /// **One copy has to serve two readers.** A file manager takes the files and a pane takes the
+    /// words, and neither can be asked to take the other's shape — so the question is not whether
+    /// each goes on, but whether both are there after the one `⌘C` (`AMB-D-832`).
+    #[test]
+    fn the_paths_are_on_as_words_beside_the_files_themselves() {
+        use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
+
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let one = dir.path().join("a plain one.md");
+        let two = dir.path().join("100% done.md");
+        std::fs::write(&one, b"mine").expect("a file");
+        std::fs::write(&two, b"mine too").expect("a file");
+
+        let pasteboard = NSPasteboard::pasteboardWithUniqueName();
+        put_on(&pasteboard, &[one.clone(), two.clone()]).expect("the pasteboard takes them");
+
+        assert_eq!(take_from(&pasteboard).len(), 2, "the files are still there to be pasted");
+        // SAFETY: the flavour's name is a constant AppKit defines and this only reads it.
+        let flavour = unsafe { NSPasteboardTypeString };
+        let words = pasteboard.stringForType(flavour).expect("the paths as words");
+        assert_eq!(
+            words.to_string(),
+            format!("{}\n{}", one.display(), two.display()),
+            "both paths, bare and one to a line",
+        );
     }
 
     /// A pasteboard holding something that is not a file is not a failure — it is a paste this

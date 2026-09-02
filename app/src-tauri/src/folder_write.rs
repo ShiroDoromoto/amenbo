@@ -170,7 +170,8 @@ pub fn folder_import(
     Ok(carried(&from, &into, one))
 }
 
-/// Put these rows on the machine's clipboard, as the files they are (`AMB-D-796`).
+/// Put these rows on the machine's clipboard, as the files they are — with their paths beside them
+/// as words, so a pane can take what a file manager cannot (`AMB-D-796`・`AMB-D-832`).
 ///
 /// The rows are named the way every other door here names them — segments under one of the
 /// project's folders — and they are resolved through the same fence, so what goes on the clipboard

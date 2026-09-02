@@ -286,7 +286,13 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "finish-creating", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], refs: &["target"], strings: &["assignee"], binds: false },
     // Posting binds the comment, since editing, removing and promoting one all name it afterwards.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: true },
+    // `mentions` names a record whose **number** is written into the text, after the words the step
+    // wrote. It is a key rather than something a road spells out because the store issues the number:
+    // a scenario knows which record it means and never what that record was numbered, so a road that
+    // wants one record's text to carry another's number has no way to type it. What the number is for
+    // is a search: a number is asked as a word underneath the record it pins, and that is only visible
+    // where some other record has it written in it.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], refs: &["target", "mentions"], strings: &["text"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "edit", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "rm", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "promote", required: &["target", "title"], refs: &["target"], strings: &["title"], binds: true },
@@ -305,7 +311,7 @@ const REGISTRY: &[OpSpec] = &[
     // what the word names is a **folder**, one of the folders the task's own project offers, so the
     // driver hands over the path it placed that folder at rather than the word itself. It is also the
     // only field here that another road can take away: unbinding the folder empties it.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "update", required: &["target"], refs: &["target"], strings: &["title", "notes", "due", "start", "priority", "at"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "update", required: &["target"], refs: &["target", "mentions"], strings: &["title", "notes", "due", "start", "priority", "at"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "clear", required: &["target", "field"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "move", required: &["target"], refs: &["target", "project"], strings: &["position"], binds: false },
     // Narrowing a listing that is already drawn, by the words a reader types over it. The words travel
@@ -2463,6 +2469,18 @@ impl Scenario {
                 }
             }
 
+            // A number written into text needs text to be written into. On an update that is a title
+            // or a notes field, and a step that named neither would be asking for a number to be put
+            // nowhere.
+            if step.domain() == Domain::Task
+                && step.op() == "update"
+                && step.with().contains_key("mentions")
+                && !step.with().contains_key("notes")
+                && !step.with().contains_key("title")
+            {
+                errs.push(at(i, "`mentions` writes a number into text, so it needs a `notes` or a `title` to write it into".to_string()));
+            }
+
             for key in ["present", "ok", "running", "required", "publishes_key", "pinned_key", "first"] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
@@ -2667,6 +2685,30 @@ steps_cli:
         );
         assert!(errs("number_of: seed, spelled: sideways").contains("`bare`"), "and the shapes are two");
         assert!(errs("number_of: ghost").contains("does not resolve"), "the record is a binding like any other");
+    }
+
+    /// A number written into one record's text is how a road shows that a number is still asked as a
+    /// word: the store issues it, so there is no other way for a scenario to put one record's number
+    /// inside another's. It needs text to land in, and the record it names is a binding like any other.
+    #[test]
+    fn a_number_written_into_text_needs_text_to_land_in() {
+        let road = |with: &str| {
+            format!(
+                "id: x\ntitle: y\nsteps_cli:\n  - type: action\n    domain: task\n    op: create\n    with: {{ title: T }}\n    as: seed\n  - type: action\n    domain: task\n    op: update\n    with: {{ target: seed, {with} }}\n"
+            )
+        };
+        let errs = |with: &str| {
+            load_str(&road(with)).unwrap().validate().unwrap_err().iter().map(|e| e.message.clone()).collect::<Vec<_>>().join(" / ")
+        };
+
+        load_str(&road("notes: SEE, mentions: seed")).unwrap().validate().expect("notes is text to land in");
+        load_str(&road("title: SEE, mentions: seed")).unwrap().validate().expect("and so is a title");
+
+        assert!(
+            errs("due: today, mentions: seed").contains("needs a `notes` or a `title`"),
+            "a day is not text: {}", errs("due: today, mentions: seed")
+        );
+        assert!(errs("notes: SEE, mentions: ghost").contains("does not resolve"), "the record is a binding");
     }
 
     #[test]

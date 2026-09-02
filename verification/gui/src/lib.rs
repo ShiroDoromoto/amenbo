@@ -423,6 +423,17 @@ impl Instructor {
         })
     }
 
+    /// What a step's `mentions` adds to the end of a text it writes: the number of a record, said by
+    /// the record rather than by the number, which is what the operator reads off the screen. The store
+    /// issues that number and these lines are rendered before any world stands up, so there is nothing
+    /// else to name it by. Left out, nothing is added.
+    fn mentioning(&self, with: &Args) -> String {
+        let Some(name) = with.get("mentions").and_then(|v| v.as_str()) else { return String::new() };
+        let label = self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>"));
+        let noun = self.kinds.get(name).map(|k| k.noun()).unwrap_or("task");
+        format!(", followed by the number of the {noun} \"{label}\"")
+    }
+
     /// One step → one instruction. Fails closed on a registry op this harness has not mapped yet
     /// — the same contract the CLI driver keeps, so a new op surfaces loudly here too rather than
     /// walking past with a blank instruction. An action also records the label later steps read by.
@@ -826,17 +837,26 @@ impl Instructor {
                 req(with, "assignee")?
             ),
             (Domain::Task, "comment") => format!(
-                "Open the task \"{}\" and add the comment \"{}\".",
+                "Open the task \"{}\" and add the comment \"{}\"{}.",
                 self.target_label(with),
-                req(with, "text")?
+                req(with, "text")?,
+                self.mentioning(with)
             ),
             // The op names whichever of a task's own fields the step is setting, so the instruction names
             // those and no others: a line that recited the whole form would have the operator wondering
             // what to put in the fields the road never mentioned.
             (Domain::Task, "update") => {
+                // The number a `mentions` asks for lands in the two fields that carry text, and the
+                // loader has already held the step to naming one of them.
+                let mentioned = self.mentioning(with);
                 let set: Vec<String> = ["title", "notes", "due", "start", "priority"]
                     .iter()
-                    .filter_map(|k| arg_str(with, k).map(|v| format!("its {k} to \"{v}\"")))
+                    .filter_map(|k| {
+                        arg_str(with, k).map(|v| match *k {
+                            "title" | "notes" => format!("its {k} to \"{v}\"{mentioned}"),
+                            _ => format!("its {k} to \"{v}\""),
+                        })
+                    })
                     .collect();
                 if set.is_empty() {
                     return Err("action `update` names no field to set".to_string());
@@ -2885,6 +2905,43 @@ steps_gui:
             lines[3].contains("On the decisions tab") && lines[3].contains("the number of the decision \"WHY\""),
             "got: {}", lines[3]
         );
+    }
+
+    /// A number written into another record's text is said the same way a number typed into a box is:
+    /// by the record that carries it, the operator reading it off the screen.
+    #[test]
+    fn a_number_written_into_text_is_named_by_the_record_that_carries_it() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: task
+    op: create
+    with: { title: OTHER }
+    as: other
+  - type: action
+    domain: task
+    op: update
+    with: { target: other, notes: SEE, mentions: seed }
+  - type: action
+    domain: task
+    op: comment
+    with: { target: other, text: SEE, mentions: seed }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        for line in &lines[2..] {
+            assert!(
+                line.contains("followed by the number of the task \"SEED\""),
+                "got: {line}"
+            );
+        }
     }
 
     /// Where a hit stands is not something a reading gives back, so that step is left for an eye —

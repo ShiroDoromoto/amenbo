@@ -5,10 +5,9 @@
 # merely somewhere in the answer.
 #
 # The other half is that the pin is added and not substituted: a number is still asked as a word
-# underneath, so a record with that run of digits written in it is still reached. It is walked here as
-# a number nobody carries, since a record whose text holds *another record's* number is not something a
-# road can write — the store issues the number, and a scenario knows which record it means and never
-# what it was numbered.
+# underneath, so a record with that run of digits written in it is still reached — in the same answer,
+# below the record the number names. The record carrying it writes it with `mentions`, the store being
+# the one that issues the number.
 id: reach-a-record-by-its-number
 title: A number alone lands on the record it names, at the top of the answer, and goes on being asked as a word underneath
 description: >
@@ -57,6 +56,18 @@ given:
     with:
       target: swept
 
+  # And its notes carry the *window's* number, written as a word. That is what puts the two halves in
+  # one answer: asked for that number, the window is pinned to the top and this record comes back under
+  # it through the index — a build that had put the pin in place of the search would answer with the
+  # window alone.
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: swept
+      notes: "SCENARIO — the sweep is the one asked for in task"
+      mentions: window
+
 steps_cli:
   # The number alone, and the top of the answer. `first` is the whole of the step: a record that came
   # back somewhere below what the words matched is a build that stopped pinning, and a step asking only
@@ -68,6 +79,17 @@ steps_cli:
       number_of: window
       target: window
       first: true
+
+  # The same answer, one row down. The number is asked as a word underneath the pin, so the record that
+  # wrote it into its notes is here too — which is what says the pin was added to the search rather
+  # than put in place of it.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      number_of: window
+      target: swept
+      face: body
 
   # The same number written the other way. `#<n>` is a spelling and not a second question, so it lands
   # exactly where the bare one did.
@@ -144,12 +166,14 @@ steps_gui:
       target: window
       present: true
 
+  # The card that wrote that number into its notes is drawn under it, the words having gone on being
+  # matched. A board narrowed to the pin alone is a build that stopped searching.
   - type: assert
     domain: task
     op: narrowed
     with:
       target: swept
-      present: false
+      present: true
 
   # The other side's box. The same number typed here is a decision's, where over the board it was a
   # task's — which is the whole of what a box that searches one side does with a number carrying no
@@ -178,11 +202,12 @@ steps_gui:
       target: window
       first: true
 
-  # And the word underneath, on this face too: a run of digits nothing is numbered comes back through
-  # the index alone.
+  # And the word underneath, in that same answer: the record that wrote the number into its notes is a
+  # hit of its own, below the one the number named.
   - type: assert
     domain: task
     op: found
     with:
-      words: "999999"
+      number_of: window
       target: swept
+      face: body

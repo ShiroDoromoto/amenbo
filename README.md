@@ -259,6 +259,9 @@ amenbo search rollout --kind decision --limit 5 --json
 amenbo search rollout --kind decision --face comment --json   # the remarks on decisions
 amenbo search backup --filter "status:todo" --json
 amenbo search rollout --project "Website refresh" --json
+amenbo search 12 --json                  # a word written as a ref pins that record to the top; a number
+                                         # alone names both spaces, so this pins task 12 AND decision 12
+                                         # (--kind keeps the side you name), and 12 goes on being a word
 
 # Comments, assignees. There are exactly two: you (`me`) and your AI (`me-ai`).
 amenbo config set human_name "Alice"        # change your own display name (ai_name renames your AI)

@@ -926,6 +926,12 @@ words matched, so `first: true` on `found` asks for that place rather than for a
 The CLI driver reads the order off the hits; the GUI harness leaves it as a `Review`, a reading giving
 back which words are on a shot and never which line they were on.
 
+The words below that top row are reached the same way round. `mentions:` on `task update` and `task
+comment` names a record whose number is written into the text the step writes, after the words it
+wrote — the only way a road can put one record's number inside another's, since the store issues it.
+That is what lets one answer hold both halves: the record the number names at the top, and the record
+that merely wrote it down underneath.
+
 An argument can also mean two different things on the two roads, and `attach`'s `file:` is the one
 that does. To the CLI driver it is a path in the run's own folder, put there by a `repo write-file` a
 step earlier; on screen it is a **name** and nothing more — both ways in there (the picker and the

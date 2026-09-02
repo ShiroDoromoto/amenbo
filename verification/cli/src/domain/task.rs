@@ -51,8 +51,8 @@ impl Driver<'_> {
             }
             "comment" => {
                 let target = self.resolve(with)?;
-                let text = req_str(with, "text")?;
-                let v = self.run_json(&["comment", "add", &target.to_string(), "--text", text, "--json"])?;
+                let text = self.mentioning(with, req_str(with, "text")?)?;
+                let v = self.run_json(&["comment", "add", &target.to_string(), "--text", &text, "--json"])?;
                 let id = v["comment"]["id"].as_i64().ok_or("comment add did not report an id")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);
@@ -101,7 +101,12 @@ impl Driver<'_> {
                     if let Some(v) = with.get(key) {
                         let v = v.as_str().ok_or_else(|| format!("arg `{key}` must be a string"))?;
                         args.push(format!("--{key}"));
-                        args.push(v.to_string());
+                        // The number a `mentions` asks for lands in the two fields that carry text,
+                        // and the loader has already held the step to naming one of them.
+                        args.push(match key {
+                            "title" | "notes" => self.mentioning(with, v)?,
+                            _ => v.to_string(),
+                        });
                     }
                 }
                 // `at` is the one field whose word is not the value: it names one of the folders the

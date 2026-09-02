@@ -138,7 +138,8 @@ func windowOf(pid: Int, named wanted: String?) -> (id: Int, frame: CGRect) {
         windows.append((id, w[kCGWindowName as String] as? String ?? "",
                         CGRect(x: x, y: y, width: width, height: height)))
     }
-    return theWindow(wanted, among: windows, titled: { $0.title }, of: pid).id
+    let found = theWindow(wanted, among: windows, titled: { $0.title }, of: pid)
+    return (found.id, found.frame)
 }
 
 /// Bring the app owning that pid to the front, so its windows count as on-screen, and — when one is

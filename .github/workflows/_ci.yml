@@ -112,6 +112,7 @@ jobs:
       verification: ${{ inputs.full && 'true' || steps.filter.outputs.verification }}
       gui: ${{ inputs.full && 'true' || steps.filter.outputs.gui }}
       go: ${{ inputs.full && 'true' || steps.filter.outputs.go }}
+      swift: ${{ inputs.full && 'true' || steps.filter.outputs.swift }}
       shell: ${{ inputs.full && 'true' || steps.filter.outputs.shell }}
       cargo_deps: ${{ inputs.full && 'true' || steps.filter.outputs.cargo_deps }}
       npm_deps: ${{ inputs.full && 'true' || steps.filter.outputs.npm_deps }}
@@ -518,6 +519,37 @@ jobs:
       # The same lint contract as the Linux leg, on the branches only this platform compiles.
       - name: Clippy (all targets, all features)
         run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
+
+  # The Swift tools are compiled by nothing else here. They are not shipped, so no release build
+  # reads them either, and a break in one stays invisible until the next session that reaches for it
+  # finds it broken. That is how the screen driver was last repaired: a session that had come to do
+  # something else walked into it, and nothing had gone red in between. That is what this job is for.
+  #
+  # `-typecheck` and no further: these are not distributed, so what is worth knowing is that the
+  # source still compiles against the SDK the runner has, not that a binary comes out of it. That
+  # makes it seconds — and it is gated on a Swift file changing, so the macOS runner it takes is one
+  # nothing else was queuing for. It is on the path filter rather than on `inputs.full` like the
+  # mirrors above: the mirrors are hours of cargo work on a scarce runner, this is a second of it,
+  # and the whole point is to go red on the change that broke it rather than a day later.
+  #
+  # Every tracked `.swift` file, found rather than listed, so a third tool added beside these two is
+  # read the moment it lands — the layer that opens this job is written the same way. One file per
+  # `swiftc`: each of these is a script with code at the top level, and one invocation over both
+  # would read them as a single module with two entry points.
+  swift:
+    name: swift tools typecheck
+    runs-on: macos-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.swift == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # The compiler floats with the runner image, and it is the only thing here that can move.
+      - name: Show toolchain
+        run: swiftc --version
+
+      - name: Typecheck every Swift tool
+        run: git ls-files -z '*.swift' | xargs -0 -n1 -t swiftc -typecheck
 
   # The deepest tier of the same suite, and the only job here that no diff can open. `read_scaling_guard`
   # proves the read hot paths stay O(result) as the store grows: its deterministic ratio guards say so at
@@ -1119,6 +1151,7 @@ jobs:
       - rust-e2e-mac-win
       - lint
       - lint-mac-win
+      - swift
       - scale-heavy
       - verification
       - verification-macos

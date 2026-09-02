@@ -634,6 +634,47 @@ fn task_add_defaults_to_the_time_axis_value_covering_today() {
     assert_eq!(overridden["count"], 1, "it can be overridden to another era");
 }
 
+/// A new decision defaults to that same era, on the same terms as a task's — the axis nobody named is
+/// filled, and `--dim` on the time axis wins over it. Without this a required time axis would refuse
+/// every `decision accept` for a value the store can settle itself.
+#[test]
+fn decision_add_defaults_to_the_time_axis_value_covering_today() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "時代PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "時代", "--ordered", "--time-axis", "--json"]);
+
+    // While only a past window exists, no default is applied — the decision is recorded unclassified.
+    cli.json(&["dimension", "value-add", "時代", "--name", "黎明期", "--start", "2000-01-01", "--end", "2000-12-31", "--json"]);
+    cli.json(&["decision", "add", "--project", &pid, "--title", "窓の外", "--body", "根拠", "--json"]);
+    let outside = cli.json(&["decision", "list", "--filter", "time_axis:黎明期", "--json"]);
+    assert_eq!(outside["count"], 0, "with no era covering today, nothing is assigned");
+
+    // Add an ongoing era (an open end) and new decisions pick it up by default.
+    cli.json(&["dimension", "value-add", "時代", "--name", "現代", "--start", "2000-01-01", "--json"]);
+    let d = cli.json(&["decision", "add", "--project", &pid, "--title", "既定つき", "--body", "根拠", "--json"]);
+    let did = id_str(&d["decision"]["id"]);
+    let current = cli.json(&["decision", "list", "--filter", "time_axis:現代", "--json"]);
+    assert_eq!(current["count"], 1, "the current era is assigned by default at creation");
+    assert_eq!(id_str(&current["decisions"][0]["id"]), did);
+
+    // Named at creation, the era the caller chose stands — the default does not replace it.
+    let backdated = cli.json(&[
+        "decision", "add", "--project", &pid, "--title", "過去の時代", "--body", "根拠",
+        "--dim", "時代=黎明期", "--json",
+    ]);
+    let backdated_id = id_str(&backdated["decision"]["id"]);
+    let past = cli.json(&["decision", "list", "--filter", "time_axis:黎明期", "--json"]);
+    assert_eq!(past["count"], 1, "the named era wins over the default");
+    assert_eq!(id_str(&past["decisions"][0]["id"]), backdated_id);
+    assert_eq!(cli.json(&["decision", "list", "--filter", "time_axis:現代", "--json"])["count"], 1, "and today's era is never written on it");
+
+    // The default is not mandatory: it can be cleared.
+    cli.json(&["dimension", "unset", &decision_ref(&did), "時代", "現代", "--json"]);
+    let cleared = cli.json(&["decision", "list", "--filter", "time_axis:現代", "--json"]);
+    assert_eq!(cleared["count"], 0, "the default can be cleared");
+}
+
 /// A decision is filed on the very same axes a task is, with the very same values (`AMB-D-781`) — and the
 /// target has to say which of the two it is, because they number independently.
 #[test]

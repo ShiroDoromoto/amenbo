@@ -151,6 +151,22 @@ steps_gui:
       target: swept
       present: false
 
+  # The other side's box. The same number typed here is a decision's, where over the board it was a
+  # task's — which is the whole of what a box that searches one side does with a number carrying no
+  # type code.
+  - type: action
+    domain: decision
+    op: narrow
+    with:
+      number_of: outbox
+
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: outbox
+      present: true
+
   # The box that crosses the two sides. Asked the same number, it answers with the record at the top —
   # which is an eye's to close here, a reading giving back which words are on a shot and never which
   # line they were on.

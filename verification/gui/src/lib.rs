@@ -931,6 +931,14 @@ impl Instructor {
                 "On the board, type {} into the search box over the columns.",
                 self.typed(with)?
             ),
+            // The same box on the decisions tab. It is written out rather than shared with the board's,
+            // for the reason that tab's other moves are: the box sits over the decisions and not over the
+            // columns, and a line that did not say which of the two an operator is standing at could be
+            // walked on either.
+            (Domain::Decision, "narrow") => format!(
+                "On the decisions tab, type {} into the search box over the rows.",
+                self.typed(with)?
+            ),
             // The other narrowing on that board, opened and folded from the one control it has. The line
             // names that control by what it does rather than by its wording, the way every button here is
             // named: it is the only thing above the board that speaks about narrowing, and while the
@@ -2840,6 +2848,43 @@ steps_gui:
         );
         assert!(lines[2].contains("the number of the task \"SEED\"") && lines[2].contains("`#`"), "got: {}", lines[2]);
         assert!(lines[2].contains("first of the answer"), "and the top is what the step asks for: {}", lines[2]);
+    }
+
+    /// The two boxes that read one side each. A number carrying no type code is whichever side the box
+    /// it was typed into reads, so the line has to say which of the two tabs the operator is standing
+    /// at — one that named neither could be walked on either.
+    #[test]
+    fn the_two_boxes_that_read_one_side_each_are_told_apart() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: decision
+    op: create
+    with: { title: WHY }
+    as: why
+  - type: action
+    domain: task
+    op: narrow
+    with: { number_of: seed }
+  - type: action
+    domain: decision
+    op: narrow
+    with: { number_of: why }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[2].contains("On the board") && lines[2].contains("over the columns"), "got: {}", lines[2]);
+        assert!(
+            lines[3].contains("On the decisions tab") && lines[3].contains("the number of the decision \"WHY\""),
+            "got: {}", lines[3]
+        );
     }
 
     /// Where a hit stands is not something a reading gives back, so that step is left for an eye —

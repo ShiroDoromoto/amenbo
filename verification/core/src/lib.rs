@@ -2054,7 +2054,11 @@ const REGISTRY: &[OpSpec] = &[
     // because what it is about is the gesture: several things picked up together and let go once put
     // every path on the line side by side, and two drops one after the other are two gestures that
     // happen to end in the same place. Only the first can say what a hand full of files does.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drop-in", required: &["brings"], refs: &[], strings: &["beside", "brings"], binds: false },
+    //
+    // `onto` is which pane, once saying so is the point: a drop lands where the pointer is, and on a
+    // page with two panes that is a thing to prove rather than a thing to assume. Left out, it is
+    // the page's one pane, which is what every road walked before there was a second one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drop-in", required: &["brings"], refs: &[], strings: &["beside", "brings", "onto"], binds: false },
     // What is standing in the pane's input line, **unsent**. It is not `pane` with a different
     // sentence: that one reads what a program printed, and this reads what nothing has run yet.
     //
@@ -2063,7 +2067,11 @@ const REGISTRY: &[OpSpec] = &[
     // whatever the screen was asking at that moment — which on a first run is a question one of the
     // real answers to ran a script off the network. A reading that could not tell the
     // two apart would go green over exactly that.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "in-the-box", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    //
+    // `on` is which pane's line is being read, named by the words a road typed into it. Left out, it
+    // is the page's one pane — a road with two says which, the same way it says which one to type
+    // into.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "in-the-box", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
     // A command run in the pane, and waited on until what it printed is drawn. It is not `type-line`
     // with a longer word in it: that step's line is the reader's own and is written to be *left* on
     // the screen — the shell is not meant to know it — and this is a program being asked for output
@@ -2113,6 +2121,14 @@ const REGISTRY: &[OpSpec] = &[
     // how a road tells "the same terminal, moved" from "another terminal, started". The absent half
     // is what a road reads while the other face is up.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // Which pane of the page is the one being worked in, named the way every other pane step names
+    // one. Two things are read at once because they are one fact to a reader: the frame drawn picked
+    // out from the others, and the keyboard being in that pane rather than in the one they came from.
+    //
+    // The second half is read off the cursor and not by typing. A path handed to a pane is standing
+    // in its input line unsent, so a character typed to find out where the keyboard is would be a
+    // character added to the path — the road would be editing the very thing the step before it read.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "worked-in", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // Ending the terminal in the pane. It is the only way out — a pane going away is a pane moving,
     // and the session outlives it — so it is also the only way a road reaches the state that follows
     // one: what a pane says once nothing is running in it any more.
@@ -2605,6 +2621,15 @@ const REGISTRY: &[OpSpec] = &[
     // end off Amenbo's window and stop at the hand-over, and this one ends **on** it, in the pane,
     // where a shot can settle what happened. `terminal in-the-box` is what reads it.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "hand-to-pane", required: &[], refs: &[], strings: &[], binds: false },
+    // The same hand-over made by hand: the row taken hold of and carried onto a pane, rather than
+    // named to the one the reader is already in. It is a separate op from the menu item because the
+    // difference is the whole of what it proves — the menu's pane is the face's answer and this one
+    // is the reader's, and a road that walked only the menu would leave the gesture untested.
+    //
+    // `onto` names which pane, by the words a road typed into it, the way `type-line` and
+    // `remove-pane` name one. It is what the road is about — a page with one pane cannot tell "where
+    // it landed" from "where the reader was" — so unlike those two it is not optional.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "carry-to-pane", required: &["name", "section", "onto"], refs: &[], strings: &["name", "onto", "section"], binds: false },
     // And what the press left. No shot settles it, and that is the point rather than a gap: what a
     // hand-over ends in is off Amenbo's own window — an application that came forward, or an
     // operating system's chooser drawn by the system — and the run shoots the window under test. The

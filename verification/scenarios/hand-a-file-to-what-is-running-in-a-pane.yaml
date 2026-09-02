@@ -23,11 +23,22 @@
 # so a fix made in it shows neither in git's diff nor on the rows the panel colours. A folder costs
 # the whole tree under it.
 #
-# ── Why four roads and not one ───────────────────────────────────────────────────────────────────
+# ── Why five roads and not one ───────────────────────────────────────────────────────────────────
 # A file dragged in from the machine, a hand full of them dragged in at once, a folder off a row of
-# the panel, and a file off a row: four doors and one answer. The drags go first, on a line with
-# nothing else standing on it — that is the only moment the path can be read for what is *not* in it,
-# and a hand full is where a carry would show worst, taking every one of them in.
+# the panel, a file off a row, and a row carried onto a pane by hand: five doors and one answer. The
+# drags go first, on a line with nothing else standing on it — that is the only moment the path can be
+# read for what is *not* in it, and a hand full is where a carry would show worst, taking every one of
+# them in.
+#
+# ── Why the last road needs a second pane ────────────────────────────────────────────────────────
+# The four above are walked on one pane, where "the pane it landed on" and "the pane the reader was
+# in" are the same box and nothing can tell them apart. Two of the five doors point at a pane — the
+# drag from outside, and the carry — and what a pointer says is which one, so the road opens a second
+# pane and stands the reader in the other one before each of them.
+#
+# What it reads there is not only the path. A landing settles which pane is being worked in and where
+# the keyboard is, and that is the one way a hand-over can be right and still be wrong: the path in
+# one pane, the words the reader types after it in another.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no terminal road here and no gap in one. A drop is the operating system's, the menu is
@@ -36,11 +47,12 @@
 id: hand-a-file-to-what-is-running-in-a-pane
 title: What is handed to the pane reaches it as the path it is already at
 description: >
-  Open a pane in the project's folder and get four things to what is running in it: a file dragged in
-  from the machine, a pair dragged in together, a folder off a row of the panel beside it, and a file
-  off a row. Nothing is copied and nothing is moved — no dragged path is under the project's folder
-  afterwards, and no landing is made for any of them — and all four put the whole path in the line
-  the person types into, unsent, for them to send.
+  Open a pane in the project's folder and get five things to what is running in it: a file dragged in
+  from the machine, a pair dragged in together, a folder off a row of the panel beside it, a file off
+  a row, and a row carried onto a pane of its own. Nothing is copied and nothing is moved — no dragged
+  path is under the project's folder afterwards, and no landing is made for any of them — and all five
+  put the whole path in the line the person types into, unsent, for them to send. The two that point
+  at a pane land in the one the pointer named, and leave it the pane being worked in.
 
 given:
   - type: action
@@ -86,6 +98,15 @@ steps_gui:
   - type: action
     domain: terminal
     op: open-shell
+
+  # A line of the road's own, so this pane can be named later. Nothing reads it until the page has a
+  # second pane on it — and by then "the pane" names two, which is exactly when the last road needs
+  # to say which one it means.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane the reader is in
 
   # The panel, which is the door the second and third roads come through.
   - type: action
@@ -226,3 +247,101 @@ steps_gui:
     op: in-the-box
     with:
       shows: handed.txt
+
+  # ── The fifth road, and what a landing settles ────────────────────────────────────────────────
+  # A second pane, because everything above this line happens where "the pane it landed on" and "the
+  # pane the reader was in" are the same box. From here they are two, and that is the only way the
+  # rest of this can be read at all.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane beside it
+
+  # Back to the first pane, which is what makes the reader's pane the one the landing is *not* in.
+  # The paths standing on its line go off with the press, which is what a line typed under them
+  # does — they have been read, and what this step is for is where the reader is standing.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      shows: SCENARIO the pane the reader is in
+      text: SCENARIO the reader stands here
+
+  - type: assert
+    domain: terminal
+    op: worked-in
+    with:
+      shows: SCENARIO the pane the reader is in
+
+  # The road this face was missing: the row taken hold of and carried, rather than named to the pane
+  # the reader is already in. Where it comes down is the reader's own answer and nothing else's.
+  - type: action
+    domain: files
+    op: carry-to-pane
+    with:
+      name: watering.md
+      section: tree
+      onto: SCENARIO the pane beside it
+
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: watering.md
+      on: SCENARIO the pane beside it
+
+  # And what the landing settles. A person who carried a path into a pane has said which pane they
+  # mean, so the next thing they type goes there — without this, the path lands in one pane and the
+  # words after it in another, which is the one way a hand-over can be right and still be wrong.
+  - type: assert
+    domain: terminal
+    op: worked-in
+    with:
+      shows: SCENARIO the pane beside it
+
+  # Back again, for the drag from outside: it lands where the pointer is, so the reader has to be
+  # somewhere else for that to be worth reading.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      shows: SCENARIO the pane the reader is in
+      text: SCENARIO the reader stands here again
+
+  - type: action
+    domain: terminal
+    op: drop-in
+    with:
+      brings: handed.txt
+      onto: SCENARIO the pane beside it
+
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: handed.txt
+      on: SCENARIO the pane beside it
+
+  # The same reading for the other door. Both gestures point at a pane, so both answer for it.
+  - type: assert
+    domain: terminal
+    op: worked-in
+    with:
+      shows: SCENARIO the pane beside it

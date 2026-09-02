@@ -442,6 +442,19 @@ const REGISTRY: &[OpSpec] = &[
     // role, it is set on a value that already exists: that is the door the screen has, its date fields
     // sitting on the value in the manager.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "period", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value", "start", "end"], binds: false },
+    // Whether the axis retires its values by closing them instead of deleting them. It is the other
+    // nomination the role slot holds, so it is written the way `time-axis` above it is — on an axis
+    // that already exists, which is the door the manager has — and `closable: false` gives it up
+    // again. One slot means one role, so naming this takes the time axis off the same axis.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "closable", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
+    // Retiring one of that axis's values, and bringing it back. Closing is the payload of the role
+    // above the way a period is the time axis's, and it is not `value-rm` in a quieter form: everything
+    // already filed under the value keeps it and a filter naming it goes on resolving, while nothing
+    // new is filed under it from here on. The two directions are not one move either — closing asks for
+    // the role, and is refused on the last value a required axis still offers, where reopening is free
+    // on any axis, so an axis that gave the role up strands nothing.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-close", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-reopen", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value"], binds: false },
     // Renaming that key afterwards — the axis's own, or one of its values' where `value` names one.
     // It is a move of its own rather than an arg on the ops above, because naming a key at birth and
     // renaming one are two different doors: the screen has only the second, so a road that wrote the
@@ -1358,6 +1371,15 @@ const REGISTRY: &[OpSpec] = &[
     //
     // A screen road alone: a terminal has no columns, which is the same reason `project group-by` is.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "groupable", required: &["axis"], refs: &[], strings: &["axis"], binds: false },
+    // Whether the board, cut along that axis, draws a column for one of its values. Not whether the
+    // value is defined — `dimension listed` asks that — but whether the board keeps a place to stand a
+    // card in. A closed value is where the two come apart: it keeps its column while cards are still
+    // in it and loses it once the last one leaves, which is the one reading that says the board
+    // neither takes filed work off itself nor grows columns nobody can drop into.
+    //
+    // A screen road alone, like the `group-by` that cut the board and the `groupable` that reads the
+    // row of buttons: a terminal answers with a listing, and a listing has no columns.
+    OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "column", required: &["axis", "value"], refs: &[], strings: &["axis", "value"], binds: false },
     // An axis as it is read back, by name: is it defined, and does it carry the value named?
     //
     // `side` asks a different question of the same listing — not whether the axis is defined but
@@ -1365,7 +1387,21 @@ const REGISTRY: &[OpSpec] = &[
     // as much as ever, so the two answers come apart there and nowhere else. `target`
     // rides with it for the face that has no listing to read the offer off: a screen reads it as the
     // control a record's own pane keeps per axis, so the road names the record whose pane is opened.
+    //
+    // A `value` on that face narrows the reading one step further, to whether the control offers that
+    // value as an answer — which is the same question the terminal's listing answers, a closed value
+    // being left out of both. The record is what the two come apart on: the pane goes on drawing a
+    // closed value the record already carries, so a road reads the picker twice, once on a record
+    // holding the value and once on a record that would newly take it.
     OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "listed", required: &["dimension"], refs: &["target"], strings: &["dimension", "value", "side"], binds: false },
+    // Whether one of the axis's values is closed. `listed` above asks what the axis still offers, and
+    // a closed value is exactly what has stopped being offered while staying on the axis — so the two
+    // together are what separates a value retired from one deleted, which neither says alone.
+    // `equals: false` is the same reading after the way back was taken.
+    //
+    // The value has to be on the axis: one that is not there is a step naming the wrong value, not a
+    // value that is open, and it is called that rather than answered — the line `key` draws too.
+    OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "closed", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value"], binds: false },
     // The key an axis answers to, or one of its values where `value` names one. Read apart from
     // `listed` because it is a different question: that one asks whether the axis is defined at all,
     // and a row whose key was quietly left as its id-derived default is defined exactly as much as one

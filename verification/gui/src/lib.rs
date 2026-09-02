@@ -664,8 +664,19 @@ impl Instructor {
             // The category's own name, which is what its control on the pane is labelled with. The
             // reader gave that name, so it is not a word of the interface's — and on the `present:
             // false` side its absence from the pane is the whole of the claim.
-            (Domain::Dimension, "listed") => {
+            //
+            // Except where the step names a value: what is being asked then is what the control offers,
+            // and the answers are inside a list a reader opens. A shot of the pane holds the field and
+            // not the list, so the word would be missing on the `present: true` side as often as it is
+            // there — an eye closes that one.
+            (Domain::Dimension, "listed") if arg_str(with, "value").is_none() => {
                 Some(Expectation { text: arg_str(with, "dimension")?.to_string(), present: present(with) })
+            }
+            // The value on the column heading, which is a word the reader gave. A column that is not
+            // drawn holds nothing that would carry the name elsewhere on the board — the cards under it
+            // went with it, and a card draws a category only where the axis is marked for it.
+            (Domain::Project, "column") => {
+                Some(Expectation { text: arg_str(with, "value")?.to_string(), present: present(with) })
             }
             // The value, not the card's title: what is being asked is whether the classification is
             // drawn, and a title is on the board either way. Which card carries it is the driver's to
@@ -1069,6 +1080,36 @@ impl Instructor {
                     ),
                 }
             }
+            // Whether the axis retires its values by closing them instead of deleting them. The box sits
+            // beside the one that names the time axis because the two are the same field — an axis holds
+            // one role — and it is named by what it does rather than by its label, the way every other
+            // control on these roads is.
+            (Domain::Dimension, "closable") => {
+                let dimension = req(with, "dimension")?;
+                match with.get("closable").and_then(|v| v.as_bool()).unwrap_or(true) {
+                    true => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn on the box that lets its values be closed instead of deleted.",
+                    ),
+                    false => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn off the box that lets its values be closed instead of deleted.",
+                    ),
+                }
+            }
+            // Retiring one of that axis's values, and bringing it back. It is one button on the value's
+            // own row rather than two side by side — it flips once it has been pressed — so the two
+            // lines send a reader to the same place and name the direction. The button stands only under
+            // an axis carrying the role, which is what the step before either of these puts there, and
+            // it is shut on the last value a required axis still offers, which is the road's other half.
+            (Domain::Dimension, "value-close") => format!(
+                "Above the board, open the way into managing the project's categories, find the value \"{}\" under \"{}\", and press the button on its row that closes it.",
+                req(with, "value")?,
+                req(with, "dimension")?
+            ),
+            (Domain::Dimension, "value-reopen") => format!(
+                "Above the board, open the way into managing the project's categories, find the value \"{}\" under \"{}\", and press the button on its row that opens it again. This panel is the only face that draws a closed value at all, so it is the only one the way back is on.",
+                req(with, "value")?,
+                req(with, "dimension")?
+            ),
             // The window one value covers, written where a reader writes it: a pair of date controls on
             // the value's own row in that same manager, drawn only under an axis carrying the time-axis
             // role. An end nobody has written yet is a button saying so rather than an empty date field
@@ -1434,6 +1475,23 @@ impl Instructor {
                     req(with, "axis")?
                 ),
             },
+            // One column of the board that row cut, read for whether it is drawn at all. A closed value
+            // is where the answer stops following from the value being defined: the column stands while
+            // cards are still in it — hiding it would take those tasks off the board — and goes once the
+            // last one leaves, so an axis that keeps closing values does not grow columns nobody can
+            // drop into.
+            (Domain::Project, "column") => match present(with) {
+                true => format!(
+                    "On the board cut along \"{}\", confirm there is still a column headed \"{}\", with its cards in it.",
+                    req(with, "axis")?,
+                    req(with, "value")?
+                ),
+                false => format!(
+                    "On the board cut along \"{}\", confirm there is no column headed \"{}\" — the value is still on the category, and nothing is filed under it for the board to hold.",
+                    req(with, "axis")?,
+                    req(with, "value")?
+                ),
+            },
             // The fold, read for both of the things it does. Neither half is a reading's to close, so the
             // line says out loud what an eye on the shot is looking for.
             (Domain::Task, "filters-folded") => format!(
@@ -1571,12 +1629,38 @@ impl Instructor {
                 let dimension = req(with, "dimension")?;
                 let noun = self.target_noun(with);
                 let label = self.target_label(with);
-                match present(with) {
-                    true => format!(
+                // A `value` narrows the reading from the control to what is inside it: whether the
+                // record can be newly filed under that value. The answers are in a list that has to be
+                // opened, except the one the record already carries — that one is drawn as the field's
+                // answer, which is the half of the claim a closed value is about.
+                match (arg_str(with, "value"), present(with)) {
+                    (Some(value), true) => format!(
+                        "Open the {noun} \"{label}\", open the control its pane keeps for the category \"{dimension}\", and confirm \"{value}\" is among the answers it offers. A value the record already carries stands there as the field's own answer, whether or not it is one the record could newly be filed under."
+                    ),
+                    (Some(value), false) => format!(
+                        "Open the {noun} \"{label}\", open the control its pane keeps for the category \"{dimension}\", and confirm \"{value}\" is not among the answers it offers. The value is still on the category — the classification panel draws it — it is simply not one this record can be newly filed under."
+                    ),
+                    (None, true) => format!(
                         "Open the {noun} \"{label}\" and confirm its pane keeps a control for the category \"{dimension}\"."
                     ),
-                    false => format!(
+                    (None, false) => format!(
                         "Open the {noun} \"{label}\" and confirm its pane keeps no control for the category \"{dimension}\" — the category is still in the manager, it is simply not offered here."
+                    ),
+                }
+            }
+            // Whether a value is closed, read on the one face that draws a closed value at all. The
+            // panel says it twice over — the row is drawn struck through, and the button on it offers
+            // the way back rather than the way out — and neither is a word on a shot: the marking is a
+            // style and the button's label is the interface's own, so an eye closes this one.
+            (Domain::Dimension, "closed") => {
+                let dimension = req(with, "dimension")?;
+                let value = req(with, "value")?;
+                match closed_equals(with) {
+                    true => format!(
+                        "Above the board, open the way into managing the project's categories and confirm the value \"{value}\" under \"{dimension}\" is drawn as retired — struck through, with the button on its row now offering to open it again rather than to close it."
+                    ),
+                    false => format!(
+                        "Above the board, open the way into managing the project's categories and confirm the value \"{value}\" under \"{dimension}\" is drawn like the category's other values — not struck through, with the button on its row offering to close it."
                     ),
                 }
             }
@@ -2327,6 +2411,12 @@ fn official(with: &Args) -> bool {
 /// always said out loud, so an unsaid one is a step asking that something is there.
 fn present(with: &Args) -> bool {
     with.get("present").and_then(|v| v.as_bool()).unwrap_or(true)
+}
+
+/// Which way round a `dimension closed` step reads its value. Closed is what a road walks this assert
+/// for, so it is the default, and `equals: false` is the reading after the way back was taken.
+fn closed_equals(with: &Args) -> bool {
+    with.get("equals").and_then(|v| v.as_bool()).unwrap_or(true)
 }
 
 /// Whether a step says the app it names already reaches this project. The op requires the key, so the

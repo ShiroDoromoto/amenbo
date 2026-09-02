@@ -52,7 +52,9 @@ pub struct DimensionValueDto {
 }
 
 /// One unified dimension (classification axis), values included, so the GUI's dimension editor and
-/// assignment selects render from real data. `role` is `none` or `time_axis` (phase); `ordered`
+/// assignment selects render from real data. `role` is `none` or `time_axis` (phase); `cardinality`
+/// says how many of the axis's values one record may hold (`AMB-D-826`) — `single`, where a new
+/// answer replaces the last, or `multi`, where it joins it; `ordered`
 /// says whether the values have an order; `showOnCard` says whether a task's value on this axis
 /// belongs on its card (`AMB-D-651`) — the axis's own answer, so it reads the same on every device;
 /// `required` says the axis refuses to be left empty (`AMB-D-734`), which the detail pane reads to
@@ -73,6 +75,8 @@ pub struct DimensionDto {
     pub(crate) notes: String,
     #[ts(type = "\"none\" | \"time_axis\"")]
     pub(crate) role: String,
+    #[ts(type = "\"single\" | \"multi\"")]
+    pub(crate) cardinality: String,
     pub(crate) ordered: bool,
     pub(crate) show_on_card: bool,
     pub(crate) required: bool,

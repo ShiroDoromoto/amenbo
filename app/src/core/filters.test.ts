@@ -5,7 +5,7 @@ import type { TaskCard } from "../mock/types";
 
 describe("filters: user-defined classifications (unified dimension)", () => {
   const dim = {
-    id: 1, name: "カテゴリー", notes: "", role: "none" as const, ordered: false, showOnCard: false, required: false,
+    id: 1, name: "カテゴリー", notes: "", role: "none" as const, cardinality: "single" as const, ordered: false, showOnCard: false, required: false,
     appliesTo: "both" as const,
     values: [{ id: 11, name: "バグ" }, { id: 12, name: "機能" }],
   };
@@ -108,7 +108,7 @@ describe("parseRefQuery: recognizing ref numbers in the search box", () => {
 
 describe("filters: the decisions tab narrows the same way the board does", () => {
   const dim = {
-    id: 1, name: "テーマ", notes: "", role: "none" as const, ordered: false, showOnCard: false, required: false,
+    id: 1, name: "テーマ", notes: "", role: "none" as const, cardinality: "single" as const, ordered: false, showOnCard: false, required: false,
     appliesTo: "both" as const,
     values: [{ id: 11, name: "メイン" }, { id: 12, name: "会話の窓" }],
   };

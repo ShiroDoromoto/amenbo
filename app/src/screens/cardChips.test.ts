@@ -14,6 +14,7 @@ const dim = (
   name,
   notes: "",
   role: "none",
+  cardinality: "single",
   ordered: false,
   showOnCard,
   required: false,

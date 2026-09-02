@@ -277,7 +277,9 @@ export type DimensionDecisionValueDto = { decisionId: number, valueId: number, }
 
 /**
  * One unified dimension (classification axis), values included, so the GUI's dimension editor and
- * assignment selects render from real data. `role` is `none` or `time_axis` (phase); `ordered`
+ * assignment selects render from real data. `role` is `none` or `time_axis` (phase); `cardinality`
+ * says how many of the axis's values one record may hold (`AMB-D-826`) — `single`, where a new
+ * answer replaces the last, or `multi`, where it joins it; `ordered`
  * says whether the values have an order; `showOnCard` says whether a task's value on this axis
  * belongs on its card (`AMB-D-651`) — the axis's own answer, so it reads the same on every device;
  * `required` says the axis refuses to be left empty (`AMB-D-734`), which the detail pane reads to
@@ -289,7 +291,7 @@ export type DimensionDto = { id: number, name: string,
  * The axis's readable key (`AMB-D-735`), the counterpart of a value's. Omitted only for a row
  * still being written; every saved axis carries one.
  */
-slug?: string, notes: string, role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, required: boolean, 
+slug?: string, notes: string, role: "none" | "time_axis", cardinality: "single" | "multi", ordered: boolean, showOnCard: boolean, required: boolean, 
 /**
  * Which of the two entities this axis classifies (`AMB-D-789`). The screens read it to decide
  * which of them offer the axis at all — the board and the task card the task side, the decision

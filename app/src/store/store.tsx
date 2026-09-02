@@ -63,6 +63,12 @@ interface Store {
    */
   setDimensionSlug(id: number, slug: string): Promise<boolean>;
   updateDimension(id: number, notes: string): void;
+  /**
+   * Let one record answer this axis with several of its values (`AMB-D-826`). Raising it takes
+   * nothing away; lowering it is refused while a record still holds several, and the sentence says
+   * how many.
+   */
+  setDimensionMulti(id: number, multi: boolean): void;
   setDimensionOrdered(id: number, ordered: boolean): void;
   setDimensionTimeAxis(id: number, timeAxis: boolean): void;
   setDimensionShowOnCard(id: number, showOnCard: boolean): void;
@@ -191,6 +197,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     renameDimension(id, name) { run(mut.renameDimension(id, name)); },
     setDimensionSlug(id, slug) { return runOk(mut.setDimensionSlug(id, slug)); },
     updateDimension(id, notes) { run(mut.updateDimension(id, notes)); },
+    setDimensionMulti(id, multi) { run(mut.setDimensionMulti(id, multi)); },
     setDimensionOrdered(id, ordered) { run(mut.setDimensionOrdered(id, ordered)); },
     setDimensionTimeAxis(id, timeAxis) { run(mut.setDimensionTimeAxis(id, timeAxis)); },
     setDimensionShowOnCard(id, showOnCard) { run(mut.setDimensionShowOnCard(id, showOnCard)); },

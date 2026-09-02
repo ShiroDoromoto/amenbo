@@ -77,9 +77,13 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // lands on the screen along with them.
   "invalid_dimension_name_whitespace",
   // The pair a time axis will not enter into (`AMB-D-826`): the era resolution reads one value, so an
-  // axis that admits several cannot be the one it reads. The classification panel holds the time-axis
-  // switch, so flipping it onto a multi-select axis lands the refusal on the screen.
+  // axis that admits several cannot be the one it reads. The classification panel holds both switches
+  // side by side, so flipping either one onto the other lands the refusal on the screen.
   "invalid_dimension_multi_time_axis",
+  // Its other half: the way back down, refused while records still answer that axis with several
+  // values (`AMB-D-826`). The same panel is where the switch is lowered, and the count the sentence
+  // carries is the size of what the reader is being asked to clear first.
+  "invalid_dimension_demote_holders",
   "invalid_task_required_dimension",
   // Its decision twin: the same flag, read at the other door a record passes through once
   // (`decision accept`), and the decision pane is where that button is.
@@ -178,10 +182,6 @@ export const CORE_SENTENCE_ERROR_CODES = [
  * — which is also why they owe no template. A code that reaches a screen belongs in the sentence list
  * instead, with its prose. */
 export const CORE_CLI_ONLY_ERROR_CODES = [
-  // The refusal a demotion back to single-select meets while records still answer with several values
-  // (`AMB-D-826`). Only `dimension update --cardinality` can ask for it; the classification panel has no
-  // control that lowers it, so nothing on a screen can reach this yet.
-  "invalid_dimension_demote_holders",
   "not_found_plugin_rollback_build",
   "invalid_plugin_rollback_manifest_absent",
   "invalid_plugin_rollback_manifest_unparsable",

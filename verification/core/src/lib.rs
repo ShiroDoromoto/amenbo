@@ -2072,6 +2072,17 @@ const REGISTRY: &[OpSpec] = &[
     // page with two panes that is a thing to prove rather than a thing to assume. Left out, it is
     // the page's one pane, which is what every road walked before there was a second one.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drop-in", required: &["brings"], refs: &[], strings: &["beside", "brings", "onto"], binds: false },
+    // What is on the machine's clipboard put into a pane's input line. It is the drop above made
+    // with the keys instead of the hand, and it answers the half the drop cannot: a drop carries
+    // files the operator picked up on their own machine, and a paste carries whatever the last copy
+    // left — which is how a road follows one copy from the file face through to the pane.
+    //
+    // Nothing is sent. The line is left standing for `in-the-box` to read, for the reason
+    // `hand-to-pane` leaves it standing: a path put in front of an agent is a path the person has
+    // still to send.
+    //
+    // `onto` is which pane, named the way `drop-in` names one. Left out, it is the page's one pane.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste", required: &[], refs: &[], strings: &["onto"], binds: false },
     // What is standing in the pane's input line, **unsent**. It is not `pane` with a different
     // sentence: that one reads what a program printed, and this reads what nothing has run yet.
     //
@@ -2478,6 +2489,16 @@ const REGISTRY: &[OpSpec] = &[
     // It is one op and not two — the caret put where it goes, and then the typing — because on this
     // face they are one move, the same reasoning `name` is one op for.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "edit", required: &["types"], refs: &[], strings: &["types"], binds: false },
+    // The same box filled from the clipboard instead of from the keyboard. It is a separate op and
+    // not `edit` with the words left out, because a road cannot spell what goes in: what arrives is
+    // whatever the last copy put there, and on the road this exists for that is a path the run
+    // minted and nobody can write down beforehand.
+    //
+    // **It is an ordinary text box, and that is the whole of why it is here.** A path pasted into a
+    // pane comes with the quoting a shell needs, so a road that read only the pane could not tell a
+    // plain path on the clipboard from a quoted one. This is where the plain half is read, with
+    // `files reading`.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "paste-into-editor", required: &[], refs: &[], strings: &[], binds: false },
     // And the typing kept. It takes no args: what is saved is the file that is open, and where the
     // bytes go is not a road's to say.
     //
@@ -2634,6 +2655,15 @@ const REGISTRY: &[OpSpec] = &[
     // end off Amenbo's window and stop at the hand-over, and this one ends **on** it, in the pane,
     // where a shot can settle what happened. `terminal in-the-box` is what reads it.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "hand-to-pane", required: &[], refs: &[], strings: &[], binds: false },
+    // The item that puts the row on the machine's own clipboard — the file itself and its plain path
+    // together. It takes no args for the reason the one above it does: what is copied is the row the
+    // menu was opened on, a folder as readily as a file.
+    //
+    // **Nothing here can be read.** A clipboard is off every window a run shoots, so this op ends in
+    // the press and says so, and what settles it is the paste after it — into a pane, into the
+    // editor an opened file draws, or back into the tree. It is the one step on this menu whose
+    // whole meaning is in the step that follows.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "copy-path", required: &[], refs: &[], strings: &[], binds: false },
     // The same hand-over made by hand: the row taken hold of and carried onto a pane, rather than
     // named to the one the reader is already in. It is a separate op from the menu item because the
     // difference is the whole of what it proves — the menu's pane is the face's answer and this one

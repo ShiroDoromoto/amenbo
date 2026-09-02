@@ -680,15 +680,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-radius: var(--r-sm);
   color: var(--c-text); text-align: left;
 }
-/* **The three answers a row gives, told apart by the ground under it.** A band and not a colour on
+/* **The four answers a row gives, told apart by the ground under it.** A band and not a colour on
    the name: a mark made of the name's own letters is as wide as the name happens to be, so two rows
    in the same tree say the same thing at two sizes, and a short name says it faintly.
 
-   The row whose file is being read (`AMB-D-815`). Of the three it is the only one that says
-   something about the work rather than about where the reader's hand is at this instant — so it
-   takes the accent's own pair rather than a shade of the ground, and it is the one the other two
-   stand aside for. `:not` and not the order they are written in: these selectors reach the row
-   through the item holding it and this one does not, so nothing but saying so would keep it. */
+   Two of the four are the reader's own doing and take the accent; the other two — the tab stop and
+   the pointer, below — are only where their hand is at this instant, and take a shade of the
+   ground. `:not` and not the order they are written in: those two selectors reach the row through
+   the item holding it and these do not, so nothing but saying so would keep them. */
+/* The rows a reader picked out, which is what an act on "the files" is about
+   (`app/src/files/FilesPanel.tsx`). */
+.files__file--picked, .files__dir--picked { background: var(--c-accent-faint); }
+/* The row whose file is being read (`AMB-D-815`), on the stronger of the accent's two grounds.
+   Written under the one above so that a row which is both — clicking a file picks it out and reads
+   it — is drawn as the one being read: of the two, that is the one there can only ever be one of. */
 .files__file--chosen, .files__dir--chosen {
   background: var(--c-accent-weak); color: var(--c-accent-text);
 }
@@ -701,10 +706,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__item:focus-visible > .files__dir, .files__item:focus > .files__dir {
   outline: 1px solid var(--c-accent); outline-offset: -1px;
 }
-.files__item:focus-visible > .files__file:not(.files__file--chosen),
-.files__item:focus > .files__file:not(.files__file--chosen),
-.files__item:focus-visible > .files__dir:not(.files__dir--chosen),
-.files__item:focus > .files__dir:not(.files__dir--chosen) {
+.files__item:focus-visible > .files__file:not(.files__file--chosen, .files__file--picked),
+.files__item:focus > .files__file:not(.files__file--chosen, .files__file--picked),
+.files__item:focus-visible > .files__dir:not(.files__dir--chosen, .files__dir--picked),
+.files__item:focus > .files__dir:not(.files__dir--chosen, .files__dir--picked) {
   background: var(--c-surface-sunken);
 }
 /* The row under the pointer. One row is inside no other — they are all lines of one list — so the
@@ -713,8 +718,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
    the pointer with nothing reads as a row that cannot be pressed. */
 .files__item:hover > .files__file,
 .files__item:hover > .files__dir { color: var(--c-accent); }
-.files__item:hover > .files__file:not(.files__file--chosen),
-.files__item:hover > .files__dir:not(.files__dir--chosen) {
+.files__item:hover > .files__file:not(.files__file--chosen, .files__file--picked),
+.files__item:hover > .files__dir:not(.files__dir--chosen, .files__dir--picked) {
   background: var(--c-surface-sunken);
 }
 /* A name the repository's ignore rules cover. It is on the list because what git does not record is

@@ -53,6 +53,7 @@ import { fileUrl } from "../core/fileUrl";
 import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { pushNotice } from "../core/notice";
+import { hostOs } from "../core/platform";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
   folderClipCopy, folderClipPaste, folderEncodings, folderEntries, folderGitStatus, folderImport,
@@ -96,10 +97,10 @@ type Edit =
  * How a reader has opened one folder's tree: whether the tree itself is unfolded, which folders
  * inside it are, and which row holds the tree's stop in the tab order.
  *
- * **The panel holds it, not the section.** Reading a file draws the reader in the sections' place
- * (`FileReader`), and what a component holds goes when it is unmounted — so a tree whose state lived
- * in its own section would be folded shut again every time somebody came back from a file, with
- * their place in it gone too.
+ * **The panel holds it, not the tree.** The tree is unmounted the moment it is folded shut, and the
+ * section holding it whenever the folder is unbound or the project switched away from — and what a
+ * component holds goes with it. A reader who folds a tree away and opens it again is asking for it
+ * back the way they left it, which is only possible if it was never theirs to lose.
  *
  * **Only how the reader opened it.** What is read off the disk — the names, git's answer, whether
  * the folder moved — stays with the watch, which is the section's own and has to stop when the
@@ -115,6 +116,22 @@ type Opened = {
   open: string[];
   /** Which row holds the stop, as its path joined — nothing until a reader has been on one. */
   cursor: string | null;
+  /**
+   * The rows a reader has picked out, as their paths joined.
+   *
+   * **Not the row the keyboard is on, and not the file being read.** The cursor is where the next
+   * key lands and `chosen` is what the panel is showing; this is the answer to "which ones", and it
+   * is the only one of the three that can be more than one row (`AMB-T-4229`).
+   */
+  picked: string[];
+  /**
+   * The end a range is measured from, as its path joined — the last row picked without Shift.
+   *
+   * Held rather than read back off `picked`, because a range runs both ways: the rows in it say
+   * which they are and not which end the reader started at, so a range pulled back past its own
+   * start would grow the other way instead.
+   */
+  anchor: string | null;
 };
 
 /**
@@ -127,7 +144,7 @@ type Opened = {
  * `open` stays empty, which is what makes it the **first** level and not the whole tree: the levels
  * under it cost a read each and are asked for when somebody opens them (`Tree`).
  */
-const AT_FIRST: Opened = { treeOpen: true, open: [], cursor: null };
+const AT_FIRST: Opened = { treeOpen: true, open: [], cursor: null, picked: [], anchor: null };
 
 /** The name being typed in one section, and the end of typing it. */
 type Naming = {
@@ -292,6 +309,21 @@ export function FilesPanel({
       return kept.length === Object.keys(was).length ? was : Object.fromEntries(kept);
     });
   }, [recorded]);
+
+  /**
+   * Pick rows out of one folder's tree, which puts down whatever was picked in another.
+   *
+   * **One selection for the panel, drawn in whichever section it is in.** The sections are how
+   * several bound folders are drawn (`AMB-D-778`), not several selections to hold at once — and
+   * what is done with picked rows is done to one folder's paths, so rows gathered across two of
+   * them would be a selection nothing could act on.
+   */
+  const onPicked = (root: string, picked: string[], anchor: string | null) =>
+    setOpened((was) => Object.fromEntries(sections.map((one) => {
+      const now = was[one.path] ?? AT_FIRST;
+      if (one.path === root) return [one.path, { ...now, picked, anchor }];
+      return [one.path, now.picked.length === 0 ? now : { ...now, picked: [], anchor: null }];
+    })));
 
   // Files dragged in from the desktop. The panel hears about them from the host rather than from
   // the DOM, so the highlight under the pointer — and the scroll when the pointer hangs at an edge —
@@ -530,6 +562,7 @@ export function FilesPanel({
           onRead={(path) => { setEdit(null); setReading({ root: one.path, path }); }}
           onMenu={(path, dir, x, y) => setMenu({ root: one.path, path, dir, x, y })}
           onTrash={(path) => askTrash(one.path, path)}
+          onPicked={(picked, anchor) => onPicked(one.path, picked, anchor)}
           chosen={reading !== null && reading.root === one.path ? reading.path.join("/") : null}
           onCarry={onCarry}
         />
@@ -588,7 +621,7 @@ export function FilesPanel({
  *
  * **What is watched is the section's, how it is opened is the panel's.** The two are held apart on
  * one line: a watch has to stop when the section does, and how a reader opened the tree has to
- * outlive it — the section is unmounted for as long as a file is being read (`Opened`).
+ * outlive both the tree, which goes whenever it is folded shut, and the section itself (`Opened`).
  *
  * **The news is a number, not a payload.** What the host says when the folder moves carries no
  * rows (`AMB-D-785`), so what a section does with it is count: `moved` goes up, and everything read
@@ -608,7 +641,7 @@ export function FilesPanel({
  */
 function FolderSection({
   projectId, root, label, bound, landing, scroller, opened, onOpened, edit, onEdit, onRead, onMenu,
-  onTrash, chosen, onCarry,
+  onTrash, onPicked, chosen, onCarry,
 }: {
   projectId: number;
   root: string;
@@ -637,6 +670,9 @@ function FolderSection({
   onMenu: (path: string[], dir: boolean, x: number, y: number) => void;
   /** Put one row of this folder in the machine's bin. */
   onTrash: (path: string[]) => void;
+  /** Pick rows of this folder out, and say which end a range would next be measured from. The
+   *  panel takes it because picking here puts down what was picked in another section. */
+  onPicked: (picked: string[], anchor: string | null) => void;
   /** The row of this folder whose file is being read, or nothing where the file being read is in
    *  another folder — or where none is. The panel works out which section it belongs to, since it
    *  is the panel that knows what is open. */
@@ -654,7 +690,7 @@ function FolderSection({
   // (`Opened`). Nothing until a reader has been on a row is what puts the tab stop on the first one
   // the moment the panel is drawn, rather than leaving a reader to Tab through the tree to find out
   // where they are.
-  const { treeOpen, open, cursor } = opened;
+  const { treeOpen, open, cursor, picked, anchor } = opened;
   const gone = !bound || changes.gone;
 
   const naming: Naming = {
@@ -817,6 +853,9 @@ function FolderSection({
             onTrash={onTrash}
             cursor={cursor}
             onCursor={(key) => onOpened((was) => ({ ...was, cursor: key }))}
+            picked={picked}
+            anchor={anchor}
+            onPicked={onPicked}
             chosen={chosen}
             onCarry={onCarry}
           />
@@ -996,17 +1035,25 @@ function useLedgerNav(onOpenLedger?: () => void): RefNav {
  * **The two can land on the same row and say different things.** Faint is "git does not record
  * this"; the colour is "git says this moved". A row is rarely both — what is ignored has no status
  * to show — but nothing here stops them, because nothing about either one depends on the other.
+ *
+ * And the two grounds a row can stand on: picked out by the reader, and being read. A row is often
+ * both — clicking a file does both at once — so which of the two is drawn is the stylesheet's
+ * answer and not this function's (`../styles/global.css`).
+ *
+ * Named rather than counted off, because four flags in a row is four chances to hand them over in
+ * the wrong order and no way to see it at the call.
  */
-function rowClass(
-  base: string,
-  ignored: boolean,
-  mark: GitMark | null,
-  chosen: boolean,
-): string {
+function rowClass(base: string, on: {
+  ignored: boolean;
+  mark: GitMark | null;
+  picked: boolean;
+  chosen: boolean;
+}): string {
   let all = base;
-  if (ignored) all += ` ${base}--ignored`;
-  if (mark !== null) all += ` ${base}--git ${base}--git-${mark}`;
-  if (chosen) all += ` ${base}--chosen`;
+  if (on.ignored) all += ` ${base}--ignored`;
+  if (on.mark !== null) all += ` ${base}--git ${base}--git-${on.mark}`;
+  if (on.picked) all += ` ${base}--picked`;
+  if (on.chosen) all += ` ${base}--chosen`;
   return all;
 }
 
@@ -1131,7 +1178,7 @@ function linesOf(
 /** One bound folder's tree: every open row of it, drawn as one list. */
 function Tree({
   projectId, root, landing, scroller, marks, moved, open, onOpen, naming, onRead, onMenu,
-  onTrash, cursor, onCursor, chosen, onCarry,
+  onTrash, cursor, onCursor, picked, anchor, onPicked, chosen, onCarry,
 }: {
   projectId: number;
   root: string;
@@ -1177,6 +1224,17 @@ function Tree({
    */
   cursor: string | null;
   onCursor: (key: string) => void;
+  /**
+   * The rows a reader has picked out, as their paths joined (`Opened`).
+   *
+   * **Picking is not standing.** One row carries the tab stop and one file is being read; what is
+   * picked is a set, and it is what an act on "the files" is about (`AMB-T-4230`).
+   */
+  picked: string[];
+  /** The end a range is measured from, or nothing before a reader has picked anything (`Opened`). */
+  anchor: string | null;
+  /** Pick rows out, and say which end a range would next be measured from. */
+  onPicked: (picked: string[], anchor: string | null) => void;
   /**
    * The row of this section whose file is being read, as its path joined — or nothing.
    *
@@ -1247,6 +1305,37 @@ function Tree({
     () => lines.flatMap((line) => (line.kind === "row" ? [line] : [])),
     [lines],
   );
+
+  /**
+   * The rows from one to another, both ends included, in the order they are drawn.
+   *
+   * Over the rows and not over the document, for the reason every walk here is: a range whose far
+   * end has been scrolled out of the window would otherwise stop at the edge of what happens to be
+   * drawn (`AMB-T-4108`). A row that is no longer there at all names no range — the tree moved
+   * under the reader, and the press was about a row that has gone.
+   */
+  const between = (from: string, to: string): string[] => {
+    const end = rows.findIndex((one) => one.key === to);
+    if (end < 0) return [];
+    const at = rows.findIndex((one) => one.key === from);
+    const start = at < 0 ? end : at;
+    return rows.slice(Math.min(start, end), Math.max(start, end) + 1).map((one) => one.key);
+  };
+
+  // A name the folder no longer holds is picked no longer. What decides is the level's own answer
+  // and never the rows on the screen: a folder somebody folded shut is let go of here (`levels`),
+  // and a row whose folder is not in hand stays picked — so folding one and opening it again gives
+  // the reader back what they had, while a file that went to the bin is out of the selection before
+  // anything can be asked of it (`AMB-T-4230`).
+  useEffect(() => {
+    const held = (key: string): boolean => {
+      const at = key.split("/");
+      const level = levels[at.slice(0, -1).join("/")];
+      return level === undefined || level.rows.some((one) => one.name === at[at.length - 1]);
+    };
+    if (picked.every(held)) return;
+    onPicked(picked.filter(held), anchor);
+  }, [levels, picked]);
 
   /**
    * The row a press named, as one answer per press.
@@ -1362,7 +1451,9 @@ function Tree({
    * row is no box around it, so the way out of one is found by the row's path.
    *
    * A key with a modifier on it is not this tree's: the panel around it hears undo (`FilesPanel`),
-   * and what the reader means by ⌘ or Ctrl is the machine's word, never a row's.
+   * and what the reader means by ⌘ or Ctrl is the machine's word, never a row's. Shift is the one
+   * exception, and it is no word of the machine's: on a walk it reaches from the end a range is
+   * measured from to where the reader has arrived (`AMB-T-4229`).
    */
   const onKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1374,12 +1465,28 @@ function Tree({
     const at = rows.findIndex((one) => one.key === (on.dataset.key ?? ""));
     const here = rows[at];
     if (here === undefined) return;
-    const go = (to: Row | undefined) => { if (to !== undefined) setNamed({ key: to.key }); };
+    /**
+     * Stand on a row, and pick out what the walk arrived at.
+     *
+     * Moving without Shift picks one row: what was picked is put down, and where the reader lands
+     * is the end the next range is measured from. With it, the range runs from that end to here —
+     * from the row they were standing on where nothing has been picked yet, which is what a reader
+     * pressing Shift on a tree nobody has touched means by it.
+     */
+    const go = (to: Row | undefined, spread = false) => {
+      if (to === undefined) return;
+      setNamed({ key: to.key });
+      if (!spread) { onPicked([to.key], to.key); return; }
+      const from = anchor ?? here.key;
+      onPicked(between(from, to.key), from);
+    };
     switch (e.key) {
-      case "ArrowDown": e.preventDefault(); go(rows[at + 1]); break;
-      case "ArrowUp": e.preventDefault(); go(rows[at - 1]); break;
-      case "Home": e.preventDefault(); go(rows[0]); break;
-      case "End": e.preventDefault(); go(rows[rows.length - 1]); break;
+      case "ArrowDown": e.preventDefault(); go(rows[at + 1], e.shiftKey); break;
+      case "ArrowUp": e.preventDefault(); go(rows[at - 1], e.shiftKey); break;
+      // The two ends of the tree are reached the way the steps are: a reader holding Shift is
+      // asking for everything between, however far away the end is.
+      case "Home": e.preventDefault(); go(rows[0], e.shiftKey); break;
+      case "End": e.preventDefault(); go(rows[rows.length - 1], e.shiftKey); break;
       // Into the folder: open it where it is shut, and step to what is inside where it is already
       // open. A shut one does not also move — what was asked for is to see inside, and the rows to
       // move onto are not read off the disk yet.
@@ -1450,6 +1557,9 @@ function Tree({
       // tree in (`AMB-D-780`).
       role="tree"
       aria-label={t("files.tree")}
+      // Said on the list, because it is a fact about the tree and not about any one row: a reader
+      // being read to is told the rows can be picked out several at a time before they meet one.
+      aria-multiselectable
       onKeyDown={onKey}
     >
       {/* What the rows nobody is looking at leave behind: their height, so that the list is as tall
@@ -1505,9 +1615,41 @@ function Tree({
             aria-setsize={line.setsize}
             aria-posinset={line.posinset}
             aria-expanded={line.isDir ? line.unfolded : undefined}
+            // On every row and not only on the picked ones: what a reader is told about a row they
+            // have arrived at is whether it is in the selection, and a row that said nothing would
+            // be read as one that cannot be picked at all.
+            aria-selected={picked.includes(line.key)}
             tabIndex={line.key === stop ? 0 : -1}
             className={`files__item${lands ? " files__into" : ""}`}
-            onClick={() => {
+            // A press picks the row out; which keys are down says what else it is. The machine's
+            // own key takes one row into the selection or back out of it, Shift reaches from the
+            // end the range is measured from to here, and a press with neither is this one row.
+            // Neither of the two opens anything: a reader gathering rows is not asking to be shown
+            // each one on the way (`AMB-T-4229`).
+            //
+            // **Which key that is, is the machine's answer and not one key that will do.** Ctrl
+            // and a press is how a Mac asks for the menu, so a Mac reading it as "add this row"
+            // would answer one press with a menu and a row taken in at once (`../core/platform`).
+            // Whether a click arrives beside that menu is the webview's own answer, so the press is
+            // let go of here rather than read as the plain one it is not.
+            onClick={(e) => {
+              const mac = hostOs() === "macos";
+              if (mac && e.ctrlKey) return;
+              if (e.shiftKey) {
+                const from = anchor ?? cursor ?? line.key;
+                onPicked(between(from, line.key), from);
+                return;
+              }
+              if (mac ? e.metaKey : e.ctrlKey) {
+                onPicked(
+                  picked.includes(line.key)
+                    ? picked.filter((one) => one !== line.key)
+                    : [...picked, line.key],
+                  line.key,
+                );
+                return;
+              }
+              onPicked([line.key], line.key);
               if (line.isDir) onOpen(line.key);
               else onRead(line.path);
             }}
@@ -1518,10 +1660,16 @@ function Tree({
             // Stood on before the menu opens, because the row a menu is about is the row a reader
             // comes back to when it closes — and a right-click is not a press the browser moves the
             // focus for.
+            //
+            // A menu opened away from what is picked is a menu about this row: the rows a reader
+            // gathered are put down, because the alternative is a menu standing over one row and
+            // acting on others (`AMB-T-4230`). Opened on a row that is already in the selection it
+            // changes nothing — that is the press a reader makes to act on what they gathered.
             onContextMenu={(e) => {
               e.preventDefault();
               e.stopPropagation();
               e.currentTarget.focus();
+              if (!picked.includes(line.key)) onPicked([line.key], line.key);
               onMenu(line.path, line.isDir, e.clientX, e.clientY);
             }}
             // Where the tab stop follows to, however the row was reached — the arrows move the
@@ -1531,7 +1679,13 @@ function Tree({
           >
             {line.isDir
               ? (
-                <span className={rowClass("files__dir", line.ignored, mark, chosen === line.key)}>
+                <span className={rowClass("files__dir", {
+                  ignored: line.ignored,
+                  mark,
+                  picked: picked.includes(line.key),
+                  chosen: chosen === line.key,
+                })}
+                >
                   <span className="files__twisty">
                     <Icon name={line.unfolded ? "chevronDown" : "chevronRight"} />
                   </span>
@@ -1540,7 +1694,13 @@ function Tree({
                 </span>
               )
               : (
-                <span className={rowClass("files__file", line.ignored, mark, chosen === line.key)}>
+                <span className={rowClass("files__file", {
+                  ignored: line.ignored,
+                  mark,
+                  picked: picked.includes(line.key),
+                  chosen: chosen === line.key,
+                })}
+                >
                   {/* Empty, and there anyway: it is what puts the name at the same place as the
                       name of the folder above it (`../styles/global.css`). */}
                   <span className="files__twisty" />

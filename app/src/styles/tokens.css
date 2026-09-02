@@ -19,9 +19,15 @@
   --c-text-muted: #6f6a5e;
   --c-text-faint: #9b958a;
 
-  /* ----- color: accent (teal) ----- */
+  /* ----- color: accent (teal) -----
+     `faint` is a step under `weak`, for the ground of something a reader picked out themselves
+     while a stronger one is standing beside it: the rows picked in the file tree are drawn on it
+     and the row being read keeps `weak` (`app/src/files/FilesPanel.tsx`). It is the accent and not
+     a grey because what is on it is the reader's own doing, and the greys are where their hand
+     happens to be at this instant — the hover and the tab stop. */
   --c-accent: #0e7c7b;
   --c-accent-weak: #d6ecec;
+  --c-accent-faint: #e9f4f4;
   --c-accent-text: #095a59;
 
   /* ----- the pane's inside -----
@@ -192,6 +198,7 @@
 
   --c-accent: #2ba6a4;
   --c-accent-weak: #11403f;
+  --c-accent-faint: #0e2f2f;
   --c-accent-text: #7fd6d4;
 
   --c-brand-mark: #ffffff;

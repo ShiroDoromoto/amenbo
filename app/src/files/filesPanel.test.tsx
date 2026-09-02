@@ -304,6 +304,36 @@ function click(el: Element | null | undefined) {
   });
 }
 
+/**
+ * The same, with a key held down: how a reader takes one row into the selection, or reaches a run
+ * of them at once (`AMB-T-4229`).
+ */
+function clickWith(
+  el: Element | null | undefined,
+  keys: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean },
+) {
+  return act(async () => {
+    el?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    el?.dispatchEvent(new MouseEvent("click", { bubbles: true, ...keys }));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+/** The user agent jsdom reports, which places the webview on neither a Mac nor Windows
+ *  (`../core/platform`) — so the key that takes a row into the selection is Ctrl. */
+const NOT_A_MAC = navigator.userAgent;
+
+/** Read the rest of a test as a Mac, which is where ⌘ and Ctrl part company. */
+const onMac = () => Object.defineProperty(navigator, "userAgent", {
+  configurable: true,
+  value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+});
+
+/** The rows picked out of one tree, in the order they are drawn — read off what a reader is told
+ *  about them rather than off the class the stylesheet happens to hang the band on. */
+const pickedIn = (scope: ParentNode): string[] =>
+  [...scope.querySelectorAll<HTMLElement>('[role="treeitem"][aria-selected="true"]')].map(labelOf);
+
 /** A size as the panel writes one, so the assertion is about the number and not about `Intl`. */
 const megabytes = (n: number) =>
   formatNumber(n, { style: "unit", unit: "megabyte", unitDisplay: "short", maximumFractionDigits: 1 });
@@ -437,6 +467,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  Object.defineProperty(navigator, "userAgent", { configurable: true, value: NOT_A_MAC });
   act(() => root.unmount());
   container.remove();
   delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
@@ -1814,6 +1845,178 @@ describe("the file face", () => {
     expect(at()).toBe("a.md");
   });
 
+  // ── picking rows out ────────────────────────────────────────────────────────────────────────
+  // Which rows an act is about is a set of its own: not the row the keyboard is standing on, and not
+  // the file being read (`AMB-T-4229`). The gestures are the ones every file manager already has, so
+  // what is tested is that they mean here what they mean there.
+
+  /** A flat folder of four names, drawn and stood on. */
+  async function four() {
+    hoisted.entries = {
+      "": ["a.md", "b.md", "c.md", "d.md"].map((name) => ({ name, isDir: false, ignored: false })),
+    };
+    await drawOpen();
+    rows()[0]!.focus();
+  }
+
+  const picked = () => pickedIn(container);
+
+  /** A press with Shift down: the walk reaches rather than steps. */
+  const shift = (el: Element, key: string) => act(async () => {
+    el.dispatchEvent(new KeyboardEvent("keydown", { key, shiftKey: true, bubbles: true }));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  it("says on the list that its rows can be picked out several at a time", async () => {
+    await four();
+    expect(container.querySelector('[role="tree"]')!.getAttribute("aria-multiselectable"))
+      .toBe("true");
+    // Every row answers and not only the picked ones: a row that said nothing would be read as one
+    // that cannot be picked at all.
+    expect(rows().every((one) => one.hasAttribute("aria-selected"))).toBe(true);
+  });
+
+  it("picks the one row a plain press is on, and opens it", async () => {
+    await four();
+    await click(rowFor("b.md"));
+    await settle();
+    expect(picked()).toEqual(["b.md"]);
+    expect(hoisted.asked).toContain(`read:${ROOT}:b.md`);
+  });
+
+  it("takes a row in and back out with the machine's own key, without opening it", async () => {
+    await four();
+    await clickWith(rowFor("a.md"), { ctrlKey: true });
+    await clickWith(rowFor("c.md"), { ctrlKey: true });
+    expect(picked()).toEqual(["a.md", "c.md"]);
+
+    // The same press again is the row leaving, which is what makes it the way to correct a slip.
+    await clickWith(rowFor("a.md"), { ctrlKey: true });
+    expect(picked()).toEqual(["c.md"]);
+    // And nothing was read on the way: a reader gathering rows is not asking to be shown each one.
+    expect(hoisted.asked.filter((one) => one.startsWith("read:"))).toEqual([]);
+  });
+
+  it("takes a row in with the key the machine has, and not with the one that opens its menu", async () => {
+    await four();
+    onMac();
+    // On a Mac the key is ⌘ — Ctrl and a press is that machine's way of asking for the menu, and a
+    // row taken into the selection by it would be one press answering twice.
+    await clickWith(rowFor("a.md"), { metaKey: true });
+    await clickWith(rowFor("c.md"), { metaKey: true });
+    expect(picked()).toEqual(["a.md", "c.md"]);
+
+    await clickWith(rowFor("b.md"), { ctrlKey: true });
+    expect(picked()).toEqual(["a.md", "c.md"]);
+    // And it is not read as a plain press either: nothing was opened and nothing was put down.
+    expect(hoisted.asked.filter((one) => one.startsWith("read:"))).toEqual([]);
+  });
+
+  it("reaches from the end the range is measured from to the row Shift was pressed on", async () => {
+    await four();
+    await clickWith(rowFor("b.md"), { ctrlKey: true });
+    await clickWith(rowFor("d.md"), { shiftKey: true });
+    expect(picked()).toEqual(["b.md", "c.md", "d.md"]);
+
+    // The end does not move with the range, so reaching the other way is the rows above it and not
+    // the ones already picked turned over.
+    await clickWith(rowFor("a.md"), { shiftKey: true });
+    expect(picked()).toEqual(["a.md", "b.md"]);
+  });
+
+  it("grows the range with Shift and the arrows, and shrinks it back", async () => {
+    await four();
+    // A step without Shift is one row: what was picked is put down, and this is where the next
+    // range is measured from.
+    await press(rows()[0]!, "ArrowDown");
+    expect(picked()).toEqual(["b.md"]);
+
+    await shift(document.activeElement!, "ArrowDown");
+    await shift(document.activeElement!, "ArrowDown");
+    expect(picked()).toEqual(["b.md", "c.md", "d.md"]);
+
+    await shift(document.activeElement!, "ArrowUp");
+    expect(picked()).toEqual(["b.md", "c.md"]);
+    // Back past the end it was measured from, which is where a range does turn over.
+    await shift(document.activeElement!, "ArrowUp");
+    await shift(document.activeElement!, "ArrowUp");
+    expect(picked()).toEqual(["a.md", "b.md"]);
+  });
+
+  it("reaches both ends of the tree with Shift, the way the steps do", async () => {
+    await four();
+    await press(rows()[0]!, "ArrowDown");
+    await shift(document.activeElement!, "End");
+    expect(picked()).toEqual(["b.md", "c.md", "d.md"]);
+    await shift(document.activeElement!, "Home");
+    expect(picked()).toEqual(["a.md", "b.md"]);
+  });
+
+  it("puts the range down when the walk steps without Shift", async () => {
+    await four();
+    await clickWith(rowFor("a.md"), { ctrlKey: true });
+    await clickWith(rowFor("c.md"), { shiftKey: true });
+    expect(picked()).toEqual(["a.md", "b.md", "c.md"]);
+
+    // The keyboard is still on the row `four` stood it on, and a step from there is one row.
+    await press(document.activeElement!, "ArrowDown");
+    expect(picked()).toEqual(["b.md"]);
+  });
+
+  it("picks the row a menu was opened away from the selection on", async () => {
+    await four();
+    await clickWith(rowFor("a.md"), { ctrlKey: true });
+    await clickWith(rowFor("b.md"), { ctrlKey: true });
+
+    // A menu standing over one row and acting on others is the thing to keep out (`AMB-T-4230`).
+    await menuOn(rowFor("d.md"));
+    expect(picked()).toEqual(["d.md"]);
+  });
+
+  it("leaves the selection alone for a menu opened inside it", async () => {
+    await four();
+    await clickWith(rowFor("a.md"), { ctrlKey: true });
+    await clickWith(rowFor("b.md"), { ctrlKey: true });
+
+    // Which is the press a reader makes to act on what they gathered.
+    await menuOn(rowFor("b.md"));
+    expect(picked()).toEqual(["a.md", "b.md"]);
+  });
+
+  it("lets go of a row the folder no longer holds", async () => {
+    await four();
+    await clickWith(rowFor("b.md"), { ctrlKey: true });
+    await clickWith(rowFor("c.md"), { ctrlKey: true });
+    expect(picked()).toEqual(["b.md", "c.md"]);
+
+    hoisted.entries[""] = ["a.md", "c.md", "d.md"]
+      .map((name) => ({ name, isDir: false, ignored: false }));
+    await act(async () => {
+      tell({ root: ROOT, capped: false, unwatched: false, gone: false });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    // A row that went under the reader is out of the selection before anything can be asked of it
+    // (`AMB-T-4230`).
+    expect(picked()).toEqual(["c.md"]);
+  });
+
+  it("gives a folded folder's rows back to the reader who folded it shut", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowRight");
+    await settle();
+    await clickWith(rowFor("main.rs"), { ctrlKey: true });
+    expect(picked()).toEqual(["main.rs"]);
+
+    // Nothing is drawn to pick while the folder is shut, and the row is not gone — nobody said the
+    // folder moved, and what is inside it was only let go of because nobody is looking at it.
+    await press(rows()[0]!, "ArrowLeft");
+    await settle();
+    expect(picked()).toEqual([]);
+    await press(rows()[0]!, "ArrowRight");
+    await settle();
+    expect(picked()).toEqual(["main.rs"]);
+  });
+
   // ── only what is in view ────────────────────────────────────────────────────────────────────
   // Nothing caps what a folder answers with, so a tree opened on `node_modules` is thousands of
   // rows. What is drawn is the run in view; the rest is stood in for by its height.
@@ -2097,6 +2300,20 @@ describe("a project bound to several folders", () => {
     // The same path names a different file in each folder, so which folder the row was in has to
     // travel with it.
     expect(hoisted.asked).toContain(`read:${OTHER}:a.md`);
+  });
+
+  it("holds one selection for the panel, in whichever folder it was last made in", async () => {
+    both();
+    await openBothTrees();
+    await clickWith(rowIn(folderNamed("repo"), "a.md"), { ctrlKey: true });
+    expect(pickedIn(folderNamed("repo"))).toEqual(["a.md"]);
+
+    // The sections are how several bound folders are drawn, not several selections to hold at once
+    // (`AMB-D-778`): rows picked in one folder are put down when rows are picked in another, so
+    // what is picked is always one folder's paths — which is all an act on them can be about.
+    await clickWith(rowIn(folderNamed("plugins"), "a.md"), { ctrlKey: true });
+    expect(pickedIn(folderNamed("plugins"))).toEqual(["a.md"]);
+    expect(pickedIn(folderNamed("repo"))).toEqual([]);
   });
 
   it("keeps a folder that has gone, and says that is what happened", async () => {

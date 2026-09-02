@@ -190,7 +190,7 @@ export const id: Translation = {
     "detail.linkedDecisions": "Didasari oleh",
     "detail.premiseUnsettled": "premis belum selesai — tunggu putusannya atau lepaskan tautannya (tidak bisa dipesan)",
     "detail.priority": "Prioritas", "detail.priorityNone": "Tidak ada",
-    "detail.notes": "Catatan (Markdown)", "detail.edit": "Sunting", "detail.add": "Tambah",
+    "detail.notes": "Catatan (Markdown)", "detail.edit": "Sunting", "detail.add": "Tambah", "detail.dimUnset": "Hapus nilai ini",
     "detail.notesPh": "Tulis catatan dalam Markdown…", "detail.notesHint": "Markdown · simpan dengan ⌘/Ctrl+Enter · Esc untuk batal",
     "detail.cancel": "Batal", "detail.save": "Simpan", "detail.noNotes": "Belum ada catatan",
     "detail.activityCategory": "Aktivitas", "detail.noComments": "Belum ada komentar",

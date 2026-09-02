@@ -190,7 +190,7 @@ export const es: Translation = {
     "detail.linkedDecisions": "Motivada por",
     "detail.premiseUnsettled": "premisa sin resolver: espera la decisión o quita el enlace (no se puede reservar)",
     "detail.priority": "Prioridad", "detail.priorityNone": "Ninguna",
-    "detail.notes": "Notas (Markdown)", "detail.edit": "Editar", "detail.add": "Añadir",
+    "detail.notes": "Notas (Markdown)", "detail.edit": "Editar", "detail.add": "Añadir", "detail.dimUnset": "Quitar este valor",
     "detail.notesPh": "Escribe notas en Markdown…", "detail.notesHint": "Markdown · guarda con ⌘/Ctrl+Intro · Esc para cancelar",
     "detail.cancel": "Cancelar", "detail.save": "Guardar", "detail.noNotes": "Todavía no hay notas",
     "detail.activityCategory": "Actividad", "detail.noComments": "Todavía no hay comentarios",

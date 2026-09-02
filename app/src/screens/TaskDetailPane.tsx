@@ -17,6 +17,8 @@ import { errText, eventText, exactLabel, priorityLabel, t, tf } from "../core/i1
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
 import { axesFor } from "../core/appliesTo";
+import { DimensionField } from "../components/DimensionField";
+import type { DimensionDto } from "../bindings/bindings";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
@@ -79,7 +81,7 @@ export function TaskDetailPane({
   // The pane fetches comments per-task: the snapshot's window of the latest 100 would push an old task's
   // comments out of view and leave the list empty. Outside Tauri (mock) this stays null and we fall back to the store.
   const [taskActivity, setTaskActivity] = useState<ActivityItem[] | null>(null);
-  const [dimValues, setDimValues] = useState<Record<number, number>>({});
+  const [dimValues, setDimValues] = useState<Record<number, number[]>>({});
   const task = useTask(taskId);
   const commentCount = task?.comments ?? 0; // Grows on a post, which is what triggers the refetch
   useEffect(() => {
@@ -95,22 +97,28 @@ export function TaskDetailPane({
     let alive = true;
     fetchTaskDimensions(taskId).then((rows) => {
       if (!alive) return;
-      const m: Record<number, number> = {};
-      for (const r of rows) m[r.dimensionId] = r.valueId;
+      // One row per assignment, and a multi-select axis answers with several (`AMB-D-826`) — so the
+      // map is keyed by axis and holds every value the task carries on it, not the last row read.
+      const m: Record<number, number[]> = {};
+      for (const r of rows) (m[r.dimensionId] ??= []).push(r.valueId);
       setDimValues(m);
     }).catch(() => {});
     return () => { alive = false; };
   }, [taskId]);
-  // What the select shows for one axis — the value, or nothing where the task is on no value of it. It is
-  // both how an assignment is drawn optimistically and how a refused one is taken back, so the two can
-  // never disagree about what "cleared" looks like.
-  const showDimValue = (dimensionId: number, valueId: number | undefined) =>
+  // What the field shows for one axis — every value the task carries on it. It is both how an
+  // assignment is drawn optimistically and how a refused one is taken back, so the two can never
+  // disagree about what "cleared" looks like.
+  const showDimValues = (dimensionId: number, values: number[]) =>
     setDimValues((m) => {
       const n = { ...m };
-      if (valueId === undefined) delete n[dimensionId];
-      else n[dimensionId] = valueId;
+      if (values.length === 0) delete n[dimensionId];
+      else n[dimensionId] = values;
       return n;
     });
+  // Drawing one value put on: a single-select axis replaces what it had, a multi-select one gains it
+  // (`AMB-D-826`) — the same split core makes when it writes.
+  const withValue = (dim: DimensionDto, valueId: number) =>
+    dim.cardinality === "multi" ? [...(dimValues[dim.id] ?? []), valueId] : [valueId];
   // Unsaved input means: notes are being edited and the draft differs from what is stored, or a comment draft is
   // still sitting there. On unmount it always resets to false, so nothing carries over to the next task opened.
   const notesDirty = editingNotes && notesDraft !== (task?.notes ?? "");
@@ -149,7 +157,7 @@ export function TaskDetailPane({
   // (`AMB-D-734`). Core reads the same premise when a creation is finished, over the same side; reading
   // it here too is what lets the pane hold the button and name what is missing, instead of the click
   // coming back refused.
-  const unmetRequired = taskAxes.filter((d) => d.required && !dimValues[d.id]);
+  const unmetRequired = taskAxes.filter((d) => d.required && !dimValues[d.id]?.length);
 
   const startEditNotes = () => { setNotesDraft(task.notes ?? ""); setEditingNotes(true); };
 
@@ -302,31 +310,25 @@ export function TaskDetailPane({
             <div className="detail__field" key={dim.id}>
               <span className="detail__flabel">{dim.name}</span>
               <span>
-                <select
-                  className="inlineselect"
-                  value={dimValues[dim.id] ?? ""}
-                  onChange={(e) => {
-                    const valueId = Number(e.target.value);
-                    const prev = dimValues[dim.id];
-                    // The select moves first and the write answers after, so a refusal has to put it
-                    // back: a required axis will not be emptied (`AMB-D-734`), and left alone the pane
-                    // would go on showing "none" over a value the store still holds.
-                    if (valueId) {
-                      showDimValue(dim.id, valueId);
-                      void store.setTaskDimensionValue(task.id, valueId)
-                        .then((ok) => { if (!ok) showDimValue(dim.id, prev); });
-                    } else if (prev) {
-                      showDimValue(dim.id, undefined);
-                      void store.unsetTaskDimensionValue(task.id, prev)
-                        .then((ok) => { if (!ok) showDimValue(dim.id, prev); });
-                    }
+                {/* The field moves first and the write answers after, so a refusal has to put it back:
+                    a required axis will not be emptied (`AMB-D-734`), and left alone the pane would go
+                    on showing "none" over a value the store still holds. */}
+                <DimensionField
+                  dim={dim}
+                  selected={dimValues[dim.id] ?? []}
+                  onSet={(valueId) => {
+                    const prev = dimValues[dim.id] ?? [];
+                    showDimValues(dim.id, withValue(dim, valueId));
+                    void store.setTaskDimensionValue(task.id, valueId)
+                      .then((ok) => { if (!ok) showDimValues(dim.id, prev); });
                   }}
-                >
-                  <option value="">{t("detail.none")}</option>
-                  {dim.values.map((v) => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
+                  onUnset={(valueId) => {
+                    const prev = dimValues[dim.id] ?? [];
+                    showDimValues(dim.id, prev.filter((v) => v !== valueId));
+                    void store.unsetTaskDimensionValue(task.id, valueId)
+                      .then((ok) => { if (!ok) showDimValues(dim.id, prev); });
+                  }}
+                />
               </span>
             </div>
           ))}

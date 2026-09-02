@@ -1742,7 +1742,8 @@ export async function unsetTaskDimensionValue(taskId: number, valueId: number): 
   return invokeAck("task_unset_dimension_value", { taskId, valueId });
 }
 
-/** The dimension assignments a task currently carries (dimensionId → valueId), for the detail pane's current-value display. */
+/** The dimension assignments a task currently carries — one row per assignment, so a multi-select axis
+ * (`AMB-D-826`) answers with several naming the same dimension. The detail pane groups them by axis. */
 export async function fetchTaskDimensions(taskId: number): Promise<TaskDimensionAssignmentDto[]> {
   if (!inTauri()) return [];
   return invoke<TaskDimensionAssignmentDto[]>("task_dimensions", { taskId });
@@ -1760,13 +1761,16 @@ export async function unsetDecisionDimensionValue(decisionId: number, valueId: n
   return invokeAck("decision_unset_dimension_value", { decisionId, valueId });
 }
 
-/** The dimension assignments a decision currently carries (dimensionId → valueId), for the decision pane's current-value display. */
+/** The dimension assignments a decision currently carries — the decision side of `fetchTaskDimensions`,
+ * and several rows on one axis where that axis is multi-select (`AMB-D-826`). */
 export async function fetchDecisionDimensions(decisionId: number): Promise<DecisionDimensionAssignmentDto[]> {
   if (!inTauri()) return [];
   return invoke<DecisionDimensionAssignmentDto[]>("decision_dimensions", { decisionId });
 }
 
-/** All task assignments for one project × dimension (taskId → valueId) in a single call, so the board can group by value. */
+/** All task assignments for one project × dimension in a single call, so the board can group by value and
+ * draw the values its cards carry. One row per assignment: an axis admitting several values at once
+ * (`AMB-D-826`) answers with several rows for the one task, so a caller collects rather than overwrites. */
 export async function fetchProjectDimensionAssignments(
   projectId: number,
   dimensionId: number,
@@ -1778,7 +1782,8 @@ export async function fetchProjectDimensionAssignments(
   });
 }
 
-/** All decision assignments for one project × dimension (decisionId → valueId) in a single call, so the decisions tab can narrow by classification. */
+/** All decision assignments for one project × dimension in a single call, so the decisions tab can narrow
+ * by classification. One row per assignment, the way the task side answers. */
 export async function fetchProjectDecisionDimensionAssignments(
   projectId: number,
   dimensionId: number,

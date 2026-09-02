@@ -190,7 +190,7 @@ export const vi: Translation = {
     "detail.linkedDecisions": "Xuất phát từ",
     "detail.premiseUnsettled": "tiền đề chưa ngã ngũ — hãy chờ phán quyết hoặc gỡ mối nối (không nhận việc được)",
     "detail.priority": "Mức ưu tiên", "detail.priorityNone": "Không có",
-    "detail.notes": "Ghi chú (Markdown)", "detail.edit": "Sửa", "detail.add": "Thêm",
+    "detail.notes": "Ghi chú (Markdown)", "detail.edit": "Sửa", "detail.add": "Thêm", "detail.dimUnset": "Gỡ giá trị này",
     "detail.notesPh": "Viết ghi chú bằng Markdown…", "detail.notesHint": "Markdown · lưu bằng ⌘/Ctrl+Enter · Esc để huỷ",
     "detail.cancel": "Huỷ", "detail.save": "Lưu", "detail.noNotes": "Chưa có ghi chú",
     "detail.activityCategory": "Hoạt động", "detail.noComments": "Chưa có bình luận",

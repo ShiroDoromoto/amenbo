@@ -417,6 +417,12 @@ const REGISTRY: &[OpSpec] = &[
     // road that needs the demand out of the way. An axis offering no values could never be answered,
     // so raising it on one is refused, which is a road of its own to walk.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "required", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
+    // How many of the axis's values one record may answer it with. It is a flag like the
+    // two above it — `multi: false` lowering it again — and the way down is the direction that can be
+    // refused: a record still answering with several would have every value but one thrown away, so
+    // core turns it back and names the count. A multi-select axis cannot also be the time axis, which
+    // resolves one era, so the pair is refused at whichever of the two moved.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "cardinality", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
     // Which of the two sides of the store the axis classifies at all. `side` is a word and not a
     // switch — there are three answers, and unlike the two flags above it the axis starts on the wide
     // one — so a road here narrows rather than raises, and takes `side: both` to widen back.
@@ -1344,6 +1350,14 @@ const REGISTRY: &[OpSpec] = &[
     // button, and a button's label is a word of the interface — so what separates `drawn` from `firing`
     // is not something the presence of text on a shot can settle.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "plugin-row", required: &["project", "plugin", "state"], refs: &[], strings: &["project", "plugin", "state"], binds: false },
+    // Whether the axis is offered as a way to cut the board into columns. Not whether it is defined —
+    // `dimension listed` asks that, and an axis that admits several values at once is defined exactly
+    // as much as ever. What it is not is a way to say where a task *is*: a task
+    // answering three of its values would stand in three columns at once, so the picker leaves it out
+    // while the filter chips go on offering it.
+    //
+    // A screen road alone: a terminal has no columns, which is the same reason `project group-by` is.
+    OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "groupable", required: &["axis"], refs: &[], strings: &["axis"], binds: false },
     // An axis as it is read back, by name: is it defined, and does it carry the value named?
     //
     // `side` asks a different question of the same listing — not whether the axis is defined but
@@ -1893,6 +1907,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Dimension, "value-add"),
     (Domain::Dimension, "set"),
     (Domain::Dimension, "show-on-card"),
+    // And how many of its values one record may answer with, which is the same kind of answer: the
+    // axis's own, written once and read by every face. A screen road about work already filed under
+    // several values has to open on an axis that admits them — raising the flag is the classification
+    // manager's own road, and walking it here would prove that road rather than this one.
+    (Domain::Dimension, "cardinality"),
     // And which axis is the project's time axis, with the windows its values already cover. A screen
     // road about the era is watching the era arrive on a record nobody was asked about, and that
     // reader set the axis up on some earlier day — designating it is a road of its own, on the manager,

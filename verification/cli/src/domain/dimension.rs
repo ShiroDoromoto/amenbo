@@ -111,6 +111,21 @@ impl Driver<'_> {
                 };
                 Ok(Outcome::action(note))
             }
+            // How many of the axis's values one record may answer it with. A flag like the two above
+            // it, and the one whose lowering the store can refuse: `--cardinality single` on an axis
+            // some record still answers with several is turned away with the count, rather than
+            // quietly dropping every value but one.
+            "cardinality" => {
+                let dimension = req_str(with, "dimension")?;
+                let several = opt_bool(with, "multi").unwrap_or(true);
+                let word = if several { "multi" } else { "single" };
+                self.run_json(&["dimension", "update", dimension, "--cardinality", word, "--json"])?;
+                let note = match several {
+                    true => format!("let one record answer `{dimension}` with several values"),
+                    false => format!("held `{dimension}` back to one value per record"),
+                };
+                Ok(Outcome::action(note))
+            }
             // Which side of the store the axis classifies at all. The answer is a word and not a
             // switch — there are three of them, and `both` is where every axis starts — so a road
             // takes this door to narrow, and takes it again with `both` to widen back.

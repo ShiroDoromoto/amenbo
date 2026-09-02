@@ -421,6 +421,10 @@ wrote one language keeping it unmarked, and the row nobody described at all fall
 repository's README — `see-a-tasks-classification-on-the-board` walks what a card says of how its task
 is filed, on a board whose world was classified from a terminal: the value drawn for the axis its
 project put on the card, and nothing at all from the axis beside it that did not ask —
+`answer-one-category-with-several-values` walks the same board over a category one task answers twice:
+both values on the one card, the category missing from the row of buttons that cut the columns while
+the category beside it is still offered there, and the pair still drawn once the board is cut along
+that other one —
 `set-an-app-up-to-reach-this-project` walks the fold that holds the other way in — the app already reaching this
 project and the folder its entry names, beside the app reaching nothing, each row offering the one road its app can
 walk —

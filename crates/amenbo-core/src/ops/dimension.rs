@@ -125,6 +125,57 @@ fn demotion_drops_values(name: &str, holders: usize) -> Error {
     )
 }
 
+/// The refusal closing meets on an axis that was never nominated for it: `closed` is the payload of the
+/// [`DimensionRole::Closable`] role (`AMB-D-829`), the way a period is the time axis's, and an axis
+/// nobody nominated retires its values by deleting them as before. Named on the door rather than left to
+/// the layer above — unlike a period, which core writes as asked ([`value_set_dates`]) — because closing
+/// is what the role *is*: nothing else in the store reads the nomination, so a flag written past it would
+/// mean nothing anywhere.
+fn not_closable(axis: &str, value: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!(
+            "'{axis}' does not close its values, so '{value}' cannot be closed — nominate the category \
+             closable first, or remove the value"
+        ))
+        .coded(ErrorCode::InvalidDimensionCloseNotClosable)
+        .with("name", axis)
+        .with("value", value),
+    )
+}
+
+/// The refusal closing meets on the last value a required axis still offers (`AMB-D-829` meeting
+/// `AMB-D-734`). Closing every value of such an axis leaves a flag nobody can satisfy — the state
+/// [`update`] refuses from the flag's side and [`value_delete`] from the value's, reached by a third
+/// door. Lower the requirement first; that is free, and then the values close like any others.
+fn closing_the_last_open(axis: &str, value: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!(
+            "'{axis}' is a required category and '{value}' is the last value it still offers, so \
+             closing it would leave a demand nobody can meet — lower the requirement first"
+        ))
+        .coded(ErrorCode::InvalidDimensionCloseLastOpen)
+        .with("name", axis)
+        .with("value", value),
+    )
+}
+
+/// The refusal a closed value meets at both assignment doors ([`set`] and [`set_on_decision`]): it is
+/// retired from what a record is newly filed under (`AMB-D-829`). That is the whole of what closing
+/// does — every record already on the value keeps it, every filter naming it goes on resolving, and only
+/// the arrival of a new one is turned away. Refused rather than quietly ignored: a caller that asked for
+/// a classification and was handed none would leave the record filed under nothing at all.
+fn value_is_closed(axis: &str, value: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!(
+            "'{value}' is closed on '{axis}', so nothing new is filed under it — name an open value, or \
+             reopen this one"
+        ))
+        .coded(ErrorCode::InvalidDimensionSetClosedValue)
+        .with("name", axis)
+        .with("value", value),
+    )
+}
+
 /// How many records answer this axis with more than one value — what a demotion would have to throw
 /// away. Both sides are asked: the axis is one mechanism serving tasks and decisions alike
 /// (`AMB-D-781`), so a decision filed under three values is as much a holder as a task is.
@@ -404,7 +455,9 @@ pub fn update(
         d.show_on_card = c;
     }
     if let Some(r) = required {
-        if r && read::dimension_value_ids(tx.conn(), id)?.is_empty() {
+        // Counted over the values the axis still offers: a closed one takes no new record
+        // (`AMB-D-829`), so an axis whose values are all closed is as unsatisfiable as an empty one.
+        if r && read::open_dimension_value_ids(tx.conn(), id)?.is_empty() {
             return Err(unsatisfiable_required(&d.name));
         }
         d.required = r;
@@ -512,6 +565,8 @@ pub fn value_add(
         // Periods are filled in later with `value_set_dates`; a fresh value has none.
         start_on: None,
         end_on: None,
+        // Open, whatever the axis's role: a value is raised in order to be filed under (`AMB-D-829`).
+        closed: false,
         created_at: now,
         updated_at: now,
     };
@@ -572,6 +627,45 @@ pub fn value_set_dates(
     Ok(after)
 }
 
+/// Close a value, or open it again (`AMB-D-829`). A closed value is retired from what a record is newly
+/// filed under, and stays exactly where it was in every other respect: the records already on it keep it,
+/// its name, its key and its place in the order are held, and a filter naming it goes on resolving. That
+/// last one is the whole reason to close rather than delete — a delete takes the classification with it,
+/// and afterwards nobody can ask what carried the value.
+///
+/// **Closing asks for the role, reopening never does.** `closed` is the payload of
+/// [`DimensionRole::Closable`], so an axis nobody nominated is refused here ([`not_closable`]) — but the
+/// way back is free on any axis, so an axis that gives the role up later strands no value nobody can
+/// bring back. It is the shape `required` takes: the direction that takes something away is the one
+/// carrying a precondition.
+///
+/// **A required axis keeps a value to offer** (`AMB-D-734`). Closing the last of them would leave a
+/// demand nobody can meet — the state [`update`] refuses from the flag's side and [`value_delete`] from
+/// the value's.
+///
+/// Deleting is a separate act and this says nothing about it: a closed value is deleted on the same terms
+/// an open one is, the way a task's being `done` says nothing about whether it may be deleted.
+pub fn value_set_closed(tx: &WriteTx<'_>, value_id: i64, closed: bool) -> Result<DimensionValue> {
+    let before = live_value_before(tx, value_id)?;
+    let axis = live_before(tx, before.dimension_id)?;
+    // Asked of the move, not of the state: a value already closed is not closed again, so an axis that
+    // has since dropped the role can still be tidied without meeting a refusal about it.
+    if closed && !before.closed {
+        if axis.role != DimensionRole::Closable {
+            return Err(not_closable(&axis.name, &before.name));
+        }
+        if axis.required {
+            let still_offered = read::open_dimension_value_ids(tx.conn(), axis.id)?;
+            if still_offered.iter().all(|id| *id == before.id) {
+                return Err(closing_the_last_open(&axis.name, &before.name));
+            }
+        }
+    }
+    let after = DimensionValue { closed, updated_at: Timestamp::now(), ..before.clone() };
+    emit_update(tx, record::dimension_value(&before), record::dimension_value(&after))?;
+    Ok(after)
+}
+
 /// Reorder a value on an ordered dimension. An unordered dimension has no arrangement, so this is
 /// refused.
 pub fn value_move(tx: &WriteTx<'_>, value_id: i64, pos: Position) -> Result<DimensionValue> {
@@ -597,10 +691,12 @@ pub fn value_move(tx: &WriteTx<'_>, value_id: i64, pos: Position) -> Result<Dime
 /// **A required axis refuses to empty tasks out** (`AMB-D-734`). Two ways to that state pass through
 /// here, and both are shut:
 ///
-/// - **The last value of a required axis** leaves a flag nobody can satisfy — every creation on the
-///   project would then stop at the door, which is the same state [`update`] already refuses to create
-///   from the other side. Lower the requirement first; that is free, and then the values are ordinary
-///   again.
+/// - **The last value a required axis still offers** leaves a flag nobody can satisfy — every creation
+///   on the project would then stop at the door, which is the same state [`update`] already refuses to
+///   create from the other side, and [`value_set_closed`] from a third. Closed values do not count
+///   towards what it offers (`AMB-D-829`) — nothing new is filed under one — so removing a closed value
+///   is free and removing the last open one is what is refused. Lower the requirement first; that is
+///   free, and then the values are ordinary again.
 /// - **Any value a task is classified as** takes that classification with it, dropping a task that had
 ///   already finished its creation back to no value at all — the one state [`unset`] refuses one task
 ///   at a time, reached here for every task on the value at once, behind the creation premise's back.
@@ -615,11 +711,15 @@ pub fn value_move(tx: &WriteTx<'_>, value_id: i64, pos: Position) -> Result<Dime
 pub fn value_delete(tx: &WriteTx<'_>, value_id: i64, reassign_to: Option<i64>) -> Result<()> {
     let before = live_value_before(tx, value_id)?;
     let axis = live_before(tx, before.dimension_id)?;
-    if axis.required && read::dimension_value_ids(tx.conn(), axis.id)?.len() <= 1 {
+    // Counted over the values the axis still offers (`AMB-D-829`): removing a closed value takes nothing
+    // away from what a record can be filed under, and removing the last *open* one empties the axis
+    // whether or not closed rows stay behind it.
+    let still_offered = read::open_dimension_value_ids(tx.conn(), axis.id)?;
+    if axis.required && still_offered.iter().all(|id| *id == before.id) {
         return Err(Error::Invalid(
             Msg::new(format!(
-                "'{}' is a required category and this is its last value, so removing it would leave \
-                 a demand nobody can meet — lower the requirement first",
+                "'{}' is a required category and this is the last value it still offers, so removing \
+                 it would leave a demand nobody can meet — lower the requirement first",
                 axis.name
             ))
             .with("name", &axis.name),
@@ -731,12 +831,17 @@ pub(crate) fn delete_value_subtree(tx: &WriteTx<'_>, value_id: i64) -> Result<()
 /// same value is already assigned, either way. Returns (row, created). The removal and the insert ride
 /// on **the same transaction** — commit them separately and a crash in between leaves zero or two rows
 /// for one task on a single-select axis, breaking the one-row invariant.
+///
+/// **A closed value is refused** (`AMB-D-829`): closing retires a value from what is filed under it from
+/// here on. What was already filed under it is untouched, which is why the refusal sits after the noop —
+/// a task carrying the value may go on carrying it.
 pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensionValue, bool)> {
     let Some(task) = read::task(tx.conn(), task_id)? else {
         return Err(crate::ops::task::NOUN.not_found(task_id.to_string()));
     };
-    let dimension_id = read::dimension_id_of_value(tx.conn(), value_id)?
+    let value = read::dimension_value(tx.conn(), value_id)?
         .ok_or_else(|| VALUE_NOUN.not_found(value_id.to_string()))?;
+    let dimension_id = value.dimension_id;
     let axis = read::dimension(tx.conn(), dimension_id)?
         .ok_or_else(|| NOUN.not_found(dimension_id.to_string()))?;
     // A classification is an edge like any other: it names an axis and a value that live in one project,
@@ -753,6 +858,13 @@ pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensi
         let existing = read::task_dimension_value(tx.conn(), id)?
             .expect("the assignment id was just read from the same transaction");
         return Ok((existing, false));
+    }
+
+    // Read after the noop above, deliberately: closing retires a value from what is filed under it from
+    // here on, and says nothing about what already is (`AMB-D-829`). A task carrying the value keeps it,
+    // and asking for it again is the same noop it was.
+    if value.closed {
+        return Err(value_is_closed(&axis.name, &value.name));
     }
 
     // Drop the existing assignment on this axis (a different value) first, keeping it to one row — on a
@@ -819,6 +931,10 @@ pub fn unset(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<bool> {
 /// single-select axis, replaced in one transaction, and an added row on a multi-select one. A noop when
 /// the same value is already assigned. Returns (row, created).
 ///
+/// **A closed value is refused here too** (`AMB-D-829`), after the same noop and for the same reason:
+/// one axis, one set of values, and a value retired from the choices is retired from both of the things
+/// it classifies.
+///
 /// **No `required` here.** The flag bites at the two doors a record passes through once —
 /// `task::finish_creating` and `decision::accept` (`AMB-D-790`) — and this is neither. So an axis being
 /// required does not demand a value at the moment of assigning, and clearing one is left unconditional
@@ -832,8 +948,9 @@ pub fn set_on_decision(
     let Some(decision) = read::decision(tx.conn(), decision_id)? else {
         return Err(crate::ops::decision::NOUN.not_found(decision_id.to_string()));
     };
-    let dimension_id = read::dimension_id_of_value(tx.conn(), value_id)?
+    let value = read::dimension_value(tx.conn(), value_id)?
         .ok_or_else(|| VALUE_NOUN.not_found(value_id.to_string()))?;
+    let dimension_id = value.dimension_id;
     let axis = read::dimension(tx.conn(), dimension_id)?
         .ok_or_else(|| NOUN.not_found(dimension_id.to_string()))?;
     // A classification is an edge, and following it reads the other end's project vocabulary — the same
@@ -849,6 +966,12 @@ pub fn set_on_decision(
         let existing = read::decision_dimension_value(tx.conn(), id)?
             .expect("the assignment id was just read from the same transaction");
         return Ok((existing, false));
+    }
+
+    // Closed on this side too, and for the same reason (`AMB-D-829`): one axis, one set of values, and a
+    // value retired from the choices is retired from both of the things it classifies (`AMB-D-781`).
+    if value.closed {
+        return Err(value_is_closed(&axis.name, &value.name));
     }
 
     // Drop the existing assignment on this axis (a different value) first, keeping it to one row — on a
@@ -2011,5 +2134,128 @@ mod tests {
         update(tx, axis.id, None, None, Some(DimensionCardinality::Single), None, None, None, None, None, None)
             .unwrap();
         assert_eq!(dim(tx, axis.id).cardinality, DimensionCardinality::Single);
+    }
+
+    /// What closing a value does, and what it deliberately leaves alone (`AMB-D-829`): nothing new is
+    /// filed under it, on either side of the mechanism, and everything already filed under it stays —
+    /// which is the whole difference from deleting it.
+    #[test]
+    fn a_closed_value_takes_nothing_new_and_keeps_everything_it_had() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let filed = task_in(tx, "出したもの", p);
+        let fresh = task_in(tx, "これから", p);
+        let k = mk_decision_in(tx, "決定", p);
+        let axis =
+            add(tx, p, NewDimension { role: DimensionRole::Closable, ..custom("リリース") }).unwrap();
+        let shipped = value_add(tx, axis.id, "v19", None).unwrap();
+        let next = value_add(tx, axis.id, "v20", None).unwrap();
+        set(tx, filed, shipped.id).unwrap();
+        set_on_decision(tx, k, shipped.id).unwrap();
+
+        let closed = value_set_closed(tx, shipped.id, true).unwrap();
+        assert!(closed.closed);
+        assert!(val(tx, shipped.id).closed, "and it is what was written, not just what came back");
+        assert_eq!(closed.name, shipped.name, "the name is held — reopening has to find it");
+        assert_eq!(closed.slug, shipped.slug, "and so is the key a filter names it by");
+        assert_eq!(closed.order_key, shipped.order_key, "and its place in the order");
+
+        assert_eq!(
+            read::task_dimension_assignments(tx.conn(), filed).unwrap(),
+            vec![(axis.id, shipped.id)],
+            "the task filed under it before is still filed under it",
+        );
+        assert_eq!(
+            read::decision_dimension_assignments(tx.conn(), k).unwrap(),
+            vec![(axis.id, shipped.id)],
+            "and so is the decision",
+        );
+        assert!(
+            read::resolve_dimension_value_by_ref(tx.conn(), &[axis.id], "v19").unwrap().contains(&shipped.id),
+            "a filter naming it goes on resolving — the reason to close rather than delete",
+        );
+
+        let refused = set(tx, fresh, shipped.id).unwrap_err();
+        assert!(refused.to_string().contains("v19"), "the refusal names the value: {refused}");
+        assert!(
+            read::task_dimension_assignments(tx.conn(), fresh).unwrap().is_empty(),
+            "and the refusal wrote nothing",
+        );
+        assert!(set_on_decision(tx, k, next.id).is_ok(), "an open value is filed under as before");
+        assert!(
+            set(tx, filed, shipped.id).is_ok(),
+            "asking again for the value a task already carries is the noop it always was",
+        );
+
+        // Open it again and the door it was refused at opens with it.
+        value_set_closed(tx, shipped.id, false).unwrap();
+        set(tx, fresh, shipped.id).unwrap();
+        assert_eq!(
+            read::task_dimension_assignments(tx.conn(), fresh).unwrap(),
+            vec![(axis.id, shipped.id)],
+        );
+    }
+
+    /// The role is what closing asks for, and it asks only in the closing direction (`AMB-D-829`): an
+    /// axis nobody nominated retires its values by deleting them as before, and one that gives the
+    /// nomination up later strands nothing — the way back is free on any axis.
+    #[test]
+    fn closing_asks_for_the_role_and_reopening_never_does() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let plain = add(tx, p, custom("プロダクト")).unwrap();
+        let core = value_add(tx, plain.id, "Amenbo本体", None).unwrap();
+        let refused = value_set_closed(tx, core.id, true).unwrap_err();
+        assert!(refused.to_string().contains("プロダクト"), "the refusal names the axis: {refused}");
+        assert!(!val(tx, core.id).closed, "and it wrote nothing");
+
+        // Nominated, the same call goes through — and the nomination can be given up afterwards without
+        // stranding what was closed under it.
+        update(tx, plain.id, None, None, None, None, Some(DimensionRole::Closable), None, None, None, None)
+            .unwrap();
+        value_set_closed(tx, core.id, true).unwrap();
+        update(tx, plain.id, None, None, None, None, Some(DimensionRole::None), None, None, None, None)
+            .unwrap();
+        assert!(val(tx, core.id).closed, "dropping the role closes nothing and opens nothing");
+        value_set_closed(tx, core.id, false).unwrap();
+        assert!(!val(tx, core.id).closed, "and the way back needs no role");
+    }
+
+    /// A required axis has to keep something to answer with (`AMB-D-734` meeting `AMB-D-829`). Three
+    /// doors reach the state where it offers nothing — closing the last open value, deleting it, and
+    /// raising the flag on an axis whose values are all closed — and all three are shut. Deleting a
+    /// value nobody could be filed under any more is not one of them.
+    #[test]
+    fn a_required_axis_keeps_a_value_it_still_offers() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let axis =
+            add(tx, p, NewDimension { role: DimensionRole::Closable, ..custom("リリース") }).unwrap();
+        let shipped = value_add(tx, axis.id, "v19", None).unwrap();
+        let next = value_add(tx, axis.id, "v20", None).unwrap();
+        value_set_closed(tx, shipped.id, true).unwrap();
+        update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap();
+
+        let refused = value_set_closed(tx, next.id, true).unwrap_err();
+        assert!(refused.to_string().contains("v20"), "the refusal names the value: {refused}");
+        assert!(!val(tx, next.id).closed, "and it wrote nothing");
+
+        assert!(
+            value_delete(tx, next.id, None).is_err(),
+            "the same state by the other door: the last value it still offers stays",
+        );
+        value_delete(tx, shipped.id, None).unwrap();
+        assert!(val_opt(tx, shipped.id).is_none(), "a closed value takes nothing away by going");
+
+        // Lowering the flag is the way out, and then the last value closes like any other.
+        update(tx, axis.id, None, None, None, None, None, None, Some(false), None, None).unwrap();
+        value_set_closed(tx, next.id, true).unwrap();
+        let refused =
+            update(tx, axis.id, None, None, None, None, None, None, Some(true), None, None).unwrap_err();
+        assert!(refused.to_string().contains("リリース"), "the refusal names the axis: {refused}");
+        assert!(!dim(tx, axis.id).required, "an axis offering nothing cannot be required");
     }
 }

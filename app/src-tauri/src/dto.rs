@@ -80,7 +80,11 @@ pub struct DimensionDto {
     /// and the detail pane to draw one select or a row of chips.
     #[ts(type = "\"single\" | \"multi\"")]
     pub(crate) cardinality: String,
-    #[ts(type = "\"none\" | \"time_axis\"")]
+    /// What this axis is nominated as (`amenbo_core::model::DimensionRole`). `time_axis` is the one
+    /// whose values carry periods and resolve the current era; `closable` is the one whose values can
+    /// be closed — retired from what a record is newly filed under, while everything already filed
+    /// under them stays (`AMB-D-829`). One role per axis, and `none` is where every axis starts.
+    #[ts(type = "\"none\" | \"time_axis\" | \"closable\"")]
     pub(crate) role: String,
     pub(crate) ordered: bool,
     pub(crate) show_on_card: bool,

@@ -301,7 +301,14 @@ slug?: string, notes: string,
  * column says where a task is, and a task on several values of one axis is in no single column —
  * and the detail pane to draw one select or a row of chips.
  */
-cardinality: "single" | "multi", role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, required: boolean, 
+cardinality: "single" | "multi", 
+/**
+ * What this axis is nominated as (`amenbo_core::model::DimensionRole`). `time_axis` is the one
+ * whose values carry periods and resolve the current era; `closable` is the one whose values can
+ * be closed — retired from what a record is newly filed under, while everything already filed
+ * under them stays (`AMB-D-829`). One role per axis, and `none` is where every axis starts.
+ */
+role: "none" | "time_axis" | "closable", ordered: boolean, showOnCard: boolean, required: boolean, 
 /**
  * Which of the two entities this axis classifies (`AMB-D-789`). The screens read it to decide
  * which of them offer the axis at all — the board and the task card the task side, the decision

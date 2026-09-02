@@ -695,7 +695,9 @@ datasets! {
         // starts; `multi` is the axis's own answer that a record may sit on several of its values at once.
         cardinality: enum_col("single", "multi"),
         ordered: bool_col,
-        role: enum_col("none", "time_axis"),
+        // What this axis is nominated as: the project's time axis, or the one whose values can be
+        // closed (`AMB-D-829`). One role per axis — model.rs says why the two do not overlap.
+        role: enum_col("none", "time_axis", "closable"),
         show_on_card: bool_col,
         required: bool_col,
         // Which side this axis means anything on — `task`, `decision` or `both` (`AMB-D-789`). Unlike
@@ -723,6 +725,12 @@ datasets! {
         // the columns; only a time_axis axis gives them meaning (model.rs).
         start_on: date_opt,
         end_on: date_opt,
+        // Is this value retired from what a record is newly filed under (`AMB-D-829`)? The payload of
+        // the `role: closable` axis, carried on every value the way the period above is — closing one
+        // is what asks for the role (`ops::dimension`), the column merely holds the answer. A closed
+        // value keeps its name, its key and its place, so `UNIQUE (dimension_id, slug)` and the order
+        // below go on counting it: reopening has to find it where it was.
+        closed: bool_col,
     } => "UNIQUE (dimension_id, slug)"
 
     task_dimension_value {

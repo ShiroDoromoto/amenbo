@@ -182,6 +182,14 @@ export const CORE_SENTENCE_ERROR_CODES = [
  * — which is also why they owe no template. A code that reaches a screen belongs in the sentence list
  * instead, with its prose. */
 export const CORE_CLI_ONLY_ERROR_CODES = [
+  // The three refusals closing a value raises (`AMB-D-829`): an axis nobody nominated closable, the last
+  // value a required axis still offers, and a closed value somebody tried to file a record under. Core
+  // carries the flag and no face reaches it yet — the classification panel has no close control and the
+  // CLI no close command — so nothing on a screen can be refused for these reasons. Whichever door lands
+  // one of them on a screen moves it into the sentence list above, with the prose it then owes.
+  "invalid_dimension_close_not_closable",
+  "invalid_dimension_close_last_open",
+  "invalid_dimension_set_closed_value",
   "not_found_plugin_rollback_build",
   "invalid_plugin_rollback_manifest_absent",
   "invalid_plugin_rollback_manifest_unparsable",

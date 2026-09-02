@@ -948,6 +948,21 @@ impl Store {
         })
     }
 
+    /// Close a dimension value, or open it again (one operation = one transaction). Closing retires the
+    /// value from what a record is newly filed under and leaves everything already filed under it where
+    /// it is (`AMB-D-829`); it asks for the axis's `closable` role, while opening back is free on any
+    /// axis. A door of its own rather than an arm of [`Self::dimension_value_update`], for the reason the
+    /// period has one: a value's fields are set one concern at a time.
+    pub fn dimension_value_set_closed(
+        &mut self,
+        value_id: i64,
+        closed: bool,
+    ) -> Result<crate::model::DimensionValue> {
+        self.write_one(&[WriteTarget::DimensionValue(value_id)], |tx| {
+            crate::ops::dimension::value_set_closed(tx, value_id, closed)
+        })
+    }
+
     /// Reorder a dimension value (one operation = one transaction). Refused on an unordered dimension.
     pub fn dimension_value_move(
         &mut self,

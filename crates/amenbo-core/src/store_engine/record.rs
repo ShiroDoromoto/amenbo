@@ -327,6 +327,7 @@ pub fn dimension_value(v: &DimensionValue) -> Record {
                 ("slug", ov(&v.slug)),
                 ("start_on", dov(&v.start_on)),
                 ("end_on", dov(&v.end_on)),
+                ("closed", bv(v.closed)),
             ],
             &v.created_at,
             &v.updated_at,

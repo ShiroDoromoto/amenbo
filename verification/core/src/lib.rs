@@ -322,6 +322,11 @@ const REGISTRY: &[OpSpec] = &[
     // as words: the store issues it, so no scenario knows it in advance. `spelled` is the shape it is
     // typed in — `bare` (`12`) or `hash` (`#12`), both of which the box reads.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "narrow", required: &[], refs: &["number_of"], strings: &["words", "spelled"], binds: false },
+    // The same box over the decisions tab, and a separate entry for the reason the panel's three moves
+    // are: a road has to say which of the two tabs it is standing on, or it could be walked on either.
+    // The side is what the box is read in — a number typed here is a decision's, where the same number
+    // typed over the board is a task's.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "narrow", required: &[], refs: &["number_of"], strings: &["words", "spelled"], binds: false },
     // The other narrowing on that same board, and the three moves it takes: the values are opened, some
     // of them are chosen, and they are folded away again. Opening and folding are written as moves of
     // their own rather than left around the choosing, because what the fold gives back is the room the
@@ -2084,7 +2089,7 @@ fn may_stand(domain: Domain, op: &str) -> bool {
 fn takes_a_query(domain: Domain, op: &str) -> bool {
     matches!(
         (domain, op),
-        (Domain::Task, "narrow" | "open-hit" | "found") | (Domain::Decision, "found")
+        (Domain::Task, "narrow" | "open-hit" | "found") | (Domain::Decision, "narrow" | "found")
     )
 }
 

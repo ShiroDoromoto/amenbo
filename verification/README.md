@@ -711,8 +711,9 @@ written as the CLI writes it, since the chips carrying them are in the reader's 
 `filters-folded` reads what the fold leaves: the values off the screen, and the count of narrowing
 axes on the control they folded into.
 
-The decisions tab has that same panel over its own list, and its own entries for it —
-`decision open-filters` / `choose-filter` / `close-filters` / `filters-folded` / `narrowed`. They are
+The decisions tab has that same panel over its own list — and a box of its own beside it — and its own
+entries for both: `decision narrow` / `open-filters` / `choose-filter` / `close-filters` /
+`filters-folded` / `narrowed`. They are
 separate from the board's rather than shared with them because a road has to say which of the two
 tabs it is standing on: a step that named neither could be walked on either and would prove whichever
 the operator happened to be looking at. On the decision side `narrowed` is the screen's answer to what
@@ -915,7 +916,10 @@ binding in place of `words:`, and exactly one of the two. `spelled:` is the shap
 (`12`) or `hash` (`#12`), both of which the box reads. The two roads fill it in differently and for the
 same reason the rest of this section names: the CLI driver knows what the run created and substitutes
 the number, while the GUI harness renders its lines from the YAML alone — before any world stands up —
-so it names the record instead and the operator reads the number off the screen.
+so it names the record instead and the operator reads the number off the screen. Which box was typed
+into is what settles the side a number with no type code is read as: `task narrow` types over the
+columns and answers with a task, `decision narrow` types over the rows on the other tab and answers
+with a decision.
 
 What such a query is answered with is a record put at the **top** of the answer, ahead of whatever the
 words matched, so `first: true` on `found` asks for that place rather than for a place anywhere in it.

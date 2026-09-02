@@ -1,0 +1,210 @@
+# One copy made in the file panel, and the three places what it left can be put down.
+#
+# A copy here puts two things on the machine's clipboard at once: the file itself, and its path as
+# plain words. Which of the two comes out is decided by where it is pasted, and every one of those
+# places is somewhere a reader actually pastes — an ordinary text box, the folder itself, and a pane.
+# A road that read only one of them would go green over a copy that had thrown the other away.
+#
+# ── Why the text box is read for no quote and the pane for one ───────────────────────────────────
+# The words are put on the clipboard bare. What wraps them is the pane, when it takes a paste that is
+# carrying files: a name with a space in it is two words to a shell, and quoting is the only thing
+# that makes it one. Anywhere else quoting would be damage — a path pasted into a text box is a path,
+# not a command — so the two readings are opposite on purpose, and the file this road copies has a
+# space in its name so that the difference is visible at all.
+#
+# ── Why the bare reading is taken before anything reaches the pane ───────────────────────────────
+# Both halves of the screen are on one shot. Once the pane holds the quoted path, "the quote is
+# nowhere" is no longer a reading anybody can take — so the text box is walked while the pane is
+# still empty, and the quote arrives only after the step that says it is not there yet.
+#
+# ── Why the text box is a different file's ───────────────────────────────────────────────────────
+# What is read in the editor is the copied file's name, so the file open in the editor has to be
+# another one: a reading taken on the file's own text could not tell a paste that landed from a
+# header drawing the name of what is open. Reading it inside `keep.md` leaves one explanation.
+#
+# ── Why the folder is pasted into at all ─────────────────────────────────────────────────────────
+# The file half of the clipboard is what the words were added beside, and the whole worry is that
+# adding them threw it away. So the paste that carries the file is walked after the words have
+# already come out somewhere else: a clipboard that had lost the file by then fails here, and one
+# that never had it fails the same way, which is the reading this step is for.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. What a terminal does with a path is print it; the clipboard is the
+# machine's own, and nothing on a command line puts a file on it.
+id: copy-a-path-once-and-put-it-down-in-three-places
+title: One copy of a row goes into a text box bare, into a folder as the file, and into a pane quoted
+description: >
+  Open the terminal face on a project whose folder holds a file with a space in its name, with a
+  shell running in the pane. Copy that row's path from its menu, then put what the copy left down
+  three times: in another file's editor, where it arrives as plain words; in a folder, where the file
+  itself arrives; and in the pane, where it arrives quoted. Then copy a second row with the key the
+  machine copies with, and see the pane take that one the same way.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # The row the road copies. The space in the name is the whole reason this file is the one: it is
+  # what a quote is for, and a name without one would read the same quoted or bare.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: a plain one.md
+      content: SCENARIO the name of this file has a space in it
+
+  # The folder the file is pasted into, and the file whose editor the words are pasted into. One
+  # file does both, which is why it is somewhere other than the top of the tree: a paste into the
+  # folder holding the row would be the machine renaming a copy, and reading that is reading the
+  # file manager.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/keep.md
+      content: SCENARIO this file was here before anything was pasted into it
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # A shell, because one of the three places is a pane's input line and an empty frame has none.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: a plain one.md
+      section: tree
+
+  # ── the copy, made once ───────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: a plain one.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: copy-path
+
+  # ── into a text box, bare ─────────────────────────────────────────────────────────────────────
+  # The editor of the other file. The tree goes while a file is open, so the name read below is the
+  # pasted words and nothing else on the screen. What is typed is not saved: what the road is about
+  # is what came out of the clipboard, and where it ends up on the disk is another road's question.
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: keep.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: paste-into-editor
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: a plain one.md
+
+  # And the half a pane would have had. The same reading taken with the quote on it finds nothing,
+  # which is what says the quoting is the pane's own and not something the clipboard was carrying.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: "a plain one.md'"
+      present: false
+
+  # ── into the folder, as the file ──────────────────────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: back
+
+  - type: action
+    domain: files
+    op: paste
+    with:
+      name: keep.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: a plain one.md
+      section: tree
+
+  # ── into the pane, quoted ─────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: paste
+
+  # The closing quote is read along with the name, and it is the point of the step: the words on the
+  # clipboard end at the name, so a quote after it can only have been put there on the way in. The
+  # path in front of it is whatever folder this run made, which no road can spell.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: "a plain one.md'"
+
+  # ── and the same copy made with the key ───────────────────────────────────────────────────────
+  # A second row, so what the pane takes could not have been left over from the first: the line is
+  # still holding that one, and a name that was never on the clipboard until now is the reading.
+  - type: action
+    domain: files
+    op: copy
+    with:
+      name: keep.md
+      section: tree
+
+  - type: action
+    domain: terminal
+    op: paste
+
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: "keep.md'"

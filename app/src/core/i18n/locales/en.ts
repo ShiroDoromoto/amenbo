@@ -663,6 +663,7 @@ const ui = {
   "files.copyPath": "Copy the path",
   "files.pasteFilePath": "Paste the file's path",
   "files.pasteFolderPath": "Paste the folder's path",
+  "files.pastePaths": "Paste the paths",
   "files.openWith": "Open with the usual application",
   "files.chooseApp": "Open with an application I pick",
   "files.appUsual": "{name} (the usual one)",

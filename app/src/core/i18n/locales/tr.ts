@@ -579,6 +579,7 @@ export const tr: Translation = {
     "files.copyPath": "Yolu kopyala",
     "files.pasteFilePath": "Dosyanın yolunu yapıştır",
     "files.pasteFolderPath": "Klasörün yolunu yapıştır",
+    "files.pastePaths": "Yolları yapıştır",
     "files.openWith": "Her zamanki uygulamayla aç",
     "files.chooseApp": "Seçtiğim uygulamayla aç",
     "files.appUsual": "{name} (her zamanki)",

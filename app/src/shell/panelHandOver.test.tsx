@@ -17,7 +17,7 @@ const hoisted = vi.hoisted(() => ({
   saved: null as unknown,
   running: [] as { session: string; startedAt: string; folder: string | null }[],
   /** What the face handed the panel, or nothing where it handed it none. */
-  handOver: undefined as ((whole: string) => void) | undefined,
+  handOver: undefined as ((wholes: string[]) => void) | undefined,
   /** Every paste the face asked for: the session it named, and the text. */
   pasted: [] as { session: string; text: string }[],
 }));
@@ -56,7 +56,7 @@ vi.mock("../core/snapshot", async (importOriginal) => ({
 
 // The panel itself draws nothing here: what is under test is what the face hands it.
 vi.mock("../files/FilesPanel", () => ({
-  FilesPanel: (props: { onHandOver?: (whole: string) => void }) => {
+  FilesPanel: (props: { onHandOver?: (wholes: string[]) => void }) => {
     hoisted.handOver = props.onHandOver;
     return null;
   },
@@ -144,7 +144,7 @@ describe("handing a file from the panel to a pane", () => {
     await mount();
     await focusPane("b");
     await act(async () => {
-      hoisted.handOver?.("/work/a/notes.md");
+      hoisted.handOver?.(["/work/a/notes.md"]);
       await new Promise((r) => setTimeout(r, 0));
     });
     // The pane the reader is standing on, not the first one on the page.
@@ -157,10 +157,23 @@ describe("handing a file from the panel to a pane", () => {
     await mount();
     await focusPane("b");
     await act(async () => {
-      hoisted.handOver?.("/work/a/it's a shot.png");
+      hoisted.handOver?.(["/work/a/it's a shot.png"]);
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(hoisted.pasted).toEqual([{ session: "s-b", text: "'/work/a/it'\\''s a shot.png'" }]);
+  });
+
+  /** Several rows picked out go over together, each quoted on its own — the same line a drop of
+   *  several files puts in a pane (`AMB-T-4242`). */
+  it("puts every path it is handed in front of what is running, one line", async () => {
+    await mount();
+    await focusPane("b");
+    await act(async () => {
+      hoisted.handOver?.(["/work/a/notes.md", "/work/a/a shot.png"]);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hoisted.pasted)
+      .toEqual([{ session: "s-b", text: "'/work/a/notes.md' '/work/a/a shot.png'" }]);
   });
 
   it("hands the panel nothing where the pane being worked in has nothing running", async () => {

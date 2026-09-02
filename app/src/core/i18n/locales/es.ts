@@ -600,6 +600,7 @@ export const es: Translation = {
     "files.copyPath": "Copiar la ruta",
     "files.pasteFilePath": "Pegar la ruta del archivo",
     "files.pasteFolderPath": "Pegar la ruta de la carpeta",
+    "files.pastePaths": "Pegar las rutas",
     "files.openWith": "Abrir con la aplicación de siempre",
     "files.chooseApp": "Abrir con una aplicación que yo elija",
     "files.appUsual": "{name} (la de siempre)",

@@ -582,6 +582,7 @@ export const vi: Translation = {
     "files.copyPath": "Sao chép đường dẫn",
     "files.pasteFilePath": "Dán đường dẫn của tệp",
     "files.pasteFolderPath": "Dán đường dẫn của thư mục",
+    "files.pastePaths": "Dán các đường dẫn",
     "files.openWith": "Mở bằng ứng dụng thường dùng",
     "files.chooseApp": "Mở bằng ứng dụng tôi chọn",
     "files.appUsual": "{name} (ứng dụng thường dùng)",

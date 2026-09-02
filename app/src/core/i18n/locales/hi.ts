@@ -579,6 +579,7 @@ export const hi: Translation = {
     "files.copyPath": "पथ कॉपी करें",
     "files.pasteFilePath": "फ़ाइल का पथ चिपकाएँ",
     "files.pasteFolderPath": "फ़ोल्डर का पथ चिपकाएँ",
+    "files.pastePaths": "पथ चिपकाएँ",
     "files.openWith": "सामान्य ऐप में खोलें",
     "files.chooseApp": "चुने हुए ऐप में खोलें",
     "files.appUsual": "{name} (सामान्य वाला)",

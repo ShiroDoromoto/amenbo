@@ -591,6 +591,7 @@ export const ja: Translation = {
     "files.copyPath": "パスをコピー",
     "files.pasteFilePath": "ファイルのパスを貼る",
     "files.pasteFolderPath": "フォルダのパスを貼る",
+    "files.pastePaths": "パスを貼る",
     "files.openWith": "いつものアプリで開く",
     "files.chooseApp": "アプリを選んで開く",
     "files.appUsual": "{name}（いつものアプリ）",

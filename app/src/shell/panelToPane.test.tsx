@@ -19,7 +19,7 @@ const hoisted = vi.hoisted(() => ({
   saved: null as unknown,
   running: [] as { session: string; startedAt: string; folder: string | null }[],
   /** The gesture the face handed the panel, which every row of it would put on its press. */
-  carry: undefined as undefined | ((whole: string, event: RowPress<HTMLElement>) => void),
+  carry: undefined as undefined | ((wholes: string[], event: RowPress<HTMLElement>) => void),
   /** Every paste the face asked for: the session it named, and the text. */
   pasted: [] as { session: string; text: string }[],
 }));
@@ -63,7 +63,7 @@ vi.mock("../core/snapshot", async (importOriginal) => ({
 // with what comes back.
 vi.mock("../files/FilesPanel", () => ({
   FilesPanel: (props: {
-    onCarry?: (whole: string, event: RowPress<HTMLElement>) => void;
+    onCarry?: (wholes: string[], event: RowPress<HTMLElement>) => void;
   }) => {
     hoisted.carry = props.onCarry;
     return null;
@@ -190,7 +190,7 @@ beforeEach(() => {
   row = document.createElement("li");
   row.textContent = "notes.md";
   row.addEventListener("pointerdown", (e) => {
-    hoisted.carry?.("/work/a/notes.md", e as unknown as RowPress<HTMLElement>);
+    hoisted.carry?.(["/work/a/notes.md"], e as unknown as RowPress<HTMLElement>);
   });
   document.body.appendChild(row);
   root = createRoot(container);

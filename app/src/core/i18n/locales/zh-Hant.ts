@@ -579,6 +579,7 @@ export const zhHant: Translation = {
     "files.copyPath": "複製路徑",
     "files.pasteFilePath": "貼上檔案路徑",
     "files.pasteFolderPath": "貼上資料夾路徑",
+    "files.pastePaths": "貼上路徑",
     "files.openWith": "用常用的應用程式開啟",
     "files.chooseApp": "用我選的應用程式開啟",
     "files.appUsual": "{name}（常用的）",

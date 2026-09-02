@@ -578,6 +578,7 @@ export const ko: Translation = {
     "files.copyPath": "경로 복사",
     "files.pasteFilePath": "파일 경로 붙여넣기",
     "files.pasteFolderPath": "폴더 경로 붙여넣기",
+    "files.pastePaths": "경로 붙여넣기",
     "files.openWith": "늘 쓰는 앱으로 열기",
     "files.chooseApp": "앱을 골라서 열기",
     "files.appUsual": "{name} (늘 쓰는 앱)",

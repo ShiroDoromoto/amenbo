@@ -27,7 +27,7 @@ import { invoke } from "../core/ipc";
 import type { PaneDrawnDto, PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf, tn } from "../core/i18n";
-import { focusTerminal, pasteIntoTerminal, quotedPath } from "../talk/terminal";
+import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
 /**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
@@ -421,11 +421,12 @@ export function TerminalFace({
   const sessionIn = (frame: string | null) =>
     layout.frames.find((one) => one.id === frame)?.session ?? null;
 
-  /** Put a path in front of what is running in one session, written the way a shell reads as one
-   *  thing (`AMB-D-801`). A write that cannot land is nothing to say: the terminal ended between the
-   *  hand-over and this, and the pane already draws what one ends with. */
-  const pasteInto = useCallback((session: string, whole: string) => {
-    void pasteIntoTerminal(session, quotedPath(whole)).catch(() => {});
+  /** Put paths in front of what is running in one session, each written the way a shell reads as one
+   *  thing and a space between them (`AMB-D-801`). A write that cannot land is nothing to say: the
+   *  terminal ended between the hand-over and this, and the pane already draws what one ends with. */
+  const pasteInto = useCallback((session: string, wholes: string[]) => {
+    if (wholes.length === 0) return;
+    void pasteIntoTerminal(session, quotedPaths(wholes)).catch(() => {});
   }, []);
 
   /**
@@ -439,23 +440,27 @@ export function TerminalFace({
    *
    * The file is already inside a folder the project is bound to — it is a row of this panel — so
    * there is nothing to carry: what a pane's own drop has to do first (`./TerminalPane`) is done
-   * here by the file being where it is. The path is pasted and no newline is sent.
+   * here by the file being where it is. The paths are pasted and no newline is sent.
    *
-   * The path is quoted, the same way a pane's own drop quotes one (`./TerminalPane`, `AMB-D-801`):
-   * this is the same handover read the other way round, and a shell splits a name with a space in it
-   * whichever door the path came through.
+   * **However many rows the reader picked out** (`AMB-T-4242`): the panel says which rows its door
+   * was about, and five paths reach a shell the way five dropped files do — quoted one by one, a
+   * space between them.
+   *
+   * The paths are quoted, the same way a pane's own drop quotes them (`./TerminalPane`,
+   * `AMB-D-801`): this is the same handover read the other way round, and a shell splits a name with
+   * a space in it whichever door the path came through.
    */
   const handOver = useMemo(() => {
     const session = sessionIn(layout.focus);
     if (session === null) return undefined;
-    return (whole: string) => { pasteInto(session, whole); };
+    return (wholes: string[]) => { pasteInto(session, wholes); };
   }, [layout.focus, layout.frames]);
 
   /**
    * The other way a row of the panel reaches a pane: carried there, and let go on the one it is
    * meant for (`../files/handDrag`).
    *
-   * **What is handed over is the same thing the menu hands over** — the path, quoted, unsent — and
+   * **What is handed over is the same thing the menu hands over** — the paths, quoted, unsent — and
    * what differs is only which pane says so: the pointer's rather than the focus's. Which is why the
    * two land in the same place afterwards as a drop from the desktop does (`./TerminalPane`): a
    * person who carried a path into a pane has said which pane they mean, so it becomes the one being
@@ -465,10 +470,10 @@ export function TerminalFace({
    * hand a path to.
    */
   const { overFrame, press: carry } = useHandDrag(
-    (frame, whole) => {
+    (frame, wholes) => {
       const session = sessionIn(frame);
       if (session === null) return;
-      pasteInto(session, whole);
+      pasteInto(session, wholes);
       setLayout((was) => focusOn(was, frame));
       focusTerminal(document.querySelector<HTMLElement>(`[data-hand="${frame}"]`));
     },

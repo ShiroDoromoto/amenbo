@@ -22,17 +22,17 @@ function under(el: Element | null): void {
 
 let container: HTMLDivElement;
 let root: Root;
-/** What the face was told to do with a landed row. */
-let landed: [string, string][];
+/** What the face was told to do with landed rows. */
+let landed: [string, string[]][];
 /** Which panes have something running in them, which is what decides whether one takes a row. */
 let running: string[];
 /** The pane the pointer is over, as the face would draw the surface on it. */
 let overFrame: string | null;
-let press: ((whole: string, event: unknown) => void) | null;
+let press: ((wholes: string[], event: unknown) => void) | null;
 
 function Face() {
   const drag = useHandDrag(
-    (frame, whole) => { landed.push([frame, whole]); },
+    (frame, wholes) => { landed.push([frame, wholes]); },
     (frame) => running.includes(frame),
   );
   press = drag.press as unknown as typeof press;
@@ -42,7 +42,7 @@ function Face() {
   return createElement("div", null,
     createElement("li", {
       className: "files__item", id: "row",
-      onPointerDown: (e: never) => press?.("/work/a/notes.md", e),
+      onPointerDown: (e: never) => press?.(["/work/a/notes.md"], e),
     }, "notes.md"),
     createElement("div", { [HAND_ATTR]: "1", id: "one" }),
     createElement("div", { [HAND_ATTR]: "2", id: "two" }));
@@ -169,7 +169,7 @@ describe("letting a row go", () => {
     expect(overFrame).toBe("2");
 
     await to("pointerup", 300, 100);
-    expect(landed).toEqual([["2", "/work/a/notes.md"]]);
+    expect(landed).toEqual([["2", ["/work/a/notes.md"]]]);
     expect(overFrame).toBeNull();
     expect(document.querySelector(".files__ghost")).toBeNull();
     expect(document.body.classList.contains("is-dragging")).toBe(false);

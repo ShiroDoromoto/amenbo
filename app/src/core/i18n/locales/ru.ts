@@ -608,6 +608,7 @@ export const ru: Translation = {
     "files.copyPath": "Скопировать путь",
     "files.pasteFilePath": "Вставить путь файла",
     "files.pasteFolderPath": "Вставить путь папки",
+    "files.pastePaths": "Вставить пути",
     "files.openWith": "Открыть в обычном приложении",
     "files.chooseApp": "Открыть в выбранном приложении",
     "files.appUsual": "{name} (обычное)",

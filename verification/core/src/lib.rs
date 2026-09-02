@@ -2484,8 +2484,13 @@ const REGISTRY: &[OpSpec] = &[
     // Unfolding the folder. It is a value and not two ops because it is one control that opens and
     // shuts, unlike the two windows' way out and way back, which are pressed in different places.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "tree", required: &["open"], refs: &[], strings: &[], binds: false },
-    // One folder opened a level. Folders are opened one at a time on purpose — the level below is
-    // fetched when it is asked for — so a road reaching something deep names each step of the way.
+    // One folder opened a level, or shut again with `open: false`. Folders are opened one at a time
+    // on purpose — the level below is fetched when it is asked for — so a road reaching something
+    // deep names each step of the way.
+    //
+    // The two halves are a value rather than two ops, the way the whole tree's are: what opens a
+    // folder is the press that shuts it. Shutting one is how a road keeps a name on the screen once,
+    // which is what a road pasting copies anywhere needs — a copy carries the name it came from.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "enter", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // A file opened, from whichever section it is being pressed in. The row is named by the words it
     // draws, which is the file's own name.

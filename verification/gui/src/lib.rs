@@ -2054,6 +2054,12 @@ impl Instructor {
                 true => "In the column beside the panes, the section that draws the folder itself is to be standing unfolded — each of them where there is more than one. It is drawn that way, so this is usually nothing to do; unfold any that is folded.".to_string(),
                 false => "Fold those sections back up.".to_string(),
             },
+            // A folder opened a level, or shut again. Opening is what a road asks for nearly every
+            // time, so it is what the step means when it says nothing.
+            (Domain::Files, "enter") if !unfolds(with) => format!(
+                "In the folder's section, fold the folder \"{}\" shut. What was under it goes off the screen; the folder's own row stays.",
+                req(with, "name")?
+            ),
             (Domain::Files, "enter") => format!(
                 "In the folder's section, open the folder \"{}\" one level.",
                 req(with, "name")?
@@ -2200,8 +2206,12 @@ impl Instructor {
             // What was picked before is said to stay, because that is the whole of what separates this
             // press from an ordinary one — and an operator who saw the earlier row go plain would be
             // looking at the bug this step exists to catch.
+            //
+            // **Both halves are said, because the press has two.** On a row already picked out the
+            // same key takes it back out, which is how a reader corrects a slip — and a line that
+            // promised only the adding would read as a failure to an operator walking the other half.
             (Domain::Files, "pick") => format!(
-                "In {}, hold down the key this machine adds to a selection with and click the row \"{}\". It is picked out alongside whatever was picked out before it, which stays as it was.",
+                "In {}, hold down the key this machine adds to a selection with and click the row \"{}\". If it was not picked out it joins whatever was, which stays as it is; if it was, that press takes it back out and leaves the rest.",
                 section(with)?,
                 req(with, "name")?
             ),
@@ -3720,6 +3730,12 @@ const KEEP_PRINTING_SECONDS: u32 = 30;
 /// is the half most asserts want, these ask for a shape a step takes only when it says so.
 fn flagged(with: &Args, key: &str) -> bool {
     with.get(key).and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
+/// Which way a step about a folder is going. Opening is the ordinary ask — a road reaches down a
+/// tree far more often than it puts one away — so a step that says nothing is opening one.
+fn unfolds(with: &Args) -> bool {
+    with.get("open").and_then(|v| v.as_bool()).unwrap_or(true)
 }
 
 /// A required yes-or-no argument. It is not `present`'s neighbour: that one has a default because most

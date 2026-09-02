@@ -9,7 +9,7 @@
 // is two words to a shell, and a name with a quote in it stops one dead — waiting for a closing
 // quote the reader's Enter never supplies.
 import { describe, expect, it, vi } from "vitest";
-import { pasteIntoTerminal, quotedPath } from "./terminal";
+import { holdsFiles, pasteIntoTerminal, quotedPath, quotedPaths } from "./terminal";
 
 const hoisted = vi.hoisted(() => ({
   /** What was written to the terminal, as the command took it. */
@@ -55,5 +55,40 @@ describe("writing one path for a terminal to read", () => {
   it("treats a machine it cannot name as POSIX, which is what Linux is", () => {
     expect(quotedPath("/work/it's shot.png", "other"))
       .toBe("'/work/it'\\''s shot.png'");
+  });
+});
+
+describe("writing several paths for a terminal to read", () => {
+  it("quotes each one, so the space between two is not the space inside one", () => {
+    expect(quotedPaths(["/work/a shot.png", "/work/b shot.png"], "macos"))
+      .toBe("'/work/a shot.png' '/work/b shot.png'");
+  });
+
+  it("is one path and no separator when there is one path", () => {
+    expect(quotedPaths(["/work/one.png"], "macos")).toBe("'/work/one.png'");
+  });
+});
+
+describe("the paste a pane answers for", () => {
+  /** A paste, with the two things this reads held down to what a test gives it. */
+  function carrying(over: { files?: number; types?: string[] } = {}): DataTransfer {
+    return {
+      files: { length: over.files ?? 0 },
+      types: over.types ?? [],
+    } as unknown as DataTransfer;
+  }
+
+  it("is one carrying files, said either way round", () => {
+    expect(holdsFiles(carrying({ files: 1 })), "the files themselves").toBe(true);
+    expect(holdsFiles(carrying({ types: ["Files"] })), "what the paste says it holds").toBe(true);
+    expect(holdsFiles(carrying({ files: 2, types: ["Files", "text/plain"] }))).toBe(true);
+  });
+
+  it("is not a paste of words, however much of it there is", () => {
+    // Left to the emulator, which is the only one that knows whether the program inside asked for
+    // bracketed paste. Answering here would bracket text for a program that never asked.
+    expect(holdsFiles(carrying({ types: ["text/plain"] }))).toBe(false);
+    expect(holdsFiles(carrying({ types: ["text/plain", "text/html"] }))).toBe(false);
+    expect(holdsFiles(carrying())).toBe(false);
   });
 });

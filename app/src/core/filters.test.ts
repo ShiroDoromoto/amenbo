@@ -5,11 +5,12 @@ import type { TaskCard } from "../mock/types";
 
 describe("filters: user-defined classifications (unified dimension)", () => {
   const dim = {
-    id: 1, name: "カテゴリー", notes: "", role: "none" as const, ordered: false, showOnCard: false, required: false,
+    id: 1, name: "カテゴリー", notes: "", cardinality: "single" as const, role: "none" as const, ordered: false,
+    showOnCard: false, required: false,
     appliesTo: "both" as const,
     values: [{ id: 11, name: "バグ" }, { id: 12, name: "機能" }],
   };
-  const assign = { t1: { 1: 11 }, t2: { 1: 12 } };
+  const assign = { t1: { 1: [11] }, t2: { 1: [12] } };
   const dims = filterDimensions([dim], assign);
   const custom = dims.find((d) => d.id === "dim:1")!;
 
@@ -35,6 +36,16 @@ describe("filters: user-defined classifications (unified dimension)", () => {
     const empty = { ...dim, id: 2, values: [] };
     const only = filterDimensions([empty], {});
     expect(only.find((d) => d.id === "dim:2")).toBeUndefined();
+  });
+
+  // A task on several values of one axis (`AMB-D-826`) answers to each of them, and the values within one
+  // axis are ORed — so choosing either one keeps it, and it is not counted twice.
+  it("keeps a task carrying several values on one axis under any of them", () => {
+    const both = filterDimensions([{ ...dim, cardinality: "multi" as const }], { t9: { 1: [11, 12] } });
+    const t9 = { id: "t9", title: "t" } as unknown as TaskCard;
+    expect(passesFilters(t9, both, { "dim:1": ["11"] })).toBe(true);
+    expect(passesFilters(t9, both, { "dim:1": ["12"] })).toBe(true);
+    expect(passesFilters(t9, both, { "dim:1": ["11", "12"] })).toBe(true);
   });
 });
 
@@ -108,11 +119,12 @@ describe("parseRefQuery: recognizing ref numbers in the search box", () => {
 
 describe("filters: the decisions tab narrows the same way the board does", () => {
   const dim = {
-    id: 1, name: "テーマ", notes: "", role: "none" as const, ordered: false, showOnCard: false, required: false,
+    id: 1, name: "テーマ", notes: "", cardinality: "single" as const, role: "none" as const, ordered: false,
+    showOnCard: false, required: false,
     appliesTo: "both" as const,
     values: [{ id: 11, name: "メイン" }, { id: 12, name: "会話の窓" }],
   };
-  const assign = { 1: { 1: 11 }, 2: { 1: 12 } };
+  const assign = { 1: { 1: [11] }, 2: { 1: [12] } };
   const dims = decisionFilterDimensions([dim], assign);
   const decision = (id: number, status: string, supersededBy: unknown[] = []) =>
     ({ id, status, supersededBy }) as unknown as DecisionDto;

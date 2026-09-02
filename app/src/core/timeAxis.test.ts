@@ -10,6 +10,7 @@ const dim = (role: DimensionDto["role"], values: DimensionValueDto[]): Dimension
   id: 1,
   name: "時代",
   notes: "",
+  cardinality: "single",
   role,
   ordered: true,
   showOnCard: false,

@@ -309,6 +309,7 @@ pub(super) fn dimension_value_row(r: &Row) -> rusqlite::Result<DimensionValue> {
         order_key: get(r, C.order_key)?,
         start_on: date_opt(r, C.start_on)?,
         end_on: date_opt(r, C.end_on)?,
+        closed: get(r, C.closed)?,
         created_at,
         updated_at,
     })
@@ -601,6 +602,9 @@ mod tests {
                 order_key: "a0".to_string(),
                 start_on: Some("2026-06-20".parse().unwrap()),
                 end_on: Some("2026-07-07".parse().unwrap()),
+                // Closed (not the field's default) so a dropped column cannot pass, as the edge kind
+                // above does with its enum.
+                closed: true,
                 created_at: now,
                 updated_at: now,
             }],

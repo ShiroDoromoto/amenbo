@@ -355,6 +355,14 @@ not the pace of them. The tool opens the field's picker, writes the day where th
 tabs back out so the panel is not standing over the rows beneath, and reads the field back — so a
 write that reached nothing is reported here rather than as a red assert on the day.
 
+**`--near <name>` says which row, where the field's own name does not.** A manager listing the values
+of an axis draws every row the same `Start date` and `End date`, so the name reaches one field per
+value and asking it to name itself more fully asks for a name that is not there. What is there is the
+value's own name, on that row: `set-date <pid> "Start date" 2001-01-01 --near Ongoing` writes into the
+`Start date` standing beside `Ongoing`. Same row is read off the frames the tree answers with at that
+moment — no shot, no scale, nothing that a screen having moved could put out — and a `--near` that
+leaves several fields, or none, is refused the same way an ambiguous name is.
+
 ### `--print` — read the road without a screen
 
 The screen road is written in YAML, but the sentences it turns into are written in Rust, so what a
@@ -443,6 +451,13 @@ wrote one language keeping it unmarked, and the row nobody described at all fall
 repository's README — `see-a-tasks-classification-on-the-board` walks what a card says of how its task
 is filed, on a board whose world was classified from a terminal: the value drawn for the axis its
 project put on the card, and nothing at all from the axis beside it that did not ask —
+`answer-one-category-with-several-values` walks the same board over a category one task answers twice:
+both values on the one card, the category missing from the row of buttons that cut the columns while
+the category beside it is still offered there, and the pair still drawn once the board is cut along
+that other one —
+`file-work-by-moving-its-card` walks that board as the place work is filed from rather than read on —
+the column standing before anything is in it, a card carried into it and another carried elsewhere,
+and the narrowing afterwards that comes back with the first and leaves out the second —
 `set-an-app-up-to-reach-this-project` walks the fold that holds the other way in — the app already reaching this
 project and the folder its entry names, beside the app reaching nothing, each row offering the one road its app can
 walk —
@@ -1126,7 +1141,8 @@ Some ops exist for one road only, and the registry carries them all the same: op
 answering which project it asks for are moves a screen's road is made of and a terminal's has none
 of, so they are written in `steps_gui` and the CLI driver maps neither. A driver maps the ops it
 meets; one it does not meet is not its to map. Cutting that board along another axis (`project
-group-by`) is the same kind: what a terminal answers with is a listing, and a listing has no columns
+group-by`) is the same kind, and so is reading one of the columns back (`project column`): what a
+terminal answers with is a listing, and a listing has no columns
 to recut — the axis is a word in the filter there, not a way the answer is laid out. Answering the question an opened project puts, choosing
 which tool the text is for, pressing the button that hands it over, and dropping the answer again
 (`repo ai-launch-consent` / `ai-launch-pick` / `ai-launch-copy` / `ai-launch-consent-clear`), are the

@@ -76,6 +76,23 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // unreachable by the one key a person actually remembers. Typed in the same panel as the slug, so it
   // lands on the screen along with them.
   "invalid_dimension_name_whitespace",
+  // The pair a time axis will not enter into (`AMB-D-826`): the era resolution reads one value, so an
+  // axis that admits several cannot be the one it reads. The classification panel holds both switches
+  // side by side, so flipping either one onto the other lands the refusal on the screen.
+  "invalid_dimension_multi_time_axis",
+  // Its other half: the way back down, refused while records still answer that axis with several
+  // values (`AMB-D-826`). The same panel is where the switch is lowered, and the count the sentence
+  // carries is the size of what the reader is being asked to clear first.
+  "invalid_dimension_demote_holders",
+  // The three refusals closing a value raises (`AMB-D-829`). The panel holds the closable switch and the
+  // close button side by side, so a value can be asked to close on an axis whose role was just dropped
+  // elsewhere; it shuts the button on the last value a required axis still offers, and the refusal is the
+  // backstop under a panel drawn a moment ago. The third arrives at the pickers rather than here — a
+  // value closed on another face is gone from the select but may still be carried, and a record moving
+  // onto it is turned away.
+  "invalid_dimension_close_not_closable",
+  "invalid_dimension_close_last_open",
+  "invalid_dimension_set_closed_value",
   "invalid_task_required_dimension",
   // Its decision twin: the same flag, read at the other door a record passes through once
   // (`decision accept`), and the decision pane is where that button is.

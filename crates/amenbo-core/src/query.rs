@@ -3040,8 +3040,10 @@ mod filter_tests {
 
     /// What repeating `dim:` means is read off the **axis** (`AMB-D-655`): different axes AND, as they
     /// always have, and the same axis twice ORs — the set of values per axis the other keys spell with a
-    /// comma, which a value's name cannot borrow because it is the user's own text. An axis is
-    /// single-select, so the old AND answered `dim:A=x dim:A=y` with nobody.
+    /// comma, which a value's name cannot borrow because it is the user's own text. On a single-select
+    /// axis the old AND answered `dim:A=x dim:A=y` with nobody, which is what made it worth changing;
+    /// the OR is what a multi-select axis needs too (`AMB-D-826`), and the arm is an `EXISTS` per axis,
+    /// so a record holding both values is still answered once.
     #[test]
     fn the_same_axis_named_twice_asks_for_either_value() {
         use crate::model::{DimensionCardinality, DimensionRole};

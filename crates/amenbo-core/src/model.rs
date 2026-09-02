@@ -558,26 +558,36 @@ pub struct DecisionTaskLink {
 // Every axis a task can be classified along — phase, category, whatever the user invents — goes through
 // one mechanism: the Dimension.
 
-/// How many values of a dimension a task may hold. Single-select only: `(task, dimension)` is constrained
-/// to one row. A one-variant enum is kept so the physical column `dimension.cardinality` keeps its meaning
-/// in the type system — bringing multi-select back is then a matter of adding a variant.
+/// How many values of an axis one record may hold — the axis's own answer, like `show_on_card` and
+/// `required` (`AMB-D-826`). `Single` constrains `(task, dimension)` to one row and is where every axis
+/// starts and where every axis an upgrade brings in stays; `Multi` lets one record answer the axis with
+/// several of its values, so a record that genuinely spans a set of them is filed under all of them
+/// rather than under a representative one.
+///
+/// **`Multi` and `role: TimeAxis` do not go together.** A time axis resolves the "current era" to a
+/// single value ([`crate::store_engine::read::current_time_axis_value`]) and writes that one onto a new
+/// record; belonging to several eras leaves both halves of that undefined. `ops::dimension` refuses the
+/// pair at both doors it can be built through.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DimensionCardinality {
     #[default]
     Single,
+    Multi,
 }
 
 impl DimensionCardinality {
     pub fn as_str(&self) -> &'static str {
         match self {
             DimensionCardinality::Single => "single",
+            DimensionCardinality::Multi => "multi",
         }
     }
 
     pub fn parse(s: &str) -> Option<DimensionCardinality> {
         match s {
             "single" => Some(DimensionCardinality::Single),
+            "multi" => Some(DimensionCardinality::Multi),
             _ => None,
         }
     }
@@ -587,12 +597,24 @@ impl DimensionCardinality {
 /// earns it special treatment in the views' filter affordances. The user is free to call that axis
 /// "phase", or "sprint", or anything else — the role is the engine's vocabulary, the name is data. The
 /// mechanism is identical to every other axis; only this flag is added.
+///
+/// `Closable` nominates an axis whose values can be **closed**: a value nobody is to be filed under any
+/// more, which stays where it is and keeps every record already filed under it (`AMB-D-829`). Without
+/// it the only way to retire a value is to delete it, and that takes the classification with it — what
+/// was filed under a finished release stops being findable at all. The flag is on the axis rather than
+/// on the value because closing means something on the axis that keeps raising values and retiring them
+/// (a release, a theme) and nothing on the one whose values are the vocabulary itself.
+///
+/// **One axis holds one role.** An axis is either the time axis or the closable one, and the two say
+/// different things about what its values are: a time axis retires a value by its period running out,
+/// which is the very thing `DimensionValue::covers` reads, so it needs no second way of saying the same.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DimensionRole {
     #[default]
     None,
     TimeAxis,
+    Closable,
 }
 
 impl DimensionRole {
@@ -600,6 +622,7 @@ impl DimensionRole {
         match self {
             DimensionRole::None => "none",
             DimensionRole::TimeAxis => "time_axis",
+            DimensionRole::Closable => "closable",
         }
     }
 
@@ -607,6 +630,7 @@ impl DimensionRole {
         match s {
             "none" => Some(DimensionRole::None),
             "time_axis" => Some(DimensionRole::TimeAxis),
+            "closable" => Some(DimensionRole::Closable),
             _ => None,
         }
     }
@@ -771,6 +795,22 @@ pub struct DimensionValue {
     /// Last day of the period, inclusive. `None` means "ongoing" — an open end.
     #[serde(default)]
     pub end_on: Option<NaiveDate>,
+    /// Is this value closed — retired from the choices a record is newly filed under, while everything
+    /// already filed under it stays (`AMB-D-829`)? It is the **payload of the
+    /// [`DimensionRole::Closable`] role**, the way `start_on` / `end_on` are the time axis's: the column
+    /// is on every value, and closing one is refused unless its axis carries the role
+    /// (`ops::dimension::value_set_closed`). Reopening is free on any axis, so an axis that loses the
+    /// role never strands a value nobody can bring back.
+    ///
+    /// A closed value keeps its id, its name, its key and its place in the order — reopening it has to
+    /// find all four where they were, and a filter naming it goes on resolving, which is the whole point
+    /// of closing rather than deleting. What it stops doing is taking new records:
+    /// `ops::dimension::set` and its decision twin refuse it, and the guards that ask whether an axis
+    /// still offers anything count the open values alone.
+    ///
+    /// `false` is where every value starts and where every value an upgrade brings in stays.
+    #[serde(default)]
+    pub closed: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
@@ -790,9 +830,9 @@ impl DimensionValue {
 }
 
 /// The assignment of a dimension value to a task — the join record. `dimension_id` is denormalised onto
-/// it so that ops and reads can enforce the single-select `(task, dimension)` one-row constraint, and
-/// filter on an axis directly, without joining through to the value. Removing an assignment deletes the
-/// row.
+/// it so that ops and reads can hold a single-select axis to its `(task, dimension)` one row, sweep a
+/// multi-select one's rows together (`AMB-D-826`), and filter on an axis directly, without joining
+/// through to the value. Removing an assignment deletes the row.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TaskDimensionValue {
     pub id: i64,

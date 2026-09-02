@@ -3926,19 +3926,25 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
 /// One dimension value of a project overview (in `order_key` order). `start_on`/`end_on` are the
 /// period of a `role: time_axis` value — carried for every value, meaningful only on a time_axis axis.
 /// `slug` is the readable key the value answers to outside Amenbo (`AMB-D-735`); it is `None` only for
-/// a row still being written, never for one the overview reads back.
+/// a row still being written, never for one the overview reads back. `closed` is the same shape one
+/// role further along: the payload of `role: closable` (`AMB-D-829`), carried for every value and
+/// meaningful only where the axis was nominated — a value nothing new is filed under, while everything
+/// already filed under it stays.
 pub struct DimensionValueRow {
     pub id: i64,
     pub name: String,
     pub slug: Option<String>,
     pub start_on: Option<NaiveDate>,
     pub end_on: Option<NaiveDate>,
+    pub closed: bool,
 }
 
 /// One dimension (classification axis) of a project overview: id/name/slug/notes plus its live values (in
 /// `order_key` order) and the flags the GUI needs to render/operate it. `role` is the snake_case wire
-/// text (`none`/`time_axis`); `ordered` says whether its values carry an order; `show_on_card` says
-/// whether a task's value on this axis belongs on its card (`AMB-D-651`); `required` says whether it
+/// text (`none`/`time_axis`), and `cardinality` the same for how many of the axis's values one record
+/// may hold (`single`/`multi` — `AMB-D-826`); `ordered` says whether its values carry an order;
+/// `show_on_card` says whether a task's value on this axis belongs on its card (`AMB-D-651`);
+/// `required` says whether it
 /// refuses to be left empty (`AMB-D-734`), which is what lets the GUI hold the button that ends a
 /// creation instead of letting the write fail at the door.
 pub struct DimensionRow {
@@ -3948,6 +3954,10 @@ pub struct DimensionRow {
     /// being written, never for one the overview reads back.
     pub slug: Option<String>,
     pub notes: String,
+    /// How many of the axis's values one record may hold, as stored (`single`/`multi` — `AMB-D-826`).
+    /// It passes straight through to the DTO, the way `role` does: the board reads it to keep an axis
+    /// that admits several out of the choices its columns can be split by.
+    pub cardinality: String,
     pub role: String,
     pub ordered: bool,
     pub show_on_card: bool,
@@ -4052,6 +4062,7 @@ fn overview_dimensions(
     let mut sel = Select::new();
     let (project_id, id, name) = (sel.col(D.project_id), sel.col(D.id), sel.col(D.name));
     let (notes, role, ordered) = (sel.col(D.notes), sel.col(D.role), sel.col(D.ordered));
+    let cardinality = sel.col(D.cardinality);
     let (show_on_card, required, slug) = (sel.col(D.show_on_card), sel.col(D.required), sel.col(D.slug));
     let applies_to = sel.col(D.applies_to);
     // The project is joined to keep a dimension whose project is gone out of the overview, not for a
@@ -4070,6 +4081,7 @@ fn overview_dimensions(
                     name: name.get(r)?,
                     slug: slug.get(r)?,
                     notes: notes.get(r)?,
+                    cardinality: cardinality.get(r)?,
                     role: role.get(r)?,
                     ordered: ordered.get(r)?,
                     show_on_card: show_on_card.get(r)?,
@@ -4099,6 +4111,7 @@ fn overview_dimension_values(
     let mut sel = Select::new();
     let (dimension_id, id, name) = (sel.col(V.dimension_id), sel.col(V.id), sel.col(V.name));
     let (slug, start_on, end_on) = (sel.col(V.slug), sel.col(V.start_on), sel.col(V.end_on));
+    let closed = sel.col(V.closed);
     let mut sql = Sql::from(&sel, V.table);
     sql.join(D.table, same(D.id, V.dimension_id))
         .push_where(scoped(reach, D.project_id).as_ref())
@@ -4114,6 +4127,7 @@ fn overview_dimension_values(
                     slug: slug.get(r)?,
                     start_on: parse_card_date(start_on.get(r)?)?,
                     end_on: parse_card_date(end_on.get(r)?)?,
+                    closed: closed.get(r)?,
                 },
             ))
         })
@@ -4231,7 +4245,9 @@ pub fn task_dimension_assignments(conn: &Connection, task_id: i64) -> Result<Vec
 /// two values would be the join done the long way round.
 ///
 /// Ordered by the **axis**, not by when the assignment was made, so two tasks classified in a different
-/// order still read down the same columns.
+/// order still read down the same columns. A multi-select axis contributes one pair per value it was
+/// answered with (`AMB-D-826`), and those sort by the value — the axis's own order where it has one, so
+/// the row of chips reads the way the axis is written rather than the way it was filled in.
 pub fn task_classification(conn: &Connection, task_id: i64) -> Result<Vec<(String, String)>> {
     const TV: col::task_dimension_value::Cols = col::task_dimension_value::of("tv");
     const D: col::dimension::Cols = col::dimension::of("d");
@@ -4243,7 +4259,7 @@ pub fn task_classification(conn: &Connection, task_id: i64) -> Result<Vec<(Strin
     sql.join(D.table, same(D.id, TV.dimension_id))
         .join(V.table, same(V.id, TV.value_id))
         .push_where(Some(&Pred::eq(TV.task_id, task_id)))
-        .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+        .order_by([Sort::by(D.order_key), Sort::by(D.id), Sort::by(V.order_key), Sort::by(V.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let rows = stmt
         .query_map(rusqlite::params_from_iter(sql.params()), |r| {
@@ -4293,7 +4309,8 @@ pub fn decision_dimension_assignments(conn: &Connection, decision_id: i64) -> Re
 }
 
 /// What one decision is classified as, in words — [`task_classification`]'s twin, ordered by the **axis**
-/// for the same reason, and read by the face that prints a decision rather than joins.
+/// and then by the value for the same reasons, and read by the face that prints a decision rather than
+/// joins.
 pub fn decision_classification(conn: &Connection, decision_id: i64) -> Result<Vec<(String, String)>> {
     const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::of("dv");
     const D: col::dimension::Cols = col::dimension::of("d");
@@ -4305,7 +4322,7 @@ pub fn decision_classification(conn: &Connection, decision_id: i64) -> Result<Ve
     sql.join(D.table, same(D.id, DV.dimension_id))
         .join(V.table, same(V.id, DV.value_id))
         .push_where(Some(&Pred::eq(DV.decision_id, decision_id)))
-        .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+        .order_by([Sort::by(D.order_key), Sort::by(D.id), Sort::by(V.order_key), Sort::by(V.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let rows = stmt
         .query_map(rusqlite::params_from_iter(sql.params()), |r| {
@@ -5057,16 +5074,33 @@ pub fn current_time_axis_value(
 }
 
 /// The live values of one dimension — the subtree [`crate::ops::dimension::delete`] deletes
-/// child-first, each value taking the task assignments that name it.
+/// child-first, each value taking the task assignments that name it. **Every** value, closed ones
+/// included: an axis that is going takes all of them, and a closed value is a live row like any other
+/// (`AMB-D-829`).
 pub fn dimension_value_ids(conn: &Connection, dimension_id: i64) -> Result<Vec<i64>> {
     select_ids(conn, DVAL.id, Some(&Pred::eq(DVAL.dimension_id, dimension_id)))
 }
 
-/// The live assignment of `task_id` on `dimension_id`, whatever value it names. Every dimension is
-/// single-select, so `ops::dimension::set` reads this to delete the outgoing assignment in the same
-/// transaction as the incoming one — the `(task, dimension)` one-row invariant is only an invariant if
-/// the two writes commit together. It is a set, not a row, because the invariant is what keeps it a row:
-/// a store that broke it must not silently keep the extra assignment.
+/// The values of one dimension a record can still be filed under — [`dimension_value_ids`] without the
+/// closed ones (`AMB-D-829`). What the guards asking "does this axis still offer anything" read: an axis
+/// whose values are all closed offers nothing, however many rows it holds, so `required` may not be
+/// raised on it and its last open value may not be deleted out from under the flag.
+///
+/// The `closed` column bites on every axis, not only a `role: closable` one. Only that role can have a
+/// value closed in the first place ([`crate::ops::dimension::value_set_closed`]), and an axis that loses
+/// the role afterwards keeps whatever was closed under it closed — reopening is what is free, on any
+/// axis, so nothing is ever stranded.
+pub fn open_dimension_value_ids(conn: &Connection, dimension_id: i64) -> Result<Vec<i64>> {
+    let pred = Pred::eq(DVAL.dimension_id, dimension_id).and(Pred::eq(DVAL.closed, false));
+    select_ids(conn, DVAL.id, Some(&pred))
+}
+
+/// The live assignments of `task_id` on `dimension_id`, whatever values they name. On a single-select
+/// axis `ops::dimension::set` reads this to delete the outgoing assignment in the same transaction as
+/// the incoming one — the `(task, dimension)` one-row invariant is only an invariant if the two writes
+/// commit together. It is a set rather than a row for two reasons that now sit side by side: a
+/// multi-select axis legitimately holds several (`AMB-D-826`), and on a single-select one a store that
+/// broke the invariant must not have the extra assignment silently kept.
 pub fn assignment_ids_on_axis(
     conn: &Connection,
     task_id: i64,

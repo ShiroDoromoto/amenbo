@@ -63,8 +63,20 @@ interface Store {
    */
   setDimensionSlug(id: number, slug: string): Promise<boolean>;
   updateDimension(id: number, notes: string): void;
+  /**
+   * Let one record answer this axis with several of its values (`AMB-D-826`). Raising it takes
+   * nothing away; lowering it is refused while a record still holds several, and the sentence says
+   * how many.
+   */
+  setDimensionMulti(id: number, multi: boolean): void;
   setDimensionOrdered(id: number, ordered: boolean): void;
   setDimensionTimeAxis(id: number, timeAxis: boolean): void;
+  /**
+   * Let this axis's values be closed rather than deleted (`AMB-D-829`). An axis holds one role, so
+   * naming it closable takes the time axis off it, and giving the role up leaves whatever was closed
+   * closed — reopening is free on any axis.
+   */
+  setDimensionClosable(id: number, closable: boolean): void;
   setDimensionShowOnCard(id: number, showOnCard: boolean): void;
   /**
    * Make this axis refuse to be left empty (`AMB-D-734`). It is read where a creation is finished and
@@ -82,6 +94,12 @@ interface Store {
   /** The value's counterpart of `setDimensionSlug`, unique within its axis, and refusable the same way. */
   setDimensionValueSlug(valueId: number, slug: string): Promise<boolean>;
   setDimensionValuePeriod(valueId: number, startOn: string | undefined, endOn: string | undefined): void;
+  /**
+   * Close a value, or open it again (`AMB-D-829`). Closing keeps every record already on it and every
+   * filter naming it, and stops the value taking new records; deleting is the other act and takes the
+   * classification with it.
+   */
+  setDimensionValueClosed(valueId: number, closed: boolean): void;
   /**
    * Delete a value of an axis. `reassignTo` names another value of the same axis for the tasks
    * answering with this one to move to — which a required axis demands rather than emptying them out.
@@ -191,8 +209,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     renameDimension(id, name) { run(mut.renameDimension(id, name)); },
     setDimensionSlug(id, slug) { return runOk(mut.setDimensionSlug(id, slug)); },
     updateDimension(id, notes) { run(mut.updateDimension(id, notes)); },
+    setDimensionMulti(id, multi) { run(mut.setDimensionMulti(id, multi)); },
     setDimensionOrdered(id, ordered) { run(mut.setDimensionOrdered(id, ordered)); },
     setDimensionTimeAxis(id, timeAxis) { run(mut.setDimensionTimeAxis(id, timeAxis)); },
+    setDimensionClosable(id, closable) { run(mut.setDimensionClosable(id, closable)); },
     setDimensionShowOnCard(id, showOnCard) { run(mut.setDimensionShowOnCard(id, showOnCard)); },
     setDimensionRequired(id, required) { run(mut.setDimensionRequired(id, required)); },
     setDimensionAppliesTo(id, appliesTo) { run(mut.setDimensionAppliesTo(id, appliesTo)); },
@@ -201,6 +221,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     renameDimensionValue(valueId, name) { run(mut.renameDimensionValue(valueId, name)); },
     setDimensionValueSlug(valueId, slug) { return runOk(mut.setDimensionValueSlug(valueId, slug)); },
     setDimensionValuePeriod(valueId, startOn, endOn) { run(mut.setDimensionValuePeriod(valueId, startOn, endOn)); },
+    setDimensionValueClosed(valueId, closed) { run(mut.setDimensionValueClosed(valueId, closed)); },
     removeDimensionValue(valueId, reassignTo) { run(mut.removeDimensionValue(valueId, reassignTo ?? null)); },
     moveDimensionValue(valueId, pos) { run(mut.moveDimensionValue(valueId, pos)); },
     setTaskDimensionValue(taskId, valueId) { return runOk(mut.setTaskDimensionValue(taskId, valueId)); },

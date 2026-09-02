@@ -6,7 +6,7 @@
 
 use crate::dto::*;
 use crate::error::CmdError;
-use amenbo_core::model::{ActorKind, DimensionRole, Priority, TaskStatus};
+use amenbo_core::model::{ActorKind, DimensionCardinality, DimensionRole, Priority, TaskStatus};
 use amenbo_core::time::Timestamp;
 use amenbo_core::{query, Store};
 use chrono::NaiveDate;
@@ -386,6 +386,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
                 name: d.name.clone(),
                 slug: d.slug.clone(),
                 notes: d.notes.clone(),
+                cardinality: d.cardinality.clone(),
                 role: d.role.clone(),
                 ordered: d.ordered,
                 show_on_card: d.show_on_card,
@@ -400,6 +401,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
                         slug: v.slug.clone(),
                         start_on: v.start_on.map(|d| d.to_string()),
                         end_on: v.end_on.map(|d| d.to_string()),
+                        closed: v.closed,
                     })
                     .collect(),
             })
@@ -2708,7 +2710,7 @@ pub fn dimension_add(project_id: i64, name: String) -> Result<WriteAck, CmdError
 #[tauri::command]
 pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_update(id, Some(&name), None, None, None, None, None, None, None)?;
+        store.dimension_update(id, Some(&name), None, None, None, None, None, None, None, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -2722,33 +2724,58 @@ pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
 #[tauri::command]
 pub fn dimension_set_slug(id: i64, slug: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_update(id, None, None, None, None, None, None, None, Some(&slug))?;
+        store.dimension_update(id, None, None, None, None, None, None, None, None, Some(&slug))?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
 }
 
-/// Update a dimension's description (notes), whether its values are ordered (ordered), whether it is
+/// Update a dimension's description (notes), whether one record may answer it with several values
+/// (multi), whether its values are ordered (ordered), whether it is
 /// the time axis (time_axis), whether it goes on the task card (show_on_card), whether it refuses
 /// to be left empty (required), and which of the two entities it classifies (applies_to). Only the
-/// fields passed are changed — same shape as the CLI's `dimension update`. Turning `ordered` on makes reordering values (`dimension_value_move`) take
-/// effect; turning `time_axis` on makes that axis's values carry periods; turning `show_on_card` on
+/// fields passed are changed — same shape as the CLI's `dimension update`. Turning `multi` on lets a
+/// record hold several of this axis's values at once (`AMB-D-826`), and core refuses the way back
+/// down while any record still holds several, and refuses the pair `multi` × time axis at either
+/// door; turning `ordered` on makes reordering values (`dimension_value_move`) take
+/// effect; turning `time_axis` on makes that axis's values carry periods, and turning `closable` on
+/// lets them be closed instead of deleted (`AMB-D-829`) — one role per axis, so the two switches are
+/// the same field and never arrive together; turning `show_on_card` on
 /// puts this axis on every task card, for everyone (`AMB-D-651` — the axis holds the answer, not the
 /// device); turning `required` on makes a creation on this project wait until the axis is answered
 /// (`AMB-D-734`), and core refuses it on an axis that offers no values; narrowing `applies_to` takes
 /// the axis out of the side it no longer classifies, leaving the assignments already made there in
 /// place, meaning nothing (`AMB-D-789`).
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn dimension_update(
     id: i64,
     notes: Option<String>,
+    multi: Option<bool>,
     ordered: Option<bool>,
     time_axis: Option<bool>,
+    closable: Option<bool>,
     show_on_card: Option<bool>,
     required: Option<bool>,
     applies_to: Option<String>,
 ) -> Result<WriteAck, CmdError> {
-    let role = time_axis.map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
+    // The two nominations are one field, and an axis holds one role, so the panel moves one switch at a
+    // time and either arm alone says what the role becomes. Both at once is the screen's defect, not the
+    // person's — refused here rather than silently letting one win.
+    let role = match (time_axis, closable) {
+        (Some(_), Some(_)) => {
+            return Err(amenbo_core::Error::invalid(
+                "an axis holds one role: pass time_axis or closable, not both",
+            )
+            .into())
+        }
+        (Some(on), None) => Some(if on { DimensionRole::TimeAxis } else { DimensionRole::None }),
+        (None, Some(on)) => Some(if on { DimensionRole::Closable } else { DimensionRole::None }),
+        (None, None) => None,
+    };
+    let cardinality = multi.map(|on| {
+        if on { DimensionCardinality::Multi } else { DimensionCardinality::Single }
+    });
     // A word this build does not know is the screen's defect, not the person's, so it is refused here
     // rather than silently read as `both` — the same door core's own parse holds.
     let applies_to = match applies_to.as_deref() {
@@ -2759,7 +2786,7 @@ pub fn dimension_update(
         None => None,
     };
     with_store_mut(|store| {
-        store.dimension_update(id, None, notes.as_deref(), ordered, role, show_on_card, required, applies_to, None)?;
+        store.dimension_update(id, None, notes.as_deref(), cardinality, ordered, role, show_on_card, required, applies_to, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -2845,6 +2872,22 @@ pub fn dimension_value_set_period(
             .into());
         }
         store.dimension_value_update(value_id, None, None, Some((start, end)))?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]))
+}
+
+/// Close a dimension value, or open it again (`AMB-D-829`) — the panel's counterpart of the CLI's
+/// `dimension value-close` / `value-reopen`. Closing retires the value from what a record is newly filed
+/// under and takes nothing away: the records already on it keep it, its name, key and place stay, and a
+/// filter naming it goes on resolving. Unlike a period, the role is checked by core rather than here —
+/// closing *is* what the nomination means, so the refusal belongs at the door that writes it
+/// (`invalid_dimension_close_not_closable`), together with the one keeping a required axis answerable
+/// (`invalid_dimension_close_last_open`). Reopening asks for nothing.
+#[tauri::command]
+pub fn dimension_value_set_closed(value_id: i64, closed: bool) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.dimension_value_set_closed(value_id, closed)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))

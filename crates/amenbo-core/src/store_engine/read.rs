@@ -3937,8 +3937,10 @@ pub struct DimensionValueRow {
 
 /// One dimension (classification axis) of a project overview: id/name/slug/notes plus its live values (in
 /// `order_key` order) and the flags the GUI needs to render/operate it. `role` is the snake_case wire
-/// text (`none`/`time_axis`); `ordered` says whether its values carry an order; `show_on_card` says
-/// whether a task's value on this axis belongs on its card (`AMB-D-651`); `required` says whether it
+/// text (`none`/`time_axis`), and `cardinality` the same for how many of the axis's values one record
+/// may hold (`single`/`multi` — `AMB-D-826`); `ordered` says whether its values carry an order;
+/// `show_on_card` says whether a task's value on this axis belongs on its card (`AMB-D-651`);
+/// `required` says whether it
 /// refuses to be left empty (`AMB-D-734`), which is what lets the GUI hold the button that ends a
 /// creation instead of letting the write fail at the door.
 pub struct DimensionRow {
@@ -3948,6 +3950,10 @@ pub struct DimensionRow {
     /// being written, never for one the overview reads back.
     pub slug: Option<String>,
     pub notes: String,
+    /// How many of the axis's values one record may hold, as stored (`single`/`multi` — `AMB-D-826`).
+    /// It passes straight through to the DTO, the way `role` does: the board reads it to keep an axis
+    /// that admits several out of the choices its columns can be split by.
+    pub cardinality: String,
     pub role: String,
     pub ordered: bool,
     pub show_on_card: bool,
@@ -4052,6 +4058,7 @@ fn overview_dimensions(
     let mut sel = Select::new();
     let (project_id, id, name) = (sel.col(D.project_id), sel.col(D.id), sel.col(D.name));
     let (notes, role, ordered) = (sel.col(D.notes), sel.col(D.role), sel.col(D.ordered));
+    let cardinality = sel.col(D.cardinality);
     let (show_on_card, required, slug) = (sel.col(D.show_on_card), sel.col(D.required), sel.col(D.slug));
     let applies_to = sel.col(D.applies_to);
     // The project is joined to keep a dimension whose project is gone out of the overview, not for a
@@ -4070,6 +4077,7 @@ fn overview_dimensions(
                     name: name.get(r)?,
                     slug: slug.get(r)?,
                     notes: notes.get(r)?,
+                    cardinality: cardinality.get(r)?,
                     role: role.get(r)?,
                     ordered: ordered.get(r)?,
                     show_on_card: show_on_card.get(r)?,

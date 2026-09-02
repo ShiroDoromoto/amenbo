@@ -270,8 +270,10 @@ export type DecisionRefDto = { id: number,
 name: string | null, ref?: string, };
 
 /**
- * The per-decision assigned value for one project × dimension (`decisionId`→`valueId`) — the decision
- * side of [`DimensionTaskValueDto`]. The decisions tab uses it to narrow its list by classification.
+ * One assignment on one project × dimension (`decisionId`→`valueId`) — the decision side of
+ * [`DimensionTaskValueDto`]. The decisions tab uses it to narrow its list by classification. One row
+ * per assignment, so an axis admitting several values at once (`AMB-D-826`) sends several for the one
+ * decision.
  */
 export type DimensionDecisionValueDto = { decisionId: number, valueId: number, };
 
@@ -289,7 +291,13 @@ export type DimensionDto = { id: number, name: string,
  * The axis's readable key (`AMB-D-735`), the counterpart of a value's. Omitted only for a row
  * still being written; every saved axis carries one.
  */
-slug?: string, notes: string, role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, required: boolean, 
+slug?: string, notes: string, 
+/**
+ * How many of this axis's values one record may hold (`AMB-D-826`). The board reads it to keep a
+ * multi-select axis out of the axes its columns can be split by — a column says where a task is,
+ * and a task on several values of one axis is in no single column.
+ */
+cardinality: "single" | "multi", role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, required: boolean, 
 /**
  * Which of the two entities this axis classifies (`AMB-D-789`). The screens read it to decide
  * which of them offer the axis at all — the board and the task card the task side, the decision
@@ -298,8 +306,10 @@ slug?: string, notes: string, role: "none" | "time_axis", ordered: boolean, show
 appliesTo: "task" | "decision" | "both", values: Array<DimensionValueDto>, };
 
 /**
- * The per-task assigned value for one project × dimension (`taskId`→`valueId`). The board uses it
- * to bundle tasks by value on the chosen dimension (browsing/grouping).
+ * One assignment on one project × dimension (`taskId`→`valueId`). The board uses it to bundle tasks by
+ * value on the chosen dimension (browsing/grouping), and to draw the values its cards carry. One row per
+ * assignment, so an axis admitting several values at once (`AMB-D-826`) sends several for the one task —
+ * which is why the axis splitting the columns is never one of those.
  */
 export type DimensionTaskValueDto = { taskId: number, valueId: number, };
 

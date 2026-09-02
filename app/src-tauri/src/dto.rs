@@ -71,6 +71,11 @@ pub struct DimensionDto {
     #[ts(optional)]
     pub(crate) slug: Option<String>,
     pub(crate) notes: String,
+    /// How many of this axis's values one record may hold (`AMB-D-826`). The board reads it to keep a
+    /// multi-select axis out of the axes its columns can be split by — a column says where a task is,
+    /// and a task on several values of one axis is in no single column.
+    #[ts(type = "\"single\" | \"multi\"")]
+    pub(crate) cardinality: String,
     #[ts(type = "\"none\" | \"time_axis\"")]
     pub(crate) role: String,
     pub(crate) ordered: bool,
@@ -108,8 +113,10 @@ pub struct DecisionDimensionAssignmentDto {
     pub(crate) value_id: i64,
 }
 
-/// The per-decision assigned value for one project × dimension (`decisionId`→`valueId`) — the decision
-/// side of [`DimensionTaskValueDto`]. The decisions tab uses it to narrow its list by classification.
+/// One assignment on one project × dimension (`decisionId`→`valueId`) — the decision side of
+/// [`DimensionTaskValueDto`]. The decisions tab uses it to narrow its list by classification. One row
+/// per assignment, so an axis admitting several values at once (`AMB-D-826`) sends several for the one
+/// decision.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -120,8 +127,10 @@ pub struct DimensionDecisionValueDto {
     pub(crate) value_id: i64,
 }
 
-/// The per-task assigned value for one project × dimension (`taskId`→`valueId`). The board uses it
-/// to bundle tasks by value on the chosen dimension (browsing/grouping).
+/// One assignment on one project × dimension (`taskId`→`valueId`). The board uses it to bundle tasks by
+/// value on the chosen dimension (browsing/grouping), and to draw the values its cards carry. One row per
+/// assignment, so an axis admitting several values at once (`AMB-D-826`) sends several for the one task —
+/// which is why the axis splitting the columns is never one of those.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]

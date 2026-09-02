@@ -386,6 +386,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
                 name: d.name.clone(),
                 slug: d.slug.clone(),
                 notes: d.notes.clone(),
+                cardinality: d.cardinality.clone(),
                 role: d.role.clone(),
                 ordered: d.ordered,
                 show_on_card: d.show_on_card,

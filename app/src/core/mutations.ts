@@ -1754,7 +1754,9 @@ export async function fetchDecisionDimensions(decisionId: number): Promise<Decis
   return invoke<DecisionDimensionAssignmentDto[]>("decision_dimensions", { decisionId });
 }
 
-/** All task assignments for one project × dimension (taskId → valueId) in a single call, so the board can group by value. */
+/** All task assignments for one project × dimension in a single call, so the board can group by value and
+ * draw the values its cards carry. One row per assignment: an axis admitting several values at once
+ * (`AMB-D-826`) answers with several rows for the one task, so a caller collects rather than overwrites. */
 export async function fetchProjectDimensionAssignments(
   projectId: number,
   dimensionId: number,
@@ -1766,7 +1768,8 @@ export async function fetchProjectDimensionAssignments(
   });
 }
 
-/** All decision assignments for one project × dimension (decisionId → valueId) in a single call, so the decisions tab can narrow by classification. */
+/** All decision assignments for one project × dimension in a single call, so the decisions tab can narrow
+ * by classification. One row per assignment, the way the task side answers. */
 export async function fetchProjectDecisionDimensionAssignments(
   projectId: number,
   dimensionId: number,

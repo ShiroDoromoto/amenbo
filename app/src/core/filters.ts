@@ -46,11 +46,15 @@ export type FilterSelection = Record<string, string[]>;
 const PRIORITIES: Priority[] = ["high", "medium", "low"];
 
 /**
- * Task — or decision — to (dimension id to assigned value id). Dimension and value ids are integer
- * keys, and so is the outer one, carried as a string because that is what a `Record` key is. One
- * shape for both sides: a classification is the same fact whichever of the two carries it.
+ * Task — or decision — to (dimension id to the value ids assigned on it). Dimension and value ids are
+ * integer keys, and so is the outer one, carried as a string because that is what a `Record` key is.
+ * One shape for both sides: a classification is the same fact whichever of the two carries it.
+ *
+ * The innermost value is a list because an axis may admit several at once (`AMB-D-826`); a
+ * single-select axis is the one-element case of the same shape, so nothing downstream branches on
+ * which kind of axis it is reading. An axis a record sits on no value of is absent, never `[]`.
  */
-export type DimAssignments = Record<string, Record<number, number>>;
+export type DimAssignments = Record<string, Record<number, number[]>>;
 
 /**
  * The axes the board filters on. The assignee options me / me-ai are decided by facet kind (in a
@@ -163,7 +167,7 @@ function customDimensions<T>(
         // `FilterSelection` is one Record across all dimensions, so what it holds are strings; an integer key is carried in that form.
         value: String(v.id),
         label: () => v.name,
-        test: (item: T) => dimAssign[idOf(item)]?.[dim.id] === v.id,
+        test: (item: T) => dimAssign[idOf(item)]?.[dim.id]?.includes(v.id) ?? false,
       })),
     }));
 }

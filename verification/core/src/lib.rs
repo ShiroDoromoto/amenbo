@@ -355,6 +355,21 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A terminal has no standing selection to press — it writes the selection out
     // as a `--filter` each time it asks, which is what `listed` walks.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-view", required: &["view"], refs: &[], strings: &["view"], binds: false },
+    // A card carried into one of the columns a cut board draws, which is the board's own way of filing
+    // work: what it lands under is the value on the column's heading, so the move names the axis and
+    // that value rather than anywhere on a screen. The card is named by `target`, the way every step
+    // pointing at a record names it.
+    //
+    // A closed value is where the road comes apart, which is why this is written as an op that can be
+    // turned away: such a column stands while cards are still in it and takes no drop, so the value the
+    // picker stopped offering cannot be reached around by hand. The screen holds that line one step
+    // earlier than the store does — the column is no drop target at all, rather than a drop the store
+    // refuses — so `refused:` names the rule the road walks (`dimension set`'s own) and not a sentence
+    // anybody is shown.
+    //
+    // A screen road alone: a terminal files work with `dimension set`, and has no column to carry a
+    // card into.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "drop-into-column", required: &["target", "axis", "value"], refs: &["target"], strings: &["axis", "value"], binds: false },
     // A project's own life: its fields, where it sits in the list, and whether it is still in play.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "update", required: &["target"], refs: &["target"], strings: &["name", "notes", "view"], binds: false },

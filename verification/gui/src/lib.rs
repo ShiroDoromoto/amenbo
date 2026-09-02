@@ -956,6 +956,27 @@ impl Instructor {
             (Domain::Task, "open-view") => {
                 format!("In the sidebar, press {}.", view_row(req(with, "view")?)?)
             }
+            // The card carried across the board and let go in a column, which is how work is filed
+            // where it is standing. The column is named by the value on its heading — a word the reader
+            // gave — and the axis beside it says which cut of the board the operator is looking at, so a
+            // line is walkable on the board it was written for and on no other.
+            //
+            // The half a closed value turns away is written out rather than left to the sentence every
+            // refused step ends with, for the reason the held creation is: nothing comes back and no
+            // sentence is shown, the column simply not taking the card — so an operator told only to
+            // expect a refusal would be watching for something that never appears.
+            (Domain::Task, "drop-into-column") if with.contains_key("refused") => format!(
+                "On the board cut along \"{}\", carry the card \"{}\" over the column headed \"{}\" and let it go. The column takes no card — it is nowhere a drop can land — so the card stays in the column it came from, with nothing said about it.",
+                req(with, "axis")?,
+                self.target_label(with),
+                req(with, "value")?
+            ),
+            (Domain::Task, "drop-into-column") => format!(
+                "On the board cut along \"{}\", drag the card \"{}\" into the column headed \"{}\" and let it go there.",
+                req(with, "axis")?,
+                self.target_label(with),
+                req(with, "value")?
+            ),
             // The moves that carry the screen from one shot to the next. They read as what to do and
             // not as what to confirm, because that is what they are — the shot they leave behind is
             // the screen after the move, which is how a road across screens is proven walked rather
@@ -4611,6 +4632,44 @@ steps_gui:
         );
         let said = Instructor::new().render(&carded(true)).unwrap();
         assert!(said.contains("heading"), "and the line says where the word will be standing: {said}");
+    }
+
+    /// Filing work by carrying its card into a column, and the one column that will not take it. Both
+    /// halves are the same move and the same three words — the axis, the card, the value on the heading
+    /// — so what tells them apart is what the line says happens at the end of the drag. The refused one
+    /// says the card comes back and nothing is said about it, because that is all a column which is no
+    /// drop target ever does: an operator waiting for a sentence to appear would be waiting for a screen
+    /// this build never draws.
+    #[test]
+    fn a_card_carried_into_a_column_says_when_the_column_will_not_take_it() {
+        let drop = |value: &str, refused: bool| {
+            let mut with: Args = [
+                ("target".to_string(), serde_yaml::Value::from("fresh")),
+                ("axis".to_string(), serde_yaml::Value::from("Release")),
+                ("value".to_string(), serde_yaml::Value::from(value)),
+            ]
+            .into_iter()
+            .collect();
+            if refused {
+                with.insert(
+                    "refused".to_string(),
+                    serde_yaml::Value::from("invalid_dimension_set_closed_value"),
+                );
+            }
+            Step::Action { domain: Domain::Task, op: "drop-into-column".to_string(), with, bind: None }
+        };
+
+        let landed = Instructor::new().render(&drop("v19", false)).unwrap();
+        assert!(landed.contains("Release") && landed.contains("v19"), "got: {landed}");
+        assert!(landed.contains("fresh"), "the card is named: {landed}");
+        assert!(!landed.contains("turned away"), "a drop that lands walks no refusal: {landed}");
+
+        let turned = Instructor::new().render(&drop("v18", true)).unwrap();
+        assert!(turned.contains("takes no card"), "got: {turned}");
+        assert!(
+            turned.contains("turned away rather than to go through"),
+            "and it is still a refused step: {turned}"
+        );
     }
 
     /// The demand an axis can carry, and the two controls this face answers it with. A terminal meets

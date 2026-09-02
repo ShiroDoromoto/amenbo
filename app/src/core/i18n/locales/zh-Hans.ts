@@ -186,7 +186,7 @@ export const zhHans: Translation = {
     "detail.linkedDecisions": "依据",
     "detail.premiseUnsettled": "前提尚未定论——等待裁定或解除关联（无法预约）",
     "detail.priority": "优先级", "detail.priorityNone": "无",
-    "detail.notes": "备注（Markdown）", "detail.edit": "编辑", "detail.add": "添加",
+    "detail.notes": "备注（Markdown）", "detail.edit": "编辑", "detail.add": "添加", "detail.dimUnset": "移除此值",
     "detail.notesPh": "用 Markdown 写备注…", "detail.notesHint": "Markdown · 用 ⌘/Ctrl+Enter 保存 · Esc 取消",
     "detail.cancel": "取消", "detail.save": "保存", "detail.noNotes": "还没有备注",
     "detail.activityCategory": "动态", "detail.noComments": "还没有评论",

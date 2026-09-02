@@ -188,7 +188,7 @@ export const uk: Translation = {
     "detail.linkedDecisions": "Постало з",
     "detail.premiseUnsettled": "засаду не вирішено — дочекайтеся рішення або відв'яжіть її (зарезервувати не вдасться)",
     "detail.priority": "Пріоритет", "detail.priorityNone": "Немає",
-    "detail.notes": "Нотатки (Markdown)", "detail.edit": "Редагувати", "detail.add": "Додати",
+    "detail.notes": "Нотатки (Markdown)", "detail.edit": "Редагувати", "detail.add": "Додати", "detail.dimUnset": "Прибрати це значення",
     "detail.notesPh": "Напишіть нотатки в Markdown…", "detail.notesHint": "Markdown · зберегти через ⌘/Ctrl+Enter · Esc скасовує",
     "detail.cancel": "Скасувати", "detail.save": "Зберегти", "detail.noNotes": "Нотаток поки немає",
     "detail.activityCategory": "Активність", "detail.noComments": "Коментарів поки немає",

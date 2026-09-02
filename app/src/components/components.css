@@ -358,6 +358,17 @@
    what the task is and not that anything is wrong with it — the chips it shares the card with report
    trouble, and a classification must not be read as one of those. */
 .chip--dim { white-space: nowrap; cursor: default; color: var(--c-text-muted); }
+/* The values a record carries on a multi-select axis (`AMB-D-826`), in the detail pane: the chips and
+   the select that offers what is not carried yet, wrapping onto a second line where the row runs out
+   rather than pushing the field wider. */
+.dimchips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
+/* The cross that takes one value off. It sits inside the chip, so it drops the button defaults the way
+   .chip--link does and turns accent on hover to show it is the part that can be pressed. */
+.chip__x {
+  border: 0; background: transparent; padding: 0 0 0 var(--s-1); margin: 0;
+  color: inherit; font: inherit; line-height: 1; cursor: pointer;
+}
+.chip__x:hover { color: var(--c-accent); }
 
 /* The plugin market's catalog panel: one row per registered catalog, plus the row that adds one. */
 .catsrc { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-sunken); }

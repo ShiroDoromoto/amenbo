@@ -4,6 +4,8 @@ import { Attachments } from "../components/Attachments";
 import { CommentRow } from "../components/CommentRow";
 import { getSnapshot, inTauri, type Decision, type DecisionStatus } from "../core/snapshot";
 import { axesFor } from "../core/appliesTo";
+import { DimensionField } from "../components/DimensionField";
+import type { DimensionDto } from "../bindings/bindings";
 import type { Actor } from "../mock/types";
 import {
   acceptDecision, addDecisionComment, amendDecision, buildsOnDecision, editDecision, editDecisionComment,
@@ -403,13 +405,13 @@ function DecisionStamps({ d }: { d: Decision }) {
 }
 
 // The classification axes a decision sits on (`AMB-D-781`) — the decision side of the task pane's
-// selects, and the same optimistic move: the select goes first and a refusal takes it back. The axes
+// fields, and the same optimistic move: the field goes first and a refusal takes it back. The axes
 // belong to the project, so a project carrying none draws nothing at all, which is the common case for
 // the decisions recorded before this existed. A required axis is not enforced in this control: the flag
 // bites where a record is settled (`AMB-D-790`), which on this side is the accept below — so an axis
-// left blank here comes back as a refusal from that press, not as a select this component holds.
+// left blank here comes back as a refusal from that press, not as a value this component holds.
 function DecisionDimensions({ d }: { d: Decision }) {
-  const [values, setValues] = useState<Record<number, number>>({});
+  const [values, setValues] = useState<Record<number, number[]>>({});
   const [error, setError] = useState<string | null>(null);
   // Pull this decision's assignments from the read-model (Tauri only; the browser mock has no decisions).
   useEffect(() => {
@@ -417,8 +419,10 @@ function DecisionDimensions({ d }: { d: Decision }) {
     let alive = true;
     fetchDecisionDimensions(d.id).then((rows) => {
       if (!alive) return;
-      const m: Record<number, number> = {};
-      for (const r of rows) m[r.dimensionId] = r.valueId;
+      // One row per assignment, and a multi-select axis answers with several (`AMB-D-826`) — so the
+      // map is keyed by axis and holds every value the decision carries on it, not the last row read.
+      const m: Record<number, number[]> = {};
+      for (const r of rows) (m[r.dimensionId] ??= []).push(r.valueId);
       setValues(m);
     }).catch(() => {});
     return () => { alive = false; };
@@ -431,23 +435,27 @@ function DecisionDimensions({ d }: { d: Decision }) {
     (d.project ? getSnapshot().projects.find((p) => p.id === d.project?.id) : undefined)?.dimensions ?? [],
   );
   if (axes.length === 0) return null;
-  // What the select shows for one axis — the value, or nothing where the decision is on no value of it.
-  // Drawing an assignment and taking a refused one back go through here alike, so the two can never
-  // disagree about what "cleared" looks like.
-  const show = (dimensionId: number, valueId: number | undefined) =>
+  // What the field shows for one axis — every value the decision carries on it. Drawing an assignment
+  // and taking a refused one back go through here alike, so the two can never disagree about what
+  // "cleared" looks like.
+  const show = (dimensionId: number, next: number[]) =>
     setValues((m) => {
       const n = { ...m };
-      if (valueId === undefined) delete n[dimensionId];
-      else n[dimensionId] = valueId;
+      if (next.length === 0) delete n[dimensionId];
+      else n[dimensionId] = next;
       return n;
     });
-  const write = (dimensionId: number, next: number | undefined, prev: number | undefined) => {
+  // One value put on or taken off, drawn first and written after. A single-select axis replaces what
+  // it had and a multi-select one gains the value (`AMB-D-826`) — the same split core makes.
+  const write = (dim: DimensionDto, valueId: number, on: boolean) => {
     setError(null);
-    show(dimensionId, next);
-    const done = next !== undefined
-      ? setDecisionDimensionValue(d.id, next)
-      : prev !== undefined ? unsetDecisionDimensionValue(d.id, prev) : Promise.resolve();
-    void done.catch((e) => { setError(errText(e)); show(dimensionId, prev); });
+    const prev = values[dim.id] ?? [];
+    const next = on
+      ? (dim.cardinality === "multi" ? [...prev, valueId] : [valueId])
+      : prev.filter((v) => v !== valueId);
+    show(dim.id, next);
+    const done = on ? setDecisionDimensionValue(d.id, valueId) : unsetDecisionDimensionValue(d.id, valueId);
+    void done.catch((e) => { setError(errText(e)); show(dim.id, prev); });
   };
   return (
     <div style={{ marginTop: 8 }}>
@@ -455,19 +463,12 @@ function DecisionDimensions({ d }: { d: Decision }) {
         <div className="detail__field" key={dim.id}>
           <span className="detail__flabel">{dim.name}</span>
           <span>
-            <select
-              className="inlineselect"
-              value={values[dim.id] ?? ""}
-              onChange={(e) => {
-                const valueId = Number(e.target.value);
-                write(dim.id, valueId || undefined, values[dim.id]);
-              }}
-            >
-              <option value="">{t("detail.none")}</option>
-              {dim.values.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
-            </select>
+            <DimensionField
+              dim={dim}
+              selected={values[dim.id] ?? []}
+              onSet={(valueId) => write(dim, valueId, true)}
+              onUnset={(valueId) => write(dim, valueId, false)}
+            />
           </span>
         </div>
       ))}

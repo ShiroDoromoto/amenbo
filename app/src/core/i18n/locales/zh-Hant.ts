@@ -186,7 +186,7 @@ export const zhHant: Translation = {
     "detail.linkedDecisions": "依據",
     "detail.premiseUnsettled": "前提尚未定案——等待裁定或解除連結（無法預約）",
     "detail.priority": "優先度", "detail.priorityNone": "無",
-    "detail.notes": "備註（Markdown）", "detail.edit": "編輯", "detail.add": "新增",
+    "detail.notes": "備註（Markdown）", "detail.edit": "編輯", "detail.add": "新增", "detail.dimUnset": "移除此值",
     "detail.notesPh": "用 Markdown 寫備註…", "detail.notesHint": "Markdown · 用 ⌘/Ctrl+Enter 儲存 · Esc 取消",
     "detail.cancel": "取消", "detail.save": "儲存", "detail.noNotes": "還沒有備註",
     "detail.activityCategory": "動態", "detail.noComments": "還沒有留言",

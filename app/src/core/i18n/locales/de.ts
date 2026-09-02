@@ -185,7 +185,7 @@ export const de: Translation = {
     "detail.linkedDecisions": "Begründet durch",
     "detail.premiseUnsettled": "Prämisse noch nicht entschieden — warte auf die Entscheidung oder löse die Verknüpfung (kein Reservieren möglich)",
     "detail.priority": "Priorität", "detail.priorityNone": "Keine",
-    "detail.notes": "Notizen (Markdown)", "detail.edit": "Bearbeiten", "detail.add": "Hinzufügen",
+    "detail.notes": "Notizen (Markdown)", "detail.edit": "Bearbeiten", "detail.add": "Hinzufügen", "detail.dimUnset": "Diesen Wert entfernen",
     "detail.notesPh": "Notizen in Markdown schreiben…", "detail.notesHint": "Markdown · mit ⌘/Strg+Enter speichern · Esc zum Abbrechen",
     "detail.cancel": "Abbrechen", "detail.save": "Speichern", "detail.noNotes": "Noch keine Notizen",
     "detail.activityCategory": "Aktivität", "detail.noComments": "Noch keine Kommentare",

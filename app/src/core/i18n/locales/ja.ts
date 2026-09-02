@@ -187,7 +187,7 @@ export const ja: Translation = {
     "detail.linkedDecisions": "根拠",
     "detail.premiseUnsettled": "根拠が未確定です。裁定を待つかリンクを外してください（予約できません）",
     "detail.priority": "優先度", "detail.priorityNone": "なし",
-    "detail.notes": "メモ（Markdown）", "detail.edit": "編集", "detail.add": "追加",
+    "detail.notes": "メモ（Markdown）", "detail.edit": "編集", "detail.add": "追加", "detail.dimUnset": "この値を外す",
     "detail.notesPh": "Markdown で概要を書く…", "detail.notesHint": "Markdown 可 · ⌘/Ctrl+Enter で保存 · Esc で取消",
     "detail.cancel": "取消", "detail.save": "保存", "detail.noNotes": "概要文はまだありません",
     "detail.activityCategory": "このタスクの動き", "detail.noComments": "まだコメントはありません",

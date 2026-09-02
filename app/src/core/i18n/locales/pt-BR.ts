@@ -189,7 +189,7 @@ export const ptBR: Translation = {
     "detail.linkedDecisions": "Motivada por",
     "detail.premiseUnsettled": "premissa não resolvida — espere a decisão ou desvincule (não dá para reservar)",
     "detail.priority": "Prioridade", "detail.priorityNone": "Nenhuma",
-    "detail.notes": "Anotações (Markdown)", "detail.edit": "Editar", "detail.add": "Adicionar",
+    "detail.notes": "Anotações (Markdown)", "detail.edit": "Editar", "detail.add": "Adicionar", "detail.dimUnset": "Remover este valor",
     "detail.notesPh": "Escreva anotações em Markdown…", "detail.notesHint": "Markdown · salve com ⌘/Ctrl+Enter · Esc para cancelar",
     "detail.cancel": "Cancelar", "detail.save": "Salvar", "detail.noNotes": "Ainda não há anotações",
     "detail.activityCategory": "Atividade", "detail.noComments": "Ainda não há comentários",

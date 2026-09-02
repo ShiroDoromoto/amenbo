@@ -188,7 +188,7 @@ export const pl: Translation = {
     "detail.linkedDecisions": "Wynika z",
     "detail.premiseUnsettled": "przesłanka nierozstrzygnięta — poczekaj na rozstrzygnięcie albo ją odepnij (nie da się zarezerwować)",
     "detail.priority": "Priorytet", "detail.priorityNone": "Brak",
-    "detail.notes": "Notatki (Markdown)", "detail.edit": "Edytuj", "detail.add": "Dodaj",
+    "detail.notes": "Notatki (Markdown)", "detail.edit": "Edytuj", "detail.add": "Dodaj", "detail.dimUnset": "Usuń tę wartość",
     "detail.notesPh": "Napisz notatki w Markdownie…", "detail.notesHint": "Markdown · zapisz przez ⌘/Ctrl+Enter · Esc anuluje",
     "detail.cancel": "Anuluj", "detail.save": "Zapisz", "detail.noNotes": "Nie ma jeszcze notatek",
     "detail.activityCategory": "Aktywność", "detail.noComments": "Nie ma jeszcze komentarzy",

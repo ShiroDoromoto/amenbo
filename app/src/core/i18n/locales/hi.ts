@@ -185,7 +185,7 @@ export const hi: Translation = {
     "detail.linkedDecisions": "किस कारण",
     "detail.premiseUnsettled": "आधार तय नहीं — निर्णय की प्रतीक्षा करें या कड़ी हटाएँ (आरक्षित नहीं किया जा सकता)",
     "detail.priority": "प्राथमिकता", "detail.priorityNone": "कोई नहीं",
-    "detail.notes": "नोट (Markdown)", "detail.edit": "संपादित करें", "detail.add": "जोड़ें",
+    "detail.notes": "नोट (Markdown)", "detail.edit": "संपादित करें", "detail.add": "जोड़ें", "detail.dimUnset": "यह मान हटाएँ",
     "detail.notesPh": "Markdown में नोट लिखें…", "detail.notesHint": "Markdown · ⌘/Ctrl+Enter से सहेजें · Esc से रद्द",
     "detail.cancel": "रद्द करें", "detail.save": "सहेजें", "detail.noNotes": "अभी कोई नोट नहीं",
     "detail.activityCategory": "गतिविधि", "detail.noComments": "अभी कोई टिप्पणी नहीं",

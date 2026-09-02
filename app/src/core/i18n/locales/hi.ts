@@ -578,6 +578,7 @@ export const hi: Translation = {
     "files.reveal": "फ़ाइल मैनेजर में दिखाएँ",
     "files.trash": "रद्दी में भेजें",
     "files.trashAsk": "{name} को रद्दी में भेजें?",
+    "files.trashAskMany.one": "{n} आइटम को रद्दी में भेजें?", "files.trashAskMany.other": "{n} आइटम को रद्दी में भेजें?",
     "files.trashUndoable": "यह इस मशीन की रद्दी में जाएगी, और पूर्ववत करने पर वापस आ जाएगी।",
     "files.trashQuiet": "दोबारा न पूछें",
     "files.trashGo": "भेजें",

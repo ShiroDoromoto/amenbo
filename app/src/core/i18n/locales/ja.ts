@@ -590,6 +590,7 @@ export const ja: Translation = {
     "files.reveal": "フォルダで表示",
     "files.trash": "ゴミ箱へ入れる",
     "files.trashAsk": "{name} をゴミ箱へ入れますか？",
+    "files.trashAskMany.other": "{n} 件をゴミ箱へ入れますか？",
     "files.trashUndoable": "このパソコンのゴミ箱へ移ります。元に戻せます。",
     "files.trashQuiet": "今後確認しない",
     "files.trashGo": "ゴミ箱へ入れる",

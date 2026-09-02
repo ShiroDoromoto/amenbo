@@ -607,6 +607,7 @@ export const ru: Translation = {
     "files.reveal": "Показать в файловом менеджере",
     "files.trash": "Переместить в корзину",
     "files.trashAsk": "Переместить {name} в корзину?",
+    "files.trashAskMany.one": "Переместить {n} объект в корзину?", "files.trashAskMany.few": "Переместить {n} объекта в корзину?", "files.trashAskMany.many": "Переместить {n} объектов в корзину?", "files.trashAskMany.other": "Переместить {n} объекта в корзину?",
     "files.trashUndoable": "Файл попадёт в корзину этого компьютера, и отмена вернёт его обратно.",
     "files.trashQuiet": "Больше не спрашивать",
     "files.trashGo": "Переместить",

@@ -577,6 +577,7 @@ export const ko: Translation = {
     "files.reveal": "파일 관리자에서 보기",
     "files.trash": "휴지통으로 옮기기",
     "files.trashAsk": "{name}을(를) 휴지통으로 옮길까요?",
+    "files.trashAskMany.other": "{n}개를 휴지통으로 옮길까요?",
     "files.trashUndoable": "이 컴퓨터의 휴지통으로 들어가며, 실행 취소하면 돌아옵니다.",
     "files.trashQuiet": "다시 묻지 않기",
     "files.trashGo": "옮기기",

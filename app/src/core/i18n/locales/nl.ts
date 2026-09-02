@@ -578,6 +578,7 @@ export const nl: Translation = {
     "files.reveal": "Tonen in de bestandsbeheerder",
     "files.trash": "Naar de prullenbak",
     "files.trashAsk": "{name} naar de prullenbak verplaatsen?",
+    "files.trashAskMany.one": "{n} item naar de prullenbak verplaatsen?", "files.trashAskMany.other": "{n} items naar de prullenbak verplaatsen?",
     "files.trashUndoable": "Het bestand gaat naar de prullenbak van deze computer, en ongedaan maken haalt het terug.",
     "files.trashQuiet": "Niet meer vragen",
     "files.trashGo": "Verplaatsen",

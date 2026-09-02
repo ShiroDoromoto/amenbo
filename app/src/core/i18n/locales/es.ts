@@ -599,6 +599,7 @@ export const es: Translation = {
     "files.reveal": "Mostrar en el gestor de archivos",
     "files.trash": "Mover a la papelera",
     "files.trashAsk": "¿Mover {name} a la papelera?",
+    "files.trashAskMany.one": "¿Mover {n} elemento a la papelera?", "files.trashAskMany.many": "¿Mover {n} elementos a la papelera?", "files.trashAskMany.other": "¿Mover {n} elementos a la papelera?",
     "files.trashUndoable": "Va a la papelera de este equipo, y deshacer lo devuelve.",
     "files.trashQuiet": "No volver a preguntar",
     "files.trashGo": "Mover",

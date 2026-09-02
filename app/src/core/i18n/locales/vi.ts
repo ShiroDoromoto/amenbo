@@ -581,6 +581,7 @@ export const vi: Translation = {
     "files.reveal": "Hiện trong trình quản lý tệp",
     "files.trash": "Chuyển vào thùng rác",
     "files.trashAsk": "Chuyển {name} vào thùng rác?",
+    "files.trashAskMany.other": "Chuyển {n} mục vào thùng rác?",
     "files.trashUndoable": "Tệp sẽ nằm trong thùng rác của máy này, và hoàn tác sẽ đưa nó trở lại.",
     "files.trashQuiet": "Đừng hỏi lại",
     "files.trashGo": "Chuyển",

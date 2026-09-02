@@ -604,6 +604,7 @@ export const pl: Translation = {
     "files.reveal": "Pokaż w menedżerze plików",
     "files.trash": "Przenieś do kosza",
     "files.trashAsk": "Przenieść {name} do kosza?",
+    "files.trashAskMany.one": "Przenieść {n} element do kosza?", "files.trashAskMany.few": "Przenieść {n} elementy do kosza?", "files.trashAskMany.many": "Przenieść {n} elementów do kosza?", "files.trashAskMany.other": "Przenieść {n} elementu do kosza?",
     "files.trashUndoable": "Plik trafi do kosza tego komputera, a cofnięcie go przywróci.",
     "files.trashQuiet": "Nie pytaj ponownie",
     "files.trashGo": "Przenieś",

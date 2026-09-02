@@ -199,6 +199,37 @@ function segmentsOf(into: string): string[] {
   return into === "" ? [] : into.split("/");
 }
 
+/**
+ * Do one thing to each of the rows an act is about, in the order they were given.
+ *
+ * One after another rather than all at once: what is on the other side of these is the machine —
+ * applications being started, a file manager being brought to the front — and a handful of those
+ * asked for together arrive in whatever order the OS gets to them. The first refusal ends it, the
+ * same way the bin's own list does (`crate::trash`): a caller who could not open the second file
+ * has nothing to gain from opening the fifth.
+ */
+async function eachOf(paths: string[][], go: (path: string[]) => Promise<void>): Promise<void> {
+  for (const one of paths) await go(one);
+}
+
+/**
+ * One row per folder, in the order they were given.
+ *
+ * Showing a row where it lives is showing the folder holding it, and the machine's file manager
+ * selects one row at a time: five rows of one folder asked for one after another would be five
+ * presses fighting over the same window, each undoing the one before it. One press per folder is
+ * what "show these where they live" comes to.
+ */
+function oncePerFolder(paths: string[][]): string[][] {
+  const seen = new Set<string>();
+  return paths.filter((one) => {
+    const dir = one.slice(0, -1).join("/");
+    if (seen.has(dir)) return false;
+    seen.add(dir);
+    return true;
+  });
+}
+
 export function FilesPanel({
   projectId, onOpenLedger, show, tab, onTab, onClose, onHandOver, onCarry,
 }: {
@@ -270,8 +301,8 @@ export function FilesPanel({
   // How each bound folder's tree is opened, by the folder it is about — the folder is the key
   // because a project draws a section per binding and each of them is opened on its own (`Opened`).
   const [opened, setOpened] = useState<Record<string, Opened>>({});
-  // The row a question about the bin is standing over, or nothing while none is up.
-  const [asking, setAsking] = useState<{ root: string; path: string[] } | null>(null);
+  // The rows a question about the bin is standing over, or nothing while none is up.
+  const [asking, setAsking] = useState<{ root: string; paths: string[][] } | null>(null);
   // What the machine said about the last row that would not go — kept until the next press, because
   // the row it is about is no longer on the list to say it for itself.
   const [stopped, setStopped] = useState<string | null>(null);
@@ -324,6 +355,26 @@ export function FilesPanel({
       if (one.path === root) return [one.path, { ...now, picked, anchor }];
       return [one.path, now.picked.length === 0 ? now : { ...now, picked: [], anchor: null }];
     })));
+
+  /**
+   * The rows an act is about: the ones picked out, where the act was aimed at one of them — and the
+   * row it was aimed at alone, where it was not.
+   *
+   * **Aimed at, not standing on.** A menu is opened on a row and a key is pressed on one; either
+   * way the row under it decides whether the reader meant the selection or meant that row. Nothing
+   * has to be put down first, because both doors put it down themselves: a right-click away from
+   * the selection takes it (`Tree`), and so does a walk with the arrows (`AMB-T-4229`).
+   *
+   * **A row picked out and then folded away is still one of them.** What a fold takes off the
+   * screen it gives back on opening, and the selection is held through it on purpose (`Tree`); the
+   * count in the question before the bin is what says how many rows a press is about, not how many
+   * of them happen to be drawn.
+   */
+  const actOn = (root: string, path: string[]): string[][] => {
+    const now = opened[root] ?? AT_FIRST;
+    if (!now.picked.includes(path.join("/"))) return [path];
+    return now.picked.map(segmentsOf);
+  };
 
   // Files dragged in from the desktop. The panel hears about them from the host rather than from
   // the DOM, so the highlight under the pointer — and the scroll when the pointer hangs at an edge —
@@ -379,19 +430,25 @@ export function FilesPanel({
     if (acted > 0) box.current?.focus();
   }, [acted]);
 
-  // Put one row in the machine's bin. Nothing here deletes: what the host offers is the bin, and a
+  // Put rows in the machine's bin. Nothing here deletes: what the host offers is the bin, and a
   // machine that cannot offer one refuses rather than deleting instead (`./folder`).
-  const bin = (root: string, path: string[]) => {
+  //
+  // **One press however many rows it is about**, which is what makes undo put back exactly what the
+  // press took away: the host holds a press as one entry (`crate::trash`).
+  const bin = (root: string, paths: string[][]) => {
     if (projectId === null) return;
     setStopped(null);
-    void folderTrash(projectId, root, [path])
+    void folderTrash(projectId, root, paths)
       .then((done) => {
         setActed((n) => n + 1);
         setStopped(done.stopped === null ? null : whyStopped(done.stopped));
-        // A file being read that has just gone is not a file to go on reading.
-        if (done.gone.length > 0) {
+        // A file being read that has just gone is not a file to go on reading. Which of them went
+        // is the front of the list: the rows go in the order they were given and the first refusal
+        // ends the press, so the count of them is where it got to (`crate::trash`).
+        const went = paths.slice(0, done.gone.length).map((one) => one.join("/"));
+        if (went.length > 0) {
           setReading((now) =>
-            now !== null && now.root === root && now.path.join("/") === path.join("/") ? null : now
+            now !== null && now.root === root && went.includes(now.path.join("/")) ? null : now
           );
         }
       })
@@ -399,9 +456,9 @@ export function FilesPanel({
   };
 
   // The question first, unless this reader has said they do not want it (`./askBeforeTrash`).
-  const askTrash = (root: string, path: string[]) => {
-    if (asksBeforeTrash()) setAsking({ root, path });
-    else bin(root, path);
+  const askTrash = (root: string, paths: string[][]) => {
+    if (asksBeforeTrash()) setAsking({ root, paths });
+    else bin(root, paths);
   };
 
   // Undo, which here means the last press of the bin and nothing else. It is the OS's own key rather
@@ -453,14 +510,15 @@ export function FilesPanel({
     if (projectId === null) return;
     const on = e.target as HTMLElement;
 
-    // The row the keyboard is on, which is the one thing a copy could be about.
+    // The rows the copy is about, found from the row the keyboard is on: the ones picked out where
+    // it is one of them, and that row alone where it is not (`actOn`).
     if (pressed === "c") {
       const row = on.closest<HTMLElement>('[role="treeitem"]');
       const root = row?.dataset.root;
       const path = row?.dataset.key;
       if (root === undefined || path === undefined) return;
       e.preventDefault();
-      void folderClipCopy(projectId, root, [segmentsOf(path)])
+      void folderClipCopy(projectId, root, actOn(root, segmentsOf(path)))
         .catch((why: unknown) => pushNotice(errText(why)));
       return;
     }
@@ -488,8 +546,8 @@ export function FilesPanel({
       {stopped !== null && <p className="files__stopped">{stopped}</p>}
       {asking !== null && (
         <TrashAsk
-          name={asking.path[asking.path.length - 1] ?? ""}
-          onGo={() => { const one = asking; setAsking(null); bin(one.root, one.path); }}
+          names={asking.paths.map((one) => one[one.length - 1] ?? "")}
+          onGo={() => { const one = asking; setAsking(null); bin(one.root, one.paths); }}
           onCancel={() => setAsking(null)}
         />
       )}
@@ -561,7 +619,7 @@ export function FilesPanel({
           onEdit={setEdit}
           onRead={(path) => { setEdit(null); setReading({ root: one.path, path }); }}
           onMenu={(path, dir, x, y) => setMenu({ root: one.path, path, dir, x, y })}
-          onTrash={(path) => askTrash(one.path, path)}
+          onTrash={(path) => askTrash(one.path, actOn(one.path, path))}
           onPicked={(picked, anchor) => onPicked(one.path, picked, anchor)}
           chosen={reading !== null && reading.root === one.path ? reading.path.join("/") : null}
           onCarry={onCarry}
@@ -572,6 +630,7 @@ export function FilesPanel({
           projectId={projectId}
           root={menu.root}
           path={menu.path}
+          about={actOn(menu.root, menu.path)}
           dir={menu.dir}
           at={{ x: menu.x, y: menu.y }}
           naming={{
@@ -585,7 +644,7 @@ export function FilesPanel({
               : () => setEdit({ kind: "rename", root: menu.root, path: menu.path }),
           }}
           onClose={() => setMenu(null)}
-          onTrash={() => askTrash(menu.root, menu.path)}
+          onTrash={() => askTrash(menu.root, actOn(menu.root, menu.path))}
           onHandOver={onHandOver}
         />
       )}
@@ -600,7 +659,9 @@ export function FilesPanel({
           path={reading.path}
           onBack={() => setReading(null)}
           onOpenLedger={onOpenLedger}
-          onTrash={() => askTrash(reading.root, reading.path)}
+          // The file on the screen and never what is picked out behind it: the reading face is
+          // about one file, and a bin pressed there is about the one being read.
+          onTrash={() => askTrash(reading.root, [reading.path])}
           onKey={onKey}
           close={close}
           aside={aside}
@@ -890,10 +951,25 @@ function FolderSection({
  * are about a file's own kind, and a menu that offered them over a folder would be offering to open a
  * directory in a text editor. What is left over a folder is what can be written into it.
  */
-function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash, onHandOver }: {
+function FileMenu({ projectId, root, path, about, dir, at, naming, onClose, onTrash, onHandOver }: {
   projectId: number;
   root: string;
+  /** The row the menu was opened on — what the menu is drawn from, and what it asks the host about
+   *  where a question is about one row (`folderOpenWith`). */
   path: string[];
+  /**
+   * The rows every door here acts on: `path` alone, or the rows a reader picked out where this one
+   * is among them (`FilesPanel`).
+   *
+   * **What the menu is drawn from is still the one row.** Whether it is a folder decides which
+   * doors there are, and a menu whose shape changed with what else was picked out would be a menu
+   * a reader could not learn.
+   *
+   * The doors that only make sense one at a time — naming, and handing a path to a pane — are drawn
+   * only where this is one row. There is nothing to be gained by offering a rename over five rows
+   * except a press that has to be refused afterwards.
+   */
+  about: string[][];
   /** Whether the row is a folder. It decides the whole of what the menu holds. */
   dir: boolean;
   at: { x: number; y: number };
@@ -934,6 +1010,8 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash, on
 
   // Read out once, so the item below is drawn from the same answer it calls.
   const rename = naming?.onRename ?? null;
+  /** Whether the menu is about one row, which is what the doors that name a single thing need. */
+  const alone = about.length === 1;
 
   /** Ask, and then either draw what came back or step aside because the OS already asked. */
   const choose = () => {
@@ -948,7 +1026,7 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash, on
     <Menu at={at} face={apps} onClose={onClose}>
       {apps === null ? (
         <>
-          {naming !== undefined && dir && (
+          {naming !== undefined && dir && alone && (
             <>
               <MenuItem onClick={() => pick(() => naming.onMake(false))}>
                 {t("files.newFile")}
@@ -958,15 +1036,20 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash, on
               </MenuItem>
             </>
           )}
-          {rename !== null && <MenuItem onClick={() => pick(rename)}>{t("files.rename")}</MenuItem>}
+          {rename !== null && alone
+            && <MenuItem onClick={() => pick(rename)}>{t("files.rename")}</MenuItem>}
           {/* What `⌘C` on the row already does, said out loud: the keys are how a reader who knows
               them copies a path, and the menu is where everybody else looks (`AMB-D-832`). It puts
               the file itself and the plain path on the machine's clipboard in one press, which is
               why one word covers a folder as well as a file — what is copied is the row, and the
               row is named the same either way. Nothing is drawn afterwards: a clipboard says what
               it holds when it is pasted, and a line here would be read as something having gone
-              wrong. */}
-          <MenuItem onClick={() => act(() => folderClipCopy(projectId, root, [path]))}>
+              wrong.
+
+              Several rows go on in one press, as the files they are and as their paths on one line
+              each: what the clipboard holds is what was picked out, and the press that put it there
+              is the one a reader made (`AMB-D-832`). */}
+          <MenuItem onClick={() => act(() => folderClipCopy(projectId, root, about))}>
             {t("files.copyPath")}
           </MenuItem>
           {/* The one door that goes the other way: everything beside it hands the row out to the
@@ -977,19 +1060,33 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash, on
               to hand anything to — the copy above would otherwise move up the menu depending on
               what else is open. Of the doors here it is the one whose answer stays inside the app,
               and it is over a folder as much as over a file: nothing is carried, so a folder costs
-              no more to name than a file does (`AMB-D-820`). */}
-          {onHandOver !== undefined && (
+              no more to name than a file does (`AMB-D-820`).
+
+              **One row at a time**: what a pane is handed is a path written the way a shell reads as
+              one thing, and the door is drawn only where there is one path to write
+              (`../shell/TerminalFace`). */}
+          {onHandOver !== undefined && alone && (
             <MenuItem onClick={() => { onClose(); onHandOver(fileAt(root, path)); }}>
               {dir ? t("files.pasteFolderPath") : t("files.pasteFilePath")}
             </MenuItem>
           )}
+          {/* The three doors out to the machine, each one taken for every row the menu is about.
+              A folder among them is opened the way the machine opens a folder — which is what a
+              reader who picked one out and asked for it to be opened meant. */}
           {!dir && (
             <>
-              <MenuItem onClick={() => act(() => folderOpenFile(projectId, root, path))}>
+              <MenuItem
+                onClick={() => act(() => eachOf(about, (one) => folderOpenFile(projectId, root, one)))}
+              >
                 {t("files.openWith")}
               </MenuItem>
               <MenuItem onClick={choose}>{t("files.chooseApp")}</MenuItem>
-              <MenuItem onClick={() => act(() => folderRevealFile(projectId, root, path))}>
+              <MenuItem
+                onClick={() => act(() => eachOf(
+                  oncePerFolder(about),
+                  (one) => folderRevealFile(projectId, root, one),
+                ))}
+              >
                 {t("files.reveal")}
               </MenuItem>
             </>
@@ -1011,7 +1108,13 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash, on
         apps.map((app) => (
           <MenuItem
             key={app.path}
-            onClick={() => act(() => folderOpenFileWith(projectId, root, path, app.path))}
+            // The list was asked about the row the menu was opened on, and every row it is about is
+            // opened with what the reader picked off it: what a person choosing an application for
+            // five files has chosen is one application.
+            onClick={() => act(() => eachOf(
+              about,
+              (one) => folderOpenFileWith(projectId, root, one, app.path),
+            ))}
           >
             {/* The one the file would have opened with anyway is said to be that, not just put
                 first: a list whose order carries the meaning loses it the moment somebody reads
@@ -2219,6 +2322,9 @@ function FileReader({
           projectId={projectId}
           root={root}
           path={path}
+          // The file being read, and nothing picked out behind it: this menu is opened on the face
+          // showing one file (`FilesPanel`).
+          about={[path]}
           dir={false}
           at={menu}
           onClose={() => setMenu(null)}

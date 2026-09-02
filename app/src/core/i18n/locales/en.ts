@@ -665,6 +665,7 @@ const ui = {
   // says so, because what makes "yes" cheap to press is knowing where the file goes.
   "files.trash": "Move to the bin",
   "files.trashAsk": "Move {name} to the bin?",
+  "files.trashAskMany.one": "Move {n} item to the bin?", "files.trashAskMany.other": "Move {n} items to the bin?",
   "files.trashUndoable": "It goes where this machine's deleted files go, and undo brings it back.",
   "files.trashQuiet": "Do not ask again",
   "files.trashGo": "Move it",

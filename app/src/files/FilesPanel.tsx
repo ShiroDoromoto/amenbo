@@ -40,7 +40,7 @@
 // name of a file mean the same as dropping just beside it.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
-  CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject,
+  CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as RowPress, ReactNode, RefObject,
 } from "react";
 import type {
   FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
@@ -182,7 +182,9 @@ function segmentsOf(into: string): string[] {
   return into === "" ? [] : into.split("/");
 }
 
-export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose, onHandOver }: {
+export function FilesPanel({
+  projectId, onOpenLedger, show, tab, onTab, onClose, onHandOver, onCarry,
+}: {
   /** The project whose folder the face is rooted at; nothing is drawn without one. */
   projectId: number | null;
   /** Leave the terminal face for the ledger — what a reference or a record means when it is clicked. */
@@ -215,6 +217,14 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
    * none, none of this is handed down and the row's menu draws no item for it.
    */
   onHandOver?: (whole: string) => void;
+  /**
+   * Take hold of a row, so it can be carried to a pane and let go there (`./handDrag`).
+   *
+   * The gesture belongs to the face for the same reason `onHandOver` does — where a path lands is a
+   * pane's session, which the panel cannot see — so what the panel does with it is hand it to every
+   * row it draws. With none handed down, the rows are what they were: things to open.
+   */
+  onCarry?: (whole: string, event: RowPress<HTMLElement>) => void;
 }) {
   // `0` names no project, which is what the folder read then answers with: none. A window with no
   // project on it draws the invitation, the same as one whose project has no folder.
@@ -521,6 +531,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
           onMenu={(path, dir, x, y) => setMenu({ root: one.path, path, dir, x, y })}
           onTrash={(path) => askTrash(one.path, path)}
           chosen={reading !== null && reading.root === one.path ? reading.path.join("/") : null}
+          onCarry={onCarry}
         />
       ))}
       {menu !== null && (
@@ -597,7 +608,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose,
  */
 function FolderSection({
   projectId, root, label, bound, landing, scroller, opened, onOpened, edit, onEdit, onRead, onMenu,
-  onTrash, chosen,
+  onTrash, chosen, onCarry,
 }: {
   projectId: number;
   root: string;
@@ -630,6 +641,8 @@ function FolderSection({
    *  another folder — or where none is. The panel works out which section it belongs to, since it
    *  is the panel that knows what is open. */
   chosen: string | null;
+  /** Take hold of one of this folder's rows, to carry it to a pane (`./handDrag`). */
+  onCarry?: (whole: string, event: RowPress<HTMLElement>) => void;
 }) {
   const [changes, setChanges] = useState<FolderChangesDto>(
     { root, capped: false, unwatched: false, gone: false },
@@ -805,6 +818,7 @@ function FolderSection({
             cursor={cursor}
             onCursor={(key) => onOpened((was) => ({ ...was, cursor: key }))}
             chosen={chosen}
+            onCarry={onCarry}
           />
         )}
       </section>
@@ -1117,7 +1131,7 @@ function linesOf(
 /** One bound folder's tree: every open row of it, drawn as one list. */
 function Tree({
   projectId, root, landing, scroller, marks, moved, open, onOpen, naming, onRead, onMenu,
-  onTrash, cursor, onCursor, chosen,
+  onTrash, cursor, onCursor, chosen, onCarry,
 }: {
   projectId: number;
   root: string;
@@ -1171,6 +1185,8 @@ function Tree({
    * reading it, and without a mark it is one name among the rest.
    */
   chosen: string | null;
+  /** Take hold of a row, to carry it to a pane (`./handDrag`). */
+  onCarry?: (whole: string, event: RowPress<HTMLElement>) => void;
 }) {
   /**
    * The names of every folder on the screen, each with the reading of the section they were taken
@@ -1495,6 +1511,10 @@ function Tree({
               if (line.isDir) onOpen(line.key);
               else onRead(line.path);
             }}
+            // A row is a thing to open and a thing to carry, and which one a press turns out to be
+            // is decided by how far it travels (`./handDrag`). A folder is carried the same way a
+            // file is: what is handed over is a path, and the tree under it costs nothing to name.
+            onPointerDown={(e) => onCarry?.(fileAt(root, line.path), e)}
             // Stood on before the menu opens, because the row a menu is about is the row a reader
             // comes back to when it closes — and a right-click is not a press the browser moves the
             // focus for.

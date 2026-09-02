@@ -630,6 +630,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
   margin-left: calc(var(--depth, 0) * var(--s-3));
 }
 .files__item { cursor: pointer; }
+/* The row that follows the pointer while it is being carried to a pane. It is the row's own node,
+   copied, for the reason a card's ghost is (`app/src/components/components.css`) — and it is taken
+   out of the list it was indented in, so the copy carries the indent's margin with it and is placed
+   from its own left edge instead (`app/src/files/handDrag.ts`). */
+.files__ghost {
+  position: fixed; top: 0; left: 0; z-index: 1000; margin: 0;
+  pointer-events: none; opacity: 0.9; cursor: grabbing;
+  background: var(--c-surface); border-radius: var(--r-sm);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+}
 /* One line for each folder a row stands inside, drawn in the space the indent left in front of it:
    the band runs from the tree's own edge to the row's, and a line falls every step, so the last of
    them is at the left edge of the folder holding the row.

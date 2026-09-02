@@ -1,0 +1,172 @@
+# Reaching a record by the number it is known by. A number is not a word — it is written nowhere the
+# word index covers, so nothing about looking for one is answered by looking for text — and it is the
+# shortest thing anyone holding a ref can type. What the road walks is that typing it lands on the
+# record it names, in every box that takes typing, and that the record is put at the *top* rather than
+# merely somewhere in the answer.
+#
+# The other half is that the pin is added and not substituted: a number is still asked as a word
+# underneath, so a record with that run of digits written in it is still reached. It is walked here as
+# a number nobody carries, since a record whose text holds *another record's* number is not something a
+# road can write — the store issues the number, and a scenario knows which record it means and never
+# what it was numbered.
+id: reach-a-record-by-its-number
+title: A number alone lands on the record it names, at the top of the answer, and goes on being asked as a word underneath
+description: >
+  Ask for a record by nothing but its number, and read what comes back and in what order. What is
+  under test is the landing and the placing together: an answer that merely contained the record would
+  read green off a build that had stopped putting it first, and a build that answered the number and
+  stopped answering the word would read green off a road that never asked for one. The number is asked
+  in both of its spellings, both of the spaces it names at once, and narrowed to one of them.
+# The two records the number lands on. They are the first of their spaces, which is what makes them
+# carry the same number — the two number themselves apart, so a number alone names both — and the run
+# is a store of its own, so the first task filed is task 1 and the first decision decision 1. A step
+# below asks for one by the other's number, which is where that is proven rather than assumed.
+given:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO TASK — the retention window
+    as: window
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: window
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — retention of the outbox
+    as: outbox
+
+  # The record the word half is read off. Its title carries a run of digits no record in this store is
+  # numbered, so asking for it is a question the pin cannot answer and only the word index can.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO TASK — 999999 rows swept
+    as: swept
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: swept
+
+steps_cli:
+  # The number alone, and the top of the answer. `first` is the whole of the step: a record that came
+  # back somewhere below what the words matched is a build that stopped pinning, and a step asking only
+  # whether it was there could not tell the two apart.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      number_of: window
+      target: window
+      first: true
+
+  # The same number written the other way. `#<n>` is a spelling and not a second question, so it lands
+  # exactly where the bare one did.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      number_of: window
+      spelled: hash
+      target: window
+      first: true
+
+  # Both spaces at once. A number carries no type code, so it names the task and the decision alike,
+  # and where both are live both are pinned. This is also where the premise above is proven: the
+  # decision is asked for by the *task's* number, so a store that had numbered them apart reds here.
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      number_of: window
+      target: outbox
+
+  # Told which side it reads, it pins that side alone — the narrowing that makes a number usable at all
+  # for a reader who knows which of the two they are after.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      number_of: window
+      kind: task
+      target: window
+      first: true
+
+  - type: assert
+    domain: decision
+    op: found
+    with:
+      number_of: window
+      kind: task
+      target: outbox
+      present: false
+
+  # The word underneath. Nothing is numbered 999999, so nothing is pinned and what comes back came back
+  # through the index — which is the proof the pin was added to the search rather than put in place of
+  # it.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: "999999"
+      target: swept
+
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: "999999"
+      target: window
+      present: false
+
+steps_gui:
+  # The board's own box. What is typed there is read as the side the board draws, so the number needs
+  # no type code in front of it — and the card it lands on is the one the shot after this catches.
+  - type: action
+    domain: task
+    op: narrow
+    with:
+      number_of: window
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: window
+      present: true
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: swept
+      present: false
+
+  # The box that crosses the two sides. Asked the same number, it answers with the record at the top —
+  # which is an eye's to close here, a reading giving back which words are on a shot and never which
+  # line they were on.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      number_of: window
+      target: window
+      first: true
+
+  # And the word underneath, on this face too: a run of digits nothing is numbered comes back through
+  # the index alone.
+  - type: assert
+    domain: task
+    op: found
+    with:
+      words: "999999"
+      target: swept

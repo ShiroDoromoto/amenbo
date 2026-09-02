@@ -419,7 +419,7 @@ impl Instructor {
         let noun = self.kinds.get(name).map(|k| k.noun()).unwrap_or("task");
         Ok(match arg_str(with, "spelled") {
             Some("hash") => format!("the number of the {noun} \"{label}\" with a `#` in front of it"),
-            _ => format!("the number of the {noun} \"{label}\", on its own"),
+            _ => format!("the number of the {noun} \"{label}\" and nothing else"),
         })
     }
 

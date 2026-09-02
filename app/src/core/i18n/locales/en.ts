@@ -201,7 +201,7 @@ const ui = {
   "detail.linkedDecisions": "Motivated by",
   "detail.premiseUnsettled": "premise not settled — wait for the ruling or unlink it (cannot reserve)",
   "detail.priority": "Priority", "detail.priorityNone": "None",
-  "detail.notes": "Notes (Markdown)", "detail.edit": "Edit", "detail.add": "Add",
+  "detail.notes": "Notes (Markdown)", "detail.edit": "Edit", "detail.add": "Add", "detail.dimUnset": "Remove this value",
   "detail.notesPh": "Write notes in Markdown…", "detail.notesHint": "Markdown · save with ⌘/Ctrl+Enter · Esc to cancel",
   "detail.cancel": "Cancel", "detail.save": "Save", "detail.noNotes": "No notes yet",
   "detail.activityCategory": "Activity", "detail.noComments": "No comments yet",

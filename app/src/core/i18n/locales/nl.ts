@@ -185,7 +185,7 @@ export const nl: Translation = {
     "detail.linkedDecisions": "Komt voort uit",
     "detail.premiseUnsettled": "grond nog niet beslecht — wacht de uitspraak af of ontkoppel hem (reserveren kan niet)",
     "detail.priority": "Prioriteit", "detail.priorityNone": "Geen",
-    "detail.notes": "Notities (Markdown)", "detail.edit": "Bewerken", "detail.add": "Toevoegen",
+    "detail.notes": "Notities (Markdown)", "detail.edit": "Bewerken", "detail.add": "Toevoegen", "detail.dimUnset": "Deze waarde verwijderen",
     "detail.notesPh": "Schrijf notities in Markdown…", "detail.notesHint": "Markdown · opslaan met ⌘/Ctrl+Enter · Esc annuleert",
     "detail.cancel": "Annuleren", "detail.save": "Opslaan", "detail.noNotes": "Nog geen notities",
     "detail.activityCategory": "Activiteit", "detail.noComments": "Nog geen opmerkingen",

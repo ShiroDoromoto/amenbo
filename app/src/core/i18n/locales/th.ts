@@ -188,7 +188,7 @@ export const th: Translation = {
     "detail.linkedDecisions": "มาจาก",
     "detail.premiseUnsettled": "ข้อตั้งยังไม่ยุติ — รอคำตัดสินหรือปลดการเชื่อม (จองงานไม่ได้)",
     "detail.priority": "ความสำคัญ", "detail.priorityNone": "ไม่มี",
-    "detail.notes": "บันทึก (Markdown)", "detail.edit": "แก้ไข", "detail.add": "เพิ่ม",
+    "detail.notes": "บันทึก (Markdown)", "detail.edit": "แก้ไข", "detail.add": "เพิ่ม", "detail.dimUnset": "เอาค่านี้ออก",
     "detail.notesPh": "เขียนบันทึกเป็น Markdown…", "detail.notesHint": "Markdown · บันทึกด้วย ⌘/Ctrl+Enter · Esc เพื่อยกเลิก",
     "detail.cancel": "ยกเลิก", "detail.save": "บันทึก", "detail.noNotes": "ยังไม่มีบันทึก",
     "detail.activityCategory": "ความเคลื่อนไหว", "detail.noComments": "ยังไม่มีความเห็น",

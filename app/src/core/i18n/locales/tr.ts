@@ -185,7 +185,7 @@ export const tr: Translation = {
     "detail.linkedDecisions": "Şundan doğdu",
     "detail.premiseUnsettled": "dayanak henüz karara bağlanmadı — kararı bekleyin ya da bağı kaldırın (üstlenilemez)",
     "detail.priority": "Öncelik", "detail.priorityNone": "Yok",
-    "detail.notes": "Notlar (Markdown)", "detail.edit": "Düzenle", "detail.add": "Ekle",
+    "detail.notes": "Notlar (Markdown)", "detail.edit": "Düzenle", "detail.add": "Ekle", "detail.dimUnset": "Bu değeri kaldır",
     "detail.notesPh": "Notları Markdown ile yazın…", "detail.notesHint": "Markdown · ⌘/Ctrl+Enter ile kaydet · Esc ile vazgeç",
     "detail.cancel": "Vazgeç", "detail.save": "Kaydet", "detail.noNotes": "Henüz not yok",
     "detail.activityCategory": "Hareketler", "detail.noComments": "Henüz yorum yok",

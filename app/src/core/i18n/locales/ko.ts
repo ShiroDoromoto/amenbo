@@ -185,7 +185,7 @@ export const ko: Translation = {
     "detail.linkedDecisions": "근거",
     "detail.premiseUnsettled": "전제가 아직 정해지지 않았습니다 — 판단을 기다리거나 연결을 푸세요(예약할 수 없습니다)",
     "detail.priority": "우선순위", "detail.priorityNone": "없음",
-    "detail.notes": "메모(마크다운)", "detail.edit": "편집", "detail.add": "추가",
+    "detail.notes": "메모(마크다운)", "detail.edit": "편집", "detail.add": "추가", "detail.dimUnset": "이 값 제거",
     "detail.notesPh": "마크다운으로 메모를 쓰세요…", "detail.notesHint": "마크다운 · ⌘/Ctrl+Enter로 저장 · Esc로 취소",
     "detail.cancel": "취소", "detail.save": "저장", "detail.noNotes": "아직 메모가 없습니다",
     "detail.activityCategory": "활동", "detail.noComments": "아직 댓글이 없습니다",

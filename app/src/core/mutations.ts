@@ -1730,7 +1730,8 @@ export async function unsetTaskDimensionValue(taskId: number, valueId: number): 
   return invokeAck("task_unset_dimension_value", { taskId, valueId });
 }
 
-/** The dimension assignments a task currently carries (dimensionId → valueId), for the detail pane's current-value display. */
+/** The dimension assignments a task currently carries — one row per assignment, so a multi-select axis
+ * (`AMB-D-826`) answers with several naming the same dimension. The detail pane groups them by axis. */
 export async function fetchTaskDimensions(taskId: number): Promise<TaskDimensionAssignmentDto[]> {
   if (!inTauri()) return [];
   return invoke<TaskDimensionAssignmentDto[]>("task_dimensions", { taskId });
@@ -1748,7 +1749,8 @@ export async function unsetDecisionDimensionValue(decisionId: number, valueId: n
   return invokeAck("decision_unset_dimension_value", { decisionId, valueId });
 }
 
-/** The dimension assignments a decision currently carries (dimensionId → valueId), for the decision pane's current-value display. */
+/** The dimension assignments a decision currently carries — the decision side of `fetchTaskDimensions`,
+ * and several rows on one axis where that axis is multi-select (`AMB-D-826`). */
 export async function fetchDecisionDimensions(decisionId: number): Promise<DecisionDimensionAssignmentDto[]> {
   if (!inTauri()) return [];
   return invoke<DecisionDimensionAssignmentDto[]>("decision_dimensions", { decisionId });

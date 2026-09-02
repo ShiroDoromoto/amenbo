@@ -188,7 +188,7 @@ export const ru: Translation = {
     "detail.linkedDecisions": "Обосновано",
     "detail.premiseUnsettled": "предпосылка не решена — дождитесь решения или уберите связь (взять в работу нельзя)",
     "detail.priority": "Приоритет", "detail.priorityNone": "Нет",
-    "detail.notes": "Заметки (Markdown)", "detail.edit": "Изменить", "detail.add": "Добавить",
+    "detail.notes": "Заметки (Markdown)", "detail.edit": "Изменить", "detail.add": "Добавить", "detail.dimUnset": "Убрать это значение",
     "detail.notesPh": "Пишите заметки в Markdown…", "detail.notesHint": "Markdown · сохранить — ⌘/Ctrl+Enter · Esc — отмена",
     "detail.cancel": "Отмена", "detail.save": "Сохранить", "detail.noNotes": "Заметок пока нет",
     "detail.activityCategory": "Активность", "detail.noComments": "Комментариев пока нет",

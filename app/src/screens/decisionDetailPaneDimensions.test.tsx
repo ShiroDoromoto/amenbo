@@ -11,9 +11,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Decision } from "../core/snapshot";
 
-const AXIS = { id: 900, name: "テーマ", notes: "", role: "none", ordered: false, showOnCard: false, required: false,
+const AXIS = { id: 900, name: "テーマ", notes: "", role: "none", cardinality: "single", ordered: false, showOnCard: false, required: false,
   appliesTo: "both",
   values: [{ id: 901, name: "メイン" }, { id: 902, name: "talk-window" }] };
+/** The same axis, admitting several of its values at once (`AMB-D-826`). */
+const MULTI = { ...AXIS, cardinality: "multi" };
 
 const hoisted = vi.hoisted(() => ({
   /** The axes the decision's project carries — emptied to check the project with none. */
@@ -71,6 +73,15 @@ let container: HTMLDivElement;
 let root: Root;
 
 const axisSelect = () => container.querySelector<HTMLSelectElement>("select.inlineselect");
+
+/** The values drawn as chips, in the order the row reads. */
+const chips = () =>
+  Array.from(container.querySelectorAll(".chip--dim")).map((c) => c.textContent?.replace("×", "").trim());
+/** The cross on the chip standing for `name`. */
+const cross = (name: string) =>
+  Array.from(container.querySelectorAll<HTMLElement>(".chip--dim"))
+    .find((c) => c.textContent?.includes(name))!
+    .querySelector<HTMLButtonElement>(".chip__x")!;
 
 /** Pick a value in the axis select, the way a reader does. */
 async function pick(value: string) {
@@ -146,6 +157,55 @@ describe("DecisionDetailPane classification selects", () => {
 
     expect(hoisted.asked).toEqual(["unset:781:901"]);
     expect(axisSelect()!.value).toBe("");
+  });
+
+  // A multi-select axis is the one that keeps what it had (`AMB-D-826`): the chips are what it carries,
+  // the select offers only what it does not, and the cross is the way off — the same `unset` write the
+  // single-select axis clears itself through.
+  it("draws every value a multi-select axis carries, and offers only the rest", async () => {
+    hoisted.axes = [MULTI];
+    hoisted.assigned = [{ dimensionId: MULTI.id, valueId: 901 }, { dimensionId: MULTI.id, valueId: 902 }];
+    await open();
+
+    expect(chips()).toEqual(["メイン", "talk-window"]);
+    expect(axisSelect()).toBeNull(); // Nothing left to offer
+  });
+
+  it("gains a value on a multi-select axis and keeps the one it had", async () => {
+    hoisted.axes = [MULTI];
+    hoisted.assigned = [{ dimensionId: MULTI.id, valueId: 901 }];
+    await open();
+    expect(chips()).toEqual(["メイン"]);
+
+    await pick("902");
+
+    expect(hoisted.asked).toEqual(["set:781:902"]);
+    expect(chips()).toEqual(["メイン", "talk-window"]);
+  });
+
+  it("takes one value off a multi-select axis through the cross", async () => {
+    hoisted.axes = [MULTI];
+    hoisted.assigned = [{ dimensionId: MULTI.id, valueId: 901 }, { dimensionId: MULTI.id, valueId: 902 }];
+    await open();
+
+    await act(async () => { cross("メイン").click(); });
+    await settle();
+
+    expect(hoisted.asked).toEqual(["unset:781:901"]);
+    expect(chips()).toEqual(["talk-window"]);
+  });
+
+  it("puts a refused value back on a multi-select axis without dropping the others", async () => {
+    hoisted.axes = [MULTI];
+    hoisted.assigned = [{ dimensionId: MULTI.id, valueId: 901 }];
+    hoisted.setFails = true;
+    await open();
+
+    await pick("902");
+
+    expect(hoisted.asked).toEqual(["set:781:902"]);
+    expect(chips()).toEqual(["メイン"]);
+    expect(container.textContent).toContain("refused");
   });
 
   it("puts the select back and says why when the write is refused", async () => {

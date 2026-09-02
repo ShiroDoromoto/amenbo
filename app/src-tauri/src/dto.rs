@@ -52,7 +52,9 @@ pub struct DimensionValueDto {
 }
 
 /// One unified dimension (classification axis), values included, so the GUI's dimension editor and
-/// assignment selects render from real data. `role` is `none` or `time_axis` (phase); `ordered`
+/// assignment selects render from real data. `role` is `none` or `time_axis` (phase); `cardinality`
+/// is `single` or `multi` — how many of the axis's values one record may hold (`AMB-D-826`), which is
+/// what the detail pane reads to draw one select or a row of chips; `ordered`
 /// says whether the values have an order; `showOnCard` says whether a task's value on this axis
 /// belongs on its card (`AMB-D-651`) — the axis's own answer, so it reads the same on every device;
 /// `required` says the axis refuses to be left empty (`AMB-D-734`), which the detail pane reads to
@@ -71,9 +73,11 @@ pub struct DimensionDto {
     #[ts(optional)]
     pub(crate) slug: Option<String>,
     pub(crate) notes: String,
-    /// How many of this axis's values one record may hold (`AMB-D-826`). The board reads it to keep a
-    /// multi-select axis out of the axes its columns can be split by — a column says where a task is,
-    /// and a task on several values of one axis is in no single column.
+    /// How many of this axis's values one record may hold (`AMB-D-826`). Every axis starts `single`,
+    /// where one value replaces the last; `multi` is the one that gains a value and keeps what it had.
+    /// The board reads it to keep a multi-select axis out of the axes its columns can be split by — a
+    /// column says where a task is, and a task on several values of one axis is in no single column —
+    /// and the detail pane to draw one select or a row of chips.
     #[ts(type = "\"single\" | \"multi\"")]
     pub(crate) cardinality: String,
     #[ts(type = "\"none\" | \"time_axis\"")]
@@ -89,8 +93,9 @@ pub struct DimensionDto {
     pub(crate) values: Vec<DimensionValueDto>,
 }
 
-/// One task × dimension assignment (`valueId` is set on the `dimensionId` axis). The detail pane's
-/// assignment selects use it to reflect the current value.
+/// One task × dimension assignment (`valueId` is set on the `dimensionId` axis). The detail pane
+/// reads them to show what the task carries — one row per assignment, so a multi-select axis
+/// (`AMB-D-826`) answers with several rows naming the same `dimensionId`.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]

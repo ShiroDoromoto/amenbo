@@ -83,7 +83,7 @@ async function handOver(session: string, paths: string[]) {
  * running on the way out — a session whose place has gone is one nobody can reach.
  */
 export function TerminalPane({
-  frame, project, names, start, autoStart, focused,
+  frame, project, names, start, autoStart, focused, offered = false,
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onWaiting,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
@@ -99,6 +99,16 @@ export function TerminalPane({
    *  and the one a person has just pressed the way in on. */
   autoStart: boolean;
   focused: boolean;
+  /**
+   * Whether something being carried inside the window is hanging over this pane
+   * (`../files/handDrag`).
+   *
+   * **Told rather than watched for**, which is the difference between the two drags. A drop from the
+   * desktop is the host's news and reaches each pane on its own; a row carried across the page is
+   * one gesture the face is holding, and the pane it is over is the face's answer. Both light the
+   * same surface, because to a reader they are the same act.
+   */
+  offered?: boolean;
   onOpened: (frame: string, session: string, folder: string | null) => void;
   onSaid: (statement: SessionSaidDto) => void;
   /** A file path drawn in this pane was clicked, as it was drawn. */
@@ -351,10 +361,12 @@ export function TerminalPane({
           </MenuItem>
         </Menu>
       )}
-      {/* The receiving surface, drawn over the pane while a drag hangs on it and never otherwise. It
-          takes no pointer events: what is under the drag has to stay the pane, or the point the host
-          resolves would land on the surface itself and the highlight would flicker itself away. */}
-      {handing && <div className="slot__handing">{t("face.handHere")}</div>}
+      {/* The receiving surface, drawn over the pane while something hangs on it and never otherwise —
+          a file from the desktop, which this pane hears about itself, or a row of the panel, which
+          the face is carrying and says so (`../files/handDrag`). It takes no pointer events: what is
+          under the drag has to stay the pane, or the point being resolved would land on the surface
+          itself and the highlight would flicker itself away. */}
+      {(handing || offered) && <div className="slot__handing">{t("face.handHere")}</div>}
       {asking !== null && (
         <PaneDropAsk
           holding={asking}

@@ -18,6 +18,7 @@ import {
   type SideTab,
 } from "../talk/columns";
 import { FilesPanel } from "../files/FilesPanel";
+import { useHandDrag } from "../files/handDrag";
 import { Icon } from "../components/Icon";
 import { useBoundFolders } from "../core/boundFolders";
 import { chooseFolderFor, fetchBoundFolders } from "../core/mutations";
@@ -26,7 +27,7 @@ import { invoke } from "../core/ipc";
 import type { PaneDrawnDto, PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf, tn } from "../core/i18n";
-import { pasteIntoTerminal, quotedPath } from "../talk/terminal";
+import { focusTerminal, pasteIntoTerminal, quotedPath } from "../talk/terminal";
 
 /**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
@@ -415,6 +416,18 @@ export function TerminalFace({
     });
   }, []);
 
+  /** What is running in one frame, or nothing — which is also the whole of whether that pane can be
+   *  handed a path. */
+  const sessionIn = (frame: string | null) =>
+    layout.frames.find((one) => one.id === frame)?.session ?? null;
+
+  /** Put a path in front of what is running in one session, written the way a shell reads as one
+   *  thing (`AMB-D-801`). A write that cannot land is nothing to say: the terminal ended between the
+   *  hand-over and this, and the pane already draws what one ends with. */
+  const pasteInto = useCallback((session: string, whole: string) => {
+    void pasteIntoTerminal(session, quotedPath(whole)).catch(() => {});
+  }, []);
+
   /**
    * Hand a file the panel is showing to the pane the reader is working in — the reverse of
    * `pathClicked`, and the same pair of doors read the other way round.
@@ -433,12 +446,34 @@ export function TerminalFace({
    * whichever door the path came through.
    */
   const handOver = useMemo(() => {
-    const session = layout.frames.find((one) => one.id === layout.focus)?.session ?? null;
+    const session = sessionIn(layout.focus);
     if (session === null) return undefined;
-    return (whole: string) => {
-      void pasteIntoTerminal(session, quotedPath(whole)).catch(() => {});
-    };
+    return (whole: string) => { pasteInto(session, whole); };
   }, [layout.focus, layout.frames]);
+
+  /**
+   * The other way a row of the panel reaches a pane: carried there, and let go on the one it is
+   * meant for (`../files/handDrag`).
+   *
+   * **What is handed over is the same thing the menu hands over** — the path, quoted, unsent — and
+   * what differs is only which pane says so: the pointer's rather than the focus's. Which is why the
+   * two land in the same place afterwards as a drop from the desktop does (`./TerminalPane`): a
+   * person who carried a path into a pane has said which pane they mean, so it becomes the one being
+   * worked in and the keyboard follows the path into it.
+   *
+   * A pane whose program has ended takes nothing, and does not offer to: there is nothing there to
+   * hand a path to.
+   */
+  const { overFrame, press: carry } = useHandDrag(
+    (frame, whole) => {
+      const session = sessionIn(frame);
+      if (session === null) return;
+      pasteInto(session, whole);
+      setLayout((was) => focusOn(was, frame));
+      focusTerminal(document.querySelector<HTMLElement>(`[data-hand="${frame}"]`));
+    },
+    (frame) => sessionIn(frame) !== null,
+  );
 
   const opened = useCallback((frame: string, session: string, folder: string | null) => {
     startNow.current.delete(frame);
@@ -839,6 +874,7 @@ export function TerminalFace({
                     }}
                     autoStart={frame.session !== null || startNow.current.has(frame.id)}
                     focused={layout.focus === frame.id}
+                    offered={overFrame === frame.id}
                     onOpened={opened}
                     onPath={pathClicked}
                     onSaid={(statement) => {
@@ -922,6 +958,7 @@ export function TerminalFace({
               onTab={(which) => { takeTab(which); wantSide(true); }}
               onClose={() => wantSide(false)}
               onHandOver={handOver}
+              onCarry={carry}
             />
           </div>
         )}

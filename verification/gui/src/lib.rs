@@ -2038,9 +2038,11 @@ impl Instructor {
                 req(with, "to")?
             ),
             // ── the file face ─────────────────────────────────────────────────────────────────
-            // The column beside the panes. Its sections are named by what each is about rather than
-            // by their headings, for the reason the segments are: the headings are the interface's
-            // own words and the run's language is whatever the machine is set to.
+            // The tree, which is the rail's other half — the column on the far side
+            // of the panes draws the file it opens and nothing else. Its sections are named by what
+            // each is about rather than by their headings, for the reason the segments are: the
+            // headings are the interface's own words and the run's language is whatever the machine
+            // is set to.
             (Domain::Files, "tree") => match flag(with, "open")? {
                 // Every one of them: a project bound to several folders draws a section each, and a
                 // row can only be read in the section it belongs to now that the tree is the only
@@ -2051,7 +2053,7 @@ impl Instructor {
                 // what is already unfolded would have them fold it. Saying where the screen has to
                 // stand leaves the road true wherever it is walked from, a section a step above
                 // folded included.
-                true => "In the column beside the panes, the section that draws the folder itself is to be standing unfolded — each of them where there is more than one. It is drawn that way, so this is usually nothing to do; unfold any that is folded.".to_string(),
+                true => "In the rail beside the panes, press the half that shows the folders — the second of its two. The section that draws the folder itself is then to be standing unfolded, each of them where there is more than one. It is drawn that way, so the unfolding is usually nothing to do; unfold any that is folded.".to_string(),
                 false => "Fold those sections back up.".to_string(),
             },
             // A folder opened a level, or shut again. Opening is what a road asks for nearly every
@@ -2089,7 +2091,7 @@ impl Instructor {
                 req(with, "encoding")?
             ),
             (Domain::Files, "back") =>
-                "Press the way back out of the file. The column returns to its two sections."
+                "Press the way back out of the file. The column it was drawn in says nothing is open; the tree is in the rail, where it was left."
                     .to_string(),
             // The keys. What each one reaches is decided by where the reader is standing, so every
             // line here says where that has to be — and says the click is only for when it is not,
@@ -2111,7 +2113,7 @@ impl Instructor {
             // answer for is a road nobody can walk, and it fails on the way in rather than on a
             // screen.
             (Domain::Files, "press") => match req(with, "key")? {
-                "escape" => "With the keyboard standing on the panel — which is where a row just pressed, or a file just opened, has left it — press the key this machine leaves things with. It is one layer per press: what is drawn over the tree goes first, and the panel itself only once the tree is what is showing. Click a row of the folder's section first only if something outside the panel has been clicked since, because the terminal beside this column hears the same key as meaning something of its own."
+                "escape" => "With the keyboard standing on the column the file is drawn in — which is where opening it has left it — press the key this machine leaves things with. It is one layer per press: the file goes first, and the column itself only once nothing is open in it. Click the file's own text first only if something outside that column has been clicked since, because the terminal beside it hears the same key as meaning something of its own."
                     .to_string(),
                 // The key that renames. It is the second door onto the box the menu opens — the
                 // typing is `rename` either way — and which row it opens the box on is decided by
@@ -3518,9 +3520,12 @@ impl Instructor {
                     mark(with)?
                 ),
             },
+            // Either column can be the one that says it: the tree in the rail says a folder has gone
+            // and the reading column says a file will not open, and the roads that read these lines
+            // are about what was said rather than about which side of the panes said it.
             (Domain::Files, "says") => match present(with) {
-                true => format!("Confirm the column says {}.", note(with)?),
-                false => format!("Confirm the column does not say {}.", note(with)?),
+                true => format!("Confirm what is drawn beside the panes says {}.", note(with)?),
+                false => format!("Confirm what is drawn beside the panes does not say {}.", note(with)?),
             },
             // What the hand-over left. Every one of the three is a `Review`, and for the same reason:
             // what settles it is not on Amenbo's window, which is the window the run shoots. The

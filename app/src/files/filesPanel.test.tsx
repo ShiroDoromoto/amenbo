@@ -11,7 +11,7 @@
 // **What the folder moving does is send everybody back to ask** (`AMB-D-785`). The host's word
 // carries no rows, so what has to be right here is that the names of the open level and the colour
 // beside them are read again — and that a word about another folder moves nothing in this one.
-import { act, createElement } from "react";
+import { act, createElement, Fragment, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -239,6 +239,8 @@ vi.mock("../core/reads", async (importOriginal) => ({
 }));
 
 import { FilesPanel } from "./FilesPanel";
+import { FolderTree } from "./FolderTree";
+import { fileUnderAny } from "./fileUnder";
 import { type CmdError, errLabel, formatNumber, t, tf, tn } from "../core/i18n";
 import { subscribeNotice } from "../core/notice";
 
@@ -276,17 +278,66 @@ async function until(held: () => boolean, missing: string) {
   throw new Error(`waited two seconds and ${missing}`);
 }
 
-type Props = Parameters<typeof FilesPanel>[0];
+type Props = Parameters<typeof FilesPanel>[0] & Parameters<typeof FolderTree>[0] & {
+  /** A path clicked in a pane, which the face around the two columns resolves (`Columns`). */
+  show?: { target: string; cwd: string | null; nth: number } | null;
+};
+
+/**
+ * The two columns as the terminal face puts them together: the tree in the rail, and the file it
+ * opens on the other side of the panes (`AMB-D-835`, `../shell/TerminalFace`).
+ *
+ * They are drawn together here because that is what a road through this face walks — a row is
+ * pressed in one column and what it opens appears in the other — and the file being read is the one
+ * piece of state the two share, so the wiring that holds it is written out the way the face writes
+ * it.
+ */
+function Columns({ show, ...props }: Partial<Props> & { projectId: number | null }) {
+  const [reading, setReading] = useState<{ root: string; path: string[] } | null>(null);
+  const gone = (root: string, went: string[]) => setReading((now) =>
+    now !== null && now.root === root && went.includes(now.path.join("/")) ? null : now
+  );
+  // A path clicked in a pane opens where it lands inside a bound folder, and nowhere else
+  // (`AMB-D-747`). The count is what makes the same file asked for twice two answers.
+  useEffect(() => {
+    if (show === undefined || show === null) return;
+    const found = fileUnderAny(hoisted.bound.map((one) => one.path), show.cwd, show.target);
+    if (found) setReading(found);
+  }, [show?.nth]);
+  // Each in the place the face puts it, so a road can say which column it means: the same class name
+  // is drawn in both, and a test that asked the document for it would be handed whichever came
+  // first.
+  return createElement(
+    Fragment,
+    null,
+    createElement("div", { className: "rail" }, createElement(FolderTree, {
+      projectId: props.projectId,
+      reading,
+      onRead: setReading,
+      onGone: gone,
+      onHandOver: props.onHandOver,
+      onCarry: props.onCarry,
+    })),
+    createElement("div", { className: "termface__column--side" }, createElement(FilesPanel, {
+      projectId: props.projectId,
+      tab: props.tab ?? "files",
+      reading,
+      onBack: () => setReading(null),
+      onGone: gone,
+      onClose: props.onClose ?? (() => {}),
+      onOpenLedger: props.onOpenLedger,
+      onHandOver: props.onHandOver,
+    })),
+  );
+}
 
 async function draw(props: Partial<Props> = {}) {
   await act(async () => {
     const projectId = "projectId" in props ? (props.projectId ?? null) : 1;
-    // Which half is up, and the panel's own way out, belong to the terminal face around it
-    // (`../shell/TerminalFace`). These tests are about what the files half draws, so the files half
-    // is what they hand it.
-    root.render(createElement(FilesPanel, {
-      tab: "files", onTab: () => {}, onClose: () => {}, ...props, projectId,
-    }));
+    // Which half is up, and the column's own way out, belong to the terminal face around it
+    // (`../shell/TerminalFace`). These tests are about what the two columns draw, so what the face
+    // would answer is what they hand them.
+    root.render(createElement(Columns, { ...props, projectId }));
   });
   await settle();
 }
@@ -698,11 +749,12 @@ describe("the file face", () => {
 
     await draw({ tab: "memo" });
     expect(container.querySelector("textarea"), "the draft page was not drawn").toBeTruthy();
-    expect(container.querySelector(".files__none")).toBeFalsy();
+    expect(container.querySelector(".termface__column--side .files__none")).toBeFalsy();
 
-    // The half that has to be rooted somewhere is the only one the missing folder stops.
+    // The tree is the half that has to be rooted somewhere, and it is the only one the missing
+    // folder stops — it says so in the rail, where it is drawn (`AMB-D-835`).
     await draw({ tab: "files" });
-    expect(container.querySelector(".files__none")?.textContent).toBe(t("files.noFolder"));
+    expect(container.querySelector(".rail .files__none")?.textContent).toBe(t("files.noFolder"));
   });
 
   it("opens the first level from the start, and everything under it one at a time", async () => {
@@ -830,13 +882,16 @@ describe("the file face", () => {
     await settle();
     expect(pressable(t("files.back"))).toBeDefined();
 
-    await press(container.querySelector(".files")!, "Escape");
+    // On the column the file is in: the layers this key takes off are the file and the column
+    // holding it, and the tree in the rail is neither of them (`AMB-D-835`).
+    const column = () => container.querySelector(".termface__column--side .files")!;
+    await press(column(), "Escape");
     await settle();
-    // The file is put away and the panel is not: one press, one layer.
+    // The file is put away and the column is not: one press, one layer.
     expect(pressable(t("files.back"))).toBeUndefined();
     expect(closed).toBe(0);
 
-    await press(container.querySelector(".files")!, "Escape");
+    await press(column(), "Escape");
     await settle();
     expect(closed).toBe(1);
   });

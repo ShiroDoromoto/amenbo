@@ -231,11 +231,11 @@ steps_gui:
       note: link
 
   # The other way out, and the one a reader already has under their hands. It takes one layer per
-  # press: what is drawn over the tree goes first, and the panel itself only once the tree is what
-  # is showing. Both presses are walked because it is the count that is the answer — a
-  # face that closed the whole column on the first press would carry a reader who meant "shut this
-  # file" away from the folder they came to look at, and a face that only ever shut the file would
-  # leave the panel with no way out but the pointer.
+  # press: the file goes first, and the column it was drawn in only once nothing is open in it. Both
+  # presses are walked because it is the count that is the answer — a face that closed the whole
+  # column on the first press would carry a reader who meant "shut this file" further than they
+  # asked, and a face that only ever shut the file would leave the column with no way out but the
+  # pointer.
   - type: action
     domain: files
     op: press

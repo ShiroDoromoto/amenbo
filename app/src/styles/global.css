@@ -586,6 +586,35 @@ button { font: inherit; color: inherit; cursor: pointer; }
    itself, folded (`app/src/files/FilesPanel.tsx`). It is a column of the window and not a card lying
    on one, so it is drawn as the ledger's right pane is (`.rightpane`): `--c-surface` to the edges,
    held off the page by a rule rather than by a border round a rounded box. */
+/* The rail's two halves, swapped rather than stacked: two lists and a tree do not fit one on top of
+   another in a column this narrow (`AMB-D-835`). It is the well the pane counts sit in, because it is
+   the same kind of control — a fixed few, exactly one of them on. */
+.rail__tabs {
+  flex: 0 0 auto;
+  display: flex; gap: 2px;
+  margin: var(--s-2) var(--s-2) 0;
+  padding: 2px;
+  background: var(--c-surface-sunken);
+  border: 1px solid var(--c-border); border-radius: var(--r-sm);
+}
+.rail__tab {
+  flex: 1; min-width: 0;
+  background: transparent; border: 0;
+  padding: 2px var(--s-2); border-radius: var(--r-sm);
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+}
+.rail__tab:hover { color: var(--c-text); }
+.rail__tab--on {
+  background: var(--c-surface); color: var(--c-text); font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+/* The tree, drawn in the rail rather than in a column of its own. It gives up the edge it drew as a
+   column — the rail already has one — and stands on the rail's ground. */
+.rail .files {
+  border-left: 0;
+  background: transparent;
+}
+
 .files {
   flex: 1 1 auto; min-width: 0;
   min-height: 0; overflow-y: auto;

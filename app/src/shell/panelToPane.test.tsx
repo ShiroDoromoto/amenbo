@@ -59,16 +59,17 @@ vi.mock("../core/snapshot", async (importOriginal) => ({
   inTauri: () => true,
 }));
 
-// The panel draws nothing here: what is under test is what the face hands it, and what the face does
-// with what comes back.
-vi.mock("../files/FilesPanel", () => ({
-  FilesPanel: (props: {
+// The tree draws nothing here: what is under test is what the face hands it, and what the face does
+// with what comes back. The rows are the tree's, and the tree is in the rail (`AMB-D-835`).
+vi.mock("../files/FolderTree", () => ({
+  FolderTree: (props: {
     onCarry?: (wholes: string[], event: RowPress<HTMLElement>) => void;
   }) => {
     hoisted.carry = props.onCarry;
     return null;
   },
 }));
+vi.mock("../files/FilesPanel", () => ({ FilesPanel: () => null }));
 
 vi.mock("../mock/adapter", () => ({
   dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }] },
@@ -166,6 +167,10 @@ const worked = () => container.querySelector(".slot--focused")?.getAttribute("da
 
 beforeEach(() => {
   window.innerWidth = 1600;
+  // The rows are carried out of the tree, and the tree is the rail's other half — so the rail is
+  // left on it (`AMB-D-835`). What half a project was left on is kept per project
+  // (`../talk/columns`), which is what this writes.
+  localStorage.setItem("amenbo.termface.railTab.1", "folders");
   hoisted.carry = undefined;
   hoisted.pasted = [];
   hoisted.saved = {

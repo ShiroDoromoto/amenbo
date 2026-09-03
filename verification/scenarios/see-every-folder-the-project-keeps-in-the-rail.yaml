@@ -1,13 +1,13 @@
-# A project is bound to as many folders as somebody bound it to, and the column beside the panes
+# A project is bound to as many folders as somebody bound it to, and the rail beside the panes
 # draws every one of them. The form most projects are actually in is this one — Amenbo itself keeps
 # six — and until this road there was nothing before a release that stood in front of it.
 #
 # ── Why two files rather than two headings ───────────────────────────────────────────────────────
 # A heading is drawn from the folder's own name, and a section drawn empty draws its heading all the
 # same — so two headings on screen say two sections were made, never that either was read. What says
-# a folder was really read is something out of that folder on the column, and the only thing there
+# a folder was really read is something out of that folder in the rail, and the only thing there
 # that could not have come from anywhere else is a file the world put in it. So each folder gets a
-# file of its own name, and both are read off the trees: both rows are on the column only if both
+# file of its own name, and both are read off the trees: both rows are in the rail only if both
 # folders were read.
 #
 # The files sit directly in their folders rather than in a subfolder, because the tree opens one
@@ -16,8 +16,8 @@
 #
 # ── Why one of them is then taken away ───────────────────────────────────────────────────────────
 # The half a reader meets by accident is a folder that has gone — renamed, moved somewhere tidier,
-# carried off on a disk that is no longer plugged in. What the column did before was fall to "this
-# project has no folder yet" for the whole panel, which says the project has nothing when five of its
+# carried off on a disk that is no longer plugged in. What the tree did before was fall to "this
+# project has no folder yet" for the whole of it, which says the project has nothing when five of its
 # six folders are sitting right there. So the section stays and says what happened to that one
 # folder, and the reading is taken twice over: the sentence about the folder that went, and the row
 # from the folder that did not, still where it was.
@@ -27,13 +27,13 @@
 # out from under it is the whole answer. A world that had moved it before the app came up would be a
 # world with a binding that never pointed anywhere, which is a different reading on a different road
 # (`follow-a-folder-that-moved`).
-id: see-every-folder-the-project-keeps-in-the-file-column
-title: The file column draws a section for every folder the project keeps, and one that goes away says so where it stood instead of taking the column with it
+id: see-every-folder-the-project-keeps-in-the-rail
+title: The rail draws a section for every folder the project keeps, and one that goes away says so where it stood instead of taking the tree with it
 description: >
-  Raise a project bound to two folders, each holding a file of its own, and open the panel beside the
-  panes and unfold the trees: each folder's tree carries its own file, so both were read. Then take
+  Raise a project bound to two folders, each holding a file of its own, and press the rail's folder
+  half and unfold the trees: each folder's tree carries its own file, so both were read. Then take
   one of the folders away from outside Amenbo, with nothing on the app pressed: its section stays
-  and says the folder is not there any more, while the other folder's file is still on the column
+  and says the folder is not there any more, while the other folder's file is still in the rail
   beside it.
 
 given:
@@ -46,7 +46,7 @@ given:
       dir: greenhouse-beds
     as: greenhouse
 
-  # And the second, which is what makes the column two sections rather than one.
+  # And the second, which is what makes the rail two sections rather than one.
   - type: action
     domain: folder
     op: bind
@@ -54,7 +54,7 @@ given:
       dir: potting-shed
       project: greenhouse
 
-  # One file per folder, named apart: the same name in both would leave a row on the column that
+  # One file per folder, named apart: the same name in both would leave a row in the rail that
   # either folder could have put there.
   - type: action
     domain: repo
@@ -134,7 +134,7 @@ steps_gui:
       note: folder-gone
 
   # And the other folder is untouched beside it — which is the half the old behaviour got wrong: one
-  # folder going took the whole column down to "this project has no folder yet".
+  # folder going took the whole tree down to "this project has no folder yet".
   - type: assert
     domain: files
     op: listed

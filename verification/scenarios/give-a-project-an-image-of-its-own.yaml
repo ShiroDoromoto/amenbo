@@ -13,18 +13,26 @@
 # the screen was left and returned to. Everything before that arrival says the screen moved; only the
 # arrival says the store did.
 #
+# Then it crosses to the other face, where the same image is drawn a second time. The settings are
+# where a project is given one; the tabs down the edge of the terminal face are what it was given one
+# for, and they are drawn from one picture handed to that face rather than from a read per project. So
+# an image the settings draw and the tabs do not is the shape this half catches, and it is caught in
+# both directions — the tab falls back to the colour and the letter once the image is taken away, the
+# way the square beside the button does.
+#
 # The image is a fixture rather than something the road describes: what is under test is a picture
 # being drawn, so any file of the right name would prove nothing. It lands in the folder the run makes
 # for itself, and the run says that path before the first step is handed over — nothing in these
 # instructions can name it, since they are rendered from this file alone.
 id: give-a-project-an-image-of-its-own
-title: A project is given an image to show for itself, it is still there after the screen is left and returned to, and taking it away puts the colour and the letter back
+title: A project is given an image to show for itself, it is still there after the screen is left and returned to, its tab down the edge of the other face draws it too, and taking it away puts the colour and the letter back on both
 description: >
   Open the settings a project keeps for itself, read the square it draws while it has no image of its
   own — the project's colour with the first letter of its name on it — and give it one, choosing a file
   off the disk and saving the form. Then walk out to the board and back in, which is the only way to
-  ask whether what is drawn came out of the store rather than out of the form. Take the image away
-  again last, and the colour and the letter are what the square holds once more.
+  ask whether what is drawn came out of the store rather than out of the form, and cross to the
+  terminal face, where the project's tab is drawn with that same image. Take the image away again
+  last, and the colour and the letter are what the square and the tab both hold once more.
 given:
   # The project the road works on. Raising one is a road of its own and this one opens on the settings,
   # so what stands the project up is the premise.
@@ -96,6 +104,37 @@ steps_gui:
       target: greenhouse
       present: true
 
+  # And the other surface that draws it. The tabs down the edge of the terminal face are all drawn from
+  # the one picture that face is handed, so an image standing in the settings and nowhere here would be
+  # an image the tabs never heard about. The tab is read where it stands: every project has one whether
+  # or not the face is drawing that project's panes, and pressing this one first would have the road
+  # reading the tab it had just moved the whole face onto.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: assert
+    domain: terminal
+    op: tab-icon
+    with:
+      project: Greenhouse
+      present: true
+
+  # Back to the ledger, which is where the settings are reached from.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
   # And the way back off. Clearing takes the original with the version that was drawn, so what the
   # square falls back to is the same thing it held before the road began.
   - type: action
@@ -109,4 +148,20 @@ steps_gui:
     op: icon
     with:
       target: greenhouse
+      present: false
+
+  # And the tab with it. What the square fell back to is what the tab falls back to — the colour and
+  # the letter — and this reading is what says taking the image away reached the picture the tabs are
+  # drawn from as well.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: assert
+    domain: terminal
+    op: tab-icon
+    with:
+      project: Greenhouse
       present: false

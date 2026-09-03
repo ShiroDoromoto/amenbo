@@ -551,6 +551,7 @@ export const it: Translation = {
     "mcp.projects": "Progetti che questa app può raggiungere",
     "mcp.handover": "I progetti selezionati sono esattamente il contenuto della richiesta e del file. Consegnandolo, la voce di questa app viene sostituita per intero, comprese le cartelle che già raggiunge.",
     "mcp.noProjects": "Nessun progetto ha ancora una cartella, quindi non c'è dove puntare un server.",
+    "mcp.pickNone": "Nulla di selezionato è nulla da consegnare: seleziona prima un progetto.",
     "mcp.stale": "Lasciato da un Amenbo precedente",
     "app.crashTitle": "Qualcosa è andato storto",
     "app.crashHint": "Lo schermo non si è potuto disegnare. Ricarica per recuperare — i tuoi dati sono al sicuro.",

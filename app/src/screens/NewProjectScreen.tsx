@@ -97,7 +97,7 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
                 state it cannot be created from, which is not a move worth offering. */}
             {dir ? (
               <div className="folderrow">
-                <code className="path">{dir}</code>
+                <code className="path" title={dir}>{dir}</code>
                 <button className="btn" onClick={() => void chooseFolder()} disabled={busy}>{t("newproj.changeFolder")}</button>
               </div>
             ) : (
@@ -154,7 +154,7 @@ function DoneStep({ created, onOpenProject, onOpenMcp }: { created: Created; onO
         {dir && (
           <div className="newproj__capability">
             <p>{t("newproj.doneCapability")}</p>
-            <code className="path">{dir}</code>
+            <code className="path" title={dir}>{dir}</code>
           </div>
         )}
 

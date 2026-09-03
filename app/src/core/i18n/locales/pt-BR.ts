@@ -552,6 +552,7 @@ export const ptBR: Translation = {
     "mcp.projects": "Projetos que este aplicativo pode alcançar",
     "mcp.handover": "Os projetos marcados são exatamente o conteúdo do pedido e do arquivo. Ao entregá-lo, a entrada deste aplicativo é substituída por inteiro, incluindo as pastas que ele já alcança.",
     "mcp.noProjects": "Nenhum projeto tem pasta ainda, então não há para onde apontar um servidor.",
+    "mcp.pickNone": "Nada marcado é nada a entregar — marque um projeto primeiro.",
     "mcp.stale": "Deixado por um Amenbo mais antigo",
     "app.crashTitle": "Algo deu errado",
     "app.crashHint": "A tela não conseguiu ser desenhada. Recarregue para recuperar — seus dados estão seguros.",

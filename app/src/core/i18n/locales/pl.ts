@@ -557,6 +557,7 @@ export const pl: Translation = {
     "mcp.projects": "Projekty, do których ta aplikacja może sięgać",
     "mcp.handover": "Zaznaczone projekty to dokładnie treść prośby i pliku. Przekazanie zastępuje cały wpis tej aplikacji, razem z folderami, do których już sięga.",
     "mcp.noProjects": "Żaden projekt nie ma jeszcze folderu, więc nie ma na co skierować serwera.",
+    "mcp.pickNone": "Nic nie zaznaczono, więc nie ma czego przekazać — zaznacz najpierw projekt.",
     "mcp.stale": "Pozostawione przez starsze Amenbo",
     "app.crashTitle": "Coś poszło nie tak",
     "app.crashHint": "Ekranu nie udało się narysować. Przeładuj, żeby wrócić do gry — Twoje dane są bezpieczne.",

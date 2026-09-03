@@ -551,6 +551,7 @@ export const fr: Translation = {
     "mcp.projects": "Projets que cette application peut atteindre",
     "mcp.handover": "Les projets cochés sont exactement le contenu de la demande et du fichier. En le remettant, l'entrée de cette application est remplacée en entier, y compris les dossiers qu'elle atteint déjà.",
     "mcp.noProjects": "Aucun projet n'a encore de dossier : il n'y a nulle part où pointer un serveur.",
+    "mcp.pickNone": "Rien de coché, rien à transmettre : cochez d'abord un projet.",
     "mcp.stale": "Laissé par un Amenbo plus ancien",
     "app.crashTitle": "Quelque chose s'est mal passé",
     "app.crashHint": "L'écran n'a pas pu s'afficher. Rechargez pour récupérer — vos données sont intactes.",

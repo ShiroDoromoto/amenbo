@@ -528,6 +528,7 @@ export const zhHans: Translation = {
     "mcp.projects": "本应用可以访问的项目",
     "mcp.handover": "勾选的项目就是请求文本和文件的内容。交出去后，这个应用的条目会被整个替换，包括它现在能到达的文件夹。",
     "mcp.noProjects": "还没有项目绑定文件夹，服务器没有可指向的地方。",
+    "mcp.pickNone": "没有勾选任何项目，就没有可交出的内容——请先勾选一个。",
     "mcp.stale": "旧版 Amenbo 留下的",
     "app.crashTitle": "出了点问题",
     "app.crashHint": "画面渲染失败。重新加载即可恢复——你的数据是安全的。",

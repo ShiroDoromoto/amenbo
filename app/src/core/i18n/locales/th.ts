@@ -580,6 +580,7 @@ export const th: Translation = {
     "files.unwatchedHow": "โควตานี้แบ่งตามผู้ใช้และใช้ร่วมกับโปรแกรมแก้ไขที่เปิดอยู่ การเพิ่ม fs.inotify.max_user_watches จะทำให้มีที่ว่างมากขึ้น",
     "files.noFolder": "โปรเจกต์นี้ยังไม่มีโฟลเดอร์",
     "files.nothingOpen": "ยังไม่ได้เปิดอะไร",
+    "files.width": "กว้างขึ้นหรือแคบลง",
     "files.folderGone": "ไม่พบโฟลเดอร์นี้แล้ว",
     "files.back": "กลับไปที่รายการ",
     "files.edit": "แก้ไข",

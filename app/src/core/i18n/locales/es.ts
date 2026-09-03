@@ -598,6 +598,7 @@ export const es: Translation = {
     "files.unwatchedHow": "El cupo es por usuario y se comparte con el editor que tengas abierto. Subir fs.inotify.max_user_watches da más margen.",
     "files.noFolder": "Este proyecto aún no tiene carpeta.",
     "files.nothingOpen": "No hay nada abierto.",
+    "files.width": "Más ancho o más estrecho",
     "files.folderGone": "Esta carpeta ya no está.",
     "files.back": "Volver a la lista",
     "files.edit": "Editar",

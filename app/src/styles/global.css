@@ -185,7 +185,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The rail and the panes, side by side. A column keeps the width the person gave it and the panes
    take what is left: the panes are what the face is for, and a list of them that grew with their
    names would take the room from the thing it is a list of (`app/src/talk/columns.ts`). */
-.termface__body { flex: 1; min-height: 0; display: flex; }
+.termface__body { position: relative; flex: 1; min-height: 0; display: flex; }
 
 /* One of the columns beside the panes. It holds the column itself and the grip on the edge it shares
    with them, which is why it is a box of its own: the grip is drawn on the edge rather than in the
@@ -193,6 +193,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__column { position: relative; flex: 0 0 auto; min-height: 0; display: flex; }
 .termface__column--rail { width: var(--rail-w, 160px); }
 .termface__column--side { width: var(--side-w, 16rem); }
+/* The wide width lies over the panes rather than pushing them aside: a page that had to make room
+   would move the pane a reader is about to paste into, and reading is a thing they came back from
+   (`AMB-D-835`). The rail is never covered — how wide this may go is bounded by it
+   (`app/src/talk/columns.ts`). */
+.termface__column--wide {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  z-index: 4;
+  box-shadow: var(--shadow-md);
+}
 /* The edge itself. It is wider than the line it sits on — a border is a pixel and a pointer is not —
    so it straddles that line rather than sitting to one side of it. */
 .termface__grip {
@@ -958,8 +967,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The panel's way out, at the end of whichever row it has. Quiet, like the control that ends a pane:
    what stops it being pressed by mistake is that nothing is lost when it is — the top row opens the
    panel again, on the half it was showing. */
-.files__close {
+/* Wider or narrower, beside the way out and pushed to the far end with it: the two are the column's
+   own controls, where everything else on the row is about the file in it. */
+.files__width {
   margin-left: auto; flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+}
+.files__width:hover { color: var(--c-text); }
+.files__close {
+  flex: 0 0 auto;
   display: inline-flex; align-items: center;
   padding: 0 var(--s-1);
   border: 0; background: transparent;

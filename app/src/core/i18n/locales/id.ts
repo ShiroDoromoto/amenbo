@@ -580,6 +580,7 @@ export const id: Translation = {
     "files.unwatchedHow": "Jatahnya per pengguna dan dibagi dengan editor yang sedang Anda buka. Menaikkan fs.inotify.max_user_watches memberi ruang lebih.",
     "files.noFolder": "Proyek ini belum punya folder.",
     "files.nothingOpen": "Tidak ada yang terbuka.",
+    "files.width": "Lebih lebar atau lebih sempit",
     "files.folderGone": "Folder ini sudah tidak ada.",
     "files.back": "Kembali ke daftar",
     "files.edit": "Sunting",

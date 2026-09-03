@@ -580,6 +580,7 @@ export const vi: Translation = {
     "files.unwatchedHow": "Hạn mức tính theo từng người dùng và dùng chung với trình soạn thảo đang mở. Tăng fs.inotify.max_user_watches sẽ có thêm chỗ.",
     "files.noFolder": "Dự án này chưa có thư mục.",
     "files.nothingOpen": "Chưa mở gì cả.",
+    "files.width": "Rộng hơn hoặc hẹp hơn",
     "files.folderGone": "Thư mục này không còn nữa.",
     "files.back": "Quay lại danh sách",
     "files.edit": "Sửa",

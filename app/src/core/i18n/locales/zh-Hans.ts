@@ -577,6 +577,7 @@ export const zhHans: Translation = {
     "files.unwatchedHow": "名额按用户分配，和你打开的编辑器共用。调高 fs.inotify.max_user_watches 可以留出更多余地。",
     "files.noFolder": "这个项目还没有文件夹。",
     "files.nothingOpen": "没有打开任何文件。",
+    "files.width": "变宽或变窄",
     "files.folderGone": "这个文件夹已经不在了。",
     "files.back": "返回列表",
     "files.edit": "编辑",

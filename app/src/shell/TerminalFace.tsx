@@ -13,14 +13,15 @@ import {
   paneIn, panesOf, restored, roomOnPage, setCount, setOrient, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import {
-  clampRailWidth, clampSideNarrow, getRailShown, getRailTab, getRailWidth, getSideNarrow,
-  getSideShown, getSideTab, setRailShown, setRailTab, setRailWidth, setSideNarrow, setSideShown,
-  setSideTab,
+  clampRailWidth, clampSideNarrow, clampSideWide, getRailShown, getRailTab, getRailWidth,
+  getSideNarrow, getSideShown, getSideTab, getSideWide, setRailShown, setRailTab, setRailWidth,
+  setSideNarrow, setSideShown, setSideTab, setSideWide,
   type RailTab, type SideTab,
 } from "../talk/columns";
 import { FilesPanel } from "../files/FilesPanel";
 import { FolderTree } from "../files/FolderTree";
 import { fileUnderAny } from "../files/fileUnder";
+import { isBlankSpaceClose } from "./outsideClose";
 import { useHandDrag } from "../files/handDrag";
 import { Icon } from "../components/Icon";
 import { useBoundFolders } from "../core/boundFolders";
@@ -156,6 +157,8 @@ export function TerminalFace({
   goPane?: { session: string; nth: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  // The reading column itself, so a press can be told apart from one inside it (`isBlankSpaceClose`).
+  const sideRef = useRef<HTMLDivElement>(null);
   // Nothing is open until somebody opens something: a pane is made by opening one (`../talk/layout`),
   // so the face comes up with the way in and no boxes.
   const [layout, setLayout] = useState<Layout>(EMPTY_LAYOUT);
@@ -177,7 +180,14 @@ export function TerminalFace({
   const [railShown, setRailShownState] = useState(getRailShown);
   const [sideShown, setSideShownState] = useState(getSideShown);
   const [railWidth, setRailWidthState] = useState(() => getRailWidth(null));
-  const [sideWidth, setSideWidthState] = useState(() => getSideNarrow(null));
+  const [narrowWidth, setNarrowWidthState] = useState(() => getSideNarrow(null));
+  const [wideWidth, setWideWidthState] = useState(() => getSideWide(null));
+  // Which of the two widths the column is drawn at. It is not kept: a width is how much room this
+  // project's reading wants, where the step is what the reader is doing this minute — opening a file
+  // asks for the wide one, and the next thing they press puts it back (`AMB-D-835`).
+  const [wide, setWideState] = useState(false);
+  // What the column is actually drawn at, which is the one the face hands the stylesheet.
+  const sideWidth = wide ? wideWidth : narrowWidth;
   // Which of the file face's two the panel shows. It is held here rather than there because the row
   // that switches between them is here: the panel is only on the screen while it is open, so a
   // switch living inside it could not be the one that opens it (`../files/FilesPanel`). What it
@@ -687,25 +697,34 @@ export function TerminalFace({
       // The rail's edge is its right one, so the width is how far the pointer is from the face's left.
       (at) => clampRailWidth(
         at - (rootRef.current?.getBoundingClientRect().left ?? 0),
-        sideShown ? sideWidth : 0,
+        sideShown ? narrowWidth : 0,
       ),
       setRailWidthState,
-      (px) => setRailWidth(layout.project, px, sideShown ? sideWidth : 0),
+      (px) => setRailWidth(layout.project, px, sideShown ? narrowWidth : 0),
     ),
-    [dragging, layout.project, sideShown, sideWidth],
+    // The narrow width and not the drawn one: the wide column lies over the panes rather than
+    // pushing them aside, so it takes nothing the rail could have had (`AMB-D-835`).
+    [dragging, layout.project, sideShown, narrowWidth],
   );
 
+  // The edge of whichever width the column is standing on. Dragging the wide one leaves the narrow
+  // one where it was, and the other way about: the two answer different questions — how much room
+  // reading may take while the work is still in view, and how much it may take while it is being
+  // read (`../talk/columns`).
   const dragSide = useMemo(
     () => dragging(
       // The file face's edge is its left one, so the width is how far the pointer is from the right.
-      (at) => clampSideNarrow(
-        (rootRef.current?.getBoundingClientRect().right ?? 0) - at,
-        railShown ? railWidth : 0,
-      ),
-      setSideWidthState,
-      (px) => setSideNarrow(layout.project, px, railShown ? railWidth : 0),
+      (at) => {
+        const px = (rootRef.current?.getBoundingClientRect().right ?? 0) - at;
+        const floor = railShown ? railWidth : 0;
+        return wide ? clampSideWide(px, floor) : clampSideNarrow(px, floor);
+      },
+      wide ? setWideWidthState : setNarrowWidthState,
+      (px) => (wide
+        ? setSideWide(layout.project, px, railShown ? railWidth : 0)
+        : setSideNarrow(layout.project, px, railShown ? railWidth : 0)),
     ),
-    [dragging, layout.project, railShown, railWidth],
+    [dragging, layout.project, railShown, railWidth, wide],
   );
 
   // The widths this project was left at, read again whenever the rail moves to another project: they
@@ -713,7 +732,11 @@ export function TerminalFace({
   // (`AMB-D-835`, `../talk/columns`). A project nothing has been kept for is drawn at the defaults.
   useEffect(() => {
     setRailWidthState(getRailWidth(layout.project));
-    setSideWidthState(getSideNarrow(layout.project));
+    setNarrowWidthState(getSideNarrow(layout.project));
+    setWideWidthState(getSideWide(layout.project));
+    // And standing on the narrow step, which is where a project is arrived at: the wide one is
+    // asked for by opening a file, and no file is open on a project just moved to.
+    setWideState(false);
     // And which half of the rail this project was left on. The file goes with the project it was
     // opened from: a path is read against one project's folders, so carrying it to the next would be
     // drawing a file the rail beside it has no row for.
@@ -727,7 +750,8 @@ export function TerminalFace({
   // is left alone — what was asked for on a wide screen is what comes back on one.
   useEffect(() => {
     setRailWidthState((px) => clampRailWidth(px));
-    setSideWidthState((px) => clampSideNarrow(px));
+    setNarrowWidthState((px) => clampSideNarrow(px));
+    setWideWidthState((px) => clampSideWide(px));
   }, [width]);
   // The paths alone, and a stable one per set of them: the empty frame reads what the agents are
   // traced across off this, and a fresh array every render would send it back to the host on every
@@ -740,6 +764,19 @@ export function TerminalFace({
   // question about where a pane works stands in its place while it is up, because that is where the
   // answer appears: a question drawn anywhere else is one the reader has to go and find.
   const room = roomOnPage(layout, page);
+
+  // Back to the narrow width on the next press outside the column, wherever it lands: a press on a
+  // pane is a reader going back to the work, and a press on the rail is one going back to the list.
+  // **Narrow and not closed** — what they pressed says where they are looking, not that they are
+  // finished with the file (`AMB-D-835`).
+  useEffect(() => {
+    if (!wide) return;
+    const onDown = (e: PointerEvent) => {
+      if (isBlankSpaceClose(e.target as Node, sideRef.current)) setWideState(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [wide]);
 
   // A path clicked in a pane. It opens only where it lands inside one of the folders this project is
   // bound to — the same fence the host applies. One that lands outside opens nothing: the pane keeps
@@ -757,6 +794,7 @@ export function TerminalFace({
     setReading(found);
     takeTab("files");
     wantSide(true);
+    setWideState(true);
     // `nth` is what makes the same file asked for twice two answers, and the folders are joined
     // because the array itself is rebuilt on every render.
   }, [show?.nth, roots]);
@@ -779,6 +817,9 @@ export function TerminalFace({
             // files half wherever it stood: a row pressed for its file is a reader asking to see it.
             takeTab("files");
             wantSide(true);
+            // And opened wide, because what a reader asked for is the file. The next thing they
+            // press puts it back narrow, whatever that is (`AMB-D-835`).
+            setWideState(true);
           }}
           // A file that has gone to the bin is not one to go on reading.
           onGone={(root, went) => setReading((now) =>
@@ -1044,7 +1085,11 @@ export function TerminalFace({
             and opened again from the top row: whichever way it went away, the way back is in front
             of the reader (`../files/FilesPanel`). */}
         {sideShown && (
-          <div className="termface__column termface__column--side">
+          <div
+            className={`termface__column termface__column--side${
+              wide ? " termface__column--wide" : ""}`}
+            ref={sideRef}
+          >
             <div
               className="termface__grip termface__grip--side"
               role="separator"
@@ -1064,6 +1109,8 @@ export function TerminalFace({
                 now !== null && now.root === root && went.includes(now.path.join("/")) ? null : now
               )}
               onClose={() => wantSide(false)}
+              wide={wide}
+              onWide={setWideState}
               onHandOver={handOver}
             />
           </div>

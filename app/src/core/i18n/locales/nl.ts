@@ -577,6 +577,7 @@ export const nl: Translation = {
     "files.unwatchedHow": "Het aantal geldt per gebruiker en wordt gedeeld met de editor die je open hebt. fs.inotify.max_user_watches verhogen geeft meer ruimte.",
     "files.noFolder": "Dit project heeft nog geen map.",
     "files.nothingOpen": "Er is niets geopend.",
+    "files.width": "Breder of smaller",
     "files.folderGone": "Deze map is er niet meer.",
     "files.back": "Terug naar de lijst",
     "files.edit": "Bewerken",

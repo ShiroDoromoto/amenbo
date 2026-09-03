@@ -577,6 +577,7 @@ export const hi: Translation = {
     "files.unwatchedHow": "यह सीमा हर उपयोगकर्ता के लिए अलग है और आपके खुले संपादक के साथ बँटती है। fs.inotify.max_user_watches बढ़ाने से और जगह मिलती है।",
     "files.noFolder": "इस प्रोजेक्ट का अभी कोई फ़ोल्डर नहीं है।",
     "files.nothingOpen": "कुछ भी खुला नहीं है।",
+    "files.width": "चौड़ा या सँकरा",
     "files.folderGone": "यह फ़ोल्डर अब मौजूद नहीं है।",
     "files.back": "सूची पर वापस",
     "files.edit": "संपादित करें",

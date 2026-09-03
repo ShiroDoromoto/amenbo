@@ -598,6 +598,7 @@ export const fr: Translation = {
     "files.unwatchedHow": "Le quota est par utilisateur et partagé avec l'éditeur que vous avez ouvert. Augmenter fs.inotify.max_user_watches laisse plus de marge.",
     "files.noFolder": "Ce projet n'a pas encore de dossier.",
     "files.nothingOpen": "Rien n'est ouvert.",
+    "files.width": "Plus large ou plus étroit",
     "files.folderGone": "Ce dossier n'est plus là.",
     "files.back": "Retour à la liste",
     "files.edit": "Modifier",

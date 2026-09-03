@@ -603,6 +603,7 @@ export const uk: Translation = {
     "files.unwatchedHow": "Ліміт задано на користувача й ділиться з відкритим редактором. Збільшення fs.inotify.max_user_watches дає більше місця.",
     "files.noFolder": "Цей проєкт ще не має теки.",
     "files.nothingOpen": "Нічого не відкрито.",
+    "files.width": "Ширше або вужче",
     "files.folderGone": "Цієї теки більше немає.",
     "files.back": "Назад до списку",
     "files.edit": "Редагувати",

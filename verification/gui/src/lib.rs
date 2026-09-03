@@ -2187,7 +2187,7 @@ impl Instructor {
             // answer for is a road nobody can walk, and it fails on the way in rather than on a
             // screen.
             (Domain::Files, "press") => match req(with, "key")? {
-                "escape" => "With the keyboard standing on the column the file is drawn in — which is where opening it has left it — press the key this machine leaves things with. It is one layer per press: the file goes first, and the column itself only once nothing is open in it. Click the file's own text first only if something outside that column has been clicked since, because the terminal beside it hears the same key as meaning something of its own."
+                "escape" => "With the keyboard standing on the column the file is drawn in — which is where opening it has left it — press the key this machine leaves things with. It is one layer per press: the wide width goes first, and the column itself once it is standing narrow. Click the file's own text first only if something outside that column has been clicked since, because the terminal beside it hears the same key as meaning something of its own."
                     .to_string(),
                 // The key that renames. It is the second door onto the box the menu opens — the
                 // typing is `rename` either way — and which row it opens the box on is decided by

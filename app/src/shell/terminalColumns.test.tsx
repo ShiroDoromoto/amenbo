@@ -25,7 +25,7 @@ vi.mock("../core/boundFolders", () => ({
 }));
 
 import { TerminalFace } from "./TerminalFace";
-import { RAIL_DEFAULT, SIDE_NARROW_DEFAULT } from "../talk/columns";
+import { RAIL_DEFAULT, SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT } from "../talk/columns";
 import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -118,6 +118,48 @@ describe("closing a column, and opening it again", () => {
     root = createRoot(container);
     await mount();
     expect(q(".termface__column--rail")).toBeNull();
+  });
+});
+
+// Reading in a 256px column is reading through a slot, and a wide one that pushed the panes aside
+// would move the pane a reader is about to paste into. So the column has two widths and goes between
+// them, and the wide one lies over the panes (`AMB-D-835`).
+describe("the two widths the reading column stands on", () => {
+  const widthOf = () => (q(".termface") as HTMLElement).style.getPropertyValue("--side-w");
+
+  it("goes wide from the control beside the way out, over the panes rather than beside them", async () => {
+    await mount();
+    expect(widthOf()).toBe(`${SIDE_NARROW_DEFAULT}px`);
+
+    await click(q(".files__width"));
+    expect(widthOf()).toBe(`${SIDE_WIDE_DEFAULT}px`);
+    // Over them: the panes keep the room they had, which is what makes the pane a reader is going
+    // back to still be where they left it.
+    expect(q(".termface__column--wide")).not.toBeNull();
+  });
+
+  it("goes back narrow on the next press outside it, and does not close", async () => {
+    await mount();
+    await click(q(".files__width"));
+    expect(q(".termface__column--wide")).not.toBeNull();
+
+    // A press on the panes is a reader going back to the work — and going back to the work is not
+    // being finished with the file.
+    await act(async () => {
+      q(".termface__page-grid")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+    expect(q(".termface__column--wide")).toBeNull();
+    expect(q(".termface__column--side")).not.toBeNull();
+    expect(widthOf()).toBe(`${SIDE_NARROW_DEFAULT}px`);
+  });
+
+  it("leaves the width alone for a press inside the column itself", async () => {
+    await mount();
+    await click(q(".files__width"));
+    await act(async () => {
+      q(".termface__column--side")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+    expect(q(".termface__column--wide")).not.toBeNull();
   });
 });
 

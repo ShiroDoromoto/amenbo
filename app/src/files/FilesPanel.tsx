@@ -35,7 +35,7 @@ import { Icon } from "../components/Icon";
 const MARKDOWN = [".md", ".markdown"];
 
 export function FilesPanel({
-  projectId, tab, reading, onBack, onGone, onClose, onOpenLedger, onHandOver,
+  projectId, tab, reading, onBack, onGone, onClose, wide, onWide, onOpenLedger, onHandOver,
 }: {
   /** The project the file belongs to; nothing is drawn without one. */
   projectId: number | null;
@@ -56,6 +56,16 @@ export function FilesPanel({
   onGone?: (root: string, went: string[]) => void;
   /** Put the column away. What opens it again is the top row, which is where it was opened from. */
   onClose: () => void;
+  /**
+   * Whether the column is standing on its wide width — the one that lies over the panes — rather
+   * than the narrow one they are drawn beside (`AMB-D-835`).
+   *
+   * The step is the face's because the face is what draws the column at it, and because everything
+   * that puts it back narrow happens outside this column: a press on a pane, a press on the rail.
+   * What is here is the two ways a reader asks from inside — the control, and the key.
+   */
+  wide: boolean;
+  onWide: (want: boolean) => void;
   /** Leave the terminal face for the ledger — what a reference or a record means when it is clicked. */
   onOpenLedger?: () => void;
   /** Hand the file being read to the pane the reader is working in (`../shell/TerminalFace`). */
@@ -71,9 +81,10 @@ export function FilesPanel({
    * what each of them means, and the boundary between the two is which of them the reader is in
    * (`AMB-D-780`).
    *
-   * **One press, one layer.** The file goes first and the column itself after it, so the two things
-   * a reader might mean by "back" are told apart by how many times they press rather than by
-   * finding a different way out of each (`AMB-D-815`).
+   * **One press, one layer.** The wide width goes first and the column itself after it, so the two
+   * things a reader might mean by "back" are told apart by how many times they press rather than by
+   * finding a different way out of each (`AMB-D-815`). The width is not a layer of its own on top of
+   * that — it *is* the first one, which is why a column standing narrow closes on one press.
    */
   const onKey = (e: ReactKeyboardEvent) => {
     if (e.key === "Escape") {
@@ -82,7 +93,7 @@ export function FilesPanel({
       // carry the reader a layer past the one they asked for.
       if (trash.asking || (e.target as HTMLElement).closest('[role="menu"]') !== null) return;
       e.preventDefault();
-      if (reading !== null) onBack();
+      if (wide) onWide(false);
       else onClose();
       return;
     }
@@ -93,13 +104,27 @@ export function FilesPanel({
     }
   };
 
-  // The way to put the column away, and the whole of the row it sits on. It is drawn in every state
+  // The width and the way out, and the whole of the row they sit on. Both are drawn in every state
   // the column can be in — reading a file included — because a column that could only be closed
   // from one of its states is one a reader has to find their way back out of.
+  //
+  // **One control with two ends, and what it says is the end it goes to.** A column already lying
+  // over the panes offers to give them back; a narrow one offers the room to read in. The mark is
+  // the direction the edge would move, which is the same thing said without a word (`AMB-D-835`).
   const close = (
-    <button className="files__close" title={t("pane.close")} onClick={onClose}>
-      <Icon name="close" />
-    </button>
+    <>
+      <button
+        className="files__width"
+        title={t("files.width")}
+        aria-pressed={wide}
+        onClick={() => onWide(!wide)}
+      >
+        <Icon name={wide ? "chevronRight" : "chevronLeft"} />
+      </button>
+      <button className="files__close" title={t("pane.close")} onClick={onClose}>
+        <Icon name="close" />
+      </button>
+    </>
   );
 
   // The draft page is the project's, and a project has one whether or not it is bound to a folder

@@ -172,12 +172,9 @@ export function DecisionDetailPane({
         ) : (
           <span style={editable ? { cursor: "text" } : undefined} title={editable ? t("detail.edit") : undefined} onDoubleClick={editable ? startEdit : undefined}>{d.title}</span>
         )}
-        <span style={{
-          fontSize: "var(--fs-xs)", padding: "1px 8px", borderRadius: 10, color: "#fff",
-          background: statusColor(d.status),
-        }}>{t(`dec.status.${d.status}`)}</span>
+        <span className="chip chip--status" style={{ background: statusColor(d.status) }}>{t(`dec.status.${d.status}`)}</span>
         {!editing && editable && (
-          <button className="feed__action" onClick={startEdit}>{t("detail.edit")}</button>
+          <button className="btn" onClick={startEdit}>{t("detail.edit")}</button>
         )}
       </div>
 
@@ -212,7 +209,7 @@ export function DecisionDetailPane({
           </div>
         </div>
       ) : d.body ? (
-        <div className="markdown" style={{ marginTop: 8, fontSize: "var(--fs-body)", maxWidth: "var(--measure-prose)" }} onDoubleClick={editable ? startEdit : undefined}>
+        <div className="markdown decbody" onDoubleClick={editable ? startEdit : undefined}>
           <Markdown>{d.body}</Markdown>
         </div>
       ) : null}
@@ -226,7 +223,7 @@ export function DecisionDetailPane({
             <span key={lt.id} style={isClosed(lt.status) ? { color: "var(--c-muted)" } : undefined}>
               {i > 0 && ", "}
               <button
-                className="feed__action"
+                className="feed__target"
                 style={{ padding: "0 4px", ...(isClosed(lt.status) ? { opacity: 0.6 } : {}) }}
                 onClick={() => onOpenTask?.(Number(lt.id))}
               >
@@ -250,7 +247,7 @@ export function DecisionDetailPane({
                 {standingOn(d).map((s) => (
                   <button
                     key={s.id}
-                    className="feed__action"
+                    className="feed__target"
                     style={{ display: "block", padding: "0 4px" }}
                     onClick={() => onOpenDecision?.(s.id)}
                   >
@@ -284,7 +281,7 @@ export function DecisionDetailPane({
             </div>
           </div>
         ) : (
-          // Entry buttons are real buttons, not link-styled feed__action: accepting or rejecting a
+          // Entry buttons carry the accent fill: accepting or rejecting a
           // decision is the pane's primary act and must not hide among the faint navigation links.
           <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
             <button className="btn btn--primary" onClick={() => setConfirming("accept")}>{t("dec.accept")}</button>
@@ -296,7 +293,7 @@ export function DecisionDetailPane({
       {d.status === "accepted" && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="feed__action" onClick={() => void runReopen()}>{t("dec.reopen")}</button>
+            <button className="btn" onClick={() => void runReopen()}>{t("dec.reopen")}</button>
           </div>
           {reopenError && <ErrorNote>{reopenError}</ErrorNote>}
         </div>
@@ -506,7 +503,7 @@ function DecisionEdges({ d, onOpenDecision }: {
         >
           {t(r.labelKey)}:{" "}
           <button
-            className="feed__action"
+            className="feed__target"
             style={{ padding: "0 4px" }}
             onClick={() => onOpenDecision?.(r.target.id)}
           >
@@ -519,7 +516,7 @@ function DecisionEdges({ d, onOpenDecision }: {
           )}
           {inTauri() && (
             <button
-              className="feed__action"
+              className="btn"
               style={{ marginLeft: 6, fontSize: "var(--fs-xs)" }}
               onClick={() => void unlink(r)}
             >
@@ -575,7 +572,7 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
   };
   if (!open) {
     return (
-      <button className="feed__action" style={{ marginTop: 6 }} onClick={() => setOpen(true)}>
+      <button className="btn" style={{ marginTop: 6 }} onClick={() => setOpen(true)}>
         <Icon name="plus" /> {t("dec.edge.add")}
       </button>
     );

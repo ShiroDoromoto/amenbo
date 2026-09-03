@@ -177,7 +177,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           </select>
         </label>
         <span className="topbar__spacer" style={{ flex: 1 }} />
-        <button className="feed__action" onClick={() => setComposing((v) => !v)}><Icon name="plus" /> {t("dec.new")}</button>
+        <button className="btn" onClick={() => setComposing((v) => !v)}><Icon name="plus" /> {t("dec.new")}</button>
       </div>
 
       {/* The filters themselves, opened in place under the bar the toggle sits in. One line per axis,
@@ -272,10 +272,7 @@ function DecisionCard({ d, selected, onSelect }: {
     >
       {d.ref && <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
       <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</span>
-      <span style={{
-        fontSize: "var(--fs-xs)", padding: "1px 8px", borderRadius: 10, color: "#fff", whiteSpace: "nowrap",
-        background: statusColor(d.status),
-      }}>{t(`dec.status.${d.status}`)}</span>
+      <span className="chip chip--status" style={{ background: statusColor(d.status) }}>{t(`dec.status.${d.status}`)}</span>
       {/* The edge, said in the row: which decision overturned this one. It sits beside the status rather
           than instead of it — a rejected decision that was later superseded is both, and a badge that
           picked one of the two would be hiding the other. */}
@@ -372,13 +369,13 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
       ))}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button
-          className="feed__action"
+          className="btn btn--primary"
           disabled={busy || !title.trim() || unmet.length > 0}
           onClick={() => void submit()}
         >
           {t("dec.add")}
         </button>
-        <button className="feed__action" onClick={onDone}>{t("dec.cancel")}</button>
+        <button className="btn" onClick={onDone}>{t("dec.cancel")}</button>
         {/* Why the button is held, named rather than left to a tooltip — the selects are right above.
             The sentence is the task pane's, because it is the same sentence: fill these in first. */}
         {unmet.length > 0 && (

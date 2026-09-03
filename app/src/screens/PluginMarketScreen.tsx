@@ -145,7 +145,7 @@ export function PluginMarketScreen({ onOpenInstalled }: {
           </select>
         </label>
         <span className="topbar__spacer" style={{ flex: 1 }} />
-        <button className="feed__action" onClick={() => setSourcesOpen((v) => !v)}>
+        <button className="btn" onClick={() => setSourcesOpen((v) => !v)}>
           {tf("plugins.sources", { count: catalog.sources.length })} <Icon name={sourcesOpen ? "chevronDown" : "chevronRight"} />
         </button>
         <span className="meta">
@@ -288,7 +288,7 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
             {s.reachable ? tn("plugins.offered", s.offered) : t("plugins.sourceDown")}
           </span>
           {!s.official && (
-            <button className="feed__action" disabled={busy} onClick={() => void run(() => removeCatalogSource(s.url))}>
+            <button className="btn btn--danger" disabled={busy} onClick={() => void run(() => removeCatalogSource(s.url))}>
               {t("plugins.removeSource")}
             </button>
           )}
@@ -320,7 +320,7 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
           </button>
         </div>
       )}
-      {error && <div style={{ color: "var(--c-heed)", fontSize: "var(--fs-xs)" }}>{error}</div>}
+      {error && <div className="catsrc__err">{error}</div>}
       <div className="meta">{t("plugins.sourcesNote")}</div>
     </div>
   );
@@ -375,7 +375,7 @@ function SourceConsent({ probe, name, onName, busy, onConfirm, onCancel }: {
             style={{ flex: 1, minWidth: 0 }}
           />
         </label>
-        <button className="feed__action" disabled={busy} onClick={onCancel}>{t("plugins.sourceCancel")}</button>
+        <button className="btn" disabled={busy} onClick={onCancel}>{t("plugins.sourceCancel")}</button>
         <button className="btn" disabled={busy} onClick={onConfirm}>
           {t(probe.fingerprint ? "plugins.trustAndAdd" : "plugins.addSource")}
         </button>

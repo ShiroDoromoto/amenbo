@@ -1,0 +1,80 @@
+# A pane is called by a name its reader typed, and the row carries it from then on.
+#
+# **The row above a pane belongs to the frame rather than to the session in it**, which is why it is
+# where a person names a pane. Three hands name a frame and they are ranked — the first line typed
+# into it, then the agent running in it, then the person, whose word is the last one for good. This
+# road walks the top of that ranking.
+#
+# The way in is the row's own menu, and it is the only one. That menu is drawn only while a terminal
+# is running, so a frame nobody has opened anything in has no name at all — which is the half this
+# road cannot walk: a menu that is not on the screen is not something a reading can be asked for.
+#
+# ── Why a line is sent before the naming ─────────────────────────────────────────────────────────
+# A frame nobody has named is called after the folder it works in, so a road that named one of those
+# would prove only that a box writes into a row with nothing in it. The typed line is the lowest of
+# the three hands: it puts a word on the row, and that word is what the box opens on, selected and
+# waiting to be typed over. The reading at the end is then the ranking being kept rather than a first
+# name arriving.
+#
+# ── Why the word it replaced is not read for its absence ─────────────────────────────────────────
+# The line that named the frame is still down in the pane, where the shell echoed it back, so a
+# reading that asked for it to be gone would be asking the screen to lose text this road put there on
+# purpose. The reading that is written answers the same question: the row carries the person's word,
+# which it could not do if the typed one had held.
+#
+# ── One pane ─────────────────────────────────────────────────────────────────────────────────────
+# A row is read by the pane running under it, so telling two of them apart is another road's goal
+# (`get-rid-of-a-pane-for-good`). What is under test here is what a row says, not which row was
+# reached.
+#
+# The world is empty on purpose. A name is held for the frame and for this run, and nothing else has
+# to be standing for one to be given — and choosing the folder is what raises the project it belongs
+# to, so the road makes the world it needs by walking in.
+id: call-a-pane-by-a-name-of-your-own
+title: A person names a pane from the row's own menu, over the word the row was already carrying
+description: >
+  Open a pane on a folder and send a line into it, which is what the row calls the pane until
+  somebody says otherwise. Open what else the row can do, choose the item that names the pane, and
+  type a name of your own over the one waiting in the box. The row carries that name afterwards.
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # A pane exists because somebody chose where it runs, and the choosing is what raises the project
+  # around it as well.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: lantern
+
+  # Down to a plain shell. What an agent does with a line typed at it is the agent's own, and the line
+  # below has to be the person's keys and nothing else — those are what name a frame.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The lowest of the three hands. From here the row calls the pane this, until somebody outranks it.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the first line
+
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO named by hand
+
+  # The person's word, on the row and nowhere in the interface around it. It stands over the line that
+  # named the frame a moment ago, which is the whole of what the last word for good means here.
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO named by hand

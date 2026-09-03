@@ -55,6 +55,8 @@ export const vi: Translation = {
     "projset.title": "Cài đặt dự án", "projset.back": "Về bảng",
     "projset.general": "Chung", "projset.nameLabel": "Tên", "projset.notesLabel": "Ghi chú",
     "projset.colorLabel": "Màu", "projset.viewLabel": "Khung xem mặc định",
+    "projset.iconLabel": "Biểu tượng", "projset.iconClear": "Bỏ ảnh",
+    "projset.iconHint": "Hiện trên các thẻ dự án. Không có ảnh thì hiện màu và chữ cái đầu của tên.",
     "projset.save": "Lưu", "projset.saved": "Đã lưu", "projset.saving": "Đang lưu…",
     "projset.notesPh": "Ghi chú cho dự án này (không bắt buộc)",
     "projset.danger": "Lưu trữ & xoá", "projset.archivedBadge": "Đã lưu trữ",

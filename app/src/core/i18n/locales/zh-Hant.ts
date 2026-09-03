@@ -53,6 +53,8 @@ export const zhHant: Translation = {
     "projset.title": "專案設定", "projset.back": "回到看板",
     "projset.general": "一般", "projset.nameLabel": "名稱", "projset.notesLabel": "備註",
     "projset.colorLabel": "顏色", "projset.viewLabel": "預設檢視",
+    "projset.iconLabel": "圖示", "projset.iconClear": "移除圖片",
+    "projset.iconHint": "顯示在專案分頁上。沒有圖片時顯示顏色與名稱首字。",
     "projset.save": "儲存", "projset.saved": "已儲存", "projset.saving": "儲存中…",
     "projset.notesPh": "這個專案的備註（選填）",
     "projset.danger": "封存與刪除", "projset.archivedBadge": "已封存",

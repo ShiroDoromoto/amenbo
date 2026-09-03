@@ -52,6 +52,8 @@ export const ja: Translation = {
     "projset.title": "プロジェクト設定", "projset.back": "ボードへ戻る",
     "projset.general": "基本", "projset.nameLabel": "名前", "projset.notesLabel": "メモ",
     "projset.colorLabel": "色", "projset.viewLabel": "既定のビュー",
+    "projset.iconLabel": "アイコン", "projset.iconClear": "画像を外す",
+    "projset.iconHint": "プロジェクトタブに出ます。登録が無ければ、色と名前の1文字目が出ます。",
     "projset.save": "保存", "projset.saved": "保存しました", "projset.saving": "保存中…",
     "projset.notesPh": "このプロジェクトのメモ（任意）",
     "projset.danger": "アーカイブ・削除", "projset.archivedBadge": "アーカイブ済み",

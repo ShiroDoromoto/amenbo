@@ -55,6 +55,8 @@ export const fr: Translation = {
     "projset.title": "Réglages du projet", "projset.back": "Retour au tableau",
     "projset.general": "Général", "projset.nameLabel": "Nom", "projset.notesLabel": "Notes",
     "projset.colorLabel": "Couleur", "projset.viewLabel": "Vue par défaut",
+    "projset.iconLabel": "Icône", "projset.iconClear": "Retirer l'image",
+    "projset.iconHint": "Affichée sur les onglets de projet. Sans image, la couleur et la première lettre du nom sont affichées.",
     "projset.save": "Enregistrer", "projset.saved": "Enregistré", "projset.saving": "Enregistrement…",
     "projset.notesPh": "Notes de ce projet (facultatif)",
     "projset.danger": "Archiver et supprimer", "projset.archivedBadge": "Archivé",

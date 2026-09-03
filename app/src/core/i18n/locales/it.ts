@@ -55,6 +55,8 @@ export const it: Translation = {
     "projset.title": "Impostazioni del progetto", "projset.back": "Torna alla bacheca",
     "projset.general": "Generale", "projset.nameLabel": "Nome", "projset.notesLabel": "Note",
     "projset.colorLabel": "Colore", "projset.viewLabel": "Vista predefinita",
+    "projset.iconLabel": "Icona", "projset.iconClear": "Rimuovi immagine",
+    "projset.iconHint": "Compare sulle schede di progetto. Senza immagine si mostrano il colore e la prima lettera del nome.",
     "projset.save": "Salva", "projset.saved": "Salvato", "projset.saving": "Salvataggio…",
     "projset.notesPh": "Note di questo progetto (facoltative)",
     "projset.danger": "Archivia ed elimina", "projset.archivedBadge": "Archiviato",

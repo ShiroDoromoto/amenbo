@@ -460,7 +460,7 @@ export function TaskDetailPane({
                 <Markdown>{task.notes}</Markdown>
               </div>
             ) : (
-              <div className="faint" style={{ fontSize: "var(--fs-sm)" }}>{t("detail.noNotes")}</div>
+              <div className="faint" style={{ fontSize: "var(--fs-md)" }}>{t("detail.noNotes")}</div>
             )}
           </div>
 
@@ -477,7 +477,7 @@ export function TaskDetailPane({
           <div>
             <div className="detail__section-h">{t("detail.activityCategory")} · <Icon name="comment" size="md" /> {task.comments}</div>
             {comments.length === 0 ? (
-              <div className="faint" style={{ marginTop: 6, fontSize: "var(--fs-sm)" }}>{t("detail.noComments")}</div>
+              <div className="faint" style={{ marginTop: 6, fontSize: "var(--fs-md)" }}>{t("detail.noComments")}</div>
             ) : (
               <div className="comments">
                 {olderCount > 0 && (

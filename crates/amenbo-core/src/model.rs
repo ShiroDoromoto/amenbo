@@ -244,6 +244,19 @@ pub struct Project {
     pub name: String,
     pub notes: String,
     pub color: Option<String>,
+    /// The image the project shows for itself, as a small `data:image/…` URL — a 96px square PNG,
+    /// capped at [`crate::config::AVATAR_MAX_BYTES`]. `None` means the project has none, and the
+    /// surfaces fall back to the colour and the first letter of the name. Its original lives in the
+    /// blob store, named by [`Project::icon_source`] (`AMB-D-839`).
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// The BLAKE3 hash of the icon's original image in the blob store (`<store>/blobs/<hash>`), kept so
+    /// a different size can be baked later without asking the human to choose the file again
+    /// (`AMB-D-839`). `None` where there is no icon, or where one was registered without an original.
+    /// It moves with [`Project::icon`] and never apart from it — a hash left standing beside another
+    /// image's display version would name the wrong original.
+    #[serde(default)]
+    pub icon_source: Option<String>,
     pub default_view: View,
     pub archived: bool,
     pub order_key: String,

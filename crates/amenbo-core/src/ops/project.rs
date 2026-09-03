@@ -38,6 +38,10 @@ pub fn add(tx: &WriteTx<'_>, input: NewProject) -> Result<Project> {
         name: input.name,
         notes: input.notes,
         color: input.color,
+        // A project is born without an icon — registering one is its own act, on a project that exists
+        // (`AMB-D-839`), so creation has nothing to say about it.
+        icon: None,
+        icon_source: None,
         default_view: input.view,
         archived: false,
         order_key,
@@ -57,12 +61,27 @@ fn live_before(tx: &WriteTx<'_>, id: i64) -> Result<Project> {
     read::project(tx.conn(), id)?.ok_or_else(|| NOUN.not_found(id.to_string()))
 }
 
+/// What a patch does to a project's icon (`AMB-D-839`). The display version and the original's hash
+/// move as one — no caller can touch half of the pair — so the two acts are spelled out here rather
+/// than left to be inferred from a pair of `Option`s that could disagree.
+#[derive(Clone, Debug)]
+pub enum IconPatch {
+    /// Register an image: the small version the surfaces draw, and the blob hash of the original it was
+    /// baked from. `source` is `None` where the caller kept no original.
+    Set { display: String, source: Option<String> },
+    /// Take the icon away. The surfaces fall back to the colour and the first letter of the name; the
+    /// original stops being referenced, and the next blob sweep reclaims its bytes.
+    Clear,
+}
+
 #[derive(Default)]
 pub struct ProjectPatch {
     pub name: Option<String>,
     pub notes: Option<String>,
     pub view: Option<View>,
     pub color: Option<String>,
+    /// `None` leaves the icon as it is; `Some` replaces both halves of it at once.
+    pub icon: Option<IconPatch>,
 }
 
 pub fn update(tx: &WriteTx<'_>, id: i64, patch: ProjectPatch) -> Result<Project> {
@@ -82,6 +101,25 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: ProjectPatch) -> Result<Project>
     }
     if let Some(color) = patch.color {
         p.color = Some(color);
+    }
+    if let Some(icon) = patch.icon {
+        match icon {
+            IconPatch::Set { display, source } => {
+                // The same guards the facet avatars go through — shape and size for the display version,
+                // the shape of a content address for the original — so one rule covers every image a
+                // human registers, whichever surface registers it.
+                crate::config::validate_avatar("icon", &display)?;
+                if let Some(hash) = &source {
+                    crate::config::validate_avatar_source("icon", hash)?;
+                }
+                p.icon = Some(display);
+                p.icon_source = source;
+            }
+            IconPatch::Clear => {
+                p.icon = None;
+                p.icon_source = None;
+            }
+        }
     }
     p.updated_at = Timestamp::now();
     emit_update(tx, record::project(&before), record::project(&p))?;
@@ -229,6 +267,42 @@ mod tests {
             let after = read::project(tx.conn(), p).unwrap().unwrap();
             assert_eq!(after.name, "beta");
             assert_eq!(after.slug.as_deref(), Some("alpha"));
+        });
+    }
+
+    /// The icon's two halves move together (`AMB-D-839`): registering writes both, clearing takes both,
+    /// and a patch that names neither leaves them where they are. A malformed half is refused whole — the
+    /// project keeps the icon it had rather than half of the new one.
+    #[test]
+    fn a_projects_icon_moves_with_the_original_it_was_baked_from() {
+        with_tx(|tx| {
+            let p = mk_project(tx, "icons");
+            let icon = |id: i64| {
+                let row = read::project(tx.conn(), id).unwrap().unwrap();
+                (row.icon, row.icon_source)
+            };
+            let hash = "c".repeat(64);
+            let png = "data:image/png;base64,AAAA";
+            assert_eq!(icon(p), (None, None), "a project is born without one");
+
+            let set = |display: &str, source: Option<String>| ProjectPatch {
+                icon: Some(IconPatch::Set { display: display.to_string(), source }),
+                ..Default::default()
+            };
+            update(tx, p, set(png, Some(hash.clone()))).unwrap();
+            assert_eq!(icon(p), (Some(png.to_string()), Some(hash.clone())));
+
+            // A patch about something else leaves the icon alone.
+            update(tx, p, ProjectPatch { notes: Some("メモ".into()), ..Default::default() }).unwrap();
+            assert_eq!(icon(p), (Some(png.to_string()), Some(hash.clone())));
+
+            // Neither half is written when either is malformed.
+            update(tx, p, set("data:text/plain;base64,AAAA", Some(hash.clone()))).unwrap_err();
+            update(tx, p, set(png, Some("not-a-hash".to_string()))).unwrap_err();
+            assert_eq!(icon(p), (Some(png.to_string()), Some(hash)));
+
+            update(tx, p, ProjectPatch { icon: Some(IconPatch::Clear), ..Default::default() }).unwrap();
+            assert_eq!(icon(p), (None, None), "clearing takes the original with the display version");
         });
     }
 

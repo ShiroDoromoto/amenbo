@@ -128,6 +128,10 @@ pub(super) fn project_row(r: &Row) -> rusqlite::Result<Project> {
         name: get(r, C.name)?,
         notes: get(r, C.notes)?,
         color: get(r, C.color)?,
+        // Both read null on a store an older binary wrote (no icon was registrable then), which is
+        // faithful: a project with no icon and one that predates the column are the same project.
+        icon: get(r, C.icon)?,
+        icon_source: get(r, C.icon_source)?,
         default_view: enum_req(r, C.default_view, View::parse)?,
         archived: get(r, C.archived)?,
         order_key: get(r, C.order_key)?,
@@ -492,6 +496,8 @@ mod tests {
                 name: "PJ".to_string(),
                 notes: "notes".to_string(),
                 color: Some("red".to_string()),
+                icon: Some("data:image/png;base64,AAAA".to_string()),
+                icon_source: Some("a".repeat(64)),
                 default_view: View::Board,
                 archived: true,
                 order_key: "a0".to_string(),

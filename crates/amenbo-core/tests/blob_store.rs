@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime};
 
 use amenbo_core::config::Paths;
 use amenbo_core::model::{ActorKind, AttachmentTarget};
+use amenbo_core::ops::project::IconPatch;
 use amenbo_core::store_engine::read;
 use amenbo_core::Store;
 
@@ -272,6 +273,69 @@ fn new_task(title: &str, project_id: i64) -> amenbo_core::ops::task::NewTask {
         created_by_kind: Some(ActorKind::Ai),
         at_binding_id: None,
     }
+}
+
+/// The originals of the images a human registered are in the GC root set too (`AMB-D-839`) — an
+/// avatar's, held in config, and a project icon's, held on the project row. Neither hangs off an
+/// attachment, so a sweep that counted attachments alone would take the very bytes keeping an original
+/// was for.
+#[test]
+fn the_sweep_keeps_the_originals_a_registered_image_names() {
+    let paths = temp_paths();
+    let mut store = Store::open_at(paths.clone()).unwrap();
+
+    let project = store.project_add(new_project("アイコンつきPJ")).unwrap().id;
+    let avatar = store.blobs().ingest_bytes(b"the original the avatar was baked from").unwrap().hash;
+    let icon = store.blobs().ingest_bytes(b"the original the project icon was baked from").unwrap().hash;
+    let loose = store.blobs().ingest_bytes(b"nothing names these bytes").unwrap().hash;
+
+    store.config.set_avatar(ActorKind::Human, Some(PNG), Some(&avatar)).unwrap();
+    store.save_config().unwrap();
+    store
+        .project_update(project, icon_patch(IconPatch::Set { display: PNG.to_string(), source: Some(icon.clone()) }))
+        .unwrap();
+    age_blobs(&paths, &[&avatar, &icon, &loose]);
+
+    let report = store.gc_blobs(Duration::ZERO).unwrap();
+
+    assert_eq!(report.removed, 1, "only the bytes nothing names are collected");
+    assert!(store.blobs().has(&avatar), "the avatar's original survives the sweep");
+    assert!(store.blobs().has(&icon), "and so does the project icon's");
+    assert!(!store.blobs().has(&loose));
+}
+
+/// The same root set guards the **targeted** reclaim: an image's original and an attachment can be the
+/// same bytes (content-addressing shares them), so removing the attachment must not take the original
+/// the icon still names.
+#[test]
+fn removing_an_attachment_spares_bytes_a_registered_image_still_names() {
+    let paths = temp_paths();
+    let mut store = Store::open_at(paths.clone()).unwrap();
+
+    let project = store.project_add(new_project("同じ画像のPJ")).unwrap().id;
+    let shared = store.blobs().ingest_bytes(b"attached, and also an icon's original").unwrap().hash;
+    let a = attach(&mut store, TASK_A, &shared);
+    store
+        .project_update(project, icon_patch(IconPatch::Set { display: PNG.to_string(), source: Some(shared.clone()) }))
+        .unwrap();
+    age_blobs(&paths, &[&shared]);
+
+    store.remove_attachment(a).unwrap();
+    assert!(store.blobs().has(&shared), "the icon still names these bytes");
+
+    // Clearing the icon is what lets them go — and the sweep is what collects them.
+    store.project_update(project, icon_patch(IconPatch::Clear)).unwrap();
+    let report = store.gc_blobs(Duration::ZERO).unwrap();
+    assert_eq!(report.removed, 1);
+    assert!(!store.blobs().has(&shared));
+}
+
+/// A display version small enough to stand in for a baked 96px PNG in these fixtures.
+const PNG: &str = "data:image/png;base64,AAAA";
+
+/// A patch that touches the icon and nothing else.
+fn icon_patch(icon: IconPatch) -> amenbo_core::ops::project::ProjectPatch {
+    amenbo_core::ops::project::ProjectPatch { icon: Some(icon), ..Default::default() }
 }
 
 /// Backdate the blob files past [`amenbo_core::blob::GC_MIN_AGE`] so a sweep judges them on their

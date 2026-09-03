@@ -2285,10 +2285,27 @@ const REGISTRY: &[OpSpec] = &[
     // operator crosses over before it lands, so the step ends on the ledger. How long they have is
     // the driver's to say and not the road's.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text"], binds: false },
+    // A name the person gives a pane, typed on that same row. The words the row carries are otherwise
+    // the session's own, said from inside the terminal, and this is the other hand on them: the last
+    // word on a frame is the person's, so a name typed here stands over whatever the session called
+    // itself (`app/src/talk/frames.ts`).
+    //
+    // **The way in is the row's menu, and that menu is drawn only while a terminal is running**
+    // (`app/src/shell/TerminalPane.tsx`). A frame nobody has opened anything in is a place there is
+    // nothing to call, so a road that named one would be pressing something that is not on the screen.
+    //
+    // `shows` names which pane, the way `press-pane` and `paste` name one: by the words a road typed
+    // into it earlier. Left out, it is the page's one pane.
+    //
+    // There is no way to spell an empty name, and that is the door being closed rather than an
+    // omission: an empty box takes nothing, so a road that asked for one would be asking for a step
+    // that does nothing and reads as though it had.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "name-pane", required: &["name"], refs: &[], strings: &["name", "shows"], binds: false },
     // And what the pane's label carries afterwards. This is the whole of what the surface layer is
     // for: a word said in a terminal that nothing outside it can find out, arriving where a person
     // reads it. The words are the agent's own, so a reading finds them on the label and nowhere in
-    // the interface around it.
+    // the interface around it. It reads a name a person typed (`name-pane`) the same way and for the
+    // same reason — those words are the operator's own too, and are drawn on the row and nowhere else.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "label", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // The mark the terminal's own segment wears while a turn is standing behind it. It is the whole
     // of what crosses the switch — a dot, with no number and no words — so there is nothing to name

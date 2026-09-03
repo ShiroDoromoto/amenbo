@@ -1856,6 +1856,29 @@ impl Instructor {
             (Domain::Terminal, "end-pane") =>
                 "In the pane that has a terminal running in it, run: exit — the program ends. The pane stays where it is with what it printed still on it, and nothing is running in it any more."
                     .to_string(),
+            // Naming the place, which is three presses and not one: the row's menu, the item in it,
+            // and the key that takes the word. All three are said, and the last of them is said
+            // hardest — the box is left as easily as it is opened, and every way of leaving it keeps
+            // nothing. An operator who typed the name and then clicked somewhere to see what had
+            // happened would have walked the step that undoes this one.
+            //
+            // The item is named by where it sits and what it does rather than by the word on it, for
+            // the reason every control on these roads is: the word is the interface's, and the run's
+            // language is whatever the machine is set to.
+            //
+            // What is in the box already is said too. It opens on the name as it stands, selected, so
+            // typing replaces it — and an operator who cleared it first would be doing the one thing
+            // that ends in no name at all.
+            (Domain::Terminal, "name-pane") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "On the row above {pane}, press the control that opens what else the row can do, and choose the item that names the pane — the one set apart, below the two that hand the terminal something. A box takes the label's place with the name as it stands in it, already selected. Type \"{}\" straight over it and press Enter. The row carries that name afterwards. Press nothing else and click nowhere else in between: leaving the box, by any means, is the way this is taken back rather than kept.",
+                    req(with, "name")?
+                )
+            }
             // Getting rid of the place. The pane is named by the words the road typed into it, since
             // that is the only thing on a page of panes that is the road's own — and being sure which
             // one is pressed is the whole point on the one move nothing takes back.
@@ -3359,10 +3382,16 @@ impl Instructor {
             // the absent half is read with the ledger up, where the pane is hidden rather than gone.
             // What the pane's label carries. It is the row above the pane rather than the pane itself:
             // the words got there because the app read them out of the drop box the agent wrote to,
-            // never because they were printed in the terminal.
+            // or because a person typed them on that row (`name-pane`), and never because they were
+            // printed in the terminal.
+            //
+            // Which of the two hands put them there is not said, and that is the point of the reading
+            // rather than a gap in it: what is on the row is what a reader is promised, and a step
+            // that told the operator where to expect the words to have come from would have them mark
+            // a working face red on the half it did not name.
             (Domain::Terminal, "label") => match present(with) {
                 true => format!(
-                    "On the row above the pane running a terminal, confirm the label carries \"{}\" — said in the pane, read off the screen.",
+                    "On the row above the pane running a terminal, confirm the label carries \"{}\" — words of that pane's own, not any of the interface's, read off the screen.",
                     req(with, "shows")?
                 ),
                 false => format!(

@@ -1,0 +1,119 @@
+# The other half of what a run keeps: not how many panes to a page, but which way two of them sit.
+#
+# A reader asks for two panes one above the other because two side by side halve the columns each of
+# them gets, and half of a window with a column beside it is under the eighty a TUI wants
+# (`stack-the-two-panes-so-each-keeps-the-whole-width`). That is a thing about the machine they are at
+# and the work they do in it, not about this afternoon — so it is kept the way the split is, and a run
+# that dropped it would put the reader back under eighty columns every morning.
+#
+# The line is worth walking for the reason the split's is: **both sides of it look right.** A face
+# that fell back to the arrangement every fresh device starts on and a face that remembered are each a
+# working screen, drawn without complaint, and nothing goes red on the way between them. The only way
+# to tell is to end a run and look at what the next one lays out.
+#
+# ── Why the press is not read before the run ─────────────────────────────────────────────────────
+# Because it is another road's, and because there would be nothing to read it on. What the press does
+# is proved where it is pressed; what is under test here is what survives. And a reading of the shape
+# wants two panes standing — one pane and the empty frame beside it draw the arrangement without
+# saying what it was for — so the road would have to open two panes for a reading, only for the run to
+# take both away a step later. The pane it does open is there to make the screen before the ending a
+# definite one: what a folder starts a pane with is the operator's own machine, and a plain shell is
+# the one state every machine can be put in.
+#
+# ── Why the count is never pressed ───────────────────────────────────────────────────────────────
+# Two is where a fresh run comes up and the one count this arrangement is asked at, so there is
+# nothing to set. It also keeps the two halves apart: a road that set the split as well would come
+# back on a screen that could be right for one reason and wrong for the other, and `frames` and
+# `panes-sit` would be answering the same question twice.
+# Whether the split itself comes back is `open-the-app-again-on-the-split-you-set-and-no-panes`.
+#
+# The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
+# what the pane runs is the reader's own shell. Choosing the folder is what raises the project it
+# belongs to, so the road makes what it needs by walking in.
+id: open-the-app-again-on-the-way-you-set-two-panes-to-sit
+title: A run of the app keeps the way a reader set two panes to sit, and the next run lays its panes out that way
+description: >
+  Open the terminal face, choose the folder it runs in, and get the pane down to a plain shell. Ask
+  for the two panes of a page to sit one above the other. End the run and open the app again on the
+  same store: the page comes back with nothing on it, so open two panes there. They are stacked, each
+  taking the whole width between the columns — the arrangement the reader set, and not the side by
+  side a fresh device starts on.
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The way in, and what binds the folder to the project the face is on. Which project the run comes
+  # back on is the split road's question; here there is one, so it is the one that answers.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell, which is the one state every machine's face can be put in: what a folder
+  # starts a pane with is the operator's own business, and the screen the run is ended on should be a
+  # screen the road knows.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # What the reader set, and the whole of what this road is about. The control is on the row whether
+  # or not there are panes to lay out — it belongs to the page rather than to what is standing on it.
+  - type: action
+    domain: terminal
+    op: set-orient
+    with:
+      orient: down
+
+  # The run ends here and another comes up on the same store. Nothing is pressed for it — the app is
+  # the run's own, and ending it is the harness's — and what the operator confirms is the window that
+  # came back.
+  - type: action
+    domain: store
+    op: run-again
+
+  # Where a fresh launch opens is not the road's to know, so it presses for the face it reads rather
+  # than reading whichever one the app came up on.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Two panes, because an arrangement of two is what is being read and the run brought none of the
+  # last one's places back. The folder is the project's own and it is the only one, which is why each
+  # of these is a press and nothing else.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  # And the page is full at two, which is the same thing as saying both of them are standing. A page
+  # still offering a way in would be a page with one pane on it, and the reading below would be about
+  # a box with nothing in it.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 2
+      empty: 0
+
+  # The arrangement the last run was told to keep. Had it been dropped, these two would be side by
+  # side under eighty columns each — a screen that draws perfectly well and is not the one the reader
+  # asked for.
+  - type: assert
+    domain: terminal
+    op: panes-sit
+    with:
+      orient: down

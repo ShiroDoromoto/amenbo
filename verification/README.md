@@ -651,14 +651,20 @@ kept running across the change for the reason the re-cut roads keep one: the gri
 the panes, and a page put up again rather than re-laid would come back drawn and with nothing on it.
 
 What none of those moves reaches is the end of the run itself, and the arrangement is two things at
-once: what the reader *set* — the split, the project they were looking at — and what they *opened*,
-the places and the names on them. The line between the two is drawn only when the app goes out, the
+once: what the reader *set* — the split, the way two panes sit, the project they were looking at —
+and what they *opened*, the places and the names on them. The line between the two is drawn only when the app goes out, the
 first coming back and the second not, and `open-the-app-again-on-the-split-you-set-and-no-panes` is
 the road that walks it with `store run-again`. What it reads there is a count of boxes and never the words on a pane: what a terminal
 printed goes with the run whether or not its place came back, so a step reading for the line it typed
 would pass on both screens. A page offering one way in and a page with the last run's places standing
 on it are told apart by how many boxes are drawn, and the split by what the page does with a pane
 once there is one on it.
+`open-the-app-again-on-the-way-you-set-two-panes-to-sit` walks the same seam for the arrangement of
+two, which the split road cannot carry: it cuts the page to one on purpose, and which way two panes
+sit is only readable where two are standing. So that one presses no count at all — two is where a
+fresh run comes up — sets the panes to go down the page, ends the run, and opens two on the page that
+comes back. Both roads are about a line where **both sides look right**: a face that forgot and a face
+that remembered are each a working screen, and nothing goes red between them.
 
 Which folder a pane works in belongs to the same seam, because a pane belongs to a project and can
 work in no folder outside it. So the press that opens one does not open a picker: bound to a single

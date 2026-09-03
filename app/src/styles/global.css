@@ -1065,8 +1065,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The two rows at the head of the column stand the same height, whichever half is up. Left to their
    own contents one is two icons tall and the other a line of names, so a reader crossing between the
    draft page and a file saw everything under them move by the difference. The height is a tab's own
-   — a name at `--fs-sm` over 1.6 lines, with its 2px above and below — rounded up (`AMB-T-4271`). */
-.files__top, .files__tabs { min-height: 26px; }
+   — a name at `--fs-sm` over 1.6 lines, with its 2px above and below and the tab's edge around that
+   — rounded up (`AMB-T-4271`). */
+.files__top, .files__tabs { min-height: 27px; }
 /* The files the column is holding. The row scrolls sideways and never wraps: a second line of tabs
    would take the room the file is read in, and it is the file a reader came for (`AMB-D-835`). */
 .files__tabs { flex: 0 0 auto; min-width: 0; display: flex; align-items: center; gap: var(--s-1); }
@@ -1078,27 +1079,42 @@ button { font: inherit; color: inherit; cursor: pointer; }
   scrollbar-width: none;
 }
 .files__strip::-webkit-scrollbar { display: none; }
+/* One tab, drawn as one whether or not it is the one being read. The row marked only the tab that
+   was on and left the rest as bare words, which is a row of links rather than a row of tabs — and a
+   reader who cannot see where one ends cannot see that the ✕ beside it belongs to that one
+   (`AMB-T-4272`). The edge is the whole of the shape: a fill on every tab would leave the one that
+   is on with nowhere left to go. */
 .files__tab {
   flex: 0 0 auto; display: inline-flex; align-items: center;
-  border-radius: var(--r-sm);
+  padding: 0 1px;
+  border: 1px solid var(--c-border); border-radius: var(--r-sm);
   color: var(--c-text-muted);
 }
 /* The one being read, lifted out of the row the way the pane counts are: one of a fixed few is on,
    and a colour alone reads as a row of links. */
-.files__tab--on { background: var(--c-surface-sunken); color: var(--c-text); font-weight: 600; }
+.files__tab--on {
+  background: var(--c-surface-sunken); border-color: var(--c-border-strong);
+  color: var(--c-text); font-weight: 600;
+}
 .files__tabname {
   max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 2px var(--s-1);
   border: 0; background: transparent; color: inherit;
   font-size: var(--fs-sm); line-height: 1.6;
 }
+/* Letting a file go, and the list of everything open. Both are marks rather than words, so what says
+   they can be pressed is the room around them: at the width they were drawn before, the only thing
+   telling a reader the ✕ was a control was the colour it took under the pointer, which is an answer
+   that arrives after the question (`AMB-T-4272`). The ground under the pointer says it in advance,
+   and it is drawn in the edge's own colour so it reads on the tab that is on as well as beside it. */
 .files__tabclose, .files__more {
-  flex: 0 0 auto; display: inline-flex; align-items: center;
-  padding: 0 2px;
-  border: 0; background: transparent;
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px;
+  padding: 0;
+  border: 0; border-radius: var(--r-sm); background: transparent;
   color: var(--c-text-muted); font-size: var(--fs-xs); line-height: 1;
 }
-.files__tabclose:hover, .files__more:hover { color: var(--c-text); }
+.files__tabclose:hover, .files__more:hover { color: var(--c-text); background: var(--c-border); }
 
 /* Wider or narrower, and the way out beside it, both pushed to the far end of the row they have to
    themselves: the two are the column's own, where every other control the panel draws is about a

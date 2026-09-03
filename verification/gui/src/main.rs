@@ -8,13 +8,18 @@
 //! assert it cannot judge is left as a `Review` for a human eye, and its shot is kept.
 //!
 //! Usage: `verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>]
-//!                    [--json]`
+//!                    [--fixtures <dir>] [--json]`
 //!        `verify-gui <scenario.yaml> --print`
 //!   `--app`      the installed `.app` bundle to launch and shoot (e.g. `~/Applications/Amenbo.app`)
 //!   `--evidence` where the shots + manifest land (default: a fresh dir under the temp tree)
 //!   `--screen`   path to the screen tool (default: scripts/screen.swift in the repo)
+//!   `--fixtures` where the files a premise copies are (default: verification/fixtures in the repo)
 //!   `--json`     emit the manifest path, verdict and step count as JSON instead of the summary
 //!   `--print`    print the road's instructions and stop — nothing launched, no shot, no OCR
+//!
+//! `--screen` and `--fixtures` exist for the same reason: both are resolved from where this harness
+//! was compiled, and a run in a VM stands somewhere else entirely, where that path names nothing.
+//! Leaving either out is the repository's own copy, which is what a run on this machine wants.
 //!
 //! What it will launch is a build the release workflow produced, and nothing else
 //! ([`amenbo_verify_gui::shipped`]). The bundle is asked before the run starts; a build made here is
@@ -67,7 +72,7 @@ fn main() -> ExitCode {
         Ok(o) => o,
         Err(msg) => {
             eprintln!("verify-gui: {msg}");
-            eprintln!("usage: verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>] [--json]");
+            eprintln!("usage: verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>] [--fixtures <dir>] [--json]");
             eprintln!("       verify-gui <scenario.yaml> --print");
             return ExitCode::from(2);
         }
@@ -127,7 +132,7 @@ fn run(opts: &Opts) -> Result<bool, String> {
     // The world the scenario declared, stood up with the CLI this very bundle ships. Before the
     // launch, because a store is read as the app starts; and before there is an evidence directory,
     // because a premise that could not be stood up must leave no shots of a half-built world.
-    let world = stand_world(&scenario, bundle, &store)?;
+    let world = stand_world(&scenario, bundle, &store, opts.fixtures.clone())?;
 
     let mut gui = launch::launch(bundle, &store)?;
     gui.wait_until_shootable(&opts.screen)?;
@@ -197,12 +202,13 @@ fn stand_world<'a>(
     scenario: &amenbo_scenario::Scenario,
     bundle: &Path,
     store: &'a scratch::Session,
+    fixtures: Option<PathBuf>,
 ) -> Result<Option<World<'a>>, String> {
     if scenario.given.is_empty() {
         return Ok(None);
     }
     let cli = amenbo_verify_gui::shipped::sidecar(bundle)?;
-    amenbo_verify_cli::stand_world(&cli, store, &scenario.given)
+    amenbo_verify_cli::stand_world(&cli, store, &scenario.given, fixtures)
         .map(Some)
         .map_err(|e| format!("the world `{}` starts from could not be stood up: {e}", scenario.id))
 }
@@ -277,6 +283,10 @@ struct Opts {
     app: Option<PathBuf>,
     evidence: Option<PathBuf>,
     screen: PathBuf,
+    /// Where the files a premise copies are. `None` is the shelf beside the scenarios in this
+    /// repository, which is where the harness was compiled and so where a run on this machine finds
+    /// them; a run in the VM is handed the copy that was sent in there.
+    fixtures: Option<PathBuf>,
     json: bool,
     print: bool,
 }
@@ -287,6 +297,7 @@ impl Opts {
         let mut app = None;
         let mut evidence = None;
         let mut screen = None;
+        let mut fixtures = None;
         let mut json = false;
         let mut print = false;
         let mut it = args.peekable();
@@ -297,6 +308,9 @@ impl Opts {
                 "--app" => app = Some(PathBuf::from(it.next().ok_or("--app needs a bundle path")?)),
                 "--evidence" => evidence = Some(PathBuf::from(it.next().ok_or("--evidence needs a path")?)),
                 "--screen" => screen = Some(PathBuf::from(it.next().ok_or("--screen needs a path")?)),
+                "--fixtures" => {
+                    fixtures = Some(PathBuf::from(it.next().ok_or("--fixtures needs a path")?))
+                }
                 s if s.starts_with("--") => return Err(format!("unknown flag `{s}`")),
                 _ => {
                     if scenario.replace(PathBuf::from(a)).is_some() {
@@ -310,6 +324,7 @@ impl Opts {
             app,
             evidence,
             screen: screen.unwrap_or_else(default_screen),
+            fixtures,
             json,
             print,
         })

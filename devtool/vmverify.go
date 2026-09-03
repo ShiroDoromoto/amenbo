@@ -35,6 +35,11 @@ const (
 	vmVerifySteps    = vmGuestHome + "/verify-gui-steps.txt"
 	vmVerifyLog      = vmGuestHome + "/verify-gui.log"
 	vmVerifyEvidence = vmGuestHome + "/verify-gui-evidence"
+	// vmVerifyFixtures is where `install` lands the fixtures a premise copies from. The harness
+	// resolves them from its own compile-time path when nobody says otherwise, and that path is
+	// this machine's — so the run is told where they really are, the way it is told about the
+	// screen tool.
+	vmVerifyFixtures = vmGuestHome + "/fixtures"
 	// vmScreenSource is the screen tool as source, beside the compiled one `vm screen` sends.
 	// The harness runs the tool as `swift <path>`, which is a path to source; the compiled binary
 	// is for the operator's own moves. One tree, two shapes, and both from the same file.
@@ -231,9 +236,10 @@ func refuseForeignArch(pkg, arch string) error {
 // first step. It does not wait for the run: a road is walked by somebody, and that somebody is the
 // caller of `step` between one hand-over and the next.
 //
-// **`--screen` is passed explicitly.** The harness resolves the tool relative to its own executable,
-// which in the guest is a path on this side of the machine — a run without it fails a minute in,
-// having launched an app and photographed nothing.
+// **`--screen` and `--fixtures` are passed explicitly.** The harness resolves both relative to its
+// own executable, which in the guest is a path on this side of the machine. Without the first a run
+// fails a minute in, having launched an app and photographed nothing; without the second a road that
+// copies a fixture fails before that, standing up its world.
 func vmVerifyRun(scenario string) error {
 	ip, err := vmIP()
 	if err != nil {
@@ -256,9 +262,9 @@ func vmVerifyRun(scenario string) error {
 	_, _ = sshRun(ip, "pkill -f "+vmVerifyBin+" || true; pkill -f "+vmGuestApp+" || true")
 
 	start := fmt.Sprintf(
-		": > %s && rm -rf %s && nohup sh -c 'tail -n 0 -f %s | %s %s --app %s --evidence %s --screen %s' > %s 2>&1 &",
+		": > %s && rm -rf %s && nohup sh -c 'tail -n 0 -f %s | %s %s --app %s --evidence %s --screen %s --fixtures %s' > %s 2>&1 &",
 		vmVerifySteps, vmVerifyEvidence, vmVerifySteps, vmVerifyBin, guestScenario,
-		vmGuestApp, vmVerifyEvidence, vmScreenSource, vmVerifyLog)
+		vmGuestApp, vmVerifyEvidence, vmScreenSource, vmVerifyFixtures, vmVerifyLog)
 	if _, err := sshRun(ip, start); err != nil {
 		return fmt.Errorf("starting the run: %w", err)
 	}

@@ -40,7 +40,7 @@ pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Repor
     shipped::ensure_release_build(bin)?;
     let session = scratch::session(&scenario.id, keep)
         .map_err(|e| format!("could not create a throwaway store: {e}"))?;
-    let mut driver = Driver::new(bin, &session)?;
+    let mut driver = Driver::new(bin, &session, None)?;
 
     let mut report = Report::new(scenario);
     // The world the road takes for granted, stood up before the road is walked. It is the same driver
@@ -91,12 +91,17 @@ pub fn run_scenario(scenario: &Scenario, bin: &Path, keep: bool) -> Result<Repor
 /// What comes back is held rather than dropped, and that is not a formality: part of a world can be
 /// a thing that only stands while something holds it — a catalog the premise put on the loopback
 /// answers for exactly as long as this does.
+///
+/// `fixtures` says where the files a premise copies are, for a caller that is not standing in this
+/// repository — the GUI harness runs inside a VM, where this crate's compile-time path names nothing.
+/// `None` is that path, which is what the CLI road runs on.
 pub fn stand_world<'a>(
     bin: &Path,
     session: &'a scratch::Session,
     given: &[Step],
+    fixtures: Option<PathBuf>,
 ) -> Result<World<'a>, String> {
-    let mut driver = Driver::new(bin, session)?;
+    let mut driver = Driver::new(bin, session, fixtures)?;
     let mut stood = Vec::new();
     for (i, step) in given.iter().enumerate() {
         // The premise's own numbering, the way the loader's errors read it: a world's step is not a
@@ -140,6 +145,13 @@ pub fn anchor_bin(bin: PathBuf) -> PathBuf {
         // Nowhere to anchor to: hand back what we were given and let the run report its own failure.
         Err(_) => bin,
     }
+}
+
+/// Where the scenario fixtures live when nobody says otherwise — `verification/fixtures/`, beside
+/// the scenarios that name them. Resolved from this crate's own location rather than from the CWD,
+/// so `verify-all` finds them wherever it is invoked from.
+fn default_fixtures_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("fixtures")
 }
 
 /// Drives the shipped binary against one isolated store, remembering the ids that steps bind.
@@ -203,6 +215,11 @@ pub(crate) struct Driver<'a> {
     /// is judged, so the arm issuing the command never has to know it might be turned away —
     /// [`Driver::refused`] puts it up and takes it back down around the one call.
     refusal: Option<String>,
+    /// Where the files a `copy-fixture` step reaches for are. Held on the driver rather than read
+    /// off this crate's own location, because a run does not always stand in the tree it was
+    /// compiled in: the harness that walks a screen road is sent to a VM, and the compile-time path
+    /// names nothing there.
+    fixtures: PathBuf,
 }
 
 /// What an expected refusal travels back on. A refusal has to reach [`Driver::refused`] from
@@ -213,7 +230,14 @@ const REFUSED: &str = "\u{1}refused:";
 
 impl<'a> Driver<'a> {
     /// Boot a fresh store: `init` creates it and hands back the project every `task add` needs.
-    fn new(bin: &Path, session: &'a scratch::Session) -> Result<Driver<'a>, String> {
+    ///
+    /// `fixtures` names the shelf a `copy-fixture` step reads from; `None` takes the one beside the
+    /// scenarios in this repository.
+    fn new(
+        bin: &Path,
+        session: &'a scratch::Session,
+        fixtures: Option<PathBuf>,
+    ) -> Result<Driver<'a>, String> {
         let mut d = Driver {
             bin: bin.to_path_buf(),
             session,
@@ -231,6 +255,7 @@ impl<'a> Driver<'a> {
             server: None,
             tick_at_start: false,
             refusal: None,
+            fixtures: fixtures.unwrap_or_else(default_fixtures_dir),
         };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;
         d.project_id = v["identity"]["project_id"]

@@ -2056,6 +2056,18 @@ impl Instructor {
                     toward
                 )
             }
+            // A press on a pane and nothing else. What it is for is the column on the other side of
+            // the panes, so the line says plainly that nothing is typed: an operator who pressed the
+            // input line and carried on would be reading a face two steps had moved.
+            (Domain::Terminal, "press-pane") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Click once on {pane} — on the terminal itself, not on the row above it — and type nothing. Nothing is sent: the press is a reader going back to the work, and what it is for is what happens to the column beside it."
+                )
+            }
             // A file put in the folder from outside Amenbo, while the app is up. It is written as an
             // instruction and not left to the premise because *when* it happens is the whole of what
             // is under test: what the face draws has to move without anybody touching the app, so the
@@ -2167,6 +2179,25 @@ impl Instructor {
             (Domain::Files, "back") =>
                 "In the row above the file, press the way it offers to close it. Its tab goes with it, and where it was the only one open the column says nothing is."
                     .to_string(),
+            // One tab pressed. The row is drawn at both of the column's widths, so this is the same
+            // press wherever the column is standing — and the scroll is said because a tab far
+            // enough along the row is off the end of it, which is a reader hunting for something the
+            // face has not lost.
+            (Domain::Files, "tab") => match arg_str(with, "name") {
+                Some(name) => format!(
+                    "In the row of tabs above the file, press the one named \"{name}\", scrolling the row sideways if it is not on the screen. What it names comes up in the column."
+                ),
+                None => "In the row of tabs above the file, press the first one — the draft page's, which is the one tab with no cross on it. The page comes up in the column."
+                    .to_string(),
+            },
+            // The other door onto the same tab, and the only one onto a tab off the end of the row.
+            // What comes up brings its tab into view, which is said because it is the half that makes
+            // the press worth walking: a face that marked a tab nobody can see would be answering a
+            // reader who still cannot tell which file is up.
+            (Domain::Files, "more-tabs") => format!(
+                "At the end of the row of tabs, past the last of them, press the control that lists what is open — and choose \"{}\" from the list that comes up. What it names comes up in the column, and the row scrolls until its tab is on the screen.",
+                req(with, "name")?
+            ),
             // The keys. What each one reaches is decided by where the reader is standing, so every
             // line here says where that has to be — and says the click is only for when it is not,
             // because a road that opened or pressed a row a step ago has left the keyboard where
@@ -3614,6 +3645,27 @@ impl Instructor {
             (Domain::Files, "says") => match present(with) {
                 true => format!("Confirm what is drawn beside the panes says {}.", note(with)?),
                 false => format!("Confirm what is drawn beside the panes does not say {}.", note(with)?),
+            },
+            // The row of tabs, read as a whole and in order. The draft page is left out of the list a
+            // road writes: it is always the first of them and it is named in the interface's own
+            // words, so what a road can say is which files stand after it.
+            (Domain::Files, "tabs") => format!(
+                "In the row of tabs above the file, confirm the tabs standing after the draft page's are exactly these, in this order and with no others among them:{}. Scroll the row sideways where it does not all fit — it scrolls and never wraps, so a tab off its end is still one of them.",
+                names(with, "names")?
+            ),
+            // Which half the rail is standing on. Both halves are said in every reading — the one
+            // that is up, and the one that is therefore not — because a line naming only what to look
+            // for could not catch a rail that had drawn both.
+            (Domain::Files, "half") => match req(with, "half")? {
+                "panes" => "In the rail beside the panes, confirm the half showing the two lists is the one up — the projects, and under the one being shown, its panes — and that no folder tree is drawn on the rail."
+                    .to_string(),
+                "folders" => "In the rail beside the panes, confirm the half showing the folders is the one up — the folder's own section, folded down — and that the lists of projects and panes are not drawn on the rail."
+                    .to_string(),
+                other => {
+                    return Err(format!(
+                        "assert `half` does not know the half `{other}` — it is panes or folders"
+                    ))
+                }
             },
             // What the hand-over left. Every one of the three is a `Review`, and for the same reason:
             // what settles it is not on Amenbo's window, which is the window the run shoots. The

@@ -51,7 +51,7 @@ impl Driver<'_> {
                 {
                     return Err(format!("`from: {from}` must name a file under fixtures/"));
                 }
-                let src = amenbo_scenario::fixtures_dir().join(from);
+                let src = self.fixtures.join(from);
                 let full = match with.get("dir") {
                     Some(_) => self.folder(with)?.join(self.inside(path)?),
                     None => self.in_session(path)?,

@@ -80,7 +80,7 @@ function steps(cli: string | null): { title: string; cmd?: string; body: React.R
 /** The create card: the primary action, which navigates to a GUI screen (NewProjectScreen). */
 function NavCard({ icon, label, hint, go, onClick }: { icon: IconName; label: string; hint: string; go: string; onClick: () => void }) {
   return (
-    <button className="onboard__action onboard__action--primary" onClick={onClick}>
+    <button className="btn onboard__action" onClick={onClick}>
       <Icon name={icon} size="lg" />
       <span className="onboard__action-body">
         <span className="onboard__action-label">{label}</span>
@@ -108,7 +108,7 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
     // The line saying where the card leads borrows the word the board's own no-folder warning
     // offers: both end in the same move, and one wording for it is one thing to learn.
     return (
-      <button className="onboard__action" onClick={() => setOpen(true)}>
+      <button className="btn onboard__action" onClick={() => setOpen(true)}>
         <Icon name="folder" size="lg" />
         <span className="onboard__action-body">
           <span className="onboard__action-label">{t("onboard.openLabel")}</span>
@@ -136,7 +136,7 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
   };
 
   return (
-    <div className="onboard__action onboard__action--open">
+    <div className="btn onboard__action onboard__action--open">
       <Icon name="folder" size="lg" />
       <div className="onboard__action-body">
         <span className="onboard__action-label">{t("onboard.openLabel")}</span>
@@ -144,7 +144,6 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
         <label className="onboard__field">
           <span className="onboard__action-hint">{t("detail.project")}</span>
           <select
-            className="onboard__select"
             value={projectId}
             disabled={busy}
             onChange={(e) => setProjectId(Number(e.target.value))}

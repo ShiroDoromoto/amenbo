@@ -9,8 +9,64 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button { font: inherit; color: inherit; cursor: pointer; }
+
+/* ---------- the boxes a reader fills in (`AMB-D-841`, `AMB-D-842`) ---------- */
+/* Every input, select and textarea in the app, drawn the same way once, here. Left to the browser
+   they were drawn by the platform — a different box on macOS, on Windows and on Linux, none of them
+   carrying a single token of the palette they sit in, and each screen that wanted one to look like
+   the app restyled its own. So the base is the whole of the look, and a class above it says only
+   what is different about that one box.
+
+   Sunken, because a box to type in is a well cut into the surface it sits on, which is the same
+   thing the ground's third step says elsewhere (`AMB-D-840`). The outline is `--c-edge` and not
+   `--c-rule`: this is a control, and has to be found before it can be used.
+
+   The width is capped rather than set, so a box takes what its container gives it up to the point
+   where it stops being one box (`--measure-form`). A container narrower than that still decides —
+   the cap only says where growing stops. */
+input, select, textarea {
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-sunken);
+  border: 1px solid var(--c-edge);
+  border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-3);
+  max-width: var(--measure-form);
+}
+/* One focus ring for everything, drawn outside the box so it is not confused with the border it
+   would otherwise recolour, and only for the keyboard: a pointer already knows where it clicked. */
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+/* A textarea holds something written rather than a value filled in, so it takes the reading width
+   and not the form one: what is typed in it is shown back at `--measure-prose` (a note, a comment,
+   a decision's body), and a box narrower than that would break the lines somewhere else than the
+   page does. It is dragged taller and never wider — widening it breaks the column its neighbours
+   are laid out in. */
+textarea { resize: vertical; max-width: var(--measure-prose); }
+select { cursor: pointer; }
+/* A tick box is drawn by the platform and stays that way: the rule above is for boxes with a value
+   typed into them, and its padding, ground and border would each take a piece of the tick. What it
+   keeps from the rule is the accent, so the tick is the app's colour and not the system's. */
+input[type="checkbox"], input[type="radio"] {
+  width: var(--s-4); height: var(--s-4);
+  margin: 0; padding: 0;
+  max-width: none;
+  border: none; background: none; border-radius: 0;
+  accent-color: var(--c-accent);
+  cursor: pointer;
+}
+/* A colour well shows a value rather than holding one typed in, so the padding of the rule above
+   would eat the only thing it has to show. It keeps the outline and the corner, and gives the
+   inside over to the colour. */
+input[type="color"] {
+  width: var(--s-6); height: var(--s-5);
+  padding: 2px;
+  cursor: pointer;
+}
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--c-border-strong); border-radius: 6px; border: 2px solid var(--c-bg); }
+::-webkit-scrollbar-thumb { background: var(--c-edge); border-radius: 6px; border: 2px solid var(--c-bg); }
 
 /* ---------- app shell grid ---------- */
 /* Rows: topbar / the bands / body. Each child is given its row outright, because a child placed by
@@ -75,7 +131,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   height: 100%; min-height: 0;
   display: flex; flex-direction: column;
 }
-/* The band over the face, and the same one the ledger's own band is: `--c-surface-2` with a rule
+/* The band over the face, and the same one the ledger's own band is: `--c-surface` with a rule
    under it, drawn to the edges of what it is over (`.board__toolbar`). The face has no padding of its
    own for that reason — a ground inset from the window reads as a card lying on the window, and the
    two faces are one window showing one thing or the other (`AMB-D-753`), so a reader must not be able
@@ -84,25 +140,25 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__bar {
   display: flex; align-items: center; gap: var(--s-3);
   padding: var(--s-3) var(--s-5);
-  background: var(--c-surface-2); border-bottom: 1px solid var(--c-border);
+  background: var(--c-surface); border-bottom: 1px solid var(--c-rule);
 }
 .termface__action {
   position: relative;
   display: inline-flex; align-items: center; gap: var(--s-1);
-  background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
 }
 .termface__action:hover { color: var(--c-text); }
 /* A toggle whose side is on the screen. It is the same button either way — what it says is whether
    pressing it opens something or puts it away. */
-.termface__action--on { color: var(--c-text); border-color: var(--c-border-strong); }
+.termface__action--on { color: var(--c-text); border-color: var(--c-edge); }
 /* The file face's two halves, at the far end of the row: they are about the other side of the
    screen, and the controls for what is in the middle sit between them and the way out. */
 .termface__sides { display: flex; gap: var(--s-2); margin-left: auto; }
 /* The program in the terminal having exited. What is on the screen stays as it was — that is what a
    terminal ends with — and this is the part of it the screen cannot show for itself. */
-.termface__note { color: var(--c-text-muted); font-size: var(--fs-sm); }
+.termface__note { color: var(--c-text-muted); font-size: var(--fs-md); }
 /* What the face holds: the frame the agent question is put in, and the pane once one is running
    (`app/src/talk/agent.ts`). It takes the room the bar above it leaves. */
 .termface__face { display: flex; flex: 1; flex-direction: column; min-height: 0; }
@@ -117,7 +173,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__pane {
   flex: 1; min-height: 0;
   padding: var(--s-3);
-  border: 1px solid var(--c-border);
+  border: 1px solid var(--c-rule);
   border-radius: var(--r-md);
   background: var(--c-pane-bg);
   color-scheme: dark;
@@ -134,13 +190,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__counts {
   display: flex; margin-left: var(--s-2);
   padding: 2px;
-  background: var(--c-surface-sunken);
-  border: 1px solid var(--c-border); border-radius: var(--r-sm);
+  background: var(--c-sunken);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
 }
 .termface__count {
   background: transparent; border: 0;
   padding: 2px var(--s-2); border-radius: var(--r-sm);
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
 }
 .termface__count:hover { color: var(--c-text); }
 /* The one that holds a drawing instead of words. The count says a number and the orientation says a
@@ -156,12 +212,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .termface__pages {
   display: flex; gap: var(--s-1);
-  padding-left: var(--s-3); border-left: 1px solid var(--c-border);
+  padding-left: var(--s-3); border-left: 1px solid var(--c-rule);
 }
 .termface__page {
   min-width: 29px; height: 25px;
-  background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-sm);
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+  background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .termface__page--on {
   background: var(--c-accent); border-color: var(--c-accent); color: #fff; font-weight: 600;
@@ -179,7 +235,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px;
   background: var(--c-heed); color: #fff;
   font-size: var(--fs-xs); font-weight: 700; line-height: 1;
-  box-shadow: 0 0 0 2px var(--c-surface-2);
+  box-shadow: 0 0 0 2px var(--c-surface);
 }
 
 /* The rail and the panes, side by side. A column keeps the width the person gave it and the panes
@@ -210,7 +266,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .termface__grip--rail { right: -4px; }
 .termface__grip--side { left: -4px; }
-.termface__grip:hover { background: var(--c-border-strong); }
+.termface__grip:hover { background: var(--c-edge); }
 
 /* The page: the slots of it, laid out one across, two across, two down, or two rows of two, three or
    four. The grid is written per count rather than flowing, because a slot is a fixed place — panes
@@ -238,7 +294,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   position: absolute; top: var(--s-3); right: var(--s-3); bottom: var(--s-3);
   width: 26px;
   display: flex; align-items: center; justify-content: center;
-  border: 1.5px dashed var(--c-border-strong); border-radius: var(--r-lg);
+  border: 1.5px dashed var(--c-edge); border-radius: var(--r-lg);
   background: transparent; color: var(--c-text-faint);
 }
 .termface__addstrip:hover {
@@ -264,7 +320,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: var(--s-3); text-align: center;
   border: 1.5px dashed var(--c-accent); border-radius: var(--r-lg);
   background: var(--c-accent-weak); color: var(--c-accent-text);
-  font-size: var(--fs-sm); font-weight: var(--fw-bold);
+  font-size: var(--fs-md); font-weight: var(--fw-bold);
 }
 /* What is said about this terminal, and the one control a running pane has. One row, because ending
    it is the last thing there is to say about it. */
@@ -288,7 +344,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   margin-bottom: var(--s-2);
   padding: 0 var(--s-1); border-radius: var(--r-sm);
   border: 1px solid var(--c-accent); background: var(--c-surface);
-  color: var(--c-text); font-size: var(--fs-sm);
+  color: var(--c-text); font-size: var(--fs-md);
 }
 /* The box is drawn only while it holds the keyboard — it goes as soon as it is left — so the accent
    border around it is already the whole of "this is where you are typing", and the machine's own ring
@@ -303,7 +359,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: inline-flex; align-items: center;
   padding: 0 var(--s-1);
   border: 0; background: transparent;
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .slot__end:hover { color: var(--c-text); }
 /* The row's menu, which holds what the pane can be handed rather than what it can be rid of. It is
@@ -314,7 +370,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: inline-flex; align-items: center;
   padding: 0 var(--s-1);
   border: 0; background: transparent;
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .slot__more:hover { color: var(--c-text); }
 
@@ -323,15 +379,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
    one belongs to the terminal face, and a modal borrowing another feature's class names cannot be
    restyled without touching that feature. The backdrop is the one exception — it is `.modal__overlay`
    for every modal in the app, which is what `outsideClose` reads. */
-.panedrop__modal { width: min(460px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
-.panedrop__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-3); }
+.panedrop__modal { width: min(460px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
+.panedrop__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-3); }
 .panedrop__holding { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
 /* The refs, one to a line. What is at stake is read one item at a time, and a run-on list of them is
    the shape a reader skips. */
 .panedrop__refs { margin: 0 0 var(--s-4); padding-left: var(--s-5); font-variant-numeric: tabular-nums; }
 .panedrop__failed { color: var(--c-stop); font-size: var(--fs-xs); margin: 0 0 var(--s-3); }
 .panedrop__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.panedrop__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); color: var(--c-text); cursor: pointer; }
+.panedrop__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
 /* Handing the work back is the one of the three that loses nothing, so it is the one drawn as the
    answer. The other two are not talked out of — leaving a reservation standing is a thing a person
    has reasons for. */
@@ -345,7 +401,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   flex: 1; min-height: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: var(--s-3); padding: var(--s-3);
-  border: 1.5px dashed var(--c-border-strong); border-radius: var(--r-lg);
+  border: 1.5px dashed var(--c-edge); border-radius: var(--r-lg);
 }
 /* The press, and the one a pane whose program ended offers again. It is the only thing to do in the
    frame it stands in, so it is drawn as the one thing to do: filled, and the accent. What is chosen
@@ -355,14 +411,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: var(--s-2) var(--s-5);
   border: 1px solid var(--c-accent); border-radius: var(--r-md);
   background: var(--c-accent); color: #fff;
-  font-size: var(--fs-sm); font-weight: 600;
+  font-size: var(--fs-md); font-weight: 600;
 }
 .slot__open:hover { filter: brightness(1.08); }
 /* The same press before anybody has chosen, which is the first run and only it. It steps back to an
    outline so the row above is the one lit thing in the frame — what the reader has to do is choose,
    and the button says so in words rather than waiting to refuse a press (`../shell/EmptySlot`). */
 .slot__open:disabled {
-  background: transparent; border-color: var(--c-border); color: var(--c-text-faint);
+  background: transparent; border-color: var(--c-edge); color: var(--c-text-faint);
   cursor: default;
 }
 .slot__open:disabled:hover { filter: none; }
@@ -384,7 +440,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
    frame, and one that shouts would take the eye before the thing it is asking about. */
 .slot__ask {
   margin: 0;
-  color: var(--c-text-muted); font-size: var(--fs-sm); text-align: center;
+  color: var(--c-text-muted); font-size: var(--fs-md); text-align: center;
 }
 
 /* What the terminal is opened with: one pill each, and the one in force filled with the accent. They
@@ -412,13 +468,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__start {
   display: block;
   padding: var(--s-1) var(--s-3);
-  border: 1px solid var(--c-border); border-radius: 999px;
+  border: 1px solid var(--c-edge); border-radius: 999px;
   background: var(--c-surface); color: var(--c-text-muted);
-  font-size: var(--fs-sm); line-height: 1.6; text-align: center;
+  font-size: var(--fs-md); line-height: 1.6; text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .slot__start .icon { margin-right: var(--s-1); }
-.slot__start:hover { color: var(--c-text); border-color: var(--c-border-strong); }
+.slot__start:hover { color: var(--c-text); border-color: var(--c-edge); }
 .slot__start--on {
   background: var(--c-accent-weak); border-color: var(--c-accent);
   color: var(--c-accent-text); font-weight: 600;
@@ -429,7 +485,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__start--missing {
   border-style: dashed; color: var(--c-text-faint); cursor: default;
 }
-.slot__start--missing:hover { color: var(--c-text-faint); border-color: var(--c-border); }
+.slot__start--missing:hover { color: var(--c-text-faint); border-color: var(--c-edge); }
 /* The row's place while the machine is still being asked. Two empty pills and nothing written in
    them: what is not known yet is which of these can be started, so a name here would have to be
    drawn as usable or as missing and both would be a guess (`AMB-D-792`). They are out of the tree a
@@ -437,7 +493,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__starts--waiting { grid-template-columns: repeat(2, minmax(9.5rem, 1fr)); }
 .slot__start--waiting {
   min-height: 2.2rem;
-  border-style: dashed; background: var(--c-surface-sunken);
+  border-style: dashed; background: var(--c-sunken);
 }
 /* What the frame has to say about the row rather than on it: that the machine is still being asked,
    or that it could not be. Quiet like the question above it, and never in place of a pill — the row
@@ -495,9 +551,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__field > span { color: var(--c-text-muted); font-size: var(--fs-xs); }
 .slot__field > input {
   padding: var(--s-1) var(--s-2);
-  border: 1px solid var(--c-border); border-radius: var(--r-md);
+  border: 1px solid var(--c-edge); border-radius: var(--r-md);
   background: var(--c-surface); color: var(--c-text);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .slot__field > input:focus-visible { border-color: var(--c-accent); outline: none; }
 /* What will run, said before it is saved. Monospaced because it is a command and not prose, and it
@@ -517,14 +573,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: transparent; color: var(--c-accent-text);
   font-size: var(--fs-xs); font-weight: 600;
 }
-.slot__save:disabled { border-color: var(--c-border); color: var(--c-text-faint); cursor: default; }
+.slot__save:disabled { border-color: var(--c-edge); color: var(--c-text-faint); cursor: default; }
 
 /* Where the pane being opened will work, asked in the place the pane is about to take (`./FolderChoice`).
    It is the same dashed box the way in is, because it is the same place one step further on. */
 .slot--asking {
   flex: 1; min-height: 0;
   padding: var(--s-3);
-  border: 1.5px dashed var(--c-border-strong); border-radius: var(--r-lg);
+  border: 1.5px dashed var(--c-edge); border-radius: var(--r-lg);
   overflow-y: auto;
 }
 
@@ -540,8 +596,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .ptabs {
   flex: 0 0 auto; width: var(--tabs-w, 160px); min-height: 0;
   display: flex; flex-direction: column;
-  background: var(--c-surface-2);
-  border-right: 1px solid var(--c-border);
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-rule);
 }
 .ptabs__list {
   flex: 1 1 auto; min-height: 0; overflow-y: auto;
@@ -556,11 +612,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: flex; align-items: center; gap: var(--s-2);
   padding: var(--s-1); border-radius: var(--r-md);
   background: transparent; border: 1px solid transparent;
-  color: var(--c-text); font-size: var(--fs-sm); text-align: left;
+  color: var(--c-text); font-size: var(--fs-md); text-align: left;
 }
 .ptabs__tab:hover { background: var(--c-surface); }
 .ptabs__tab--on {
-  background: var(--c-surface); border-color: var(--c-border-strong);
+  background: var(--c-surface); border-color: var(--c-edge);
   font-weight: 600; box-shadow: var(--shadow-sm);
 }
 /* The project's colour with the first character of its name on it, or the image it was given instead
@@ -574,8 +630,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   flex: 0 0 auto;
   width: 24px; height: 24px; border-radius: var(--r-sm);
   display: flex; align-items: center; justify-content: center;
-  background: var(--c-surface-sunken);
-  font-size: var(--fs-sm); font-weight: 700; line-height: 1;
+  background: var(--c-sunken);
+  font-size: var(--fs-md); font-weight: 700; line-height: 1;
   text-transform: uppercase;
   overflow: hidden;
 }
@@ -599,7 +655,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .ptabs--compact .ptabs__tab { justify-content: center; }
 .ptabs--compact .ptabs__needs {
   position: absolute; top: 0; right: 0;
-  box-shadow: 0 0 0 2px var(--c-surface-2);
+  box-shadow: 0 0 0 2px var(--c-surface);
 }
 /* The way between the two widths. Quiet and small: it is pressed once and left, where the tabs above
    it are pressed all day (`AMB-D-838`). */
@@ -615,7 +671,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The rail: the folders of the project being shown, under its name (`app/src/shell/FolderRail.tsx`,
    `AMB-D-838`).
 
-   It is the ledger's sidebar in the other face's place, so it is the sidebar's ground: `--c-surface-2`
+   It is the ledger's sidebar in the other face's place, so it is the sidebar's ground: `--c-surface`
    with a rule down its edge, full height. Left with no ground of its own it fell through to `--c-bg`
    and the face came out inside out — the edges sunk below the middle, where every other face of this
    window has them above it. Its width is the column's around it (`.termface__column--rail`), which is
@@ -627,8 +683,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rail {
   flex: 1 1 auto; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
-  background: var(--c-surface-2);
-  border-right: 1px solid var(--c-border);
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-rule);
 }
 /* Whose folders these are. It is a name and not the caption of a list, so it is drawn as one — the
    face's own text at the face's own size, where the headings it replaced were small, spaced and
@@ -641,7 +697,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rail__title {
   flex: 1; min-width: 0; margin: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--c-text); font-size: var(--fs-sm); font-weight: 600;
+  color: var(--c-text); font-size: var(--fs-md); font-weight: 600;
 }
 
 /* ---------- the file face ---------- */
@@ -661,9 +717,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--s-3);
   padding: var(--s-3);
-  border-left: 1px solid var(--c-border);
+  border-left: 1px solid var(--c-rule);
   background: var(--c-surface);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 .files--empty { color: var(--c-text-muted); }
 /* One bound folder and everything drawn about it. A project can be bound to several and each gets
@@ -674,14 +730,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
    the rows it belongs to down the panel. */
 .files__foldername {
   margin: 0; padding: var(--s-2) 0 0;
-  border-top: 1px solid var(--c-border);
-  color: var(--c-text); font-size: var(--fs-sm); font-weight: 700; text-align: left;
+  border-top: 1px solid var(--c-rule);
+  color: var(--c-text); font-size: var(--fs-md); font-weight: 700; text-align: left;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .files__row { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
 .files__head {
   margin: 0; padding: 0;
-  color: var(--c-text-muted); font-size: var(--fs-sm); font-weight: 600;
+  color: var(--c-text-muted); font-size: var(--fs-md); font-weight: 600;
   text-align: left; background: none; border: 0;
 }
 /* The mark is drawn rather than typed (`AMB-D-686`), and it sits in the same fixed box the rows
@@ -728,7 +784,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   left: calc(-1 * var(--depth, 0) * var(--s-3));
   width: calc(var(--depth, 0) * var(--s-3));
   background: repeating-linear-gradient(
-    to right, var(--c-border) 0 1px, transparent 1px var(--s-3)
+    to right, var(--c-rule) 0 1px, transparent 1px var(--s-3)
   );
   opacity: 0;
   pointer-events: none;
@@ -780,7 +836,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__item:focus > .files__file:not(.files__file--chosen, .files__file--picked),
 .files__item:focus-visible > .files__dir:not(.files__dir--chosen, .files__dir--picked),
 .files__item:focus > .files__dir:not(.files__dir--chosen, .files__dir--picked) {
-  background: var(--c-surface-sunken);
+  background: var(--c-sunken);
 }
 /* The row under the pointer. One row is inside no other — they are all lines of one list — so the
    pointer is in exactly the row it is pointing at.
@@ -790,7 +846,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__item:hover > .files__dir { color: var(--c-accent); }
 .files__item:hover > .files__file:not(.files__file--chosen, .files__file--picked),
 .files__item:hover > .files__dir:not(.files__dir--chosen, .files__dir--picked) {
-  background: var(--c-surface-sunken);
+  background: var(--c-sunken);
 }
 /* A name the repository's ignore rules cover. It is on the list because what git does not record is
    still something somebody wrote, and it is faint because that is the whole of what the mark says
@@ -849,7 +905,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__item:hover > .files__dir--git { color: var(--c-accent); }
 /* Reading one file: the way back, the name, and whatever the file turned out to be.
    It lies over the tree instead of replacing it (`AMB-D-815`), drawn the way the columns' own
-   drawers are — right against the edge, full height, on `--c-surface-2` under `--shadow-md` — so
+   drawers are — right against the edge, full height, on `--c-surface` under `--shadow-md` — so
    that what a panel over the page looks like is one thing and not two.
    The box it is measured against is the column (or, in a narrow window, the drawer holding it):
    both are positioned and the tree between them is not, so the panel keeps its place while the
@@ -917,7 +973,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__newline {
   align-self: start; max-width: 100%;
   color: var(--c-text); font-size: var(--fs-xs);
-  background: none; border: 1px solid var(--c-border); border-radius: var(--r-sm);
+  background: none; border: 1px solid var(--c-edge); border-radius: var(--r-sm);
 }
 /* The file having moved under a reader who has typed in it, and the one thing the panel can do
    about it. Drawn as a sentence with its own next step under it, the same shape the refused picture
@@ -951,7 +1007,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: inline-flex; align-items: center;
   padding: 0 var(--s-1);
   border: 0; background: transparent;
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
   cursor: pointer;
 }
 .files__trash:hover { color: var(--c-text); }
@@ -971,14 +1027,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .trashask {
   width: min(420px, 100%);
   padding: var(--s-5);
-  background: var(--c-surface); border: 1px solid var(--c-border);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
   border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
 }
-.trashask__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-2); overflow-wrap: anywhere; }
+.trashask__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); overflow-wrap: anywhere; }
 .trashask__undoable { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-4); }
-.trashask__quiet { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-sm); margin-bottom: var(--s-4); cursor: pointer; }
+.trashask__quiet { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); margin-bottom: var(--s-4); cursor: pointer; }
 .trashask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.trashask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); color: var(--c-text); cursor: pointer; }
+.trashask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
 /* The answer the question was opened to get. It is drawn as the answer rather than argued against,
    because the bin is where it sends the row and undo brings it back. */
 .trashask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
@@ -1013,20 +1069,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__tab {
   flex: 0 0 auto; display: inline-flex; align-items: center;
   padding: 0 1px;
-  border: 1px solid var(--c-border); border-radius: var(--r-sm);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
   color: var(--c-text-muted);
 }
 /* The one being read, lifted out of the row the way the pane counts are: one of a fixed few is on,
    and a colour alone reads as a row of links. */
 .files__tab--on {
-  background: var(--c-surface-sunken); border-color: var(--c-border-strong);
+  background: var(--c-sunken); border-color: var(--c-edge);
   color: var(--c-text); font-weight: 600;
 }
 .files__tabname {
   max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   padding: 2px var(--s-1);
   border: 0; background: transparent; color: inherit;
-  font-size: var(--fs-sm); line-height: 1.6;
+  font-size: var(--fs-md); line-height: 1.6;
 }
 /* Letting a file go, and the list of everything open. Both are marks rather than words, so what says
    they can be pressed is the room around them: at the width they were drawn before, the only thing
@@ -1040,7 +1096,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border: 0; border-radius: var(--r-sm); background: transparent;
   color: var(--c-text-muted); font-size: var(--fs-xs); line-height: 1;
 }
-.files__tabclose:hover, .files__more:hover { color: var(--c-text); background: var(--c-border); }
+.files__tabclose:hover, .files__more:hover { color: var(--c-text); background: var(--c-hover); }
 
 /* Wider or narrower, and the way out beside it, both pushed to the far end of the row they have to
    themselves: the two are the column's own, where every other control the panel draws is about a
@@ -1052,7 +1108,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: inline-flex; align-items: center;
   padding: 0 var(--s-1);
   border: 0; background: transparent;
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .files__width:hover { color: var(--c-text); }
 .files__close {
@@ -1060,7 +1116,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: inline-flex; align-items: center;
   padding: 0 var(--s-1);
   border: 0; background: transparent;
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
 }
 .files__close:hover { color: var(--c-text); }
 
@@ -1072,8 +1128,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .memo__field {
   flex: 1; min-height: 0; width: 100%; resize: none;
   padding: var(--s-2);
-  background: var(--c-surface-sunken); border: 1px solid var(--c-border); border-radius: var(--r-md);
-  color: var(--c-text); font-family: var(--font-mono); font-size: var(--fs-sm); line-height: 1.6;
+  background: var(--c-sunken); border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  color: var(--c-text); font-family: var(--font-mono); font-size: var(--fs-md); line-height: 1.6;
 }
 
 /* Nothing is pressed to keep what is written here, so the page shows the keeping instead of saying
@@ -1134,37 +1190,40 @@ button { font: inherit; color: inherit; cursor: pointer; }
    The loud ones fill the band, and there the parts are cut out of the ground rather than laid on it:
    `--banner-tint` for the patch a control sits on, and an action that swaps ink for ground. */
 .healthbanner {
-  --banner-ground: var(--c-surface-2);
+  --banner-ground: var(--c-surface);
   --banner-ink: var(--c-text);
-  --banner-tint: var(--c-surface-sunken);
-  --banner-tint-hover: var(--c-border);
-  --banner-edge: var(--c-border-strong);
+  --banner-tint: var(--c-sunken);
+  --banner-tint-hover: var(--c-hover);
+  --banner-edge: var(--c-rule);
   /* The one accented thing on a quiet band; the loud ones override the pair below. */
   --banner-btn-ground: var(--c-accent);
-  --banner-btn-ink: #fff;
+  --banner-btn-ink: var(--c-on-accent);
 
-  display: flex; align-items: flex-start; gap: var(--s-3);
-  padding: var(--s-2) var(--s-4);
+  display: flex; align-items: flex-start; gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
   background: var(--banner-ground); color: var(--banner-ink);
-  border-bottom: 1px solid var(--c-border);
-  font-size: var(--fs-sm);
+  border-bottom: 1px solid var(--c-rule);
+  font-size: var(--fs-md);
 }
 /* The two steps that fill the band, and the accent one beside them: an offer is not a step on the
    ladder — nothing is wrong, the reader is being handed something. */
 .healthbanner--stop, .healthbanner--heed, .healthbanner--offer {
-  --banner-ink: #fff;
   --banner-tint: rgba(0, 0, 0, 0.18);
   --banner-tint-hover: rgba(0, 0, 0, 0.3);
   --banner-edge: rgba(255, 255, 255, 0.35);
-  --banner-btn-ground: #fff;
+  /* The action on a loud band turns the pairing round rather than taking a colour of its own: the
+     band's ink becomes its ground and the band's ground its ink. The pair holds AA read either
+     way, so one declaration covers all three bands and both themes. */
+  --banner-btn-ground: var(--banner-ink);
   --banner-btn-ink: var(--banner-ground);
   border-bottom-color: transparent;
 }
-.healthbanner--stop { --banner-ground: var(--c-stop); }
-.healthbanner--heed { --banner-ground: var(--c-heed); }
+/* Each band names the fill and the ink together — they are one pairing, and a theme swaps both. */
+.healthbanner--stop { --banner-ground: var(--c-stop); --banner-ink: var(--c-on-stop); }
+.healthbanner--heed { --banner-ground: var(--c-heed); --banner-ink: var(--c-on-heed); }
 /* The re-sync affordance for an outdated managed block, and the rest of the guidance the app offers
    rather than warns about. Accent, so it reads as an offer wherever it stands beside a step. */
-.healthbanner--offer { --banner-ground: var(--c-accent); }
+.healthbanner--offer { --banner-ground: var(--c-accent); --banner-ink: var(--c-on-accent); }
 .healthbanner__body { flex: 1; min-width: 0; }
 .healthbanner__title { font-weight: var(--fw-bold); }
 .healthbanner__line { font-size: var(--fs-xs); opacity: 0.95; word-break: break-word; }
@@ -1177,11 +1236,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .healthbanner__close:hover { background: var(--banner-tint-hover); }
 .healthbanner__close:disabled { opacity: 0.5; cursor: default; }
-/* The button that runs the action (re-sync). It outweighs the close button. */
+/* The button that runs the action (re-sync). It is the filled system (`AMB-D-841`) drawn in the
+   band's own pairing rather than the accent — the fill and the size of a primary button, taking the
+   ground and ink the band hands it. It outweighs the close button, which stays at the band's
+   reading size. */
 .healthbanner__action {
   flex: none; color: var(--banner-btn-ink); background: var(--banner-btn-ground);
-  border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-3);
-  font-size: var(--fs-xs); font-weight: var(--fw-bold); cursor: pointer;
+  border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-2);
+  font-size: var(--fs-md); font-weight: var(--fw-bold); cursor: pointer;
 }
 .healthbanner__action:hover { opacity: 0.85; }
 .healthbanner__action:disabled { opacity: 0.6; cursor: default; }
@@ -1207,22 +1269,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- topbar ---------- */
 .topbar {
-  display: flex; align-items: center; gap: var(--s-4);
-  padding: 0 var(--s-4);
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 0 var(--s-3);
   background: var(--c-surface);
-  border-bottom: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--c-rule);
 }
 /* The brand mark tightens its gap a little so it reads as a pair with the workspace name.
    It is drawn in `currentColor`, so the colour it takes is the one set here — black on the light
    ground, white on the dark one — and not the topbar's text colour. */
 .topbar__brand {
   display: inline-flex; align-items: center;
-  margin-right: calc(var(--s-2) - var(--s-4));
+  margin-right: calc(var(--s-2) - var(--s-3));
   color: var(--c-brand-mark);
 }
 /* "amenbo" is a link that opens the product page (https://amenbo.work/) in the default
    browser. */
-.topbar__ws { font-weight: var(--fw-bold); font-size: var(--fs-lg); cursor: pointer; }
+.topbar__ws { font-weight: var(--fw-bold); font-size: var(--fs-xl); cursor: pointer; }
 .topbar__ws:hover { text-decoration: underline; }
 .topbar__ws:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; border-radius: 2px; }
 /* The reflect flourish: the moment an external write (AI/CLI) reaches the GUI, a rainbow
@@ -1261,7 +1323,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .topbar__envbadge {
   font-family: var(--font-mono);
   font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: 0.04em;
-  color: #fff; background: var(--c-heed);
+  color: var(--c-on-heed); background: var(--c-heed);
   border-radius: var(--r-sm); padding: 1px var(--s-2);
   white-space: nowrap;
 }
@@ -1272,14 +1334,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
    arranged. */
 .topbar__faces {
   display: inline-flex;
-  background: var(--c-surface-sunken);
-  border: 1px solid var(--c-border); border-radius: var(--r-md);
+  background: var(--c-sunken);
+  border: 1px solid var(--c-edge); border-radius: var(--r-md);
   padding: 2px;
 }
 .topbar__face {
   background: none; border: 0; border-radius: calc(var(--r-md) - 2px);
   padding: var(--s-1) var(--s-3);
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
 }
 .topbar__face:hover { color: var(--c-text); }
 .topbar__face--on { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
@@ -1293,7 +1355,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1; cursor: pointer;
 }
@@ -1303,9 +1365,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .topbar__nav { display: inline-flex; gap: var(--s-1); }
 .topbar__navbtn {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 24px; background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  min-width: 24px; background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
-  color: var(--c-text-muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer;
+  color: var(--c-text-muted); font-size: var(--fs-xl); line-height: 1; cursor: pointer;
 }
 .topbar__navbtn:hover:not(:disabled) { color: var(--c-text); }
 .topbar__navbtn:disabled { opacity: 0.35; cursor: default; }
@@ -1318,9 +1380,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sidebar-wrap { grid-area: sidebar; position: relative; display: flex; min-height: 0; min-width: 0; }
 .sidebar {
   flex: 1; min-width: 0;
-  background: var(--c-surface-2);
-  border-right: 1px solid var(--c-border);
-  overflow-y: auto; padding: var(--s-3) var(--s-2);
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-rule);
+  overflow-y: auto; padding: var(--s-2) var(--s-2);
 }
 /* The resize handle on the right edge: a thin hit area straddling the border, showing its line
    only on hover or drag. Mirrors .rightpane__resizer on the opposite edge. */
@@ -1333,19 +1395,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-accent); opacity: 0; transition: opacity 0.12s;
 }
 .sidebar__resizer:hover::after, .sidebar__resizer:active::after { opacity: 1; }
-.sidebar__group { margin-bottom: var(--s-5); }
+.sidebar__group { margin-bottom: var(--s-4); }
 .sidebar__label {
   font-size: var(--fs-xs); font-weight: var(--fw-bold);
   text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--c-text-faint); padding: 0 var(--s-3); margin-bottom: var(--s-2);
+  color: var(--c-text-muted); padding: 0 var(--s-2); margin-bottom: var(--s-2);
 }
 .navitem {
-  display: flex; align-items: center; gap: var(--s-3);
+  display: flex; align-items: center; gap: var(--s-2);
   width: 100%; text-align: left; background: none; border: none;
-  padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
   color: var(--c-text); font-size: var(--fs-md);
 }
-.navitem:hover { background: var(--c-surface-sunken); }
+.navitem:hover { background: var(--c-hover); }
 .navitem--active { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 .navitem__dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 /* Drag-and-drop reordering of projects. The row being held fades, and the drop target
@@ -1359,24 +1421,24 @@ body.dragging-row { user-select: none; }
 .navitem--drop-before { box-shadow: inset 0 2px 0 0 var(--c-accent); }
 .navitem--drop-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
 .navitem__count {
-  margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-faint);
-  background: var(--c-surface-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
+  margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-muted);
+  background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
 }
 .navitem--active .navitem__count { background: var(--c-surface); }
 /* The inbox's needs-attention badge: the accent colour carries "unread / needs a look". */
-.navitem__count--alert { background: var(--c-accent); color: #fff; font-weight: var(--fw-medium); }
-.navitem--active .navitem__count--alert { background: var(--c-accent); color: #fff; }
+.navitem__count--alert { background: var(--c-accent); color: var(--c-on-accent); font-weight: var(--fw-medium); }
+.navitem--active .navitem__count--alert { background: var(--c-accent); color: var(--c-on-accent); }
 /* The due row warns on two steps at once, so its badges travel as a group. Only the group takes the
    auto margin: two of them side by side would each claim a share of the free space and drift apart. */
 .navitem__counts { margin-left: auto; display: flex; align-items: center; gap: var(--s-1); }
 .navitem__counts .navitem__count { margin-left: 0; }
 /* Its day has gone or is today — nothing moves until a hand is put to it. Its day is tomorrow — it
    moves on its own, and the badge is there to be known while it comes (the steps of `tokens.css`). */
-.navitem__count--stop { background: var(--c-stop); color: #fff; font-weight: var(--fw-medium); }
-.navitem__count--heed { background: var(--c-heed); color: #fff; font-weight: var(--fw-medium); }
-.navitem--active .navitem__count--stop { background: var(--c-stop); color: #fff; }
-.navitem--active .navitem__count--heed { background: var(--c-heed); color: #fff; }
-.navitem--muted { color: var(--c-text-faint); font-size: var(--fs-sm); cursor: pointer; }
+.navitem__count--stop { background: var(--c-stop); color: var(--c-on-stop); font-weight: var(--fw-medium); }
+.navitem__count--heed { background: var(--c-heed); color: var(--c-on-heed); font-weight: var(--fw-medium); }
+.navitem--active .navitem__count--stop { background: var(--c-stop); color: var(--c-on-stop); }
+.navitem--active .navitem__count--heed { background: var(--c-heed); color: var(--c-on-heed); }
+.navitem--muted { color: var(--c-text-muted); font-size: var(--fs-md); cursor: pointer; }
 
 /* ---------- main ---------- */
 .main { grid-area: main; overflow: auto; min-width: 0; display: flex; flex-direction: column; }
@@ -1389,7 +1451,7 @@ body.dragging-row { user-select: none; }
 .rightpane-wrap { grid-area: pane; position: relative; display: flex; min-height: 0; min-width: 0; }
 .rightpane {
   flex: 1; min-width: 0;
-  background: var(--c-surface); border-left: 1px solid var(--c-border);
+  background: var(--c-surface); border-left: 1px solid var(--c-rule);
   overflow-y: auto; display: flex; flex-direction: column;
 }
 /* The resize handle on the left edge: a thin hit area straddling the border, showing its
@@ -1405,21 +1467,17 @@ body.dragging-row { user-select: none; }
 .rightpane__resizer:hover::after, .rightpane__resizer:active::after { opacity: 1; }
 .rightpane__empty {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  color: var(--c-text-faint); font-size: var(--fs-sm); padding: var(--s-6); text-align: center;
+  color: var(--c-text-muted); font-size: var(--fs-md); padding: var(--s-5); text-align: center;
 }
 
 /* ---------- generic ---------- */
-.chip {
-  display: inline-flex; align-items: center; gap: var(--s-1);
-  font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm);
-  background: var(--c-surface-sunken); color: var(--c-text-muted); white-space: nowrap;
-}
-.muted { color: var(--c-text-muted); }
-.faint { color: var(--c-text-faint); }
+/* Reading ink is two steps (`AMB-D-840`), so these two hand over one value: `.faint` is the older
+   name, kept while its callers are still written that way. */
+.muted, .faint { color: var(--c-text-muted); }
 /* The step a mark takes, set on the thing the mark sits in rather than on the mark: an icon draws in
    `currentColor` (`AMB-D-686`), so it is the chip, the row or the line that decides what it asks of
    the reader. Two classes and not three — the third step asks nothing, and a mark that asks nothing
-   takes the tone of the words it stands in (`.muted` / `.faint`) or a colour of its own. */
+   takes the tone of the words it stands in (`.muted`) or a colour of its own. */
 .step-stop { color: var(--c-stop); }
 .step-heed { color: var(--c-heed); }
 
@@ -1439,7 +1497,7 @@ body.dragging-row { user-select: none; }
 .agent__looking {
   padding: var(--s-4);
   color: var(--c-text-muted);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 
 /* The invitation to choose a folder, the offer of an agent and the install notice share a box: each is
@@ -1451,7 +1509,7 @@ body.dragging-row { user-select: none; }
   align-items: flex-start;
   gap: var(--s-2);
   padding: var(--s-4);
-  border: 1px solid var(--c-border);
+  border: 1px solid var(--c-rule);
   border-radius: var(--r-md);
   background: var(--c-surface);
 }
@@ -1463,13 +1521,13 @@ body.dragging-row { user-select: none; }
 .agent__hint {
   max-width: 60ch;
   color: var(--c-text-muted);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   line-height: 1.6;
 }
 
 .agent__choice {
   padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--c-border);
+  border: 1px solid var(--c-edge);
   border-radius: var(--r-sm);
   background: var(--c-surface);
   color: var(--c-text);
@@ -1487,7 +1545,7 @@ body.dragging-row { user-select: none; }
   color: var(--c-text-faint);
   cursor: default;
 }
-.agent__choice--missing:hover { border-color: var(--c-border); }
+.agent__choice--missing:hover { border-color: var(--c-edge); }
 
 /* The press that unfolds them, and the rows it unfolds. Quiet: what the offer is about is what can
    be started here, and this is the line under it. */
@@ -1520,12 +1578,12 @@ body.dragging-row { user-select: none; }
   justify-content: flex-end;
   gap: var(--s-2);
   padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--c-border);
+  border: 1px solid var(--c-rule);
   border-radius: var(--r-md);
   background: var(--c-surface);
 }
 
-.agent__pick { display: flex; align-items: center; gap: var(--s-1); font-size: var(--fs-sm); }
+.agent__pick { display: flex; align-items: center; gap: var(--s-1); font-size: var(--fs-md); }
 
 /* What is shown instead when a terminal could not be started, or the question could not be put. */
 .agent__failed {
@@ -1533,7 +1591,7 @@ body.dragging-row { user-select: none; }
   padding: var(--s-4);
   color: var(--c-text-muted);
   font-family: var(--font-mono);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   white-space: pre-wrap;
 }
 
@@ -1545,7 +1603,7 @@ body.dragging-row { user-select: none; }
   align-items: baseline;
   gap: var(--s-2);
   padding: 0 var(--s-2) var(--s-2);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   color: var(--c-text-muted);
   white-space: nowrap;
 }

@@ -693,6 +693,7 @@ export const es: Translation = {
     "mcp.projects": "Proyectos a los que esta aplicación puede llegar",
     "mcp.handover": "Los proyectos marcados son exactamente el contenido de la solicitud y del archivo. Al entregarlo se reemplaza por completo la entrada de esta aplicación, incluidas las carpetas que ya alcanza.",
     "mcp.noProjects": "Ningún proyecto tiene todavía una carpeta, así que no hay adónde apuntar un servidor.",
+    "mcp.pickNone": "Sin nada marcado no hay nada que entregar: marque primero un proyecto.",
     "mcp.stale": "Dejado por un Amenbo anterior",
     "app.crashTitle": "Algo salió mal",
     "app.crashHint": "La pantalla no se pudo dibujar. Recarga para recuperarla: tus datos están a salvo.",

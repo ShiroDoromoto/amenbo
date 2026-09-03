@@ -17,6 +17,7 @@ import { invoke } from "../core/ipc";
 import { revealLabelKey } from "../core/platform";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
+import { inkOn } from "../core/ink";
 import type { AgentHookRequestsDto, BoundFolderDto, ProjectSettingsDto, WakeDto } from "../bindings/bindings";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
@@ -181,13 +182,12 @@ export function ProjectSettingsScreen({
           <div className="settings__form">
             <label className="field">
               <span className="fieldlabel">{t("projset.nameLabel")}</span>
-              <input {...asTyped} className="textinput" value={name} onChange={(e) => setName(e.target.value)} />
+              <input {...asTyped} value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="field">
               <span className="fieldlabel">{t("projset.notesLabel")}</span>
               <textarea
                 {...asTyped}
-                className="textinput"
                 rows={4}
                 value={notes}
                 placeholder={t("projset.notesPh")}
@@ -285,7 +285,8 @@ export function ProjectSettingsScreen({
  *
  * With no icon the preview shows what the surfaces fall back to: the project's colour, and the first
  * letter of its name. It reads from the form's own state rather than the saved project, so a colour
- * being changed at the same time is already in it.
+ * being changed at the same time is already in it — the letter's ink included, which is derived from
+ * whatever colour the picker currently holds (`core/ink.ts`) rather than fixed at white.
  */
 function IconPicker({
   name, color, icon, busy, onPick, onClear, onError,
@@ -317,7 +318,11 @@ function IconPicker({
       <span className="iconpick__preview" style={{ background: icon ? undefined : color }}>
         {icon
           ? <img className="iconpick__img" src={icon} alt="" />
-          : <span className="iconpick__letter">{[...name.trim()][0] ?? ""}</span>}
+          : (
+            <span className="iconpick__letter" style={{ color: inkOn(color) }}>
+              {[...name.trim()][0] ?? ""}
+            </span>
+          )}
       </span>
       <div className="buttonrow">
         <button className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
@@ -429,7 +434,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
         {folders?.map((f) => (
           <div key={f.path} className="field">
             <div className="folderrow">
-              <code className="path">{f.path}</code>
+              <code className="path" title={f.path}>{f.path}</code>
               {/* The state of the folder, in the row's own voice — it wears the note's look and its
                   mark, but not its `role`: what is wrong is announced once, by the hint below, and a
                   reader hearing the same fault twice learns nothing the second time. */}
@@ -750,9 +755,9 @@ function PluginsSection({ projectId }: { projectId: number }) {
             <span className="hint">{t("projset.pluginsDevice")}</span>
             {deviceWide.map((i) => (
               <div className="pluggate" key={i.name}>
-                <span className="chip">{i.name}</span>
+                <span className="rowname">{i.name}</span>
                 {i.device?.enabled && <span className="chip">{t("plugins.enabledChip")}</span>}
-                <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+                <span className="meta">
                   {t("plugins.scope.machine")}
                 </span>
               </div>

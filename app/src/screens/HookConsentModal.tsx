@@ -98,11 +98,11 @@ export function HookConsentModal({ onDone }: { onDone?: () => void }) {
 
         {error && <div className="hookconsent__error">{error}</div>}
 
-        <div className="hookconsent__actions">
-          <button className="hookconsent__action hookconsent__action--yes" disabled={busy} onClick={() => void answer(true)}>
+        <div className="buttonrow">
+          <button className="btn btn--primary" disabled={busy} onClick={() => void answer(true)}>
             {t("hooks.yes")}
           </button>
-          <button className="hookconsent__action hookconsent__action--never" disabled={busy} onClick={() => void answer(false)}>
+          <button className="btn" disabled={busy} onClick={() => void answer(false)}>
             {t("hooks.no")}
           </button>
         </div>

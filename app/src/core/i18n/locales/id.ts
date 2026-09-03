@@ -673,6 +673,7 @@ export const id: Translation = {
     "mcp.projects": "Proyek yang boleh dijangkau aplikasi ini",
     "mcp.handover": "Proyek yang Anda centang adalah isi dari permintaan dan berkas itu. Menyerahkannya mengganti seluruh entri aplikasi ini, termasuk folder yang sudah dijangkaunya.",
     "mcp.noProjects": "Belum ada proyek yang punya folder, jadi tidak ada tujuan untuk server.",
+    "mcp.pickNone": "Tidak ada yang dicentang berarti tidak ada yang diserahkan — centang satu proyek dulu.",
     "mcp.stale": "Ditinggalkan Amenbo versi lama",
     "app.crashTitle": "Ada yang tidak beres",
     "app.crashHint": "Layar ini gagal digambar. Muat ulang untuk pulih — data Anda aman.",

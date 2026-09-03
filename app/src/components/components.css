@@ -28,7 +28,7 @@
 .facet__base svg { display: block; width: 100%; height: 100%; }
 /* Registered avatar image fills and crops to the circular base (object-fit: cover). */
 .facet__img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.facet__name { font-size: var(--fs-sm); }
+.facet__name { font-size: var(--fs-md); }
 
 
 /* The writing and the form parts that turn up on any screen, named for what they are rather than for
@@ -36,15 +36,30 @@
    only one drawing them, and every screen that wanted one after that borrowed the name — which left
    the creation screen's own block unsafe to touch, its rules being half the app's. A screen's block
    holds what only that screen has; this is where what several of them share belongs. */
-/* The quiet line under a control, saying what it will do or what the reader is choosing between. */
+/* The quiet line under a control, saying what it will do or what the reader is choosing between. The
+   paragraph a plugin's author wrote under one of their own fields is this line too (`.plugcfg__help`),
+   which only adds the wrapping a body it did not write needs. */
 .hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* The bold lead-in over a field or a group of them. */
+/* The bold lead-in over a field or a group of them — including the caption over a field a plugin's
+   author declared (`.plugcfg__label`), which only adds the row that holds the chips beside the word.
+   A step over `.hint` is what makes it a lead-in: the two were both drawn at 12px, and a caption the
+   size of the sentence under it leads nothing (`AMB-D-842`). */
 .fieldlabel { font-weight: var(--fw-bold); font-size: var(--fs-md); }
-/* A folder path, which is one long unbreakable word: it scrolls inside its own box rather than
-   pushing the column it sits in as wide as the deepest path a reader happens to have. */
+/* The word in front of a control on a toolbar — a filter's or a sort's, wrapping the control it
+   names. It carries the size alone: the row it sits on reads at the page's colour, and the two
+   classes above would each take that away in a different direction. */
+.ctllabel { font-size: var(--fs-xs); }
+/* A folder path, which is one long unbreakable word: it stays inside its own box and gives up its tail
+   rather than pushing the column it sits in as wide as the deepest path a reader happens to have. The
+   tail goes rather than the box scrolling, a scrollbar being taller than the 4px between one row and
+   the next and so drawn straight through the line of prose below. A cut path is not a path anyone can
+   check, so every one of these carries the whole of it as its `title`. The box is drawn by its line
+   for the reason a chip's is (`.chip`): a cut path has to show where it was cut, and the ground alone
+   cannot say that on a row that already wears the same ground. */
 .path {
-  flex: 1; min-width: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
-  background: var(--c-surface-sunken); font-size: var(--fs-sm); overflow-x: auto; white-space: nowrap;
+  flex: 1; min-width: 0; padding: calc(var(--s-2) - 1px); border-radius: var(--r-sm);
+  background: var(--c-sunken); border: 1px solid var(--c-rule); font-size: var(--fs-md);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
 /* What went wrong, said where it went wrong (`components/ErrorNote.tsx`). One row, mark then words:
    it aligns at the top rather than the middle so the mark stays beside the first line of a message
@@ -54,7 +69,7 @@
    drift, leaving the loud and the quiet form of one message on two different steps. */
 .errortext {
   display: flex; align-items: flex-start; gap: var(--s-1);
-  color: var(--c-stop); font-size: var(--fs-sm);
+  color: var(--c-stop); font-size: var(--fs-md);
 }
 .errortext--quiet { font-size: inherit; }
 /* And what went through, said where it went through (`components/DoneNote.tsx`) — the same row as
@@ -67,19 +82,15 @@
 }
 /* One thing being filled in: what it is above, what it is filled in with below. */
 .field { display: flex; flex-direction: column; gap: var(--s-2); }
-/* The box a reader types into. */
-.textinput {
-  padding: var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md);
-  font-size: var(--fs-md); background: var(--c-surface); color: var(--c-text); outline: none;
-}
-.textinput:focus { border-color: var(--c-accent); }
 /* A folder and what can be done with it, on one line while the line is wide enough for both. */
 .folderrow { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 /* The buttons a form is finished with, set apart from the fields above them. */
-.actions { display: flex; gap: var(--s-3); }
+.actions { display: flex; gap: var(--s-2); }
 /* Buttons offered beside something rather than under a form: closer together, and wrapping rather
    than running off the edge, since a row of them is as long as the words a language spells them in. */
-.buttonrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+/* A row of buttons, wherever one stands: the three consent rows that each wrote this out
+   again now carry it too (`AMB-D-841`). */
+.buttonrow { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 
 .due--overdue { color: var(--c-due-overdue); }
 .due--today { color: var(--c-due-today); }
@@ -92,60 +103,65 @@
    heading plus the 72px floor below, while its neighbours ran the height of their cards — and since a
    column draws no frame, the empty one reads as being just as tall as the rest. Aiming at the middle of
    what looks like the column then lands below the target, and the card goes back with nothing said. */
-.board { display: flex; gap: var(--s-4); padding: var(--s-5); align-items: stretch; overflow-x: auto; flex: 1; }
+.board { display: flex; gap: var(--s-3); padding: var(--s-4); align-items: stretch; overflow-x: auto; flex: 1; }
 /* Every toolbar row folds rather than crushes. A row that has lost width — any of them, once the detail
    pane opens beside it — would otherwise squeeze whatever is still shrinkable until it breaks a
    character at a time. The label that names the chips beside it is a name, so it holds its line too. */
 .board__toolbar {
-  display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; row-gap: var(--s-2);
-  padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+  display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; row-gap: var(--s-2);
+  padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); background: var(--c-sunken);
 }
 .board__toolbar > .faint { white-space: nowrap; }
-.board__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-right: var(--s-3); }
-.viewtabs { display: inline-flex; background: var(--c-surface-sunken); border-radius: var(--r-md); padding: 2px; }
-.viewtab { border: none; background: none; padding: var(--s-1) var(--s-3); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
+.board__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-right: var(--s-2); }
+.viewtabs { display: inline-flex; background: var(--c-sunken); border-radius: var(--r-md); padding: 2px; }
+.viewtab { border: none; background: none; padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .viewtab--active { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-medium); box-shadow: var(--shadow-sm); }
 /* A vertical separator plus a standalone button, setting the view switcher apart from
    decisions (a different kind of entity). */
-.board__sep { align-self: stretch; width: 1px; margin: var(--s-1) 0; background: var(--c-border); }
-.decisionsbtn { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-border); background: var(--c-surface); padding: var(--s-1) var(--s-3); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
+.board__sep { align-self: stretch; width: 1px; margin: var(--s-1) 0; background: var(--c-rule); }
+.decisionsbtn { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .decisionsbtn--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 /* Under-discussion (proposed) decision count on the decisions button. Standalone (not the sidebar's task+decision sum), since this surface is the decisions face. */
-.decisionsbtn__count { font-size: var(--fs-xs); color: var(--c-text-faint); background: var(--c-surface-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
+.decisionsbtn__count { font-size: var(--fs-xs); color: var(--c-text-muted); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
 .decisionsbtn--active .decisionsbtn__count { background: var(--c-surface); }
-.filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-5); border-bottom: 1px solid var(--c-border); flex-wrap: wrap; }
+.filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); flex-wrap: wrap; }
+/* The box that narrows a list, wherever a screen puts one. A control takes the page's font from the
+   base rule, and a toolbar reads a step below the page — so the step is said here, once, rather than
+   at each of the five tags that mount one. How wide it stands is the screen's own business and stays
+   with the tag. */
+.board__search { font-size: var(--fs-xs); }
 /* A chip is a name, so it is never squeezed: it keeps its own size (`flex: none`) and its label stays on
    one line. Left to shrink, a chip in a row that has lost width — the board's group row once the detail
    pane opens beside it — breaks its label a character at a time and reads as nothing. The rows that hold
    chips wrap instead. */
-.filterchip { font-size: var(--fs-xs); border: 1px solid var(--c-border); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-3); color: var(--c-text-muted); flex: none; white-space: nowrap; }
+.filterchip { font-size: var(--fs-xs); border: 1px solid var(--c-edge); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-2); color: var(--c-text-muted); flex: none; white-space: nowrap; }
 .filterchip--on { border-color: var(--c-accent); color: var(--c-accent-text); background: var(--c-accent-weak); }
 /* The filters, opened under the bar. One axis per line: a row of values is as wide as it needs to be,
    and axes read down the panel rather than running into one another. */
-.filterpanel { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-sunken); }
+.filterpanel { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); background: var(--c-sunken); }
 .filterpanel__axis { display: flex; align-items: baseline; gap: var(--s-2); }
 .filterpanel__label { font-size: var(--fs-xs); flex: none; min-width: 6em; }
 .filterpanel__values { display: flex; align-items: center; gap: var(--s-1); flex-wrap: wrap; }
 /* The toggle that opens them, carrying how many axes narrow while they are closed. Built like the
    decisions button beside it — both are standing controls in the toolbar. */
-.filtertoggle { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-border); background: var(--c-surface); padding: var(--s-1) var(--s-3); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
+.filtertoggle { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .filtertoggle--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
-.filtertoggle__count { font-size: var(--fs-xs); color: var(--c-text-faint); background: var(--c-surface-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
+.filtertoggle__count { font-size: var(--fs-xs); color: var(--c-text-muted); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
 .filtertoggle--active .filtertoggle__count { background: var(--c-surface); }
 
-.column { width: 280px; flex: none; display: flex; flex-direction: column; gap: var(--s-3); }
+.column { width: 280px; flex: none; display: flex; flex-direction: column; gap: var(--s-2); }
 .column__head { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-1); }
 .column__name { font-weight: var(--fw-bold); font-size: var(--fs-md); }
-.column__count { font-size: var(--fs-xs); color: var(--c-text-faint); }
+.column__count { font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* What the column holds beside what its count names (the closed column's rejected). Fainter and smaller
    than the count, so it reads as an aside and is never mistaken for the figure it sits next to. */
-.column__note { font-size: var(--fs-2xs); color: var(--c-text-faint); }
+.column__note { font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* The add button at the right end of a column header. Pressing it starts a new item in the
    right pane. */
 .column__addbtn {
   margin-left: auto; width: 22px; height: 22px; flex: none;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--c-border); border-radius: var(--r-sm);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
   background: var(--c-surface); color: var(--c-text-muted); cursor: pointer; line-height: 1;
 }
 .column__addbtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
@@ -153,11 +169,13 @@
    would read as an empty column rather than as a control. */
 .board__addcol {
   width: 200px; flex: none; align-self: flex-start;
-  text-align: left; font-size: var(--fs-sm); color: var(--c-text-faint);
-  border: 1px dashed var(--c-border-strong); background: none; border-radius: var(--r-md); padding: var(--s-2) var(--s-3);
+  text-align: left; font-size: var(--fs-md); color: var(--c-text-muted);
+  border: 1px dashed var(--c-edge); background: none; border-radius: var(--r-md); padding: var(--s-2) var(--s-2);
 }
 .board__addcol:hover { color: var(--c-accent); border-color: var(--c-accent); }
-.column__addinput { border: 1px solid var(--c-accent); border-radius: var(--r-md); padding: var(--s-2) var(--s-3); font-size: var(--fs-md); outline: none; }
+/* The box that is open only while a column is being named: it is already the thing being typed
+   into, so it wears the accent on its border from the moment it appears. */
+.column__addinput { border-color: var(--c-accent); font-size: var(--fs-xs); }
 .board__addcolinput { width: 200px; flex: none; align-self: flex-start; }
 
 /* ---------- drag & drop (moving between the status board's columns) ---------- */
@@ -167,12 +185,12 @@
    done archive). */
 .column__seeall {
   text-align: center; width: 100%; padding: var(--s-2);
-  font-size: var(--fs-sm); color: var(--c-text-muted);
-  background: none; border: 1px dashed var(--c-border); border-radius: var(--r-md); cursor: pointer;
+  font-size: var(--fs-md); color: var(--c-text-muted);
+  background: none; border: 1px dashed var(--c-edge); border-radius: var(--r-md); cursor: pointer;
 }
 .column__seeall:hover { color: var(--c-accent); border-color: var(--c-accent); }
 .column--droppable { min-height: 72px; border-radius: var(--r-md); transition: background 0.1s ease; }
-.column--dragover { background: var(--c-surface-2, rgba(27, 147, 194, 0.08)); outline: 2px dashed var(--c-accent); outline-offset: 4px; }
+.column--dragover { background: var(--c-hover); outline: 2px dashed var(--c-accent); outline-offset: 4px; }
 .card--draggable { cursor: grab; }
 .card--dragging { opacity: 0.45; cursor: grabbing; }
 /* The card that follows the pointer. It is the card's own node, copied — the browser used to draw
@@ -193,16 +211,16 @@ body.is-dragging { user-select: none; }
 /* ---------- toast (a transient warning: a failed write and the like) ---------- */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 1000;
-  max-width: 80%; padding: var(--s-3) var(--s-4); border-radius: var(--r-md);
-  font-size: var(--fs-sm); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); cursor: pointer;
+  max-width: 80%; padding: var(--s-2) var(--s-3); border-radius: var(--r-md);
+  font-size: var(--fs-md); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); cursor: pointer;
 }
-.toast--warn { color: #fff; background: var(--c-heed); }
+.toast--warn { color: var(--c-on-heed); background: var(--c-heed); }
 
 /* ---------- card ---------- */
 .card {
   text-align: left; width: 100%;
-  background: var(--c-surface); border: 1px solid var(--c-border);
-  border-radius: var(--r-md); padding: var(--s-3); box-shadow: var(--shadow-sm);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
+  border-radius: var(--r-md); padding: var(--s-2); box-shadow: var(--shadow-sm);
   display: flex; flex-direction: column; gap: var(--s-2);
   /* Render windowing: a card off screen skips layout and paint while keeping its DOM and
      its drag-and-drop. This holds the rendering cost near constant however long the column
@@ -210,19 +228,16 @@ body.is-dragging { user-select: none; }
   content-visibility: auto;
   contain-intrinsic-size: auto 110px;
 }
-.card:hover { border-color: var(--c-border-strong); }
+.card:hover { border-color: var(--c-edge); }
 .card--selected { border-color: var(--c-accent); box-shadow: 0 0 0 1px var(--c-accent); }
-.card--closed .card__title { color: var(--c-text-faint); text-decoration: line-through; }
+.card--closed .card__title { color: var(--c-text-muted); text-decoration: line-through; }
 .card__title { font-size: var(--fs-md); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
 .card__row { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 .card__assign { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); color: var(--c-text-muted); }
-.card__footer { display: flex; align-items: center; gap: var(--s-2); color: var(--c-text-faint); font-size: var(--fs-xs); }
+.card__footer { display: flex; align-items: center; gap: var(--s-2); color: var(--c-text-muted); font-size: var(--fs-xs); }
 .card__spacer { flex: 1; }
 /* A compact select sat inline among a card's or row's chips (the status control, a dimension value). */
-.inlineselect {
-  font-size: var(--fs-xs); color: var(--c-text); background: var(--c-surface);
-  border: 1px solid var(--c-border-strong); border-radius: var(--r-sm); padding: 0 2px; cursor: pointer;
-}
+.inlineselect { font-size: var(--fs-xs); padding: 0 2px; }
 /* The axis the board is grouped by. Its row is what the detail pane takes width from (the toolbar above
    spans the pane, this does not), so it folds onto a second line rather than crushing the buttons — the
    heading beside them holds its line for the same reason. */
@@ -231,7 +246,7 @@ body.is-dragging { user-select: none; }
 
 /* The chip a task's ref is shown in; clicking it copies that same ref. */
 .idchip {
-  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-faint);
+  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-muted);
   background: none; border: none; padding: 0 2px; cursor: pointer; white-space: nowrap;
 }
 .idchip:hover { color: var(--c-accent); }
@@ -240,8 +255,8 @@ body.is-dragging { user-select: none; }
 /* The comment thread; bodies render as Markdown. */
 .comments { margin-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-2); }
 .comment {
-  background: var(--c-surface-sunken); border-radius: var(--r-md);
-  padding: var(--s-2) var(--s-3);
+  background: var(--c-sunken); border-radius: var(--r-md);
+  padding: var(--s-2) var(--s-2);
 }
 .comment__meta {
   display: flex; align-items: center; gap: var(--s-2);
@@ -256,6 +271,10 @@ body.is-dragging { user-select: none; }
 /* The elements react-markdown emits. The line height and paragraph spacing keep Japanese
    text from feeling cramped. */
 .markdown { line-height: 1.7; }
+/* A decision's body — the one long read the app has. It is the only place that asks for the reading
+   size and the prose measure, so the two sit here rather than on `.markdown`, which is the renderer
+   and says nothing about how wide the thing it renders should be. */
+.decbody { font-size: var(--fs-body); max-width: var(--measure-prose); margin-top: var(--s-2); }
 .markdown > :first-child { margin-top: 0; }
 .markdown > :last-child { margin-bottom: 0; }
 .markdown p { margin: var(--s-2) 0; }
@@ -264,51 +283,51 @@ body.is-dragging { user-select: none; }
 .markdown li > p { margin: 0; }
 .markdown h1, .markdown h2, .markdown h3,
 .markdown h4, .markdown h5, .markdown h6 {
-  font-weight: var(--fw-bold); line-height: 1.4; margin: var(--s-4) 0 var(--s-2);
+  font-weight: var(--fw-bold); line-height: 1.4; margin: var(--s-3) 0 var(--s-2);
 }
 .markdown h1 { font-size: var(--fs-xl); }
-.markdown h2 { font-size: var(--fs-lg); }
+.markdown h2 { font-size: var(--fs-xl); }
 /* h3 and deeper all cap at the same muted size — bodies here rarely nest past h3. */
 .markdown h3, .markdown h4, .markdown h5, .markdown h6 {
   font-size: var(--fs-md); color: var(--c-text-muted);
 }
 .markdown code {
   font-family: var(--font-mono); font-size: 0.92em;
-  background: var(--c-surface); border: 1px solid var(--c-border);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
   border-radius: var(--r-sm); padding: 0 0.3em;
 }
 .markdown pre {
-  background: var(--c-surface); border: 1px solid var(--c-border);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
   border-radius: var(--r-md); padding: var(--s-2); overflow-x: auto;
 }
 .markdown pre code { background: none; border: none; padding: 0; }
 /* Other GFM block elements. Token-driven, so dark/light follow automatically. */
 .markdown blockquote {
-  margin: var(--s-2) 0; padding-left: var(--s-3);
-  border-left: 3px solid var(--c-border-strong); color: var(--c-text-muted);
+  margin: var(--s-2) 0; padding-left: var(--s-2);
+  border-left: 3px solid var(--c-rule); color: var(--c-text-muted);
 }
-.markdown hr { border: none; border-top: 1px solid var(--c-border); margin: var(--s-4) 0; }
+.markdown hr { border: none; border-top: 1px solid var(--c-rule); margin: var(--s-3) 0; }
 /* An image's alt text, drawn in place of the picture (see Markdown.tsx): no image is ever emitted, so
    this is what a README's badge row and any inline figure come out as. inline-block keeps a link's
    underline off it, and the tokens make it read as a quiet label rather than as prose. */
 .markdown__imgalt {
   display: inline-block; font-size: var(--fs-xs); line-height: 1.7;
   padding: 0 var(--s-2); margin: 0 var(--s-1) 2px 0;
-  border-radius: var(--r-sm); background: var(--c-surface-sunken);
+  border-radius: var(--r-sm); background: var(--c-sunken);
   color: var(--c-text-muted); white-space: nowrap; vertical-align: middle;
 }
 /* Task lists (`- [ ]`): drop the bullet, keep the checkbox tinted and spaced from the label. */
 .markdown .contains-task-list { list-style: none; padding-left: 0; }
-.markdown .task-list-item input { margin: 0 var(--s-2) 0 0; accent-color: var(--c-accent); }
+.markdown .task-list-item input { margin: 0 var(--s-2) 0 0; }
 /* GFM tables. The right pane is a fixed 480px, so a wide table scrolls sideways in its own
    wrapper (see Markdown.tsx) rather than wrapping and blowing up the row height. */
 .markdown__tablewrap { overflow-x: auto; margin: var(--s-2) 0; }
-.markdown table { border-collapse: collapse; font-size: var(--fs-sm); }
+.markdown table { border-collapse: collapse; font-size: var(--fs-md); }
 .markdown th, .markdown td {
-  border: 1px solid var(--c-border); padding: var(--s-1) var(--s-2); text-align: left;
+  border: 1px solid var(--c-rule); padding: var(--s-1) var(--s-2); text-align: left;
 }
 .markdown th {
-  background: var(--c-surface-2); border-bottom: 1px solid var(--c-border-strong);
+  background: var(--c-sunken); border-bottom: 1px solid var(--c-rule);
   font-weight: var(--fw-bold);
 }
 .markdown a { color: var(--c-accent); }
@@ -321,7 +340,7 @@ body.is-dragging { user-select: none; }
 .markdown .mermaid__note {
   margin: 0 0 var(--s-1); font-size: var(--fs-xs); color: var(--c-text-muted);
 }
-.markdown .mermaid--failed { border-left: 2px solid var(--c-border-strong); padding-left: var(--s-2); }
+.markdown .mermaid--failed { border-left: 2px solid var(--c-rule); padding-left: var(--s-2); }
 /* A reference link inside a body, jumping to its target on click. */
 .markdown a.reflink {
   cursor: pointer; color: var(--c-accent-text);
@@ -331,43 +350,53 @@ body.is-dragging { user-select: none; }
 .markdown a.reflink:hover { text-decoration: underline; }
 
 .compose { margin-top: var(--s-2); }
-.compose__input {
-  width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px;
-  font-family: inherit; font-size: var(--fs-sm); line-height: 1.5;
-  border: 1px solid var(--c-border-strong); border-radius: var(--r-md);
-  padding: var(--s-2) var(--s-3); background: var(--c-surface); color: var(--c-text); outline: none;
-}
-.compose__input:focus { border-color: var(--c-accent); }
+.compose__input { width: 100%; min-height: 64px; }
 .compose__actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-2); }
-/* A small label chip, as used for a blocker or a reference to a decision. */
-.chip { font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm); background: var(--c-surface-sunken); }
-/* A clickable chip: the link that navigates to a dependency's blocker. It drops the button
-   defaults to keep the chip's look, and turns accent on hover to show it can be pressed. */
-.chip--link { border: 0; cursor: pointer; color: inherit; font-family: inherit; line-height: inherit; }
-.chip--link:hover { background: var(--c-border-strong); color: var(--c-accent); }
+/* One word for how a thing stands — enabled, filled, overdue, filed here. That is the whole of the
+   chip's job (`AMB-D-841`): a box around a word that is not pressable, which only reads as a state
+   while nothing else on the row wears one. A name is not a state and is written plainly (`.rowname`),
+   and something that can be pressed is a button or a link, never this.
+
+   The box is drawn by the line around it and not by the ground inside it. The grounds are held to
+   shallow steps on purpose (`AMB-D-840`) — 1.195:1 between neighbours at the widest — so a chip that
+   relies on its ground says nothing over a row wearing that same ground, which is how the word "on"
+   came to read as plain text on an enabled crossing (`.plugcross--on`, sunken under a sunken chip).
+   No single ground can be picked out of the three either, a chip standing on all of them.
+
+   The line is `--c-rule`, the divider, and not the `--c-edge` a control's outline takes: a chip is
+   read and never used, so it does not have to be found at 3:1, and the 3:1 outline stays what says a
+   thing can be pressed (`AMB-D-841`). The border is taken out of the padding rather than added to the
+   box, so a chip keeps the height it had beside the buttons on its row. */
+.chip {
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  font-size: var(--fs-xs); padding: 0 calc(var(--s-2) - 1px); border-radius: var(--r-sm);
+  background: var(--c-sunken); border: 1px solid var(--c-rule);
+  color: var(--c-text-muted); white-space: nowrap;
+}
+/* The name of the thing a row is about — a project, a device, a plugin. Written, not boxed, and a
+   step up from the words around it so the row still starts with what it names. */
+.rowname { font-size: var(--fs-md); font-weight: var(--fw-medium); }
 /* The chip for a premise that holds a reserve back (ready===false). It carries the shape alone: which
    step it takes is decided per premise where it is drawn (`atoms.tsx`), an unfinished blocker being a
    stop and a start day still ahead a heed. It stays clear of the human-declared status=blocked and its
    --c-blocked, which is the heed step in the status range — the two must not be confused, and what
    keeps them apart is that a premise nobody can pass is drawn one step above it. */
 .chip--block { white-space: nowrap; cursor: default; }
-.chip--official { background: var(--c-accent); color: #fff; }
+.chip--official { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-on-accent); }
+/* A status said as a filled chip, the fill naming which status it is (`statusColor`, kept beside the
+   two places that draw it). White on a colour, so it reads as a stamp on the title rather than as one
+   more word after it, and rounder than the chips it can sit beside for the same reason. The white is
+   plain rather than `--c-on-accent`: that one flips with the theme, and these fills do not — they are
+   the same three colours in both, so what reads on them is the same in both. */
+.chip--status { border-radius: 10px; border-color: transparent; color: #fff; white-space: nowrap; }
 /* The index's recommendation, which sits beside the trust badge rather than on its ladder. Outlined
    in the accent instead of filled with it, so the two read as different kinds of claim at a glance
    and the solid one stays the rarer, stronger of the pair. */
-/* The border is taken out of the padding rather than added to the box: this chip sits directly beside
-   the filled trust badge, which has no border, and a badge one pixel taller on each side reads as a
-   mistake rather than as a distinction. */
-.chip--featured {
-  color: var(--c-accent);
-  border: 1px solid var(--c-accent);
-  background: transparent;
-  padding: 0 calc(var(--s-2) - 1px);
-}
+.chip--featured { color: var(--c-accent); border-color: var(--c-accent); background: transparent; }
 /* A chip that reports a state the user did not choose and would want to act on — an installed plugin
    this build cannot speak to, which is handed no event however its switch stands (`AMB-D-359`). The
    heed step, not the stop one: nothing is broken, it simply does not fire. */
-.chip--heed { color: var(--c-heed); border: 1px solid var(--c-heed); background: transparent; }
+.chip--heed { color: var(--c-heed); border-color: var(--c-heed); background: transparent; }
 /* The value a card carries on an axis its owner put on the card (`AMB-D-650`). Muted, because it states
    what the task is and not that anything is wrong with it — the chips it shares the card with report
    trouble, and a classification must not be read as one of those. */
@@ -376,8 +405,9 @@ body.is-dragging { user-select: none; }
    the select that offers what is not carried yet, wrapping onto a second line where the row runs out
    rather than pushing the field wider. */
 .dimchips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); }
-/* The cross that takes one value off. It sits inside the chip, so it drops the button defaults the way
-   .chip--link does and turns accent on hover to show it is the part that can be pressed. */
+/* The cross that takes one value off. It sits inside the chip, so it drops the button's own fill, border
+   and padding and turns accent on hover to show it is the part that can be pressed — the chip around it
+   is the box, and a second one inside would read as a control nested in a control. */
 .chip__x {
   border: 0; background: transparent; padding: 0 0 0 var(--s-1); margin: 0;
   color: inherit; font: inherit; line-height: 1; cursor: pointer;
@@ -385,82 +415,126 @@ body.is-dragging { user-select: none; }
 .chip__x:hover { color: var(--c-accent); }
 
 /* The plugin market's catalog panel: one row per registered catalog, plus the row that adds one. */
-.catsrc { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-sunken); }
+.catsrc { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); background: var(--c-sunken); }
 .catsrc__row { display: flex; align-items: center; gap: var(--s-2); }
 .catsrc__url { font-size: var(--fs-xs); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .catsrc__name { font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12em; }
+/* Why adding or dropping a source did not go through, said under the row that asked for it. The heed
+   step: the catalog the user already has is untouched, so nothing is broken — the ask simply did not
+   land. */
+.catsrc__err { font-size: var(--fs-xs); color: var(--c-heed); }
 /* What registering pins, while the user decides (`AMB-D-389`). Set apart from the rows above it,
    because it is a question and they are a list. */
-.catsrc__consent { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface); }
+.catsrc__consent { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2); border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-surface); }
 /* The fingerprint is what is being trusted, so it is read character by character: monospace, and big
    enough to compare against what the publisher states. */
-.catsrc__fp strong { font-family: var(--font-mono); font-size: var(--fs-sm); letter-spacing: 0.04em; user-select: text; }
+.catsrc__fp strong { font-family: var(--font-mono); font-size: var(--fs-md); letter-spacing: 0.04em; user-select: text; }
 
 /* A market row is the way into the detail, so it says so on hover — the click is what costs a request
    to GitHub (`AMB-D-347`), and a row that looked inert would hide that. */
+/* The name of an installed plugin, heading the crossings listed under it: a step up from the row's
+   own words, or "mail" and "slack" read as one more line of the list (`AMB-D-842`). */
+.plugname { font-size: var(--fs-body); font-weight: var(--fw-bold); }
+
 .plugcard { cursor: pointer; }
-.plugcard:hover { background: var(--c-surface-2); }
+.plugcard:hover { background: var(--c-hover); }
 
 /* The one plugin a user opened: the catalog's own fields, then what was fetched from GitHub for this
    entry alone. Taller than the other modals because a README is the bulk of it, and it scrolls
    inside itself rather than growing the page. */
-.plugdet { width: min(720px, 100%); max-height: 84vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
-.plugdet__head { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-3); }
-.plugdet__name { font-size: var(--fs-lg); }
+.plugdet { width: min(720px, 100%); max-height: 84vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
+.plugdet__head { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2); }
+.plugdet__name { font-size: var(--fs-xl); }
 .plugdet__desc { margin-bottom: var(--s-2); }
 .plugdet__meta { display: flex; gap: var(--s-2); flex-wrap: wrap; font-size: var(--fs-xs); }
 /* What the catalog's detail document says installing would mean (`AMB-D-385`). Set off from the entry's
    own lines above it by a rule, because it is a different document answering a different question. */
-.plugdet__wants { border-top: 1px solid var(--c-border); margin-top: var(--s-3); padding-top: var(--s-3); display: flex; flex-direction: column; gap: var(--s-1); }
-.plugdet__figures { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; margin: var(--s-3) 0; font-size: var(--fs-sm); }
+.plugdet__wants { border-top: 1px solid var(--c-rule); margin-top: var(--s-2); padding-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-1); }
+.plugdet__figures { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin: var(--s-2) 0; font-size: var(--fs-md); }
 .plugdet__note { color: var(--c-heed); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
 /* Install, then enable — the two acts, on one line, wrapping rather than pushing the README down. */
-.plugdet__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.plugdet__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-2); }
 /* One plugin's switch, wherever it is drawn — the market's detail and the installed list share the
    control, so they share its shape. Same row rules as the actions above it. */
-.pluggate { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.pluggate { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-2); }
+/* The row reads a step below the page, and the picker on it follows the row rather than the base
+   rule's inherited page font. */
+.pluggate select { font-size: var(--fs-xs); }
 .pluggate .pluggate { margin-bottom: 0; }
 /* One project × plugin crossing (`AMB-D-447`): its line, and the settings it opens underneath. Ruled off
    from the next crossing, since two rows of chips and buttons otherwise read as one. */
-.plugcross { border-left: 2px solid var(--c-border); padding-left: var(--s-3); margin-bottom: var(--s-2); }
+.plugcross { border-left: 2px solid var(--c-rule); padding: var(--s-1) var(--s-2); margin-bottom: var(--s-2); }
+/* A crossing the plugin fires at: the accent down its left edge and a ground under the whole row, so
+   which projects are on is read by running the eye down the list rather than by finding the word on
+   each line. The word stays where it was — a colour is not a label, and the row still has to say what
+   it is to anyone the colour does not reach. */
+.plugcross--on { border-left-color: var(--c-accent); background: var(--c-sunken); }
+/* Every crossing draws the same four columns — the project, what its settings amount to, the switch,
+   and the way into the form — so the switch stands in one place down the list however long a name
+   runs. The width left over is a column of its own at the end rather than space handed to the states,
+   which would push the controls to the far edge of a wide window and away from the row they act on.
+   Only the crossings: the other rows that share `.pluggate` are one-off lines of controls. */
+.plugcross > .pluggate {
+  display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 12rem) auto auto 1fr;
+  align-items: center; column-gap: var(--s-2); row-gap: var(--s-1);
+}
+/* What the row says under itself — a refusal, or the events a disable dropped — runs the whole width. */
+.plugcross > .pluggate > .pluggate__note { grid-column: 1 / -1; }
+/* The chips of the states column, held as one cell so an absent chip does not move the columns. */
+.pluggate__states { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .pluggate__note { flex-basis: 100%; color: var(--c-heed); font-size: var(--fs-xs); }
 /* The settings a plugin's author declared (`AMB-D-356`), drawn as a form amenbo generates. Set inside a
    frame of its own: it is a place to type, not another control on the row's line. */
-.plugcfg { flex-basis: 100%; border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-bg); padding: var(--s-3); margin-bottom: var(--s-3); font-size: var(--fs-sm); }
-.plugcfg__field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-3); align-items: flex-start; }
-.plugcfg__field input { width: 100%; }
-.plugcfg__label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
-/* A field whose author declared candidates: one row per candidate, each box only as wide as a box (the
-   rule above stretches a text input to the field's width, which would swallow a checkbox). */
+.plugcfg { flex-basis: 100%; border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-bg); padding: var(--s-2); margin-bottom: var(--s-2); font-size: var(--fs-md); }
+/* One setting, ruled off from the next: the button that clears a value sits under the box it clears,
+   and without a line under the pair it reads as belonging to the label below it instead. */
+.plugcfg__field {
+  display: flex; flex-direction: column; gap: var(--s-1); align-items: flex-start;
+  border-bottom: 1px solid var(--c-rule); padding-bottom: var(--s-2); margin-bottom: var(--s-2);
+}
+/* The last one has nothing to be told apart from: the operations below carry a rule of their own. */
+.plugcfg__field:last-child, .plugcfg__field:has(+ .plugcfg__acts) { border-bottom: 0; }
+/* A box a value is typed into takes the form width and stops there (`AMB-D-842`) — unless the author's
+   own default or example says the value is a short one, and then it is only as wide as that: a port
+   number in a box the width of a token reads as a box waiting for a token. */
+.plugcfg__field input { width: 100%; max-width: var(--measure-form); }
+.plugcfg__field input.plugcfg__short { width: auto; }
+/* The row a field's caption is: the word, and the chips that qualify it. The type is `.fieldlabel`'s. */
+.plugcfg__label { display: flex; align-items: center; gap: var(--s-2); }
+/* A field whose author declared candidates: one row per candidate, each box only as wide as a box.
+   The rule above stretches every input in the field to the field's width, and a tick box stretched
+   that far is a bar with a tick at one end, so this hands it back the size a tick box has. */
 .plugcfg__choices { display: flex; flex-direction: column; gap: var(--s-1); }
 .plugcfg__choice { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
-.plugcfg__choice input { width: auto; }
+.plugcfg__choice input { width: var(--s-4); }
 .plugcfg__note { font-size: var(--fs-xs); }
-/* The author's paragraph under an input (`AMB-D-656`). Their line breaks are kept — it is a body, and
-   the only shape it has is the one they typed — and nothing in it is drawn as markup or as a link. */
-.plugcfg__help { font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The author's paragraph under an input (`AMB-D-656`), drawn as the quiet line every screen draws
+   (`.hint`) and adding only what a body somebody else typed needs. Their line breaks are kept — it is a
+   body, and the only shape it has is the one they wrote — and nothing in it is drawn as markup or as a
+   link. */
+.plugcfg__help { max-width: var(--measure-prose); white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A field whose value the plugin writes, standing where its input would (`AMB-D-656`). */
-.plugcfg__fixed { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.plugcfg__fixed { font-size: var(--fs-md); overflow-wrap: anywhere; }
 /* The operations the author declared (`AMB-D-664`), under the fields they act on and ruled off from them:
    these run somebody else's code, where everything above only writes a value down. */
-.plugcfg__acts { border-top: 1px solid var(--c-border); margin-top: var(--s-3); padding-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-2); }
+.plugcfg__acts { border-top: 1px solid var(--c-rule); margin-top: var(--s-2); padding-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-2); }
 .plugcfg__act { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); }
 /* What one press asks for and nothing keeps — indented under its own button, so the boxes read as part of
    the press rather than as more settings. */
-.plugcfg__ask { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); width: 100%; padding-left: var(--s-3); }
+.plugcfg__ask { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); width: 100%; padding-left: var(--s-2); }
 /* The pair that closes the ask box. Its own row, because the box stacks its boxes in a column and two
    buttons one above the other read as two separate steps rather than a choice between them. */
 .plugcfg__askacts { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-1); }
 /* What a plugin's author asked to have drawn (`AMB-D-727`) — from its manifest, between the fields, or
    from a run that has just answered. A column of its own so a `heading` can break one up, and every string
    in it is drawn as the plain text it is: no markup, no link, nothing an author's line can turn into. */
-.plugshow { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); width: 100%; margin-bottom: var(--s-3); }
+.plugshow { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); width: 100%; margin-bottom: var(--s-2); }
 .plugshow__text { font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
-.plugshow__heading { font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--c-text-muted); }
+.plugshow__heading { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--c-text-muted); }
 /* The one part that is meant to be noticed — a caution, an expiry — so it takes the same surface the
    form's own warnings do rather than a colour of the author's choosing. */
 .plugshow__note { font-size: var(--fs-xs); border-left: 2px solid var(--c-accent); padding-left: var(--s-2); overflow-wrap: anywhere; }
-.plugshow__list { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-xs); margin: 0; padding-left: var(--s-4); }
+.plugshow__list { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-xs); margin: 0; padding-left: var(--s-3); }
 /* A string nobody should have to retype, with its button on the same line. The string is monospaced —
    these are addresses and keys, where a run of characters has to be readable one at a time. */
 .plugshow__copy { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
@@ -469,8 +543,8 @@ body.is-dragging { user-select: none; }
    background is one many scanners will not take. Sized off the form's own type so it grows with it. */
 .plugshow__qr { width: 12rem; max-width: 100%; height: auto; border-radius: var(--r-sm); }
 
-.plugdet__readme { border-top: 1px solid var(--c-border); padding-top: var(--s-3); font-size: var(--fs-sm); overflow-wrap: anywhere; }
-.plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-4); padding-top: var(--s-2); font-size: var(--fs-xs); }
+.plugdet__readme { border-top: 1px solid var(--c-rule); padding-top: var(--s-2); font-size: var(--fs-md); overflow-wrap: anywhere; }
+.plugdet__foot { border-top: 1px solid var(--c-rule); margin-top: var(--s-3); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from
    --block (why anyone cannot start it) — this is what changed since *you* took it — so it speaks through
    its own bell mark. Like --block it carries the shape alone and takes its step where it is drawn:
@@ -486,14 +560,26 @@ body.is-dragging { user-select: none; }
 .chip--blockglyph { flex: none; cursor: default; margin-right: 2px; }
 /* ---------- detail pane ---------- */
 .detail { display: flex; flex-direction: column; }
-.detail__tabs { display: flex; gap: var(--s-1); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--c-border); }
-.detail__tab { border: none; background: none; padding: var(--s-1) var(--s-3); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
-.detail__tab--active { background: var(--c-surface-sunken); color: var(--c-text); font-weight: var(--fw-medium); }
-.detail__body { padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-4); }
-.detail__title { font-size: var(--fs-xl); font-weight: var(--fw-bold); }
+.detail__tabs { display: flex; gap: var(--s-1); padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--c-rule); }
+.detail__tab { border: none; background: none; padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
+.detail__tab--active { background: var(--c-sunken); color: var(--c-text); font-weight: var(--fw-medium); }
+.detail__body { padding: var(--s-3); display: flex; flex-direction: column; gap: var(--s-3); }
+/* The line a detail pane opens with: a ref, the title, what state it is in, and the way into
+   editing it. Laid out here rather than at each pane, because a row of separate elements is what
+   both of them are — and JSX eats the whitespace between two of them on separate lines, so a row
+   that reads as a row on the page reads as one word without this. It wraps: a long title on a
+   narrow pane takes the chips down with it rather than pushing them off the edge. */
+.detail__title {
+  font-size: var(--fs-xl); font-weight: var(--fw-bold);
+  display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap;
+}
 .detail__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.detail__field { display: flex; gap: var(--s-3); font-size: var(--fs-md); align-items: baseline; }
-.detail__flabel { width: 64px; flex: none; color: var(--c-text-faint); font-size: var(--fs-sm); }
+.detail__field { display: flex; gap: var(--s-2); font-size: var(--fs-md); align-items: baseline; }
+/* The label column is fixed so the values line up down the pane, and it is given in `em` so the
+   width follows the step rather than a pixel count somebody has to remember to raise with it: six
+   of them is the six-character Japanese word for project, the longest label this pane puts here. A
+   language whose word runs longer wraps, which it already did at the 64px this replaces. */
+.detail__flabel { width: 6em; flex: none; color: var(--c-text-muted); font-size: var(--fs-md); }
 /* The pane a task is being worked in: the way back from the ledger to the terminal, drawn as a link
    rather than a control because what it does is go somewhere. */
 .detail__pane {
@@ -502,53 +588,61 @@ body.is-dragging { user-select: none; }
   color: var(--c-accent-text); font-size: inherit; text-align: left;
 }
 .detail__pane:hover { text-decoration: underline; }
-.detail__sep { height: 1px; background: var(--c-border); }
-.detail__section-h { font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--c-text-muted); }
+.detail__sep { height: 1px; background: var(--c-rule); }
+.detail__section-h { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--c-text-muted); }
 
 /* The attachment view: a drag-and-drop target plus a preview chosen by mime type. */
-.attach__drop { margin-top: var(--s-2); border: 1px dashed var(--c-border); border-radius: var(--r-sm); padding: var(--s-2); }
+.attach__drop { margin-top: var(--s-2); border: 1px dashed var(--c-edge); border-radius: var(--r-sm); padding: var(--s-2); }
 .attach__drop--active { border-color: var(--c-accent); background: var(--c-accent-weak); }
 /* The space-saving attachment right under a comment. Quieter padding and border than a
    body attachment, so it reads as nested under the comment it belongs to. */
 .attach__drop--compact { margin-top: var(--s-1); padding: var(--s-1); }
 .attach__drop--compact .attach__list { margin-bottom: var(--s-1); }
 .attach__compactadd { font-size: var(--fs-xs); }
-.attach__drophint { font-size: var(--fs-sm); padding: var(--s-2); text-align: center; }
-.attach__list { display: flex; flex-direction: column; gap: var(--s-3); }
-.attach__item { border: 1px solid var(--c-border); border-radius: var(--r-sm); padding: var(--s-2); }
+.attach__drophint { font-size: var(--fs-md); padding: var(--s-2); text-align: center; }
+.attach__list { display: flex; flex-direction: column; gap: var(--s-2); }
+.attach__item { border: 1px solid var(--c-rule); border-radius: var(--r-sm); padding: var(--s-2); }
 .attach__head { display: flex; align-items: center; gap: var(--s-2); }
-.attach__name { font-size: var(--fs-sm); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
-.attach__meta { font-size: var(--fs-2xs); flex: none; }
+.attach__name { font-size: var(--fs-md); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
+.attach__meta { font-size: var(--fs-xs); flex: none; }
 .attach__rm { flex: none; }
 .attach__dl { flex: none; }
 .attach__img { display: block; max-width: 100%; max-height: 360px; margin-top: var(--s-2); border-radius: var(--r-sm); object-fit: contain; }
 .attach__audio { display: block; width: 100%; margin-top: var(--s-2); }
 .attach__video { display: block; max-width: 100%; max-height: 360px; margin-top: var(--s-2); border-radius: var(--r-sm); }
 .attach__pdf { display: block; width: 100%; height: 480px; margin-top: var(--s-2); border: none; border-radius: var(--r-sm); }
-.attach__text { max-height: 320px; overflow: auto; margin-top: var(--s-2); font-size: var(--fs-sm); }
-.attach__pre { white-space: pre-wrap; word-break: break-word; background: var(--c-surface-2); padding: var(--s-2); border-radius: var(--r-sm); }
+.attach__text { max-height: 320px; overflow: auto; margin-top: var(--s-2); font-size: var(--fs-md); }
+.attach__pre { white-space: pre-wrap; word-break: break-word; background: var(--c-sunken); padding: var(--s-2); border-radius: var(--r-sm); }
 .attach__csvwrap { max-height: 320px; overflow: auto; margin-top: var(--s-2); }
-.attach__csv { border-collapse: collapse; font-size: var(--fs-2xs); }
-.attach__csv th, .attach__csv td { border: 1px solid var(--c-border); padding: 2px 6px; text-align: left; white-space: nowrap; }
-.attach__csv th { background: var(--c-surface-2); position: sticky; top: 0; }
-.attach__missing, .attach__unsupported, .attach__loading { margin-top: var(--s-2); font-size: var(--fs-sm); }
-.attach__url { margin-top: var(--s-1); font-size: var(--fs-sm); word-break: break-all; }
+.attach__csv { border-collapse: collapse; font-size: var(--fs-xs); }
+.attach__csv th, .attach__csv td { border: 1px solid var(--c-rule); padding: 2px 6px; text-align: left; white-space: nowrap; }
+.attach__csv th { background: var(--c-sunken); position: sticky; top: 0; }
+.attach__missing, .attach__unsupported, .attach__loading { margin-top: var(--s-2); font-size: var(--fs-md); }
+.attach__url { margin-top: var(--s-1); font-size: var(--fs-md); word-break: break-all; }
 .commits { display: flex; flex-direction: column; gap: var(--s-2); }
 .commits__item { display: flex; align-items: center; gap: var(--s-2); }
 .commits__sha {
   flex: 1 1 auto; min-width: 0; font-family: var(--font-mono, monospace); font-size: var(--fs-xs);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  background: var(--c-surface-2); padding: 2px var(--s-2); border-radius: var(--r-sm);
+  background: var(--c-sunken); padding: 2px var(--s-2); border-radius: var(--r-sm);
 }
+/* The three systems every pressable thing in the app is drawn as (`AMB-D-841`): this outlined one
+   for the ordinary move, `--primary` for the one the screen is for, `--danger` for a delete. A
+   fourth look is not a variant to add here — a button that needs one is a button in the wrong
+   system. What is not pressable carries neither a fill nor an edge. */
 .btn {
-  border: 1px solid var(--c-border-strong); background: var(--c-surface);
-  border-radius: var(--r-sm); padding: var(--s-1) var(--s-3); font-size: var(--fs-sm);
+  border: 1px solid var(--c-edge); background: var(--c-surface);
+  border-radius: var(--r-sm); padding: var(--s-1) var(--s-2); font-size: var(--fs-md);
 }
+/* The pointer lifts the edge, which is the only thing the outlined one has to give. The two that
+   carry a colour answer in that colour instead, below. */
+.btn:hover:not(:disabled) { border-color: var(--c-accent); }
 /* A button that cannot be pressed says so before it is pressed: faded, and without the pointer
    the global button rule hands every button. This is the base every variant inherits — a variant
    that wants a different fade overrides it, but none may leave the disabled state invisible. */
 .btn:disabled { opacity: 0.5; cursor: default; }
-.btn--primary { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+.btn--primary { background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); }
+.btn--primary:hover:not(:disabled) { opacity: 0.9; }
 /* The assignee picker: a small custom dropdown that puts a FacetAvatar on each facet,
    which a native <select> cannot draw. The trigger keeps the .btn look and fits the
    avatar, the name and the caret on one line. */
@@ -558,7 +652,7 @@ body.is-dragging { user-select: none; }
 .apick__menu {
   position: absolute; top: calc(100% + 2px); left: 0; z-index: 20; margin: 0; padding: var(--s-1);
   list-style: none; min-width: 100%; background: var(--c-surface);
-  border: 1px solid var(--c-border-strong); border-radius: var(--r-sm);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
 }
 .apick__opt {
@@ -566,29 +660,29 @@ body.is-dragging { user-select: none; }
   padding: var(--s-1) var(--s-2); background: transparent; border: 0; border-radius: var(--r-sm);
   cursor: pointer; white-space: nowrap;
 }
-.apick__opt:hover { background: var(--c-surface-sunken); }
+.apick__opt:hover { background: var(--c-hover); }
 /* A menu whose candidate list can grow long (the target picker for a decision-to-decision
    edge). It scrolls inside itself rather than stretching with the count. */
 .apick__menu--scroll { max-height: 240px; overflow-y: auto; }
 /* The button for a destructive operation (delete): a restrained red outline that fills in
    on hover. */
 .btn--danger { color: var(--c-stop); border-color: var(--c-stop); background: transparent; }
-.btn--danger:hover:not(:disabled) { background: var(--c-stop); color: #fff; }
-.detail__danger { margin-top: var(--s-3); display: flex; justify-content: flex-end; }
-.notes { background: var(--c-surface-sunken); border-radius: var(--r-md); padding: var(--s-4); font-size: var(--fs-body); line-height: 1.7; white-space: pre-wrap; max-width: var(--measure-prose); }
+.btn--danger:hover:not(:disabled) { background: var(--c-stop); color: var(--c-on-stop); border-color: var(--c-stop); }
+.detail__danger { margin-top: var(--s-2); display: flex; justify-content: flex-end; }
+.notes { background: var(--c-sunken); border-radius: var(--r-md); padding: var(--s-3); font-size: var(--fs-body); line-height: 1.7; white-space: pre-wrap; max-width: var(--measure-prose); }
 /* Notes rendered as Markdown are a run of block elements, so pre-wrap comes back off (this
    is the react-markdown path). */
 .notes--md { white-space: normal; cursor: text; }
-.meta { font-size: var(--fs-xs); color: var(--c-text-faint); }
+.meta { font-size: var(--fs-xs); color: var(--c-text-muted); }
 
 /* ---------- activity ---------- */
 .feed { display: flex; flex-direction: column; }
 /* Virtual scrolling for history: it claims the remaining height inside .main and scrolls
    only within itself, which is what windowing rests on. */
 .feed--virtual { flex: 1; min-height: 0; overflow-y: auto; }
-.feed__daygroup { padding: var(--s-3) var(--s-5) 0; font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-faint); }
-.feed__item { display: flex; gap: var(--s-3); padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); align-items: flex-start; }
-.feed__item:hover { background: var(--c-surface-2); }
+.feed__daygroup { padding: var(--s-2) var(--s-4) 0; font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-muted); }
+.feed__item { display: flex; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); align-items: flex-start; }
+.feed__item:hover { background: var(--c-hover); }
 .feed__body { flex: 1; min-width: 0; }
 .feed__line { font-size: var(--fs-md); line-height: 1.6; }
 /* The destination of an entry. Only a row that can be pressed carries the link colour.
@@ -597,20 +691,15 @@ body.is-dragging { user-select: none; }
    the unpressable row looks like a link and the pressable one looks plain. */
 .feed__target { font-size: var(--fs-xs); color: var(--c-accent-text); border: none; background: none; }
 button.feed__target:hover { color: var(--c-accent); }
-.feed__target--gone { color: var(--c-text-faint); }
-.feed__meta { font-size: var(--fs-xs); color: var(--c-text-faint); display: flex; gap: var(--s-3); margin-top: 2px; }
-.feed__action { font-size: var(--fs-xs); color: var(--c-text-faint); border: none; background: none; }
-/* Only a pressable one turns accent, and a disabled one fades: this class is the borderless
-   sibling of .btn and carries the same rule, since it is disabled in as many places. */
-.feed__action:hover:not(:disabled) { color: var(--c-accent); }
-.feed__action:disabled { opacity: 0.5; cursor: default; }
+.feed__target--gone { color: var(--c-text-muted); }
+.feed__meta { font-size: var(--fs-xs); color: var(--c-text-muted); display: flex; gap: var(--s-2); margin-top: 2px; }
 
 /* ---------- search (where a word is written) ---------- */
 /* Every control on this row keeps its size, and the note — the one thing on the row nobody presses —
    is what gives way first. The wrapping itself is the toolbar's own (above). */
 .board__toolbar--search .btn { flex: none; }
 .srch__input { flex: 1 1 220px; min-width: 140px; max-width: 320px; margin: 0; font-size: var(--fs-md); }
-.srch__filter { flex: 1 1 140px; min-width: 100px; max-width: 200px; margin: 0; font-size: var(--fs-sm); font-family: var(--font-mono); }
+.srch__filter { flex: 1 1 140px; min-width: 100px; max-width: 200px; margin: 0; font-size: var(--fs-md); font-family: var(--font-mono); }
 .srch__label { flex: none; font-size: var(--fs-xs); }
 .srch__note { flex: 0 1 auto; min-width: 0; font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Two marks, not one: the side the record is on, then the face the words landed on. They sit together
@@ -633,7 +722,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The excerpt is a glance at where something is written, not the reading — it keeps the writer's own
    line breaks but never grows the row past two lines. */
 .srch__snippet {
-  font-size: var(--fs-sm); color: var(--c-text-muted); margin-top: 2px;
+  font-size: var(--fs-md); color: var(--c-text-muted); margin-top: 2px;
   white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
 }
 /* Where the words landed. The excerpt is muted on purpose, so the run they are on is lifted back to the
@@ -644,19 +733,19 @@ button.feed__target:hover { color: var(--c-accent); }
   background: var(--c-accent-weak); color: var(--c-text);
   border-radius: 2px; padding: 0 1px;
 }
-.srch__error { color: var(--c-stop); font-size: var(--fs-sm); }
+.srch__error { color: var(--c-stop); font-size: var(--fs-md); }
 
 /* ---------- empty / placeholder ---------- */
-.placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-3); color: var(--c-text-faint); }
+.placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-2); color: var(--c-text-muted); }
 
 /* ---------- list (smart views) ---------- */
 .list { display: flex; flex-direction: column; }
 .row {
-  display: flex; align-items: center; gap: var(--s-3);
+  display: flex; align-items: center; gap: var(--s-2);
   width: 100%; text-align: left; background: none; border: none;
-  padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border);
+  padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule);
 }
-.row:hover { background: var(--c-surface-2); }
+.row:hover { background: var(--c-hover); }
 .row--selected { background: var(--c-accent-weak); }
 /* The inbox's unread indicator. It takes a fixed-width slot at the head of the row, so the
    row does not shift as the dot lights or clears, and only lights while unread. */
@@ -672,7 +761,7 @@ button.feed__target:hover { color: var(--c-accent); }
    Truncating keeps the height constant whatever the column width, and overflow:hidden
    handles the horizontal spill. */
 .row__title { font-size: var(--fs-md); font-weight: var(--fw-medium); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row__title--closed { color: var(--c-text-faint); text-decoration: line-through; }
+.row__title--closed { color: var(--c-text-muted); text-decoration: line-through; }
 .row__spacer { flex: 1; }
 /* The inbox row's actions (mark read / archive / restore). They stay visible at all times:
    showing them only on hover leaves them undiscoverable, and on a selected row, once the
@@ -681,30 +770,24 @@ button.feed__target:hover { color: var(--c-accent); }
    split by colour — read takes the accent, archive stays neutral — keeping the two
    concepts apart. */
 .row__actions { flex: none; display: inline-flex; align-items: center; gap: var(--s-2); }
-.row__action {
-  background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-sm); cursor: pointer;
-  padding: 2px var(--s-2); font-size: var(--fs-sm); line-height: 1.4; white-space: nowrap;
-  color: var(--c-text-muted);
-}
-/* Mark read: leans on the accent — a forward move that clears the mark while the item is
-   still untouched. */
-.row__action--read:hover, .row__action--read:focus-visible { color: var(--c-accent); border-color: var(--c-accent); }
-/* Archive / restore: neutral — tidying that moves an item out of the inbox or brings it
-   back, not a delete. */
-.row__action--dismiss:hover, .row__action--dismiss:focus-visible { color: var(--c-text); border-color: var(--c-text-muted); }
 
 /* ---------- settings ---------- */
-.settings { padding: var(--s-5); max-width: 720px; display: flex; flex-direction: column; gap: var(--s-5); }
-.settings__section { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); padding: var(--s-4); }
-.settings__h { font-weight: var(--fw-bold); margin-bottom: var(--s-3); }
+.settings { padding: var(--s-4); max-width: 720px; display: flex; flex-direction: column; gap: var(--s-4); }
+.settings__section { background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); padding: var(--s-3); }
+.settings__h { font-weight: var(--fw-bold); margin-bottom: var(--s-2); }
 .settings__body { display: flex; flex-direction: column; gap: var(--s-2); }
 /* A section body holding a form rather than rows of fact: its own reading width, and the room between
    fields that filling one in wants. It wore the creation screen's block for this, which is why that
    screen's padding could not be touched without moving settings — the two look alike because a form
    looks like a form, not because either is the other's. */
-.settings__form { padding: var(--s-5); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-5); }
-.settings__row { display: flex; gap: var(--s-4); font-size: var(--fs-md); }
+.settings__form { padding: var(--s-4); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-4); }
+.settings__row { display: flex; gap: var(--s-3); font-size: var(--fs-md); }
 .settings__k { width: 220px; flex: none; color: var(--c-text-muted); }
+/* Fine print inside a settings row — the name under an avatar, a path, what doctor found, the note
+   after a switch. It carries the size alone, because what colours these is never the same thing: the
+   step class on a doctor line, the tick on a DoneNote, the page's own colour on the rest. `.meta` and
+   `.hint` would each overrule that with muted. */
+.settings__fine { font-size: var(--fs-xs); }
 /* Profile avatar preview: a 48px circular base (registered image or identicon). */
 .avatar-preview {
   display: inline-flex; width: 48px; height: 48px; flex: none;
@@ -722,11 +805,12 @@ button.feed__target:hover { color: var(--c-accent); }
   border-radius: var(--r-md); overflow: hidden;
 }
 .iconpick__img { display: block; width: 100%; height: 100%; object-fit: cover; }
-/* On the project's own colour, which is chosen for a background — the same pairing the surfaces draw. */
-.iconpick__letter { color: #fff; font-size: var(--fs-lg); font-weight: 600; }
+/* On the project's own colour. The ink is not written here: the ground is a value the human picks, so no token
+   can hold the pair and it is worked out from the colour at render instead (`core/ink.ts`). */
+.iconpick__letter { font-size: var(--fs-xl); font-weight: 600; }
 
 /* ---------- new project (creation screen) ---------- */
-.newproj { padding: var(--s-5); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-5); }
+.newproj { padding: var(--s-4); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-4); }
 
 /* ---------- new-project completion step ---------- */
 .newproj__capability { display: flex; flex-direction: column; gap: var(--s-2); }
@@ -735,18 +819,25 @@ button.feed__target:hover { color: var(--c-accent); }
 
 /* ---------- the first loop (ask an AI, see it land on the board) ---------- */
 .firstloop {
-  display: flex; flex-direction: column; gap: var(--s-4);
-  padding: var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md);
+  display: flex; flex-direction: column; gap: var(--s-3);
+  padding: var(--s-3); border: 1px solid var(--c-rule); border-radius: var(--r-md);
   background: var(--c-surface);
 }
 .firstloop__head { display: flex; flex-direction: column; gap: 2px; }
 .firstloop__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
-.firstloop__intro { font-size: var(--fs-sm); }
+.firstloop__intro { font-size: var(--fs-md); }
+.firstloop__step { display: flex; gap: var(--s-2); }
+.firstloop__num {
+  width: 24px; height: 24px; flex: none; border-radius: 50%;
+  background: var(--c-accent); color: var(--c-on-accent); font-size: var(--fs-md); font-weight: var(--fw-bold);
+  display: flex; align-items: center; justify-content: center;
+}
+.firstloop__stepbody { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
 .firstloop__steptitle { font-weight: var(--fw-bold); }
-.firstloop__stephint { font-size: var(--fs-sm); }
+.firstloop__stephint { font-size: var(--fs-md); }
 .firstloop__prompt {
-  margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
-  background: var(--c-surface-sunken); font-size: var(--fs-sm); line-height: 1.6;
+  margin: 0; padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
+  background: var(--c-sunken); font-size: var(--fs-md); line-height: 1.6;
 }
 .firstloop .btn { align-self: flex-start; }
 /* The way out to the reader's own terminal: closed it is one line, open it is that line with the
@@ -754,10 +845,16 @@ button.feed__target:hover { color: var(--c-accent); }
    belongs to the line that opened it, not to the loop's own list. */
 .firstloop__outside { display: flex; flex-direction: column; gap: var(--s-2); }
 .firstloop__end { display: flex; flex-direction: column; gap: 2px; }
+.firstloop__fallback { display: flex; flex-direction: column; gap: var(--s-2); }
+.firstloop__path {
+  margin: 0; padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
+  background: var(--c-sunken); font-family: var(--font-mono); font-size: var(--fs-md);
+  overflow-wrap: anywhere;
+}
 /* On a board the loop is the only thing on the surface, so it gets the surface's own margin and a
    width it can be read across (inside the creation screen the column already caps it). */
-.board__firstloop { padding: var(--s-5); max-width: 720px; }
-.firstloop__error { color: var(--c-stop); font-size: var(--fs-sm); }
+.board__firstloop { padding: var(--s-4); max-width: 720px; }
+.firstloop__error { color: var(--c-stop); font-size: var(--fs-md); }
 
 /* ---------- the standing rows ---------- */
 /* The box a standing row is drawn in: what is left to set up, said on the app's own surface with an
@@ -770,60 +867,63 @@ button.feed__target:hover { color: var(--c-accent); }
    Each says its own below. */
 .standingrow {
   display: flex; flex-direction: column; gap: var(--s-2);
-  padding: var(--s-4);
-  border: 1px solid var(--c-border); border-left: 3px solid var(--c-accent); border-radius: var(--r-md);
+  padding: var(--s-3);
+  border: 1px solid var(--c-rule); border-left: 3px solid var(--c-accent); border-radius: var(--r-md);
   background: var(--c-surface); max-width: 720px;
 }
 /* The folders whose AI is not started on amenbo, on the project's own screen: the board's surface
    margin, and nothing under it — what follows sets its own top. */
-.agenthookrow { margin: var(--s-4) var(--s-5) 0; }
+.agenthookrow { margin: var(--s-3) var(--s-4) 0; }
 /* The tick's offer, in the stack of bands. The bands butt against each other and against the top bar,
    so this one holds itself off all four sides rather than taking a surface's margin. */
-.tickbanner { margin: var(--s-3) var(--s-4); }
+.tickbanner { margin: var(--s-2) var(--s-3); }
 .tickbanner__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
-.tickbanner__what { font-size: var(--fs-sm); }
+.tickbanner__what { font-size: var(--fs-md); }
 .tickbanner__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .agenthookrow__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
-.agenthookrow__what { font-size: var(--fs-sm); }
-.agenthookrow__folders { font-size: var(--fs-sm); color: var(--c-text-muted); }
+.agenthookrow__what { font-size: var(--fs-md); }
+.agenthookrow__folders { font-size: var(--fs-md); color: var(--c-text-muted); }
 /* The folders waiting for this one text. Monospaced because they are paths, and scrolled rather than
    growing without bound — a project can be bound to many. */
 .agenthookrow__dirs {
-  margin: 0; padding-left: var(--s-5); max-height: 8em; overflow: auto;
+  margin: 0; padding-left: var(--s-4); max-height: 8em; overflow: auto;
   font-family: var(--font-mono); font-size: var(--fs-xs); overflow-wrap: anywhere;
 }
 /* The text the copy button hands over, shown rather than hidden behind it: it asks an AI of the reader's
    to edit a file of theirs, so it is read before it is handed on. Capped and scrolled in place. */
 .agenthookrow__request {
-  max-height: 11em; overflow: auto; margin: 0; padding: var(--s-2) var(--s-3);
-  border-radius: var(--r-sm); background: var(--c-surface-sunken);
+  max-height: 11em; overflow: auto; margin: 0; padding: var(--s-2) var(--s-2);
+  border-radius: var(--r-sm); background: var(--c-sunken);
   font-family: var(--font-mono); font-size: var(--fs-xs);
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.agenthookrow__pick { align-self: flex-start; padding: var(--s-1) var(--s-2); font-size: var(--fs-sm); }
+.agenthookrow__pick { align-self: flex-start; padding: var(--s-1) var(--s-2); font-size: var(--fs-md); }
 /* The always-open way to the request text on the project settings screen (`AMB-D-670`) — a column in the
    value half of a `settings__row`, reusing the row above's list and text blocks. `min-width: 0` is what
    holds it there: without it a flex item is as wide as its widest line, and the request would push the
    whole screen sideways instead of scrolling inside itself. */
 .harnessreq { display: flex; flex-direction: column; gap: var(--s-2); flex: 1; min-width: 0; }
-.harnessreq__pick { align-self: flex-start; padding: var(--s-1) var(--s-2); font-size: var(--fs-sm); }
+.harnessreq__pick { align-self: flex-start; padding: var(--s-1) var(--s-2); font-size: var(--fs-md); }
 /* The folded way in for an AI that cannot open a folder (`AMB-D-671`): a line on the project settings
    screen, and a block of its own rather than a share of that screen's. It is named apart from the MCP
    screen below (`AMB-D-690`) — a part standing inside another screen and the screen it points at are
    two things, and one name over both meant a rule written for either reached the other. `min-width: 0`
    for the reason `harnessreq` needs it: a path is one long word, and without it the row is as wide as the
-   longest one instead of scrolling inside itself. */
+   longest one instead of keeping it inside itself. */
 .mcpsetup { display: flex; flex-direction: column; gap: var(--s-2); flex: 1; min-width: 0; }
 .mcpsetup__toggle { align-self: flex-start; }
 
 /* ---------- connect via MCP (the screen) ---------- */
-.mcp__apps { display: flex; flex-direction: column; gap: var(--s-3); margin: 0; padding: 0; list-style: none; }
+.mcp__apps { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
 /* One app: its name, what it already holds, and the one move that changes it. The state and the folder
    sit on one line where there is room and wrap where there is not — the folder is the longer half and the
-   one that has to stay readable. */
+   one that has to stay readable. The row is told from the card by a rule and not by a sunken ground:
+   what it holds is a chip and a boxful of path, both of which are drawn on `--c-sunken` themselves, and
+   a mark the same colour as the thing under it is not a mark. */
 .mcp__app {
   display: flex; flex-direction: column; gap: var(--s-1);
-  padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--c-surface-sunken);
+  padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
+  border: 1px solid var(--c-rule); background: var(--c-surface);
 }
 /* The folded row, and the whole of what opens it. It reads as the row itself rather than as a control
    on it: no border, no fill, and the chevron alone off to the right saying there is more under it. */
@@ -832,79 +932,85 @@ button.feed__target:hover { color: var(--c-accent); }
   width: 100%; padding: 0; border: none; background: none; text-align: left;
 }
 .mcp__headtext { display: flex; flex-direction: column; gap: var(--s-1); flex: 1; min-width: 0; }
-.mcp__name { font-weight: var(--fw-bold); font-size: var(--fs-sm); }
-.mcp__state { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-size: var(--fs-sm); }
+.mcp__name { font-weight: var(--fw-bold); font-size: var(--fs-md); }
+.mcp__state { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: var(--fs-md); }
 .mcp__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 /* That a copy went through, said beside the buttons rather than inside one (`AMB-D-690`). It is drawn
    after them, so the space it takes when it appears is space nothing else was standing in — a button
    never moves out from under the pointer that has just pressed it. */
-.mcp__copied { font-size: var(--fs-sm); color: var(--c-text-muted); }
+.mcp__copied { font-size: var(--fs-md); color: var(--c-text-muted); }
 .mcp__saved { font-size: var(--fs-xs); overflow-wrap: anywhere; }
 /* Which projects a row may reach: a tick apiece, each with the folder that would be written into
-   the entry. The folder is the longer half, so a project wraps as a block rather than letting one
-   path push the column wide. */
+   the entry. */
 .mcp__pick { display: flex; flex-direction: column; gap: var(--s-1); }
-.mcp__project { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-size: var(--fs-sm); }
+/* Every project draws the same three columns — the tick, the name, the folder — so the folders begin at
+   one place down the list however long a name runs, which is the half a reader is actually comparing.
+   Laid out by each name's own length, as they were, no two paths started in the same place. The name
+   column is the crossings' 12rem (`.plugcross > .pluggate`): the two lists are read the same way. */
+.mcp__project {
+  display: grid; grid-template-columns: auto minmax(0, 12rem) minmax(0, 1fr);
+  align-items: center; column-gap: var(--s-2); font-size: var(--fs-md);
+}
+/* A name longer than its column wraps inside it rather than widening it. */
+.mcp__projname { min-width: 0; overflow-wrap: anywhere; }
 /* What an older amenbo left, set below the row it belongs to and marked down: it is something to
    take away rather than part of what this app is set up for. */
-.mcp__stale { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-sm); }
+.mcp__stale { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-md); }
 .mcp__staleRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
 /* The card with no rows in it, either way round: nothing to set up, or nothing read yet. Both are one
    muted line where the rows would be, so the wait does not read as the answer. */
-.mcp__empty, .mcp__loading { font-size: var(--fs-sm); color: var(--c-text-muted); }
+.mcp__empty, .mcp__loading { font-size: var(--fs-md); color: var(--c-text-muted); }
 /* Copy, no, close — in that order, and wrapping rather than shrinking, since the row is narrow enough for
    three buttons to meet the edge in a language that spells them out. */
 .agenthookrow__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.agenthookrow__error { font-size: var(--fs-sm); color: var(--c-stop); }
+.agenthookrow__error { font-size: var(--fs-md); color: var(--c-stop); }
 /* The board's warning band: the same shape as the wiring row above, marked on the heed step rather
    than the accent, because a project with no folder is short of something rather than offered something. */
 .boardwarn {
   display: flex; flex-direction: column; gap: var(--s-2);
-  margin: var(--s-4) var(--s-5) 0; padding: var(--s-4);
-  border: 1px solid var(--c-border); border-left: 3px solid var(--c-heed); border-radius: var(--r-md);
+  margin: var(--s-3) var(--s-4) 0; padding: var(--s-3);
+  border: 1px solid var(--c-rule); border-left: 3px solid var(--c-heed); border-radius: var(--r-md);
   background: var(--c-surface); max-width: 720px;
 }
 .boardwarn__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
-.boardwarn__what { font-size: var(--fs-sm); }
+.boardwarn__what { font-size: var(--fs-md); }
 .boardwarn__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 
 /* ---------- pager (list/smart-view windowing) ---------- */
-.pager { display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: var(--s-3); }
-.pager__info { font-size: var(--fs-sm); color: var(--c-text-muted); min-width: 12ch; text-align: center; }
+.pager { display: flex; align-items: center; justify-content: center; gap: var(--s-2); padding: var(--s-2); }
+.pager__info { font-size: var(--fs-md); color: var(--c-text-muted); min-width: 12ch; text-align: center; }
 
 /* ---------- onboarding ---------- */
-.onboard { padding: var(--s-7); max-width: 640px; margin: 0 auto; }
-.onboard__hero { text-align: center; margin-bottom: var(--s-7); }
-.onboard__hero h2 { margin: var(--s-3) 0 var(--s-2); }
-.onboard__steps { display: flex; flex-direction: column; gap: var(--s-4); }
-.onboard__step { display: flex; gap: var(--s-4); }
-.onboard__num { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--c-accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); }
+.onboard { padding: var(--s-6); max-width: 640px; margin: 0 auto; }
+.onboard__hero { text-align: center; margin-bottom: var(--s-6); }
+.onboard__hero h2 { margin: var(--s-2) 0 var(--s-2); }
+.onboard__steps { display: flex; flex-direction: column; gap: var(--s-3); }
+.onboard__step { display: flex; gap: var(--s-3); }
+.onboard__num { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--c-accent); color: var(--c-on-accent); display: flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); }
 .onboard__steptitle { font-weight: var(--fw-bold); margin-bottom: 2px; }
-.onboard__cmd, .onboard__step code { font-family: var(--font-mono); font-size: var(--fs-sm); background: var(--c-surface-sunken); border-radius: var(--r-sm); padding: 1px var(--s-2); }
+.onboard__cmd, .onboard__step code { font-family: var(--font-mono); font-size: var(--fs-md); background: var(--c-sunken); border-radius: var(--r-sm); padding: 1px var(--s-2); }
 .onboard__cmd { display: inline-block; margin-top: var(--s-2); color: var(--c-accent-text); }
 /* The empty state's primary actions (create / open). Each moves on inside the app. */
-.onboard__actions { display: flex; gap: var(--s-3); justify-content: center; margin-top: var(--s-5); flex-wrap: wrap; }
+.onboard__actions { display: flex; gap: var(--s-2); justify-content: center; margin-top: var(--s-4); flex-wrap: wrap; }
+/* A card in shape and an outlined button in colour: the ground, the edge and the fade a disabled
+   one takes all come from `.btn`, which these carry alongside this class. What is left here is the
+   layout — a card wide enough to hold a label over a hint. */
 .onboard__action {
-  display: flex; align-items: flex-start; gap: var(--s-3); text-align: left;
-  flex: 1 1 240px; max-width: 300px;
-  background: var(--c-surface); border: 1px solid var(--c-border-strong); border-radius: var(--r-md);
-  padding: var(--s-3); cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  display: flex; align-items: flex-start; gap: var(--s-2); text-align: left;
+  flex: 1 1 240px; max-width: 300px; border-radius: var(--r-md);
+  padding: var(--s-2); transition: border-color 0.15s, background 0.15s;
 }
-.onboard__action:hover { border-color: var(--c-accent); background: var(--c-surface-sunken); }
+.onboard__action:hover:not(:disabled) { border-color: var(--c-accent); background: var(--c-hover); }
 .onboard__action-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .onboard__action-label { font-weight: var(--fw-bold); display: flex; align-items: center; gap: var(--s-2); }
 .onboard__action-hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* The create card — the primary action, which moves to a screen inside the GUI. The accent
-   lifts it a little above the rest. */
-.onboard__action--primary { border-color: var(--c-accent); }
 .onboard__go { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-accent-text); margin-top: var(--s-2); }
 /* The open card once it is asking which project: the same card, now holding controls of its own, so it
    stops behaving like one big button (no pointer, no hover) and takes the width its select needs. */
 .onboard__action--open { cursor: default; flex-basis: 320px; max-width: 100%; }
-.onboard__action--open:hover { border-color: var(--c-border-strong); background: var(--c-surface); }
+.onboard__action--open:hover:not(:disabled) { border-color: var(--c-edge); background: var(--c-surface); }
 .onboard__action--open .onboard__action-body { flex: 1; gap: var(--s-2); }
 .onboard__field { display: flex; flex-direction: column; gap: var(--s-1); margin-top: var(--s-2); }
-.onboard__select { padding: var(--s-2); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); }
 .onboard__actionrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .onboard__error { color: var(--c-stop); font-size: var(--fs-xs); }
 /* The heading of the reference section. */
@@ -913,7 +1019,11 @@ button.feed__target:hover { color: var(--c-accent); }
 
 /* ---------- palette-derived shared bits ---------- */
 /* The search screen's input, styled as the palette's was. */
-.palette__input { width: 100%; border: none; border-bottom: 1px solid var(--c-border); padding: var(--s-4); font-size: var(--fs-lg); background: none; outline: none; }
+.palette__input {
+  width: 100%; max-width: none;
+  border: none; border-bottom: 1px solid var(--c-edge); border-radius: 0;
+  padding: var(--s-3); font-size: var(--fs-xl); background: none;
+}
 
 /* ---------- the shared modal chrome ---------- */
 /* `.modal__overlay` is the backdrop **every** modal wears, the feature blocks below included. It is
@@ -928,15 +1038,15 @@ button.feed__target:hover { color: var(--c-accent); }
 
    The pair carried the name `.setup__*` until the first-run setup it was written for went away,
    taking the definitions with it and leaving five screens wearing a name for a screen that had gone. */
-.modal__overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-5); }
+.modal__overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-4); }
 /* Over another modal rather than beside it: the rejection asks its question from the status control
    of a task the reader may have opened from one. */
 .modal__overlay--raised { z-index: 60; }
-.modal__card { width: min(440px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-6); }
+.modal__card { width: min(440px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 /* Wide enough for the migration report, whose paths and version pairs read badly wrapped. */
 .modal__card--wide { width: min(680px, 100%); max-height: 84vh; overflow-y: auto; }
-.modal__hero { text-align: center; margin-bottom: var(--s-5); }
-.modal__hero h2 { margin: var(--s-3) 0 var(--s-1); }
+.modal__hero { text-align: center; margin-bottom: var(--s-4); }
+.modal__hero h2 { margin: var(--s-2) 0 var(--s-1); }
 .modal__goose { font-size: var(--fs-display-lg); line-height: 1; }
 
 /* ---------- the lint hook consent modal (HookConsentModal) ---------- */
@@ -944,67 +1054,54 @@ button.feed__target:hover { color: var(--c-accent); }
    than a share of the hook consent's: the two happen to look alike, and a modal borrowing another
    feature's class names cannot be restyled without touching that feature. The backdrop is the one
    exception — it is `.modal__overlay` for all of them, which is what `outsideClose` reads. */
-.rejectask__modal { width: min(480px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
-.rejectask__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-2); }
-.rejectask__why { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-3); }
-.rejectask__input { width: 100%; box-sizing: border-box; resize: vertical; padding: var(--s-2); font: inherit; color: var(--c-text); background: var(--c-surface-2); border: 1px solid var(--c-border); border-radius: var(--r-md); margin-bottom: var(--s-3); }
-.rejectask__actions { display: flex; align-items: center; gap: var(--s-3); }
-.rejectask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); color: var(--c-text); cursor: pointer; }
-.rejectask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.rejectask__action:disabled { opacity: 0.5; cursor: default; }
+.rejectask__modal { width: min(480px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
+.rejectask__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
+.rejectask__why { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
+.rejectask__input { width: 100%; margin-bottom: var(--s-2); }
 
-.hookconsent__modal { width: min(520px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-6); }
-.hookconsent__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-3); }
-.hookconsent__why { margin-bottom: var(--s-3); }
-.hookconsent__where { font-size: var(--fs-xs); color: var(--c-text-muted); word-break: break-all; margin-bottom: var(--s-4); }
-.hookconsent__slots { margin-bottom: var(--s-4); }
+.hookconsent__modal { width: min(520px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
+.hookconsent__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
+.hookconsent__why { margin-bottom: var(--s-2); }
+.hookconsent__where { font-size: var(--fs-xs); color: var(--c-text-muted); word-break: break-all; margin-bottom: var(--s-3); }
+.hookconsent__slots { margin-bottom: var(--s-3); }
 .hookconsent__slotsTitle { font-weight: var(--fw-bold); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
-.hookconsent__slots ul { margin: 0; padding-left: var(--s-5); }
-.hookconsent__guidance { margin: var(--s-2) 0 0; padding: var(--s-2); background: var(--c-surface-2); border-radius: var(--r-md); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-all; }
-.hookconsent__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-3); }
-.hookconsent__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.hookconsent__action { padding: var(--s-3) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); cursor: pointer; }
-.hookconsent__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.hookconsent__action--never { color: var(--c-text-muted); }
-.hookconsent__action:disabled { opacity: 0.5; cursor: default; }
-.hookconsent__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-3); }
+.hookconsent__slots ul { margin: 0; padding-left: var(--s-4); }
+.hookconsent__guidance { margin: var(--s-2) 0 0; padding: var(--s-2); background: var(--c-sunken); border-radius: var(--r-md); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-all; }
+.hookconsent__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
+.hookconsent__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-2); }
 
 /* ---------- a usage nudge (NudgeHost and the views it puts) ---------- */
 /* An offer, not a gate: the same modal shape as the consent question, one size down, and its decline is
    the plain button rather than a muted one — nothing here is being asked permission for. */
-.nudge__modal { width: min(460px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
-.nudge__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-3); }
-.nudge__why { margin-bottom: var(--s-4); }
-.nudge__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-3); }
-.nudge__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.nudge__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); color: var(--c-text); cursor: pointer; }
-.nudge__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.nudge__action:disabled { opacity: 0.5; cursor: default; }
-.nudge__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-3); }
+.nudge__modal { width: min(460px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
+.nudge__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
+.nudge__why { margin-bottom: var(--s-3); }
+.nudge__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
+.nudge__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-2); }
 
 /* ---------- the classification management panel (DimensionManager) ---------- */
-.dimmgr { width: min(560px, 100%); max-height: 82vh; display: flex; flex-direction: column; gap: var(--s-4); }
+.dimmgr { width: min(560px, 100%); max-height: 82vh; display: flex; flex-direction: column; gap: var(--s-3); }
 .dimmgr__head { display: flex; align-items: center; justify-content: space-between; }
-.dimmgr__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); }
+.dimmgr__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); }
 .dimmgr__empty { margin: 0; }
-.dimmgr__list { display: flex; flex-direction: column; gap: var(--s-3); overflow-y: auto; }
-.dimmgr__dim { border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); }
+.dimmgr__list { display: flex; flex-direction: column; gap: var(--s-2); overflow-y: auto; }
+.dimmgr__dim { border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-sunken); padding: var(--s-2) var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); }
 /* The head carries the name and every flag the axis holds, so it wraps: the fourth toggle
    (required) is what took it past one line at this width, and without wrapping the delete
    button is the item that gets squeezed until its label breaks a character at a time. */
-.dimmgr__dimhead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+.dimmgr__dimhead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .dimmgr__name { flex: 1; min-width: 12ch; font-weight: var(--fw-bold); background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: inherit; }
-.dimmgr__notes { width: 100%; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-size: var(--fs-sm); }
+.dimmgr__notes { width: 100%; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-size: var(--fs-md); }
 /* The readable key beside a name (`AMB-D-735`). It is machine-facing text — lower-case ASCII, no spaces —
    so it is set in the mono face and kept quiet next to the name it belongs to. */
 .dimmgr__slug { width: 14ch; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
 .dimmgr__valslug { width: 12ch; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
-.dimmgr__name:hover, .dimmgr__notes:hover, .dimmgr__valname:hover, .dimmgr__slug:hover, .dimmgr__valslug:hover { border-color: var(--c-border); }
+.dimmgr__name:hover, .dimmgr__notes:hover, .dimmgr__valname:hover, .dimmgr__slug:hover, .dimmgr__valslug:hover { border-color: var(--c-edge); }
 .dimmgr__name:focus, .dimmgr__notes:focus, .dimmgr__valname:focus, .dimmgr__slug:focus, .dimmgr__valslug:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
 .dimmgr__values { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-left: var(--s-2); }
 .dimmgr__vlabel { font-size: var(--fs-xs); margin-right: var(--s-1); }
-.dimmgr__val { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--c-border); border-radius: 999px; padding: 1px var(--s-2); background: var(--c-surface); }
-.dimmgr__valname { background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-sm); width: 8ch; }
+.dimmgr__val { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--c-rule); border-radius: 999px; padding: 1px var(--s-2); background: var(--c-surface); }
+.dimmgr__valname { background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-md); width: 8ch; }
 /* Only ordered values go into a single vertical column. A cloud of chips wraps in two
    dimensions, so the up/down controls stop matching what is visually above and below, and
    the names truncate at 8ch beyond reading. One column shows the ordering as it is and
@@ -1023,82 +1120,85 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__val--closed .dimmgr__valname { text-decoration: line-through; text-decoration-color: var(--c-text-muted); }
 .dimmgr__period { display: inline-flex; align-items: center; gap: 2px; margin: 0 2px; font-size: var(--fs-xs); }
 .dimmgr__date { background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-size: var(--fs-xs); }
-.dimmgr__date:hover { border-color: var(--c-border); }
+.dimmgr__date:hover { border-color: var(--c-edge); }
 .dimmgr__date:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
-.dimmgr__open { background: transparent; border: 1px dashed var(--c-border); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
+.dimmgr__open { background: transparent; border: 1px dashed var(--c-edge); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
 .dimmgr__open:hover { border-color: var(--c-accent); color: var(--c-accent); }
-.dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: #fff; font-size: var(--fs-xs); }
-.dimmgr__danger { color: var(--c-stop); white-space: nowrap; }
+.dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: var(--c-on-accent); font-size: var(--fs-xs); }
 /* The removal that has to say where the tasks go first. It stands in the delete button's place inside
    the value's pill, so the row keeps its width and the question is asked where the press landed. */
 .dimmgr__reassign { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); }
-.dimmgr__reassignpick { max-width: 14ch; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-xs); }
+.dimmgr__reassignpick { max-width: 14ch; background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-xs); }
 .dimmgr__adddim { align-self: flex-start; }
 .dimmgr__ordered { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--c-text-muted); cursor: pointer; white-space: nowrap; }
 .dimmgr__reorder { display: inline-flex; gap: 1px; margin-right: 2px; }
-.dimmgr__movebtn { background: transparent; border: none; color: var(--c-text-muted); cursor: pointer; padding: 0 1px; line-height: 1; font-size: var(--fs-sm); }
+.dimmgr__movebtn { background: transparent; border: none; color: var(--c-text-muted); cursor: pointer; padding: 0 1px; line-height: 1; font-size: var(--fs-md); }
 .dimmgr__movebtn:hover:not(:disabled) { color: var(--c-accent); }
 .dimmgr__movebtn:disabled { opacity: 0.3; cursor: default; }
 
 /* ---------- calendar view ---------- */
-.cal { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-4) var(--s-5); gap: var(--s-3); overflow-y: auto; }
-.cal__head { display: flex; align-items: center; gap: var(--s-3); }
-.cal__month { font-size: var(--fs-lg); font-weight: var(--fw-bold); min-width: 9ch; }
+.cal { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-3) var(--s-4); gap: var(--s-2); overflow-y: auto; }
+.cal__head { display: flex; align-items: center; gap: var(--s-2); }
+.cal__month { font-size: var(--fs-xl); font-weight: var(--fw-bold); min-width: 9ch; }
 .cal__nav {
   width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid var(--c-border); border-radius: var(--r-sm); background: var(--c-surface);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm); background: var(--c-surface);
   color: var(--c-text-muted); cursor: pointer; line-height: 1;
 }
 .cal__nav:hover { color: var(--c-accent); border-color: var(--c-accent); }
 .cal__todaybtn {
-  margin-left: var(--s-2); font-size: var(--fs-xs); border: 1px solid var(--c-border);
-  background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-3); color: var(--c-text-muted); cursor: pointer;
+  margin-left: var(--s-2); font-size: var(--fs-xs); border: 1px solid var(--c-edge);
+  background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-2); color: var(--c-text-muted); cursor: pointer;
 }
 .cal__todaybtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
 .cal__weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s-1); }
-.cal__weekday { font-size: var(--fs-xs); color: var(--c-text-faint); text-align: center; padding: var(--s-1) 0; }
+.cal__weekday { font-size: var(--fs-xs); color: var(--c-text-muted); text-align: center; padding: var(--s-1) 0; }
 .cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s-1); }
 .cal__cell {
   min-height: 92px; display: flex; flex-direction: column; gap: 2px;
-  border: 1px solid var(--c-border); border-radius: var(--r-sm); background: var(--c-surface); padding: var(--s-1);
+  border: 1px solid var(--c-rule); border-radius: var(--r-sm); background: var(--c-surface); padding: var(--s-1);
 }
-.cal__cell--out { background: var(--c-surface-sunken); }
-.cal__cell--out .cal__date { color: var(--c-text-faint); }
+.cal__cell--out { background: var(--c-sunken); }
+.cal__cell--out .cal__date { color: var(--c-text-muted); }
 .cal__cell--today { border-color: var(--c-accent); box-shadow: 0 0 0 1px var(--c-accent); }
 .cal__date { font-size: var(--fs-xs); color: var(--c-text-muted); text-align: right; padding: 0 2px; }
 .cal__cell--today .cal__date { color: var(--c-accent); font-weight: var(--fw-bold); }
 .cal__chip {
   display: block; width: 100%; text-align: left; border: none; border-radius: var(--r-sm);
-  padding: 1px var(--s-2); font-size: var(--fs-2xs); line-height: 1.5; cursor: pointer;
+  padding: 1px var(--s-2); font-size: var(--fs-xs); line-height: 1.5; cursor: pointer;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  background: var(--c-surface-sunken); color: var(--c-text); border-left: 3px solid var(--c-text-faint);
+  background: var(--c-sunken); color: var(--c-text); border-left: 3px solid var(--c-text-faint);
 }
 .cal__chip--overdue { border-left-color: var(--c-due-overdue); }
 .cal__chip--today { border-left-color: var(--c-due-today); }
 .cal__chip--tomorrow { border-left-color: var(--c-due-tomorrow); }
 .cal__chip--future { border-left-color: var(--c-due-future); }
-.cal__chip--closed { color: var(--c-text-faint); text-decoration: line-through; }
+.cal__chip--closed { color: var(--c-text-muted); text-decoration: line-through; }
 .cal__chip--selected { background: var(--c-accent-weak); box-shadow: inset 0 0 0 1px var(--c-accent); }
-.cal__chip:hover { background: var(--c-surface-2); }
-.cal__more { font-size: var(--fs-2xs); color: var(--c-text-faint); padding: 0 var(--s-2); }
-.cal__nodue { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-top: var(--s-2); border-top: 1px dashed var(--c-border); }
-.cal__nodue-label { font-size: var(--fs-xs); color: var(--c-text-faint); font-weight: var(--fw-medium); }
-.cal__nodue .cal__chip { display: inline-block; width: auto; max-width: 220px; border-left-width: 3px; border-left-color: var(--c-border-strong); }
+.cal__chip:hover { background: var(--c-hover); }
+.cal__more { font-size: var(--fs-xs); color: var(--c-text-muted); padding: 0 var(--s-2); }
+.cal__nodue { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-top: var(--s-2); border-top: 1px dashed var(--c-rule); }
+.cal__nodue-label { font-size: var(--fs-xs); color: var(--c-text-muted); font-weight: var(--fw-medium); }
+.cal__nodue .cal__chip { display: inline-block; width: auto; max-width: 220px; border-left-width: 3px; border-left-color: var(--c-rule); }
 
 /* ---------- timeline (gantt) view ---------- */
-.tl { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-4) var(--s-5); gap: var(--s-2); overflow-y: auto; }
-.tl__axis, .tl__row { display: grid; grid-template-columns: 200px 1fr 84px; align-items: center; gap: var(--s-3); }
-.tl__axis { padding-bottom: var(--s-2); border-bottom: 1px solid var(--c-border); position: sticky; top: 0; background: var(--c-bg); z-index: 1; }
-.tl__ruler { position: relative; height: 16px; font-size: var(--fs-2xs); color: var(--c-text-faint); }
-.tl__ruler-end { position: absolute; right: 0; top: 0; }
-.tl__ruler-start { right: auto; left: 0; }
-.tl__ruler-today { position: absolute; top: 0; transform: translateX(-50%); color: var(--c-accent); font-weight: var(--fw-medium); white-space: nowrap; }
+.tl { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-3) var(--s-4); gap: var(--s-2); overflow-y: auto; }
+.tl__axis, .tl__row { display: grid; grid-template-columns: 200px 1fr 84px; align-items: center; gap: var(--s-2); }
+.tl__axis { padding-bottom: var(--s-2); border-bottom: 1px solid var(--c-rule); position: sticky; top: 0; background: var(--c-bg); z-index: 1; }
+/* Three labels on one line, laid out as tracks so they can never paint over each other: the two
+   date tracks carry the today marker's share of the axis (set inline), and the marker itself takes
+   the width it needs between them. Near an edge the date track there shrinks away and the marker
+   comes to rest flush against that edge, instead of running off the window. */
+.tl__ruler { display: grid; align-items: center; column-gap: var(--s-1); height: 16px; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.tl__ruler-date { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl__ruler-date--end { text-align: right; }
+.tl__ruler-today { color: var(--c-accent); font-weight: var(--fw-medium); white-space: nowrap; }
 .tl__rows { display: flex; flex-direction: column; }
-.tl__row { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--c-border); padding: var(--s-2) 0; cursor: pointer; }
-.tl__row:hover { background: var(--c-surface-2); }
+.tl__row { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--c-rule); padding: var(--s-2) 0; cursor: pointer; }
+.tl__row:hover { background: var(--c-hover); }
 .tl__row--selected { background: var(--c-accent-weak); }
 .tl__label { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
-.tl__title { font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl__title { font-size: var(--fs-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tl__track { position: relative; height: 18px; }
 .tl__todayline { position: absolute; top: -2px; bottom: -2px; width: 0; border-left: 1px dashed var(--c-accent); }
 .tl__bar { position: absolute; top: 3px; height: 12px; border-radius: var(--r-sm); min-width: 4px; background: var(--c-due-future); }
@@ -1107,23 +1207,23 @@ button.feed__target:hover { color: var(--c-accent); }
 .tl__bar--tomorrow { background: var(--c-due-tomorrow); }
 .tl__bar--future { background: var(--c-due-future); }
 .tl__bar--closed { background: var(--c-done); opacity: 0.7; }
-.tl__rel { font-size: var(--fs-2xs); color: var(--c-text-muted); text-align: right; white-space: nowrap; }
+.tl__rel { font-size: var(--fs-xs); color: var(--c-text-muted); text-align: right; white-space: nowrap; }
 
 /* The restart gate for a store that has been overtaken (RestartGate). */
-.restart__error { margin-bottom: var(--s-3); padding: var(--s-3); border: 1px solid var(--c-stop); border-radius: var(--r-md); color: var(--c-stop); font-size: var(--fs-xs); }
-.restart__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.restart__error { margin-bottom: var(--s-2); padding: var(--s-2); border: 1px solid var(--c-stop); border-radius: var(--r-md); color: var(--c-stop); font-size: var(--fs-xs); }
+.restart__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 /* The way out when restarting is not the answer: secondary to the button, but always present. */
-.restart__stuck { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--c-border); font-size: var(--fs-xs); }
-.restart__stuck h3 { margin: 0 0 var(--s-2); font-size: var(--fs-sm); }
+.restart__stuck { margin-top: var(--s-3); padding-top: var(--s-2); border-top: 1px solid var(--c-rule); font-size: var(--fs-xs); }
+.restart__stuck h3 { margin: 0 0 var(--s-2); font-size: var(--fs-md); }
 .restart__stuck p { margin: 0 0 var(--s-2); }
-.restart__detail { margin: 0 0 var(--s-2); padding: var(--s-2); border-radius: var(--r-md); background: var(--c-surface-sunken); font-family: var(--font-mono); font-size: var(--fs-2xs); overflow-x: auto; }
+.restart__detail { margin: 0 0 var(--s-2); padding: var(--s-2); border-radius: var(--r-md); background: var(--c-sunken); font-family: var(--font-mono); font-size: var(--fs-xs); overflow-x: auto; }
 
 /* The migration screen shown at startup (MigrationScreen). */
-.migrate__body { display: flex; flex-direction: column; gap: var(--s-3); }
+.migrate__body { display: flex; flex-direction: column; gap: var(--s-2); }
 .migrate__path { display: block; margin-top: var(--s-1); font-size: var(--fs-xs); word-break: break-all; }
-.migrate__bar { height: 6px; background: var(--c-border); border-radius: 3px; overflow: hidden; }
+.migrate__bar { height: 6px; background: var(--c-sunken); border-radius: 3px; overflow: hidden; }
 .migrate__bar-fill { height: 100%; background: var(--c-accent); }
-.migrate__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.migrate__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 
 /* The menu opened at a point (Menu). Placed where the pointer was, and above everything, because it
    is about the row it was opened on and nothing else. */
@@ -1131,7 +1231,7 @@ button.feed__target:hover { color: var(--c-accent); }
   position: fixed; z-index: 20;
   display: flex; flex-direction: column;
   padding: var(--s-1) 0;
-  background: var(--c-surface); border: 1px solid var(--c-border);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
   border-radius: var(--r-md); box-shadow: var(--shadow-md);
   /* What the caps in `Menu.tsx` do when a list is longer than the window it is drawn in. Without
      it the box would be cut at the cap and the items past it unreachable, which is the same dead
@@ -1141,10 +1241,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .menu__item {
   padding: var(--s-1) var(--s-3);
   background: none; border: 0;
-  color: var(--c-text); font-size: var(--fs-sm); text-align: left; white-space: nowrap;
+  color: var(--c-text); font-size: var(--fs-md); text-align: left; white-space: nowrap;
   cursor: pointer;
 }
-.menu__item:hover { background: var(--c-surface-sunken); }
+.menu__item:hover { background: var(--c-hover); }
 /* The item that is not the kind of the ones above it, held off from them. The gap is the whole of
    the separation: a rule would draw a heading over a group of one. */
-.menu__item--apart { margin-top: var(--s-1); border-top: 1px solid var(--c-border); padding-top: var(--s-2); }
+.menu__item--apart { margin-top: var(--s-1); border-top: 1px solid var(--c-rule); padding-top: var(--s-2); }

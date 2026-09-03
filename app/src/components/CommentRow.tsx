@@ -79,8 +79,8 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
         </span>
         {inTauri() && !editing && (
           <>
-            <button className="feed__action comment__act" title={t("comment.edit")} onClick={startEdit}><Icon name="pencil" /></button>
-            <button className="feed__action comment__rm" title={t("comment.remove")} onClick={() => void remove()}><Icon name="close" /></button>
+            <button className="btn comment__act" title={t("comment.edit")} onClick={startEdit}><Icon name="pencil" /></button>
+            <button className="btn btn--danger comment__rm" title={t("comment.remove")} onClick={() => void remove()}><Icon name="close" /></button>
           </>
         )}
       </div>
@@ -99,7 +99,7 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
             }}
           />
           <div className="compose__actions">
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.notesHint")}</span>
+            <span className="meta">{t("detail.notesHint")}</span>
             <span>
               <button className="btn" onClick={cancelEdit}>{t("detail.cancel")}</button>
               <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={!draft.trim()} onClick={() => void save()}>

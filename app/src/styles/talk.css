@@ -24,7 +24,7 @@
   padding: var(--s-2) var(--s-5);
   background: var(--c-heed);
   color: #fff;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 
 .talk__elevated-title {

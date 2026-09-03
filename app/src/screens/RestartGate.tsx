@@ -64,7 +64,7 @@ export function RestartGate() {
           <p className="muted">{t("restart.intro", lang)}</p>
         </div>
 
-        <p className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("restart.how", lang)}</p>
+        <p className="meta">{t("restart.how", lang)}</p>
 
         {failed && (
           <div className="restart__error">
@@ -90,7 +90,7 @@ export function RestartGate() {
           {cli
             ? <pre className="restart__detail" style={{ whiteSpace: "pre-wrap" }}>{tf("restart.stuck.command", { cmd: cli }, lang)}</pre>
             : <NoCli />}
-          <p className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("restart.stuck.where", lang)}</p>
+          <p className="meta">{t("restart.stuck.where", lang)}</p>
         </div>
       </div>
     </div>

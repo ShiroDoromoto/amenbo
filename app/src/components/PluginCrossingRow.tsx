@@ -79,19 +79,21 @@ export function PluginCrossingRow({ install, layer, name }: {
   };
 
   return (
-    <div className="plugcross">
+    <div className={at.enabled ? "plugcross plugcross--on" : "plugcross"}>
       <div className="pluggate">
-        <span className="chip">{name}</span>
-        {at.enabled && <span className="chip">{t("plugins.enabledChip")}</span>}
-        {/* What the settings at this crossing amount to, in one word: the refusal waiting to happen, or
-            that something is filled in — which is also why an off project is on the list at all. */}
-        {at.requiredUnset ? (
-          <span className="chip chip--heed">{t("plugins.cfg.requiredEmpty")}</span>
-        ) : (
-          at.hasValue && <span className="chip">{t("plugins.cfg.filled")}</span>
-        )}
+        <span className="rowname">{name}</span>
+        <span className="pluggate__states">
+          {at.enabled && <span className="chip">{t("plugins.enabledChip")}</span>}
+          {/* What the settings at this crossing amount to, in one word: the refusal waiting to happen,
+              or that something is filled in — which is also why an off project is on the list at all. */}
+          {at.requiredUnset ? (
+            <span className="chip chip--heed">{t("plugins.cfg.requiredEmpty")}</span>
+          ) : (
+            at.hasValue && <span className="chip">{t("plugins.cfg.filled")}</span>
+          )}
+        </span>
         <button
-          className="feed__action"
+          className="btn btn--primary"
           disabled={busy || (!at.enabled && !install.compatible)}
           onClick={() => void move(!at.enabled)}
         >
@@ -101,7 +103,7 @@ export function PluginCrossingRow({ install, layer, name }: {
             whether there is anything to configure, and it is not worth a button. Operations count as
             something to open it for: a plugin with a button and no field still has a form. */}
         {(install.config.length > 0 || install.actions.length > 0) && (
-          <button className="feed__action" onClick={() => setOpen((s) => !s)}>
+          <button className="btn" onClick={() => setOpen((s) => !s)}>
             {t(open ? "plugins.cfg.hide" : "plugins.cfg.open")}
           </button>
         )}

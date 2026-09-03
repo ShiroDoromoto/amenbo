@@ -222,7 +222,7 @@ function matching(field: TmField, rules: Rules): Extension {
 // A box rather than a colour: the bracket already carries whichever colour its scope gave it, and
 // repainting it would say something about what it is instead of where its partner went.
 const PAINT = EditorView.theme({
-  ".tm-bracket": { outline: "1px solid var(--c-border-strong)", borderRadius: "2px" },
+  ".tm-bracket": { outline: "1px solid var(--c-edge)", borderRadius: "2px" },
   ".tm-bracket-lost": { color: "var(--c-code-invalid)", fontWeight: "var(--fw-bold)" },
 });
 

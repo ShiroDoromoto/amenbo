@@ -267,8 +267,9 @@ key is a monospace word of five or six characters, well under the floor, and `ch
 which no reading of a photograph could do anyway. A lowercase `i` is deliberately not in the set: the
 face this serves draws it with a dot, so folding it onto `l` would give away discrimination against a
 misreading this screen does not produce. A green earned this way carries `slipped` like any other.
-An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
-kept for an AI/human eye and does not fail the run. A task's **title is one of those once the task
+An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`, unless it is
+one of the few read off the store instead (below): its shot is kept for an AI/human eye and does not
+fail the run. A task's **title is one of those once the task
 has ended**: done and rejected are drawn with a line through them, and the reader returns the glyphs
 under that line as other letters (`SCENARIO — work is over` came back as `SCENARIOwotk is eveF`), so
 no fold brings the two sides together. The harness follows each binding through its terminal states
@@ -277,6 +278,35 @@ absent one: a reading that cannot find a title it is looking straight at passes 
 step, so those lines read green while proving nothing — which is what this takes away. Write the
 machine-judged half of a road on cards that are still open. tesseract stays the Linux container path
 (`scripts/docker/gui-e2e.sh`); each driver walks the road written for it.
+
+### The asserts no screen draws — read off the store
+
+OCR and an eye can close only what is drawn somewhere, and some state is not. The file a reader
+chose for an avatar is kept beside the 96px square baked from it, and no screen draws that
+original: left as a `Review`, a step about it says nothing a release could stand on, since its
+shot is of a screen the state was never on.
+
+So a short, closed table of asserts is put to the **store** instead — `amenbo_verify_gui::reads_the_store`,
+which holds `store blobs` and nothing else yet. Such a step is judged by the very arm
+the CLI road judges it with, reached through the driver that stood the world up, so the two drivers
+answer one question one way. It comes out `read` in the summary (`☑`) and in `manifest.json`, and
+carries what the store said as `told`. A count that does not meet reds the run like any failed
+assert; a store that cannot be read at all ends it.
+
+Where the reading is taken settles three things:
+
+- **The step is still handed over and still shot.** What makes the reading honest is that the screen
+  in front of it is the one the step before stood up, and the shot is the evidence of that.
+- **It is read in the step's own place, not once the road has been walked.** A road says how many
+  blobs the store holds before an image is registered and again after; a single reading at the end
+  would answer both with the state the last step left.
+- **A road carrying one needs a `given:`.** What reads the store is the premise's own driver, and
+  booting one for a road that declared no world would raise a project the road was written without —
+  so such a road is turned away before a store is made.
+
+What stays off that table is as much the point. An assert whose words *are* on screen remains the
+screen's: reading the store for those would check the build's records against themselves rather than
+against what a reader sees.
 
 The Linux container carries no toolchain, so it can't read the scenario itself. Its host launcher
 (`make verify-gui-linux`) resolves the scenario through the `emit` bin and passes the card — the
@@ -312,9 +342,13 @@ not yet an app with a window, and a walk that started between the two would fail
 An app that never draws one inside a minute is reported as that, and one that exits on the way up is
 reported the moment it does. `--evidence <dir>` chooses where
 the shots and manifest land (default: a fresh dir under the temp tree); `--screen <path>` points at
-a tool other than the repo's own. Exit is 0 when every OCR-judged assert passed and every step was
-captured, non-zero on a failed assert or a load/capture/reading failure — a `Review` step is closed
-by a human from the evidence, not by the exit code.
+a tool other than the repo's own, and `--fixtures <dir>` at a shelf other than
+`verification/fixtures`. Both of those last two are resolved from where the harness was compiled
+when they are left out, so both have to be given to a run that is not standing in this tree — which
+is what `devtool vm verify run` passes for a run in the VM.
+Exit is 0 when every assert a machine judged — off the shot, or off the store — passed and every
+step was captured, non-zero on a failed assert or a load/capture/reading failure — a `Review` step is
+closed by a human from the evidence, not by the exit code.
 
 **Name what to press rather than aim at it.** `swift scripts/screen.swift find <pid>` lists every
 element on screen with the name it answers to and where it stands, and `click-named <pid> <name>`
@@ -1254,6 +1288,19 @@ argument on the first: it is another surface and not another way of asking, the 
 an image is given on and the tabs being what it was given one for. That reading is a `Review` too, and
 names the project rather than pressing its tab — every project has one, and going to it would move the
 whole face onto the one tab being read.
+
+Giving each of the two faces a store writes as an image of its own, clearing one again, reading which
+of the two a slot holds, and the way back onto the screen all of that is done on (`store set-avatar` /
+`clear-avatar` / `avatar` / `open-settings`), are one road's for a reason a shade narrower. The setting
+is reachable from a terminal — `config set human_avatar` takes the display version as a data URL — but
+the original that version was baked from arrives only where a picker handed the bytes over, so a road
+written for the CLI would walk past the half this one exists for. `facet:` is `human` or `ai`, the two
+words the store files them under, and the line names the face rather than the display name beside it:
+only one of those two names is the same in every language. Neither move waits for a button, this row
+writing the store as the picker closes, and the reading is a `Review` on both of its states — an image
+and the pattern drawn for a face that has none are both pictures. `open-settings` is a step of its own
+because the road walks it twice: a slot redrawn under the operator's eye says the screen heard, and
+only coming back to it says the store did.
 
 One road's alone is sometimes an *argument* rather than a whole op, and then it is the driver that
 cannot answer it which says so. A search hit is the case: what the row **calls** the place it points

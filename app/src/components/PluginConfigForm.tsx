@@ -279,7 +279,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           {/* A choice is a group of boxes, each with its own label, so the caption above it names the
               group rather than pointing at one input. */}
           <label
-            className="plugcfg__label"
+            className="fieldlabel plugcfg__label"
             htmlFor={
               f.fieldType === "multi" || f.readonly
                 ? undefined
@@ -382,6 +382,11 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
               id={`cfg-${install.name}-${f.key}`}
               type="text"
               disabled={busy}
+              /* How wide the box is drawn is read off what the author already wrote: a default or an
+                 example short enough to be a port or a flag gets a box that size, and everything else
+                 takes the form's width (`AMB-D-842`). */
+              className={shortHint(f) ? "plugcfg__short" : undefined}
+              size={shortHint(f)?.length}
               value={shown(f)}
               /* An empty box under a "default" chip would leave the value in force unreadable — the
                  candidates of a choice are ticked, and this is the same showing for a line. The
@@ -394,7 +399,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           {/* The author's own paragraph about this field (`AMB-D-656`), under the input it explains.
               Text and nothing else: the newlines are theirs, and no Markdown or link is drawn from it —
               this is the screen a secret is typed into. */}
-          {settingHelp(f) && <div className="faint plugcfg__help">{settingHelp(f)}</div>}
+          {settingHelp(f) && <div className="hint plugcfg__help">{settingHelp(f)}</div>}
           {/* What the author's check said about *this* box (`AMB-D-664`) — beside the one it named, which
               is the whole reason a verdict carries keys at all. Plain text, like their paragraph above. */}
           {check?.fields[f.key] && (
@@ -402,7 +407,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           )}
           {!f.readonly && held(heldFor(f.key)) && (
             <button
-              className="feed__action"
+              className="btn"
               disabled={busy}
               onClick={() => void onClear(f)}
             >
@@ -420,7 +425,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           {busy ? t("plugins.cfg.saving") : t("plugins.cfg.save")}
         </button>
         {done && !busy && (
-          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t(done)}</span>
+          <span className="meta">{t(done)}</span>
         )}
         {error && <div className="pluggate__note">{error}</div>}
       </div>
@@ -433,9 +438,6 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           {!enabled && <div className="plugcfg__note">{t("plugins.act.needsEnabled")}</div>}
           {actions.map((a) => (
             <div key={a.cmd} className="plugcfg__act">
-              {/* A real button, not the link-styled feed__action: the author's own words are the label,
-                  so a borderless faint one is read as one more line of their prose and never pressed —
-                  and pressing these in turn is the whole way a plugin's setup is walked. */}
               <button
                 className="btn"
                 disabled={!enabled || pressing !== null}
@@ -453,7 +455,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
                 <div className="plugcfg__ask">
                   {a.ask.map((f) => (
                     <label key={f.key} className="plugcfg__field">
-                      <span className="plugcfg__label">{askLabel(f)}</span>
+                      <span className="fieldlabel plugcfg__label">{askLabel(f)}</span>
                       <input
                         {...asTyped}
                         type={f.secret ? "password" : "text"}
@@ -510,6 +512,16 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
       )}
     </div>
   );
+}
+
+/**
+ * The width hint the author's own writing gives a box: a default or an example short enough to be a
+ * port number or a flag. Anything longer says nothing about width — a token and a URL are both just
+ * "long" — so the box takes the form's width instead.
+ */
+function shortHint(f: PluginWantedSettingDto): string | undefined {
+  const hint = f.defaultValue ?? settingPlaceholder(f) ?? "";
+  return hint.length > 0 && hint.length <= 12 ? hint : undefined;
 }
 
 /**

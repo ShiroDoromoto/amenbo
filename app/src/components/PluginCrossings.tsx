@@ -59,7 +59,7 @@ export function PluginCrossings({ install, projects }: {
   return (
     <>
       {shown.length === 0 && (
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+        <span className="meta">
           {t("plugins.gate.offEverywhere")}
         </span>
       )}
@@ -74,8 +74,7 @@ export function PluginCrossings({ install, projects }: {
             <select
               value=""
               onChange={(e) => setAdded((a) => [...a, Number(e.target.value)])}
-              style={{ fontSize: "var(--fs-xs)" }}
-            >
+                    >
               <option value="">{t("plugins.gate.addProject")}</option>
               {rest.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>

@@ -591,7 +591,7 @@ export const pl: Translation = {
     "face.needsYou": "czeka na Ciebie",
     "face.handHere": "Upuść, aby wkleić ścieżkę",
     "face.more": "Więcej",
-    "files.tab": "Pliki",
+    "files.side": "Strona i pliki",
     "files.memo": "Strona",
     "files.memoTyping": "Pisanie",
     "files.memoKept": "Zapisano",

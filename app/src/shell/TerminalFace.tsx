@@ -663,21 +663,6 @@ export function TerminalFace({
     setSideShownState(setSideShown(want));
   }, []);
 
-  /**
-   * The file face's two, from the top row — the only place they are switched between.
-   *
-   * Pressing the one already up is the way to put the panel away, so one control both says which
-   * half is up and opens or closes the panel. The panel's own cross closes it too, and that is not
-   * a second switch: it ends the panel rather than choosing a half.
-   */
-  const showSide = useCallback((which: SideTab) => {
-    if (sideShown && tab === which) wantSide(false);
-    else {
-      takeTab(which);
-      wantSide(true);
-    }
-  }, [sideShown, tab, takeTab, wantSide]);
-
   // Dragging the edge between a column and the panes. The width follows the pointer while it moves
   // and is kept when it stops, the way the board's own columns are dragged (`../shell/AppShell`).
   const dragging = useCallback(
@@ -987,27 +972,25 @@ export function TerminalFace({
           </nav>
         )}
         {note !== null && <span className="termface__note">{note}</span>}
-        {/* The file face's two halves, and the way to open it again once it has been closed. They
-            sit at the far end because they are about the other side of the screen. Pressing the one
-            already up puts the panel away, so the row says which half is open as well as opening
-            one — and it is the whole of the switch: the panel draws no tabs of its own
-            (`../files/FilesPanel`).
+        {/* The way to the reading column, at the far end because it is about the other side of the
+            screen. It opens the column and closes it again, and what comes up is the half the
+            reader left up.
 
-            The memo is first because it is the one the face opens on, and a default drawn second is
-            a small thing out of order (`../talk/columns`). */}
+            **Which half is not asked here any more.** The column holds the draft page and the open
+            files on one row of tabs, and that row is the switch: it is the only one of the two that
+            can also say which files are open, and a second control saying half of the same thing
+            leaves a reader looking for the right one (`../files/FilesPanel`). What was here said
+            "folder" in one language after the folder had moved to the rail, which is what a control
+            drifts into when the thing it opens has changed under it. */}
         <div className="termface__sides">
-          {(["memo", "files"] as const).map((which) => (
-            <button
-              key={which}
-              className={`termface__action${
-                sideShown && tab === which ? " termface__action--on" : ""}`}
-              onClick={() => showSide(which)}
-              aria-expanded={sideShown && tab === which}
-            >
-              <Icon name={which === "files" ? "folder" : "pencil"} />
-              {t(which === "files" ? "files.tab" : "files.memo")}
-            </button>
-          ))}
+          <button
+            className={`termface__action${sideShown ? " termface__action--on" : ""}`}
+            onClick={() => wantSide(!sideShown)}
+            aria-expanded={sideShown}
+          >
+            <Icon name="document" />
+            {t("files.side")}
+          </button>
         </div>
       </div>
       <div className="termface__body">

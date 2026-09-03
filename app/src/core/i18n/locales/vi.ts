@@ -568,7 +568,7 @@ export const vi: Translation = {
     "face.needsYou": "đang chờ bạn",
     "face.handHere": "Thả để dán đường dẫn",
     "face.more": "Thêm",
-    "files.tab": "Tệp",
+    "files.side": "Trang ghi và tệp",
     "files.memo": "Trang ghi",
     "files.memoTyping": "Đang nhập",
     "files.memoKept": "Đã lưu",

@@ -564,7 +564,7 @@ export const ko: Translation = {
     "face.needsYou": "사용자를 기다리는 중",
     "face.handHere": "여기에 놓으면 경로를 붙여 넣습니다",
     "face.more": "더 보기",
-    "files.tab": "파일",
+    "files.side": "메모와 파일",
     "files.memo": "메모",
     "files.memoTyping": "입력 중",
     "files.memoKept": "저장됨",

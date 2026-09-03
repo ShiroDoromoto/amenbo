@@ -565,7 +565,7 @@ export const zhHant: Translation = {
     "face.needsYou": "在等你",
     "face.handHere": "放開即可貼上路徑",
     "face.more": "更多",
-    "files.tab": "檔案",
+    "files.side": "便箋與檔案",
     "files.memo": "便箋",
     "files.memoTyping": "輸入中",
     "files.memoKept": "已保存",

@@ -591,7 +591,7 @@ export const uk: Translation = {
     "face.needsYou": "чекає на вас",
     "face.handHere": "Відпустіть, щоб вставити шлях",
     "face.more": "Ще",
-    "files.tab": "Файли",
+    "files.side": "Сторінка і файли",
     "files.memo": "Сторінка",
     "files.memoTyping": "Набір",
     "files.memoKept": "Збережено",

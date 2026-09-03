@@ -575,7 +575,7 @@ export const de: Translation = {
     "face.needsYou": "wartet auf Sie",
     "face.handHere": "Loslassen, um den Pfad einzufügen",
     "face.more": "Mehr",
-    "files.tab": "Dateien",
+    "files.side": "Seite und Dateien",
     "files.memo": "Die Seite",
     "files.memoTyping": "Wird getippt",
     "files.memoKept": "Gesichert",

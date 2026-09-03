@@ -47,9 +47,16 @@ export type Count = 1 | 2 | 4 | 6 | 8;
 export const COUNTS: readonly Count[] = [1, 2, 4, 6, 8];
 
 /**
- * How many panes a count puts across, which is the whole of how it is laid out: the rows are
- * whatever is left over, and never more than two. **Width is spent before height** — a terminal runs
- * short of columns before it runs short of lines, and a third row would take the lines away first.
+ * How many panes a count puts across when they go across, which with the orientation is the whole of
+ * how it is laid out: the rows are whatever is left over, and never more than two. **Width is spent
+ * before height** — a terminal runs short of columns before it runs short of lines, and a third row
+ * would take the lines away first.
+ *
+ * **Two is the one count where that turns around**, which is why it is the one count a person is
+ * asked about (`Orient`). Two across halves the columns of each pane, and half of a window with a
+ * column beside it is under the eighty a TUI wants; two down leaves the columns whole and takes the
+ * lines instead. So this is what a count puts across before the answer, and `acrossIn` is what it
+ * puts across after it.
  *
  * The grid itself is drawn in the stylesheet (`.termface__page-grid--*`). This is the same shape
  * said where it can be checked: the rule that no count asks for a third row is a claim about every
@@ -58,6 +65,44 @@ export const COUNTS: readonly Count[] = [1, 2, 4, 6, 8];
  * not a count's worth (`./columns`).
  */
 export const ACROSS: Readonly<Record<Count, number>> = { 1: 1, 2: 2, 4: 2, 6: 3, 8: 4 };
+
+/**
+ * Which way the panes of a two-pane page sit: side by side, or one above the other.
+ *
+ * **It is asked about two and about nothing else.** At four and above the rows are already spent
+ * (`ACROSS`), and there is no arrangement of them left to choose between; at one there is nothing to
+ * arrange. So this is not a second axis on every count — it is the one count where spending width
+ * first stops being the right answer, said where a person can say otherwise.
+ */
+export type Orient = "across" | "down";
+
+/** The orientations a person can pick, in the order they are offered. */
+export const ORIENTS: readonly Orient[] = ["across", "down"];
+
+/** Across, because it is what every count does and what two did before it could be asked. */
+export const DEFAULT_ORIENT: Orient = "across";
+
+/** Whether this count has an orientation to choose. Two, and only two (`Orient`). */
+export function orientable(count: Count): boolean {
+  return count === 2;
+}
+
+/** How many panes a count puts across, once the orientation has been taken into account. */
+export function acrossIn(count: Count, orient: Orient): number {
+  return orientable(count) && orient === "down" ? 1 : ACROSS[count];
+}
+
+/**
+ * The grid a count and an orientation ask for, as the stylesheet names it
+ * (`.termface__page-grid--*`).
+ *
+ * A count that has no orientation to choose is named by its number alone: the class is what the page
+ * is laid out by, and a name with an answer in it that the count cannot be asked would be a second
+ * class doing the same thing as the first.
+ */
+export function pageShape(count: Count, orient: Orient): string {
+  return orientable(count) && orient === "down" ? `${count}-down` : String(count);
+}
 
 /** Two panes to start with: one is what a single terminal already was, and four is a screenful to
  *  arrive at rather than to be given. */
@@ -76,6 +121,10 @@ export const DEFAULT_COUNT: Count = 2;
  */
 export type SavedLayout = {
   count: number;
+  /** Which way a two-pane page sits, absent where it sits the way every other count does
+   *  (`Orient`). It is kept at every count and not only at two: a person who went to four and asked
+   *  for two again means the two they set up, not the default back. */
+  orient?: Orient;
   /** The next id to hand out. It is this run's, like the frames it numbers: an arrangement that comes
    *  back with no frames starts again at the first. */
   nextId: number;
@@ -113,6 +162,8 @@ export type Layout = {
   /** The next id to hand out. Frames are never renumbered, so this only ever goes up. */
   readonly nextId: number;
   readonly count: Count;
+  /** Which way a two-pane page sits (`Orient`). It stands at every count, and is drawn on at two. */
+  readonly orient: Orient;
   /** The project whose panes are on the screen, or null before the face has been told of one. */
   readonly project: number | null;
   /** The page of that project being shown, counted from 1. */
@@ -133,6 +184,7 @@ export const EMPTY_LAYOUT: Layout = {
   frames: [],
   nextId: 1,
   count: DEFAULT_COUNT,
+  orient: DEFAULT_ORIENT,
   project: null,
   page: 1,
   focus: null,
@@ -352,6 +404,17 @@ export function setCount(layout: Layout, count: Count): Layout {
 }
 
 /**
+ * Lay a two-pane page the other way.
+ *
+ * **Nothing moves but the grid.** How many panes a page holds is the count, so the pages are the same
+ * pages, the panes are on the ones they were on, and the reader stays in the pane they were working
+ * in — what changes is where the two of them are drawn.
+ */
+export function setOrient(layout: Layout, orient: Orient): Layout {
+  return layout.orient === orient ? layout : { ...layout, orient };
+}
+
+/**
  * The arrangement as it is written down, for the other window to read.
  *
  * **What is written is the shape**: how many panes to a page, the panes in the order they were
@@ -369,6 +432,7 @@ export function laidOut(layout: Layout): SavedLayout {
   return {
     count: layout.count,
     nextId: layout.nextId,
+    ...(layout.orient === DEFAULT_ORIENT ? {} : { orient: layout.orient }),
     ...(layout.project === null ? {} : { project: layout.project }),
     frames: layout.frames.map((frame) => ({
       id: frame.id,
@@ -395,6 +459,7 @@ export function laidOut(layout: Layout): SavedLayout {
  */
 export function restored(saved: SavedLayout, onto: number | null): Layout {
   const count = COUNTS.find((one) => one === saved.count) ?? DEFAULT_COUNT;
+  const orient = ORIENTS.find((one) => one === saved.orient) ?? DEFAULT_ORIENT;
   const frames: Frame[] = [];
   for (const frame of saved.frames) {
     const project = frame.project ?? onto;
@@ -409,6 +474,7 @@ export function restored(saved: SavedLayout, onto: number | null): Layout {
     // frame the name of one already up.
     nextId: Math.max(saved.nextId, ...frames.map((frame) => Number(frame.id) + 1 || 0)),
     count,
+    orient,
     project: first?.project ?? onto,
     page: 1,
     focus: first?.id ?? null,

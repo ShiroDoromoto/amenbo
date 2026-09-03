@@ -25,7 +25,7 @@ use std::sync::Mutex;
 
 use tauri::Emitter;
 
-use amenbo_core::frames::{FrameName, FrameNames, NamedBy, SavedLayout};
+use amenbo_core::frames::{FrameName, FrameNames, NamedBy, Orient, SavedLayout};
 
 use crate::commands::{open_store, open_store_read};
 use crate::dto::{FrameNameDto, PaneDrawnDto, TalkLayoutDto, TaskPaneDto};
@@ -86,6 +86,7 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
     }
     Ok(open_store_read()?.saved_layout()?.map(|kept| TalkLayoutDto {
         count: kept.count,
+        orient: Some(kept.orient.into()),
         // The ids of a run that has ended name nothing here, so this one starts its own at the first.
         next_id: 1,
         project: kept.project,
@@ -105,12 +106,13 @@ pub fn save_talk_layout(
     face: tauri::State<'_, TalkFace>,
     layout: TalkLayoutDto,
 ) -> Result<(), CmdError> {
-    let keep = SavedLayout { count: layout.count, project: layout.project };
+    let keep =
+        SavedLayout { count: layout.count, orient: orient_of(&layout), project: layout.project };
     let moved = {
         let mut held = face.layout.lock().expect("talk layout lock");
-        let moved = held
-            .as_ref()
-            .map_or(true, |was| was.count != keep.count || was.project != keep.project);
+        let moved = held.as_ref().map_or(true, |was| {
+            was.count != keep.count || orient_of(was) != keep.orient || was.project != keep.project
+        });
         *held = Some(layout);
         moved
     };
@@ -118,6 +120,12 @@ pub fn save_talk_layout(
         open_store()?.save_layout(&keep)?;
     }
     Ok(())
+}
+
+/// Which way the arrangement says a two-pane page sits. An arrangement that says nothing sits the way
+/// every other count does — the face writes the answer only once there is one.
+fn orient_of(layout: &TalkLayoutDto) -> Orient {
+    layout.orient.map_or(Orient::default(), Into::into)
 }
 
 /// Which place each running session is drawn in, as the face has it now.

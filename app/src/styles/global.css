@@ -143,6 +143,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
 }
 .termface__count:hover { color: var(--c-text); }
+/* The one that holds a drawing instead of words. The count says a number and the orientation says a
+   shape, so one of the two cannot be words — and a box of a fixed height keeps the pair the same
+   height whichever is in it. */
+.termface__count--glyph { display: flex; align-items: center; padding: 3px var(--s-2); }
 /* The one in force is the one lifted out of the well: a raised face on a sunken ground says which of
    a fixed few is on without a second colour, and the group says the three are one choice. */
 .termface__count--on {
@@ -199,14 +203,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__grip--side { left: -4px; }
 .termface__grip:hover { background: var(--c-border-strong); }
 
-/* The page: the slots of it, laid out one across, two across, or two rows of two, three or four.
-   The grid is written per count rather than flowing, because a slot is a fixed place — panes that
-   reflowed as one closed would move the pane a reader was watching, and a count that laid itself out
-   from however many are open would answer a press with the shape it already had.
+/* The page: the slots of it, laid out one across, two across, two down, or two rows of two, three or
+   four. The grid is written per count rather than flowing, because a slot is a fixed place — panes
+   that reflowed as one closed would move the pane a reader was watching, and a count that laid itself
+   out from however many are open would answer a press with the shape it already had.
 
    **Never a third row.** A terminal runs out of columns before it runs out of lines, so what a wider
    screen buys is spent going across (`app/src/talk/layout.ts`, where the same numbers decide how much
-   width the columns beside the panes are measured against). */
+   width the columns beside the panes are measured against).
+
+   **Two is the one count with two grids**, because it is the one where spending width first stops
+   paying: half a window is under the eighty columns a TUI wants, and two down keeps them whole at the
+   cost of the lines. Which of the two a page gets is a person's answer and not a measurement
+   (`Orient` in the same file). */
 .termface__page-grid {
   flex: 1; min-width: 0; min-height: 0;
   display: grid; gap: var(--s-2);
@@ -228,6 +237,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .termface__page-grid--1 { grid-template: 1fr / 1fr; }
 .termface__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
+.termface__page-grid--2-down { grid-template: 1fr 1fr / 1fr; }
 .termface__page-grid--4 { grid-template: 1fr 1fr / 1fr 1fr; }
 .termface__page-grid--6 { grid-template: 1fr 1fr / 1fr 1fr 1fr; }
 .termface__page-grid--8 { grid-template: 1fr 1fr / 1fr 1fr 1fr 1fr; }

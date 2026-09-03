@@ -1,9 +1,10 @@
 // What the arrangement has to keep true, none of which is visible in the arithmetic that does it.
 import { describe, expect, it } from "vitest";
 import {
-  ACROSS, addPane, closedFrame, closedIn, COUNTS, DEFAULT_COUNT, EMPTY_LAYOUT, focusOn, goPage,
-  goProject, laidOut, movedTo, openedFrame, openedIn, pageCount, pageOfFrame, paneIn, panesOf,
-  restored, roomOnPage, setCount, slotsOf, type Layout,
+  ACROSS, acrossIn, addPane, closedFrame, closedIn, COUNTS, DEFAULT_COUNT, DEFAULT_ORIENT,
+  EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo, openedFrame, openedIn, ORIENTS,
+  orientable, pageCount, pageOfFrame, pageShape, paneIn, panesOf, restored, roomOnPage, setCount,
+  setOrient, slotsOf, type Layout,
 } from "./layout";
 
 /** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one. */
@@ -233,11 +234,52 @@ describe("the count is the most a page draws", () => {
     // arrived at rather than handed out (`./layout`).
     expect(COUNTS).toEqual([1, 2, 4, 6, 8]);
     expect(DEFAULT_COUNT).toBe(2);
-    // Every count says how many go across, and no count ever asks for a third row.
+    // Every count says how many go across, and no count ever asks for a third row — whichever way
+    // the one count that can be asked is laid.
     for (const one of COUNTS) {
       expect(ACROSS[one]).toBeGreaterThan(0);
-      expect(one / ACROSS[one]).toBeLessThanOrEqual(2);
+      for (const orient of ORIENTS) {
+        expect(acrossIn(one, orient)).toBeGreaterThan(0);
+        expect(one / acrossIn(one, orient)).toBeLessThanOrEqual(2);
+      }
     }
+  });
+
+  it("asks about two panes and about no other count", () => {
+    // Four and above have spent their rows already, and one has nothing to arrange: two is the count
+    // where spending width first stops paying (`./layout`).
+    expect(COUNTS.filter(orientable)).toEqual([2]);
+    expect(DEFAULT_ORIENT).toBe("across");
+    // Down is the one that turns the count around; across is what every count does.
+    expect(acrossIn(2, "across")).toBe(2);
+    expect(acrossIn(2, "down")).toBe(1);
+    expect(acrossIn(4, "down")).toBe(ACROSS[4]);
+  });
+
+  it("names a grid by the answer only where there is one to give", () => {
+    // The class is what a page is laid out by, so a count that cannot be asked is named by its number
+    // alone — a second name for the same grid would be a second grid to keep in step.
+    expect(pageShape(2, "across")).toBe("2");
+    expect(pageShape(2, "down")).toBe("2-down");
+    expect(pageShape(4, "down")).toBe("4");
+  });
+
+  it("lays the two panes the other way without moving any of them", () => {
+    // The count is how many a page holds, so the pages are the same pages and the reader is in the
+    // pane they were in: what changed is where the two are drawn.
+    const two = focusOn(withPanes(3, 2), "3");
+    const down = setOrient(two, "down");
+    expect(down.orient).toBe("down");
+    expect(down.page).toBe(two.page);
+    expect(down.focus).toBe("3");
+    expect(slotsOf(down, 2).map((one) => one.id)).toEqual(slotsOf(two, 2).map((one) => one.id));
+  });
+
+  it("keeps the orientation across a count that cannot be asked about it", () => {
+    // A person who went to four and asked for two again means the two they set up, not the default
+    // back — so the answer stands at every count and is drawn on at one.
+    const down = setOrient(withPanes(2), "down");
+    expect(setCount(setCount(down, 4), 2).orient).toBe("down");
   });
 
   it("draws the count that was pressed for, however few panes are open", () => {
@@ -247,6 +289,17 @@ describe("the count is the most a page draws", () => {
     expect(pageCount(wide)).toBe(1);
     expect(slotsOf(wide, 1)).toHaveLength(3);
     expect(roomOnPage(wide, 1)).toBe(true);
+  });
+
+  it("keeps an orientation it has never heard of out of a kept arrangement", () => {
+    // The same as an unknown count: what comes back has to be something the stylesheet has a grid
+    // for, and there are two.
+    const kept = { ...laidOut(withPanes(2)), orient: "sideways" as Layout["orient"] };
+    expect(restored(kept, null).orient).toBe(DEFAULT_ORIENT);
+    // What was asked for comes back, and what was never asked stays out of the row.
+    expect(laidOut(setOrient(withPanes(2), "down")).orient).toBe("down");
+    expect(laidOut(withPanes(2))).not.toHaveProperty("orient");
+    expect(restored(laidOut(setOrient(withPanes(2), "down")), null).orient).toBe("down");
   });
 
   it("keeps a count it has never heard of out of a kept arrangement", () => {

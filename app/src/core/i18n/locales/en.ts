@@ -595,6 +595,12 @@ const ui = {
   "face.projects": "Projects",
   "face.sessions": "Sessions",
   "face.paneCount": "Panes on screen",
+  // The orientation, named in words because the control itself is drawn
+  // (`app/src/shell/TerminalFace.tsx`): a shape with nothing said about it is a
+  // press to find out, and a screen reader has only what is written here.
+  "face.paneOrient": "How the two panes sit",
+  "face.paneAcross": "Side by side",
+  "face.paneDown": "One above the other",
   // The split, as words rather than a bare digit: the row of pages beside it is digits too, so the
   // count says what it counts (`app/src/shell/TerminalFace.tsx`).
   "face.panes.one": "{n} pane", "face.panes.other": "{n} panes",

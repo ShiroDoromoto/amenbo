@@ -135,10 +135,42 @@ impl FrameNames {
 pub struct SavedLayout {
     /// How many panes to a page.
     pub count: u32,
+    /// Which way a two-pane page sits ([`Orient`]). It is kept whatever the split is: a person who
+    /// went to four panes and back to two means the two they set up.
+    #[serde(default, skip_serializing_if = "Orient::is_across")]
+    pub orient: Orient,
     /// The project whose panes the face was showing. `None` is a machine where the face has not been
     /// told of one yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project: Option<u32>,
+}
+
+/// Which way the two panes of a two-pane page sit: side by side, or one above the other.
+///
+/// **It is asked about two panes and about nothing else.** Every count spends width before height —
+/// a terminal runs short of columns long before it runs short of lines — and at four and above the
+/// rows are already spent, so there is no arrangement left to choose between. Two is the count where
+/// spending width first stops paying: half a window is under the eighty columns an agent's TUI wants,
+/// while two down leaves the columns whole and takes the lines instead (`app/src/talk/layout.ts`).
+///
+/// An arrangement written before there was anything to ask reads as [`Across`](Orient::Across), which
+/// is what two panes did then.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Orient {
+    /// Side by side, which is what every other count does.
+    #[default]
+    Across,
+    /// One above the other.
+    Down,
+}
+
+impl Orient {
+    /// Whether this is the way a page sits when nobody has said otherwise — what lets the answer stay
+    /// out of the row until it is one.
+    pub fn is_across(&self) -> bool {
+        matches!(self, Orient::Across)
+    }
 }
 
 /// What this device kept of the arrangement, or nothing where it kept none.
@@ -219,7 +251,7 @@ mod tests {
         let engine = StoreEngine::open_in_memory().unwrap();
         assert_eq!(saved_layout(&engine).unwrap(), None, "nothing has been laid out yet");
 
-        let kept = SavedLayout { count: 4, project: Some(1) };
+        let kept = SavedLayout { count: 4, orient: Orient::Across, project: Some(1) };
         save_layout(&engine, &kept).unwrap();
 
         assert_eq!(saved_layout(&engine).unwrap(), Some(kept));
@@ -243,7 +275,10 @@ mod tests {
                 ),
             )
             .unwrap();
-        assert_eq!(saved_layout(&engine).unwrap(), Some(SavedLayout { count: 4, project: Some(2) }));
+        assert_eq!(
+            saved_layout(&engine).unwrap(),
+            Some(SavedLayout { count: 4, orient: Orient::Across, project: Some(2) })
+        );
     }
 
     /// The names an older build kept are cleared where they are met: ids start again at "1" every
@@ -255,9 +290,34 @@ mod tests {
             .set_meta(RETIRED_NAMES_META, Some(r#"{"1":{"name":"the migration","by":"person"}}"#))
             .unwrap();
 
-        save_layout(&engine, &SavedLayout { count: 2, project: None }).unwrap();
+        save_layout(&engine, &SavedLayout { count: 2, orient: Orient::Across, project: None }).unwrap();
 
         assert_eq!(engine.get_meta(RETIRED_NAMES_META).unwrap(), None);
+    }
+
+    /// The orientation comes back the way the split does, and stays out of the row while it is the
+    /// one every count has: a person who never asked has nothing of theirs to keep.
+    #[test]
+    fn the_way_two_panes_sit_is_kept_only_once_it_has_been_asked() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+
+        save_layout(&engine, &SavedLayout { count: 2, orient: Orient::Across, project: None })
+            .unwrap();
+        let written = engine.get_meta(LAYOUT_META).unwrap().expect("the arrangement");
+        assert!(!written.contains("orient"), "nothing was asked: {written}");
+
+        let kept = SavedLayout { count: 2, orient: Orient::Down, project: Some(1) };
+        save_layout(&engine, &kept).unwrap();
+        assert_eq!(saved_layout(&engine).unwrap(), Some(kept));
+    }
+
+    /// An arrangement written before there was anything to ask is two panes side by side, which is
+    /// what two panes were then.
+    #[test]
+    fn an_arrangement_with_no_orientation_in_it_is_side_by_side() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        engine.set_meta(LAYOUT_META, Some(r#"{"count":2,"project":1}"#)).unwrap();
+        assert_eq!(saved_layout(&engine).unwrap().expect("the arrangement").orient, Orient::Across);
     }
 
     /// A scalar nobody can read is no arrangement, not a failure to open the window over.

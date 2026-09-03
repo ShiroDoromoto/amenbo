@@ -139,8 +139,11 @@ describe("the window the terminal is split out into", () => {
     // Every pane has a row, so there is somewhere to go to any of them.
     expect(railNames()).toEqual(["a", "b", "c", "d"]);
     // The split is choosable, and the pages of this project are reachable: without either, the panes
-    // beyond the one on screen are panes the reader cannot get to.
-    expect(q(".termface__counts")).toHaveLength(1);
+    // beyond the one on screen are panes the reader cannot get to. Two of them, because the split is
+    // two panes here and two is the one count that is also asked which way it sits
+    // (`../talk/layout`).
+    expect(q(".termface__counts")).toHaveLength(2);
+    expect(q(".termface__count--glyph")).toHaveLength(2);
     expect(q(".termface__page")).toHaveLength(2);
   });
 

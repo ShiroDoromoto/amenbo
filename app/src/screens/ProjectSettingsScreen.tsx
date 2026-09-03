@@ -142,13 +142,12 @@ export function ProjectSettingsScreen({
           <div className="settings__form">
             <label className="field">
               <span className="fieldlabel">{t("projset.nameLabel")}</span>
-              <input {...asTyped} className="textinput" value={name} onChange={(e) => setName(e.target.value)} />
+              <input {...asTyped} value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="field">
               <span className="fieldlabel">{t("projset.notesLabel")}</span>
               <textarea
                 {...asTyped}
-                className="textinput"
                 rows={4}
                 value={notes}
                 placeholder={t("projset.notesPh")}

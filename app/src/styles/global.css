@@ -9,6 +9,62 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button { font: inherit; color: inherit; cursor: pointer; }
+
+/* ---------- the boxes a reader fills in (`AMB-D-841`, `AMB-D-842`) ---------- */
+/* Every input, select and textarea in the app, drawn the same way once, here. Left to the browser
+   they were drawn by the platform — a different box on macOS, on Windows and on Linux, none of them
+   carrying a single token of the palette they sit in, and each screen that wanted one to look like
+   the app restyled its own. So the base is the whole of the look, and a class above it says only
+   what is different about that one box.
+
+   Sunken, because a box to type in is a well cut into the surface it sits on, which is the same
+   thing the ground's third step says elsewhere (`AMB-D-840`). The outline is `--c-edge` and not
+   `--c-rule`: this is a control, and has to be found before it can be used.
+
+   The width is capped rather than set, so a box takes what its container gives it up to the point
+   where it stops being one box (`--measure-form`). A container narrower than that still decides —
+   the cap only says where growing stops. */
+input, select, textarea {
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-sunken);
+  border: 1px solid var(--c-edge);
+  border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-3);
+  max-width: var(--measure-form);
+}
+/* One focus ring for everything, drawn outside the box so it is not confused with the border it
+   would otherwise recolour, and only for the keyboard: a pointer already knows where it clicked. */
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+/* A textarea holds something written rather than a value filled in, so it takes the reading width
+   and not the form one: what is typed in it is shown back at `--measure-prose` (a note, a comment,
+   a decision's body), and a box narrower than that would break the lines somewhere else than the
+   page does. It is dragged taller and never wider — widening it breaks the column its neighbours
+   are laid out in. */
+textarea { resize: vertical; max-width: var(--measure-prose); }
+select { cursor: pointer; }
+/* A tick box is drawn by the platform and stays that way: the rule above is for boxes with a value
+   typed into them, and its padding, ground and border would each take a piece of the tick. What it
+   keeps from the rule is the accent, so the tick is the app's colour and not the system's. */
+input[type="checkbox"], input[type="radio"] {
+  width: var(--s-4); height: var(--s-4);
+  margin: 0; padding: 0;
+  max-width: none;
+  border: none; background: none; border-radius: 0;
+  accent-color: var(--c-accent);
+  cursor: pointer;
+}
+/* A colour well shows a value rather than holding one typed in, so the padding of the rule above
+   would eat the only thing it has to show. It keeps the outline and the corner, and gives the
+   inside over to the colour. */
+input[type="color"] {
+  width: var(--s-6); height: var(--s-5);
+  padding: 2px;
+  cursor: pointer;
+}
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--c-edge); border-radius: 6px; border: 2px solid var(--c-bg); }
 

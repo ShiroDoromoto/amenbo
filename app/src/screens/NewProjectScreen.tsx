@@ -81,7 +81,6 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
           <span className="fieldlabel">{t("newproj.nameLabel")}</span>
           <input
             {...asTyped}
-            className="textinput"
             autoFocus
             value={name}
             placeholder={t("side.newProjectPh")}

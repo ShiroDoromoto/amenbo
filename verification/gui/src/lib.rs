@@ -2071,11 +2071,11 @@ impl Instructor {
             // `show-face`'s are: the words are the interface's own and the run's language is
             // whatever the machine is set to.
             (Domain::Terminal, "hide-side") => match side(with)? {
-                Side::Rail => "At the top of the terminal face, press the control that folds the list of panes away — the small one just after the way out to a separate window. The list goes, and the panes take the width it was using.".to_string(),
+                Side::Rail => "At the top of the terminal face, press the control that folds the folders away — the small one just after the way out to a separate window. The column goes, and the panes take the width it was using. The tabs of the projects stay where they are: they are at the edge of the face and have no way to close them.".to_string(),
                 Side::Files => "On the panel beside the panes — whichever of its two halves is up — press the cross at the end of its own top row. The panel goes, and the panes take the width it was using.".to_string(),
             },
             (Domain::Terminal, "show-side") => match side(with)? {
-                Side::Rail => "At the top of the terminal face, press that same control again. The list of panes comes back where it was.".to_string(),
+                Side::Rail => "At the top of the terminal face, press that same control again. The folders come back where they were.".to_string(),
                 // One control, and it is a switch rather than a way in: the same press opens the
                 // panel and puts it away. So the step is written as the state to end in — a road
                 // that pressed regardless would close the panel on every run that came up with it
@@ -2099,11 +2099,11 @@ impl Instructor {
                     // the words that step will use.
                     "broad" => "well out across the face, as far as the edge will go — it stops of its own accord before the panes are squeezed away, and letting go anywhere near that stop is far enough",
                     // The same gesture on the wide width, which stops somewhere else: it runs on
-                    // over the panes until it meets the rail, so the sentence that fits the narrow
+                    // over the panes until it meets the folders, so the sentence that fits the narrow
                     // width's stop would have the operator let go while the work is still in view.
-                    // The rail is named by where it is rather than by what it lists, because the
-                    // half it is standing on is the road's to move (`files tree`).
-                    "cover" => "on out over the panes, as far as the edge will go — it stops when it reaches the column at the other edge of the face, by which point none of the panes is left showing, and letting go anywhere near that stop is far enough",
+                    // It is the folders and not the edge of the face: the tabs stand further out
+                    // still, and neither they nor the folders are ever covered.
+                    "cover" => "on out over the panes, as far as the edge will go — it stops when it reaches the column of folders on the other side of them, by which point none of the panes is left showing, and letting go anywhere near that stop is far enough",
                     other => return Err(format!("action `drag-side` does not know the direction `{other}`")),
                 };
                 format!(
@@ -3994,7 +3994,7 @@ impl Side {
     /// The words an instruction is built around, written to fit after "confirm" and after "between".
     fn phrase(self) -> &'static str {
         match self {
-            Side::Rail => "the list of panes down one side",
+            Side::Rail => "the column of folders down one side",
             Side::Files => "the panel beside the panes",
         }
     }

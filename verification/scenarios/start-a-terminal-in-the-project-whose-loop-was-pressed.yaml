@@ -16,7 +16,7 @@
 #
 # ── Why a line in each pane ──────────────────────────────────────────────────────────────────────
 # Which project a pane belongs to is read the way `go-to-the-panes-of-another-project` reads it: the
-# rail is the division itself, so a line typed into a pane is on the screen under its own project
+# tabs are the division itself, so a line typed into a pane is on the screen under its own project
 # and nowhere else. Two lines give the two readings — the new project's pane carrying the line the
 # loop's terminal was named by, and the old project's pane carrying nothing of it.
 #
@@ -94,7 +94,7 @@ steps_gui:
     domain: folder
     op: start-terminal
 
-  # The pane the press opened, named so the rail can be asked about it.
+  # The pane the press opened, named so the face can be asked about it.
   - type: action
     domain: terminal
     op: open-shell

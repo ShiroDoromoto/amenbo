@@ -1,7 +1,8 @@
 # The middle of the terminal face, taken back from the two columns beside it and given to them again.
 #
-# The face draws three things across: a list of the panes down one side, the panes, and the folder's
-# files down the other. On a laptop the two columns together are most of a pane's worth of width, and
+# The face draws four things across: the tabs of the projects at the edge, the folders of the one
+# being shown, the panes, and what is being read down the other side. The tabs are not among what
+# folds — they are the one column with no way to close it — so what this road walks is the other two. On a laptop the two columns together are most of a pane's worth of width, and
 # what this road defends is that a reader can have it back — and, having had it back, can ask for the
 # column again.
 #
@@ -13,8 +14,8 @@
 # them is what says the fold was real rather than a redraw.
 #
 # ── Why each side is walked separately ───────────────────────────────────────────────────────────
-# They are put away by different controls — the list from the row above the panes, the panel from a
-# cross on itself — and it is the same road only in the reader's head. A run that folded one of them
+# They are put away by different controls — the folders from the row above the panes, the panel from
+# a cross on itself — and it is the same road only in the reader's head. A run that folded one of them
 # and took the other on trust would be leaving the untested half exactly where a control is easiest
 # to forget: on the panel, which is the one that carries its own.
 #
@@ -40,7 +41,7 @@ id: fold-the-sides-away-and-bring-them-back
 title: Both columns beside the panes fold away, give their width to the panes, and come back from the row above
 description: >
   Open the terminal face, choose the folder it runs in, get the pane down to a plain shell and type a
-  line into it. Fold the list of panes away from the row above — it goes, and the panes spread into
+  line into it. Fold the folders away from the row above — they go, and the panes spread into
   its width — then press the same control and it is back. Close the file panel from the cross on the
   panel itself, and bring it back from the row above. Then drag the edge the panel shares with the
   panes outward and back again: the edge moves, the panes give up exactly that width and take it
@@ -88,7 +89,7 @@ steps_gui:
     with:
       side: files
 
-  # ── the list of panes ─────────────────────────────────────────────────────────────────────────
+  # ── the folders ───────────────────────────────────────────────────────────────────────────────
   - type: action
     domain: terminal
     op: hide-side

@@ -2,7 +2,7 @@
 # own folders.
 #
 # A pane belongs to a project, so the folders it can work in are the ones that project is bound to.
-# That is what the rail promises — panes of two projects are never on one screen — and a picker
+# That is what the tabs promise — panes of two projects are never on one screen — and a picker
 # reaching anywhere on the disk would be the one way round it. So the press that opens a pane does not
 # open a picker: where the project keeps several folders it puts up a question whose whole list is
 # those folders, and where it keeps one it asks nothing at all.

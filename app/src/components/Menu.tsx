@@ -9,17 +9,55 @@
 // **The items are the caller's, but the class on them is not.** The arrows find what to walk by the
 // item class, so a caller who spelt it themselves would lose the keyboard without anything looking
 // wrong. `MenuItem` is how the class stays out of their hands.
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 
 /** What the arrows walk. The one string both halves of this file agree on. */
 const ITEM = "menu__item";
 
 /**
+ * How close to the window's edge the box may come.
+ *
+ * Small, because it is not a margin anybody is meant to see — it is what keeps a box pushed back
+ * from an edge from looking stuck to it. It is also the one number the height and width the box is
+ * allowed are measured back from, so the whole of it lands inside the window rather than the
+ * corner it was opened at.
+ */
+const EDGE = 4;
+
+/** The window a menu is being fitted into, or a stand-in where there is none to ask. What renders
+ *  this shell without a window lays nothing out either, so the stand-in is never fitted against. */
+function roomInWindow(): { w: number; h: number } {
+  if (typeof window === "undefined") return { w: 1280, h: 800 };
+  return { w: window.innerWidth, h: window.innerHeight };
+}
+
+/**
+ * Where one edge of the box goes, along one axis.
+ *
+ * The point it was opened at, while there is room for the box after it. Where there is not, the
+ * other side of that point — which is what a menu opened at the right edge of a window has always
+ * done, and it keeps the box under the pointer rather than sliding it somewhere the reader did not
+ * press. Where there is room on neither side the box is bigger than the window, and it goes hard
+ * against the near edge: what is capped is then the box's own size, and starting anywhere else
+ * would only push its far end further out.
+ */
+function fit(point: number, size: number, room: number): number {
+  const start = point + size + EDGE <= room ? point : point - size;
+  return Math.min(Math.max(start, EDGE), Math.max(room - size - EDGE, EDGE));
+}
+
+/**
  * A menu box at a point, holding whatever items it is given.
  *
  * Placed where the pointer was and above everything, because it is about the row it was opened on
  * and nothing else.
+ *
+ * **Where the pointer was, and inside the window.** A point near an edge is a point most of the box
+ * does not fit after, and the box is drawn over everything: what falls outside the window is not
+ * clipped or scrolled to, it is simply unreadable. So the box is measured once it is drawn and
+ * placed against what it actually came out as — the items are the caller's, and how tall a list of
+ * them ends up is not a number this side can be told in advance.
  */
 export function Menu({ at, face, onClose, children }: {
   at: { x: number; y: number };
@@ -33,6 +71,21 @@ export function Menu({ at, face, onClose, children }: {
   children: ReactNode;
 }) {
   const box = useRef<HTMLDivElement | null>(null);
+  const [place, setPlace] = useState<{ left: number; top: number }>({ left: at.x, top: at.y });
+  const room = roomInWindow();
+
+  // Measured after the box is drawn and before it is painted, so the reader never sees it at the
+  // corner it was asked for and then somewhere else. `face` is in here for the reason it is on the
+  // focus below: the items have been replaced, so the size measured for the ones before is a size
+  // this box no longer has.
+  useLayoutEffect(() => {
+    const drawn = box.current?.getBoundingClientRect();
+    if (drawn === undefined) return;
+    setPlace({
+      left: fit(at.x, drawn.width, room.w),
+      top: fit(at.y, drawn.height, room.h),
+    });
+  }, [at.x, at.y, face, room.w, room.h]);
 
   useEffect(() => {
     // Anything the person does **outside** the menu closes it: one that outlived the next click
@@ -91,7 +144,15 @@ export function Menu({ at, face, onClose, children }: {
   return (
     <div
       className="menu"
-      style={{ left: at.x, top: at.y }}
+      // The size caps are the other half of fitting: a list longer than the window, or a name wider
+      // than it, cannot be placed anywhere that shows the whole of it — so it is the box that gives,
+      // and what does not fit is scrolled to rather than lost off an edge.
+      style={{
+        left: place.left,
+        top: place.top,
+        maxHeight: room.h - EDGE * 2,
+        maxWidth: room.w - EDGE * 2,
+      }}
       role="menu"
       ref={box}
       onKeyDown={walk}

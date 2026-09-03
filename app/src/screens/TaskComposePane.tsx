@@ -58,7 +58,7 @@ export function TaskComposePane({
           }}
         />
 
-        <div style={{ marginTop: "var(--s-3)" }}>
+        <div style={{ marginTop: "var(--s-2)" }}>
           <div className="detail__section-h">{t("compose.notes")}</div>
           <textarea
             {...asTyped}
@@ -74,7 +74,7 @@ export function TaskComposePane({
           />
         </div>
 
-        <div className="detail__field" style={{ marginTop: "var(--s-3)" }}>
+        <div className="detail__field" style={{ marginTop: "var(--s-2)" }}>
           <span className="detail__flabel">{t("date.due")}</span>
           <DateField label={t("date.due")} value={due} onChange={setDue} />
         </div>
@@ -83,7 +83,7 @@ export function TaskComposePane({
           <DateField label={t("date.start")} value={start} onChange={setStart} />
         </div>
 
-        <div className="compose__actions" style={{ marginTop: "var(--s-3)" }}>
+        <div className="compose__actions" style={{ marginTop: "var(--s-2)" }}>
           <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("compose.hint")}</span>
           <span>
             <button className="btn" onClick={onCancel}>{t("compose.cancel")}</button>

@@ -410,6 +410,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
             id: p.id,
             name: p.name.clone(),
             color: p.color.clone().unwrap_or_else(|| "#9aa7b2".to_string()),
+            icon: p.icon.clone(),
             view: p.default_view.clone(),
             open_count: p.open_count,
             proposed_decision_count: p.proposed_decision_count,

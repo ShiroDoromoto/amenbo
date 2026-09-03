@@ -563,12 +563,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-surface); border-color: var(--c-border-strong);
   font-weight: 600; box-shadow: var(--shadow-sm);
 }
-/* The project's colour with the first character of its name on it. It is drawn whether or not the
-   names are, so folding takes a width away and never a way of telling one project from another.
-   The ground is the colour the person gave the project and the ink is worked out from it
-   (`app/src/shell/projectMark.ts`); a colour that could not be read leaves the surface underneath and
-   the face's own text colour. `uppercase` is the stylesheet's rather than the character's: what is in
-   the mark is the name's own first character, cased here for the same reason a heading is. */
+/* The project's colour with the first character of its name on it, or the image it was given instead
+   (`AMB-D-838`). It is drawn whether or not the names are, so folding takes a width away and never a
+   way of telling one project from another. The ground is the colour the person gave the project and
+   the ink is worked out from it (`app/src/shell/projectMark.ts`); a colour that could not be read
+   leaves the surface underneath and the face's own text colour. `uppercase` is the stylesheet's rather
+   than the character's: what is in the mark is the name's own first character, cased here for the same
+   reason a heading is. */
 .ptabs__mark {
   flex: 0 0 auto;
   width: 24px; height: 24px; border-radius: var(--r-sm);
@@ -576,7 +577,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-surface-sunken);
   font-size: var(--fs-sm); font-weight: 700; line-height: 1;
   text-transform: uppercase;
+  overflow: hidden;
 }
+/* The image fills the mark and is cut to its corners. It is baked square before it is ever stored
+   (`app/src/core/mutations.ts`), so `cover` is not cropping anything a person would miss — it is what
+   keeps a stored image from an older bake, or one that arrived some other way, from stretching. */
+.ptabs__icon { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ptabs__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A turn standing in a project that is not the one being shown. It is the colour the pages wear and
    for the same reason: somebody is needed there, and the panes that would say so are off the screen.

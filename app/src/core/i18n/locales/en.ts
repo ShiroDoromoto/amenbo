@@ -594,6 +594,12 @@ const ui = {
   "face.rail": "Panes",
   "face.projects": "Projects",
   "face.sessions": "Sessions",
+  // The rail's two halves: the lists, and the folder tree that moved there off the other side of the
+  // panes (`AMB-D-835`). Each word names what its half holds rather than what pressing it does, because
+  // both are always drawn and one of them is always on.
+  "face.railHalves": "What the rail shows",
+  "face.railPanes": "Panes",
+  "face.railFolders": "Folders",
   "face.paneCount": "Panes on screen",
   // The orientation, named in words because the control itself is drawn
   // (`app/src/shell/TerminalFace.tsx`): a shape with nothing said about it is a
@@ -658,6 +664,9 @@ const ui = {
   "files.unwatched": "This machine has run out of watches.",
   "files.unwatchedHow": "The supply is per user and shared with the editor you have open. Raising fs.inotify.max_user_watches gives it more room.",
   "files.noFolder": "This project has no folder yet.",
+  // The reading column with nothing in it. Finding a file is the rail's now, so what stands here is
+  // the line saying so rather than the tree this column used to hold.
+  "files.nothingOpen": "Nothing is open.",
   "files.folderGone": "This folder is not there any more.",
   "files.back": "Back to the list",
   "files.edit": "Edit",

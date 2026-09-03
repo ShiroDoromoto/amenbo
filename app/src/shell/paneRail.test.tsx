@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_LAYOUT, focusOn, goProject, openedFrame, openedIn, type Layout } from "../talk/layout";
 import type { Project } from "../mock/types";
 import { PaneRail } from "./PaneRail";
+import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -16,6 +17,10 @@ let root: Root;
 const project = vi.fn();
 const picked = vi.fn();
 const renamed = vi.fn();
+const took = vi.fn();
+
+/** What the rail draws in place of its lists while the other half is up (`../files/FolderTree`). */
+const TREE = "the tree";
 
 const PROJECTS = [
   { id: 1, name: "amenbo" },
@@ -31,13 +36,20 @@ function twoProjects(): Layout {
   return focusOn(goProject(layout, 1), "1");
 }
 
-async function draw(layout: Layout, names: Map<string, string> = new Map()) {
+async function draw(
+  layout: Layout,
+  names: Map<string, string> = new Map(),
+  tab: "panes" | "folders" = "panes",
+) {
   await act(async () => {
     root.render(createElement(PaneRail, {
       layout,
       names,
       projects: PROJECTS,
       needy: new Set<string>(),
+      tab,
+      onTab: took,
+      folders: createElement("p", null, TREE),
       onProject: project,
       onPick: picked,
       onRename: renamed,
@@ -52,6 +64,7 @@ beforeEach(() => {
   project.mockReset();
   picked.mockReset();
   renamed.mockReset();
+  took.mockReset();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -112,9 +125,43 @@ describe("the rail", () => {
     await draw(twoProjects());
     // A page with room draws an empty frame, and a full one the strip beside the panes: both are on
     // the face the reader is looking at, so a press here was never the only road (`./TerminalFace`).
+    // The two halves are not a way in either: what they choose is which of the rail's own lists is
+    // drawn, and neither of them opens anything (`AMB-D-835`).
     const ways = [...container.querySelectorAll<HTMLElement>(".rail button")]
-      .filter((one) => !one.classList.contains("rail__project") && !one.classList.contains("rail__row"));
+      .filter((one) => !one.classList.contains("rail__project")
+        && !one.classList.contains("rail__row")
+        && !one.classList.contains("rail__tab"));
     expect(ways.map((one) => one.className)).toEqual([]);
+  });
+
+  // The rail holds two lists and a tree, and a column this narrow has room for one of those at a
+  // time (`AMB-D-835`). So the halves are swapped, and both are named on the control that swaps
+  // them: a reader has to be able to see where the other one went.
+  it("names both halves and says which is up, without drawing the one that is not", async () => {
+    await draw(twoProjects());
+    expect(container.textContent).not.toContain(TREE);
+    const tabs = [...container.querySelectorAll<HTMLElement>(".rail__tab")];
+    expect(tabs.map((one) => one.textContent))
+      .toEqual([t("face.railPanes"), t("face.railFolders")]);
+    expect(tabs.map((one) => one.getAttribute("aria-checked"))).toEqual(["true", "false"]);
+  });
+
+  it("asks for the other half rather than swapping itself", async () => {
+    await draw(twoProjects());
+    await act(async () => {
+      container.querySelectorAll<HTMLElement>(".rail__tab")[1]!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    // Which half is up is kept per project, and what keeps it is the face around the rail
+    // (`../talk/columns`).
+    expect(took).toHaveBeenCalledWith("folders");
+  });
+
+  it("draws the tree in place of the lists on the half that is up", async () => {
+    await draw(twoProjects(), new Map(), "folders");
+    expect(container.textContent).toContain(TREE);
+    expect(rows()).toHaveLength(0);
+    expect(container.querySelectorAll(".rail__project")).toHaveLength(0);
   });
 
   it("goes to a pane on a page that is not the one showing", async () => {
@@ -133,6 +180,9 @@ describe("the rail", () => {
         projects: PROJECTS,
         // The pane of project 2, which is not the project on the screen.
         needy: new Set(["5"]),
+        tab: "panes" as const,
+        onTab: took,
+        folders: createElement("p", null, TREE),
         onProject: project,
         onPick: picked,
         onRename: renamed,

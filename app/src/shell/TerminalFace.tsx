@@ -13,11 +13,14 @@ import {
   paneIn, panesOf, restored, roomOnPage, setCount, setOrient, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import {
-  clampRailWidth, clampSideNarrow, getRailShown, getRailWidth, getSideNarrow, getSideShown,
-  getSideTab, setRailShown, setRailWidth, setSideNarrow, setSideShown, setSideTab,
-  type SideTab,
+  clampRailWidth, clampSideNarrow, getRailShown, getRailTab, getRailWidth, getSideNarrow,
+  getSideShown, getSideTab, setRailShown, setRailTab, setRailWidth, setSideNarrow, setSideShown,
+  setSideTab,
+  type RailTab, type SideTab,
 } from "../talk/columns";
 import { FilesPanel } from "../files/FilesPanel";
+import { FolderTree } from "../files/FolderTree";
+import { fileUnderAny } from "../files/fileUnder";
 import { useHandDrag } from "../files/handDrag";
 import { Icon } from "../components/Icon";
 import { useBoundFolders } from "../core/boundFolders";
@@ -180,6 +183,14 @@ export function TerminalFace({
   // switch living inside it could not be the one that opens it (`../files/FilesPanel`). What it
   // starts as is this device's own answer, kept between runs (`../talk/columns`).
   const [tab, setTabState] = useState<SideTab>(getSideTab);
+  // Which half of the rail is up — the two lists, or the folder tree (`AMB-D-835`). It is kept per
+  // project, so a project the reader was last reading files in comes back on the tree; the read
+  // below is what brings that project's own answer in.
+  const [railTab, setRailTabState] = useState<RailTab>(() => getRailTab(null));
+  // The file being read, and the bound folder it is in. It is held here rather than in either column
+  // because both of them answer to it: the tree in the rail marks the row it was opened from, and
+  // the column on the other side of the panes draws it (`AMB-D-835`).
+  const [reading, setReading] = useState<{ root: string; path: string[] } | null>(null);
   // The question about where the pane being opened works, while it is up. It is not a frame: a place
   // is made by opening one, and one nobody finished opening is a box that says nothing
   // (`../talk/layout`). `note` on it is a binding the host refused.
@@ -619,6 +630,11 @@ export function TerminalFace({
     setTabState(setSideTab(which));
   }, []);
 
+  /** The same for the rail's two halves, kept per project (`../talk/columns`). */
+  const takeRailTab = useCallback((which: RailTab) => {
+    setRailTabState(setRailTab(layout.project, which));
+  }, [layout.project]);
+
   /** Ask for a side, or put it away. The wish is kept either way — a person who closed the rail has
    *  closed it, and it stays closed across runs until they ask for it again. */
   const wantRail = useCallback((want: boolean) => {
@@ -698,6 +714,11 @@ export function TerminalFace({
   useEffect(() => {
     setRailWidthState(getRailWidth(layout.project));
     setSideWidthState(getSideNarrow(layout.project));
+    // And which half of the rail this project was left on. The file goes with the project it was
+    // opened from: a path is read against one project's folders, so carrying it to the next would be
+    // drawing a file the rail beside it has no row for.
+    setRailTabState(getRailTab(layout.project));
+    setReading(null);
   }, [layout.project]);
 
   // A window that has shrunk cannot leave a column with the middle's room in it. Each is measured
@@ -720,12 +741,53 @@ export function TerminalFace({
   // answer appears: a question drawn anywhere else is one the reader has to go and find.
   const room = roomOnPage(layout, page);
 
+  // A path clicked in a pane. It opens only where it lands inside one of the folders this project is
+  // bound to — the same fence the host applies. One that lands outside opens nothing: the pane keeps
+  // the characters it drew, and no reader is shown a file from somewhere this face cannot answer for
+  // (`AMB-D-747`).
+  //
+  // **The rail is left where it was.** The file is drawn on the other side of the panes, so a reader
+  // following a path out of a pane is shown it without the lists going out from under them
+  // (`AMB-D-835`).
+  const roots = boundPaths.join("\0");
+  useEffect(() => {
+    if (show === null) return;
+    const found = fileUnderAny(boundPaths, show.cwd, show.target);
+    if (!found) return;
+    setReading(found);
+    takeTab("files");
+    wantSide(true);
+    // `nth` is what makes the same file asked for twice two answers, and the folders are joined
+    // because the array itself is rebuilt on every render.
+  }, [show?.nth, roots]);
+
   const rail = (
     <PaneRail
       layout={layout}
       names={names}
       projects={projects}
       needy={needy}
+      tab={railTab}
+      onTab={takeRailTab}
+      folders={
+        <FolderTree
+          projectId={layout.project}
+          reading={reading}
+          onRead={(at) => {
+            setReading(at);
+            // The file goes to the column on the other side of the panes, which is opened on the
+            // files half wherever it stood: a row pressed for its file is a reader asking to see it.
+            takeTab("files");
+            wantSide(true);
+          }}
+          // A file that has gone to the bin is not one to go on reading.
+          onGone={(root, went) => setReading((now) =>
+            now !== null && now.root === root && went.includes(now.path.join("/")) ? null : now
+          )}
+          onHandOver={handOver}
+          onCarry={carry}
+        />
+      }
       onProject={(project) => {
         setAsking(null);
         setLayout((was) => goProject(was, project));
@@ -993,14 +1055,16 @@ export function TerminalFace({
             <FilesPanel
               projectId={layout.project}
               onOpenLedger={onOpenLedger}
-              show={show}
               tab={tab}
-              // Both halves are reached the same way, and asking for one is asking for the panel:
-              // a file clicked in a pane opens the face it is read in.
-              onTab={(which) => { takeTab(which); wantSide(true); }}
+              reading={reading}
+              onBack={() => setReading(null)}
+              // A file binned from the reading column is one the tree in the rail is about to stop
+              // drawing too, and the column has to let go of it either way.
+              onGone={(root, went) => setReading((now) =>
+                now !== null && now.root === root && went.includes(now.path.join("/")) ? null : now
+              )}
               onClose={() => wantSide(false)}
               onHandOver={handOver}
-              onCarry={carry}
             />
           </div>
         )}

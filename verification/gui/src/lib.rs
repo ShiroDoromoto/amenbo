@@ -3397,17 +3397,20 @@ impl Instructor {
             // And where its edge stands now. It is read against the shot before it rather than
             // against a number: what the drag is asked to have done is move this edge and nothing
             // else, and the two pictures side by side are what say so.
+            // The width and nothing about the panes. A column dragged wider takes the room from
+            // them, and the reading column at its wide width lies over them instead and takes none
+            // — so what is the same in both, and all a person at the screen can be asked for, is
+            // that the edge moved and the rest of the face did not.
             (Domain::Terminal, "side-width") => {
                 let which = side(with)?;
-                let (moved, gave) = match flag(with, "wider")? {
-                    true => ("wider than it was on the shot before this one", "narrower by that much"),
-                    false => ("narrower than it was on the shot before this one", "wider by that much"),
+                let moved = match flag(with, "wider")? {
+                    true => "wider than it was on the shot before this one",
+                    false => "narrower than it was on the shot before this one",
                 };
                 format!(
-                    "Confirm {} is {}, and that the panes beside it are {} — the edge moved, and nothing else on the face did.",
+                    "Confirm {} is {} — the edge between it and the panes moved, and nothing else on the face did.",
                     which.phrase(),
-                    moved,
-                    gave
+                    moved
                 )
             }
             // The shape the page is drawn in, read off the two panes standing on it. What it is about

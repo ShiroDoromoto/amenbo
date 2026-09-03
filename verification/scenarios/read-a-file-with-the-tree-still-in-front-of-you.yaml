@@ -1,0 +1,191 @@
+# Reading a file used to cost a reader the list they opened it from, and this is the road that says
+# it no longer does: the tree is in the rail on one side of the panes, the file is drawn on the
+# other, and both are on the screen at once.
+#
+# ── Why a second name is read while the first file is open ───────────────────────────────────────
+# A face that drew the file over the tree would pass every reading about the file itself. What it
+# cannot pass is a name from the tree read *while* the file is up — that is the whole of what the
+# three columns buy, and it is one line here.
+#
+# ── Why the width is read against the shot before it ─────────────────────────────────────────────
+# The column has two widths and the road walks between them, but neither is a number a person at the
+# screen can measure. What they can see is that it grew and then gave the room back, so the readings
+# are of the change: wider on the file being opened, narrower on the key that gives the panes back.
+#
+# ── Why the key rather than a press on a pane ────────────────────────────────────────────────────
+# A press on a pane narrows the column too, and it is the way a reader most often does it. The key
+# is what this road walks because both of its layers are the same gesture counted twice: one press
+# gives the panes their width back, the second puts the column away. A road that pressed a pane
+# would be walking one of them and reading the other from somewhere else.
+#
+# ── Why the file is still open at the narrow width ───────────────────────────────────────────────
+# Being finished with the room is not being finished with the file. So the reading after the first
+# press is of the file's own text, still there in a column a third the width it was.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. Three columns, a width and a key are things on a screen; what the binary
+# is handed is paths, and none of this reaches it.
+id: read-a-file-with-the-tree-still-in-front-of-you
+title: The file opens wide on the far side of the panes while the tree stays in the rail, and the key gives the width back before it closes the column
+description: >
+  Raise a project bound to a folder of two files and open the reading column. Turn the rail to its
+  folders half and open the first file with two presses: it is drawn on the far side of the panes and
+  the column grows to read it in. The second file's row is still there in the rail — read it, and
+  pick it out — and then press the key that leaves things: the column goes back to the width the
+  panes are drawn beside with the file still open, and a second press puts the column away.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+    as: orchard
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: orchard
+
+  # Two files at the top of the folder, each with a mark in it: what the reading below is of is the
+  # file's own text, and two files that read alike would leave the road green on either.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard
+      path: pruning.md
+      content: "# SCENARIO the pears are pruned after the leaves fall"
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard
+      path: grafting.md
+      content: "# SCENARIO the scions are cut while the wood is still asleep"
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The column on the far side of the panes, which is where a file is drawn. It opens on the page a
+  # person writes on rather than on a file, so the road asks for it before reading anything in it.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # And the rail turned to its folders half, which is where the tree is. The section stands unfolded
+  # at its first level from the moment it is drawn: the names in the bound folder are what a person
+  # came to the folders half for.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: pruning.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: pruning.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears are pruned after the leaves fall
+
+  # Opened wide, because what a reader asked for is the file. The panes keep the room they had — the
+  # column lies over them rather than pushing them aside — and the reading is of the change.
+  - type: assert
+    domain: terminal
+    op: side-width
+    with:
+      side: files
+      wider: true
+
+  # The line this road exists for. The tree is in the rail, so the second name is on the screen with
+  # the first file open over the panes — which is the thing a face that drew the file over the tree
+  # could not do.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: grafting.md
+      section: tree
+
+  # And it can be reached, not only seen: the row is picked out with the key this machine adds to a
+  # selection with, while the file stays where it is.
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: grafting.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears are pruned after the leaves fall
+
+  # One layer per press: the width first.
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: escape
+
+  - type: assert
+    domain: terminal
+    op: side-width
+    with:
+      side: files
+      wider: false
+
+  # The file is still open in it. What the press gave back is the panes' width, which is not the same
+  # thing as being done with what is being read.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears are pruned after the leaves fall
+
+  # And the second press, which is the column itself.
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: escape
+
+  - type: assert
+    domain: terminal
+    op: side
+    with:
+      side: files
+      present: false
+
+  # The tree is untouched by any of it: it is the rail's half, and the column that came and went was
+  # on the other side of the panes.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: grafting.md
+      section: tree

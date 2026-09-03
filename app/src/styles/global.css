@@ -841,12 +841,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
    level. It is a fixed width rather than a share of the column because the column has a floor of
    its own (`SIDE_MIN`, `app/src/talk/columns.ts`): 200px less this band is 176px, which is where
    the panel is narrowest, and a share would go on eating into that as the column shrank. */
+/* The file, under the row of tabs that says which one it is. It fills what is left of the column
+   and lies over nothing — the tree it would have covered is in the rail (`AMB-D-835`) — so the
+   padding and the edge are the column's own and this adds neither. */
 .files--reading {
   gap: var(--s-2);
-  position: absolute; inset: 0 0 0 auto; z-index: 2;
-  width: calc(100% - 24px);
-  background: var(--c-surface-2);
-  box-shadow: var(--shadow-md);
+  padding: 0;
+  border-left: 0;
 }
 /* The name's own row — the way out on either side of it and nothing else between. Every control on
    this bar is as wide as its own words, so the name was the only thing that could give way when
@@ -967,6 +968,39 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The panel's way out, at the end of whichever row it has. Quiet, like the control that ends a pane:
    what stops it being pressed by mistake is that nothing is lost when it is — the top row opens the
    panel again, on the half it was showing. */
+/* The files the column is holding. The row scrolls sideways and never wraps: a second line of tabs
+   would take the room the file is read in, and it is the file a reader came for (`AMB-D-835`). */
+.files__tabs { flex: 0 0 auto; min-width: 0; display: flex; align-items: center; gap: var(--s-1); }
+/* No scrollbar drawn under it. A bar 190px wide would be most of a tab, and what says there is more
+   is the control at the end — which lists them by name rather than by where they sit. */
+.files__strip {
+  flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden;
+  display: flex; gap: 2px;
+  scrollbar-width: none;
+}
+.files__strip::-webkit-scrollbar { display: none; }
+.files__tab {
+  flex: 0 0 auto; display: inline-flex; align-items: center;
+  border-radius: var(--r-sm);
+  color: var(--c-text-muted);
+}
+/* The one being read, lifted out of the row the way the pane counts are: one of a fixed few is on,
+   and a colour alone reads as a row of links. */
+.files__tab--on { background: var(--c-surface-sunken); color: var(--c-text); font-weight: 600; }
+.files__tabname {
+  max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 2px var(--s-1);
+  border: 0; background: transparent; color: inherit;
+  font-size: var(--fs-sm); line-height: 1.6;
+}
+.files__tabclose, .files__more {
+  flex: 0 0 auto; display: inline-flex; align-items: center;
+  padding: 0 2px;
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-xs); line-height: 1;
+}
+.files__tabclose:hover, .files__more:hover { color: var(--c-text); }
+
 /* Wider or narrower, beside the way out and pushed to the far end with it: the two are the column's
    own controls, where everything else on the row is about the file in it. */
 .files__width {

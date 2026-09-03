@@ -10,7 +10,7 @@
 #
 # ── Why the width is read against the panes rather than against the shot before ──────────────────
 # `side-width` is the other reading of this edge, and it cannot be used here: it answers against the
-# picture before it, and a press on the rail redraws every column on the face. "Wider than it was"
+# picture before it, and a press on a project's tab redraws every column on the face. "Wider than it was"
 # after a move between projects would be a sentence about two faces rather than about one width. So
 # each reading here stands on its own shot — the column and the panes divide the width between them,
 # and which of the two is the wider is what an eye at a picture can say (`side-span`).
@@ -36,12 +36,6 @@
 # there is, and one dragged to the stop leaves none on the widest. So the wide leg is read with
 # `side-cover`, and its pair is the same shape as the narrow leg's — part, then all, then part again
 # in the other project, and all once more on coming back to the one it was dragged in.
-#
-# ── What this road does not walk ─────────────────────────────────────────────────────────────────
-# Which half the rail stands on is the third answer kept per project, and it cannot be walked here:
-# the press that moves between projects is in one of those two halves, so the project being left is
-# always left on that one and never answers the other. What that costs is not a reading but the face,
-# and the panel it is on is being reconsidered whole.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # A width is a thing on a screen, and the binary is handed paths.
@@ -131,7 +125,7 @@ steps_gui:
 
   # Onto the wide width, which is reached by asking for a file rather than by dragging anything: the
   # column comes over the panes to read in, and that is the width the rest of this leg is about. The
-  # tree is in the rail, so the rail goes onto its folder half to reach the row.
+  # tree is in the rail, so the row is standing there to reach.
   - type: action
     domain: files
     op: tree

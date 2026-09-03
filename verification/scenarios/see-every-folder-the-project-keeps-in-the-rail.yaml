@@ -30,8 +30,8 @@
 id: see-every-folder-the-project-keeps-in-the-rail
 title: The rail draws a section for every folder the project keeps, and one that goes away says so where it stood instead of taking the tree with it
 description: >
-  Raise a project bound to two folders, each holding a file of its own, and press the rail's folder
-  half and unfold the trees: each folder's tree carries its own file, so both were read. Then take
+  Raise a project bound to two folders, each holding a file of its own, and unfold the trees in the
+  rail beside the panes: each folder's tree carries its own file, so both were read. Then take
   one of the folders away from outside Amenbo, with nothing on the app pressed: its section stays
   and says the folder is not there any more, while the other folder's file is still in the rail
   beside it.

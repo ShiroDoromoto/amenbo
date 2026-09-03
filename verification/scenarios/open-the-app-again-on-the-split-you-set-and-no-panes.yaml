@@ -29,9 +29,9 @@
 # A project that is the only one comes back by having nowhere else to be. The road raises two and
 # works in the second, so coming back on it is a choice the store had to have kept.
 #
-# Reading which one came back is the pane's to answer rather than the rail's: every project has a row
-# on the rail whichever is being shown, so a name read off the screen would be found there on a face
-# that came back on the wrong project. A pane belongs to a project and works in a folder that project
+# Reading which one came back is the pane's to answer rather than the tabs': every project has a tab
+# whichever is being shown, so a name read off the screen would be found there on a face that came
+# back on the wrong project. A pane belongs to a project and works in a folder that project
 # is bound to, so where the new pane is standing *is* the project the face came back on — read the way
 # `open-a-pane-where-a-project-keeps-more-than-one-folder` reads it, by printing a file that lies in
 # one of the folders and says so. Both folders carry one, so a face that came back on the wrong
@@ -192,7 +192,7 @@ steps_gui:
     domain: terminal
     op: open-shell
 
-  # And the project, asked of the pane rather than of the rail. A pane works in a folder of its own
+  # And the project, asked of the pane rather than of the tabs. A pane works in a folder of its own
   # project, so the folder's own file is the face saying which project it came back on — and the
   # other folder holds one too, so the wrong project would answer this with the wrong sentence.
   - type: action

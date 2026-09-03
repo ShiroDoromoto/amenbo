@@ -28,8 +28,8 @@
 id: read-a-file-with-the-tree-still-in-front-of-you
 title: The file opens wide on the far side of the panes while the tree stays in the rail, and the key gives the width back before it closes the column
 description: >
-  Raise a project bound to a folder of two files and open the reading column. Turn the rail to its
-  folders half and open the first file with two presses: it is drawn on the far side of the panes and
+  Raise a project bound to a folder of two files and open the reading column. In the tree beside the
+  panes, open the first file with two presses: it is drawn on the far side of the panes and
   the column grows to read it in. The second file's row is still there in the rail — read it, and
   pick it out — and then press the key that leaves things: the column goes back to the width the
   panes are drawn beside with the file still open, and a second press puts the column away.
@@ -82,9 +82,8 @@ steps_gui:
     with:
       side: files
 
-  # And the rail turned to its folders half, which is where the tree is. The section stands unfolded
-  # at its first level from the moment it is drawn: the names in the bound folder are what a person
-  # came to the folders half for.
+  # And the tree standing in the rail. The section stands unfolded at its first level from the moment
+  # it is drawn: the names in the bound folder are what a person came to the rail for.
   - type: action
     domain: files
     op: tree
@@ -181,7 +180,7 @@ steps_gui:
       side: files
       present: false
 
-  # The tree is untouched by any of it: it is the rail's half, and the column that came and went was
+  # The tree is untouched by any of it: it is the rail's own, and the column that came and went was
   # on the other side of the panes.
   - type: assert
     domain: files

@@ -1,6 +1,6 @@
-# The rail's upper rows are the division itself, and pressing one moves the whole face.
+# The tabs down the edge of the face are the division itself, and pressing one moves the whole face.
 #
-# A pane belongs to a project and can work in no folder outside it, so the projects on the rail are
+# A pane belongs to a project and can work in no folder outside it, so the projects on the tabs are
 # not a grouping laid over one list of terminals — they are what the list is cut by. Pressing one is
 # therefore not a filter being narrowed but the face being moved: what is drawn afterwards is that
 # project's panes, and every other project's is off the screen. This road walks that move in both
@@ -28,9 +28,9 @@
 # The world raises the two projects and nothing else: a terminal is not a record, and what the panes
 # run is the reader's own shell.
 id: go-to-the-panes-of-another-project
-title: Pressing a project on the rail puts its panes on the face and takes every other project's off, and a terminal carried away by it is still running when its project comes back
+title: Pressing a project's tab puts its panes on the face and takes every other project's off, and a terminal carried away by it is still running when its project comes back
 description: >
-  Raise two projects, each with a folder of its own, and open a terminal in each: on the rail, going
+  Raise two projects, each with a folder of its own, and open a terminal in each: on the tabs, going
   to the second takes the first's line off the screen entirely, and going back brings it and nothing
   of the second's. A line typed at the pane that came back is taken, so the terminal behind the
   project is still running and not a picture of one.
@@ -101,7 +101,7 @@ steps_gui:
     with:
       project: Boathouse
 
-  # The half that says the rail is a division rather than a grouping: the pane of the project being
+  # The half that says the tabs are a division rather than a grouping: the pane of the project being
   # left is not somewhere further down the screen, it is off it.
   - type: assert
     domain: terminal
@@ -139,7 +139,7 @@ steps_gui:
       project: Greenhouse
 
   # Back, and it is the same pane: the line it was named by is on it, having been carried off the
-  # screen and brought back by nothing but two presses on the rail.
+  # screen and brought back by nothing but two presses on the tabs.
   - type: assert
     domain: terminal
     op: pane

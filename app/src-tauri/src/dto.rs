@@ -169,6 +169,13 @@ pub struct ProjectDto {
     pub(crate) id: i64,
     pub(crate) name: String,
     pub(crate) color: String,
+    /// The image the project shows for itself, as the `data:image/…` URL of the small square that was
+    /// baked when it was registered, or `null` where there is none (`AMB-D-839`). The tabs down the
+    /// edge of the face draw it in place of the colour and the first character (`AMB-D-838`), and they
+    /// draw every project — so it rides here rather than being fetched a project at a time. Only the
+    /// display version: the file it was baked from stays in the blob store and never comes out to the
+    /// webview.
+    pub(crate) icon: Option<String>,
     #[ts(type = "\"list\" | \"board\" | \"calendar\" | \"timeline\"")]
     pub(crate) view: String,
     /// Open task count (todo/in_progress/blocked — anything but done, live only). The sidebar's

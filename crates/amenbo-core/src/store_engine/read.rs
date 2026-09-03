@@ -3989,11 +3989,18 @@ pub struct DimensionRow {
 }
 
 /// One project in the snapshot overview, read from the read-model. Carries only what the snapshot's
-/// `ProjectDto` needs: identity/colour/view and its live dimensions (with values).
+/// `ProjectDto` needs: identity/colour/icon/view and its live dimensions (with values).
 pub struct ProjectRow {
     pub id: i64,
     pub name: String,
     pub color: Option<String>,
+    /// The display version of the image the project shows for itself, as a `data:image/…` URL, or
+    /// `None` where nobody registered one (`AMB-D-839`). The tabs down the edge of the face draw it
+    /// where it is there and fall back to the colour and the first character where it is not
+    /// (`AMB-D-838`), and they draw every project — so it rides in the overview rather than being
+    /// asked for a project at a time. The original it was baked from stays in the blob store and is
+    /// read only when a different size is baked.
+    pub icon: Option<String>,
     /// `default_view` as stored (`list`/`board`/`calendar`/`timeline`) — passes straight to the DTO.
     pub default_view: String,
     /// not-yet-done task count (todo/in_progress/blocked) — the sidebar's per-project badge.
@@ -4044,8 +4051,8 @@ fn overview_projects(conn: &Connection, reach: Option<i64>) -> Result<Vec<Projec
     const P: col::project::Cols = col::project::ALL;
 
     let mut sel = Select::new();
-    let (id, name, color, default_view) =
-        (sel.col(P.id), sel.col(P.name), sel.col(P.color), sel.col(P.default_view));
+    let (id, name, color, icon, default_view) =
+        (sel.col(P.id), sel.col(P.name), sel.col(P.color), sel.col(P.icon), sel.col(P.default_view));
     let pred = Pred::all([not_archived(P)].into_iter().chain(scoped(reach, P.id)));
     let mut sql = Sql::from(&sel, P.table);
     sql.push_where(pred.as_ref())
@@ -4057,6 +4064,7 @@ fn overview_projects(conn: &Connection, reach: Option<i64>) -> Result<Vec<Projec
                 id: id.get(r)?,
                 name: name.get(r)?,
                 color: color.get(r)?,
+                icon: icon.get(r)?,
                 default_view: default_view.get(r)?,
                 open_count: 0,
                 proposed_decision_count: 0,
@@ -6327,6 +6335,34 @@ mod tests {
         assert_eq!(by.get(&1).copied(), Some(2), "two proposed; accepted/rejected excluded");
         assert_eq!(by.get(&2).copied(), Some(0), "the one proposal is superseded => not current");
         assert_eq!(by.get(&3).copied(), Some(0), "no proposed decision => 0");
+    }
+
+    /// `project_overview` carries the display version of the image a project shows for itself, so the
+    /// tabs down the edge of the face can draw every project's without asking for one at a time
+    /// (`AMB-D-838`). A project nobody registered one for reports `None`, which is what the tabs fall
+    /// back to the colour and the first character on.
+    #[test]
+    fn project_overview_carries_the_registered_icon() {
+        let e = StoreEngine::open_in_memory_unchecked().unwrap();
+        e.put_record(
+            "project",
+            1,
+            &[
+                ("name", text("Alpha")),
+                ("order_key", text("a")),
+                ("icon", text("data:image/png;base64,AAAA")),
+            ],
+        )
+        .unwrap();
+        e.put_record("project", 2, &[("name", text("Beta")), ("order_key", text("b"))]).unwrap();
+
+        let by: HashMap<i64, Option<String>> = project_overview(e.conn(), crate::reach::Reach::All)
+            .unwrap()
+            .into_iter()
+            .map(|r| (r.id, r.icon))
+            .collect();
+        assert_eq!(by.get(&1).cloned().flatten().as_deref(), Some("data:image/png;base64,AAAA"));
+        assert_eq!(by.get(&2).cloned().flatten(), None, "a project with no icon registered has none");
     }
 
     /// The dimension ref resolvers answer from the truth source — key or exact name, optionally scoped

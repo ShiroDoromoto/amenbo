@@ -18,8 +18,14 @@ const project = vi.fn();
 const folded = vi.fn();
 
 const PROJECTS = [
-  { id: 1, name: "amenbo", color: "#101820" },
-  { id: 2, name: "the site", color: "#ffe066" },
+  { id: 1, name: "amenbo", color: "#101820", icon: null },
+  { id: 2, name: "the site", color: "#ffe066", icon: null },
+] as unknown as Project[];
+
+/** The same two projects, with an image registered for the second (`AMB-D-839`). */
+const MARKED = [
+  PROJECTS[0],
+  { ...PROJECTS[1], icon: "data:image/png;base64,LOGO" },
 ] as unknown as Project[];
 
 /** A pane in each project, the one in the second running — so a turn can be left standing in it. */
@@ -31,11 +37,11 @@ function twoProjects(): Layout {
   return goProject(layout, 1);
 }
 
-async function draw(compact = false, needy: string[] = []) {
+async function draw(compact = false, needy: string[] = [], projects: Project[] = PROJECTS) {
   await act(async () => {
     root.render(createElement(ProjectTabs, {
       layout: twoProjects(),
-      projects: PROJECTS,
+      projects,
       needy: new Set(needy),
       compact,
       onCompact: folded,
@@ -100,6 +106,31 @@ describe("the project tabs", () => {
   it("still wears it once the names are folded away", async () => {
     await draw(true, ["2"]);
     expect(tabs()[1].querySelector(".ptabs__needs")).not.toBeNull();
+  });
+
+  // What a project shows for itself, where somebody gave it one (`AMB-D-838`). It stands in the mark's
+  // place rather than beside it — that place is the whole of a compact tab.
+  it("draws the image a project was given in place of its colour and its letter", async () => {
+    await draw(false, [], MARKED);
+    expect(marks()).toEqual(["a", ""]);
+    const image = tabs()[1].querySelector<HTMLImageElement>(".ptabs__icon");
+    expect(image?.getAttribute("src")).toBe("data:image/png;base64,LOGO");
+    // The colour would only show through the corners of a picture that fills the mark.
+    expect(tabs()[1].querySelector<HTMLElement>(".ptabs__mark")!.style.background).toBe("");
+  });
+
+  // Registering one is a thing a person does, and most never will.
+  it("keeps the colour and the letter for a project with no image", async () => {
+    await draw(false, [], MARKED);
+    expect(tabs()[0].querySelector(".ptabs__icon")).toBeNull();
+    expect(tabs()[0].querySelector<HTMLElement>(".ptabs__mark")!.style.background).not.toBe("");
+  });
+
+  // Folding takes the names, and the mark is what is left — an image the same as a letter.
+  it("still draws it once the names are folded away", async () => {
+    await draw(true, [], MARKED);
+    expect(tabs()[1].querySelector(".ptabs__icon")).not.toBeNull();
+    expect(tabs()[1].getAttribute("aria-label")).toBe("the site");
   });
 
   it("asks for the other width, and says which one it is offering", async () => {

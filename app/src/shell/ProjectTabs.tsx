@@ -19,11 +19,17 @@ import { t } from "../core/i18n";
  * tab, and a column that could be closed would be a way to stop being told (`AMB-T-3610`).
  *
  * **Compact is where the names go, not the tabs.** The tabs stay whatever happens; what folds away is
- * the width the names take, leaving the colour a person gave the project and the first character of
- * what they called it (`./projectMark`). It is kept for the device (`../talk/columns`) — it is how
- * somebody likes to work rather than something one project's work wants — and the control for it sits
- * under the tabs rather than in the bar over the face, because it is about this column alone and is
- * pressed once and left.
+ * the width the names take, leaving the mark: the image the project was given, or the colour a person
+ * gave it and the first character of what they called it (`./projectMark`). It is kept for the device
+ * (`../talk/columns`) — it is how somebody likes to work rather than something one project's work
+ * wants — and the control for it sits under the tabs rather than in the bar over the face, because it
+ * is about this column alone and is pressed once and left.
+ *
+ * **An image, where the project has one.** A person can register one in the project's settings
+ * (`AMB-D-838`, `AMB-D-839`), and it stands in the mark's place rather than beside it: the mark is the
+ * one thing on a compact tab, and a picture next to a letter for the same project would be saying it
+ * twice in the width there is for saying it once. Nothing is registered for most projects and nothing
+ * has to be — the colour and the letter are what they keep.
  *
  * **The tabs scroll and the control does not.** A machine with a project for every folder it has ever
  * opened must not push the way back to the names off the bottom of the screen. What scrolls past the
@@ -54,6 +60,10 @@ export function ProjectTabs({
           // A project with no colour of its own has no ink either: the mark falls back to the face's
           // surface and its own text colour, which is readable in both themes.
           const ink = project.color ? inkOn(project.color) : null;
+          // The image a person registered for the project, where there is one. It fills the mark, so
+          // the colour is left off underneath it: a picture with somebody's colour showing through its
+          // corners is the colour looking like part of the picture.
+          const icon = project.icon;
           return (
             <button
               key={project.id}
@@ -69,10 +79,10 @@ export function ProjectTabs({
             >
               <span
                 className="ptabs__mark"
-                style={{ background: project.color, ...(ink === null ? {} : { color: ink }) }}
+                style={icon === null ? { background: project.color, ...(ink === null ? {} : { color: ink }) } : undefined}
                 aria-hidden="true"
               >
-                {initialOf(project.name)}
+                {icon === null ? initialOf(project.name) : <img className="ptabs__icon" src={icon} alt="" />}
               </span>
               {!compact && <span className="ptabs__name">{project.name}</span>}
               {/* Only for a project the reader is not looking at: the panes of the one they are each

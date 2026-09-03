@@ -46,7 +46,7 @@ export function DataProgressModal({
   return (
     <div className="modal__overlay">
       <div className="modal__card" style={{ maxWidth: 420, display: "flex", flexDirection: "column", gap: 12 }}>
-        <span style={{ fontSize: "var(--fs-sm)" }}>{label}</span>
+        <span style={{ fontSize: "var(--fs-md)" }}>{label}</span>
         <div style={{ height: 6, background: "var(--c-rule)", borderRadius: 3, overflow: "hidden" }}>
           <div style={{ width: pct !== null ? `${pct}%` : "100%", height: "100%", background: "var(--c-accent)" }} />
         </div>

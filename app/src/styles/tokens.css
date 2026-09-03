@@ -80,14 +80,14 @@
   /* ----- typography ----- */
   --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
-  /* text scale */
-  --fs-2xs: 10px; /* badges / superscript markers */
-  --fs-xs: 12px;
-  --fs-sm: 13px;
-  --fs-md: 14px;
+  /* text scale — four steps, because four is how many a reader can tell apart (`AMB-D-842`).
+     The seven it replaces ran 10 / 12 / 13 / 14 / 16 / 17 / 20, three of those a single pixel
+     from their neighbour: a name nobody can see the effect of is a name the next writer picks
+     at random, and a heading a hair larger than the line under it is not a heading. */
+  --fs-xs: 12px; /* badges, superscript markers, chips */
+  --fs-md: 14px; /* the default */
   --fs-body: 16px; /* detail-pane reading body */
   --measure-prose: 40rem; /* reading-width cap for detail-pane body text (~40 CJK chars) */
-  --fs-lg: 17px;
   --fs-xl: 20px;
   --fw-normal: 400;
   --fw-medium: 550;

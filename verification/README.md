@@ -779,6 +779,12 @@ these roads said from behind the face that reads it: the layer is spoken inside 
 is drawn on the other side of the switch, so the operator arms the word and crosses over before it
 lands. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
 
+`tab-icon` is the other reading on this face that answers with no words at all: what the tab of a
+project named is drawn with, the image registered for it or the colour and the letter it falls back to.
+It names the project rather than pressing its tab, every project having one whether or not the face is
+drawing that project's panes. `give-a-project-an-image-of-its-own` is the road, and it walks the
+settings the image is given on before it crosses here.
+
 And the last is the column beside those panes. **`files`** is the folder a project answers for, read
 from inside Amenbo: the folder itself, folded down, with what git says about each row drawn as a
 colour on it. Every op takes a `section` saying which part of the column a row is being looked for
@@ -1242,7 +1248,12 @@ be naming a command that does not exist. The reading is a `Review` on both of it
 the shot is a picture, and neither the image nor the colour-and-letter a project falls back to puts a
 word there. `file:` here is not `attach`'s: what is under test is the picture, so the road names a
 file a premise copied off the fixtures shelf rather than one the operator brings, and the run says
-where it landed before the first step is handed over.
+where it landed before the first step is handed over. The tab that project carries down the edge of
+the terminal face draws the same image (`terminal tab-icon`), and is a second op rather than an
+argument on the first: it is another surface and not another way of asking, the square being the face
+an image is given on and the tabs being what it was given one for. That reading is a `Review` too, and
+names the project rather than pressing its tab — every project has one, and going to it would move the
+whole face onto the one tab being read.
 
 One road's alone is sometimes an *argument* rather than a whole op, and then it is the driver that
 cannot answer it which says so. A search hit is the case: what the row **calls** the place it points

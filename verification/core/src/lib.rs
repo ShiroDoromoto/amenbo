@@ -2350,6 +2350,21 @@ const REGISTRY: &[OpSpec] = &[
     // it had none — so a road that named a project without pressing for it would be reading a screen
     // it had not put itself on.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "go-project", required: &["project"], refs: &[], strings: &["project"], binds: false },
+    // What one of those tabs is drawn with. A project wears the image it was registered for, or —
+    // registered with none, which is nearly every project — its colour with the first letter of its
+    // name on it. `present` says which of the two, the way `project icon` does on the settings:
+    // neither side is an absence, so a step that asked for one of them to be missing would be asking
+    // an eye to find nothing in a square that is never empty.
+    //
+    // It is read on the tab of a project without going to it, `project` naming the tab as
+    // `go-project`'s does. That is the reading: every tab is drawn from the one picture the face is
+    // handed, so an image that arrived on the settings and not here would be an image the tabs never
+    // heard about.
+    //
+    // A screen road alone, for `project icon`'s reason — `project update` is the terminal's whole
+    // door onto these fields and there is nowhere on it to hand over an image — and one more: a
+    // terminal has no face to draw tabs down.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "tab-icon", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // Opening a pane. A pane belongs to a project and works in a folder that project is bound to, so
     // where it is bound to one nothing is asked at all. `from` is which of the two controls is
     // pressed, and they are not the same place: `face` is the empty frame on a page with room in it,

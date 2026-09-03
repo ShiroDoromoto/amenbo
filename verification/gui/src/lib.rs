@@ -762,7 +762,10 @@ impl Instructor {
     ///
     /// `project icon` is a `Review` further out than any of those, and on both of its states: what it
     /// reads is a picture. A reading answers which words are on a shot, and neither the image a project
-    /// was given nor the colour it falls back to puts one there.
+    /// was given nor the colour it falls back to puts one there. `terminal tab-icon` is the same
+    /// reading on the other surface that draws either, and a `Review` for the same reason — the one
+    /// letter a tab falls back to is a letter of the project's name, which the tab beside it is
+    /// spelling out in full.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with, .. } = step else { return None };
         match (*domain, op.as_str()) {
@@ -3446,6 +3449,26 @@ impl Instructor {
                 false => "In the pair of segments at the top of the window, confirm the one that shows the terminal is wearing no mark at all."
                     .to_string(),
             },
+            // What a project's tab is drawn with, down the edge of that same face. Both sides are a
+            // picture and neither is an absence, the way `project icon`'s are: registered, the tab
+            // wears the image, and with none registered it wears the project's colour with the first
+            // letter of its name on it. So each line names what an eye should find rather than
+            // asking for one of them to be missing.
+            //
+            // The tab is named and not pressed. Every project has one whether or not the face is
+            // drawing that project's panes, and going to it first would have the road reading the tab
+            // it had just moved the whole face onto — which is a tab that says nothing about the rest
+            // of them being drawn from the same picture.
+            (Domain::Terminal, "tab-icon") => match present(with) {
+                true => format!(
+                    "Down the edge of the terminal face, confirm the tab the project \"{}\" carries is drawn with the image registered for it.",
+                    req(with, "project")?
+                ),
+                false => format!(
+                    "Down the edge of the terminal face, confirm the tab the project \"{}\" carries is drawn with no image: it holds the project's colour with the first letter of its name on it.",
+                    req(with, "project")?
+                ),
+            },
             // What is standing where a person types, with nothing run. Both halves are said: the words
             // being there, and the line not having gone — a build that sent the newline would draw
             // whatever the program did with it, and the input line would be empty again.
@@ -5613,6 +5636,56 @@ steps_gui:
             "clearing waits for the same button: {}",
             lines[3]
         );
+
+        for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
+            assert!(ins.expectation(st).is_none(), "step {i} reads a picture, which no reading settles");
+        }
+    }
+
+    /// The other surface that draws the same image: the tab a project carries down the edge of the
+    /// terminal face. Both lines name what an eye should find — the image, or the colour with the
+    /// first letter of the name on it — and neither is settled by a reading, a tab holding a
+    /// picture whichever of the two it is. Nothing presses the tab either: what the road is asking is
+    /// that every tab is drawn from the one picture the face is handed, and going to the project
+    /// first would have moved the whole face onto the one tab being read.
+    #[test]
+    fn a_projects_tab_is_read_for_the_image_it_carries_without_being_pressed() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Greenhouse }
+    as: greenhouse
+steps_gui:
+  - type: assert
+    domain: terminal
+    op: tab-icon
+    with: { project: Greenhouse, present: true }
+  - type: assert
+    domain: terminal
+    op: tab-icon
+    with: { project: Greenhouse, present: false }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[0].contains("Greenhouse") && lines[0].contains("image registered for it"),
+            "the tab is named by the project that carries it: {}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains("first letter of its name"),
+            "the fallback is named rather than an absence looked for: {}",
+            lines[1]
+        );
+        for line in &lines {
+            assert!(!line.contains("press"), "the tab is read where it stands: {line}");
+        }
 
         for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
             assert!(ins.expectation(st).is_none(), "step {i} reads a picture, which no reading settles");

@@ -12,9 +12,9 @@
 # to the row it was on leaves a different answer than a press which reached.
 #
 # ── Why a row is pressed to take it back out ─────────────────────────────────────────────────────
-# Opening a file is a press on its row like any other, so the file the paths are read in is picked out
-# by the very step that opens it — and it would go on the clipboard with the rest if the road left it
-# there. Pressing it again with the adding key is how a reader takes one back out, which is the half
+# Opening a file starts with a press on its row like any other — it takes two, and the first of them
+# picks the row out — so the file the paths are read in is picked out by the very step that opens it,
+# and it would go on the clipboard with the rest if the road left it there. Pressing it again with the adding key is how a reader takes one back out, which is the half
 # of that key an adding-only press would pass.
 #
 # ── Why the paths are read in another file's text ────────────────────────────────────────────────

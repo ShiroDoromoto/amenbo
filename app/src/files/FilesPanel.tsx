@@ -1756,8 +1756,9 @@ function Tree({
             // A press picks the row out; which keys are down says what else it is. The machine's
             // own key takes one row into the selection or back out of it, Shift reaches from the
             // end the range is measured from to here, and a press with neither is this one row.
-            // Neither of the two opens anything: a reader gathering rows is not asking to be shown
-            // each one on the way (`AMB-T-4229`).
+            // None of the three reads a file: a reader gathering rows is not asking to be shown
+            // each one on the way (`AMB-T-4229`), and what is inside a row is asked for by the
+            // second press (`AMB-D-835`).
             //
             // **Which key that is, is the machine's answer and not one key that will do.** Ctrl
             // and a press is how a Mac asks for the menu, so a Mac reading it as "add this row"
@@ -1782,8 +1783,21 @@ function Tree({
                 return;
               }
               onPicked([line.key], line.key);
+              // A folder answers the first press: what is under it is more of the tree, and
+              // showing it takes nothing away from what a reader can still reach. A file waits for
+              // the second one — the file lies over the tree while it is being read, so a row
+              // opened on the way to the next one is the row that hides it (`AMB-D-835`).
               if (line.isDir) onOpen(line.key);
-              else onRead(line.path);
+            }}
+            // The second press is what asks for what is inside. Keys held down mean here what they
+            // mean on the first press: a reader reaching for a run of rows, or taking one in and
+            // out of the selection, is not asking to be shown any of them — and pressing twice to
+            // gather two rows is not a request to read either.
+            onDoubleClick={(e) => {
+              const mac = hostOs() === "macos";
+              if (mac && e.ctrlKey) return;
+              if (e.shiftKey || (mac ? e.metaKey : e.ctrlKey)) return;
+              if (!line.isDir) onRead(line.path);
             }}
             // A row is a thing to open and a thing to carry, and which one a press turns out to be
             // is decided by how far it travels (`./handDrag`). A folder is carried the same way a

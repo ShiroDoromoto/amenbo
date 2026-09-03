@@ -2064,8 +2064,11 @@ impl Instructor {
                 "In the folder's section, open the folder \"{}\" one level.",
                 req(with, "name")?
             ),
+            // Twice, because one press picks the row out and does no more: the file lies over the
+            // tree while it is being read, so a row opened on the way past is the row that hides
+            // what a reader was reaching for next.
             (Domain::Files, "open") => format!(
-                "In {}, press \"{}\". The column is replaced by what is in that file.",
+                "In {}, press \"{}\" twice. The column is replaced by what is in that file.",
                 section(with)?,
                 req(with, "name")?
             ),

@@ -305,6 +305,24 @@ function click(el: Element | null | undefined) {
 }
 
 /**
+ * Opening a file, which is two presses and not one (`AMB-D-835`): the first picks the row out and
+ * the second asks for what is inside it. The browser sends both clicks and the double on top of
+ * them, so that is what a test that opens a file sends.
+ */
+function openFile(
+  el: Element | null | undefined,
+  keys: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean } = {},
+) {
+  return act(async () => {
+    el?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    el?.dispatchEvent(new MouseEvent("click", { bubbles: true, ...keys }));
+    el?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 2, ...keys }));
+    el?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, ...keys }));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+/**
  * The same, with a key held down: how a reader takes one row into the selection, or reaches a run
  * of them at once (`AMB-T-4229`).
  */
@@ -759,7 +777,7 @@ describe("the file face", () => {
       [...container.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")]
         .find((one) => labelOf(one) === name);
     await act(async () => { named("main.rs")!.focus(); });
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     // Both at once: the file is up and the tree is still under it. Drawn in place of each other,
     // the tree came off the page here, and its state went with it.
@@ -784,7 +802,7 @@ describe("the file face", () => {
       { name: "b.md", isDir: false, ignored: false },
     ];
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
 
     const chosen = () => container.querySelector(".files__file--chosen")?.textContent;
@@ -793,7 +811,7 @@ describe("the file face", () => {
     // The other file, so that the mark is shown to move rather than merely to exist.
     await click(pressable(t("files.back")));
     await settle();
-    await click(button("b.md"));
+    await openFile(button("b.md"));
     await settle();
     expect(chosen()).toContain("b.md");
 
@@ -808,7 +826,7 @@ describe("the file face", () => {
     hoisted.entries[""] = [{ name: "a.md", isDir: false, ignored: false }];
     let closed = 0;
     await drawOpen({ onClose: () => { closed += 1; } });
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     expect(pressable(t("files.back"))).toBeDefined();
 
@@ -980,7 +998,7 @@ describe("the file face", () => {
   it("draws a Markdown file as Markdown", async () => {
     hoisted.file = aFile({ text: "# A heading" });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     expect(hoisted.asked).toContain(`read:${ROOT}:a.md`);
     expect(container.querySelector("h1")?.textContent).toBe("A heading");
@@ -992,7 +1010,7 @@ describe("the file face", () => {
   it("switches a Markdown file between what it draws and the text it is", async () => {
     hoisted.file = aFile({ text: "# A heading" });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     // It opens on the rendering: what a person opens a Markdown file for is to read it.
     expect(container.querySelector("h1")?.textContent).toBe("A heading");
@@ -1012,7 +1030,7 @@ describe("the file face", () => {
     hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
     hoisted.file = aFile({ text: "echo hi" });
     await drawOpen();
-    await click(button("run.sh"));
+    await openFile(button("run.sh"));
     await settle();
     // A switch with nowhere to switch to is a control that answers nothing.
     expect(button(t("files.edit"))).toBeUndefined();
@@ -1121,7 +1139,7 @@ describe("the file face", () => {
     hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
     hoisted.file = aFile({ text: "#!/bin/sh\necho hi" });
     await drawOpen();
-    await click(button("run.sh"));
+    await openFile(button("run.sh"));
     await settle();
     // Not a heading: the hash in a shell script is a comment, and a name is what decides that.
     expect(container.querySelector("h1")).toBeNull();
@@ -1139,7 +1157,7 @@ describe("the file face", () => {
     hoisted.entries[""] = [{ name: "cut.txt", isDir: false, ignored: false }];
     hoisted.file = aFile({ text: "as far as it goes", truncated: true, clean: false });
     await drawOpen();
-    await click(button("cut.txt"));
+    await openFile(button("cut.txt"));
     await settle();
     expect(last(hoisted.editing)?.editable).toBe(false);
 
@@ -1147,7 +1165,7 @@ describe("the file face", () => {
     hoisted.file = aFile({ text: "read me", clean: false });
     await click(button(t("files.back")));
     await settle();
-    await click(button("cut.txt"));
+    await openFile(button("cut.txt"));
     await settle();
     expect(last(hoisted.editing)?.editable).toBe(false);
   });
@@ -1158,7 +1176,7 @@ describe("the file face", () => {
   it("says on the file's own row what the bytes were read as, and how the lines end", async () => {
     hoisted.file = aFile({ text: "a", encoding: "Shift_JIS", lineEnding: "crlf" });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     expect(button("Shift_JIS")?.textContent).toContain("CRLF");
   });
@@ -1166,7 +1184,7 @@ describe("the file face", () => {
   it("says in words that a file's newlines are mixed, rather than in a token nobody reads", async () => {
     hoisted.file = aFile({ text: "a", encoding: "UTF-8", lineEnding: "mixed" });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     expect(container.textContent).toContain(t("files.lineEndingMixed"));
   });
@@ -1174,7 +1192,7 @@ describe("the file face", () => {
   it("asks the host to read the file again in the encoding the reader named", async () => {
     hoisted.file = aFile({ text: "a", encoding: "windows-1252" });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     expect(hoisted.asked).toContain(`read:${ROOT}:a.md`);
 
@@ -1196,7 +1214,7 @@ describe("the file face", () => {
   it("leaves the encodings open while the arrows are walking them", async () => {
     hoisted.file = aFile({ text: "a", encoding: "windows-1252" });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     await click(button("windows-1252"));
     await settle();
@@ -1219,7 +1237,7 @@ describe("the file face", () => {
     hoisted.entries[""] = [{ name: "guessed.txt", isDir: false, ignored: false }];
     hoisted.file = aFile({ text: "?????", encoding: "windows-1252", clean: false });
     await drawOpen();
-    await click(button("guessed.txt"));
+    await openFile(button("guessed.txt"));
     await settle();
     expect(last(hoisted.editing)?.editable).toBe(false);
     expect(button("windows-1252")).toBeDefined();
@@ -1232,7 +1250,7 @@ describe("the file face", () => {
     hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
     hoisted.file = aFile({ text: "#!/bin/sh\necho hi", encoding: "UTF-8" });
     await drawOpen();
-    await click(button("run.sh"));
+    await openFile(button("run.sh"));
     await settle();
 
     const bar = container.querySelector(".files__bar");
@@ -1252,7 +1270,7 @@ describe("the file face", () => {
   it("draws no second row where there is nothing to put on it", async () => {
     hoisted.file = aFile({ image: { mime: "image/png" } });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
 
     expect(container.querySelector(".files__name")?.textContent).toBe("a.md");
@@ -1262,7 +1280,7 @@ describe("the file face", () => {
   it("says nothing about the encoding of a picture", async () => {
     hoisted.file = aFile({ image: { mime: "image/png" } });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     // A picture has no encoding to be wrong about, and a control that asked about one would be
     // asking a question the file cannot answer.
@@ -1279,7 +1297,7 @@ describe("the file face", () => {
         text: "#!/bin/sh\necho hi", encoding: "UTF-8", digest: "before", ...about,
       });
       await drawOpen();
-      await click(button("run.sh"));
+      await openFile(button("run.sh"));
       await settle();
     }
 
@@ -1385,7 +1403,7 @@ describe("the file face", () => {
       hoisted.entries[""] = [{ name: "notes.md", isDir: false, ignored: false }];
       hoisted.file = aFile({ text: "# a heading", encoding: "UTF-8" });
       await drawOpen();
-      await click(button("notes.md"));
+      await openFile(button("notes.md"));
       await settle();
       expect(container.querySelector("h1")).not.toBeNull();
       expect(button(t("files.saved"))).toBeUndefined();
@@ -1415,7 +1433,7 @@ describe("the file face", () => {
         text: "#!/bin/sh\necho hi", encoding: "UTF-8", digest: "before", ...about,
       });
       await drawOpen();
-      await click(button("run.sh"));
+      await openFile(button("run.sh"));
       await settle();
     }
 
@@ -1454,7 +1472,7 @@ describe("the file face", () => {
       hoisted.entries[""] = [{ name: "chart.png", isDir: false, ignored: false }];
       hoisted.file = aFile({ image: { mime: "image/png" }, digest: "before" });
       await drawOpen();
-      await click(button("chart.png"));
+      await openFile(button("chart.png"));
       await settle();
       expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
       expect(container.querySelector("img")?.getAttribute("src")).toContain("mark=before");
@@ -1550,7 +1568,7 @@ describe("the file face", () => {
   it("says so when the file is not something a panel can show", async () => {
     hoisted.file = aFile();
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     // The name says Markdown and the bytes say otherwise; the bytes win (`crate::folder`).
     expect(container.textContent).toContain(t("files.notText"));
@@ -1567,7 +1585,7 @@ describe("the file face", () => {
     };
     hoisted.refuseRead = link;
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     expect(container.textContent).toContain(errLabel(link));
     expect(container.textContent).not.toContain(t("files.unreadable"));
@@ -1585,7 +1603,7 @@ describe("the file face", () => {
       fields: null,
     };
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     expect(container.textContent).toContain(t("files.unreadable"));
     expect(container.textContent).not.toContain("no such file");
@@ -1594,7 +1612,7 @@ describe("the file face", () => {
   it("points a picture at the door that hands out a file, not at bytes of its own", async () => {
     hoisted.file = aFile({ image: { mime: "image/png" } });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     // The address is the project, the folder and the path this reader was opened on — the same
     // three the host resolved the answer through, so nothing had to be carried (`AMB-D-783`).
@@ -1605,7 +1623,7 @@ describe("the file face", () => {
   it("says what a picture it would not draw was measured at, and offers the way on", async () => {
     hoisted.file = aFile({ oversize: { bytes: 6 * 1024 * 1024, width: 40000, height: 30000 } });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     // A refusal drawn as nothing at all reads as a damaged file, so both numbers travel with it and
     // the reader is pointed at something built to open it (`AMB-D-783`).
@@ -1628,7 +1646,7 @@ describe("the file face", () => {
   it("refuses on bytes alone where the picture would not say its size", async () => {
     hoisted.file = aFile({ oversize: { bytes: 6 * 1024 * 1024 } });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     // A size nobody could read is not printed as a guess (`crate::folder`).
     expect(container.textContent).toContain(megabytes(6));
@@ -1641,7 +1659,7 @@ describe("the file face", () => {
     // — the file said to be empty, which is the opposite of what it is (`AMB-D-783`).
     hoisted.file = aFile({ oversize: { bytes: 10 * 1024, width: 16000, height: 16000 } });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     expect(container.textContent).toContain(
       formatNumber(10, { style: "unit", unit: "kilobyte", unitDisplay: "short", maximumFractionDigits: 0 }),
@@ -1653,7 +1671,7 @@ describe("the file face", () => {
     // kilobyte. Rounded up a unit it would read "0 kB" — the same lie one unit further down.
     hoisted.file = aFile({ oversize: { bytes: 33, width: 30000, height: 30000 } });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     expect(container.textContent).toContain(
       formatNumber(33, { style: "unit", unit: "byte", unitDisplay: "short", maximumFractionDigits: 0 }),
@@ -1663,7 +1681,7 @@ describe("the file face", () => {
   it("says out loud when only the head of a long file is shown", async () => {
     hoisted.file = aFile({ text: "x".repeat(10), truncated: true, clean: false });
     await drawOpen();
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     expect(container.textContent).toContain(t("files.cut"));
   });
@@ -1672,7 +1690,7 @@ describe("the file face", () => {
     const left: number[] = [];
     hoisted.file = aFile({ text: "see AMB-T-12" });
     await drawOpen({ onOpenLedger: () => left.push(1) });
-    await click(button("a.md"));
+    await openFile(button("a.md"));
     await settle();
     // A reference selects on the other face. Following one from here without leaving would land on
     // a pane the reader cannot see — a link that looks alive and is not (`AMB-D-747`).
@@ -1876,12 +1894,27 @@ describe("the file face", () => {
     expect(rows().every((one) => one.hasAttribute("aria-selected"))).toBe(true);
   });
 
-  it("picks the one row a plain press is on, and opens it", async () => {
+  it("picks the one row a plain press is on, and reads nothing", async () => {
     await four();
     await click(rowFor("b.md"));
     await settle();
     expect(picked()).toEqual(["b.md"]);
+    expect(hoisted.asked).not.toContain(`read:${ROOT}:b.md`);
+  });
+
+  it("reads the row on the second press, which the first one only picked out", async () => {
+    await four();
+    await openFile(rowFor("b.md"));
+    await settle();
+    expect(picked()).toEqual(["b.md"]);
     expect(hoisted.asked).toContain(`read:${ROOT}:b.md`);
+  });
+
+  it("reads nothing where the second press was a reader gathering another row", async () => {
+    await four();
+    await openFile(rowFor("b.md"), { ctrlKey: true });
+    await settle();
+    expect(hoisted.asked).not.toContain(`read:${ROOT}:b.md`);
   });
 
   it("takes a row in and back out with the machine's own key, without opening it", async () => {
@@ -2185,7 +2218,7 @@ describe("the file face", () => {
   it("bins the file being read and not what is picked out behind it", async () => {
     await twoPicked();
     // The file on the screen is one nobody picked out: the reading face is about one file.
-    await click(rowFor("b.md"));
+    await openFile(rowFor("b.md"));
     await settle();
     // The bin on the reading face, which wears the word as its title rather than on its face.
     await click(container.querySelector(".files__trash"));
@@ -2471,7 +2504,7 @@ describe("a project bound to several folders", () => {
     both();
     hoisted.file = aFile({ text: "hello" });
     await openBothTrees();
-    await click(rowIn(folderNamed("plugins"), "a.md"));
+    await openFile(rowIn(folderNamed("plugins"), "a.md"));
     await settle();
     // The same path names a different file in each folder, so which folder the row was in has to
     // travel with it.
@@ -2735,7 +2768,7 @@ describe("a project bound to several folders", () => {
     hoisted.file = aFile({ text: "echo hi" });
     hoisted.entries = { "": [{ name: "run.sh", isDir: false, ignored: false }] };
     await drawOpen();
-    await click(button("run.sh"));
+    await openFile(button("run.sh"));
     await settle();
 
     await pressOn(container.querySelector(".files--reading"), "c");

@@ -1,0 +1,160 @@
+# A reader who has read enough presses the pane they were working in, and the column gives the panes
+# their room back without letting the file go. This is the road that says the press means both of
+# those things at once: where the reader is looking now, and nothing about what they were reading.
+#
+# ── Why a press on a pane rather than the key ────────────────────────────────────────────────────
+# The key that leaves reaches the same width, and it is walked in `read-a-file-with-the-tree-still-in-
+# front-of-you`, where both of its layers are one gesture counted twice. This is the other way to the
+# narrow width and the one a reader takes without meaning to: they press what they want next, and the
+# width follows the press. What the two roads prove is therefore not the same thing — one is a key
+# doing what a key is told, the other is the face reading a press aimed somewhere else entirely.
+#
+# ── Why the pane is typed into before any of this ────────────────────────────────────────────────
+# The line is the reader's own words, so a reading finds it on the pane that took it and on no other
+# part of the face. It buys two things here: the press has something a road can name to aim at, and
+# the reading after the press says the pane came back with what was on it — a column that had given
+# the width back to an empty box would look the same until somebody read one.
+#
+# ── Why the pane is read after the press and not before ──────────────────────────────────────────
+# The wide column lies over the panes rather than beside them, so how much of a pane is left showing
+# is a matter of how wide the window is — which is the run's business and not the road's. What is not
+# a matter of anything is the pane once the width has gone back: it is drawn whole, with what was
+# printed on it still there. So the absent half is left unread and the present one is read where it
+# means something.
+#
+# ── Why the file is read again at the end ────────────────────────────────────────────────────────
+# Narrow is not closed. A face that took the press as "done reading" and closed the column would give
+# the panes the same width back and pass every reading above — so the last line is of the file, still
+# open in a column a third the width it was being read in.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A press, a width and a pane are things on a screen. The binary is handed paths and reads them back;
+# none of this reaches it.
+id: go-back-to-the-work-without-closing-what-you-are-reading
+title: A press on a pane gives the panes their width back and leaves the file open in the narrow column
+description: >
+  Raise a project bound to a folder, open a terminal in it and type a line the pane can be named by.
+  Open a file from the tree: the column grows over the panes to read it in. Then press the pane —
+  nothing typed, nothing sent — and the column goes back to the width the panes are drawn beside: the
+  line is on the pane where it was, and the file is still open in the column that gave the room up.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+    as: orchard
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: orchard
+
+  # One file with a mark in it, so the reading at the end is of this file's own text rather than of
+  # anything the column would draw whatever it was holding.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard
+      path: pruning.md
+      content: "# SCENARIO the pears are pruned after the leaves fall"
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The work the reader is going back to at the end of the road. It is opened first because the press
+  # this road is about is aimed at it: a face with nothing running has no pane to press.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the terminal in the orchard
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal in the orchard
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: pruning.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears are pruned after the leaves fall
+
+  # Wide, because what the reader asked for is the file — and the reading is of the change, the width
+  # being no number a person at the screen can measure.
+  - type: assert
+    domain: terminal
+    op: side-width
+    with:
+      side: files
+      wider: true
+
+  # The line this road exists for. The press is on the terminal and means nothing to it: nothing is
+  # typed, nothing is sent, and what answers is the column on the other side of the panes.
+  - type: action
+    domain: terminal
+    op: press-pane
+    with:
+      shows: SCENARIO the terminal in the orchard
+
+  - type: assert
+    domain: terminal
+    op: side-width
+    with:
+      side: files
+      wider: false
+
+  # And the work is back, with what was printed on it. The press reached the pane as a press and not
+  # as an instruction: nothing was added to the line, and nothing was sent.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal in the orchard
+
+  # The half a face that closed the column would fail. Being finished with the room is not being
+  # finished with the file, and the file is where it was.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears are pruned after the leaves fall

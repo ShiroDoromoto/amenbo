@@ -1,0 +1,141 @@
+# The draft page is the one place in Amenbo a person writes that is not a record, and it is a tab in
+# the reading column beside the files. This is the road that says the two live together: a request
+# half written is still half written after a file has been read over the top of it, and nobody was
+# asked to keep it.
+#
+# ── Why the page is left rather than the window ──────────────────────────────────────────────────
+# What is typed is written after a moment's quiet, and again on the way out. The way out this road
+# takes is the smallest one there is — another tab in the same column — because it is the one a
+# reader takes without thinking: they are writing a request, they go and read the file they are
+# writing about, and they come back. If anything is going to lose the sentence, it is that.
+#
+# ── Why the page is drawn from the store rather than from the screen ─────────────────────────────
+# The column draws the page or the file, never both, so the page is gone from the screen while the
+# file is up and what comes back is read again from where it was kept. That is the whole of the
+# reading here: a face that had held the text in front of it would pass this road, and so would one
+# that kept it — but only the second one is still true after the file was opened, and the first
+# cannot be told from it any other way on this screen.
+#
+# ── Why the typing is written as an edit ─────────────────────────────────────────────────────────
+# It is the same box, filled the same way. The step says where the caret goes and what is typed,
+# which is what it says of a file — the page has no keeping of its own to press, and that is the
+# point of it.
+#
+# ── Why the file is read for its absence at the end ──────────────────────────────────────────────
+# One column, two things in it. A face drawing the page over a file it had not put away would show
+# the words this road is looking for and be wrong about everything else, so the last line is of the
+# file's own text, nowhere on the screen.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# The draft page has no command behind it: it is the workbench rather than the work, and nothing the
+# binary is handed reaches it.
+id: come-back-to-the-draft-page-and-find-what-you-typed
+title: The draft page is a tab beside the files, and what was typed on it is still there after a file has been read in the same column
+description: >
+  Raise a project bound to a folder of one file and open the reading column. Go to the draft page —
+  the first tab, the one that is always there — and type a line on it. Open the file from the tree,
+  which draws over the page in that same column, and read it. Then press the draft page's tab again:
+  the line is where it was left, kept without anybody having asked for it, and the file's text is off
+  the screen.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+    as: orchard
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: orchard
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard
+      path: pruning.md
+      content: "# SCENARIO the pears are pruned after the leaves fall"
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # The first tab, and the one with no cross on it: the page belongs to the project rather than to a
+  # reader who opened it, so it is always there to come back to.
+  - type: action
+    domain: files
+    op: tab
+
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO the pears want a word with the pruning crew
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears want a word with the pruning crew
+
+  # And away, into the very thing a person writing a request goes to look at. The tree is in the rail
+  # on the other side of the panes, so reaching it is not itself what takes the page off the screen —
+  # opening the file is.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: pruning.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears are pruned after the leaves fall
+
+  # The page is not behind the file, it is off the screen: one column draws one of them.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears want a word with the pruning crew
+      present: false
+
+  # Back to it, by its tab. Nothing was pressed to keep what was typed, and nothing was asked.
+  - type: action
+    domain: files
+    op: tab
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears want a word with the pruning crew
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears are pruned after the leaves fall
+      present: false

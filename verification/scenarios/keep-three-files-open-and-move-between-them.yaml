@@ -1,0 +1,217 @@
+# Opening a file used to cost a reader the one they had open, and this is the road that says the
+# column holds them: three files opened one after another are three tabs, the first is still there
+# when the third is up, and a press on its tab brings it back without going to the tree for it.
+#
+# ── Why three and not two ────────────────────────────────────────────────────────────────────────
+# Two files would prove the holding and nothing else. Three is what puts a tab off the end of the row
+# at the narrow width — the row scrolls sideways and never wraps — and the control that lists them is
+# the only door onto a tab that is off it. A road with two would leave that door unwalked, and it is
+# the one part of this face a reader cannot work around: a tab they cannot see is a file they have no
+# way back to.
+#
+# ── Why the row is read as a whole ───────────────────────────────────────────────────────────────
+# The three files are read one at a time as they are opened, which says each of them reached the
+# column. What that cannot say is what became of the two before it. The reading of the row is the
+# other half: three tabs, in the order they were opened, with nothing else among them — so a face
+# that opened a file twice, or dropped one as the next came up, is caught here rather than by a
+# reader who went looking for something that was open a minute ago.
+#
+# ── Why the first file's own text is read twice ──────────────────────────────────────────────────
+# A tab pressed has to draw *that* file, and the words are the road's own, one mark to a file. So the
+# press is read on both sides: the first file's line is back, and the third's — which was up a moment
+# before — is nowhere. A column that drew the tabs and left the last file underneath would pass the
+# first of those and fail the second.
+#
+# ── Why the width is taken back before the last door ─────────────────────────────────────────────
+# The control at the end of the row is there at both widths, but it is the narrow one it exists for:
+# a column the panes are drawn beside has room for a tab or two, and everything else is off the end.
+# So the road puts the width back the way a reader does — the key that leaves, one layer — and
+# reaches the fourth tab from a row that cannot show it.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A row of tabs is a thing on a screen. What the binary is handed is paths, and it holds one file no
+# more than it holds three.
+id: keep-three-files-open-and-move-between-them
+title: Three files opened are three tabs the column holds at once, and the one off the end of the row is reached from the control that lists them
+description: >
+  Raise a project bound to a folder of three files and open them one after another: each is drawn in
+  the column, and the row above it holds a tab for each in the order they were opened. Press the
+  first file's tab and it comes back with the third's text gone from the screen. Then take the width
+  back to the narrow one, where the row cannot draw them all, and reach the last file from the
+  control at the end that lists what is open by name.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+    as: orchard
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: orchard
+
+  # Three files, each with a mark of its own: what the readings below are of is the file that is up,
+  # and three files that read alike would leave the road green on any of them. The names are long
+  # enough that the row of tabs does not fit the narrow column, which is what the last door is for.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard
+      path: pruning-the-pears.md
+      content: "# SCENARIO the pears are pruned after the leaves fall"
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard
+      path: grafting-the-scions.md
+      content: "# SCENARIO the scions are cut while the wood is still asleep"
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard
+      path: mulching-the-beds.md
+      content: "# SCENARIO the beds are mulched before the first frost"
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: pruning-the-pears.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears are pruned after the leaves fall
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: grafting-the-scions.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the scions are cut while the wood is still asleep
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: mulching-the-beds.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the beds are mulched before the first frost
+
+  # The row, read as a whole and in order. The two files opened before this one are still held, which
+  # is the thing a reader is trusting the column with every time they follow a reference out of one.
+  - type: assert
+    domain: files
+    op: tabs
+    with:
+      names:
+        - pruning-the-pears.md
+        - grafting-the-scions.md
+        - mulching-the-beds.md
+
+  # Back to the first, by its tab and not by the tree — which is the whole of what holding them is
+  # for.
+  - type: action
+    domain: files
+    op: tab
+    with:
+      name: pruning-the-pears.md
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears are pruned after the leaves fall
+
+  # And the file that was up a moment ago is off the screen. The tabs are a row of doors into one
+  # column, not a column drawing everything it holds.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the beds are mulched before the first frost
+      present: false
+
+  # The width the panes are drawn beside, taken back the way a reader takes it: one press of the key
+  # that leaves. The row is drawn at this width too — a reader who cannot see what is open is holding
+  # files with no way back to them — and it is here that it cannot draw them all.
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: escape
+
+  - type: assert
+    domain: terminal
+    op: side-width
+    with:
+      side: files
+      wider: false
+
+  # The last file is the fourth tab, and at this width it is off the end of a row that scrolls and
+  # never wraps. The control that lists what is open is the door onto it, and the row is left standing
+  # on the tab it brought up.
+  - type: action
+    domain: files
+    op: more-tabs
+    with:
+      name: mulching-the-beds.md
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the beds are mulched before the first frost
+
+  # And nothing was let go of on the way: the three are still the three, in the order they were
+  # opened.
+  - type: assert
+    domain: files
+    op: tabs
+    with:
+      names:
+        - pruning-the-pears.md
+        - grafting-the-scions.md
+        - mulching-the-beds.md

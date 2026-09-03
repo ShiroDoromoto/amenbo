@@ -567,8 +567,6 @@ export const zhHans: Translation = {
     "face.more": "更多",
     "files.tab": "文件",
     "files.memo": "便笺",
-    "files.memoWide": "写得宽一些",
-    "files.memoNarrow": "回到面板",
     "files.memoTyping": "输入中",
     "files.memoKept": "已保存",
     "files.tree": "文件夹",

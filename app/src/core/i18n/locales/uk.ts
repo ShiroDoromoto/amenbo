@@ -593,8 +593,6 @@ export const uk: Translation = {
     "face.more": "Ще",
     "files.tab": "Файли",
     "files.memo": "Сторінка",
-    "files.memoWide": "Писати широко",
-    "files.memoNarrow": "Назад на панель",
     "files.memoTyping": "Набір",
     "files.memoKept": "Збережено",
     "files.tree": "Тека",

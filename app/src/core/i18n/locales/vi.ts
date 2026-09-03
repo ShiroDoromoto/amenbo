@@ -570,8 +570,6 @@ export const vi: Translation = {
     "face.more": "Thêm",
     "files.tab": "Tệp",
     "files.memo": "Trang ghi",
-    "files.memoWide": "Viết rộng",
-    "files.memoNarrow": "Về lại bảng",
     "files.memoTyping": "Đang nhập",
     "files.memoKept": "Đã lưu",
     "files.tree": "Thư mục",

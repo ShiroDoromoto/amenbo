@@ -567,8 +567,6 @@ export const hi: Translation = {
     "face.more": "और",
     "files.tab": "फ़ाइलें",
     "files.memo": "पन्ना",
-    "files.memoWide": "बड़े में लिखें",
-    "files.memoNarrow": "पैनल पर लौटें",
     "files.memoTyping": "टाइप हो रहा है",
     "files.memoKept": "सहेजा गया",
     "files.tree": "फ़ोल्डर",

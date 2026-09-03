@@ -1023,22 +1023,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The draft page. It takes the room the panel has, because writing is what it is for
    (`app/src/files/MemoPage.tsx`). */
 .memo { flex: 1; min-height: 0; }
-.memo__bar { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); }
+/* One thing on it: how the writing stands. The name of the page is on its tab (`app/src/files/FilesPanel.tsx`). */
+.memo__bar { display: flex; align-items: baseline; justify-content: flex-end; gap: var(--s-2); }
 .memo__field {
   flex: 1; min-height: 0; width: 100%; resize: none;
   padding: var(--s-2);
   background: var(--c-surface-sunken); border: 1px solid var(--c-border); border-radius: var(--r-md);
   color: var(--c-text); font-family: var(--font-mono); font-size: var(--fs-sm); line-height: 1.6;
 }
-/* Written wide: the same text in the middle of the window, stopped at a width a paragraph is read
-   at rather than the width of the screen. */
-.memo__page {
-  display: flex; flex-direction: column; gap: var(--s-2);
-  width: min(48rem, 100%); height: min(36rem, 100%);
-  padding: var(--s-4);
-  background: var(--c-surface); border-radius: var(--r-lg); box-shadow: var(--shadow-md);
-}
-.memo__field--wide { font-size: var(--fs-md); }
 
 /* Nothing is pressed to keep what is written here, so the page shows the keeping instead of saying
    it in words (`AMB-T-3684`). The ring is the settle drawn at its own length — it fills while the

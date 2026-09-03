@@ -596,8 +596,6 @@ export const ru: Translation = {
     "face.more": "Ещё",
     "files.tab": "Файлы",
     "files.memo": "Страница",
-    "files.memoWide": "Писать широко",
-    "files.memoNarrow": "Вернуться на панель",
     "files.memoTyping": "Набор",
     "files.memoKept": "Сохранено",
     "files.tree": "Папка",

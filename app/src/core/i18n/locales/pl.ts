@@ -593,8 +593,6 @@ export const pl: Translation = {
     "face.more": "Więcej",
     "files.tab": "Pliki",
     "files.memo": "Strona",
-    "files.memoWide": "Pisz szeroko",
-    "files.memoNarrow": "Wróć do panelu",
     "files.memoTyping": "Pisanie",
     "files.memoKept": "Zapisano",
     "files.tree": "Folder",

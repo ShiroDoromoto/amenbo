@@ -570,8 +570,6 @@ export const th: Translation = {
     "face.more": "เพิ่มเติม",
     "files.tab": "ไฟล์",
     "files.memo": "หน้าบันทึก",
-    "files.memoWide": "เขียนแบบกว้าง",
-    "files.memoNarrow": "กลับไปที่แผง",
     "files.memoTyping": "กำลังพิมพ์",
     "files.memoKept": "บันทึกแล้ว",
     "files.tree": "โฟลเดอร์",

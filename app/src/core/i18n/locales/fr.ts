@@ -588,8 +588,6 @@ export const fr: Translation = {
     "face.more": "Plus",
     "files.tab": "Fichiers",
     "files.memo": "La page",
-    "files.memoWide": "Écrire en grand",
-    "files.memoNarrow": "Revenir au panneau",
     "files.memoTyping": "Saisie en cours",
     "files.memoKept": "Conservé",
     "files.tree": "Le dossier",

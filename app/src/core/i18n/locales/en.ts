@@ -655,8 +655,6 @@ const ui = {
   // can show.
   "files.tab": "Files",
   "files.memo": "The page",
-  "files.memoWide": "Write it wide",
-  "files.memoNarrow": "Back to the panel",
   "files.memoTyping": "Typing",
   "files.memoKept": "Kept",
   "files.tree": "The folder",

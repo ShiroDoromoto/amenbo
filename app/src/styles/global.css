@@ -10,7 +10,7 @@ body {
 }
 button { font: inherit; color: inherit; cursor: pointer; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--c-border-strong); border-radius: 6px; border: 2px solid var(--c-bg); }
+::-webkit-scrollbar-thumb { background: var(--c-edge); border-radius: 6px; border: 2px solid var(--c-bg); }
 
 /* ---------- app shell grid ---------- */
 /* Rows: topbar / the bands / body. Each child is given its row outright, because a child placed by
@@ -75,8 +75,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   --banner-ground: var(--c-surface);
   --banner-ink: var(--c-text);
   --banner-tint: var(--c-sunken);
-  --banner-tint-hover: var(--c-border);
-  --banner-edge: var(--c-border-strong);
+  --banner-tint-hover: var(--c-rule);
+  --banner-edge: var(--c-rule);
   /* The one accented thing on a quiet band; the loud ones override the pair below. */
   --banner-btn-ground: var(--c-accent);
   --banner-btn-ink: #fff;
@@ -84,7 +84,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: flex; align-items: flex-start; gap: var(--s-3);
   padding: var(--s-2) var(--s-4);
   background: var(--banner-ground); color: var(--banner-ink);
-  border-bottom: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--c-rule);
   font-size: var(--fs-sm);
 }
 /* The two steps that fill the band, and the accent one beside them: an offer is not a step on the
@@ -148,7 +148,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: flex; align-items: center; gap: var(--s-4);
   padding: 0 var(--s-4);
   background: var(--c-surface);
-  border-bottom: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--c-rule);
 }
 /* The brand mark tightens its gap a little so it reads as a pair with the workspace name.
    It is drawn in `currentColor`, so the colour it takes is the one set here — black on the light
@@ -206,7 +206,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .topbar__spacer { flex: 1; }
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--c-sunken); border: 1px solid var(--c-border);
+  background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1; cursor: pointer;
 }
@@ -216,7 +216,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .topbar__nav { display: inline-flex; gap: var(--s-1); }
 .topbar__navbtn {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 24px; background: var(--c-sunken); border: 1px solid var(--c-border);
+  min-width: 24px; background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer;
 }
@@ -232,7 +232,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sidebar {
   flex: 1; min-width: 0;
   background: var(--c-surface);
-  border-right: 1px solid var(--c-border);
+  border-right: 1px solid var(--c-rule);
   overflow-y: auto; padding: var(--s-3) var(--s-2);
 }
 /* The resize handle on the right edge: a thin hit area straddling the border, showing its line
@@ -298,7 +298,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rightpane-wrap { grid-area: pane; position: relative; display: flex; min-height: 0; min-width: 0; }
 .rightpane {
   flex: 1; min-width: 0;
-  background: var(--c-surface); border-left: 1px solid var(--c-border);
+  background: var(--c-surface); border-left: 1px solid var(--c-rule);
   overflow-y: auto; display: flex; flex-direction: column;
 }
 /* The resize handle on the left edge: a thin hit area straddling the border, showing its

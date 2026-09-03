@@ -67,12 +67,6 @@
 }
 /* One thing being filled in: what it is above, what it is filled in with below. */
 .field { display: flex; flex-direction: column; gap: var(--s-2); }
-/* The box a reader types into. */
-.textinput {
-  padding: var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md);
-  font-size: var(--fs-md); background: var(--c-surface); color: var(--c-text); outline: none;
-}
-.textinput:focus { border-color: var(--c-accent); }
 /* A folder and what can be done with it, on one line while the line is wide enough for both. */
 .folderrow { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 /* The buttons a form is finished with, set apart from the fields above them. */
@@ -157,7 +151,9 @@
   border: 1px dashed var(--c-edge); background: none; border-radius: var(--r-md); padding: var(--s-2) var(--s-3);
 }
 .board__addcol:hover { color: var(--c-accent); border-color: var(--c-accent); }
-.column__addinput { border: 1px solid var(--c-accent); border-radius: var(--r-md); padding: var(--s-2) var(--s-3); font-size: var(--fs-md); outline: none; }
+/* The box that is open only while a column is being named: it is already the thing being typed
+   into, so it wears the accent on its border from the moment it appears. */
+.column__addinput { border-color: var(--c-accent); }
 .board__addcolinput { width: 200px; flex: none; align-self: flex-start; }
 
 /* ---------- drag & drop (moving between the status board's columns) ---------- */
@@ -205,10 +201,7 @@
 .card__footer { display: flex; align-items: center; gap: var(--s-2); color: var(--c-text-faint); font-size: var(--fs-xs); }
 .card__spacer { flex: 1; }
 /* A compact select sat inline among a card's or row's chips (the status control, a dimension value). */
-.inlineselect {
-  font-size: var(--fs-xs); color: var(--c-text); background: var(--c-surface);
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm); padding: 0 2px; cursor: pointer;
-}
+.inlineselect { font-size: var(--fs-xs); padding: 0 2px; }
 /* The axis the board is grouped by. Its row is what the detail pane takes width from (the toolbar above
    spans the pane, this does not), so it folds onto a second line rather than crushing the buttons — the
    heading beside them holds its line for the same reason. */
@@ -285,7 +278,7 @@
 }
 /* Task lists (`- [ ]`): drop the bullet, keep the checkbox tinted and spaced from the label. */
 .markdown .contains-task-list { list-style: none; padding-left: 0; }
-.markdown .task-list-item input { margin: 0 var(--s-2) 0 0; accent-color: var(--c-accent); }
+.markdown .task-list-item input { margin: 0 var(--s-2) 0 0; }
 /* GFM tables. The right pane is a fixed 480px, so a wide table scrolls sideways in its own
    wrapper (see Markdown.tsx) rather than wrapping and blowing up the row height. */
 .markdown__tablewrap { overflow-x: auto; margin: var(--s-2) 0; }
@@ -317,13 +310,7 @@
 .markdown a.reflink:hover { text-decoration: underline; }
 
 .compose { margin-top: var(--s-2); }
-.compose__input {
-  width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px;
-  font-family: inherit; font-size: var(--fs-sm); line-height: 1.5;
-  border: 1px solid var(--c-edge); border-radius: var(--r-md);
-  padding: var(--s-2) var(--s-3); background: var(--c-surface); color: var(--c-text); outline: none;
-}
-.compose__input:focus { border-color: var(--c-accent); }
+.compose__input { width: 100%; min-height: 64px; font-size: var(--fs-sm); }
 .compose__actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-2); }
 /* A small label chip, as used for a blocker or a reference to a decision. */
 .chip { font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm); background: var(--c-sunken); }
@@ -416,15 +403,16 @@
 .plugcfg__field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-3); align-items: flex-start; }
 .plugcfg__field input { width: 100%; }
 .plugcfg__label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
-/* A field whose author declared candidates: one row per candidate, each box only as wide as a box (the
-   rule above stretches a text input to the field's width, which would swallow a checkbox). */
+/* A field whose author declared candidates: one row per candidate, each box only as wide as a box.
+   The rule above stretches every input in the field to the field's width, and a tick box stretched
+   that far is a bar with a tick at one end, so this hands it back the size a tick box has. */
 .plugcfg__choices { display: flex; flex-direction: column; gap: var(--s-1); }
 .plugcfg__choice { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
-.plugcfg__choice input { width: auto; }
+.plugcfg__choice input { width: var(--s-5); }
 .plugcfg__note { font-size: var(--fs-xs); }
 /* The author's paragraph under an input (`AMB-D-656`). Their line breaks are kept — it is a body, and
    the only shape it has is the one they typed — and nothing in it is drawn as markup or as a link. */
-.plugcfg__help { font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
+.plugcfg__help { max-width: var(--measure-prose); font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A field whose value the plugin writes, standing where its input would (`AMB-D-656`). */
 .plugcfg__fixed { font-size: var(--fs-sm); overflow-wrap: anywhere; }
 /* The operations the author declared (`AMB-D-664`), under the fields they act on and ruled off from them:
@@ -886,7 +874,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .onboard__action--open:hover { border-color: var(--c-edge); background: var(--c-surface); }
 .onboard__action--open .onboard__action-body { flex: 1; gap: var(--s-2); }
 .onboard__field { display: flex; flex-direction: column; gap: var(--s-1); margin-top: var(--s-2); }
-.onboard__select { padding: var(--s-2); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); }
 .onboard__actionrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .onboard__error { color: var(--c-stop); font-size: var(--fs-xs); }
 /* The heading of the reference section. */
@@ -895,7 +882,11 @@ button.feed__target:hover { color: var(--c-accent); }
 
 /* ---------- palette-derived shared bits ---------- */
 /* The search screen's input, styled as the palette's was. */
-.palette__input { width: 100%; border: none; border-bottom: 1px solid var(--c-edge); padding: var(--s-4); font-size: var(--fs-lg); background: none; outline: none; }
+.palette__input {
+  width: 100%; max-width: none;
+  border: none; border-bottom: 1px solid var(--c-edge); border-radius: 0;
+  padding: var(--s-4); font-size: var(--fs-lg); background: none;
+}
 
 /* ---------- the shared modal chrome ---------- */
 /* `.modal__overlay` is the backdrop **every** modal wears, the feature blocks below included. It is
@@ -929,7 +920,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .rejectask__modal { width: min(480px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 .rejectask__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-2); }
 .rejectask__why { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-3); }
-.rejectask__input { width: 100%; box-sizing: border-box; resize: vertical; padding: var(--s-2); font: inherit; color: var(--c-text); background: var(--c-sunken); border: 1px solid var(--c-edge); border-radius: var(--r-md); margin-bottom: var(--s-3); }
+.rejectask__input { width: 100%; margin-bottom: var(--s-3); }
 .rejectask__actions { display: flex; align-items: center; gap: var(--s-3); }
 .rejectask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-sunken); color: var(--c-text); cursor: pointer; }
 .rejectask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }

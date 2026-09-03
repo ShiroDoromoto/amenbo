@@ -144,7 +144,6 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
         <label className="onboard__field">
           <span className="onboard__action-hint">{t("detail.project")}</span>
           <select
-            className="onboard__select"
             value={projectId}
             disabled={busy}
             onChange={(e) => setProjectId(Number(e.target.value))}

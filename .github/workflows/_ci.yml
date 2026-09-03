@@ -1011,7 +1011,7 @@ jobs:
           guards/check-prose.sh
 
   tree-guards:
-    name: Tree guards (internal-note refs, test prose, CLI shim, change scopes, CLI name, product name, sidecar name, dev self-update, TS derive, GUI inputs)
+    name: Tree guards (internal-note refs, test prose, CLI shim, change scopes, CLI name, product name, sidecar name, dev self-update, TS derive, GUI inputs, token contrast)
     runs-on: ubuntu-latest
     # Backstop for the local pre-commit hook, which runs the first two scans over
     # staged additions only. All have fixed patterns — no secret needed. The rest
@@ -1079,6 +1079,11 @@ jobs:
         run: |
           chmod +x guards/check-workflow-run-names.sh
           guards/check-workflow-run-names.sh
+
+      - name: Assert every colour pairing still clears AA in both themes
+        run: |
+          chmod +x guards/check-token-contrast.sh
+          guards/check-token-contrast.sh
 
   # The one check the merge target requires. Every job above feeds it, so its verdict is the whole
   # workflow's verdict — and what the ruleset pins is a single name that does not move when a job is

@@ -2444,6 +2444,26 @@ const REGISTRY: &[OpSpec] = &[
     // frames are one list cut into pages, so a new count re-pages every pane this device has — which
     // is why a road walks it at all: what has to survive the cut is the terminals running inside them.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "set-panes", required: &["count"], refs: &[], strings: &[], binds: false },
+    // Which way the two panes of a two-pane page sit: `across` side by side, `down` one above the
+    // other. It is asked at two and at no other count — everywhere else the rows are already spent
+    // and there is nothing left to arrange (`app/src/talk/layout.ts`) — so a road walks it with two
+    // panes standing, and never as a shape a page of any other count could be put into.
+    //
+    // **It is an op of its own rather than an argument on the count**, for the reason `split-out` and
+    // `fold-back` are two: the presses are two controls, and what they do differs on exactly the
+    // thing worth defending. A new count re-pages every frame this device has; a new orientation
+    // moves no pane anywhere and turns no page. A road that said both in one step would be asking for
+    // a re-cut it did not want, and could not tell which of the two had done what came out.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "set-orient", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
+    // And the shape the page came out in, read off the panes themselves. It is the whole of what the
+    // press is for: `down` is asked for so that each pane keeps the window's whole width, and a build
+    // that lit the control without re-laying the grid under it would draw exactly the screen the
+    // reader pressed away from.
+    //
+    // Both shapes are walked, never the asked-for one alone. A page read only after the press has
+    // nothing to say about what it was before, so a face stuck in one arrangement — the one a road
+    // happened to ask for last — would come out green from end to end.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "panes-sit", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
     // Which page is being shown, counted from 1. Paging is one of the two ways to a pane that is not
     // on the screen and by far the commoner, so it is the move a terminal has to be able to outlive:
     // a page is drawn rather than held, and the panes it took away are still running behind it.

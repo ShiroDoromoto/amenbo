@@ -638,6 +638,18 @@ single pane walks `set-panes` past the only thing it is dangerous for.
 other cannot: the rail is the division itself rather than a grouping laid over one list, so what a
 project's press leaves on the screen is that project's panes and nothing of any other's.
 
+`set-orient` is the one move on that row that re-cuts nothing. At two panes and at no other count it
+says which way they sit — side by side, or one above the other — and every frame stays on the page it
+was on. Two is where it is asked because two is where the face's rule turns around: width is spent
+before height everywhere else, and two across halves a pane's columns, which on a window with a
+column beside it is under the eighty a TUI wants.
+`stack-the-two-panes-so-each-keeps-the-whole-width` is the road, and what `panes-sit` reads there is
+the width rather than the arrangement — a build that shuffled the boxes about without handing either
+of them more room would have honoured the press and missed what it was for. Both shapes are walked,
+a page read only after the press having nothing to say about what it was before, and a terminal is
+kept running across the change for the reason the re-cut roads keep one: the grid is redrawn under
+the panes, and a page put up again rather than re-laid would come back drawn and with nothing on it.
+
 What none of those moves reaches is the end of the run itself, and the arrangement is two things at
 once: what the reader *set* — the split, the project they were looking at — and what they *opened*,
 the places and the names on them. The line between the two is drawn only when the app goes out, the

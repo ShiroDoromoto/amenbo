@@ -1136,6 +1136,10 @@ button.feed__target:hover { color: var(--c-accent); }
   padding: var(--s-1) 0;
   background: var(--c-surface); border: 1px solid var(--c-border);
   border-radius: var(--r-md); box-shadow: var(--shadow-md);
+  /* What the caps in `Menu.tsx` do when a list is longer than the window it is drawn in. Without
+     it the box would be cut at the cap and the items past it unreachable, which is the same dead
+     end as running off the edge. */
+  overflow: auto;
 }
 .menu__item {
   padding: var(--s-1) var(--s-3);

@@ -670,8 +670,14 @@ const ui = {
   // One control with two ends, so the word names neither of them: what it says is the pair, and which
   // way this press goes is the mark on it (`AMB-D-835`).
   "files.width": "Wider or narrower",
+  // The tab a reader cannot see, and the way to it. The row scrolls rather than paging, so what this
+  // names is everything the column is holding — the answer to "where did the fourth one go".
+  "files.openFiles": "Open files",
   "files.folderGone": "This folder is not there any more.",
-  "files.back": "Back to the list",
+  // What the row above a file offers, now that the column holds several of them and the tree is in
+  // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
+  // the list" while a file lay over the tree and there was a list to go back to.
+  "files.closeFile": "Close this file",
   "files.edit": "Edit",
   "files.read": "Read",
   "files.reopenWith": "Reopen with an encoding",

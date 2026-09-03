@@ -2165,7 +2165,7 @@ impl Instructor {
                 req(with, "encoding")?
             ),
             (Domain::Files, "back") =>
-                "Press the way back out of the file. The column it was drawn in says nothing is open; the tree is in the rail, where it was left."
+                "In the row above the file, press the way it offers to close it. Its tab goes with it, and where it was the only one open the column says nothing is."
                     .to_string(),
             // The keys. What each one reaches is decided by where the reader is standing, so every
             // line here says where that has to be — and says the click is only for when it is not,

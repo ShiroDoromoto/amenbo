@@ -238,7 +238,7 @@ vi.mock("../core/reads", async (importOriginal) => ({
   resolveRef: async () => ({ kind: "task", id: 12, title: "a task", live: true }),
 }));
 
-import { FilesPanel } from "./FilesPanel";
+import { FilesPanel, openKey, type OpenFile } from "./FilesPanel";
 import { FolderTree } from "./FolderTree";
 import { fileUnderAny } from "./fileUnder";
 import { type CmdError, errLabel, formatNumber, t, tf, tn } from "../core/i18n";
@@ -293,19 +293,34 @@ type Props = Parameters<typeof FilesPanel>[0] & Parameters<typeof FolderTree>[0]
  * it.
  */
 function Columns({ show, ...props }: Partial<Props> & { projectId: number | null }) {
-  const [reading, setReading] = useState<{ root: string; path: string[] } | null>(null);
-  // The step the column is standing on, which opening a file asks for and the face keeps
+  // The files the column is holding and the one on top, wired the way the face wires them
   // (`../shell/TerminalFace`).
+  const [open, setOpen] = useState<OpenFile[]>([]);
+  const [showing, setShowing] = useState<string | null>(null);
+  // The step the column is standing on, which opening a file asks for and the face keeps.
   const [wide, setWide] = useState(false);
-  const gone = (root: string, went: string[]) => setReading((now) =>
-    now !== null && now.root === root && went.includes(now.path.join("/")) ? null : now
-  );
+  const reading = open.find((one) => openKey(one) === showing) ?? open[0] ?? null;
+  const openOne = (at: OpenFile) => {
+    setOpen((was) => (was.some((one) => openKey(one) === openKey(at)) ? was : [...was, at]));
+    setShowing(openKey(at));
+    setWide(true);
+  };
+  const closeOne = (at: OpenFile) => {
+    const key = openKey(at);
+    setOpen((was) => was.filter((one) => openKey(one) !== key));
+    setShowing((now) => (now === key ? null : now));
+  };
+  const gone = (root: string, went: string[]) => {
+    const dead = new Set(went.map((one) => `${root} ${one}`));
+    setOpen((was) => was.filter((one) => !dead.has(openKey(one))));
+    setShowing((now) => (now !== null && dead.has(now) ? null : now));
+  };
   // A path clicked in a pane opens where it lands inside a bound folder, and nowhere else
   // (`AMB-D-747`). The count is what makes the same file asked for twice two answers.
   useEffect(() => {
     if (show === undefined || show === null) return;
     const found = fileUnderAny(hoisted.bound.map((one) => one.path), show.cwd, show.target);
-    if (found) setReading(found);
+    if (found) openOne(found);
   }, [show?.nth]);
   // Each in the place the face puts it, so a road can say which column it means: the same class name
   // is drawn in both, and a test that asked the document for it would be handed whichever came
@@ -316,7 +331,7 @@ function Columns({ show, ...props }: Partial<Props> & { projectId: number | null
     createElement("div", { className: "rail" }, createElement(FolderTree, {
       projectId: props.projectId,
       reading,
-      onRead: (at: { root: string; path: string[] }) => { setReading(at); setWide(true); },
+      onRead: openOne,
       onGone: gone,
       onHandOver: props.onHandOver,
       onCarry: props.onCarry,
@@ -324,8 +339,11 @@ function Columns({ show, ...props }: Partial<Props> & { projectId: number | null
     createElement("div", { className: "termface__column--side" }, createElement(FilesPanel, {
       projectId: props.projectId,
       tab: props.tab ?? "files",
+      open,
       reading,
-      onBack: () => setReading(null),
+      onPick: (at: OpenFile) => setShowing(openKey(at)),
+      onCloseTab: closeOne,
+      onBack: () => { if (reading !== null) closeOne(reading); },
       onGone: gone,
       onClose: props.onClose ?? (() => {}),
       wide,
@@ -734,7 +752,7 @@ describe("the file face", () => {
   it("opens the same file again when it is clicked again", async () => {
     hoisted.file = aFile({ text: "# again" });
     await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 1 } });
-    await click(button(t("files.back")));
+    await click(button(t("files.closeFile")));
     await settle();
     expect(container.textContent).toContain(t("files.tree"));
 
@@ -838,10 +856,10 @@ describe("the file face", () => {
     await settle();
     // Both at once: the file is up and the tree is still under it. Drawn in place of each other,
     // the tree came off the page here, and its state went with it.
-    expect(pressable(t("files.back"))).toBeDefined();
+    expect(pressable(t("files.closeFile"))).toBeDefined();
     expect(container.querySelector("[role=\"treeitem\"]")).not.toBeNull();
 
-    await click(pressable(t("files.back")));
+    await click(pressable(t("files.closeFile")));
     await settle();
     // Both openings still stand, and the stop is on the row it was left on — a tree that folded
     // itself shut here would send the reader back through every press they had already made.
@@ -866,13 +884,13 @@ describe("the file face", () => {
     expect(chosen()).toContain("a.md");
 
     // The other file, so that the mark is shown to move rather than merely to exist.
-    await click(pressable(t("files.back")));
+    await click(pressable(t("files.closeFile")));
     await settle();
     await openFile(button("b.md"));
     await settle();
     expect(chosen()).toContain("b.md");
 
-    await click(pressable(t("files.back")));
+    await click(pressable(t("files.closeFile")));
     await settle();
     expect(container.querySelector(".files__file--chosen")).toBeNull();
   });
@@ -898,7 +916,7 @@ describe("the file face", () => {
     // The column is narrow and it is not closed: one press, one layer. The file stays where it is —
     // what a reader asked for is the panes back, not the file put away.
     expect(width().getAttribute("aria-pressed")).toBe("false");
-    expect(pressable(t("files.back"))).toBeDefined();
+    expect(pressable(t("files.closeFile"))).toBeDefined();
     expect(closed).toBe(0);
 
     await press(column(), "Escape");
@@ -1245,7 +1263,7 @@ describe("the file face", () => {
 
     // Whole, but in an encoding nothing writes back: the same answer, for the other reason.
     hoisted.file = aFile({ text: "read me", clean: false });
-    await click(button(t("files.back")));
+    await click(button(t("files.closeFile")));
     await settle();
     await openFile(button("cut.txt"));
     await settle();
@@ -1982,6 +2000,75 @@ describe("the file face", () => {
     await settle();
     expect(picked()).toEqual(["b.md"]);
     expect(hoisted.asked).not.toContain(`read:${ROOT}:b.md`);
+  });
+
+  // Reading one file while another stays open is what the tabs are for: the second one used to take
+  // the first one's place, so following a reference cost a reader the file they followed it from
+  // (`AMB-D-835`).
+  describe("the files the column is holding", () => {
+    const tabs = () => [...container.querySelectorAll<HTMLElement>(".files__tabname")]
+      .map((one) => one.textContent);
+    const onTop = () =>
+      container.querySelector<HTMLElement>('.files__tabname[aria-current="true"]')?.textContent
+        ?? null;
+    const twoOpen = async () => {
+      hoisted.entries[""] = [
+        { name: "a.md", isDir: false, ignored: false },
+        { name: "b.md", isDir: false, ignored: false },
+      ];
+      await drawOpen();
+      await openFile(button("a.md"));
+      await settle();
+      await openFile(button("b.md"));
+      await settle();
+    };
+
+    it("keeps the first open when the second is, and puts the new one on top", async () => {
+      await twoOpen();
+      expect(tabs()).toEqual(["a.md", "b.md"]);
+      expect(onTop()).toBe("b.md");
+      expect(hoisted.asked).toContain(`read:${ROOT}:b.md`);
+    });
+
+    it("brings one back up from its tab", async () => {
+      await twoOpen();
+      await click(container.querySelectorAll<HTMLElement>(".files__tabname")[0]);
+      await settle();
+      expect(onTop()).toBe("a.md");
+      // Both are still held: pressing a tab is choosing between them, not closing one.
+      expect(tabs()).toEqual(["a.md", "b.md"]);
+    });
+
+    it("lets one go from its own cross, and stands on the tab beside it", async () => {
+      await twoOpen();
+      await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[1]);
+      await settle();
+      expect(tabs()).toEqual(["a.md"]);
+      expect(onTop()).toBe("a.md");
+    });
+
+    it("says nothing is open once the last of them has gone", async () => {
+      await twoOpen();
+      await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[1]);
+      await settle();
+      await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[0]);
+      await settle();
+      expect(container.querySelector(".termface__column--side .files__none")?.textContent)
+        .toBe(t("files.nothingOpen"));
+    });
+
+    // The row scrolls rather than paging, so the tab that is off the end of it is reached by name.
+    it("lists everything it is holding, by name", async () => {
+      await twoOpen();
+      await click(container.querySelector<HTMLElement>(".files__more"));
+      await settle();
+      expect([...container.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .map((one) => one.textContent)).toEqual(["a.md", "b.md"]);
+
+      await click([...container.querySelectorAll<HTMLElement>('[role="menuitem"]')][0]);
+      await settle();
+      expect(onTop()).toBe("a.md");
+    });
   });
 
   it("reads the row on the second press, which the first one only picked out", async () => {

@@ -1952,13 +1952,14 @@ impl Instructor {
             // already shown, and a line promising the screen would change would read as a failure on
             // the one press that is allowed to do nothing.
             //
-            // Where the rail is standing is said as well as where the press is, because the rail
-            // swaps its halves rather than stacking them: a road that put the folder up (`files
-            // tree`) and then moved project would be looking for this press on the half that does
-            // not carry it. Which half the project being left is left on is not a road's to choose
-            // — the press is on one of them — and no reading here is about that.
+            // How the tabs are drawn is said as well as where the press is, because they carry two
+            // widths: named, and compact — the project's colour with the first character of its name
+            // and no more. A road that named a tab without saying that would be
+            // naming something the screen may not have on it. Which width the tabs were left at is
+            // not a road's to choose, so the step asks for the one it can be walked on rather than
+            // reading anything about it.
             (Domain::Terminal, "go-project") => format!(
-                "In the list beside the panes, under its first heading, press the name of the project \"{}\" — a row in that upper list and not one in the list of panes below it. Where the rail is standing on the half that draws the folder instead of the two lists, put it back on the lists first: this press is on that half and nowhere else. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
+                "In the column of tabs at the edge of the face, press the tab for the project \"{}\". Where the tabs are drawn as colours alone, bring their names back first with the control under them. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
                 req(with, "project")?
             ),
             // Opening a pane where there is not one yet. **A pane is opened from the empty frame**,
@@ -2179,8 +2180,8 @@ impl Instructor {
                 req(with, "to")?
             ),
             // ── the file face ─────────────────────────────────────────────────────────────────
-            // The tree, which is the rail's other half — the column on the far side
-            // of the panes draws the file it opens and nothing else. Its sections are named by what
+            // The tree, which is the whole of the column beside the panes — the column on the far
+            // side of them draws the file it opens and nothing else. Its sections are named by what
             // each is about rather than by their headings, for the reason the segments are: the
             // headings are the interface's own words and the run's language is whatever the machine
             // is set to.
@@ -2194,7 +2195,7 @@ impl Instructor {
                 // what is already unfolded would have them fold it. Saying where the screen has to
                 // stand leaves the road true wherever it is walked from, a section a step above
                 // folded included.
-                true => "In the rail beside the panes, press the half that shows the folders — the second of its two. The section that draws the folder itself is then to be standing unfolded, each of them where there is more than one. It is drawn that way, so the unfolding is usually nothing to do; unfold any that is folded.".to_string(),
+                true => "Have the folders standing beside the panes: the column is drawn there, under the project's name, and where it has been put away the control on the row above the panes brings it back. The section that draws the folder itself is then to be standing unfolded, each of them where there is more than one. It is drawn that way, so the unfolding is usually nothing to do; unfold any that is folded.".to_string(),
                 false => "Fold those sections back up.".to_string(),
             },
             // A folder opened a level, or shut again. Opening is what a road asks for nearly every
@@ -3751,20 +3752,6 @@ impl Instructor {
                 "In the row of tabs above the file, confirm the tabs standing after the draft page's are exactly these, in this order and with no others among them:{}. Scroll the row sideways where it does not all fit — it scrolls and never wraps, so a tab off its end is still one of them.",
                 names(with, "names")?
             ),
-            // Which half the rail is standing on. Both halves are said in every reading — the one
-            // that is up, and the one that is therefore not — because a line naming only what to look
-            // for could not catch a rail that had drawn both.
-            (Domain::Files, "half") => match req(with, "half")? {
-                "panes" => "In the rail beside the panes, confirm the half showing the two lists is the one up — the projects, and under the one being shown, its panes — and that no folder tree is drawn on the rail."
-                    .to_string(),
-                "folders" => "In the rail beside the panes, confirm the half showing the folders is the one up — the folder's own section, folded down — and that the lists of projects and panes are not drawn on the rail."
-                    .to_string(),
-                other => {
-                    return Err(format!(
-                        "assert `half` does not know the half `{other}` — it is panes or folders"
-                    ))
-                }
-            },
             // What the hand-over left. Every one of the three is a `Review`, and for the same reason:
             // what settles it is not on Amenbo's window, which is the window the run shoots. The
             // operator standing at the screen is the one who saw it, so the line asks them for it.
@@ -7282,9 +7269,10 @@ steps_gui:
         };
         let said = Instructor::new().render(&step).unwrap();
         assert!(said.contains("\"Greenhouse\""), "got: {said}");
+        assert!(said.contains("tabs at the edge"), "the tabs are where the press is: {said}");
         assert!(
-            said.contains("not one in the list of panes below it"),
-            "a pane's row is a different move: {said}"
+            said.contains("colours alone"),
+            "a compact tab carries no name to press by: {said}"
         );
         assert!(
             !said.contains("changes") && !said.contains("swaps"),

@@ -1698,8 +1698,8 @@ const REGISTRY: &[OpSpec] = &[
     // It carries nothing. Which folder the pane works in and which project it belongs to are both
     // the card's own to know — the card is a project's, and the folder is the one it names above the
     // press — so a step that named either would be handing the screen an answer it is under test for
-    // having. What the pane landed under is read afterwards, from the rail, by the roads that read
-    // any other pane (`terminal go-project`, `terminal pane`).
+    // having. What the pane landed under is read afterwards, off the face itself, by the roads that
+    // read any other pane (`terminal go-project`, `terminal pane`).
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "start-terminal", required: &[], refs: &[], strings: &[], binds: false },
     // The ways in a reader is offered before there is a folder to work in: raise a project, or open
     // one this device already holds. Both are the interface's own to carry out, and what says so is
@@ -2315,12 +2315,12 @@ const REGISTRY: &[OpSpec] = &[
     // spent by crossing to it: a badge still up after the person has looked would be a light saying
     // "something is standing" rather than a knock saying "something came up while you were away".
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "face-badge", required: &[], refs: &[], strings: &[], binds: false },
-    // Which project's panes the face is drawing. The rail is not a grouping laid over a list of
-    // panes: a pane belongs to a project and can work in no folder outside it, so pressing a project
-    // is the division itself being moved. What is beside the rail afterwards is that project's, and
-    // every other project's pane is off the screen — which is why a road walks this at all, a pane
-    // carried off by it being a running terminal like any other. `project` is the name drawn on the
-    // row, which is the ledger's own word for it.
+    // Which project's panes the face is drawing. The tabs down the edge of the face are not a
+    // grouping laid over a list of panes: a pane belongs to a project and can work in no folder
+    // outside it, so pressing a project is the division itself being moved. What is beside the panes
+    // afterwards is that project's, and every other project's pane is off the screen — which is why a
+    // road walks this at all, a pane carried off by it being a running terminal like any other.
+    // `project` is the name the tab carries, which is the ledger's own word for it.
     //
     // It is pressed rather than arrived at, for the reason `show-face` is. Which project the face
     // opens on is the run's business — whatever the ledger had selected, or the first project where
@@ -2329,9 +2329,9 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "go-project", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // Opening a pane. A pane belongs to a project and works in a folder that project is bound to, so
     // where it is bound to one nothing is asked at all. `from` is which of the two controls is
-    // pressed, and they are not the same place: `face` is the one thing on a screen with nothing open
-    // on it, and `rail` is the way in beside the shown project's name in the list beside the panes.
-    // Neither names a page — where a pane lands is the project's arithmetic, not the road's.
+    // pressed, and they are not the same place: `face` is the empty frame on a page with room in it,
+    // and `strip` is the thin control a full page draws beside the panes. Neither names a page —
+    // where a pane lands is the project's arithmetic, not the road's.
     //
     // `asks: true` is the other half of the folder. Where the project is bound to several, the press
     // opens nothing: what comes up where the pane would have been is the question of which of them it
@@ -2664,19 +2664,6 @@ const REGISTRY: &[OpSpec] = &[
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
-    // Which half of the rail is up — the two lists, or the folder tree. The rail swaps its halves
-    // rather than stacking them, and which one it stands on is kept per project
-    // (`app/src/shell/PaneRail.tsx`), so this is a reading a road makes after moving between
-    // projects rather than a thing it sets once.
-    //
-    // It is this domain's and not the terminal's because the half is what decides whether the tree
-    // is standing at all: every row-addressed op above reaches its rows through it, and `tree` is
-    // the press that puts it up. This is the other end — what the rail came back on, having been
-    // left there.
-    //
-    // Named by what each half draws rather than by the words on the two controls, for the reason
-    // `section` and `note` are named that way.
-    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "half", required: &["half"], refs: &[], strings: &["half"], binds: false },
 
     // ── the files the column is holding ───────────────────────────────────────────────────────────
     // The reading column holds several files at once, as a row of tabs above the one on top

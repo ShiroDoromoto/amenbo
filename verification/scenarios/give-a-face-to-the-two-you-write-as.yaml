@@ -29,7 +29,8 @@ description: >
   carried the wrong face would show. Give the AI face an image too, then walk out to a project's board
   and back onto the settings, the only way to ask whether what is drawn came out of the store rather
   than out of the screen. Clear the human's last, and the pattern is what its slot holds once more
-  while the AI's keeps its image.
+  while the AI's keeps its image. What no slot can show — the file the reader chose, kept beside the
+  square baked from it — is read out of the store either side of the first registration.
 given:
   # Somewhere to walk out to. What the road needs off the settings screen is any other screen at all,
   # and a project's board is the one every store has a way to.
@@ -71,6 +72,15 @@ steps_gui:
       facet: ai
       present: false
 
+  # The store, before anybody hands it an image. Nothing here is drawn on the settings screen or on
+  # any other — the count is read out of the store instead — and it is asked now so that
+  # the same count after the registration is a file that arrived, rather than a file that was there.
+  - type: assert
+    domain: store
+    op: blobs
+    with:
+      count: 0
+
   - type: action
     domain: store
     op: set-avatar
@@ -84,6 +94,16 @@ steps_gui:
     with:
       facet: human
       present: true
+
+  # What the slot above cannot say. A picture in it is the 96px square the screen baked, and the file
+  # the reader chose is kept beside it so a larger version can be made later without asking for the
+  # file again — which is the half of that pair no screen draws, and so the half every reading of
+  # this road was blind to until now. One file went in; one file of bytes is what the store holds.
+  - type: assert
+    domain: store
+    op: blobs
+    with:
+      count: 1
 
   # The neighbour, read while only one face has been given anything. One payload carries both, and the
   # facet left out of it means "leave as is" — a slot that moved here is one the write reached by

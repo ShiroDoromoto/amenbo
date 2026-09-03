@@ -195,6 +195,11 @@ pub struct ProjectSettingsDto {
     pub(crate) name: String,
     pub(crate) notes: String,
     pub(crate) color: String,
+    /// The image the project shows for itself, as a `data:image/…` URL, or `null` where it has none and
+    /// the surfaces fall back to the colour and the first letter of the name (`AMB-D-839`). The
+    /// original it was baked from stays in the blob store and never rides out here — the screen shows
+    /// the display version and sends a whole new pair when the human registers another image.
+    pub(crate) icon: Option<String>,
     #[ts(type = "\"list\" | \"board\" | \"calendar\" | \"timeline\"")]
     pub(crate) view: String,
     pub(crate) archived: bool,

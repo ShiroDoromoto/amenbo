@@ -559,6 +559,22 @@ pub const STEPS: &[Step] = &[
         name: "let an axis's values be closed: widen dimension.role, and give dimension_value its flag",
         apply: Apply::Custom(let_a_value_be_closed),
     },
+    Step {
+        to: 36,
+        name: "give the project row its icon, and the hash of the original that icon was baked from",
+        // `AMB-D-839`: an image a human registers is kept twice — the small version everything displays,
+        // and the original, so a different size can be baked later without asking for the file again. The
+        // facet avatars keep the pair in config; a project keeps it on its own row, which is what these
+        // two columns are. Both are nullable and seeded at null: no project could have had an icon before
+        // this, so "has none" is the truth about every existing row, not a gap to fill in.
+        //
+        // The declarations are spelled out here in frozen text, as every step's are — the registry may
+        // rename or reshape the columns tomorrow; what this step added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "ALTER TABLE project ADD COLUMN icon TEXT;
+             ALTER TABLE project ADD COLUMN icon_source TEXT;",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to

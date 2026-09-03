@@ -117,6 +117,8 @@ pub fn project(p: &Project) -> Record {
                 ("name", tv(&p.name)),
                 ("notes", tv(&p.notes)),
                 ("color", ov(&p.color)),
+                ("icon", ov(&p.icon)),
+                ("icon_source", ov(&p.icon_source)),
                 ("default_view", tv(p.default_view.as_str())),
                 ("archived", bv(p.archived)),
                 ("order_key", tv(&p.order_key)),

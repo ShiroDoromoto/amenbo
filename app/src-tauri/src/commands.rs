@@ -2415,7 +2415,7 @@ fn recover_lost_pointer(path: &std::path::Path, project_id: i64) -> Result<Write
     Ok(WriteAck::new(&["tasks"]))
 }
 
-/// Return one project's editable fields (name/notes/color/view/archived) straight from the
+/// Return one project's editable fields (name/notes/color/icon/view/archived) straight from the
 /// read-model, to prefill the project settings screen. Archived projects are returned too (this
 /// screen is where they get unarchived). A project that is not found (deleted, say) yields a coded
 /// error.
@@ -2432,6 +2432,7 @@ pub fn project_get(project_id: i64) -> Result<ProjectSettingsDto, CmdError> {
         name: row.name,
         notes: row.notes,
         color: row.color.unwrap_or_else(|| "#9aa7b2".to_string()),
+        icon: row.icon,
         view: row.default_view,
         archived: row.archived,
     })
@@ -2456,15 +2457,24 @@ pub fn project_list_archived() -> Result<Vec<ArchivedProjectDto>, CmdError> {
         .collect())
 }
 
-/// Update a project's settings — rename, notes, color, default view (same shape as the CLI's
-/// `project update`). Only the fields that were passed are changed; None leaves a field alone.
-/// `view` arrives as an enum string (list/board/calendar/timeline), and anything else is an error.
+/// Update a project's settings — rename, notes, color, icon, default view (same shape as the CLI's
+/// `project update`, which has no icon). Only the fields that were passed are changed; None leaves a
+/// field alone. `view` arrives as an enum string (list/board/calendar/timeline), and anything else is
+/// an error.
+///
+/// The icon is three states in one argument, the way `set_facet_avatars` reads its avatars: absent
+/// leaves it alone, the empty string clears it, and a `data:image/…` URL registers it. `icon_original`
+/// carries the bytes that URL was baked from — the webview has the File and no OS path for it, so the
+/// bytes come over the same way a dropped attachment's do — and they are ingested into the blob store
+/// here, so the hash the project row records is one this store actually holds (`AMB-D-839`).
 #[tauri::command]
 pub fn project_update(
     project_id: i64,
     name: Option<String>,
     notes: Option<String>,
     color: Option<String>,
+    icon: Option<String>,
+    icon_original: Option<Vec<u8>>,
     view: Option<String>,
 ) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
@@ -2475,9 +2485,22 @@ pub fn project_update(
             ),
             None => None,
         };
+        let icon = match icon.as_deref().map(str::trim) {
+            None => None,
+            Some("") => Some(amenbo_core::ops::project::IconPatch::Clear),
+            Some(display) => {
+                // Ingested before the patch, so a store that cannot take the bytes fails before the
+                // display version is written — the row never names an original that is not there.
+                let source = match icon_original {
+                    Some(bytes) if !bytes.is_empty() => Some(store.blobs().ingest_bytes(&bytes)?.hash),
+                    _ => None,
+                };
+                Some(amenbo_core::ops::project::IconPatch::Set { display: display.to_string(), source })
+            }
+        };
         store.project_update(
             project_id,
-            amenbo_core::ops::project::ProjectPatch { name, notes, view, color },
+            amenbo_core::ops::project::ProjectPatch { name, notes, view, color, icon },
         )?;
         Ok(())
     })?;
@@ -3153,17 +3176,25 @@ pub fn config_set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<Writ
     Ok(WriteAck::new(&[]))
 }
 
-/// Write the roster's two avatars (human / AI) to `config.human_avatar` / `ai_avatar`. Each argument
-/// has three states: `None` leaves that facet alone, `Some("")` clears it (back to the identicon),
-/// and `Some(dataUrl)` sets it. Unlike display names ([`write_facet_names`]), an avatar **can be
-/// cleared**, so an empty string and an absent key mean different things. Format and size limits are
-/// checked by core's [`amenbo_core::config::validate_avatar`] before anything is written.
-fn write_facet_avatars(human: Option<&str>, ai: Option<&str>) -> Result<(), CmdError> {
+/// Write the roster's two avatars (human / AI): the display version into `config.human_avatar` /
+/// `ai_avatar`, and the image the user picked into the blob store, named on that facet's
+/// `*_avatar_source` (`AMB-D-839`). Each argument has three states: `None` leaves that facet alone,
+/// `Some(("", _))` clears it (back to the identicon), and `Some((dataUrl, _))` sets it. Unlike display
+/// names ([`write_facet_names`]), an avatar **can be cleared**, so an empty string and an absent key
+/// mean different things. Format and size limits are checked by core's
+/// [`amenbo_core::config::validate_avatar`] before anything is written, and the two halves go in
+/// together through [`amenbo_core::config::Config::set_avatar`], so a display version never stands
+/// beside the previous image's original. A facet handed no bytes keeps a display version alone —
+/// which is what happens when the caller has no original to keep.
+fn write_facet_avatars(
+    human: Option<(&str, Option<&[u8]>)>,
+    ai: Option<(&str, Option<&[u8]>)>,
+) -> Result<(), CmdError> {
     if human.is_none() && ai.is_none() {
         return Ok(());
     }
     for (key, v) in [("human_avatar", human), ("ai_avatar", ai)] {
-        if let Some(val) = v.map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(val) = v.map(|(display, _)| display.trim()).filter(|s| !s.is_empty()) {
             amenbo_core::config::validate_avatar(key, val)?;
         }
     }
@@ -3173,22 +3204,37 @@ fn write_facet_avatars(human: Option<&str>, ai: Option<&str>) -> Result<(), CmdE
         return Ok(());
     }
     let mut store = Store::open_at(paths)?;
-    if let Some(h) = human {
-        store.config.set("human_avatar", h.trim())?;
-    }
-    if let Some(a) = ai {
-        store.config.set("ai_avatar", a.trim())?;
+    for (kind, arg) in [(ActorKind::Human, human), (ActorKind::Ai, ai)] {
+        let Some((display, source)) = arg else { continue };
+        let display = Some(display.trim()).filter(|s| !s.is_empty());
+        // The original goes in only beside a display version: clearing takes both away.
+        let hash = match (display, source) {
+            (Some(_), Some(bytes)) => Some(store.blobs().ingest_bytes(bytes)?.hash),
+            _ => None,
+        };
+        store.config.set_avatar(kind, display, hash.as_deref())?;
     }
     store.save_config()?;
     Ok(())
 }
 
 /// Set or clear the per-facet (human / AI) avatars from the settings screen. The counterpart of
-/// [`write_facet_names`] for display names: the roster's two faces live in config. For each
-/// argument, an absent key leaves it alone, an empty string clears it, and a data URL sets it.
+/// [`write_facet_names`] for display names: the roster's two faces live in config. For each facet, an
+/// absent key leaves it alone, an empty string clears it, and a data URL sets it. `human_source` /
+/// `ai_source` carry the bytes of the image the user picked, kept as the original beside the display
+/// version the front end shrank (`AMB-D-839`); a facet sent no bytes is registered with a display
+/// version alone.
 #[tauri::command]
-pub fn set_facet_avatars(human_avatar: Option<String>, ai_avatar: Option<String>) -> Result<WriteAck, CmdError> {
-    write_facet_avatars(human_avatar.as_deref(), ai_avatar.as_deref())?;
+pub fn set_facet_avatars(
+    human_avatar: Option<String>,
+    ai_avatar: Option<String>,
+    human_source: Option<Vec<u8>>,
+    ai_source: Option<Vec<u8>>,
+) -> Result<WriteAck, CmdError> {
+    write_facet_avatars(
+        human_avatar.as_deref().map(|d| (d, human_source.as_deref())),
+        ai_avatar.as_deref().map(|d| (d, ai_source.as_deref())),
+    )?;
     Ok(WriteAck::new(&[]))
 }
 
@@ -7483,7 +7529,7 @@ mod tests {
     }
 
     /// Round-trips the project settings commands: `project_get` returns the fields for the prefill,
-    /// `project_update` applies the delta (name/notes/color/view), `project_set_archived` takes the
+    /// `project_update` applies the delta (name/notes/color/icon/view), `project_set_archived` takes the
     /// project out of the snapshot (`project_overview` — live and not archived) and brings it back,
     /// and `project_delete` destroys it for good. The evidence that the wiring holds.
     #[test]
@@ -7511,6 +7557,8 @@ mod tests {
             Some("改名PJ".into()),
             Some("メモ本文".into()),
             None,
+            None,
+            None,
             Some("list".into()),
         )
         .unwrap();
@@ -7521,9 +7569,40 @@ mod tests {
         assert_eq!(got.view, "list", "default view persisted");
 
         assert!(
-            project_update(project_id, None, None, None, Some("kanban".into())).is_err(),
+            project_update(project_id, None, None, None, None, None, Some("kanban".into())).is_err(),
             "an invalid view is rejected"
         );
+
+        // The icon is registered as a pair (`AMB-D-839`): the display version comes back on the prefill,
+        // and the original the webview handed over is in the blob store under the hash the row records.
+        let original = b"the file the human chose".to_vec();
+        project_update(
+            project_id,
+            None,
+            None,
+            None,
+            Some("data:image/png;base64,AAAA".into()),
+            Some(original.clone()),
+            None,
+        )
+        .unwrap();
+        assert_eq!(project_get(project_id).unwrap().icon.as_deref(), Some("data:image/png;base64,AAAA"));
+        let store = open_store_read().unwrap();
+        let sources = {
+            let read_model = store.read_model();
+            amenbo_core::store_engine::read::project_icon_sources(read_model.conn()).unwrap()
+        };
+        let hash = sources.iter().next().expect("the row names its original").clone();
+        assert_eq!(
+            store.blobs().read(&hash).unwrap(),
+            original,
+            "the original was ingested under the hash the project row names"
+        );
+        drop(store);
+
+        // The empty string is the clear, the way it is for a facet avatar.
+        project_update(project_id, None, None, None, Some(String::new()), None, None).unwrap();
+        assert_eq!(project_get(project_id).unwrap().icon, None, "clearing takes the display version away");
 
         project_set_archived(project_id, true).unwrap();
         assert!(

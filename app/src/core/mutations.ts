@@ -435,11 +435,11 @@ export async function createProject(name: string, dir: string | null): Promise<n
 
 
 /**
- * Fetch one project's editable fields (name/notes/color/view/archived) to prefill the project
+ * Fetch one project's editable fields (name/notes/color/icon/view/archived) to prefill the project
  * settings screen. The snapshot's ProjectDto does not carry notes or archived, so they are hydrated
  * from core only when that screen is opened. Outside Tauri (browser iteration) the value is assembled
- * from the cached ProjectDto — notes come back empty because the cache has none, archived as false.
- * Null if the project is not found.
+ * from the cached ProjectDto — notes come back empty because the cache has none, archived as false,
+ * and the icon as none. Null if the project is not found.
  */
 export async function fetchProjectSettings(projectId: number): Promise<ProjectSettingsDto | null> {
   if (inTauri()) {
@@ -450,17 +450,26 @@ export async function fetchProjectSettings(projectId: number): Promise<ProjectSe
     }
   }
   const p = getSnapshot().projects.find((x) => x.id === projectId);
-  return p ? { id: p.id, name: p.name, notes: "", color: p.color, view: p.view, archived: false } : null;
+  return p ? { id: p.id, name: p.name, notes: "", color: p.color, icon: null, view: p.view, archived: false } : null;
 }
 
 /**
- * Update a project's settings — rename, notes, color, default view (the same shape as CLI `project
- * update`). Only the fields passed are changed; undefined leaves a field as it is. Outside Tauri the
- * cached ProjectDto is swapped in place (notes are not in the cache, so they are not reflected).
+ * Update a project's settings — rename, notes, color, icon, default view (the same shape as CLI
+ * `project update`, which has no icon). Only the fields passed are changed; undefined leaves a field
+ * as it is. Outside Tauri the cached ProjectDto is swapped in place (notes are not in the cache, so
+ * they are not reflected).
+ *
+ * The icon takes three states, like `setFacetAvatar`: undefined leaves it, `null` clears it, and a
+ * data URL registers it. `iconOriginal` is the image that URL was baked from — shrink with
+ * `fileToAvatarDataUrl` and pass the file's own bytes here, so core keeps the original beside the
+ * small version (`AMB-D-839`) and a larger one can be baked later without asking for the file again.
  */
 export async function updateProject(
   projectId: number,
-  patch: { name?: string; notes?: string; color?: string; view?: ProjectDto["view"] },
+  patch: {
+    name?: string; notes?: string; color?: string; view?: ProjectDto["view"];
+    icon?: string | null; iconOriginal?: Uint8Array;
+  },
 ): Promise<void> {
   if (inTauri()) {
     return invokeAck("project_update", {
@@ -468,6 +477,9 @@ export async function updateProject(
       name: patch.name ?? null,
       notes: patch.notes ?? null,
       color: patch.color ?? null,
+      // Keep all three states distinct: undefined = leave as is, "" = clear, a data URL = register.
+      icon: patch.icon === undefined ? null : patch.icon ?? "",
+      iconOriginal: patch.iconOriginal ?? null,
       view: patch.view ?? null,
     });
   }
@@ -1112,18 +1124,27 @@ export async function openExternalUrl(url: string): Promise<void> {
 
 /**
  * Set or clear a facet's (human / AI) avatar image. A `dataUrl` (data:image/…) sets it; `null` reverts
- * to the identicon. Shrink the image before passing it in (use `fileToAvatarDataUrl`). It lives in
- * `config.human_avatar` / `ai_avatar`, so it comes back through snapshot.roster. Only the facet named
- * is sent; the other is left out of the payload entirely, which means "leave as is" — clearing is the
- * empty string. Outside Tauri (browser) the cached roster is edited directly.
+ * to the identicon. Shrink the image before passing it in (use `fileToAvatarDataUrl`), and pass the
+ * bytes of the image the user picked as `source` — it is kept as the original beside the display
+ * version (`AMB-D-839`), so a larger version can be baked later without asking for the file again.
+ * The display version lives in `config.human_avatar` / `ai_avatar`, so it comes back through
+ * snapshot.roster; the original lives in the blob store. Only the facet named is sent; the other is
+ * left out of the payload entirely, which means "leave as is" — clearing is the empty string. Outside
+ * Tauri (browser) the cached roster is edited directly.
  */
-export async function setFacetAvatar(kind: "human" | "ai", dataUrl: string | null): Promise<void> {
+export async function setFacetAvatar(
+  kind: "human" | "ai",
+  dataUrl: string | null,
+  source?: Uint8Array,
+): Promise<void> {
   if (inTauri()) {
     // Keep all three states distinct: the named facet is Some (empty string = clear), the other is undefined = leave as is.
     const value = dataUrl ?? "";
     return invokeAck("set_facet_avatars", {
       humanAvatar: kind === "human" ? value : undefined,
       aiAvatar: kind === "ai" ? value : undefined,
+      humanSource: kind === "human" ? source : undefined,
+      aiSource: kind === "ai" ? source : undefined,
     });
   }
   mockMutate((s) => ({
@@ -1153,7 +1174,8 @@ export async function setFacetNames(humanName: string | null, aiName: string | n
 /**
  * Shrink an image File to a small square PNG data URL (96px by default). It centre-crops so the result
  * sits well in a round avatar, and keeps the store from bloating — core enforces an upper bound as
- * well. It goes through canvas, so it works the same in a browser and in the Tauri webview.
+ * well. It goes through canvas, so it works the same in a browser and in the Tauri webview. This is
+ * the display version alone; the file it was baked from is kept as the original (`setFacetAvatar`).
  */
 export async function fileToAvatarDataUrl(file: File, size = 96): Promise<string> {
   const url = URL.createObjectURL(file);

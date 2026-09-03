@@ -168,7 +168,7 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
             <option value="decision">{t("dimmgr.appliesTo.decision")}</option>
           </select>
         </label>
-        <button className="feed__action dimmgr__danger" onClick={removeDim}>{t("dimmgr.removeDim")}</button>
+        <button className="btn btn--danger" onClick={removeDim}>{t("dimmgr.removeDim")}</button>
       </div>
       <InlineText
         className="dimmgr__notes"
@@ -323,7 +323,7 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
           button rather than found by pressing it. */}
       {closable && (
         <button
-          className="feed__action"
+          className="btn"
           disabled={!value.closed && stuck}
           title={!value.closed && stuck ? t("dimmgr.lastOpenValueHint") : t("dimmgr.closeValueHint")}
           onClick={() => store.setDimensionValueClosed(value.id, !value.closed)}
@@ -333,7 +333,7 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
       )}
       {moveTo === null ? (
         <button
-          className="feed__action dimmgr__danger"
+          className="btn btn--danger"
           disabled={stuck}
           title={stuck ? t("dimmgr.lastOpenValueHint") : undefined}
           onClick={removeValue}
@@ -359,7 +359,7 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
             ))}
           </select>
           <button
-            className="feed__action dimmgr__danger"
+            className="btn btn--danger"
             disabled={!moveTo}
             onClick={() => {
               const to = siblings.find((o) => o.id === moveTo);
@@ -368,7 +368,7 @@ function ValueRow({ value, store, projectId, dimensionId, required, siblings, or
           >
             {t("dimmgr.removeValue")}
           </button>
-          <button className="feed__action" onClick={() => setMoveTo(null)}>{t("dimmgr.cancel")}</button>
+          <button className="btn" onClick={() => setMoveTo(null)}>{t("dimmgr.cancel")}</button>
         </span>
       )}
     </div>

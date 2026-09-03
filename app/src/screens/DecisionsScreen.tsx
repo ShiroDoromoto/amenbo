@@ -177,7 +177,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           </select>
         </label>
         <span className="topbar__spacer" style={{ flex: 1 }} />
-        <button className="feed__action" onClick={() => setComposing((v) => !v)}><Icon name="plus" /> {t("dec.new")}</button>
+        <button className="btn" onClick={() => setComposing((v) => !v)}><Icon name="plus" /> {t("dec.new")}</button>
       </div>
 
       {/* The filters themselves, opened in place under the bar the toggle sits in. One line per axis,
@@ -372,13 +372,13 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
       ))}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button
-          className="feed__action"
+          className="btn btn--primary"
           disabled={busy || !title.trim() || unmet.length > 0}
           onClick={() => void submit()}
         >
           {t("dec.add")}
         </button>
-        <button className="feed__action" onClick={onDone}>{t("dec.cancel")}</button>
+        <button className="btn" onClick={onDone}>{t("dec.cancel")}</button>
         {/* Why the button is held, named rather than left to a tooltip — the selects are right above.
             The sentence is the task pane's, because it is the same sentence: fill these in first. */}
         {unmet.length > 0 && (

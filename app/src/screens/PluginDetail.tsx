@@ -98,7 +98,7 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
 
         {/* Everything below this line came from GitHub, not from the catalog. */}
         <div className="plugdet__figures">
-          <button className="feed__action" onClick={() => void openExternalUrl(repoUrl(entry.repo))}>
+          <button className="btn" onClick={() => void openExternalUrl(repoUrl(entry.repo))}>
             {tf("plugins.openRepo", { repo: entry.repo })}
           </button>
           {loading && <span className="faint">{t("plugins.factsLoading")}</span>}

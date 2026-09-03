@@ -11,6 +11,7 @@ import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
 import type { SessionSaidDto, SessionWorkDto } from "../bindings/bindings";
 import { currentLang, errText, t } from "../core/i18n";
+import { asTyped, isEnterSubmit } from "../core/keys";
 import { invoke } from "../core/ipc";
 import { setStatus } from "../core/mutations";
 import { Icon } from "../components/Icon";
@@ -144,6 +145,11 @@ export function TerminalPane({
   // Whether a drag from outside is over this pane. It is the whole of the receiving surface: nothing
   // is drawn until something is being carried, and what is carried is only known while it hangs there.
   const [handing, setHanding] = useState(false);
+  // Whether the row is being named, and the box it is named in while it is. A frame's name is the
+  // person's last word on it (`../talk/frames`), so it is typed on the row it belongs to rather than
+  // in a window over the pane: what is being named is the line the box stands in.
+  const [naming, setNaming] = useState(false);
+  const nameField = useRef<HTMLInputElement>(null);
 
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
@@ -262,6 +268,13 @@ export function TerminalPane({
     plateRef.current?.named(names);
   }, [names]);
 
+  // The name as it stands, ready to be typed over. A box opened on a pane already called something is
+  // opened to change that name, and a reader who has to clear it first is being asked to type the old
+  // one back in whenever they only meant to add a word.
+  useEffect(() => {
+    nameField.current?.select();
+  }, [naming]);
+
   // Files dragged in from the desktop, which the host hands over as paths (`../core/hostDrop`).
   //
   // **The watch stands only while there is a terminal here to hand them to.** A slot with nothing
@@ -308,12 +321,42 @@ export function TerminalPane({
           run has no session and is still a place somebody has to be able to get rid of. */}
       <div className="slot__bar">
         {/* The line above the pane, which is empty until there is a session to say something about
-            — and holds the row's width open either way, so the control does not walk across it. */}
-        <div className="slot__plate" ref={labelRef} />
-        {/* What the row can do besides end the place. It is drawn only while a terminal is running,
-            because everything in it is a way of handing that terminal something — and it is a menu
-            rather than a row of buttons so that a face split four ways does not draw the same button
-            four times over. */}
+            — and holds the row's width open either way, so the control does not walk across it.
+            It stays up while a name is being typed in its place, out of sight rather than out of
+            the page: what draws it was put there once and lives longer than any one naming
+            (`../talk/plate`). */}
+        <div className={`slot__plate${naming ? " slot__plate--behind" : ""}`} ref={labelRef} />
+        {/* Where the name is typed, standing in the line's own place. Enter is the word taken and
+            Escape is the row left as it was; leaving the box is the same as Escape, because a
+            reader who has gone somewhere else has not said what to call this pane. */}
+        {naming && (
+          <input
+            ref={nameField}
+            className="slot__rename"
+            defaultValue={names.get(frame) ?? ""}
+            autoFocus
+            aria-label={t("face.rename")}
+            {...asTyped}
+            onKeyDown={(e) => {
+              if (isEnterSubmit(e)) {
+                e.preventDefault();
+                const text = e.currentTarget.value.trim();
+                // A person's word is the last one on a frame, and an empty box is not a word: it
+                // would otherwise take the name off a pane the agent had named (`../talk/frames`).
+                if (text) onName(frame, text, "person");
+                setNaming(false);
+              }
+              if (e.key === "Escape") setNaming(false);
+            }}
+            onBlur={() => setNaming(false)}
+          />
+        )}
+        {/* What the row can do besides end the place. It is a menu rather than a row of buttons so
+            that a face split four ways does not draw the same button four times over.
+
+            **It is drawn only while a terminal is running**, and it is the one way in to naming a
+            pane (`AMB-D-838`) — so an empty frame has no name. A place nobody has opened anything in
+            is a place there is nothing to call. */}
         {live !== null && (
           <button
             className="slot__more"
@@ -358,6 +401,20 @@ export function TerminalPane({
           >
             <Icon name="folder" />
             {t("files.pasteFolderPath")}
+          </MenuItem>
+          {/* Held off from the two above because it is not their kind: they hand the terminal
+              something, and this is about the place the terminal is drawn in. The row is where a
+              person names a pane, because the row is the one thing on the face that belongs to the
+              frame rather than to the session in it (`AMB-D-838`). */}
+          <MenuItem
+            apart
+            onClick={() => {
+              setMenuAt(null);
+              setNaming(true);
+            }}
+          >
+            <Icon name="pencil" />
+            {t("face.rename")}
           </MenuItem>
         </Menu>
       )}

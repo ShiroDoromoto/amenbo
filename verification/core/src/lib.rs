@@ -2493,6 +2493,12 @@ const REGISTRY: &[OpSpec] = &[
     // (`side-span`), which the other two cannot hand it — a finger's width either way is a difference
     // between two shots, and nothing an eye can name on one.
     //
+    // `cover` is the fourth, and a place as well: drag the wide width on until the panes are gone
+    // behind it. It is separate from `broad` because the two stop in different places — the narrow
+    // width stops where the panes would be squeezed away, the wide one goes on to the rail — and an
+    // operator handed the wrong sentence would let go somewhere neither reading can name. What it is
+    // for is `side-cover`, the way `broad` is for `side-span`.
+    //
     // **It is the one step on these roads aimed at a line.** The edge carries no name, so nothing
     // reaches it the way a button is reached — the screen tool drags between two points, and working
     // those out of the screen is an operator's. So the instruction says where to put the pointer and
@@ -2532,6 +2538,24 @@ const REGISTRY: &[OpSpec] = &[
     // `drag-side toward: broad` and not by the finger's width the other direction moves: a difference
     // an eye is to swear to has to be a difference an eye can see.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-span", required: &["side", "span"], refs: &[], strings: &["side", "span"], binds: false },
+    // And how much of the panes is left beside the reading column at its wide width, which is the one
+    // question the neighbour above cannot answer for that width. `span` divides the width between the
+    // column and the panes, and the wide width the column ships with takes about half of it — so a
+    // wide width somebody dragged out and the one nobody touched are the same answer on `span`
+    // whenever the window is the size the application opens at, and on a window dragged wider the
+    // shipped one turns `thin` while the build is perfectly correct. A reading resting on the size of
+    // the window is a reading a road cannot carry.
+    //
+    // What does not rest on it is whether any of the panes is showing. The wide width lies over the
+    // panes rather than beside them, and it stops at the rail: the one it ships with leaves a strip of
+    // the work in view on the narrowest window the application opens, and one dragged to the stop
+    // leaves none on the widest. So `cover` is `part` for a column with some of the panes still
+    // showing beside it, `all` for one with none — a presence rather than a proportion, which is why
+    // it stands as an op of its own instead of a third answer on `span`.
+    //
+    // `side` is here for the shape of the family and is `files`: the rail has one width and is never
+    // drawn over anything, so there is nothing for this reading to be about on that side.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-cover", required: &["side", "cover"], refs: &[], strings: &["side", "cover"], binds: false },
     // Which face the lamp on a pane's label is showing. It is the one reading that says a pane is
     // *alive* rather than drawn: a terminal that ended leaves its last output where it was, so words
     // on a pane outlive the process that wrote them and a road reading only those cannot tell a

@@ -736,6 +736,12 @@ impl Instructor {
     /// its answers are coarse for the reason it has an eye at all — a person at the screen can say
     /// which of two regions is the wider, and cannot say by how many pixels.
     ///
+    /// `terminal side-cover` is a `Review` for the reason `side-span` is, and its answers are coarse
+    /// for a plainer reason still: what it asks is whether any of the panes is showing beside the
+    /// column, which is a thing an eye either sees or does not. It is the reading the wide width is
+    /// told apart by — its neighbour divides the width, and the wide width the column ships with
+    /// divides it about the way a dragged one does on the window the application opens.
+    ///
     /// `terminal panes-sit` is a `Review` beside them, and for the same reason once more: what it
     /// reads is where two regions of the screen are in relation to one another, and the panes carry
     /// the road's own lines whichever way round they sit. A reading would find those words on the
@@ -1922,8 +1928,14 @@ impl Instructor {
             // project the face came up on is the run's business, so a road may well press the one
             // already shown, and a line promising the screen would change would read as a failure on
             // the one press that is allowed to do nothing.
+            //
+            // Where the rail is standing is said as well as where the press is, because the rail
+            // swaps its halves rather than stacking them: a road that put the folder up (`files
+            // tree`) and then moved project would be looking for this press on the half that does
+            // not carry it. Which half the project being left is left on is not a road's to choose
+            // — the press is on one of them — and no reading here is about that.
             (Domain::Terminal, "go-project") => format!(
-                "In the list beside the panes, under its first heading, press the name of the project \"{}\" — a row in that upper list and not one in the list of panes below it. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
+                "In the list beside the panes, under its first heading, press the name of the project \"{}\" — a row in that upper list and not one in the list of panes below it. Where the rail is standing on the half that draws the folder instead of the two lists, put it back on the lists first: this press is on that half and nowhere else. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
                 req(with, "project")?
             ),
             // Opening a pane where there is not one yet. **A pane is opened from the empty frame**,
@@ -2062,6 +2074,12 @@ impl Instructor {
                     // how far to go: what a later step reads is this width, and it is asked for in
                     // the words that step will use.
                     "broad" => "well out across the face, as far as the edge will go — it stops of its own accord before the panes are squeezed away, and letting go anywhere near that stop is far enough",
+                    // The same gesture on the wide width, which stops somewhere else: it runs on
+                    // over the panes until it meets the rail, so the sentence that fits the narrow
+                    // width's stop would have the operator let go while the work is still in view.
+                    // The rail is named by where it is rather than by what it lists, because the
+                    // half it is standing on is the road's to move (`files tree`).
+                    "cover" => "on out over the panes, as far as the edge will go — it stops when it reaches the column at the other edge of the face, by which point none of the panes is left showing, and letting go anywhere near that stop is far enough",
                     other => return Err(format!("action `drag-side` does not know the direction `{other}`")),
                 };
                 format!(
@@ -3468,6 +3486,26 @@ impl Instructor {
                 let which = side(with)?;
                 format!("On the terminal face, confirm {} is {}", which.phrase(), span(with)?)
             }
+            // And the reading that stands where that one cannot: the wide width, which lies over
+            // the panes instead of dividing the width with them. What is asked for is whether any of
+            // the work is still showing beside the column, because that is the one thing about this
+            // width that does not move with the size of the window — the width it ships with leaves a
+            // strip of the panes on the narrowest window the application opens, and one dragged to
+            // the stop leaves none on the widest.
+            (Domain::Terminal, "side-cover") => match side(with)? {
+                Side::Rail => return Err(
+                    "assert `side-cover` is the reading column's — the rail has one width, is never drawn over the panes, and has nothing for this reading to be about".to_string()
+                ),
+                // The panel is named and then read, in two sentences rather than one: what this
+                // reading is about is the width at which it is no longer beside the panes, and the
+                // name it goes by here says "beside" — running the two together would have the
+                // sentence contradict itself in front of the person closing it.
+                Side::Files => format!(
+                    "On the terminal face, look at {}. Confirm it is {}",
+                    Side::Files.phrase(),
+                    cover(with)?
+                ),
+            },
             // The shape the page is drawn in, read off the two panes standing on it. What it is about
             // is the width each of them ends up with rather than the arrangement for its own sake:
             // `down` is pressed so that a pane keeps the whole of it, and a grid that shuffled the
@@ -3992,6 +4030,24 @@ fn span(with: &Args) -> Result<&'static str, String> {
         Some("broad") => Ok("as wide as what is left of the panes, or wider — the width between the two columns split roughly in two, rather than the column standing as a strip at the edge of it."),
         Some(other) => Err(format!("`span` does not know `{other}` — it is thin or broad")),
         None => Err("arg `span` must say how the column and the panes divide the width".to_string()),
+    }
+}
+
+/// How much of the panes the reading column has taken at its wide width, read off one shot.
+///
+/// Two answers, and a presence rather than a proportion. [`span`] divides the width between the
+/// column and the panes, which is an answer the wide width cannot be told apart by: the width it
+/// ships with takes about half on the window the application opens and less than half on a wider
+/// one, so the same build reads differently depending on how far somebody dragged the window. What
+/// is showing behind the column does not move with the window — the shipped width leaves a strip of
+/// the panes on the narrowest window there is, and the width dragged to the stop leaves nothing on
+/// the widest.
+fn cover(with: &Args) -> Result<&'static str, String> {
+    match with.get("cover").and_then(|v| v.as_str()) {
+        Some("part") => Ok("lying over the panes with some of the work still showing beside it — the panes run on underneath the column and are cut off by its edge, and a strip of them is left standing between that edge and the column at the other edge of the face."),
+        Some("all") => Ok("lying over the panes with none of the work showing beside it — the column has taken the whole width the panes were drawn in, from the column at the other edge of the face right out to this one, and no part of a pane is anywhere in view."),
+        Some(other) => Err(format!("`cover` does not know `{other}` — it is part or all")),
+        None => Err("arg `cover` must say whether any of the panes is left showing beside the column".to_string()),
     }
 }
 

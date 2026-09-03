@@ -102,7 +102,7 @@ export function PluginMarketScreen({ onOpenInstalled }: {
           placeholder={t("plugins.searchPh")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ fontSize: "var(--fs-xs)", width: 180 }}
+          style={{ width: 180 }}
         />
         <label className="ctllabel">
           {t("plugins.category")}{" "}
@@ -313,7 +313,7 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") check(); }}
-            style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0 }}
+            style={{ flex: 1, minWidth: 0 }}
           />
           <button className="btn" disabled={busy || !url.trim()} onClick={check}>
             {busy ? t("plugins.sourceChecking") : t("plugins.addSource")}
@@ -372,7 +372,7 @@ function SourceConsent({ probe, name, onName, busy, onConfirm, onCancel }: {
             placeholder={probe.suggestedName}
             onChange={(e) => onName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") onConfirm(); }}
-            style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0 }}
+            style={{ flex: 1, minWidth: 0 }}
           />
         </label>
         <button className="feed__action" disabled={busy} onClick={onCancel}>{t("plugins.sourceCancel")}</button>

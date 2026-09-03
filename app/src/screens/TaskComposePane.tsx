@@ -47,7 +47,7 @@ export function TaskComposePane({
         <input
           {...asTyped}
           className="compose__input"
-          style={{ minHeight: "unset", fontSize: "var(--fs-md)", fontWeight: "var(--fw-bold)" }}
+          style={{ minHeight: "unset", fontWeight: "var(--fw-bold)" }}
           autoFocus
           value={title}
           placeholder={t("compose.titlePh")}

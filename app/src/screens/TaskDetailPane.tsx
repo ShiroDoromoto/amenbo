@@ -234,7 +234,7 @@ export function TaskDetailPane({
               <input
                 {...asTyped}
                 className="compose__input"
-                style={{ minHeight: "unset", fontSize: "inherit", fontWeight: "inherit", flex: 1 }}
+                style={{ minHeight: "unset", flex: 1 }}
                 autoFocus
                 value={titleDraft}
                 placeholder={t("compose.titlePh")}

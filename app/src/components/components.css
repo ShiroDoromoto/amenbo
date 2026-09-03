@@ -111,7 +111,7 @@
 .decisionsbtn { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .decisionsbtn--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 /* Under-discussion (proposed) decision count on the decisions button. Standalone (not the sidebar's task+decision sum), since this surface is the decisions face. */
-.decisionsbtn__count { font-size: var(--fs-xs); color: var(--c-text-faint); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
+.decisionsbtn__count { font-size: var(--fs-xs); color: var(--c-text-muted); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
 .decisionsbtn--active .decisionsbtn__count { background: var(--c-surface); }
 .filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); flex-wrap: wrap; }
 /* A chip is a name, so it is never squeezed: it keeps its own size (`flex: none`) and its label stays on
@@ -130,16 +130,16 @@
    decisions button beside it — both are standing controls in the toolbar. */
 .filtertoggle { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .filtertoggle--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
-.filtertoggle__count { font-size: var(--fs-xs); color: var(--c-text-faint); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
+.filtertoggle__count { font-size: var(--fs-xs); color: var(--c-text-muted); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
 .filtertoggle--active .filtertoggle__count { background: var(--c-surface); }
 
 .column { width: 280px; flex: none; display: flex; flex-direction: column; gap: var(--s-2); }
 .column__head { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-1); }
 .column__name { font-weight: var(--fw-bold); font-size: var(--fs-md); }
-.column__count { font-size: var(--fs-xs); color: var(--c-text-faint); }
+.column__count { font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* What the column holds beside what its count names (the closed column's rejected). Fainter and smaller
    than the count, so it reads as an aside and is never mistaken for the figure it sits next to. */
-.column__note { font-size: var(--fs-xs); color: var(--c-text-faint); }
+.column__note { font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* The add button at the right end of a column header. Pressing it starts a new item in the
    right pane. */
 .column__addbtn {
@@ -153,7 +153,7 @@
    would read as an empty column rather than as a control. */
 .board__addcol {
   width: 200px; flex: none; align-self: flex-start;
-  text-align: left; font-size: var(--fs-md); color: var(--c-text-faint);
+  text-align: left; font-size: var(--fs-md); color: var(--c-text-muted);
   border: 1px dashed var(--c-edge); background: none; border-radius: var(--r-md); padding: var(--s-2) var(--s-2);
 }
 .board__addcol:hover { color: var(--c-accent); border-color: var(--c-accent); }
@@ -198,11 +198,11 @@
 }
 .card:hover { border-color: var(--c-edge); }
 .card--selected { border-color: var(--c-accent); box-shadow: 0 0 0 1px var(--c-accent); }
-.card--closed .card__title { color: var(--c-text-faint); text-decoration: line-through; }
+.card--closed .card__title { color: var(--c-text-muted); text-decoration: line-through; }
 .card__title { font-size: var(--fs-md); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
 .card__row { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 .card__assign { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-xs); color: var(--c-text-muted); }
-.card__footer { display: flex; align-items: center; gap: var(--s-2); color: var(--c-text-faint); font-size: var(--fs-xs); }
+.card__footer { display: flex; align-items: center; gap: var(--s-2); color: var(--c-text-muted); font-size: var(--fs-xs); }
 .card__spacer { flex: 1; }
 /* A compact select sat inline among a card's or row's chips (the status control, a dimension value). */
 .inlineselect {
@@ -217,7 +217,7 @@
 
 /* The chip a task's ref is shown in; clicking it copies that same ref. */
 .idchip {
-  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-faint);
+  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-muted);
   background: none; border: none; padding: 0 2px; cursor: pointer; white-space: nowrap;
 }
 .idchip:hover { color: var(--c-accent); }
@@ -479,7 +479,7 @@
    width follows the step rather than a pixel count somebody has to remember to raise with it: six
    of them is the six-character Japanese word for project, the longest label this pane puts here. A
    language whose word runs longer wraps, which it already did at the 64px this replaces. */
-.detail__flabel { width: 6em; flex: none; color: var(--c-text-faint); font-size: var(--fs-md); }
+.detail__flabel { width: 6em; flex: none; color: var(--c-text-muted); font-size: var(--fs-md); }
 .detail__sep { height: 1px; background: var(--c-rule); }
 .detail__section-h { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--c-text-muted); }
 
@@ -557,14 +557,14 @@
 /* Notes rendered as Markdown are a run of block elements, so pre-wrap comes back off (this
    is the react-markdown path). */
 .notes--md { white-space: normal; cursor: text; }
-.meta { font-size: var(--fs-xs); color: var(--c-text-faint); }
+.meta { font-size: var(--fs-xs); color: var(--c-text-muted); }
 
 /* ---------- activity ---------- */
 .feed { display: flex; flex-direction: column; }
 /* Virtual scrolling for history: it claims the remaining height inside .main and scrolls
    only within itself, which is what windowing rests on. */
 .feed--virtual { flex: 1; min-height: 0; overflow-y: auto; }
-.feed__daygroup { padding: var(--s-2) var(--s-4) 0; font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-faint); }
+.feed__daygroup { padding: var(--s-2) var(--s-4) 0; font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-muted); }
 .feed__item { display: flex; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); align-items: flex-start; }
 .feed__item:hover { background: var(--c-hover); }
 .feed__body { flex: 1; min-width: 0; }
@@ -575,9 +575,9 @@
    the unpressable row looks like a link and the pressable one looks plain. */
 .feed__target { font-size: var(--fs-xs); color: var(--c-accent-text); border: none; background: none; }
 button.feed__target:hover { color: var(--c-accent); }
-.feed__target--gone { color: var(--c-text-faint); }
-.feed__meta { font-size: var(--fs-xs); color: var(--c-text-faint); display: flex; gap: var(--s-2); margin-top: 2px; }
-.feed__action { font-size: var(--fs-xs); color: var(--c-text-faint); border: none; background: none; }
+.feed__target--gone { color: var(--c-text-muted); }
+.feed__meta { font-size: var(--fs-xs); color: var(--c-text-muted); display: flex; gap: var(--s-2); margin-top: 2px; }
+.feed__action { font-size: var(--fs-xs); color: var(--c-text-muted); border: none; background: none; }
 /* Only a pressable one turns accent, and a disabled one fades: this class is the borderless
    sibling of .btn and carries the same rule, since it is disabled in as many places. */
 .feed__action:hover:not(:disabled) { color: var(--c-accent); }
@@ -625,7 +625,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .srch__error { color: var(--c-stop); font-size: var(--fs-md); }
 
 /* ---------- empty / placeholder ---------- */
-.placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-2); color: var(--c-text-faint); }
+.placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-2); color: var(--c-text-muted); }
 
 /* ---------- list (smart views) ---------- */
 .list { display: flex; flex-direction: column; }
@@ -650,7 +650,7 @@ button.feed__target:hover { color: var(--c-accent); }
    Truncating keeps the height constant whatever the column width, and overflow:hidden
    handles the horizontal spill. */
 .row__title { font-size: var(--fs-md); font-weight: var(--fw-medium); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row__title--closed { color: var(--c-text-faint); text-decoration: line-through; }
+.row__title--closed { color: var(--c-text-muted); text-decoration: line-through; }
 .row__spacer { flex: 1; }
 /* The inbox row's actions (mark read / archive / restore). They stay visible at all times:
    showing them only on hover leaves them undiscoverable, and on a selected row, once the
@@ -1042,14 +1042,14 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .cal__todaybtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
 .cal__weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s-1); }
-.cal__weekday { font-size: var(--fs-xs); color: var(--c-text-faint); text-align: center; padding: var(--s-1) 0; }
+.cal__weekday { font-size: var(--fs-xs); color: var(--c-text-muted); text-align: center; padding: var(--s-1) 0; }
 .cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s-1); }
 .cal__cell {
   min-height: 92px; display: flex; flex-direction: column; gap: 2px;
   border: 1px solid var(--c-rule); border-radius: var(--r-sm); background: var(--c-surface); padding: var(--s-1);
 }
 .cal__cell--out { background: var(--c-sunken); }
-.cal__cell--out .cal__date { color: var(--c-text-faint); }
+.cal__cell--out .cal__date { color: var(--c-text-muted); }
 .cal__cell--today { border-color: var(--c-accent); box-shadow: 0 0 0 1px var(--c-accent); }
 .cal__date { font-size: var(--fs-xs); color: var(--c-text-muted); text-align: right; padding: 0 2px; }
 .cal__cell--today .cal__date { color: var(--c-accent); font-weight: var(--fw-bold); }
@@ -1063,19 +1063,19 @@ button.feed__target:hover { color: var(--c-accent); }
 .cal__chip--today { border-left-color: var(--c-due-today); }
 .cal__chip--tomorrow { border-left-color: var(--c-due-tomorrow); }
 .cal__chip--future { border-left-color: var(--c-due-future); }
-.cal__chip--closed { color: var(--c-text-faint); text-decoration: line-through; }
+.cal__chip--closed { color: var(--c-text-muted); text-decoration: line-through; }
 .cal__chip--selected { background: var(--c-accent-weak); box-shadow: inset 0 0 0 1px var(--c-accent); }
 .cal__chip:hover { background: var(--c-hover); }
-.cal__more { font-size: var(--fs-xs); color: var(--c-text-faint); padding: 0 var(--s-2); }
+.cal__more { font-size: var(--fs-xs); color: var(--c-text-muted); padding: 0 var(--s-2); }
 .cal__nodue { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-top: var(--s-2); border-top: 1px dashed var(--c-rule); }
-.cal__nodue-label { font-size: var(--fs-xs); color: var(--c-text-faint); font-weight: var(--fw-medium); }
+.cal__nodue-label { font-size: var(--fs-xs); color: var(--c-text-muted); font-weight: var(--fw-medium); }
 .cal__nodue .cal__chip { display: inline-block; width: auto; max-width: 220px; border-left-width: 3px; border-left-color: var(--c-rule); }
 
 /* ---------- timeline (gantt) view ---------- */
 .tl { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-3) var(--s-4); gap: var(--s-2); overflow-y: auto; }
 .tl__axis, .tl__row { display: grid; grid-template-columns: 200px 1fr 84px; align-items: center; gap: var(--s-2); }
 .tl__axis { padding-bottom: var(--s-2); border-bottom: 1px solid var(--c-rule); position: sticky; top: 0; background: var(--c-bg); z-index: 1; }
-.tl__ruler { position: relative; height: 16px; font-size: var(--fs-xs); color: var(--c-text-faint); }
+.tl__ruler { position: relative; height: 16px; font-size: var(--fs-xs); color: var(--c-text-muted); }
 .tl__ruler-end { position: absolute; right: 0; top: 0; }
 .tl__ruler-start { right: auto; left: 0; }
 .tl__ruler-today { position: absolute; top: 0; transform: translateX(-50%); color: var(--c-accent); font-weight: var(--fw-medium); white-space: nowrap; }

@@ -5,6 +5,10 @@
 // opened by a person who wants it, and nothing is lost by its being closed (`../talk/columns`).
 // After the first run the default has nothing to say — what is up is whichever half the person left
 // up, which is this device's own answer and is kept between runs.
+//
+// **The top row does not choose a half.** It opens the column and closes it, and the half is the
+// column's own row of tabs (`../files/FilesPanel`), so what is pinned here is the answer being kept
+// rather than the press that sets it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -51,8 +55,8 @@ const click = async (el: HTMLElement | null) => {
 const bar = (name: string) =>
   [...container.querySelectorAll<HTMLElement>(".termface__bar button")]
     .find((one) => (one.getAttribute("aria-label") ?? one.textContent) === name) ?? null;
-/** The order the file face's two halves are offered in. */
-const halves = () =>
+/** What the top row offers for the reading column. */
+const sides = () =>
   [...container.querySelectorAll<HTMLElement>(".termface__sides button")]
     .map((one) => one.textContent);
 
@@ -79,18 +83,25 @@ afterEach(() => {
 });
 
 describe("the half the file face opens on", () => {
-  it("is the memo, and the memo is offered first", async () => {
+  it("is the memo, and the top row asks for the column rather than for a half", async () => {
     await mount();
     expect(q(".memo__field")).not.toBeNull();
-    expect(halves()).toEqual([t("files.memo"), t("files.tab")]);
+    // One control, and what it says is the column it opens. Two of them said the halves once, and
+    // the half is the column's own row of tabs to choose.
+    expect(sides()).toEqual([t("files.side")]);
   });
 
   it("is whichever half was up last, so the default is only the first run's", async () => {
-    await mount();
-    await click(bar(t("files.tab")));
-    await act(async () => root.unmount());
-    root = createRoot(container);
+    localStorage.setItem("amenbo.termface.sideTab", "files");
     await mount();
     expect(q(".memo__field")).toBeNull();
+  });
+
+  it("is put away and brought back by the one control, on the half it was left on", async () => {
+    await mount();
+    await click(bar(t("files.side")));
+    expect(q(".termface__column--side")).toBeNull();
+    await click(bar(t("files.side")));
+    expect(q(".memo__field")).not.toBeNull();
   });
 });

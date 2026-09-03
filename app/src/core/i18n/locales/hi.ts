@@ -565,7 +565,7 @@ export const hi: Translation = {
     "face.needsYou": "आपकी प्रतीक्षा में",
     "face.handHere": "पथ चिपकाने के लिए छोड़ें",
     "face.more": "और",
-    "files.tab": "फ़ाइलें",
+    "files.side": "पन्ना और फ़ाइलें",
     "files.memo": "पन्ना",
     "files.memoTyping": "टाइप हो रहा है",
     "files.memoKept": "सहेजा गया",

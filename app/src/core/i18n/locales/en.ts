@@ -653,7 +653,7 @@ const ui = {
   // about each row drawn as a colour rather than as words (`AMB-D-785`). What a file turns out not
   // to be is said in its own words — a binary is not a failure, it is simply not something a panel
   // can show.
-  "files.tab": "Files",
+  "files.side": "Page and files",
   "files.memo": "The page",
   "files.memoTyping": "Typing",
   "files.memoKept": "Kept",

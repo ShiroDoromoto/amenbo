@@ -565,7 +565,7 @@ export const zhHans: Translation = {
     "face.needsYou": "在等你",
     "face.handHere": "松开即可粘贴路径",
     "face.more": "更多",
-    "files.tab": "文件",
+    "files.side": "便笺与文件",
     "files.memo": "便笺",
     "files.memoTyping": "输入中",
     "files.memoKept": "已保存",

@@ -565,7 +565,7 @@ export const tr: Translation = {
     "face.needsYou": "sizi bekliyor",
     "face.handHere": "Yolu yapıştırmak için bırakın",
     "face.more": "Daha fazla",
-    "files.tab": "Dosyalar",
+    "files.side": "Sayfa ve dosyalar",
     "files.memo": "Sayfa",
     "files.memoTyping": "Yazılıyor",
     "files.memoKept": "Saklandı",

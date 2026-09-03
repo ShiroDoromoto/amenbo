@@ -587,7 +587,7 @@ export const ptBR: Translation = {
     "face.needsYou": "esperando por você",
     "face.handHere": "Solte para colar o caminho",
     "face.more": "Mais",
-    "files.tab": "Arquivos",
+    "files.side": "Página e arquivos",
     "files.memo": "A página",
     "files.memoTyping": "Digitando",
     "files.memoKept": "Guardado",

@@ -594,7 +594,7 @@ export const ru: Translation = {
     "face.needsYou": "ждёт вас",
     "face.handHere": "Отпустите, чтобы вставить путь",
     "face.more": "Ещё",
-    "files.tab": "Файлы",
+    "files.side": "Страница и файлы",
     "files.memo": "Страница",
     "files.memoTyping": "Набор",
     "files.memoKept": "Сохранено",

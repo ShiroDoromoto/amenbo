@@ -28,7 +28,6 @@ export type IconName =
   | "puzzle"
   | "plug"
   | "search"
-  | "book"
   | "link"
   | "gear"
   | "goose"
@@ -136,13 +135,6 @@ const ART: Record<IconName, ReactNode> = {
     <>
       <circle cx="10.6" cy="10.6" r="6.8" />
       <path d="M15.6 15.6 20.9 20.9" />
-    </>
-  ),
-  // An open book — the command reference.
-  book: (
-    <>
-      <path d="M12 7.4C10.4 5.9 7.9 5.2 3.6 5.2v12.4c4.3 0 6.8.7 8.4 2.2 1.6-1.5 4.1-2.2 8.4-2.2V5.2c-4.3 0-6.8.7-8.4 2.2z" />
-      <path d="M12 7.4v12.4" />
     </>
   ),
   // Two links of a chain — the AI connected over MCP.

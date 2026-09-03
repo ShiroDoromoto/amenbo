@@ -66,7 +66,10 @@ endif
 # shared dev app is this machine's permanent setup, which nothing sends anywhere. Refused while the
 # makefile is read rather than in the recipe, because the recipe runs after a two-minute build and a
 # door that says no afterwards has already spent it.
-ifneq (,$(filter install-gui-dev-vm,$(MAKECMDGOALS)))
+# Both names, because the lock re-enters make on the second one: the guard has to hold on the
+# inner pass too, or the id could be dropped on the way in and the build would fall back to the
+# shared dev app's names.
+ifneq (,$(filter install-gui-dev-vm install-gui-dev-vm-locked,$(MAKECMDGOALS)))
 ifeq ($(strip $(AMB-T-ID)),)
 $(error install-gui-dev-vm puts one task's own instance in the VM — pass AMB-T-ID=<id>)
 endif
@@ -254,7 +257,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm install-gui-dev-vm-locked dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -300,7 +303,7 @@ help:
 	@echo "make install-gui-dev - build the dev GUI and put it in $(APPS_DIR)/$(GUI_DEV_NAME).app"
 	@echo "                       AMB-T-ID=<id> builds that task's own throwaway instance (app-data work.amenbo.amenbo-dev-<id>, seeded from the shared dev store) instead of the shared dev app; devtool devgui rm <id> deletes it"
 	@echo "                       AMB-THEME=<slug> builds that theme's preview under the same split (app-data work.amenbo.amenbo-dev-<slug>, not seeded); the two are exclusive"
-	@echo "make install-gui-dev-vm AMB-T-ID=<id> - build that instance here and put it in the throwaway macOS VM instead of on this machine (needs devtool + tart; devtool vm rm throws the VM away)"
+	@echo "make install-gui-dev-vm AMB-T-ID=<id> - build that instance here and put it in the throwaway macOS VM instead of on this machine (one build per id at a time: a second run of the same id stops instead of waiting; needs devtool + tart; devtool vm rm throws the VM away)"
 	@echo "make gui-dev-linux - build the dev GUI's Linux AppImage in Docker into dist/ (the preview workflow's Linux leg; needs Docker)"
 	@echo "make gui-dev-names - print the names AMB-THEME / AMB-T-ID split a dev build by, as key=value (what the preview workflow reads instead of spelling them again)"
 
@@ -1006,7 +1009,17 @@ install-gui-dev: gui-dev
 ## The host target above is untouched and stays the default — a clone or a fork with one Mac has no
 ## VM, and this is a second destination rather than a replacement.
 ## AMB-T-ID=<id> is required (see the guard above); devtool raises the VM if none is running.
-install-gui-dev-vm: devtool-bin gui-dev
+## One id builds once at a time: the whole run goes back through make under that id's lock, because
+## the build is a prerequisite and a lock taken in the recipe would be taken after it. Two runs of
+## one id share a worktree and so a cargo `target`, where the second does not fail but waits — see
+## scripts/devgui-build-lock.sh for why the lock is per id and why it refuses instead of queueing.
+install-gui-dev-vm:
+	@scripts/devgui-build-lock.sh $(AMB-T-ID) $(MAKE) --no-print-directory install-gui-dev-vm-locked AMB-T-ID=$(AMB-T-ID)
+
+## The work itself, reached only through the lock above. Named rather than inlined because the lock
+## has to hold while the prerequisites build, and a prerequisite list is the one part of a target a
+## recipe cannot wrap.
+install-gui-dev-vm-locked: devtool-bin gui-dev
 	$(DEVTOOL_BIN) devgui install $(AMB-T-ID) --vm
 
 ## The names a theme's dev build is split by, as `key=value` lines — the one way anything outside

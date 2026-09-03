@@ -55,7 +55,7 @@ src/
   store/       store.tsx — shared UI state (selection, navigation) over the seams
   shell/       AppShell · TopBar · Sidebar (the frame)
   screens/     BoardScreen · ListScreen · ActivityFeed · DecisionsScreen ·
-               CalendarView · CommandCatalogScreen · detail panes
+               CalendarView · SearchScreen · detail panes
   components/  reusable pieces: BrandMark · Markdown · Mermaid · Pager · Attachments
   styles/      tokens.css (design tokens) · global.css (shell grid)
   mock/        types.ts · data.ts · adapter.ts — the browser-dev fallback

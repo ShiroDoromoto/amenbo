@@ -1,7 +1,8 @@
 //! `amenbo agent --json` — a thin CLI shell. The source of truth for the spec (philosophy, every
-//! command, capabilities, workflow) lives in [`amenbo_core::agent`], so the CLI (this command) and the
-//! GUI (the command palette / ⌘K Tauri command) consume the same source. That every subcommand in
-//! `cli.rs` shows up in the spec is enforced by this crate's integration tests via `command_names()`.
+//! command, capabilities, workflow) lives in [`amenbo_core::agent`], and this command is its only
+//! reader: the spec is what the AI reads, and the GUI carries no command reference of its own
+//! (`AMB-D-836`). That every subcommand in `cli.rs` shows up in the spec is enforced by this crate's
+//! integration tests via `command_names()`.
 
 use serde_json::Value;
 

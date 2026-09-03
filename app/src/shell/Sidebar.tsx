@@ -151,7 +151,6 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
           // Search sits here rather than among the smart views: a smart view is a standing selection of
           // tasks, and this asks where a word is written across tasks and decisions both (`AMB-D-449`).
           { id: "search", icon: "search", label: t("nav.search") },
-          { id: "commands", icon: "book", label: t("nav.commands") },
           // Connecting an AI is an app-level setting, not a project's (`AMB-D-681`), so it lives
           // here rather than folded into each project's own screen.
           { id: "mcp", icon: "link", label: t("nav.mcp") },

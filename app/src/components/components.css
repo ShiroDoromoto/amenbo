@@ -579,19 +579,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .feed__action:hover:not(:disabled) { color: var(--c-accent); }
 .feed__action:disabled { opacity: 0.5; cursor: default; }
 
-/* ---------- command catalog ---------- */
-.cmdcat__search { max-width: 280px; margin: 0; }
-.cmdcat__head { display: block; width: 100%; text-align: left; white-space: normal; }
-.cmdcat__detail { margin-top: var(--s-2); padding-left: var(--s-3); display: flex; flex-direction: column; gap: 2px; }
-.cmdcat__opt { font-size: var(--fs-xs); display: flex; gap: var(--s-2); align-items: baseline; flex-wrap: wrap; }
-.cmdcat__opt code { font-family: var(--font-mono); color: var(--c-accent-text); }
-/* Which of a command's arguments cannot be left out. It is a fact about the flag and not a fault, so
-   it takes the heed step — the one the fallback under it always meant, the token in front having
-   quietly resolved to the stop red. */
-.cmdcat__req { font-size: var(--fs-xs); color: var(--c-heed); }
-.cmdcat__examples { margin-top: var(--s-2); display: flex; flex-direction: column; gap: 2px; }
-.cmdcat__example { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-faint); }
-
 /* ---------- search (where a word is written) ---------- */
 /* Every control on this row keeps its size, and the note — the one thing on the row nobody presses —
    is what gives way first. The wrapping itself is the toolbar's own (above). */
@@ -895,10 +882,8 @@ button.feed__target:hover { color: var(--c-accent); }
 .onboard__stepstitle { margin: 0 0 var(--s-1); }
 
 /* ---------- palette-derived shared bits ---------- */
-/* Shared styles the command catalogue (CommandCatalogScreen) reuses for its search input
-   and its command display. */
+/* The search screen's input, styled as the palette's was. */
 .palette__input { width: 100%; border: none; border-bottom: 1px solid var(--c-border); padding: var(--s-4); font-size: var(--fs-lg); background: none; outline: none; }
-.palette__cmd { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--c-accent-text); }
 
 /* ---------- the shared modal chrome ---------- */
 /* `.modal__overlay` is the backdrop **every** modal wears, the feature blocks below included. It is

@@ -700,8 +700,9 @@ button.feed__target:hover { color: var(--c-accent); }
   border-radius: var(--r-md); overflow: hidden;
 }
 .iconpick__img { display: block; width: 100%; height: 100%; object-fit: cover; }
-/* On the project's own colour, which is chosen for a background — the same pairing the surfaces draw. */
-.iconpick__letter { color: #fff; font-size: var(--fs-xl); font-weight: 600; }
+/* On the project's own colour. The ink is not written here: the ground is a value the human picks, so no token
+   can hold the pair and it is worked out from the colour at render instead (`core/ink.ts`). */
+.iconpick__letter { font-size: var(--fs-xl); font-weight: 600; }
 
 /* ---------- new project (creation screen) ---------- */
 .newproj { padding: var(--s-4); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-4); }

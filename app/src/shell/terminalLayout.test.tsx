@@ -258,4 +258,24 @@ describe("how many panes", () => {
     // though it had done nothing.
     expect(q(".termface__page-grid--4")).toHaveLength(1);
   });
+
+  it("asks which way two panes sit, and asks it of no other count", async () => {
+    await mount();
+    await openPane();
+    // Two a page is where a run comes up, so the question is on the row from the start.
+    expect(q(".termface__page-grid--2")).toHaveLength(1);
+    expect(q(".termface__count--glyph")).toHaveLength(2);
+
+    await click(q(".termface__count--glyph")[1]!);  // one above the other
+    expect(q(".termface__page-grid--2-down")).toHaveLength(1);
+
+    // Four has spent its rows already, so there is nothing left to choose between and nothing drawn.
+    await click(q(".termface__count")[2]!);
+    expect(q(".termface__count--glyph")).toHaveLength(0);
+    expect(q(".termface__page-grid--4")).toHaveLength(1);
+
+    // The answer stood while it could not be asked: two is the two they set up.
+    await click(q(".termface__count")[1]!);
+    expect(q(".termface__page-grid--2-down")).toHaveLength(1);
+  });
 });

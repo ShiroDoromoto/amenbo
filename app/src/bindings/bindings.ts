@@ -1066,6 +1066,15 @@ report: MigrationDoneDto | null,
 error: { code: string; message_en: string; fields: Record<string, unknown> | null } | null, };
 
 /**
+ * Which way the two panes of a two-pane page sit ([`amenbo_core::frames::Orient`]).
+ *
+ * It crosses because it is the person's answer rather than a measurement: what a page is laid out
+ * by is chosen on the face and kept in the store, and the two windows hand it between themselves the
+ * way they hand the split.
+ */
+export type OrientDto = "across" | "down";
+
+/**
  * One session, and the place the talk window's face is drawing it in — as the face says it
  * ([`crate::frames::panes_drawn`]).
  *
@@ -2432,6 +2441,11 @@ export type TalkLayoutDto = {
  * How many panes to a page.
  */
 count: number, 
+/**
+ * Which way a two-pane page sits, absent where it sits the way every other count does
+ * ([`amenbo_core::frames::Orient`]).
+ */
+orient?: OrientDto, 
 /**
  * The next frame id to hand out — ids are never reused within a run, so a name stays on its own
  * frame. It is not kept: a run starts its ids at the first (`crate::frames`).

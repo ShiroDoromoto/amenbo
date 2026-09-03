@@ -2675,6 +2675,39 @@ pub struct FolderImageDto {
     pub(crate) mime: String,
 }
 
+/// Which way the two panes of a two-pane page sit ([`amenbo_core::frames::Orient`]).
+///
+/// It crosses because it is the person's answer rather than a measurement: what a page is laid out
+/// by is chosen on the face and kept in the store, and the two windows hand it between themselves the
+/// way they hand the split.
+#[derive(Clone, Copy, Deserialize, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum OrientDto {
+    /// Side by side.
+    Across,
+    /// One above the other.
+    Down,
+}
+
+impl From<amenbo_core::frames::Orient> for OrientDto {
+    fn from(orient: amenbo_core::frames::Orient) -> Self {
+        match orient {
+            amenbo_core::frames::Orient::Across => Self::Across,
+            amenbo_core::frames::Orient::Down => Self::Down,
+        }
+    }
+}
+
+impl From<OrientDto> for amenbo_core::frames::Orient {
+    fn from(orient: OrientDto) -> Self {
+        match orient {
+            OrientDto::Across => Self::Across,
+            OrientDto::Down => Self::Down,
+        }
+    }
+}
+
 /// The talk window's arrangement, as the window drawing the face has it (`crate::frames`).
 ///
 /// The shape only: how many panes to a page, the frames in slot order, and the folder each was
@@ -2690,6 +2723,11 @@ pub struct FolderImageDto {
 pub struct TalkLayoutDto {
     /// How many panes to a page.
     pub(crate) count: u32,
+    /// Which way a two-pane page sits, absent where it sits the way every other count does
+    /// ([`amenbo_core::frames::Orient`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) orient: Option<OrientDto>,
     /// The next frame id to hand out — ids are never reused within a run, so a name stays on its own
     /// frame. It is not kept: a run starts its ids at the first (`crate::frames`).
     pub(crate) next_id: u32,

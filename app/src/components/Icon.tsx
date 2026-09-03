@@ -71,7 +71,9 @@ export type IconName =
   | "dot"
   | "pause"
   | "stop"
-  | "newWindow";
+  | "newWindow"
+  | "paneAcross"
+  | "paneDown";
 
 /**
  * The icons a call site outside React has to draw, as geometry rather than as elements.
@@ -404,6 +406,21 @@ const ART: Record<IconName, ReactNode> = {
     <>
       <path d="M7.4 16.6H4.6a1.4 1.4 0 0 1-1.4-1.4V4.6a1.4 1.4 0 0 1 1.4-1.4h10.6a1.4 1.4 0 0 1 1.4 1.4v2.8" />
       <rect x="7.4" y="7.4" width="13.4" height="13.4" rx="1.6" />
+    </>
+  ),
+  // The page with two panes side by side, and the same page with one above the other. They are the
+  // grid itself rather than an arrow at it: what the press chooses is a shape, and the pair read as
+  // the choice they are only while they are drawn as the same box divided two ways.
+  paneAcross: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="1.6" />
+      <path d="M12 4.5v15" />
+    </>
+  ),
+  paneDown: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="1.6" />
+      <path d="M3 12h18" />
     </>
   ),
 };

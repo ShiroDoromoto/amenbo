@@ -9,8 +9,8 @@ import {
 } from "../talk/frames";
 import {
   addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, frameOfSession, goPage, goProject,
-  laidOut, movedTo, openedFrame, openedIn, pageCount, pageOfFrame, paneIn, panesOf,
-  restored, roomOnPage, setCount, slotsOf, type Count, type Layout,
+  laidOut, movedTo, openedFrame, openedIn, ORIENTS, orientable, pageCount, pageOfFrame, pageShape,
+  paneIn, panesOf, restored, roomOnPage, setCount, setOrient, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import {
   clampRailWidth, clampSideNarrow, getRailShown, getRailWidth, getSideNarrow, getSideShown,
@@ -795,6 +795,32 @@ export function TerminalFace({
             </button>
           ))}
         </div>
+        {/* Which way the two of them sit, and only where there are two: at every other count the rows
+            are already spent, so there is nothing to choose between (`../talk/layout`). It is drawn
+            as the two grids rather than named, because what the press picks is a shape — and it sits
+            beside the count for the same reason, being the rest of the same answer. */}
+        {orientable(layout.count) && (
+          <div className="termface__counts" role="radiogroup" aria-label={t("face.paneOrient")}>
+            {ORIENTS.map((orient) => (
+              <button
+                key={orient}
+                className={`termface__count termface__count--glyph${
+                  layout.orient === orient ? " termface__count--on" : ""}`}
+                role="radio"
+                aria-checked={layout.orient === orient}
+                // The icon is the whole of what is drawn, so the words that say which shape it is go
+                // where a reader can reach them rather than being left off.
+                aria-label={t(orient === "across" ? "face.paneAcross" : "face.paneDown")}
+                title={t(orient === "across" ? "face.paneAcross" : "face.paneDown")}
+                // A page asked for is the count's question, not this one: the grid changes under the
+                // same panes on the same pages, so nothing a reader was pressing towards goes away.
+                onClick={() => setLayout((was) => setOrient(was, orient))}
+              >
+                <Icon name={orient === "across" ? "paneAcross" : "paneDown"} />
+              </button>
+            ))}
+          </div>
+        )}
         {/* The pages of this project, as a row of the digits that reach them. **A project with one
             page draws none of it**: a single page nobody can go anywhere from is a control that says
             only where the reader already is. */}
@@ -866,7 +892,7 @@ export function TerminalFace({
             count is the most a page draws, and a grid that shrank to what is open would make the
             split a thing a reader cannot see the effect of (`../talk/layout`). */}
         <div
-          className={`termface__page-grid termface__page-grid--${layout.count}${
+          className={`termface__page-grid termface__page-grid--${pageShape(layout.count, layout.orient)}${
             room ? "" : " termface__page-grid--add"}`}
         >
           {!settled || layout.project === null

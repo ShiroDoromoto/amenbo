@@ -730,6 +730,12 @@ impl Instructor {
     /// nothing. `side-width` is further out still: what it asks is where an edge stands compared with
     /// the shot before it, which is two pictures rather than one.
     ///
+    /// `terminal side-span` is a `Review` beside them, and it is the one that comes back to a single
+    /// picture: what it asks is how the column and the panes divide the width between them, which is
+    /// on the shot and on no other. It reads no words for the reason its neighbours read none, and
+    /// its answers are coarse for the reason it has an eye at all — a person at the screen can say
+    /// which of two regions is the wider, and cannot say by how many pixels.
+    ///
     /// `terminal panes-sit` is a `Review` beside them, and for the same reason once more: what it
     /// reads is where two regions of the screen are in relation to one another, and the panes carry
     /// the road's own lines whichever way round they sit. A reading would find those words on the
@@ -2048,6 +2054,10 @@ impl Instructor {
                 let toward = match req(with, "toward")? {
                     "wider" => "so the column grows by something like a finger's width, and the panes give up that much",
                     "narrower" => "back to about where the edge started, so the panes take that width again",
+                    // A place and not a distance, so the operator is told where to stop rather than
+                    // how far to go: what a later step reads is this width, and it is asked for in
+                    // the words that step will use.
+                    "broad" => "well out across the face, as far as the edge will go — it stops of its own accord before the panes are squeezed away, and letting go anywhere near that stop is far enough",
                     other => return Err(format!("action `drag-side` does not know the direction `{other}`")),
                 };
                 format!(
@@ -3444,6 +3454,16 @@ impl Instructor {
                     moved
                 )
             }
+            // And the same edge read off this shot alone. It is the reading a road reaches for once
+            // the face has changed under it — after a move between projects, where every column is
+            // redrawn and the shot before is a picture of somewhere else. The landmark is the panes,
+            // because their width is whatever the column left them: the two answer for each other on
+            // the one picture, and the operator is asked which of the two regions is the wider rather
+            // than for a number nobody can read off a screen.
+            (Domain::Terminal, "side-span") => {
+                let which = side(with)?;
+                format!("On the terminal face, confirm {} is {}", which.phrase(), span(with)?)
+            }
             // The shape the page is drawn in, read off the two panes standing on it. What it is about
             // is the width each of them ends up with rather than the arrangement for its own sake:
             // `down` is pressed so that a pane keeps the whole of it, and a grid that shuffled the
@@ -3616,13 +3636,17 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // Said of what the column has open rather than of a file, because the tab it is on may be
+            // the draft page — which is not one, and has no name a road could have opened it by. The
+            // two forms above stay a file's: what they are about is Markdown drawn one way or the
+            // other, and the page is written on rather than read.
             (Domain::Files, "reading") => match present(with) {
                 true => format!(
-                    "Confirm the opened file shows \"{}\" — the words that are in it.",
+                    "Confirm what the panel has open shows \"{}\" — the words that are in it.",
                     req(with, "shows")?
                 ),
                 false => format!(
-                    "Confirm \"{}\" is nowhere on the screen — what is in the file did not reach it.",
+                    "Confirm \"{}\" is nowhere on the screen — what the panel has open did not put those words on it.",
                     req(with, "shows")?
                 ),
             },
@@ -3950,6 +3974,20 @@ fn side(with: &Args) -> Result<Side, String> {
         Some("files") => Ok(Side::Files),
         Some(other) => Err(format!("`side` does not know `{other}` — it is rail or files")),
         None => Err("arg `side` must say which of the two columns".to_string()),
+    }
+}
+
+/// How the column and the panes divide the width between them, read off one shot.
+///
+/// Coarse on purpose. What closes this is an eye at a picture, and the two answers are the two a
+/// person can give without measuring anything: the panes are plainly the wider of the pair, or they
+/// are not. A third answer between them would be asking for a judgement nobody can make twice.
+fn span(with: &Args) -> Result<&'static str, String> {
+    match with.get("span").and_then(|v| v.as_str()) {
+        Some("thin") => Ok("the narrower of the two by a plain margin — a strip at the edge, with most of the width between the two columns left to the panes."),
+        Some("broad") => Ok("as wide as what is left of the panes, or wider — the width between the two columns split roughly in two, rather than the column standing as a strip at the edge of it."),
+        Some(other) => Err(format!("`span` does not know `{other}` — it is thin or broad")),
+        None => Err("arg `span` must say how the column and the panes divide the width".to_string()),
     }
 }
 

@@ -565,7 +565,7 @@ export const nl: Translation = {
     "face.needsYou": "wacht op je",
     "face.handHere": "Laat los om het pad te plakken",
     "face.more": "Meer",
-    "files.tab": "Bestanden",
+    "files.side": "Pagina en bestanden",
     "files.memo": "De pagina",
     "files.memoTyping": "Aan het typen",
     "files.memoKept": "Bewaard",

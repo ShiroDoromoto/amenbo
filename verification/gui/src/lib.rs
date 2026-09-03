@@ -2040,7 +2040,11 @@ impl Instructor {
             },
             (Domain::Terminal, "show-side") => match side(with)? {
                 Side::Rail => "At the top of the terminal face, press that same control again. The list of panes comes back where it was.".to_string(),
-                Side::Files => "At the top of the terminal face, at the far end of the row, press the one that shows the folder's files — the second of the two, the first being the page written on. The panel comes up on that half, whether it was closed or showing the other one.".to_string(),
+                // One control, and it is a switch rather than a way in: the same press opens the
+                // panel and puts it away. So the step is written as the state to end in — a road
+                // that pressed regardless would close the panel on every run that came up with it
+                // standing, which is what a machine comes up with until somebody says otherwise.
+                Side::Files => "At the top of the terminal face, make sure the panel beside the panes is standing. What opens it is at the far end of the top row — the one control there for that panel, naming the page written on and the files together — so press it where the panel is away, and leave it where the panel is already up: that same press is what puts it away. It comes up on whichever of its two halves it was left on, and which half that is belongs to the panel's own row of tabs rather than to this press.".to_string(),
             },
             // The one gesture on these roads, and the one step aimed at something the screen does
             // not name: the edge is a line rather than a button, so nothing reaches it the way a

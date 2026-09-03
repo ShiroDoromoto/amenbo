@@ -577,7 +577,7 @@ export const ja: Translation = {
     "face.needsYou": "手が要ります",
     "face.handHere": "落とすと、パスを貼ります",
     "face.more": "その他",
-    "files.tab": "フォルダ",
+    "files.side": "メモとファイル",
     "files.memo": "メモ",
     "files.memoTyping": "入力中",
     "files.memoKept": "保存済",

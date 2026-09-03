@@ -586,7 +586,7 @@ export const it: Translation = {
     "face.needsYou": "ti sta aspettando",
     "face.handHere": "Rilascia per incollare il percorso",
     "face.more": "Altro",
-    "files.tab": "File",
+    "files.side": "Pagina e file",
     "files.memo": "La pagina",
     "files.memoTyping": "Digitazione",
     "files.memoKept": "Conservato",

@@ -97,17 +97,18 @@ describe("closing a column, and opening it again", () => {
     await mount();
     await click(q(".files__close"));
     expect(q(".termface__column--side")).toBeNull();
-    await click(bar(t("files.tab")));
+    await click(bar(t("files.side")));
     expect(q(".termface__column--side")).not.toBeNull();
   });
 
-  it("puts the file face away when the half already up is pressed again", async () => {
+  it("puts the file face away on the press that brings it back", async () => {
     await mount();
-    // It opens on the memo, so pressing the memo is asking for what is already there.
-    await click(bar(t("files.memo")));
+    // One control for the column, the way the rail has one: it says the column is up, and pressing
+    // it says that is no longer wanted. Which half comes up is the column's own row of tabs.
+    await click(bar(t("files.side")));
     expect(q(".termface__column--side")).toBeNull();
-    // The other half is not "close it again" — it is the half to show.
-    await click(bar(t("files.tab")));
+    expect(bar(t("files.side"))?.getAttribute("aria-expanded")).toBe("false");
+    await click(bar(t("files.side")));
     expect(q(".termface__column--side")).not.toBeNull();
   });
 

@@ -568,7 +568,7 @@ export const id: Translation = {
     "face.needsYou": "menunggu Anda",
     "face.handHere": "Lepaskan untuk menempelkan jalurnya",
     "face.more": "Lainnya",
-    "files.tab": "Berkas",
+    "files.side": "Halaman dan berkas",
     "files.memo": "Halaman",
     "files.memoTyping": "Mengetik",
     "files.memoKept": "Tersimpan",

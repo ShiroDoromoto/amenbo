@@ -568,7 +568,7 @@ export const th: Translation = {
     "face.needsYou": "กำลังรอคุณอยู่",
     "face.handHere": "ปล่อยเพื่อวางเส้นทาง",
     "face.more": "เพิ่มเติม",
-    "files.tab": "ไฟล์",
+    "files.side": "หน้าบันทึกและไฟล์",
     "files.memo": "หน้าบันทึก",
     "files.memoTyping": "กำลังพิมพ์",
     "files.memoKept": "บันทึกแล้ว",

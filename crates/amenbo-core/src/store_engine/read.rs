@@ -1165,9 +1165,28 @@ pub fn blob_hashes_for_target(
     blob_hashes(conn, &any_blob().and(on_target(target_type, target_id)))
 }
 
-/// Every blob hash the store's attachments reference — the root set of the blob GC.
+/// Every blob hash the store's attachments reference. It is most of the GC root set but not all of it —
+/// the images a human registered name their originals too ([`crate::Store::gc_blobs`] adds those).
 pub fn referenced_blob_hashes(conn: &Connection) -> Result<std::collections::HashSet<String>> {
     blob_hashes(conn, &any_blob())
+}
+
+/// Every blob hash a project's icon names as its original (`AMB-D-839`) — the other half of the GC root
+/// set that lives in the engine. A project with no icon carries NULL, so the `None`s fall out here.
+pub fn project_icon_sources(conn: &Connection) -> Result<std::collections::HashSet<String>> {
+    const P: col::project::Cols = col::project::ALL;
+    let mut sel = Select::new();
+    sel.distinct();
+    let source = sel.col(P.icon_source);
+    let mut sql = Sql::from(&sel, P.table);
+    sql.push_where(Some(&Pred::is_not_null(P.icon_source)));
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| source.get(r))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<Option<String>>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows.into_iter().flatten().collect())
 }
 
 /// How many live `blob` attachments reference `hash` — its refcount. Zero means the bytes are

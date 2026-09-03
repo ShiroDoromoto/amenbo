@@ -115,7 +115,7 @@ pub(crate) fn project(store: &mut Store, flags: &Flags, sub: ProjectCmd) -> Resu
             if view.is_some() { changed.push("default_view".to_string()); }
             if color.is_some() { changed.push("color".to_string()); }
             let view = match view { Some(v) => Some(parse_view(&v)?), None => None };
-            let p = store.project_update(pid, ops::project::ProjectPatch { name, notes, view, color }).map_err(CliError::from)?;
+            let p = store.project_update(pid, ops::project::ProjectPatch { name, notes, view, color, ..Default::default() }).map_err(CliError::from)?;
             let detail = store.project_detail(p.id).map_err(CliError::from)?;
             write_envelope(flags, "project.update", "project", serde_json::to_value(&detail).unwrap(), Some(changed), false, format!("✓ Updated project: {}", p.id));
         }

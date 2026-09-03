@@ -2479,7 +2479,7 @@ pub fn project_update(
         };
         store.project_update(
             project_id,
-            amenbo_core::ops::project::ProjectPatch { name, notes, view, color },
+            amenbo_core::ops::project::ProjectPatch { name, notes, view, color, ..Default::default() },
         )?;
         Ok(())
     })?;

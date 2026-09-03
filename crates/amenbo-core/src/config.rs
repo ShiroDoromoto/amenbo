@@ -623,6 +623,17 @@ pub struct Config {
     /// Optional avatar image for the AI facet. Same contract as [`Config::human_avatar`].
     #[serde(default)]
     pub ai_avatar: Option<String>,
+    /// The BLAKE3 hash of the original image [`Config::human_avatar`] was baked from, kept in the blob
+    /// store (`<store>/blobs/<hash>`) so a different size can be baked later without asking the human to
+    /// choose the file again (`AMB-D-839`). `None` where there is no avatar, and also where one was
+    /// registered without an original — `config set human_avatar` takes a data URL and nothing else, and
+    /// an avatar registered before `AMB-D-839` never kept its original. It moves with the avatar and
+    /// never apart from it ([`Config::set_avatar`]). **A user-level setting; never synced.**
+    #[serde(default)]
+    pub human_avatar_source: Option<String>,
+    /// The original behind the AI facet's avatar. Same contract as [`Config::human_avatar_source`].
+    #[serde(default)]
+    pub ai_avatar_source: Option<String>,
     /// **May Amenbo wire its lint into your git hooks?** — asked once, for the lint as a feature, and
     /// never again ([`crate::hooks`]). `None` is the unanswered state, which is what makes "asked and
     /// refused" different from "never asked". It lives here rather than against a project because the
@@ -648,14 +659,16 @@ pub struct Config {
     pub tick_consent: Option<crate::tick::TickConsent>,
 }
 
-/// Cap on the size of an avatar data URL, in bytes. A loose limit to stop breakage and runaways —
-/// a downscaled (96px) PNG fits comfortably. Both `config set human_avatar/ai_avatar` (CLI) and the
-/// GUI's `set_facet_avatars` go through this guard.
+/// Cap on the size of a registered image's display version, in bytes. A loose limit to stop breakage
+/// and runaways — a downscaled (96px) PNG fits comfortably. Every face that registers an image goes
+/// through this guard: `config set human_avatar/ai_avatar` (CLI), the GUI's `set_facet_avatars`, and a
+/// project icon ([`crate::ops::project::IconPatch`]).
 pub const AVATAR_MAX_BYTES: usize = 256 * 1024;
 
-/// Validate the shape of an avatar value (a data URL). Only pass a non-empty value; clearing (empty)
-/// is the caller's branch. Rejects anything over the cap or not starting with `data:image/`. The CLI
-/// (`config set`) and the GUI (`set_facet_avatars`) go through the same rule.
+/// Validate the shape of a registered image's display version (a data URL). Only pass a non-empty
+/// value; clearing (empty) is the caller's branch. Rejects anything over the cap or not starting with
+/// `data:image/`. The facet avatars and a project's icon go through the same rule — one shape for every
+/// image a human registers (`AMB-D-839`), whichever surface registers it.
 pub fn validate_avatar(key: &str, value: &str) -> Result<()> {
     if value.len() > AVATAR_MAX_BYTES {
         return Err(crate::error::Error::invalid(
@@ -664,6 +677,19 @@ pub fn validate_avatar(key: &str, value: &str) -> Result<()> {
     }
     if !value.starts_with("data:image/") {
         return Err(crate::error::Error::invalid(format!("{key} must be a data:image/… URL")));
+    }
+    Ok(())
+}
+
+/// Validate the shape of an avatar's original: the BLAKE3 hex digest naming it in the blob store. The
+/// bytes are not read — a hash may name an original this device no longer holds — so this asks only that
+/// the value is a content address at all, which is what stops a mistyped one being stored as a reference
+/// nothing could ever resolve.
+pub fn validate_avatar_source(key: &str, value: &str) -> Result<()> {
+    if !crate::blob::is_hash(value) {
+        return Err(crate::error::Error::invalid(format!(
+            "{key}'s original must be a BLAKE3 hash (64 lowercase hex characters)"
+        )));
     }
     Ok(())
 }
@@ -697,6 +723,8 @@ impl Default for Config {
             ai_name: None,
             human_avatar: None,
             ai_avatar: None,
+            human_avatar_source: None,
+            ai_avatar_source: None,
             hook_consent: None,
             tick_consent: None,
         }
@@ -851,6 +879,65 @@ impl Config {
         }
     }
 
+    /// The blob hash of the original a facet's avatar was baked from, for whoever bakes another size
+    /// (`AMB-D-839`). `None` means there is nothing to bake from — no avatar, or one registered without
+    /// an original — and the caller's only recourse is to ask the human for the file again.
+    pub fn avatar_source_for(&self, kind: crate::model::ActorKind) -> Option<String> {
+        let raw = match kind {
+            crate::model::ActorKind::Human => self.human_avatar_source.as_deref(),
+            crate::model::ActorKind::Ai => self.ai_avatar_source.as_deref(),
+        };
+        raw.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
+    }
+
+    /// Every blob hash the avatars still name — what the blob GC has to count as referenced, or the
+    /// sweep takes the originals away (`AMB-D-839`). Both facets, in one set.
+    pub fn avatar_sources(&self) -> std::collections::HashSet<String> {
+        use crate::model::ActorKind;
+        [ActorKind::Human, ActorKind::Ai].into_iter().filter_map(|k| self.avatar_source_for(k)).collect()
+    }
+
+    /// Register a facet's avatar: the display version and the original's blob hash, **together**. The
+    /// two halves never move apart (`AMB-D-839`) — a display version left standing beside the previous
+    /// image's hash would name the wrong original — so this is the one way to set them, and passing
+    /// `None` for `display` clears both. A `source` is optional even with a display version: the caller
+    /// may have nothing to keep (the CLI's `config set human_avatar` is exactly that case).
+    ///
+    /// The display version goes through [`validate_avatar`], the same guard `config set` uses; the hash
+    /// is checked for the shape of a content address, so a mistyped one is refused rather than stored as
+    /// a reference to bytes that can never exist.
+    pub fn set_avatar(
+        &mut self,
+        kind: crate::model::ActorKind,
+        display: Option<&str>,
+        source: Option<&str>,
+    ) -> Result<()> {
+        let key = match kind {
+            crate::model::ActorKind::Human => "human_avatar",
+            crate::model::ActorKind::Ai => "ai_avatar",
+        };
+        let display = display.map(str::trim).filter(|s| !s.is_empty());
+        let source = display.and(source).map(str::trim).filter(|s| !s.is_empty());
+        if let Some(value) = display {
+            validate_avatar(key, value)?;
+        }
+        if let Some(hash) = source {
+            validate_avatar_source(key, hash)?;
+        }
+        let (display, source) = (display.map(str::to_string), source.map(str::to_string));
+        match kind {
+            crate::model::ActorKind::Human => {
+                self.human_avatar = display;
+                self.human_avatar_source = source;
+            }
+            crate::model::ActorKind::Ai => {
+                self.ai_avatar = display;
+                self.ai_avatar_source = source;
+            }
+        }
+        Ok(())
+    }
+
     /// The roster behind `user list` and the GUI's members: the two people in the config, as
     /// `(facet, display name)` for human and ai.
     pub fn roster(&self) -> [(crate::model::ActorKind, String); 2] {
@@ -921,20 +1008,16 @@ impl Config {
                 self.ai_name = if trimmed.is_empty() { None } else { Some(trimmed.to_string()) };
             }
             // Facet avatars. An empty string clears the avatar, restoring the identicon. A non-empty
-            // value is validated for data-URL shape and size.
+            // value is validated for data-URL shape and size. This face takes a display version and
+            // nothing else, so it registers one with no original (`AMB-D-839`) — and dropping the old
+            // hash is the point: kept, it would name the *previous* image as this one's original.
             "human_avatar" | "ai_avatar" => {
-                let trimmed = value.trim();
-                let val = if trimmed.is_empty() {
-                    None
+                let kind = if key == "human_avatar" {
+                    crate::model::ActorKind::Human
                 } else {
-                    validate_avatar(key, trimmed)?;
-                    Some(trimmed.to_string())
+                    crate::model::ActorKind::Ai
                 };
-                if key == "human_avatar" {
-                    self.human_avatar = val;
-                } else {
-                    self.ai_avatar = val;
-                }
+                self.set_avatar(kind, Some(value), None)?;
             }
             "ai_allow_project_ops" => {
                 self.ai_allow_project_ops = match value {
@@ -1180,6 +1263,35 @@ mod tests {
         // Empty clears it back to identicon (None).
         c.set("human_avatar", "   ").unwrap();
         assert!(c.human_avatar().is_none(), "empty clears the avatar");
+    }
+
+    /// The display version and the original move as one (`AMB-D-839`): `set_avatar` writes both, clearing
+    /// takes both away, and a `config set human_avatar` — a face with no original to offer — drops the
+    /// hash rather than leaving it to name the previous image as this one's original.
+    #[test]
+    fn an_avatar_and_its_original_move_together() {
+        use crate::model::ActorKind;
+        let mut c = Config::default();
+        let hash = "b".repeat(64);
+
+        c.set_avatar(ActorKind::Human, Some("data:image/png;base64,AAAA"), Some(&hash)).unwrap();
+        assert_eq!(c.avatar_for(ActorKind::Human).as_deref(), Some("data:image/png;base64,AAAA"));
+        assert_eq!(c.avatar_source_for(ActorKind::Human).as_deref(), Some(hash.as_str()));
+        assert_eq!(c.avatar_sources(), [hash.clone()].into_iter().collect());
+
+        // The CLI's face registers a display version alone — and the old hash goes with the old image.
+        c.set("human_avatar", "data:image/png;base64,BBBB").unwrap();
+        assert_eq!(c.avatar_for(ActorKind::Human).as_deref(), Some("data:image/png;base64,BBBB"));
+        assert!(c.avatar_source_for(ActorKind::Human).is_none(), "the previous original is not this one's");
+
+        // A hash that is not a content address is refused, and the avatar is left where it was.
+        c.set_avatar(ActorKind::Human, Some("data:image/png;base64,CCCC"), Some("not-a-hash")).unwrap_err();
+        assert_eq!(c.avatar_for(ActorKind::Human).as_deref(), Some("data:image/png;base64,BBBB"));
+
+        // Clearing takes both halves.
+        c.set_avatar(ActorKind::Human, None, Some(&hash)).unwrap();
+        assert!(c.avatar_for(ActorKind::Human).is_none() && c.avatar_source_for(ActorKind::Human).is_none());
+        assert!(c.avatar_sources().is_empty());
     }
 
     /// A config persisted without the `human_avatar` / `ai_avatar` keys still loads, the fields defaulting

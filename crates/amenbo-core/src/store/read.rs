@@ -697,13 +697,36 @@ impl Store {
         crate::blob::BlobStore::at(self.paths.base_dir.join(crate::blob::BLOBS_SUBDIR))
     }
 
-    /// Garbage-collect blobs no live attachment references (refcount 0). The GC root set is the live
-    /// `blob` attachment hashes from the read-model; present blobs outside it are removed once they are
-    /// older than `min_age` (pass [`crate::blob::GC_MIN_AGE`]: a younger unreferenced blob may be an
-    /// attach still in flight in another process).
+    /// Garbage-collect blobs nothing in the store references any more. The root set is
+    /// [`Self::referenced_blobs`]; present blobs outside it are removed once they are older than
+    /// `min_age` (pass [`crate::blob::GC_MIN_AGE`]: a younger unreferenced blob may be an attach still
+    /// in flight in another process).
     pub fn gc_blobs(&self, min_age: std::time::Duration) -> Result<crate::blob::GcReport> {
-        let referenced = crate::store_engine::read::referenced_blob_hashes(self.engine.conn())?;
+        let referenced = self.referenced_blobs()?;
         self.blobs().gc(&referenced, min_age)
+    }
+
+    /// Every blob hash this store still names — the GC root set, in one place so the sweep and the
+    /// targeted reclaim cannot come to different answers about the same bytes.
+    ///
+    /// Attachments are the bulk of it, and used to be all of it. The images a human registers are the
+    /// rest: an avatar and a project icon each keep their **original** in the blob store (`AMB-D-839`),
+    /// referenced from config and from the project row rather than from an attachment row. A root set
+    /// that counted attachments alone would find those originals unreferenced and sweep them away —
+    /// which is the one thing keeping them was for.
+    fn referenced_blobs(&self) -> Result<std::collections::HashSet<String>> {
+        let mut referenced = crate::store_engine::read::referenced_blob_hashes(self.engine.conn())?;
+        referenced.extend(self.registered_image_sources()?);
+        Ok(referenced)
+    }
+
+    /// The originals of the images a human registered: each project icon's, and each facet avatar's
+    /// (`AMB-D-839`). The half of the root set that hangs off no attachment row — the icons come from the
+    /// engine, the avatars from config, which is not in it at all.
+    fn registered_image_sources(&self) -> Result<std::collections::HashSet<String>> {
+        let mut sources = crate::store_engine::read::project_icon_sources(self.engine.conn())?;
+        sources.extend(self.config.avatar_sources());
+        Ok(sources)
     }
 
     /// Reclaim the blobs a delete just orphaned — the **targeted** GC the delete path runs, where
@@ -726,8 +749,14 @@ impl Store {
             return Ok(report);
         }
         let blobs = self.blobs();
+        // The registered images' originals (`AMB-D-839`) are read once, not per candidate: they are the
+        // part of the root set no attachment query can see, and content-addressing means the bytes an
+        // attachment just let go of may be the very ones an avatar or a project icon points at.
+        let images = self.registered_image_sources()?;
         for hash in candidates {
-            if crate::store_engine::read::is_blob_referenced(self.engine.conn(), hash)? {
+            if images.contains(hash)
+                || crate::store_engine::read::is_blob_referenced(self.engine.conn(), hash)?
+            {
                 continue;
             }
             let freed = blobs.reclaim(hash, min_age)?;

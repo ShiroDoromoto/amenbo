@@ -7,20 +7,31 @@
 // one has a way to close it and a way to open it again, and neither is ever left without the other:
 // a column folded away with no way back is worse than one that never folded.
 //
-// **The width is the person's, and it is kept on this device.** It is a UI setting rather than
-// anything about the work, so it lives in `localStorage` beside the board's own columns and follows
-// the same shape they do — a floor, a ceiling read off the window, and a clamp applied on the way in
-// and on the way out, so a value written by an older build or a wider screen cannot come back as a
-// column with no room left beside it (`AMB-D-312`, `../core/sidebarWidth`).
+// **The widths are the person's, and they are kept per project on this device.** They are a UI
+// setting rather than anything about the work, so they live in `localStorage` beside the board's own
+// columns and follow the same shape they do — a floor, a ceiling read off the window, and a clamp
+// applied on the way in and on the way out, so a value written by an older build or a wider screen
+// cannot come back as a column with no room left beside it (`AMB-D-312`, `../core/sidebarWidth`).
+// What is kept is kept **per project**: the number of panes and the amount there is to read are not
+// the same from one project to the next, so one answer for the whole device fits whichever project
+// it was dragged in and fights the others (`AMB-D-835`).
 //
-// **A column is always a column.** It never lies over the panes, because the room for it is always
-// there: the window's own floor is 960px and the three floors together are 640px, and the ceilings
-// below are what keep the middle from being dragged away (`AMB-D-816`).
+// **The file face has two widths.** A narrow one the panes are drawn beside, and a wide one that
+// lies over them (`AMB-D-835`). They are dragged separately and kept separately, because they answer
+// different questions: how much room reading may take while the work is still in view, and how much
+// it may take while it is being read. The states themselves — closed, narrow, wide — and the moves
+// between them are `AMB-T-4253`'s; what is here is where the two answers live.
 //
-// **Which half of the file face is up is kept the same way.** It is a thing about the person rather
-// than about the work — the same reading that put the agent a pane starts with on this device
-// (`AMB-T-3686`) — so the answer they left is the one they come back to, and what the face opens on
-// is only ever the first run's answer.
+// **A column is always a column, until the wide one is asked for.** The narrow widths never lie over
+// the panes, because the room for them is always there: the window's own floor is 960px and the
+// three floors together are 640px, and the ceilings below are what keep the middle from being
+// dragged away (`AMB-D-816`). The wide width is the one exception, and it is a chosen one: it covers
+// the panes and stops at the rail, which is never covered (`AMB-D-835`).
+//
+// **Whether a column was asked for, and which half of the file face is up, are kept for the device.**
+// They are not among the answers the decision made per project (`AMB-D-835`), and the reason is what
+// each of them is: a width is how much room this project's work wants, where a column being open at
+// all is how the person likes to work, wherever they are.
 
 /**
  * The least width a terminal is worth drawing in.
@@ -32,8 +43,14 @@
  */
 export const PANE_MIN = 320;
 
-const RAIL_WIDTH = "amenbo.termface.railWidth";
-const SIDE_WIDTH = "amenbo.termface.sideWidth";
+/** The widths kept per project — the project is the last part of the key (`keyOf`). */
+const RAIL_WIDTH = "railWidth";
+const SIDE_NARROW = "sideNarrow";
+const SIDE_WIDE = "sideWide";
+/** Which half of the rail is up, likewise per project. */
+const RAIL_TAB = "railTab";
+
+/** Kept for the device, so these are whole keys rather than stems. */
 const RAIL_SHOWN = "amenbo.termface.railShown";
 const SIDE_SHOWN = "amenbo.termface.sideShown";
 const SIDE_TAB = "amenbo.termface.sideTab";
@@ -43,13 +60,48 @@ const SIDE_TAB = "amenbo.termface.sideTab";
 export const RAIL_MIN = 120;
 export const RAIL_DEFAULT = 160;
 
-/** The file face's floor and where it starts, likewise the width it shipped with (16rem). */
+/** The file face's floor and where its narrow width starts, the width it shipped with (16rem). */
 export const SIDE_MIN = 200;
-export const SIDE_DEFAULT = 256;
+export const SIDE_NARROW_DEFAULT = 256;
 
 /**
- * The most a column may take: whatever the window has left once the column on the other side and a
- * pane's floor are out of it, and never less than its own floor (`AMB-D-816`).
+ * Where the wide width starts.
+ *
+ * Rounded, the way the others are, and rounded to what reading wants rather than to a share of the
+ * window: 560px holds a line of prose or code at a readable measure, and on the narrowest window the
+ * application opens it still leaves the rail and a strip of the panes showing behind it — enough to
+ * see that the work is still there and where to press to come back to it.
+ */
+export const SIDE_WIDE_DEFAULT = 560;
+
+/**
+ * Where a per-project answer is kept, or `null` for no project.
+ *
+ * The face has no project of its own for a moment as it comes up, and one that is on no project has
+ * no answer to keep: it is drawn at the defaults and nothing is written, rather than a project's
+ * widths being overwritten by a run that had not yet been told which project it was on.
+ */
+function keyOf(name: string, project: number | null): string | null {
+  return project === null ? null : `amenbo.termface.${name}.${project}`;
+}
+
+/** What this device has kept under a key, or `null` where nothing can be read. */
+function kept(key: string | null): string | null {
+  if (key === null || typeof localStorage === "undefined") return null;
+  return localStorage.getItem(key);
+}
+
+/** Keep an answer where there is a key to keep it under, and where the device allows it. */
+function keep(key: string | null, value: string): void {
+  if (key === null) return;
+  try {
+    localStorage.setItem(key, value);
+  } catch { /* take the answer even where localStorage is unavailable */ }
+}
+
+/**
+ * The most a narrow column may take: whatever the window has left once the column on the other side
+ * and a pane's floor are out of it, and never less than its own floor (`AMB-D-816`).
  *
  * **Room, not a share of the window.** A share cannot answer this: 0.3 and 0.4 of a 960px window are
  * 288px and 384px, and a person who drags both out is left with 288px in the middle — under the
@@ -70,61 +122,86 @@ export function railMax(side: number = SIDE_MIN): number {
   return ceiling(side, RAIL_MIN);
 }
 
-export function sideMax(rail: number = RAIL_MIN): number {
+export function sideNarrowMax(rail: number = RAIL_MIN): number {
   return ceiling(rail, SIDE_MIN);
+}
+
+/**
+ * The most the wide width may take: the window, less the rail.
+ *
+ * The panes are not in the sum, because the wide width is the one that lies over them: what it must
+ * leave is the rail, which is never covered (`AMB-D-835`). Nothing here keeps it above the narrow
+ * width — the two are dragged separately, and a person who drags the wide one down to the floor has
+ * said what they meant.
+ */
+export function sideWideMax(rail: number = RAIL_MIN): number {
+  const room = typeof window === "undefined" ? 1280 : window.innerWidth;
+  return Math.max(room - rail, SIDE_MIN);
 }
 
 export function clampRailWidth(px: number, side: number = SIDE_MIN): number {
   return Math.min(Math.max(px, RAIL_MIN), railMax(side));
 }
 
-export function clampSideWidth(px: number, rail: number = RAIL_MIN): number {
-  return Math.min(Math.max(px, SIDE_MIN), sideMax(rail));
+export function clampSideNarrow(px: number, rail: number = RAIL_MIN): number {
+  return Math.min(Math.max(px, SIDE_MIN), sideNarrowMax(rail));
 }
 
-/** A width this device has kept, clamped, or where it starts when nothing has been kept. */
-function keptWidth(key: string, fallback: number, clamp: (px: number) => number): number {
-  const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(key);
+export function clampSideWide(px: number, rail: number = RAIL_MIN): number {
+  return Math.min(Math.max(px, SIDE_MIN), sideWideMax(rail));
+}
+
+/** A width this project has kept, clamped, or where it starts when nothing has been kept. */
+function keptWidth(
+  name: string, project: number | null, fallback: number, clamp: (px: number) => number,
+): number {
+  const raw = kept(keyOf(name, project));
   const px = raw === null ? NaN : Number(raw);
   return Number.isFinite(px) ? clamp(px) : fallback;
 }
 
 /** Clamp, keep, and answer with the width actually taken — which is a width even where nothing can
  *  be kept, so a drag still moves the column in a browser that refuses storage. */
-function keepWidth(key: string, px: number, clamp: (px: number) => number): number {
+function keepWidth(
+  name: string, project: number | null, px: number, clamp: (px: number) => number,
+): number {
   const taken = clamp(px);
-  try {
-    localStorage.setItem(key, String(taken));
-  } catch { /* take the width even where localStorage is unavailable */ }
+  keep(keyOf(name, project), String(taken));
   return taken;
 }
 
-export function getRailWidth(side: number = SIDE_MIN): number {
-  return keptWidth(RAIL_WIDTH, RAIL_DEFAULT, (px) => clampRailWidth(px, side));
+export function getRailWidth(project: number | null, side: number = SIDE_MIN): number {
+  return keptWidth(RAIL_WIDTH, project, RAIL_DEFAULT, (px) => clampRailWidth(px, side));
 }
 
-export function setRailWidth(px: number, side: number = SIDE_MIN): number {
-  return keepWidth(RAIL_WIDTH, px, (one) => clampRailWidth(one, side));
+export function setRailWidth(project: number | null, px: number, side: number = SIDE_MIN): number {
+  return keepWidth(RAIL_WIDTH, project, px, (one) => clampRailWidth(one, side));
 }
 
-export function getSideWidth(rail: number = RAIL_MIN): number {
-  return keptWidth(SIDE_WIDTH, SIDE_DEFAULT, (px) => clampSideWidth(px, rail));
+export function getSideNarrow(project: number | null, rail: number = RAIL_MIN): number {
+  return keptWidth(SIDE_NARROW, project, SIDE_NARROW_DEFAULT, (px) => clampSideNarrow(px, rail));
 }
 
-export function setSideWidth(px: number, rail: number = RAIL_MIN): number {
-  return keepWidth(SIDE_WIDTH, px, (one) => clampSideWidth(one, rail));
+export function setSideNarrow(project: number | null, px: number, rail: number = RAIL_MIN): number {
+  return keepWidth(SIDE_NARROW, project, px, (one) => clampSideNarrow(one, rail));
+}
+
+export function getSideWide(project: number | null, rail: number = RAIL_MIN): number {
+  return keptWidth(SIDE_WIDE, project, SIDE_WIDE_DEFAULT, (px) => clampSideWide(px, rail));
+}
+
+export function setSideWide(project: number | null, px: number, rail: number = RAIL_MIN): number {
+  return keepWidth(SIDE_WIDE, project, px, (one) => clampSideWide(one, rail));
 }
 
 /** Whether a column has been asked for. Both start shown: the face has always drawn them, and a
  *  first run that came up with two closed columns would be hiding what it is offering. */
 function keptShown(key: string): boolean {
-  return (typeof localStorage === "undefined" ? null : localStorage.getItem(key)) !== "0";
+  return kept(key) !== "0";
 }
 
 function keepShown(key: string, want: boolean): boolean {
-  try {
-    localStorage.setItem(key, want ? "1" : "0");
-  } catch { /* take the answer even where localStorage is unavailable */ }
+  keep(key, want ? "1" : "0");
   return want;
 }
 
@@ -144,6 +221,30 @@ export function setSideShown(want: boolean): boolean {
   return keepShown(SIDE_SHOWN, want);
 }
 
+/** Which half of the rail is up: this project's panes, or its folders (`AMB-D-835`). */
+export type RailTab = "panes" | "folders";
+
+/**
+ * The half this project was left on, or the one the rail opens on where nothing has been kept.
+ *
+ * **It opens on the panes**, because they are what the face is for: a project nobody has switched
+ * yet is one whose panes have not been looked at yet either. It never turns over on its own — being
+ * kept per project is what makes moving to another project land on that project's own half rather
+ * than carry this one's over (`AMB-D-835`).
+ *
+ * Anything else kept reads as the panes: the value is one of two words, and a word from an older
+ * build or a hand-edited store is not an answer.
+ */
+export function getRailTab(project: number | null): RailTab {
+  return kept(keyOf(RAIL_TAB, project)) === "folders" ? "folders" : "panes";
+}
+
+/** Keep the half that was asked for, and answer with it — a half even where nothing can be kept. */
+export function setRailTab(project: number | null, which: RailTab): RailTab {
+  keep(keyOf(RAIL_TAB, project), which);
+  return which;
+}
+
 /** Which half of the file face is up: the memo a person writes on, or the folder's own files. */
 export type SideTab = "files" | "memo";
 
@@ -161,15 +262,11 @@ export type SideTab = "files" | "memo";
  * build or a hand-edited store is not an answer.
  */
 export function getSideTab(): SideTab {
-  const kept = typeof localStorage === "undefined" ? null : localStorage.getItem(SIDE_TAB);
-  return kept === "files" ? "files" : "memo";
+  return kept(SIDE_TAB) === "files" ? "files" : "memo";
 }
 
 /** Keep the half that was asked for, and answer with it — a half even where nothing can be kept. */
 export function setSideTab(which: SideTab): SideTab {
-  try {
-    localStorage.setItem(SIDE_TAB, which);
-  } catch { /* take the half even where localStorage is unavailable */ }
+  keep(SIDE_TAB, which);
   return which;
 }
-

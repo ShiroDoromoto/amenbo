@@ -13,8 +13,8 @@ import {
   restored, roomOnPage, setCount, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import {
-  clampRailWidth, clampSideWidth, getRailShown, getRailWidth, getSideShown, getSideTab, getSideWidth,
-  setRailShown, setRailWidth, setSideShown, setSideTab, setSideWidth,
+  clampRailWidth, clampSideNarrow, getRailShown, getRailWidth, getSideNarrow, getSideShown,
+  getSideTab, setRailShown, setRailWidth, setSideNarrow, setSideShown, setSideTab,
   type SideTab,
 } from "../talk/columns";
 import { FilesPanel } from "../files/FilesPanel";
@@ -166,12 +166,15 @@ export function TerminalFace({
   const [show, setShow] = useState<{ target: string; cwd: string | null; nth: number } | null>(null);
   const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
   // The columns beside the panes: whether each was asked for, and how wide the person has made it.
-  // Both are this device's and are kept between runs (`../talk/columns`). A column asked for is a
-  // column drawn — there is always room for one, which is what its ceiling is for (`AMB-D-816`).
+  // Both are kept between runs, the wish for the device and the width for the project it was dragged
+  // in (`../talk/columns`). A column asked for is a column drawn — there is always room for one,
+  // which is what its ceiling is for (`AMB-D-816`). The widths start at the defaults because the face
+  // has no project until it is told which one it is on; the read below is what brings that project's
+  // own answers in. What the file face is drawn at is its narrow width — the wide one is `AMB-T-4253`.
   const [railShown, setRailShownState] = useState(getRailShown);
   const [sideShown, setSideShownState] = useState(getSideShown);
-  const [railWidth, setRailWidthState] = useState(() => getRailWidth());
-  const [sideWidth, setSideWidthState] = useState(() => getSideWidth());
+  const [railWidth, setRailWidthState] = useState(() => getRailWidth(null));
+  const [sideWidth, setSideWidthState] = useState(() => getSideNarrow(null));
   // Which of the file face's two the panel shows. It is held here rather than there because the row
   // that switches between them is here: the panel is only on the screen while it is open, so a
   // switch living inside it could not be the one that opens it (`../files/FilesPanel`). What it
@@ -671,23 +674,31 @@ export function TerminalFace({
         sideShown ? sideWidth : 0,
       ),
       setRailWidthState,
-      (px) => setRailWidth(px, sideShown ? sideWidth : 0),
+      (px) => setRailWidth(layout.project, px, sideShown ? sideWidth : 0),
     ),
-    [dragging, sideShown, sideWidth],
+    [dragging, layout.project, sideShown, sideWidth],
   );
 
   const dragSide = useMemo(
     () => dragging(
       // The file face's edge is its left one, so the width is how far the pointer is from the right.
-      (at) => clampSideWidth(
+      (at) => clampSideNarrow(
         (rootRef.current?.getBoundingClientRect().right ?? 0) - at,
         railShown ? railWidth : 0,
       ),
       setSideWidthState,
-      (px) => setSideWidth(px, railShown ? railWidth : 0),
+      (px) => setSideNarrow(layout.project, px, railShown ? railWidth : 0),
     ),
-    [dragging, railShown, railWidth],
+    [dragging, layout.project, railShown, railWidth],
   );
+
+  // The widths this project was left at, read again whenever the rail moves to another project: they
+  // are kept per project, because what one project wants beside its panes is not what the next does
+  // (`AMB-D-835`, `../talk/columns`). A project nothing has been kept for is drawn at the defaults.
+  useEffect(() => {
+    setRailWidthState(getRailWidth(layout.project));
+    setSideWidthState(getSideNarrow(layout.project));
+  }, [layout.project]);
 
   // A window that has shrunk cannot leave a column with the middle's room in it. Each is measured
   // against the other side's floor rather than its drawn width: clamping one narrows it, which would
@@ -695,7 +706,7 @@ export function TerminalFace({
   // is left alone — what was asked for on a wide screen is what comes back on one.
   useEffect(() => {
     setRailWidthState((px) => clampRailWidth(px));
-    setSideWidthState((px) => clampSideWidth(px));
+    setSideWidthState((px) => clampSideNarrow(px));
   }, [width]);
   // The paths alone, and a stable one per set of them: the empty frame reads what the agents are
   // traced across off this, and a fresh array every render would send it back to the host on every

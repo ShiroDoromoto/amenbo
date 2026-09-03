@@ -531,6 +531,7 @@ export const vi: Translation = {
     "mcp.projects": "Những dự án ứng dụng này được truy cập",
     "mcp.handover": "Những dự án bạn đánh dấu chính là nội dung của lời nhờ và của tệp. Khi trao đi, mục của ứng dụng này bị thay thế toàn bộ, kể cả các thư mục nó đang với tới.",
     "mcp.noProjects": "Chưa dự án nào có thư mục, nên không có chỗ để trỏ máy chủ tới.",
+    "mcp.pickNone": "Chưa chọn gì thì không có gì để chuyển — hãy chọn một dự án trước.",
     "mcp.stale": "Do Amenbo cũ để lại",
     "app.crashTitle": "Có gì đó trục trặc",
     "app.crashHint": "Màn hình này không dựng được. Hãy tải lại để phục hồi — dữ liệu của bạn vẫn an toàn.",

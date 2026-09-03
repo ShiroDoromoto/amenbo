@@ -36,19 +36,28 @@
    only one drawing them, and every screen that wanted one after that borrowed the name — which left
    the creation screen's own block unsafe to touch, its rules being half the app's. A screen's block
    holds what only that screen has; this is where what several of them share belongs. */
-/* The quiet line under a control, saying what it will do or what the reader is choosing between. */
+/* The quiet line under a control, saying what it will do or what the reader is choosing between. The
+   paragraph a plugin's author wrote under one of their own fields is this line too (`.plugcfg__help`),
+   which only adds the wrapping a body it did not write needs. */
 .hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* The bold lead-in over a field or a group of them. */
+/* The bold lead-in over a field or a group of them — including the caption over a field a plugin's
+   author declared (`.plugcfg__label`), which only adds the row that holds the chips beside the word.
+   A step over `.hint` is what makes it a lead-in: the two were both drawn at 12px, and a caption the
+   size of the sentence under it leads nothing (`AMB-D-842`). */
 .fieldlabel { font-weight: var(--fw-bold); font-size: var(--fs-md); }
 /* The word in front of a control on a toolbar — a filter's or a sort's, wrapping the control it
    names. It carries the size alone: the row it sits on reads at the page's colour, and the two
    classes above would each take that away in a different direction. */
 .ctllabel { font-size: var(--fs-xs); }
-/* A folder path, which is one long unbreakable word: it scrolls inside its own box rather than
-   pushing the column it sits in as wide as the deepest path a reader happens to have. */
+/* A folder path, which is one long unbreakable word: it stays inside its own box and gives up its tail
+   rather than pushing the column it sits in as wide as the deepest path a reader happens to have. The
+   tail goes rather than the box scrolling, a scrollbar being taller than the 4px between one row and
+   the next and so drawn straight through the line of prose below. A cut path is not a path anyone can
+   check, so every one of these carries the whole of it as its `title`. */
 .path {
   flex: 1; min-width: 0; padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
-  background: var(--c-sunken); font-size: var(--fs-md); overflow-x: auto; white-space: nowrap;
+  background: var(--c-sunken); font-size: var(--fs-md);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
 /* What went wrong, said where it went wrong (`components/ErrorNote.tsx`). One row, mark then words:
    it aligns at the top rather than the middle so the mark stays beside the first line of a message
@@ -465,7 +474,8 @@
    number in a box the width of a token reads as a box waiting for a token. */
 .plugcfg__field input { width: 100%; max-width: var(--measure-form); }
 .plugcfg__field input.plugcfg__short { width: auto; }
-.plugcfg__label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
+/* The row a field's caption is: the word, and the chips that qualify it. The type is `.fieldlabel`'s. */
+.plugcfg__label { display: flex; align-items: center; gap: var(--s-2); }
 /* A field whose author declared candidates: one row per candidate, each box only as wide as a box.
    The rule above stretches every input in the field to the field's width, and a tick box stretched
    that far is a bar with a tick at one end, so this hands it back the size a tick box has. */
@@ -473,9 +483,11 @@
 .plugcfg__choice { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
 .plugcfg__choice input { width: var(--s-4); }
 .plugcfg__note { font-size: var(--fs-xs); }
-/* The author's paragraph under an input (`AMB-D-656`). Their line breaks are kept — it is a body, and
-   the only shape it has is the one they typed — and nothing in it is drawn as markup or as a link. */
-.plugcfg__help { max-width: var(--measure-prose); font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The author's paragraph under an input (`AMB-D-656`), drawn as the quiet line every screen draws
+   (`.hint`) and adding only what a body somebody else typed needs. Their line breaks are kept — it is a
+   body, and the only shape it has is the one they wrote — and nothing in it is drawn as markup or as a
+   link. */
+.plugcfg__help { max-width: var(--measure-prose); white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A field whose value the plugin writes, standing where its input would (`AMB-D-656`). */
 .plugcfg__fixed { font-size: var(--fs-md); overflow-wrap: anywhere; }
 /* The operations the author declared (`AMB-D-664`), under the fields they act on and ruled off from them:
@@ -855,7 +867,7 @@ button.feed__target:hover { color: var(--c-accent); }
    screen below (`AMB-D-690`) — a part standing inside another screen and the screen it points at are
    two things, and one name over both meant a rule written for either reached the other. `min-width: 0`
    for the reason `harnessreq` needs it: a path is one long word, and without it the row is as wide as the
-   longest one instead of scrolling inside itself. */
+   longest one instead of keeping it inside itself. */
 .mcpsetup { display: flex; flex-direction: column; gap: var(--s-2); flex: 1; min-width: 0; }
 .mcpsetup__toggle { align-self: flex-start; }
 
@@ -863,10 +875,13 @@ button.feed__target:hover { color: var(--c-accent); }
 .mcp__apps { display: flex; flex-direction: column; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
 /* One app: its name, what it already holds, and the one move that changes it. The state and the folder
    sit on one line where there is room and wrap where there is not — the folder is the longer half and the
-   one that has to stay readable. */
+   one that has to stay readable. The row is told from the card by a rule and not by a sunken ground:
+   what it holds is a chip and a boxful of path, both of which are drawn on `--c-sunken` themselves, and
+   a mark the same colour as the thing under it is not a mark. */
 .mcp__app {
   display: flex; flex-direction: column; gap: var(--s-1);
-  padding: var(--s-2) var(--s-2); border-radius: var(--r-sm); background: var(--c-sunken);
+  padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
+  border: 1px solid var(--c-rule); background: var(--c-surface);
 }
 /* The folded row, and the whole of what opens it. It reads as the row itself rather than as a control
    on it: no border, no fill, and the chevron alone off to the right saying there is more under it. */
@@ -876,7 +891,7 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .mcp__headtext { display: flex; flex-direction: column; gap: var(--s-1); flex: 1; min-width: 0; }
 .mcp__name { font-weight: var(--fw-bold); font-size: var(--fs-md); }
-.mcp__state { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-size: var(--fs-md); }
+.mcp__state { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: var(--fs-md); }
 .mcp__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 /* That a copy went through, said beside the buttons rather than inside one (`AMB-D-690`). It is drawn
    after them, so the space it takes when it appears is space nothing else was standing in — a button
@@ -884,10 +899,18 @@ button.feed__target:hover { color: var(--c-accent); }
 .mcp__copied { font-size: var(--fs-md); color: var(--c-text-muted); }
 .mcp__saved { font-size: var(--fs-xs); overflow-wrap: anywhere; }
 /* Which projects a row may reach: a tick apiece, each with the folder that would be written into
-   the entry. The folder is the longer half, so a project wraps as a block rather than letting one
-   path push the column wide. */
+   the entry. */
 .mcp__pick { display: flex; flex-direction: column; gap: var(--s-1); }
-.mcp__project { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-size: var(--fs-md); }
+/* Every project draws the same three columns — the tick, the name, the folder — so the folders begin at
+   one place down the list however long a name runs, which is the half a reader is actually comparing.
+   Laid out by each name's own length, as they were, no two paths started in the same place. The name
+   column is the crossings' 12rem (`.plugcross > .pluggate`): the two lists are read the same way. */
+.mcp__project {
+  display: grid; grid-template-columns: auto minmax(0, 12rem) minmax(0, 1fr);
+  align-items: center; column-gap: var(--s-2); font-size: var(--fs-md);
+}
+/* A name longer than its column wraps inside it rather than widening it. */
+.mcp__projname { min-width: 0; overflow-wrap: anywhere; }
 /* What an older amenbo left, set below the row it belongs to and marked down: it is something to
    take away rather than part of what this app is set up for. */
 .mcp__stale { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-md); }

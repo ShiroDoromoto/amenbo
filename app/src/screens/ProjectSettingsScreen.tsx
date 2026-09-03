@@ -379,7 +379,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
         {folders?.map((f) => (
           <div key={f.path} className="field">
             <div className="folderrow">
-              <code className="path">{f.path}</code>
+              <code className="path" title={f.path}>{f.path}</code>
               {/* The state of the folder, in the row's own voice — it wears the note's look and its
                   mark, but not its `role`: what is wrong is announced once, by the hint below, and a
                   reader hearing the same fault twice learns nothing the second time. */}

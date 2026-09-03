@@ -584,6 +584,9 @@ const ui = {
   // over replaces rather than adds (`AMB-D-690`).
   "mcp.handover": "The projects you tick are what the request and the file are made of. Handing one over replaces this app's entry whole — the folders it already reaches included.",
   "mcp.noProjects": "No project has a folder yet, so there is nowhere to point a server.",
+  // Why the button that hands the selection over is shut, said beside it: a greyed
+  // button says only that it cannot be pressed, never what would open it.
+  "mcp.pickNone": "Nothing ticked is nothing to hand over — tick a project first.",
   "mcp.stale": "Left by an older Amenbo",
   "app.crashTitle": "Something went wrong",
   "app.crashHint": "The screen failed to render. Reload to recover — your data is safe.",

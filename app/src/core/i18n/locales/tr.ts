@@ -529,6 +529,7 @@ export const tr: Translation = {
     "mcp.projects": "Bu uygulamanın ulaşabileceği projeler",
     "mcp.handover": "İşaretlediğiniz projeler, isteğin ve dosyanın içeriğinin ta kendisidir. Verdiğinizde bu uygulamanın kaydı, hâlihazırda eriştiği klasörlerle birlikte bütünüyle değişir.",
     "mcp.noProjects": "Henüz hiçbir projenin klasörü yok, bu yüzden bir sunucunun gösterebileceği yer yok.",
+    "mcp.pickNone": "Hiçbir şey işaretlenmediyse aktarılacak bir şey de yok — önce bir proje işaretleyin.",
     "mcp.stale": "Daha eski bir Amenbo'dan kalma",
     "app.crashTitle": "Bir şeyler ters gitti",
     "app.crashHint": "Ekran çizilemedi. Kurtarmak için yeniden yükleyin — verileriniz güvende.",

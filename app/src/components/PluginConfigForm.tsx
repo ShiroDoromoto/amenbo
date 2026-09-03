@@ -279,7 +279,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           {/* A choice is a group of boxes, each with its own label, so the caption above it names the
               group rather than pointing at one input. */}
           <label
-            className="plugcfg__label"
+            className="fieldlabel plugcfg__label"
             htmlFor={
               f.fieldType === "multi" || f.readonly
                 ? undefined
@@ -399,7 +399,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           {/* The author's own paragraph about this field (`AMB-D-656`), under the input it explains.
               Text and nothing else: the newlines are theirs, and no Markdown or link is drawn from it —
               this is the screen a secret is typed into. */}
-          {settingHelp(f) && <div className="faint plugcfg__help">{settingHelp(f)}</div>}
+          {settingHelp(f) && <div className="hint plugcfg__help">{settingHelp(f)}</div>}
           {/* What the author's check said about *this* box (`AMB-D-664`) — beside the one it named, which
               is the whole reason a verdict carries keys at all. Plain text, like their paragraph above. */}
           {check?.fields[f.key] && (
@@ -455,7 +455,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
                 <div className="plugcfg__ask">
                   {a.ask.map((f) => (
                     <label key={f.key} className="plugcfg__field">
-                      <span className="plugcfg__label">{askLabel(f)}</span>
+                      <span className="fieldlabel plugcfg__label">{askLabel(f)}</span>
                       <input
                         {...asTyped}
                         type={f.secret ? "password" : "text"}

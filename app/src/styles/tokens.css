@@ -97,14 +97,19 @@
   --icon-md: 20px; /* headings and chips */
   --icon-lg: 24px; /* banners and onboarding */
 
-  /* ----- spacing ----- */
+  /* ----- spacing -----
+     Six steps on a 4px grid (`AMB-D-842`). The seven before them ran 4 / 6 / 8 at the bottom, and
+     two pixels is not a difference anyone can see — asked for the gap between a label and its
+     field, a writer picked whichever of the three came to hand, which is how the plugin screen came
+     to step 8 then 6 down one column. Dropping the 6px step leaves a ladder where every rung is
+     visibly a rung, so the gap is chosen for what it separates rather than for whichever name was
+     nearest. */
   --s-1: 4px;
-  --s-2: 6px;
-  --s-3: 8px;
-  --s-4: 12px;
-  --s-5: 16px;
-  --s-6: 24px;
-  --s-7: 32px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
 
   /* ----- radius / shadow ----- */
   --r-sm: 5px;

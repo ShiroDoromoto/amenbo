@@ -1,10 +1,19 @@
 /* amenbo design tokens */
 :root {
-  /* ----- color: neutral (warm gray) ----- */
+  /* ----- the ground, in three steps, and the hover laid on it -----
+     A page, the cards on it, and the wells cut into a card (`AMB-D-840`). The steps stay shallow —
+     what tells one region from the next is the rule around it and the space between, not the ground
+     under it. Widening them would mean moving every ink above them to hold AA, so they do not widen.
+
+     `--c-hover` is the fourth thing and not a fourth step: the ground a row takes while the pointer
+     is on it. Its value is the darkest (lightest, on the dark theme) that still leaves every ink AA
+     over it, which is what caps how far a hover can be pushed here. */
   --c-bg: #f7f6f3;
   --c-surface: #ffffff;
-  --c-surface-2: #fbfaf8;
-  --c-surface-sunken: #f1efe9;
+  --c-sunken: #f1efe9;
+  --c-hover: #f0ede6;
+
+  /* ----- color: neutral (warm gray) ----- */
   --c-border: #e4e1d9;
   --c-border-strong: #d2cec3;
   --c-text: #23211c;
@@ -121,8 +130,8 @@
 [data-theme="dark"] {
   --c-bg: #1b1a17;
   --c-surface: #242320;
-  --c-surface-2: #2a2925;
-  --c-surface-sunken: #1f1e1b;
+  --c-sunken: #1f1e1b;
+  --c-hover: #2c2b27;
   --c-border: #3a3833;
   --c-border-strong: #4c4a43;
   --c-text: #ece9e1;

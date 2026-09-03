@@ -287,7 +287,11 @@ not yet an app with a window, and a walk that started between the two would fail
 An app that never draws one inside a minute is reported as that, and one that exits on the way up is
 reported the moment it does. `--evidence <dir>` chooses where
 the shots and manifest land (default: a fresh dir under the temp tree); `--screen <path>` points at
-a tool other than the repo's own. Exit is 0 when every OCR-judged assert passed and every step was
+a tool other than the repo's own, and `--fixtures <dir>` at a shelf other than
+`verification/fixtures`. Both of those last two are resolved from where the harness was compiled
+when they are left out, so both have to be given to a run that is not standing in this tree — which
+is what `devtool vm verify run` passes for a run in the VM.
+Exit is 0 when every OCR-judged assert passed and every step was
 captured, non-zero on a failed assert or a load/capture/reading failure — a `Review` step is closed
 by a human from the evidence, not by the exit code.
 
@@ -911,6 +915,19 @@ the shot is a picture, and neither the image nor the colour-and-letter a project
 word there. `file:` here is not `attach`'s: what is under test is the picture, so the road names a
 file a premise copied off the fixtures shelf rather than one the operator brings, and the run says
 where it landed before the first step is handed over.
+
+Giving each of the two faces a store writes as an image of its own, clearing one again, reading which
+of the two a slot holds, and the way back onto the screen all of that is done on (`store set-avatar` /
+`clear-avatar` / `avatar` / `open-settings`), are one road's for a reason a shade narrower. The setting
+is reachable from a terminal — `config set human_avatar` takes the display version as a data URL — but
+the original that version was baked from arrives only where a picker handed the bytes over, so a road
+written for the CLI would walk past the half this one exists for. `facet:` is `human` or `ai`, the two
+words the store files them under, and the line names the face rather than the display name beside it:
+only one of those two names is the same in every language. Neither move waits for a button, this row
+writing the store as the picker closes, and the reading is a `Review` on both of its states — an image
+and the pattern drawn for a face that has none are both pictures. `open-settings` is a step of its own
+because the road walks it twice: a slot redrawn under the operator's eye says the screen heard, and
+only coming back to it says the store did.
 
 One road's alone is sometimes an *argument* rather than a whole op, and then it is the driver that
 cannot answer it which says so. A search hit is the case: what the row **calls** the place it points

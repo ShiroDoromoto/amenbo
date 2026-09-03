@@ -1,0 +1,153 @@
+# The image a facet is drawn as, from the file a reader picks to the slot the settings hold it in. It
+# is a screen road and could be no other: `config set human_avatar` is the terminal's whole door onto
+# this face and what it takes is the display version as a data URL, so the original the picker hands
+# over has no way in from there.
+#
+# That original is the half no build-time test reaches. The screen bakes the 96px square, the file the
+# reader chose goes to core as bytes, and core writes the pair — the version every surface draws and
+# the image it was baked from, kept so a larger one can be made later without asking for the file
+# again. Each part has its own test; what none of them walks is a person choosing a file off a real
+# disk with the two of them coming out of a real store afterwards.
+#
+# So the road leaves the settings and comes back, and that is the step that matters. A slot redrawn
+# under the operator's eye says the screen heard; only an arrival says the store did.
+#
+# It walks both faces, and not for symmetry: one payload carries the pair, and the facet not named is
+# left out of it rather than sent empty. A slot that quietly took its neighbour's image, or lost its
+# own, is what reading the AI's face after registering the human's is here to catch.
+#
+# The image is a fixture rather than something the road describes: what is under test is a picture
+# being drawn, so any file of the right name would prove nothing. It lands in the folder the run makes
+# for itself, and the run says that path before the first step is handed over — nothing in these
+# instructions can name it, since they are rendered from this file alone.
+id: give-a-face-to-the-two-you-write-as
+title: The human and the AI faces are each given an image, both survive the settings being left and returned to, and clearing one puts its drawn pattern back
+description: >
+  Open Amenbo's own settings and read the row of avatars while neither face has an image of its own —
+  each slot holding the pattern Amenbo draws from that face's name — then give the human face one,
+  choosing a file off the disk. Read the AI's slot straight afterwards, which is where a payload that
+  carried the wrong face would show. Give the AI face an image too, then walk out to a project's board
+  and back onto the settings, the only way to ask whether what is drawn came out of the store rather
+  than out of the screen. Clear the human's last, and the pattern is what its slot holds once more
+  while the AI's keeps its image.
+given:
+  # Somewhere to walk out to. What the road needs off the settings screen is any other screen at all,
+  # and a project's board is the one every store has a way to.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  # The file the picker is pointed at. A screen road cannot make one — every move it has is a move on
+  # a record — and this is an image, which no line of YAML holds.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: image/scenario-icon.png
+      path: scenario-avatar.png
+
+steps_gui:
+  - type: action
+    domain: store
+    op: open-settings
+
+  # What each face is drawn as before anybody gives it an image. It is read first because the two
+  # states are told apart by an eye, and an eye that never saw the pattern has nothing to tell the
+  # image from.
+  - type: assert
+    domain: store
+    op: avatar
+    with:
+      facet: human
+      present: false
+
+  - type: assert
+    domain: store
+    op: avatar
+    with:
+      facet: ai
+      present: false
+
+  - type: action
+    domain: store
+    op: set-avatar
+    with:
+      facet: human
+      file: scenario-avatar.png
+
+  - type: assert
+    domain: store
+    op: avatar
+    with:
+      facet: human
+      present: true
+
+  # The neighbour, read while only one face has been given anything. One payload carries both, and the
+  # facet left out of it means "leave as is" — a slot that moved here is one the write reached by
+  # mistake.
+  - type: assert
+    domain: store
+    op: avatar
+    with:
+      facet: ai
+      present: false
+
+  - type: action
+    domain: store
+    op: set-avatar
+    with:
+      facet: ai
+      file: scenario-avatar.png
+
+  # Out to a board and back onto the settings. The readings after this are the ones the road is for: a
+  # slot filled where the picker closed and a slot filled from the store are the same picture, and only
+  # a screen that was left and returned to says which one has been standing there.
+  - type: action
+    domain: project
+    op: open
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: store
+    op: open-settings
+
+  - type: assert
+    domain: store
+    op: avatar
+    with:
+      facet: human
+      present: true
+
+  - type: assert
+    domain: store
+    op: avatar
+    with:
+      facet: ai
+      present: true
+
+  # And the way back off, on one face alone. Clearing takes the original with the version that was
+  # drawn, so the slot falls back to what it held before the road began — and the face beside it,
+  # which the same payload left out, keeps what it was given.
+  - type: action
+    domain: store
+    op: clear-avatar
+    with:
+      facet: human
+
+  - type: assert
+    domain: store
+    op: avatar
+    with:
+      facet: human
+      present: false
+
+  - type: assert
+    domain: store
+    op: avatar
+    with:
+      facet: ai
+      present: true

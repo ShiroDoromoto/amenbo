@@ -749,9 +749,10 @@ screen tool.
 not wait for the run: a road is walked by somebody, and that somebody is whoever calls `step`
 between one hand-over and the next.
 
-- **`--screen` is passed explicitly.** The harness resolves the tool relative to its own executable,
-  which in the guest is a path on this side of the machine — a run without it fails a minute in,
-  having launched an app and photographed nothing.
+- **`--screen` and `--fixtures` are passed explicitly.** The harness resolves both relative to its
+  own executable, which in the guest is a path on this side of the machine. Without the first a run
+  fails a minute in, having launched an app and photographed nothing; without the second a road that
+  copies a fixture fails before that, standing up its world.
 - A previous run's app is taken down first. The harness takes its own down when it ends, and the one
   case it cannot is the one that matters: a run somebody stopped part-way leaves a window that the
   next run's shots would have in front of them.

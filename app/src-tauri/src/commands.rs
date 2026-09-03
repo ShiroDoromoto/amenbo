@@ -1237,19 +1237,6 @@ pub fn resolve_ref(input: String) -> Result<Option<RefTargetDto>, CmdError> {
     Ok(hit)
 }
 
-/// Hand the GUI the `amenbo agent --json` spec (philosophy, every command with its flags and
-/// examples, capabilities, workflows). The source of truth is [`amenbo_core::agent`], the same one
-/// the CLI's `amenbo agent` prints.
-/// The "commands" screen and ⌘K's search over real data consume it (display only — the GUI never
-/// runs the CLI). The CLI side, which the AI reads, stays in English. The GUI passes `locale`
-/// (config.language) and only the prose is swapped for a translation just before display; the
-/// English source of truth is untouched ([`amenbo_core::agent::build_localized`]). Unspecified means
-/// en.
-#[tauri::command]
-pub fn agent_spec(locale: Option<String>) -> serde_json::Value {
-    amenbo_core::agent::build_localized(locale.as_deref().unwrap_or("en"))
-}
-
 use amenbo_core::read_receipts::ReadReceipts;
 
 /// Return this machine's read state (per-task last_seen plus the mailbox-wide last_seen). Read at

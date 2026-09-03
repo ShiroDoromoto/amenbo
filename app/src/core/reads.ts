@@ -18,7 +18,6 @@ import { loadCommentTasks, loadTriggeredAt, loadReadReceipts } from "./readRecei
 import { loadInboxArchived } from "./inboxArchive";
 import { invoke } from "./ipc";
 import { decisionRef, parseRef, taskRef } from "./idref";
-import { currentLang, type Lang } from "./i18n";
 import { addDays } from "./calendar";
 import { DUE_OVERDUE, DUE_TODAY, DUE_TOMORROW, DUE_WINDOWS, type DueCounts } from "./due";
 import { isClosed } from "./status";
@@ -446,52 +445,6 @@ function mockRanges(snippet: string, needles: string[]): SearchHit["matches"] {
     else merged.push({ ...r });
   }
   return merged;
-}
-
-/** One option (flag). `help` is its description; `required` marks a mandatory flag. */
-export type CommandFlag = { name: string; help: string; required?: boolean };
-/** One positional argument. */
-export type CommandArg = { name: string; help: string; required?: boolean };
-/** The spec of one command (from `agent --json`, display only). Options = flags + args; samples = examples. */
-export type CommandSpec = {
-  name: string;
-  summary: string;
-  flags?: CommandFlag[];
-  args?: CommandArg[];
-  examples?: string[];
-};
-/** Command names grouped by capability. The details live in commands[] and are resolved by name. */
-export type CommandCapability = { capability: string; commands: string[] };
-/** The slice of the agent spec the GUI consumes (the command list plus the capability grouping). */
-export type AgentSpec = { commands: CommandSpec[]; capabilities: CommandCapability[] };
-
-const EMPTY_SPEC: AgentSpec = { commands: [], capabilities: [] };
-
-/**
- * Fetch the `amenbo agent --json` spec (source of truth: core::agent). Tauri goes through the `agent_spec`
- * command; the browser (npm run dev) gets nothing, because the command reference and ⌘K are surfaces over real
- * Tauri data (the GUI never shells out to the CLI). The English spec of record is immutable — it is what AI
- * reads — so the GUI passes a locale (config.language) and core swaps only the prose for a translation right
- * before display (`build_localized`); an absent or unknown locale passes through as English.
- */
-export async function fetchAgentSpec(locale: Lang = currentLang()): Promise<AgentSpec> {
-  if (inTauri()) return invoke<AgentSpec>("agent_spec", { locale });
-  return EMPTY_SPEC;
-}
-
-/** Read the agent spec for the command reference and ⌘K. It never changes while running, so fetch once (no subscription). */
-export function useAgentSpec(): { spec: AgentSpec; loading: boolean } {
-  // The language is part of the key, so switching languages refetches the spec in that language.
-  const lang = currentLang();
-  const { data, loading } = useQuery<AgentSpec>(["agent-spec", lang], () => fetchAgentSpec(lang));
-  return { spec: data ?? EMPTY_SPEC, loading };
-}
-
-/** Index from command name to capability name, for the grouped display in the reference and ⌘K. First one wins, so a command lands in exactly one group. */
-export function capabilityByCommand(spec: AgentSpec): Map<string, string> {
-  const m = new Map<string, string>();
-  for (const cap of spec.capabilities) for (const n of cap.commands) if (!m.has(n)) m.set(n, cap.capability);
-  return m;
 }
 
 /** Subscribing read of a single task (fetched on its own via `tasks_by_ids`, not taken from snapshot.tasks). */

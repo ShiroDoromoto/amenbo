@@ -621,9 +621,8 @@ const REFERENCE_FIELDS: [&str; 3] = ["commands", "kind", "name"];
 /// Retargets the whole spec to `cli` — the CLI this build actually installs
 /// ([`Paths::command_name`]). Everything is authored with the production spelling and rewritten on
 /// the way out, so the source stays literal, readable and copy-pasteable and no author has to
-/// remember to interpolate anything. Without this a dev build hands an AI, and shows in the GUI's
-/// command catalog, commands that are not installed there — beside a heading the GUI already spells
-/// from `command_name`.
+/// remember to interpolate anything. Without this a dev build hands an AI commands that are not
+/// installed there.
 ///
 /// Three rules, because the spec holds three kinds of string. A runnable line
 /// ([`RUNNABLE_LINE_FIELDS`]) is nothing but a command, so every standalone occurrence goes. Prose
@@ -3065,10 +3064,10 @@ mod tests {
 
     /// A line the spec tells someone to type must name the CLI this build installs — and name it at
     /// all, since a line that dropped the command word is unrunnable on every channel. The dev
-    /// channel is where the first half bites: its examples would otherwise send an AI, and the GUI's
-    /// command catalog, to a command that is not installed there. So the rule is checked twice: as
-    /// this build hands the spec out, and after a retarget to the dev spelling, which is what says
-    /// the rewrite reaches every runnable-line field.
+    /// channel is where the first half bites: its examples would otherwise send an AI to a command
+    /// that is not installed there. So the rule is checked twice: as this build hands the spec out,
+    /// and after a retarget to the dev spelling, which is what says the rewrite reaches every
+    /// runnable-line field.
     #[test]
     fn every_runnable_line_names_this_builds_cli() {
         /// Whether the line names `cli` as a word of its own — the reading side of [`standalone`].

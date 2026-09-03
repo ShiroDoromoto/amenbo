@@ -15,6 +15,7 @@ import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
+import { inkOn } from "../core/ink";
 import type { AgentHookRequestsDto, BoundFolderDto, ProjectSettingsDto } from "../bindings/bindings";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
@@ -229,7 +230,8 @@ export function ProjectSettingsScreen({
  *
  * With no icon the preview shows what the surfaces fall back to: the project's colour, and the first
  * letter of its name. It reads from the form's own state rather than the saved project, so a colour
- * being changed at the same time is already in it.
+ * being changed at the same time is already in it — the letter's ink included, which is derived from
+ * whatever colour the picker currently holds (`core/ink.ts`) rather than fixed at white.
  */
 function IconPicker({
   name, color, icon, busy, onPick, onClear, onError,
@@ -261,7 +263,11 @@ function IconPicker({
       <span className="iconpick__preview" style={{ background: icon ? undefined : color }}>
         {icon
           ? <img className="iconpick__img" src={icon} alt="" />
-          : <span className="iconpick__letter">{[...name.trim()][0] ?? ""}</span>}
+          : (
+            <span className="iconpick__letter" style={{ color: inkOn(color) }}>
+              {[...name.trim()][0] ?? ""}
+            </span>
+          )}
       </span>
       <div className="buttonrow">
         <button className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>

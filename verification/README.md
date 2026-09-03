@@ -287,7 +287,11 @@ not yet an app with a window, and a walk that started between the two would fail
 An app that never draws one inside a minute is reported as that, and one that exits on the way up is
 reported the moment it does. `--evidence <dir>` chooses where
 the shots and manifest land (default: a fresh dir under the temp tree); `--screen <path>` points at
-a tool other than the repo's own. Exit is 0 when every OCR-judged assert passed and every step was
+a tool other than the repo's own, and `--fixtures <dir>` at a shelf other than
+`verification/fixtures`. Both of those last two are resolved from where the harness was compiled
+when they are left out, so both have to be given to a run that is not standing in this tree — which
+is what `devtool vm verify run` passes for a run in the VM.
+Exit is 0 when every OCR-judged assert passed and every step was
 captured, non-zero on a failed assert or a load/capture/reading failure — a `Review` step is closed
 by a human from the evidence, not by the exit code.
 

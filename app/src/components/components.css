@@ -330,7 +330,7 @@
 /* A clickable chip: the link that navigates to a dependency's blocker. It drops the button
    defaults to keep the chip's look, and turns accent on hover to show it can be pressed. */
 .chip--link { border: 0; cursor: pointer; color: inherit; font-family: inherit; line-height: inherit; }
-.chip--link:hover { background: var(--c-rule); color: var(--c-accent); }
+.chip--link:hover { background: var(--c-hover); color: var(--c-accent-text); }
 /* The chip for a premise that holds a reserve back (ready===false). It carries the shape alone: which
    step it takes is decided per premise where it is drawn (`atoms.tsx`), an unfinished blocker being a
    stop and a start day still ahead a heed. It stays clear of the human-declared status=blocked and its
@@ -1107,6 +1107,6 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The migration screen shown at startup (MigrationScreen). */
 .migrate__body { display: flex; flex-direction: column; gap: var(--s-2); }
 .migrate__path { display: block; margin-top: var(--s-1); font-size: var(--fs-xs); word-break: break-all; }
-.migrate__bar { height: 6px; background: var(--c-rule); border-radius: 3px; overflow: hidden; }
+.migrate__bar { height: 6px; background: var(--c-sunken); border-radius: 3px; overflow: hidden; }
 .migrate__bar-fill { height: 100%; background: var(--c-accent); }
 .migrate__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }

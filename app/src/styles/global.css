@@ -75,7 +75,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   --banner-ground: var(--c-surface);
   --banner-ink: var(--c-text);
   --banner-tint: var(--c-sunken);
-  --banner-tint-hover: var(--c-rule);
+  --banner-tint-hover: var(--c-hover);
   --banner-edge: var(--c-rule);
   /* The one accented thing on a quiet band; the loud ones override the pair below. */
   --banner-btn-ground: var(--c-accent);

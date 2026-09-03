@@ -382,6 +382,11 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
               id={`cfg-${install.name}-${f.key}`}
               type="text"
               disabled={busy}
+              /* How wide the box is drawn is read off what the author already wrote: a default or an
+                 example short enough to be a port or a flag gets a box that size, and everything else
+                 takes the form's width (`AMB-D-842`). */
+              className={shortHint(f) ? "plugcfg__short" : undefined}
+              size={shortHint(f)?.length}
               value={shown(f)}
               /* An empty box under a "default" chip would leave the value in force unreadable — the
                  candidates of a choice are ticked, and this is the same showing for a line. The
@@ -507,6 +512,16 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
       )}
     </div>
   );
+}
+
+/**
+ * The width hint the author's own writing gives a box: a default or an example short enough to be a
+ * port number or a flag. Anything longer says nothing about width — a token and a URL are both just
+ * "long" — so the box takes the form's width instead.
+ */
+function shortHint(f: PluginWantedSettingDto): string | undefined {
+  const hint = f.defaultValue ?? settingPlaceholder(f) ?? "";
+  return hint.length > 0 && hint.length <= 12 ? hint : undefined;
 }
 
 /**

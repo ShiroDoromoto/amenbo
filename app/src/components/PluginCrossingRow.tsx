@@ -79,17 +79,19 @@ export function PluginCrossingRow({ install, layer, name }: {
   };
 
   return (
-    <div className="plugcross">
+    <div className={at.enabled ? "plugcross plugcross--on" : "plugcross"}>
       <div className="pluggate">
         <span className="rowname">{name}</span>
-        {at.enabled && <span className="chip">{t("plugins.enabledChip")}</span>}
-        {/* What the settings at this crossing amount to, in one word: the refusal waiting to happen, or
-            that something is filled in — which is also why an off project is on the list at all. */}
-        {at.requiredUnset ? (
-          <span className="chip chip--heed">{t("plugins.cfg.requiredEmpty")}</span>
-        ) : (
-          at.hasValue && <span className="chip">{t("plugins.cfg.filled")}</span>
-        )}
+        <span className="pluggate__states">
+          {at.enabled && <span className="chip">{t("plugins.enabledChip")}</span>}
+          {/* What the settings at this crossing amount to, in one word: the refusal waiting to happen,
+              or that something is filled in — which is also why an off project is on the list at all. */}
+          {at.requiredUnset ? (
+            <span className="chip chip--heed">{t("plugins.cfg.requiredEmpty")}</span>
+          ) : (
+            at.hasValue && <span className="chip">{t("plugins.cfg.filled")}</span>
+          )}
+        </span>
         <button
           className="btn btn--primary"
           disabled={busy || (!at.enabled && !install.compatible)}

@@ -206,7 +206,7 @@ function InstalledRow({ install, update, projects, onRemoved }: {
     <div className="feed__item">
       <div className="feed__body" style={{ minWidth: 0 }}>
         <div className="feed__line">
-          <strong>{pluginTitle(install)}</strong>
+          <strong className="plugname">{pluginTitle(install)}</strong>
           {!install.compatible ? (
             <>
               {" "}

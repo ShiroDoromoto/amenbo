@@ -1,0 +1,159 @@
+# The width the reading column is drawn at is the person's, and it is kept for the project they
+# dragged it in. This is the road that says so: a column widened in one project is the shipped width
+# in the next, and the widened one again on coming back.
+#
+# ── Why a width is kept per project at all ───────────────────────────────────────────────────────
+# How many panes there are and how much there is to read are not the same from one project to the
+# next, so one answer for the whole device fits whichever project it was dragged in and fights every
+# other. What that promises a reader is this road: the drag is a thing they said once, about this
+# project, and going somewhere else does not spend it.
+#
+# ── Why the width is read against the panes rather than against the shot before ──────────────────
+# `side-width` is the other reading of this edge, and it cannot be used here: it answers against the
+# picture before it, and a press on the rail redraws every column on the face. "Wider than it was"
+# after a move between projects would be a sentence about two faces rather than about one width. So
+# each reading here stands on its own shot — the column and the panes divide the width between them,
+# and which of the two is the wider is what an eye at a picture can say (`side-span`).
+#
+# ── Why the shipped width is read before the drag ────────────────────────────────────────────────
+# The reading after the drag means nothing on its own: a face that drew every column broad would pass
+# it. The pair is the road — thin, then broad, then thin again in the other project — and each one is
+# read the same way, so nothing in the middle can be a difference in how it was measured.
+#
+# ── Why a pane is opened in each project ─────────────────────────────────────────────────────────
+# The panes are what the column is read against, so there has to be one. A plain shell is enough and
+# nothing is typed into it: what this road is about is the width beside a pane, not the pane.
+#
+# ── What this road does not walk ─────────────────────────────────────────────────────────────────
+# The wide width, which is kept per project beside this one. It cannot be read yet: the width it
+# ships with already takes about the room the panes are left with, so it and a dragged one are the
+# same answer on `side-span`, and a road walking it would go green on a build that had lost the drag.
+# The reading that would tell them apart comes first.
+#
+# Which half the rail stands on is the third answer kept per project, and it cannot be walked at all:
+# the press that moves between projects is in one of those two halves, so the project being left is
+# always left on that one and never answers the other. What that costs is not a reading but the face,
+# and the panel it is on is being reconsidered whole.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A width is a thing on a screen, and the binary is handed paths.
+id: find-the-reading-column-at-the-width-you-left-this-project-at
+title: The reading column's width is kept for the project it was dragged in, so another project is drawn at its own and the first is drawn at the dragged one on coming back
+description: >
+  Raise two projects, each with a folder of its own, and open a terminal in each. In the first, drag
+  the edge between the reading column and the panes out until the column has taken about their width.
+  Go to the second: its column is the narrow one it shipped with, the drag having been about the first
+  project and not about this device. Go back to the first: the column is the width it was left at.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face opens on is the run's business, so the road presses for the one it means
+  # to drag in rather than reading whichever was selected.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # The width it shipped with, which is what the drag is about to move away from.
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: files
+      span: thin
+
+  - type: action
+    domain: terminal
+    op: drag-side
+    with:
+      side: files
+      toward: broad
+
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: files
+      span: broad
+
+  # The other project, which was never dragged in. The column is up here because being open at all is
+  # how this reader likes to work, wherever they are — it is the *width* that belongs to the project.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The half a device-wide width would fail: a face keeping one answer for the machine would draw this
+  # project at the width dragged in the other one, and a reader would find their panes gone in a
+  # project they had never touched the edge in.
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: files
+      span: thin
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # And the drag is still spent here. A face that kept the width only while the project was shown
+  # would pass every reading above and fail this one, which is the half a reader is actually promised.
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: files
+      span: broad

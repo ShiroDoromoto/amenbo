@@ -174,11 +174,14 @@ input[type="color"] {
 }
 .healthbanner__close:hover { background: var(--banner-tint-hover); }
 .healthbanner__close:disabled { opacity: 0.5; cursor: default; }
-/* The button that runs the action (re-sync). It outweighs the close button. */
+/* The button that runs the action (re-sync). It is the filled system (`AMB-D-841`) drawn in the
+   band's own pairing rather than the accent — the fill and the size of a primary button, taking the
+   ground and ink the band hands it. It outweighs the close button, which stays at the band's
+   reading size. */
 .healthbanner__action {
   flex: none; color: var(--banner-btn-ink); background: var(--banner-btn-ground);
   border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-2);
-  font-size: var(--fs-xs); font-weight: var(--fw-bold); cursor: pointer;
+  font-size: var(--fs-md); font-weight: var(--fw-bold); cursor: pointer;
 }
 .healthbanner__action:hover { opacity: 0.85; }
 .healthbanner__action:disabled { opacity: 0.6; cursor: default; }

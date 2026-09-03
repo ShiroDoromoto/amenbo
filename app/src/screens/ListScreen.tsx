@@ -158,7 +158,7 @@ const TaskRow = memo(function TaskRow({
           {unread && onMarkRead && (
             <button
               type="button"
-              className="row__action row__action--read"
+              className="btn"
               title={t("list.markRead")}
               onClick={(e) => { e.stopPropagation(); onMarkRead(task.id); }}
             >
@@ -168,7 +168,7 @@ const TaskRow = memo(function TaskRow({
           {onArchive && (
             <button
               type="button"
-              className="row__action row__action--dismiss"
+              className="btn"
               title={t("list.archive")}
               aria-label={t("list.archive")}
               onClick={(e) => { e.stopPropagation(); onArchive(task.id); }}
@@ -179,7 +179,7 @@ const TaskRow = memo(function TaskRow({
           {onUnarchive && (
             <button
               type="button"
-              className="row__action row__action--dismiss"
+              className="btn"
               title={t("list.unarchiveTitle")}
               aria-label={t("list.unarchiveTitle")}
               onClick={(e) => { e.stopPropagation(); onUnarchive(task.id); }}

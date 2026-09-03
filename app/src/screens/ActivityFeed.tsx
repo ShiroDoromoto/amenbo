@@ -174,7 +174,7 @@ export function ActivityFeed({
                   )}
                   {actsOn && (
                     <button
-                      className="feed__action"
+                      className="btn"
                       onClick={() =>
                         actsOn === "task" ? onReplyToTask(it.target.id) : onReplyToDecision(it.target.id)
                       }
@@ -185,7 +185,7 @@ export function ActivityFeed({
                   {inTauri() && actsOn && (
                     <>
                       <button
-                        className="feed__action"
+                        className="btn"
                         title={t("comment.edit")}
                         onClick={() =>
                           actsOn === "task"
@@ -196,7 +196,7 @@ export function ActivityFeed({
                         <Icon name="pencil" />
                       </button>
                       <button
-                        className="feed__action"
+                        className="btn btn--danger"
                         title={t("comment.remove")}
                         onClick={() => void remove(it, actsOn)}
                       >

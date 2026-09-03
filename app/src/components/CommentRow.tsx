@@ -79,8 +79,8 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
         </span>
         {inTauri() && !editing && (
           <>
-            <button className="feed__action comment__act" title={t("comment.edit")} onClick={startEdit}><Icon name="pencil" /></button>
-            <button className="feed__action comment__rm" title={t("comment.remove")} onClick={() => void remove()}><Icon name="close" /></button>
+            <button className="btn comment__act" title={t("comment.edit")} onClick={startEdit}><Icon name="pencil" /></button>
+            <button className="btn btn--danger comment__rm" title={t("comment.remove")} onClick={() => void remove()}><Icon name="close" /></button>
           </>
         )}
       </div>

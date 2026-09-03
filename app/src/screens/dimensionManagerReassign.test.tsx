@@ -89,10 +89,10 @@ let container: HTMLDivElement;
 let root: Root;
 
 /** The delete button of the value drawn second — `THEME`, the one the tasks answer with. */
-const themeDelete = () => container.querySelectorAll<HTMLButtonElement>(".dimmgr__val button.dimmgr__danger")[1];
+const themeDelete = () => container.querySelectorAll<HTMLButtonElement>(".dimmgr__val button.btn--danger")[1];
 const picker = () => container.querySelector<HTMLSelectElement>("select.dimmgr__reassignpick");
 /** The delete button inside the picker, which is the second one in that value's pill once it is open. */
-const confirmMove = () => container.querySelectorAll<HTMLButtonElement>(".dimmgr__reassign button.dimmgr__danger")[0];
+const confirmMove = () => container.querySelectorAll<HTMLButtonElement>(".dimmgr__reassign button.btn--danger")[0];
 
 async function press(button: HTMLButtonElement) {
   await act(async () => { button.click(); });
@@ -177,7 +177,7 @@ describe("removing a value of a required category", () => {
     hoisted.axis = { required: true, values: [THEME] };
     open();
 
-    const only = container.querySelectorAll<HTMLButtonElement>(".dimmgr__val button.dimmgr__danger")[0];
+    const only = container.querySelectorAll<HTMLButtonElement>(".dimmgr__val button.btn--danger")[0];
     expect(only.disabled).toBe(true);
     expect(only.title).not.toBe("");
   });

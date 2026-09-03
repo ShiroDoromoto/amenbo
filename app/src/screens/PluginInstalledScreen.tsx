@@ -68,7 +68,7 @@ export function PluginInstalledScreen() {
         {/* Asking in so many words goes to the catalog whatever the cache's age (`AMB-D-462`), and also
             un-dismisses: a build waved away earlier is what the asker wants told. */}
         <button
-          className="feed__action"
+          className="btn"
           disabled={checking}
           onClick={() => { setChecked(true); clearDismissedPluginUpdates(); refreshPluginUpdates("now"); }}
         >
@@ -261,7 +261,7 @@ function InstalledRow({ install, update, projects, onRemoved }: {
         {/* Set apart from the gate: disabling is a switch that can be flicked back, this is not
             (`AMB-D-357`). */}
         <div className="pluggate">
-          <button className="feed__action" disabled={busy} onClick={() => void onRemove()}>
+          <button className="btn btn--danger" disabled={busy} onClick={() => void onRemove()}>
             {busy ? t("plugins.removing") : t("plugins.remove")}
           </button>
           {error && <div className="pluggate__note">{error}</div>}

@@ -77,7 +77,9 @@
 .actions { display: flex; gap: var(--s-2); }
 /* Buttons offered beside something rather than under a form: closer together, and wrapping rather
    than running off the edge, since a row of them is as long as the words a language spells them in. */
-.buttonrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+/* A row of buttons, wherever one stands: the three consent rows that each wrote this out
+   again now carry it too (`AMB-D-841`). */
+.buttonrow { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 
 .due--overdue { color: var(--c-due-overdue); }
 .due--today { color: var(--c-due-today); }
@@ -518,15 +520,23 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   background: var(--c-sunken); padding: 2px var(--s-2); border-radius: var(--r-sm);
 }
+/* The three systems every pressable thing in the app is drawn as (`AMB-D-841`): this outlined one
+   for the ordinary move, `--primary` for the one the screen is for, `--danger` for a delete. A
+   fourth look is not a variant to add here — a button that needs one is a button in the wrong
+   system. What is not pressable carries neither a fill nor an edge. */
 .btn {
   border: 1px solid var(--c-edge); background: var(--c-surface);
   border-radius: var(--r-sm); padding: var(--s-1) var(--s-2); font-size: var(--fs-md);
 }
+/* The pointer lifts the edge, which is the only thing the outlined one has to give. The two that
+   carry a colour answer in that colour instead, below. */
+.btn:hover:not(:disabled) { border-color: var(--c-accent); }
 /* A button that cannot be pressed says so before it is pressed: faded, and without the pointer
    the global button rule hands every button. This is the base every variant inherits — a variant
    that wants a different fade overrides it, but none may leave the disabled state invisible. */
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn--primary { background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); }
+.btn--primary:hover:not(:disabled) { opacity: 0.9; }
 /* The assignee picker: a small custom dropdown that puts a FacetAvatar on each facet,
    which a native <select> cannot draw. The trigger keeps the .btn look and fits the
    avatar, the name and the caret on one line. */
@@ -551,7 +561,7 @@
 /* The button for a destructive operation (delete): a restrained red outline that fills in
    on hover. */
 .btn--danger { color: var(--c-stop); border-color: var(--c-stop); background: transparent; }
-.btn--danger:hover:not(:disabled) { background: var(--c-stop); color: var(--c-on-stop); }
+.btn--danger:hover:not(:disabled) { background: var(--c-stop); color: var(--c-on-stop); border-color: var(--c-stop); }
 .detail__danger { margin-top: var(--s-2); display: flex; justify-content: flex-end; }
 .notes { background: var(--c-sunken); border-radius: var(--r-md); padding: var(--s-3); font-size: var(--fs-body); line-height: 1.7; white-space: pre-wrap; max-width: var(--measure-prose); }
 /* Notes rendered as Markdown are a run of block elements, so pre-wrap comes back off (this
@@ -577,11 +587,6 @@
 button.feed__target:hover { color: var(--c-accent); }
 .feed__target--gone { color: var(--c-text-muted); }
 .feed__meta { font-size: var(--fs-xs); color: var(--c-text-muted); display: flex; gap: var(--s-2); margin-top: 2px; }
-.feed__action { font-size: var(--fs-xs); color: var(--c-text-muted); border: none; background: none; }
-/* Only a pressable one turns accent, and a disabled one fades: this class is the borderless
-   sibling of .btn and carries the same rule, since it is disabled in as many places. */
-.feed__action:hover:not(:disabled) { color: var(--c-accent); }
-.feed__action:disabled { opacity: 0.5; cursor: default; }
 
 /* ---------- search (where a word is written) ---------- */
 /* Every control on this row keeps its size, and the note — the one thing on the row nobody presses —
@@ -659,17 +664,6 @@ button.feed__target:hover { color: var(--c-accent); }
    split by colour — read takes the accent, archive stays neutral — keeping the two
    concepts apart. */
 .row__actions { flex: none; display: inline-flex; align-items: center; gap: var(--s-2); }
-.row__action {
-  background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-sm); cursor: pointer;
-  padding: 2px var(--s-2); font-size: var(--fs-md); line-height: 1.4; white-space: nowrap;
-  color: var(--c-text-muted);
-}
-/* Mark read: leans on the accent — a forward move that clears the mark while the item is
-   still untouched. */
-.row__action--read:hover, .row__action--read:focus-visible { color: var(--c-accent); border-color: var(--c-accent); }
-/* Archive / restore: neutral — tidying that moves an item out of the inbox or brings it
-   back, not a delete. */
-.row__action--dismiss:hover, .row__action--dismiss:focus-visible { color: var(--c-text); border-color: var(--c-text-muted); }
 
 /* ---------- settings ---------- */
 .settings { padding: var(--s-4); max-width: 720px; display: flex; flex-direction: column; gap: var(--s-4); }
@@ -871,24 +865,23 @@ button.feed__target:hover { color: var(--c-accent); }
 .onboard__cmd { display: inline-block; margin-top: var(--s-2); color: var(--c-accent-text); }
 /* The empty state's primary actions (create / open). Each moves on inside the app. */
 .onboard__actions { display: flex; gap: var(--s-2); justify-content: center; margin-top: var(--s-4); flex-wrap: wrap; }
+/* A card in shape and an outlined button in colour: the ground, the edge and the fade a disabled
+   one takes all come from `.btn`, which these carry alongside this class. What is left here is the
+   layout — a card wide enough to hold a label over a hint. */
 .onboard__action {
   display: flex; align-items: flex-start; gap: var(--s-2); text-align: left;
-  flex: 1 1 240px; max-width: 300px;
-  background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-md);
-  padding: var(--s-2); cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  flex: 1 1 240px; max-width: 300px; border-radius: var(--r-md);
+  padding: var(--s-2); transition: border-color 0.15s, background 0.15s;
 }
-.onboard__action:hover { border-color: var(--c-accent); background: var(--c-hover); }
+.onboard__action:hover:not(:disabled) { border-color: var(--c-accent); background: var(--c-hover); }
 .onboard__action-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .onboard__action-label { font-weight: var(--fw-bold); display: flex; align-items: center; gap: var(--s-2); }
 .onboard__action-hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* The create card — the primary action, which moves to a screen inside the GUI. The accent
-   lifts it a little above the rest. */
-.onboard__action--primary { border-color: var(--c-accent); }
 .onboard__go { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-accent-text); margin-top: var(--s-2); }
 /* The open card once it is asking which project: the same card, now holding controls of its own, so it
    stops behaving like one big button (no pointer, no hover) and takes the width its select needs. */
 .onboard__action--open { cursor: default; flex-basis: 320px; max-width: 100%; }
-.onboard__action--open:hover { border-color: var(--c-edge); background: var(--c-surface); }
+.onboard__action--open:hover:not(:disabled) { border-color: var(--c-edge); background: var(--c-surface); }
 .onboard__action--open .onboard__action-body { flex: 1; gap: var(--s-2); }
 .onboard__field { display: flex; flex-direction: column; gap: var(--s-1); margin-top: var(--s-2); }
 .onboard__actionrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
@@ -938,10 +931,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .rejectask__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
 .rejectask__why { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
 .rejectask__input { width: 100%; margin-bottom: var(--s-2); }
-.rejectask__actions { display: flex; align-items: center; gap: var(--s-2); }
-.rejectask__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-sunken); color: var(--c-text); cursor: pointer; }
-.rejectask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.rejectask__action:disabled { opacity: 0.5; cursor: default; }
 
 .hookconsent__modal { width: min(520px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 .hookconsent__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
@@ -952,11 +941,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .hookconsent__slots ul { margin: 0; padding-left: var(--s-4); }
 .hookconsent__guidance { margin: var(--s-2) 0 0; padding: var(--s-2); background: var(--c-sunken); border-radius: var(--r-md); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-all; }
 .hookconsent__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
-.hookconsent__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.hookconsent__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-sunken); cursor: pointer; }
-.hookconsent__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.hookconsent__action--never { color: var(--c-text-muted); }
-.hookconsent__action:disabled { opacity: 0.5; cursor: default; }
 .hookconsent__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-2); }
 
 /* ---------- a usage nudge (NudgeHost and the views it puts) ---------- */
@@ -966,10 +950,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .nudge__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
 .nudge__why { margin-bottom: var(--s-3); }
 .nudge__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
-.nudge__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.nudge__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-sunken); color: var(--c-text); cursor: pointer; }
-.nudge__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.nudge__action:disabled { opacity: 0.5; cursor: default; }
 .nudge__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-2); }
 
 /* ---------- the classification management panel (DimensionManager) ---------- */
@@ -1018,7 +998,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__open { background: transparent; border: 1px dashed var(--c-edge); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
 .dimmgr__open:hover { border-color: var(--c-accent); color: var(--c-accent); }
 .dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: var(--c-on-accent); font-size: var(--fs-xs); }
-.dimmgr__danger { color: var(--c-stop); white-space: nowrap; }
 /* The removal that has to say where the tasks go first. It stands in the delete button's place inside
    the value's pill, so the row keeps its width and the question is asked where the press landed. */
 .dimmgr__reassign { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); }

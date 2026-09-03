@@ -63,11 +63,11 @@ export function AutostartNudge({ onClose }: { onClose: () => void }) {
 
         {error && <div className="nudge__error">{error}</div>}
 
-        <div className="nudge__actions">
-          <button className="nudge__action nudge__action--yes" disabled={busy} onClick={() => void yes()}>
+        <div className="buttonrow">
+          <button className="btn btn--primary" disabled={busy} onClick={() => void yes()}>
             {t("nudge.autostart.yes")}
           </button>
-          <button className="nudge__action" disabled={busy} onClick={onClose}>
+          <button className="btn" disabled={busy} onClick={onClose}>
             {t("nudge.autostart.no")}
           </button>
         </div>

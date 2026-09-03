@@ -248,7 +248,7 @@ export function TaskDetailPane({
             ) : (
               <>
                 <span style={{ cursor: "text" }} title={t("detail.edit")} onDoubleClick={startEditTitle}>{task.title}</span>
-                <button className="feed__action" style={{ marginLeft: 6 }} onClick={startEditTitle}>{t("detail.edit")}</button>
+                <button className="btn" style={{ marginLeft: 6 }} onClick={startEditTitle}>{t("detail.edit")}</button>
               </>
             )}
             <TaskIdChip id={taskId} />
@@ -407,7 +407,7 @@ export function TaskDetailPane({
                     <span key={d.id}>
                       {i > 0 && ", "}
                       <button
-                        className="feed__action"
+                        className="feed__target"
                         style={{ padding: "0 4px" }}
                         title={unsettled ? t("detail.premiseUnsettled") : undefined}
                         onClick={() => onSelectDecision?.(d.id)}
@@ -427,7 +427,7 @@ export function TaskDetailPane({
             <div className="detail__section-h">
               {t("detail.notes")}
               {!editingNotes && (
-                <button className="feed__action" style={{ marginLeft: 8 }} onClick={startEditNotes}>
+                <button className="btn" style={{ marginLeft: 8 }} onClick={startEditNotes}>
                   {task.notes ? t("detail.edit") : <><Icon name="plus" /> {t("detail.add")}</>}
                 </button>
               )}
@@ -481,7 +481,7 @@ export function TaskDetailPane({
             ) : (
               <div className="comments">
                 {olderCount > 0 && (
-                  <button className="feed__action" onClick={() => setCommentLimit((n) => n + COMMENT_PAGE)}>
+                  <button className="btn" onClick={() => setCommentLimit((n) => n + COMMENT_PAGE)}>
                     {tf("common.loadMore", { n: olderCount })}
                   </button>
                 )}

@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 // What the columns beside the panes have to keep true: a width that survives a wider screen and an
-// older build, a wish that is remembered, a width and a half that belong to the project they were
-// left in rather than to the device, and a ceiling that leaves the middle its floor.
+// older build, a wish that is remembered, a width that belongs to the project it was dragged in
+// rather than to the device, and a ceiling that leaves the middle its floor.
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  clampRailWidth, clampSideNarrow, clampSideWide, getRailShown, getRailTab, getRailWidth,
+  clampRailWidth, clampSideNarrow, clampSideWide, getRailShown, getRailWidth,
   getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, PANE_MIN, RAIL_DEFAULT,
-  RAIL_MIN, setRailShown, setRailTab, setRailWidth, setSideNarrow, setSideShown, setSideTab,
-  setSideWide, setTabsCompact, tabsWidth, railMax, sideNarrowMax, sideWideMax, SIDE_MIN,
-  SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT,
+  RAIL_MIN, setRailShown, setRailWidth, setSideNarrow, setSideShown, setSideTab, setSideWide,
+  setTabsCompact, tabsWidth, railMax, sideNarrowMax, sideWideMax, SIDE_MIN, SIDE_NARROW_DEFAULT,
+  SIDE_WIDE_DEFAULT,
 } from "./columns";
 
 /** What the tab column is taking while nothing has been folded — it comes off the window before any
@@ -134,25 +134,6 @@ describe("whether a column was asked for", () => {
     expect(getSideShown()).toBe(false);
     setRailShown(true);
     expect(getRailShown()).toBe(true);
-  });
-});
-
-describe("which half of the rail is up", () => {
-  it("is the panes on a project nobody has switched", () => {
-    expect(getRailTab(ONE)).toBe("panes");
-  });
-
-  // Moving to another project lands on that project's own half rather than carrying this one's over.
-  it("comes back per project, so moving between them does not carry a half across", () => {
-    expect(setRailTab(ONE, "folders")).toBe("folders");
-    expect(getRailTab(ONE)).toBe("folders");
-    expect(getRailTab(TWO)).toBe("panes");
-  });
-
-  it("reads as the panes where what was kept is not one of the two", () => {
-    // An older build, or a store edited by hand: a word that is not an answer is not one.
-    localStorage.setItem("amenbo.termface.railTab.1", "files");
-    expect(getRailTab(ONE)).toBe("panes");
   });
 });
 

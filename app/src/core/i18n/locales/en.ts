@@ -587,14 +587,10 @@ const ui = {
   "face.turnTitle": "Amenbo — your turn",
   "face.turnBody": "A terminal is waiting on you.",
   "face.ended": "The program in this terminal has exited.",
-  "face.rail": "Panes",
   "face.projects": "Projects",
-  "face.sessions": "Sessions",
   // The rail's two halves: the lists, and the folder tree that moved there off the other side of the
   // panes (`AMB-D-835`). Each word names what its half holds rather than what pressing it does, because
   // both are always drawn and one of them is always on.
-  "face.railHalves": "What the rail shows",
-  "face.railPanes": "Panes",
   "face.railFolders": "Folders",
   "face.tabsCompact": "Show the colors only",
   "face.tabsNamed": "Show the project names",

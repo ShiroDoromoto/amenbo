@@ -53,8 +53,6 @@ export const PANE_MIN = 320;
 const RAIL_WIDTH = "railWidth";
 const SIDE_NARROW = "sideNarrow";
 const SIDE_WIDE = "sideWide";
-/** Which half of the rail is up, likewise per project. */
-const RAIL_TAB = "railTab";
 
 /** Kept for the device, so these are whole keys rather than stems. */
 const RAIL_SHOWN = "amenbo.termface.railShown";
@@ -274,30 +272,6 @@ export function getTabsCompact(): boolean {
 export function setTabsCompact(want: boolean): boolean {
   keep(TABS_COMPACT, want ? "1" : "0");
   return want;
-}
-
-/** Which half of the rail is up: this project's panes, or its folders (`AMB-D-835`). */
-export type RailTab = "panes" | "folders";
-
-/**
- * The half this project was left on, or the one the rail opens on where nothing has been kept.
- *
- * **It opens on the panes**, because they are what the face is for: a project nobody has switched
- * yet is one whose panes have not been looked at yet either. It never turns over on its own — being
- * kept per project is what makes moving to another project land on that project's own half rather
- * than carry this one's over (`AMB-D-835`).
- *
- * Anything else kept reads as the panes: the value is one of two words, and a word from an older
- * build or a hand-edited store is not an answer.
- */
-export function getRailTab(project: number | null): RailTab {
-  return kept(keyOf(RAIL_TAB, project)) === "folders" ? "folders" : "panes";
-}
-
-/** Keep the half that was asked for, and answer with it — a half even where nothing can be kept. */
-export function setRailTab(project: number | null, which: RailTab): RailTab {
-  keep(keyOf(RAIL_TAB, project), which);
-  return which;
 }
 
 /** Which half of the file face is up: the memo a person writes on, or the folder's own files. */

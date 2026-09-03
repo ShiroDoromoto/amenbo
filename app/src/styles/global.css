@@ -578,8 +578,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   text-transform: uppercase;
 }
 .ptabs__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A turn standing in a project that is not the one being shown — the same dot the rail draws, for the
-   same reason (`.rail__needs`). */
+/* A turn standing in a project that is not the one being shown. It is the colour the pages wear and
+   for the same reason: somebody is needed there, and the panes that would say so are off the screen.
+   A dot and not a count — what a reader does about a project they are not in is go to it, and how
+   many turns are waiting there does not change that (`AMB-T-3610`). */
 .ptabs__needs {
   flex: 0 0 auto;
   width: 7px; height: 7px; border-radius: 50%;
@@ -604,8 +606,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .ptabs__fold:hover { background: var(--c-surface); color: var(--c-text); }
 
-/* The rail: the projects, and under the one being shown, its panes. The division is what the list is
-   for, so a project is a row a person presses and not a caption over some others.
+/* The rail: the folders of the project being shown, under its name (`app/src/shell/FolderRail.tsx`,
+   `AMB-D-838`).
 
    It is the ledger's sidebar in the other face's place, so it is the sidebar's ground: `--c-surface-2`
    with a rule down its edge, full height. Left with no ground of its own it fell through to `--c-bg`
@@ -613,87 +615,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
    window has them above it. Its width is the column's around it (`.termface__column--rail`), which is
    what a person drags.
 
-   Two lists, each under a heading of its own, and the rail itself does not scroll: the projects take
-   what they need up to a share of the height and the panes take the rest, so a machine with many
-   projects cannot push the panes off the bottom. The padding is the lists' and the headings' rather
-   than the rail's, for the same reason — a list that scrolled inside its own padding would slide its
-   rows out from under the heading they belong to. */
+   The rail itself does not scroll — the tree inside it does. The padding is the header's and the
+   tree's rather than the rail's, for the same reason: a tree that scrolled inside its own padding
+   would slide its rows out from under the name they belong to. */
 .rail {
   flex: 1 1 auto; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
   background: var(--c-surface-2);
   border-right: 1px solid var(--c-border);
 }
-/* What the list under it is. Small, spaced and quiet — it is the caption of a list a person reads
-   past, not a row to press — and it carries the way in for the list it heads. */
+/* Whose folders these are. It is a name and not the caption of a list, so it is drawn as one — the
+   face's own text at the face's own size, where the headings it replaced were small, spaced and
+   faint. */
 .rail__head {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: var(--s-2);
-  padding: var(--s-3) var(--s-3) var(--s-1);
+  padding: var(--s-3) var(--s-3) var(--s-2);
 }
 .rail__title {
   flex: 1; min-width: 0; margin: 0;
-  color: var(--c-text-faint); font-size: var(--fs-xs); font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.08em;
-}
-.rail__list {
-  min-height: 0; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 2px;
-  padding: 0 var(--s-2) var(--s-2);
-}
-/* The projects take what they need and no more than a share of the rail; the panes take the rest.
-   A machine with a project for every folder it has ever opened must not push the panes out of
-   sight — the panes are what the face is for. */
-.rail__list--projects { flex: 0 1 auto; max-height: 44%; }
-.rail__list--panes { flex: 1 1 auto; }
-/* One project. It is the same row shape as a pane below it, because both are places to go, and it
-   is marked when it is the one on the screen: what is chosen here is what the whole face shows. */
-.rail__project {
-  display: flex; align-items: center; gap: var(--s-1);
-  padding: var(--s-1) var(--s-2); border-radius: var(--r-md);
-  background: transparent; border: 1px solid transparent;
-  color: var(--c-text); font-size: var(--fs-sm); text-align: left;
-}
-.rail__project:hover { background: var(--c-surface); }
-.rail__project--on {
-  background: var(--c-surface); border-color: var(--c-border-strong);
-  font-weight: 600; box-shadow: var(--shadow-sm);
-}
-/* A project's own line: its name, and the way to put another pane in it. They share a row because
-   they are about the same project — and because the way in belongs where the project is named rather
-   than at the end of its rows, where it would read as one more pane. */
-/* A turn standing in a project that is not the one being shown. It is the same colour the pages wear
-   and for the same reason: somebody is needed there, and the panes that would say so are off the
-   screen. A dot and not a count — what a reader does about a project they are not in is go to it,
-   and the number of turns waiting there does not change that (`AMB-T-3610`). */
-.rail__needs {
-  flex: 0 0 auto;
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--c-heed);
-}
-.rail__row {
-  display: flex; align-items: center; gap: var(--s-1);
-  padding: var(--s-1) var(--s-2); border-radius: var(--r-md);
-  background: transparent; border: 1px solid transparent;
-  color: var(--c-text); font-size: var(--fs-sm); text-align: left;
-}
-.rail__row:hover { background: var(--c-surface-sunken); }
-/* The pane being worked in. A bar down its edge rather than a box round it: a full border on a row
-   this size reads as a field waiting to be typed into, which is what the row *becomes* on a
-   double-click and must not look like before one. */
-.rail__row--focused {
-  background: var(--c-surface-sunken);
-  border-left-color: var(--c-accent); border-left-width: 3px;
-  padding-left: calc(var(--s-2) - 2px);
-}
-.rail__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A frame with nothing running in it. A dot and not a word: the row is a place, and that it is empty
-   is a smaller thing than what it is called. */
-.rail__idle { color: var(--c-text-muted); }
-.rail__rename {
-  padding: var(--s-1) var(--s-2); border-radius: var(--r-md);
-  border: 1px solid var(--c-accent); background: var(--c-surface);
-  color: var(--c-text); font-size: var(--fs-sm); width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--c-text); font-size: var(--fs-sm); font-weight: 600;
 }
 
 /* ---------- the file face ---------- */
@@ -701,28 +643,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
    itself, folded (`app/src/files/FilesPanel.tsx`). It is a column of the window and not a card lying
    on one, so it is drawn as the ledger's right pane is (`.rightpane`): `--c-surface` to the edges,
    held off the page by a rule rather than by a border round a rounded box. */
-/* The rail's two halves, swapped rather than stacked: two lists and a tree do not fit one on top of
-   another in a column this narrow (`AMB-D-835`). It is the well the pane counts sit in, because it is
-   the same kind of control — a fixed few, exactly one of them on. */
-.rail__tabs {
-  flex: 0 0 auto;
-  display: flex; gap: 2px;
-  margin: var(--s-2) var(--s-2) 0;
-  padding: 2px;
-  background: var(--c-surface-sunken);
-  border: 1px solid var(--c-border); border-radius: var(--r-sm);
-}
-.rail__tab {
-  flex: 1; min-width: 0;
-  background: transparent; border: 0;
-  padding: 2px var(--s-2); border-radius: var(--r-sm);
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
-}
-.rail__tab:hover { color: var(--c-text); }
-.rail__tab--on {
-  background: var(--c-surface); color: var(--c-text); font-weight: 600;
-  box-shadow: var(--shadow-sm);
-}
 /* The tree, drawn in the rail rather than in a column of its own. It gives up the edge it drew as a
    column — the rail already has one — and stands on the rail's ground. */
 .rail .files {

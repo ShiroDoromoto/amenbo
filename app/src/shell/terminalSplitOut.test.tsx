@@ -58,6 +58,9 @@ vi.mock("../core/snapshot", async (importOriginal) => ({
 // The file face beside the page watches folders on a host that is not here.
 vi.mock("../files/FilesPanel", () => ({ FilesPanel: () => null }));
 
+// The tree draws nothing here either: it is beside the panes on every run now (`AMB-D-838`), and
+// mounting the real one would have it listening to a host that is not in this test.
+vi.mock("../files/FolderTree", () => ({ FolderTree: () => null }));
 vi.mock("../mock/adapter", () => ({
   dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }] },
 }));
@@ -87,9 +90,11 @@ let root: Root;
 const pressed = vi.fn();
 
 const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
-const railNames = () => q(".rail__row .rail__name").map((el) => el.textContent);
-const focusedName = () =>
-  container.querySelector(".rail__row--focused .rail__name")?.textContent ?? null;
+/** The places drawn on the page that is up, as the frames they are (`../talk/layout`). */
+const drawnPanes = () => q(".slot").map((el) => el.getAttribute("data-hand"));
+/** Which place the face says is being worked in — read off the pane itself, which is the only thing
+ *  that says so now that the list of them is gone (`AMB-D-838`). */
+const worked = () => container.querySelector(".slot--focused")?.getAttribute("data-hand") ?? null;
 
 /** Put the face up, in one window or the other, and let the arrangement come back. */
 async function mount(ownWindow: boolean) {
@@ -104,7 +109,7 @@ async function mount(ownWindow: boolean) {
 beforeEach(() => {
   // The face measures the window to work out whether the columns beside the panes are columns at all
   // (`../talk/columns`). jsdom's window is 1024, which is genuinely too narrow for two panes and two
-  // columns — so a test that reads the rail says it is on a wide screen.
+  // columns — so a test that reads what is beside the panes says it is on a wide screen.
   window.innerWidth = 1600;
   pressed.mockReset();
   hoisted.running = [];
@@ -136,8 +141,9 @@ afterEach(() => {
 describe("the window the terminal is split out into", () => {
   it("draws the whole face — the rail, the split and the pages — and not one pane", async () => {
     await mount(true);
-    // Every pane has a row, so there is somewhere to go to any of them.
-    expect(railNames()).toEqual(["a", "b", "c", "d"]);
+    // The folders of the project are beside the panes, and the panes are the page's own two.
+    expect(container.querySelector(".rail")).not.toBeNull();
+    expect(drawnPanes()).toHaveLength(2);
     // The split is choosable, and the pages of this project are reachable: without either, the panes
     // beyond the one on screen are panes the reader cannot get to. Two of them, because the split is
     // two panes here and two is the one count that is also asked which way it sits
@@ -149,7 +155,8 @@ describe("the window the terminal is split out into", () => {
 
   it("comes up on the pane that was being worked in, and on its page", async () => {
     await mount(true);
-    expect(focusedName()).toBe("c");
+    // The third place, which is the one the arrangement was left split out on.
+    expect(worked()).toBe("3");
     // The second page, where that pane is — two panes to a page, and it is the third.
     expect(container.querySelector(".termface__page--on")?.textContent).toContain("2");
   });
@@ -158,7 +165,7 @@ describe("the window the terminal is split out into", () => {
     // The kept pane is the split-out window's to read. Which pane is being worked in *now* is the
     // board's own state, and an old write must not move a reader's place.
     await mount(false);
-    expect(focusedName()).toBe("a");
+    expect(worked()).toBe("1");
   });
 });
 

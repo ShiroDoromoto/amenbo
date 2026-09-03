@@ -69,8 +69,9 @@ const draw = (openIn: { project: number; dir: string; nth: number } | null) =>
     }));
   });
 
+/** Which project the face is on, as the column beside the panes names it (`./FolderRail`). */
 const shownProject = () =>
-  container.querySelector(".rail__project--on")!.textContent;
+  container.querySelector(".rail__title")!.textContent;
 
 beforeEach(() => {
   // The face measures the window to work out whether the columns beside the panes are columns at all
@@ -118,7 +119,7 @@ describe("a folder handed in from the ledger", () => {
     expect(hoisted.mounts.map((one) => one.cwd)).toEqual(["/work/one", "/work/two"]);
     // The other project's pane is not on this screen: what is shown is one project's panes.
     expect(shownProject()).toBe("two");
-    expect(container.querySelectorAll(".rail__row")).toHaveLength(1);
+    expect(container.querySelectorAll(".slot[data-hand]")).toHaveLength(1);
   });
 
   it("opens nothing where the folder is not one the named project is bound to", async () => {

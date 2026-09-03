@@ -49,6 +49,9 @@ vi.mock("../core/snapshot", async (importOriginal) => ({
 
 vi.mock("../files/FilesPanel", () => ({ FilesPanel: () => null }));
 
+// The tree draws nothing here either: it is beside the panes on every run now (`AMB-D-838`), and
+// mounting the real one would have it listening to a host that is not in this test.
+vi.mock("../files/FolderTree", () => ({ FolderTree: () => null }));
 vi.mock("../mock/adapter", () => ({
   dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }] },
 }));
@@ -82,8 +85,9 @@ import { TerminalFace } from "./TerminalFace";
 let container: HTMLDivElement;
 let root: Root;
 
-const focusedName = () =>
-  container.querySelector(".rail__row--focused .rail__name")?.textContent ?? null;
+/** Which place the face says is being worked in — read off the pane itself, which is the only thing
+ *  that says so now that the list of them is gone (`AMB-D-838`). */
+const worked = () => container.querySelector(".slot--focused")?.getAttribute("data-hand") ?? null;
 const shownPage = () => container.querySelector(".termface__page--on")?.textContent ?? null;
 const lastTold = () => hoisted.told[hoisted.told.length - 1] ?? [];
 
@@ -154,7 +158,7 @@ describe("the face asked for the pane a task is being worked in", () => {
     // The third pane is on the second page, which is not where a restore lands by itself — so a face
     // that only moved the focus would leave the reader looking at the wrong two panes.
     await mount({ session: "s-c", nth: 1 });
-    expect(focusedName()).toBe("c");
+    expect(worked()).toBe("3");
     expect(shownPage()).toContain("2");
   });
 
@@ -162,7 +166,7 @@ describe("the face asked for the pane a task is being worked in", () => {
     // It ended, or it is in the window this face is not. Either way there is nowhere to go, and
     // moving the reader somewhere else would be worse than not moving them.
     await mount({ session: "s-gone", nth: 1 });
-    expect(focusedName()).toBe("a");
+    expect(worked()).toBe("1");
     expect(shownPage()).toContain("1");
   });
 });

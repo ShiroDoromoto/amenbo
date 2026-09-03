@@ -66,6 +66,9 @@ vi.mock("../files/FilesPanel", () => ({ FilesPanel: () => null }));
 
 // The ledger's projects and the one folder this one is bound to. A pane carries its own project, so
 // what these answer for is the face's opening one and the way in on an empty face.
+// The tree draws nothing here either: it is beside the panes on every run now (`AMB-D-838`), and
+// mounting the real one would have it listening to a host that is not in this test.
+vi.mock("../files/FolderTree", () => ({ FolderTree: () => null }));
 vi.mock("../mock/adapter", () => ({
   dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }] },
 }));

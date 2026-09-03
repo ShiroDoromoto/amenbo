@@ -152,12 +152,10 @@ async function letGo() {
   });
 }
 
-/** Press the rail's row for a pane, which is how a reader says which one they are working in. */
-async function focusPane(name: string) {
-  const at = [...container.querySelectorAll<HTMLElement>(".rail__row")]
-    .find((one) => one.querySelector(".rail__name")?.textContent === name);
+/** Press a pane, which is how a reader says which one they are working in (`AMB-D-838`). */
+async function focusPane(frame: string) {
   await act(async () => {
-    at?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    pane(frame)?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     await new Promise((r) => setTimeout(r, 0));
   });
 }
@@ -167,10 +165,6 @@ const worked = () => container.querySelector(".slot--focused")?.getAttribute("da
 
 beforeEach(() => {
   window.innerWidth = 1600;
-  // The rows are carried out of the tree, and the tree is the rail's other half — so the rail is
-  // left on it (`AMB-D-835`). What half a project was left on is kept per project
-  // (`../talk/columns`), which is what this writes.
-  localStorage.setItem("amenbo.termface.railTab.1", "folders");
   hoisted.carry = undefined;
   hoisted.pasted = [];
   hoisted.saved = {
@@ -225,7 +219,7 @@ describe("carrying a row of the panel onto a pane", () => {
     await mount();
     // The reader is working in the first pane, and carries the row onto the second: the path goes
     // where it was let go, which is what tells this road from the row's menu.
-    await focusPane("a");
+    await focusPane("1");
     await carryOnto("2");
     await letGo();
     expect(hoisted.pasted).toEqual([{ session: "s-b", text: "'/work/a/notes.md'" }]);
@@ -234,7 +228,7 @@ describe("carrying a row of the panel onto a pane", () => {
 
   it("takes that pane as the one being worked in, and moves the keyboard into it", async () => {
     await mount();
-    await focusPane("a");
+    await focusPane("1");
     expect(worked()).toBe("1");
 
     await carryOnto("2");

@@ -534,6 +534,8 @@ export const tr: Translation = {
     "face.railHalves": "Çubukta ne görünsün",
     "face.railPanes": "Bölmeler",
     "face.railFolders": "Klasörler",
+    "face.tabsCompact": "Yalnızca renkleri göster",
+    "face.tabsNamed": "Proje adlarını göster",
     "face.paneCount": "Ekrandaki bölme sayısı",
     "face.paneOrient": "İki bölmenin düzeni",
     "face.paneAcross": "Yan yana",

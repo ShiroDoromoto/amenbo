@@ -534,6 +534,8 @@ export const hi: Translation = {
     "face.railHalves": "पट्टी में क्या दिखे",
     "face.railPanes": "पैन",
     "face.railFolders": "फ़ोल्डर",
+    "face.tabsCompact": "केवल रंग दिखाएँ",
+    "face.tabsNamed": "परियोजनाओं के नाम दिखाएँ",
     "face.paneCount": "स्क्रीन पर पैन",
     "face.paneOrient": "दो पैन की व्यवस्था",
     "face.paneAcross": "अगल-बगल",

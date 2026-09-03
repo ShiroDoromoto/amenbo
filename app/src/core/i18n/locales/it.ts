@@ -555,6 +555,8 @@ export const it: Translation = {
     "face.railHalves": "Cosa mostra la barra",
     "face.railPanes": "Riquadri",
     "face.railFolders": "Cartelle",
+    "face.tabsCompact": "Mostra solo i colori",
+    "face.tabsNamed": "Mostra i nomi dei progetti",
     "face.paneCount": "Riquadri sullo schermo",
     "face.paneOrient": "Disposizione dei due riquadri",
     "face.paneAcross": "Affiancati",

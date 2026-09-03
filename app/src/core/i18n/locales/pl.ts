@@ -560,6 +560,8 @@ export const pl: Translation = {
     "face.railHalves": "Co pokazuje pasek",
     "face.railPanes": "Panele",
     "face.railFolders": "Foldery",
+    "face.tabsCompact": "Pokaż tylko kolory",
+    "face.tabsNamed": "Pokaż nazwy projektów",
     "face.paneCount": "Panele na ekranie",
     "face.paneOrient": "Układ dwóch paneli",
     "face.paneAcross": "Obok siebie",

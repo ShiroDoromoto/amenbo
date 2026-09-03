@@ -508,6 +508,82 @@ button { font: inherit; color: inherit; cursor: pointer; }
   overflow-y: auto;
 }
 
+/* ---------- the project tabs ---------- */
+/* The projects, down the edge of the face (`app/src/shell/ProjectTabs.tsx`, `AMB-D-838`). It stands on
+   the sidebar's ground the way the rail beside it does, with a rule down its edge: the two are one
+   band of chrome at the side of the window, and a column of a different colour between the window's
+   edge and the rail would read as a thing lying on the face rather than as part of it.
+
+   Its width is the face's `--tabs-w`, which is one of two fixed numbers rather than anything a person
+   drags (`app/src/talk/columns.ts`). The list scrolls and the fold does not — a machine with many
+   projects must not push the way back to the names off the bottom. */
+.ptabs {
+  flex: 0 0 auto; width: var(--tabs-w, 160px); min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--c-surface-2);
+  border-right: 1px solid var(--c-border);
+}
+.ptabs__list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--s-2);
+}
+/* One project. It is the row the rail's projects are, because it is the same choice — what is picked
+   here is what the whole face shows — and it is marked the same way when it is the one on the screen.
+   Positioned, because compact the dot has nowhere in the row to sit and goes to the corner. */
+.ptabs__tab {
+  position: relative; flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-1); border-radius: var(--r-md);
+  background: transparent; border: 1px solid transparent;
+  color: var(--c-text); font-size: var(--fs-sm); text-align: left;
+}
+.ptabs__tab:hover { background: var(--c-surface); }
+.ptabs__tab--on {
+  background: var(--c-surface); border-color: var(--c-border-strong);
+  font-weight: 600; box-shadow: var(--shadow-sm);
+}
+/* The project's colour with the first character of its name on it. It is drawn whether or not the
+   names are, so folding takes a width away and never a way of telling one project from another.
+   The ground is the colour the person gave the project and the ink is worked out from it
+   (`app/src/shell/projectMark.ts`); a colour that could not be read leaves the surface underneath and
+   the face's own text colour. `uppercase` is the stylesheet's rather than the character's: what is in
+   the mark is the name's own first character, cased here for the same reason a heading is. */
+.ptabs__mark {
+  flex: 0 0 auto;
+  width: 24px; height: 24px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--c-surface-sunken);
+  font-size: var(--fs-sm); font-weight: 700; line-height: 1;
+  text-transform: uppercase;
+}
+.ptabs__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A turn standing in a project that is not the one being shown — the same dot the rail draws, for the
+   same reason (`.rail__needs`). */
+.ptabs__needs {
+  flex: 0 0 auto;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c-heed);
+}
+/* Compact: the mark alone, centred, and the dot moved onto its corner. Over the mark rather than
+   beside it, because there is no beside left — and it keeps the tab the width it is, so folding the
+   names away does not make a project with somebody waiting in it wider than its neighbours. */
+.ptabs--compact .ptabs__tab { justify-content: center; }
+.ptabs--compact .ptabs__needs {
+  position: absolute; top: 0; right: 0;
+  box-shadow: 0 0 0 2px var(--c-surface-2);
+}
+/* The way between the two widths. Quiet and small: it is pressed once and left, where the tabs above
+   it are pressed all day (`AMB-D-838`). */
+.ptabs__fold {
+  flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 var(--s-2) var(--s-2); padding: var(--s-1);
+  background: transparent; border: 1px solid transparent; border-radius: var(--r-sm);
+  color: var(--c-text-faint);
+}
+.ptabs__fold:hover { background: var(--c-surface); color: var(--c-text); }
+
 /* The rail: the projects, and under the one being shown, its panes. The division is what the list is
    for, so a project is a row a person presses and not a caption over some others.
 

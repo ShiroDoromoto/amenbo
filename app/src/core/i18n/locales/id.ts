@@ -537,6 +537,8 @@ export const id: Translation = {
     "face.railHalves": "Yang ditampilkan bilah",
     "face.railPanes": "Panel",
     "face.railFolders": "Folder",
+    "face.tabsCompact": "Tampilkan warna saja",
+    "face.tabsNamed": "Tampilkan nama proyek",
     "face.paneCount": "Panel di layar",
     "face.paneOrient": "Tata letak dua panel",
     "face.paneAcross": "Berdampingan",

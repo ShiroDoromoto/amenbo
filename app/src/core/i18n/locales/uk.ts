@@ -560,6 +560,8 @@ export const uk: Translation = {
     "face.railHalves": "Що показувати на панелі",
     "face.railPanes": "Панелі",
     "face.railFolders": "Теки",
+    "face.tabsCompact": "Показувати лише кольори",
+    "face.tabsNamed": "Показувати назви проєктів",
     "face.paneCount": "Панелей на екрані",
     "face.paneOrient": "Розташування двох панелей",
     "face.paneAcross": "Поруч",

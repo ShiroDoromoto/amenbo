@@ -555,6 +555,8 @@ export const fr: Translation = {
     "face.railHalves": "Ce que la barre affiche",
     "face.railPanes": "Volets",
     "face.railFolders": "Dossiers",
+    "face.tabsCompact": "N’afficher que les couleurs",
+    "face.tabsNamed": "Afficher les noms de projet",
     "face.paneCount": "Volets à l'écran",
     "face.paneOrient": "Disposition des deux volets",
     "face.paneAcross": "Côte à côte",

@@ -544,6 +544,8 @@ export const de: Translation = {
     "face.railHalves": "Was die Leiste zeigt",
     "face.railPanes": "Bereiche",
     "face.railFolders": "Ordner",
+    "face.tabsCompact": "Nur die Farben zeigen",
+    "face.tabsNamed": "Projektnamen zeigen",
     "face.paneCount": "Bereiche auf dem Bildschirm",
     "face.paneOrient": "Anordnung der zwei Bereiche",
     "face.paneAcross": "Nebeneinander",

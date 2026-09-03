@@ -537,6 +537,8 @@ export const vi: Translation = {
     "face.railHalves": "Thanh bên hiển thị gì",
     "face.railPanes": "Khung",
     "face.railFolders": "Thư mục",
+    "face.tabsCompact": "Chỉ hiện màu",
+    "face.tabsNamed": "Hiện tên dự án",
     "face.paneCount": "Số khung trên màn hình",
     "face.paneOrient": "Cách xếp hai khung",
     "face.paneAcross": "Cạnh nhau",

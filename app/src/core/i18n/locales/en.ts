@@ -600,6 +600,8 @@ const ui = {
   "face.railHalves": "What the rail shows",
   "face.railPanes": "Panes",
   "face.railFolders": "Folders",
+  "face.tabsCompact": "Show the colors only",
+  "face.tabsNamed": "Show the project names",
   "face.paneCount": "Panes on screen",
   // The orientation, named in words because the control itself is drawn
   // (`app/src/shell/TerminalFace.tsx`): a shape with nothing said about it is a

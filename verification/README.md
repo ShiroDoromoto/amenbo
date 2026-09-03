@@ -635,8 +635,9 @@ something typed after the return says anything is still listening. And it keeps 
 for the length of it — with one frame there is nothing for a new count to move, so a road with a
 single pane walks `set-panes` past the only thing it is dangerous for.
 `go-to-the-panes-of-another-project` is the road for the one that replaces, and it reads the half the
-other cannot: the rail is the division itself rather than a grouping laid over one list, so what a
-project's press leaves on the screen is that project's panes and nothing of any other's.
+other cannot: the tabs down the edge are the division itself rather than a grouping laid over one
+list, so what a project's press leaves on the screen is that project's panes and nothing of any
+other's.
 
 `set-orient` is the one move on that row that re-cuts nothing. At two panes and at no other count it
 says which way they sit — side by side, or one above the other — and every frame stays on the page it

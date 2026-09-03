@@ -285,7 +285,7 @@ function DecisionCard({ d, selected, onSelect }: {
         </span>
       )}
       <span style={{ flex: 1 }} />
-      {date && <span style={{ fontSize: "var(--fs-sm)", color: "var(--c-muted)", whiteSpace: "nowrap" }}>{date}</span>}
+      {date && <span style={{ fontSize: "var(--fs-md)", color: "var(--c-muted)", whiteSpace: "nowrap" }}>{date}</span>}
     </div>
   );
 }

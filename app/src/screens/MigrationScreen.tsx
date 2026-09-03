@@ -127,7 +127,7 @@ function Running({
           )}
         </div>
       )}
-      <span style={{ fontSize: "var(--fs-sm)" }}>{label}</span>
+      <span style={{ fontSize: "var(--fs-md)" }}>{label}</span>
       <div className="migrate__bar">
         <div className="migrate__bar-fill" style={{ width: pct !== null ? `${pct}%` : "100%" }} />
       </div>

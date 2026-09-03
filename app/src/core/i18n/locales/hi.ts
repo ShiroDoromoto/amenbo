@@ -232,7 +232,7 @@ export const hi: Translation = {
     "settings.humanNameLabel": "मनुष्य का प्रदर्शित नाम", "settings.aiNameLabel": "AI का प्रदर्शित नाम",
     "settings.facetNamesHint": "दोनों नाम (मनुष्य / AI) बदलता है (खाली छोड़ा गया खाना उस पक्ष को अछूता रखता है)।",
     "settings.avatarChoose": "छवि चुनें…", "settings.avatarReset": "आइडेंटिकॉन पर लौटाएँ",
-    "settings.avatarHint": "मनुष्य और AI के लिए एक चेहरा दर्ज करें। छवियाँ सहेजने से पहले 96px तक छोटी की जाती हैं (न रखने पर हर पक्ष का अपना आइडेंटिकॉन इस्तेमाल होता है)।",
+    "settings.avatarHint": "मनुष्य और AI के लिए एक चेहरा दर्ज करें। दिखाने के लिए 96px तक छोटी की गई प्रति इस्तेमाल होती है, और चुनी गई छवि ज्यों की त्यों रखी जाती है (न रखने पर हर पक्ष का अपना आइडेंटिकॉन इस्तेमाल होता है)।",
     "settings.avatarImageFailed": "छवि लोड नहीं की जा सकी",
     "settings.avatarCanvasFailed": "canvas प्रारंभ नहीं किया जा सका",
     "settings.appearance": "रूप", "settings.theme": "थीम", "settings.language": "भाषा",

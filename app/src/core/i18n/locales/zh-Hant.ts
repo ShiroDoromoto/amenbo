@@ -233,7 +233,7 @@ export const zhHant: Translation = {
     "settings.humanNameLabel": "人的顯示名稱", "settings.aiNameLabel": "AI 的顯示名稱",
     "settings.facetNamesHint": "更改名冊上的兩個名稱（人／AI）（留空的欄位維持不變）。",
     "settings.avatarChoose": "選擇圖片…", "settings.avatarReset": "恢復為預設圖樣",
-    "settings.avatarHint": "為人和 AI 各登錄一張臉。圖片會先縮到 96px 再儲存（未設定時使用各自的預設圖樣）。",
+    "settings.avatarHint": "為人和 AI 各登錄一張臉。顯示用的是縮到 96px 的版本，所選圖片本身也會原樣保留（未設定時使用各自的預設圖樣）。",
     "settings.avatarImageFailed": "無法載入圖片",
     "settings.avatarCanvasFailed": "無法初始化 canvas",
     "settings.appearance": "外觀", "settings.theme": "主題", "settings.language": "語言",

@@ -232,7 +232,7 @@ export const tr: Translation = {
     "settings.humanNameLabel": "İnsanın görünen adı", "settings.aiNameLabel": "Yapay zekânın görünen adı",
     "settings.facetNamesHint": "İki adı da (İnsan / Yapay zekâ) değiştirir (boş bırakılan alan o tarafa dokunmaz).",
     "settings.avatarChoose": "Görsel seç…", "settings.avatarReset": "Identicon'a döndür",
-    "settings.avatarHint": "İnsan ve yapay zekâ için birer yüz tanımlayın. Görseller kaydedilmeden önce 96px'e küçültülür (tanımlanmazsa her taraf için ayrı identicon kullanılır).",
+    "settings.avatarHint": "İnsan ve yapay zekâ için birer yüz tanımlayın. Gösterimde 96px'e küçültülmüş sürüm kullanılır, seçtiğiniz görsel olduğu gibi saklanır (tanımlanmazsa her taraf için ayrı identicon kullanılır).",
     "settings.avatarImageFailed": "Görsel yüklenemedi",
     "settings.avatarCanvasFailed": "Canvas başlatılamadı",
     "settings.appearance": "Görünüm", "settings.theme": "Tema", "settings.language": "Dil",

@@ -235,7 +235,7 @@ export const vi: Translation = {
     "settings.humanNameLabel": "Tên hiển thị của người", "settings.aiNameLabel": "Tên hiển thị của AI",
     "settings.facetNamesHint": "Đổi cả hai tên (Người / AI) (ô để trống thì bên đó giữ nguyên).",
     "settings.avatarChoose": "Chọn ảnh…", "settings.avatarReset": "Về lại identicon",
-    "settings.avatarHint": "Đăng ký một gương mặt cho Người và cho AI. Ảnh được thu nhỏ về 96px trước khi lưu (không đặt thì mỗi bên dùng identicon riêng).",
+    "settings.avatarHint": "Đăng ký một gương mặt cho Người và cho AI. Bản hiển thị được thu nhỏ về 96px, còn ảnh bạn chọn vẫn được giữ nguyên (không đặt thì mỗi bên dùng identicon riêng).",
     "settings.avatarImageFailed": "Không thể tải ảnh",
     "settings.avatarCanvasFailed": "Không thể khởi tạo canvas",
     "settings.appearance": "Giao diện", "settings.theme": "Chủ đề", "settings.language": "Ngôn ngữ",

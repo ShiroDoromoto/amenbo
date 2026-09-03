@@ -239,7 +239,7 @@ export const pl: Translation = {
     "settings.humanNameLabel": "Nazwa wyświetlana człowieka", "settings.aiNameLabel": "Nazwa wyświetlana SI",
     "settings.facetNamesHint": "Zmienia obie nazwy (Człowiek / SI) (puste pole zostawia daną stronę bez zmian).",
     "settings.avatarChoose": "Wybierz obraz…", "settings.avatarReset": "Wróć do identikonu",
-    "settings.avatarHint": "Nadaj twarz człowiekowi i SI. Obrazy są pomniejszane do 96px przed zapisem (gdy nic nie ustawisz, każda strona dostaje własny identikon).",
+    "settings.avatarHint": "Nadaj twarz człowiekowi i SI. Do wyświetlania służy wersja pomniejszona do 96px, a wybrany obraz zostaje zachowany w oryginale (gdy nic nie ustawisz, każda strona dostaje własny identikon).",
     "settings.avatarImageFailed": "Nie udało się wczytać obrazu",
     "settings.avatarCanvasFailed": "Nie udało się zainicjować elementu canvas",
     "settings.appearance": "Wygląd", "settings.theme": "Motyw", "settings.language": "Język",

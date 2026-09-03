@@ -232,7 +232,7 @@ export const ko: Translation = {
     "settings.humanNameLabel": "사람의 표시 이름", "settings.aiNameLabel": "AI의 표시 이름",
     "settings.facetNamesHint": "명부의 두 이름(사람 / AI)을 바꿉니다(빈 칸은 그대로 둡니다).",
     "settings.avatarChoose": "이미지 고르기…", "settings.avatarReset": "기본 무늬로 되돌리기",
-    "settings.avatarHint": "사람과 AI에 각각 얼굴을 등록합니다. 이미지는 저장 전에 96px로 줄입니다(설정하지 않으면 각자의 기본 무늬를 씁니다).",
+    "settings.avatarHint": "사람과 AI에 각각 얼굴을 등록합니다. 표시에는 96px로 줄인 버전을 쓰고, 고른 이미지는 그대로 보관합니다(설정하지 않으면 각자의 기본 무늬를 씁니다).",
     "settings.avatarImageFailed": "이미지를 불러오지 못했습니다",
     "settings.avatarCanvasFailed": "canvas를 초기화하지 못했습니다",
     "settings.appearance": "모양", "settings.theme": "테마", "settings.language": "언어",

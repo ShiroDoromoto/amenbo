@@ -239,7 +239,7 @@ export const uk: Translation = {
     "settings.humanNameLabel": "Показане ім'я людини", "settings.aiNameLabel": "Показане ім'я ШІ",
     "settings.facetNamesHint": "Змінює обидва імені (Людина / ШІ) (порожнє поле лишає цей бік без змін).",
     "settings.avatarChoose": "Обрати зображення…", "settings.avatarReset": "Повернути айдентикон",
-    "settings.avatarHint": "Задайте обличчя для Людини та ШІ. Зображення зменшуються до 96px перед збереженням (якщо нічого не задано, кожен бік отримує власний айдентикон).",
+    "settings.avatarHint": "Задайте обличчя для Людини та ШІ. Для показу використовується зменшена до 96px версія, а вибране зображення зберігається як є (якщо нічого не задано, кожен бік отримує власний айдентикон).",
     "settings.avatarImageFailed": "Не вдалося завантажити зображення",
     "settings.avatarCanvasFailed": "Не вдалося ініціалізувати canvas",
     "settings.appearance": "Вигляд", "settings.theme": "Тема", "settings.language": "Мова",

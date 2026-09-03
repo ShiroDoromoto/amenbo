@@ -234,7 +234,7 @@ export const de: Translation = {
     "settings.humanNameLabel": "Anzeigename des Menschen", "settings.aiNameLabel": "Anzeigename der KI",
     "settings.facetNamesHint": "Ändert die beiden Namen in der Liste (Mensch / KI) (ein leeres Feld lässt diese Facette unverändert).",
     "settings.avatarChoose": "Bild wählen…", "settings.avatarReset": "Zurück zum Identicon",
-    "settings.avatarHint": "Hinterlege ein Gesicht für Mensch und KI. Bilder werden vor dem Speichern auf 96 px verkleinert (ohne Bild wird je Facette ein Identicon benutzt).",
+    "settings.avatarHint": "Hinterlege ein Gesicht für Mensch und KI. Angezeigt wird eine auf 96 px verkleinerte Fassung; das gewählte Bild bleibt daneben erhalten (ohne Bild wird je Facette ein Identicon benutzt).",
     "settings.avatarImageFailed": "Das Bild konnte nicht geladen werden",
     "settings.avatarCanvasFailed": "Das Canvas konnte nicht initialisiert werden",
     "settings.appearance": "Darstellung", "settings.theme": "Design", "settings.language": "Sprache",

@@ -237,7 +237,7 @@ export const ja: Translation = {
     "settings.humanNameLabel": "人間の表示名", "settings.aiNameLabel": "AI の表示名",
     "settings.facetNamesHint": "名簿に出る2つの名前（人間 / AI）を変えます。空のままにした方は、いまの名前が残ります。",
     "settings.avatarChoose": "画像を選ぶ…", "settings.avatarReset": "Identicon に戻す",
-    "settings.avatarHint": "人間 / AI それぞれの顔を登録できます。画像は 96px に縮小して保存します（未設定なら facet ごとの identicon）。",
+    "settings.avatarHint": "人間 / AI それぞれの顔を登録できます。表示には 96px に縮小した版を使い、選んだ画像はそのまま残します（未設定なら facet ごとの identicon）。",
     "settings.avatarImageFailed": "画像を読み込めませんでした",
     "settings.avatarCanvasFailed": "canvas を初期化できませんでした",
     "settings.appearance": "外観", "settings.theme": "テーマ", "settings.language": "言語",

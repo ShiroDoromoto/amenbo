@@ -251,7 +251,7 @@ const ui = {
   "settings.humanNameLabel": "Human display name", "settings.aiNameLabel": "AI display name",
   "settings.facetNamesHint": "Changes the two roster names (Human / AI) (a blank field leaves that facet unchanged).",
   "settings.avatarChoose": "Choose image…", "settings.avatarReset": "Reset to identicon",
-  "settings.avatarHint": "Register a face for Human and AI. Images are downscaled to 96px before saving (a per-facet identicon is used when unset).",
+  "settings.avatarHint": "Register a face for Human and AI. The display version is downscaled to 96px, and the image you picked is kept as it is (a per-facet identicon is used when unset).",
   "settings.avatarImageFailed": "The image could not be loaded",
   "settings.avatarCanvasFailed": "The canvas could not be initialized",
   "settings.appearance": "Appearance", "settings.theme": "Theme", "settings.language": "Language",

@@ -1064,18 +1064,27 @@ export async function openExternalUrl(url: string): Promise<void> {
 
 /**
  * Set or clear a facet's (human / AI) avatar image. A `dataUrl` (data:image/…) sets it; `null` reverts
- * to the identicon. Shrink the image before passing it in (use `fileToAvatarDataUrl`). It lives in
- * `config.human_avatar` / `ai_avatar`, so it comes back through snapshot.roster. Only the facet named
- * is sent; the other is left out of the payload entirely, which means "leave as is" — clearing is the
- * empty string. Outside Tauri (browser) the cached roster is edited directly.
+ * to the identicon. Shrink the image before passing it in (use `fileToAvatarDataUrl`), and pass the
+ * bytes of the image the user picked as `source` — it is kept as the original beside the display
+ * version (`AMB-D-839`), so a larger version can be baked later without asking for the file again.
+ * The display version lives in `config.human_avatar` / `ai_avatar`, so it comes back through
+ * snapshot.roster; the original lives in the blob store. Only the facet named is sent; the other is
+ * left out of the payload entirely, which means "leave as is" — clearing is the empty string. Outside
+ * Tauri (browser) the cached roster is edited directly.
  */
-export async function setFacetAvatar(kind: "human" | "ai", dataUrl: string | null): Promise<void> {
+export async function setFacetAvatar(
+  kind: "human" | "ai",
+  dataUrl: string | null,
+  source?: Uint8Array,
+): Promise<void> {
   if (inTauri()) {
     // Keep all three states distinct: the named facet is Some (empty string = clear), the other is undefined = leave as is.
     const value = dataUrl ?? "";
     return invokeAck("set_facet_avatars", {
       humanAvatar: kind === "human" ? value : undefined,
       aiAvatar: kind === "ai" ? value : undefined,
+      humanSource: kind === "human" ? source : undefined,
+      aiSource: kind === "ai" ? source : undefined,
     });
   }
   mockMutate((s) => ({
@@ -1105,7 +1114,8 @@ export async function setFacetNames(humanName: string | null, aiName: string | n
 /**
  * Shrink an image File to a small square PNG data URL (96px by default). It centre-crops so the result
  * sits well in a round avatar, and keeps the store from bloating — core enforces an upper bound as
- * well. It goes through canvas, so it works the same in a browser and in the Tauri webview.
+ * well. It goes through canvas, so it works the same in a browser and in the Tauri webview. This is
+ * the display version alone; the file it was baked from is kept as the original (`setFacetAvatar`).
  */
 export async function fileToAvatarDataUrl(file: File, size = 96): Promise<string> {
   const url = URL.createObjectURL(file);

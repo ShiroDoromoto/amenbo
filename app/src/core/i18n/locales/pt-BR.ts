@@ -239,7 +239,7 @@ export const ptBR: Translation = {
     "settings.humanNameLabel": "Nome de exibição da pessoa", "settings.aiNameLabel": "Nome de exibição da IA",
     "settings.facetNamesHint": "Muda os dois nomes da lista (Pessoa / IA) (um campo em branco deixa essa faceta como está).",
     "settings.avatarChoose": "Escolher imagem…", "settings.avatarReset": "Voltar ao identicon",
-    "settings.avatarHint": "Registre um rosto para a pessoa e para a IA. As imagens são reduzidas a 96px antes de salvar (sem imagem, usa-se um identicon por faceta).",
+    "settings.avatarHint": "Registre um rosto para a pessoa e para a IA. A exibição usa uma versão reduzida a 96px, e a imagem escolhida é mantida como está (sem imagem, usa-se um identicon por faceta).",
     "settings.avatarImageFailed": "Não foi possível carregar a imagem",
     "settings.avatarCanvasFailed": "Não foi possível inicializar o canvas",
     "settings.appearance": "Aparência", "settings.theme": "Tema", "settings.language": "Idioma",

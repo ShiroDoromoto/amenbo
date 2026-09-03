@@ -82,7 +82,7 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
           {stage === "working" ? updatePhaseHint(progress) : stage === "ready" ? t("update.ready") : t("update.hint")}
         </div>
         {stage === "working" && (
-          <div style={{ height: 6, marginTop: 6, background: "var(--c-rule)", borderRadius: 3, overflow: "hidden" }}>
+          <div style={{ height: 6, marginTop: 6, background: "var(--c-sunken)", borderRadius: 3, overflow: "hidden" }}>
             <div style={{ width: pct !== null ? `${pct}%` : "100%", height: "100%", background: "var(--c-accent)" }} />
           </div>
         )}

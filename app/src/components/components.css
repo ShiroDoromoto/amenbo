@@ -178,7 +178,7 @@
   max-width: 80%; padding: var(--s-2) var(--s-3); border-radius: var(--r-md);
   font-size: var(--fs-md); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); cursor: pointer;
 }
-.toast--warn { color: #fff; background: var(--c-heed); }
+.toast--warn { color: var(--c-on-heed); background: var(--c-heed); }
 
 /* ---------- card ---------- */
 .card {
@@ -324,7 +324,7 @@
    --c-blocked, which is the heed step in the status range — the two must not be confused, and what
    keeps them apart is that a premise nobody can pass is drawn one step above it. */
 .chip--block { white-space: nowrap; cursor: default; }
-.chip--official { background: var(--c-accent); color: #fff; }
+.chip--official { background: var(--c-accent); color: var(--c-on-accent); }
 /* The index's recommendation, which sits beside the trust badge rather than on its ladder. Outlined
    in the accent instead of filled with it, so the two read as different kinds of claim at a glance
    and the solid one stays the rarer, stronger of the pair. */
@@ -514,7 +514,7 @@
    the global button rule hands every button. This is the base every variant inherits — a variant
    that wants a different fade overrides it, but none may leave the disabled state invisible. */
 .btn:disabled { opacity: 0.5; cursor: default; }
-.btn--primary { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+.btn--primary { background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); }
 /* The assignee picker: a small custom dropdown that puts a FacetAvatar on each facet,
    which a native <select> cannot draw. The trigger keeps the .btn look and fits the
    avatar, the name and the caret on one line. */
@@ -539,7 +539,7 @@
 /* The button for a destructive operation (delete): a restrained red outline that fills in
    on hover. */
 .btn--danger { color: var(--c-stop); border-color: var(--c-stop); background: transparent; }
-.btn--danger:hover:not(:disabled) { background: var(--c-stop); color: #fff; }
+.btn--danger:hover:not(:disabled) { background: var(--c-stop); color: var(--c-on-stop); }
 .detail__danger { margin-top: var(--s-2); display: flex; justify-content: flex-end; }
 .notes { background: var(--c-sunken); border-radius: var(--r-md); padding: var(--s-3); font-size: var(--fs-body); line-height: 1.7; white-space: pre-wrap; max-width: var(--measure-prose); }
 /* Notes rendered as Markdown are a run of block elements, so pre-wrap comes back off (this
@@ -711,7 +711,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .firstloop__step { display: flex; gap: var(--s-2); }
 .firstloop__num {
   width: 24px; height: 24px; flex: none; border-radius: 50%;
-  background: var(--c-accent); color: #fff; font-size: var(--fs-md); font-weight: var(--fw-bold);
+  background: var(--c-accent); color: var(--c-on-accent); font-size: var(--fs-md); font-weight: var(--fw-bold);
   display: flex; align-items: center; justify-content: center;
 }
 .firstloop__stepbody { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
@@ -852,7 +852,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .onboard__hero h2 { margin: var(--s-2) 0 var(--s-2); }
 .onboard__steps { display: flex; flex-direction: column; gap: var(--s-3); }
 .onboard__step { display: flex; gap: var(--s-3); }
-.onboard__num { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--c-accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); }
+.onboard__num { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--c-accent); color: var(--c-on-accent); display: flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); }
 .onboard__steptitle { font-weight: var(--fw-bold); margin-bottom: 2px; }
 .onboard__cmd, .onboard__step code { font-family: var(--font-mono); font-size: var(--fs-md); background: var(--c-sunken); border-radius: var(--r-sm); padding: 1px var(--s-2); }
 .onboard__cmd { display: inline-block; margin-top: var(--s-2); color: var(--c-accent-text); }
@@ -1004,7 +1004,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__date:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
 .dimmgr__open { background: transparent; border: 1px dashed var(--c-edge); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
 .dimmgr__open:hover { border-color: var(--c-accent); color: var(--c-accent); }
-.dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: #fff; font-size: var(--fs-xs); }
+.dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: var(--c-on-accent); font-size: var(--fs-xs); }
 .dimmgr__danger { color: var(--c-stop); white-space: nowrap; }
 /* The removal that has to say where the tasks go first. It stands in the delete button's place inside
    the value's pill, so the row keeps its width and the question is asked where the press landed. */

@@ -61,6 +61,16 @@
   --c-heed: #995d18;              /* it moves — know this while it does */
   --c-plain: var(--c-text-muted); /* nothing is asked */
 
+  /* ----- the ink on a fill -----
+     A fill and the words on it are one pairing, so each fill carries the ink it is read with
+     (`AMB-D-840`). White is not that ink: a theme swaps the fill and the white stays put, which is
+     how all three came to fail in dark. One rule sets the value — white where the fill is dark,
+     a deep tone of the fill's own family where the fill is light — and the pair holds AA either
+     way round, so a control may also invert it (a white button on a stop band). */
+  --c-on-accent: #ffffff;
+  --c-on-heed: #ffffff;
+  --c-on-stop: #ffffff;
+
   /* status */
   --c-todo: var(--c-plain);
   --c-progress: var(--c-accent);
@@ -171,6 +181,11 @@
      three follow from the light side, which names them once. */
   --c-stop: #e37166;
   --c-heed: #e0a04a;
+
+  /* The fills are light on this side, so the ink over them is the deep tone of each family. */
+  --c-on-accent: #0e3434;
+  --c-on-heed: #5a3a10;
+  --c-on-stop: #551610;
 
   --c-done: #46c97e;
 

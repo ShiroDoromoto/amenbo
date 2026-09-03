@@ -156,13 +156,13 @@ export function DecisionDetailPane({
 
   return (
     <div className="detail__body">
-      <div className="detail__title" style={{ alignItems: "baseline", gap: 8 }}>
+      <div className="detail__title">
         {d.ref && <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
         {editing ? (
           <input
             {...asTyped}
             className="compose__input"
-            style={{ minHeight: "unset", fontSize: "inherit", fontWeight: "inherit", flex: 1 }}
+            style={{ minHeight: "unset", flex: 1 }}
             autoFocus
             value={titleDraft}
             placeholder={t("dec.newTitlePh")}
@@ -172,12 +172,9 @@ export function DecisionDetailPane({
         ) : (
           <span style={editable ? { cursor: "text" } : undefined} title={editable ? t("detail.edit") : undefined} onDoubleClick={editable ? startEdit : undefined}>{d.title}</span>
         )}
-        <span style={{
-          fontSize: "var(--fs-xs)", padding: "1px 8px", borderRadius: 10, color: "#fff",
-          background: statusColor(d.status),
-        }}>{t(`dec.status.${d.status}`)}</span>
+        <span className="chip chip--status" style={{ background: statusColor(d.status) }}>{t(`dec.status.${d.status}`)}</span>
         {!editing && editable && (
-          <button className="feed__action" style={{ marginLeft: 6 }} onClick={startEdit}>{t("detail.edit")}</button>
+          <button className="btn" onClick={startEdit}>{t("detail.edit")}</button>
         )}
       </div>
 
@@ -200,11 +197,11 @@ export function DecisionDetailPane({
             }}
           />
           {d.status === "accepted" && (
-            <div className="faint" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{t("dec.editAcceptedHint")}</div>
+            <div className="faint" style={{ marginTop: 4 }}>{t("dec.editAcceptedHint")}</div>
           )}
           {editError && <ErrorNote>{editError}</ErrorNote>}
           <div className="compose__actions">
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.notesHint")}</span>
+            <span className="meta">{t("detail.notesHint")}</span>
             <span>
               <button className="btn" onClick={() => setEditing(false)}>{t("detail.cancel")}</button>
               <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={editBusy || !titleDraft.trim()} onClick={() => void saveEdit()}>{t("detail.save")}</button>
@@ -212,7 +209,7 @@ export function DecisionDetailPane({
           </div>
         </div>
       ) : d.body ? (
-        <div className="markdown" style={{ marginTop: 8, fontSize: "var(--fs-body)", maxWidth: "var(--measure-prose)" }} onDoubleClick={editable ? startEdit : undefined}>
+        <div className="markdown decbody" onDoubleClick={editable ? startEdit : undefined}>
           <Markdown>{d.body}</Markdown>
         </div>
       ) : null}
@@ -220,20 +217,20 @@ export function DecisionDetailPane({
       <DecisionEdges d={d} onOpenDecision={onOpenDecision} />
 
       {d.linkedTasks.length > 0 && (
-        <div style={{ marginTop: 8, fontSize: "var(--fs-sm)" }}>
+        <div style={{ marginTop: 8 }}>
           {t("dec.linkedTasks")}:{" "}
           {d.linkedTasks.map((lt, i) => (
             <span key={lt.id} style={isClosed(lt.status) ? { color: "var(--c-muted)" } : undefined}>
               {i > 0 && ", "}
               <button
-                className="feed__action"
+                className="feed__target"
                 style={{ padding: "0 4px", ...(isClosed(lt.status) ? { opacity: 0.6 } : {}) }}
                 onClick={() => onOpenTask?.(Number(lt.id))}
               >
                 {lt.ref ?? ""} {lt.name}
               </button>
               {lt.status !== "todo" && (
-                <span className="faint" style={{ fontSize: "var(--fs-xs)" }}> · {statusLabel(lt.status)}</span>
+                <span className="meta"> · {statusLabel(lt.status)}</span>
               )}
             </span>
           ))}
@@ -245,12 +242,12 @@ export function DecisionDetailPane({
           // Confirming an accept or reject, with an optional reason that is left behind as one comment.
           <div className="compose" style={{ marginTop: 12 }}>
             {confirming === "reject" && standingOn(d).length > 0 && (
-              <div style={{ marginBottom: 8, fontSize: "var(--fs-sm)" }}>
+              <div style={{ marginBottom: 8 }}>
                 <div className="faint">{t("dec.revisit")}</div>
                 {standingOn(d).map((s) => (
                   <button
                     key={s.id}
-                    className="feed__action"
+                    className="feed__target"
                     style={{ display: "block", padding: "0 4px" }}
                     onClick={() => onOpenDecision?.(s.id)}
                   >
@@ -274,7 +271,7 @@ export function DecisionDetailPane({
             />
             {error && <ErrorNote>{error}</ErrorNote>}
             <div className="compose__actions">
-              <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
+              <span className="meta">{t("detail.commentHint")}</span>
               <span>
                 <button className="btn" onClick={() => { setConfirming(null); setReason(""); setError(null); }}>{t("dec.cancel")}</button>
                 <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={busy} onClick={() => void runDecision()}>
@@ -284,7 +281,7 @@ export function DecisionDetailPane({
             </div>
           </div>
         ) : (
-          // Entry buttons are real buttons, not link-styled feed__action: accepting or rejecting a
+          // Entry buttons carry the accent fill: accepting or rejecting a
           // decision is the pane's primary act and must not hide among the faint navigation links.
           <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
             <button className="btn btn--primary" onClick={() => setConfirming("accept")}>{t("dec.accept")}</button>
@@ -296,7 +293,7 @@ export function DecisionDetailPane({
       {d.status === "accepted" && (
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="feed__action" onClick={() => void runReopen()}>{t("dec.reopen")}</button>
+            <button className="btn" onClick={() => void runReopen()}>{t("dec.reopen")}</button>
           </div>
           {reopenError && <ErrorNote>{reopenError}</ErrorNote>}
         </div>
@@ -312,7 +309,7 @@ export function DecisionDetailPane({
           <div>
             <div className="detail__section-h">{t("dec.comments")} · <Icon name="comment" size="md" /> {formatNumber(comments.length)}</div>
             {comments.length === 0 ? (
-              <div className="faint" style={{ marginTop: 6, fontSize: "var(--fs-sm)" }}>{t("detail.noComments")}</div>
+              <div className="faint" style={{ marginTop: 6 }}>{t("detail.noComments")}</div>
             ) : (
               <div className="comments">
                 {comments.map((c) => (
@@ -346,7 +343,7 @@ export function DecisionDetailPane({
               />
               {commentError && <ErrorNote>{commentError}</ErrorNote>}
               <div className="compose__actions">
-                <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
+                <span className="meta">{t("detail.commentHint")}</span>
                 <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
               </div>
             </div>
@@ -389,7 +386,7 @@ function DecisionStamps({ d }: { d: Decision }) {
     stamps.push({ key: "changed", label: t("dec.lastChanged"), at: d.updatedAt });
   }
   return (
-    <div className="faint" style={{ marginTop: 4, fontSize: "var(--fs-xs)" }}>
+    <div className="meta" style={{ marginTop: 4 }}>
       {stamps.map((s, i) => (
         // The separator sits outside the stamp so a narrow pane breaks the line between two of them
         // rather than through the middle of one date.
@@ -502,11 +499,11 @@ function DecisionEdges({ d, onOpenDecision }: {
       {rows.map((r) => (
         <div
           key={`${r.labelKey}-${r.target.id}`}
-          style={{ marginTop: 4, fontSize: "var(--fs-sm)", color: "var(--c-muted)" }}
+          style={{ marginTop: 4, color: "var(--c-muted)" }}
         >
           {t(r.labelKey)}:{" "}
           <button
-            className="feed__action"
+            className="feed__target"
             style={{ padding: "0 4px" }}
             onClick={() => onOpenDecision?.(r.target.id)}
           >
@@ -519,7 +516,7 @@ function DecisionEdges({ d, onOpenDecision }: {
           )}
           {inTauri() && (
             <button
-              className="feed__action"
+              className="btn"
               style={{ marginLeft: 6, fontSize: "var(--fs-xs)" }}
               onClick={() => void unlink(r)}
             >
@@ -575,7 +572,7 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
   };
   if (!open) {
     return (
-      <button className="feed__action" style={{ marginTop: 6 }} onClick={() => setOpen(true)}>
+      <button className="btn" style={{ marginTop: 6 }} onClick={() => setOpen(true)}>
         <Icon name="plus" /> {t("dec.edge.add")}
       </button>
     );
@@ -602,11 +599,11 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
         <button className="btn" onClick={() => { setOpen(false); setQuery(""); }}>{t("dec.edge.cancel")}</button>
       </div>
       {promotesToAccepted(d, kind) && (
-        <div style={{ fontSize: "var(--fs-sm)", color: "#c0504d" }}><Icon name="warning" /> {t("dec.edge.supersedeAccepts")}</div>
+        <div style={{ color: "#c0504d" }}><Icon name="warning" /> {t("dec.edge.supersedeAccepts")}</div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
       {candidates.length === 0 ? (
-        <div className="faint" style={{ fontSize: "var(--fs-sm)" }}>{t("dec.edge.noCandidates")}</div>
+        <div className="faint">{t("dec.edge.noCandidates")}</div>
       ) : (
         <ul className="apick__menu apick__menu--scroll" role="listbox" style={{ position: "static" }}>
           {candidates.map((c) => (

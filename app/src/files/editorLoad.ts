@@ -134,9 +134,9 @@ export async function mountEditor(
           // light band and the one line a reader is looking at is the one they cannot read
           // (`AMB-T-3786` met it). The token flips with the theme, so the band is a shade of the
           // surface either way rather than a colour of its own.
-          ".cm-activeLine": { backgroundColor: "var(--c-surface-sunken)" },
+          ".cm-activeLine": { backgroundColor: "var(--c-sunken)" },
           ".cm-activeLineGutter": {
-            backgroundColor: "var(--c-surface-sunken)",
+            backgroundColor: "var(--c-sunken)",
             // And its number is the one number worth reading: the rest of the gutter is muted so
             // that the text beside it reads first, which leaves nothing to tell this one apart.
             color: "var(--c-text)",
@@ -148,8 +148,8 @@ export async function mountEditor(
           // What stands in for the lines that were folded away. It is a thing to click, so it is
           // drawn as one rather than as text that happens to be there.
           ".cm-foldPlaceholder": {
-            background: "var(--c-surface-sunken)",
-            border: "1px solid var(--c-border)",
+            background: "var(--c-sunken)",
+            border: "1px solid var(--c-edge)",
             borderRadius: "var(--r-sm)",
             color: "var(--c-text-muted)",
             padding: "0 var(--s-2)",

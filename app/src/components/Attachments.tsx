@@ -181,14 +181,14 @@ export function Attachments({ target, targetId, compact = false }: {
         </span>
         {a.kind === "blob" && a.present && a.blobHash && (
           <button
-            className="feed__action attach__dl"
+            className="btn attach__dl"
             title={t("attach.download")}
             onClick={() => void saveAttachment(a.blobHash!, a.filename)}
           >
             <Icon name="arrowDown" />
           </button>
         )}
-        <button className="feed__action attach__rm" title={t("attach.remove")} onClick={() => void onRemove(a)}><Icon name="close" /></button>
+        <button className="btn btn--danger attach__rm" title={t("attach.remove")} onClick={() => void onRemove(a)}><Icon name="close" /></button>
       </div>
       <AttachmentBody a={a} />
     </div>
@@ -204,7 +204,7 @@ export function Attachments({ target, targetId, compact = false }: {
         {dragActive ? (
           <div className="faint attach__drophint">{t("attach.dropActive")}</div>
         ) : (
-          <button className="feed__action attach__compactadd" disabled={busy} onClick={onPick}>
+          <button className="btn attach__compactadd" disabled={busy} onClick={onPick}>
             <Icon name="paperclip" /> {t("attach.add")}
           </button>
         )}
@@ -216,7 +216,7 @@ export function Attachments({ target, targetId, compact = false }: {
     <div>
       <div className="detail__section-h">
         {t("attach.section")}
-        <button className="feed__action" style={{ marginLeft: 8 }} disabled={busy} onClick={onPick}>
+        <button className="btn" style={{ marginLeft: 8 }} disabled={busy} onClick={onPick}>
           <Icon name="plus" /> {t("attach.add")}
         </button>
       </div>
@@ -227,7 +227,7 @@ export function Attachments({ target, targetId, compact = false }: {
         {attachments.length === 0 ? (
           <div className="faint attach__drophint">
             {dragActive ? t("attach.dropActive") : `${t("attach.dropHint")} `}
-            {!dragActive && <button className="feed__action" disabled={busy} onClick={onPick}>{t("attach.add")}</button>}
+            {!dragActive && <button className="btn" disabled={busy} onClick={onPick}>{t("attach.add")}</button>}
           </div>
         ) : (
           <div className="attach__list">

@@ -26,7 +26,7 @@ function CopyButton({ sha }: { sha: string }) {
     }
   };
   return (
-    <button className="feed__action" title={t("commit.copy")} onClick={() => void onCopy()}>
+    <button className="btn" title={t("commit.copy")} onClick={() => void onCopy()}>
       {copied ? t("commit.copied") : <Icon name="clipboard" />}
     </button>
   );
@@ -63,14 +63,14 @@ export function Commits({ taskId }: { taskId: number }) {
     <div>
       <div className="detail__section-h">{t("commit.section")}</div>
       {commits.length === 0 ? (
-        <div className="faint" style={{ fontSize: "var(--fs-sm)" }}>{t("commit.none")}</div>
+        <div className="faint">{t("commit.none")}</div>
       ) : (
         <div className="commits">
           {commits.map((c) => (
             <div className="commits__item" key={c.id}>
               <code className="commits__sha" title={c.sha}>{c.sha}</code>
               <CopyButton sha={c.sha} />
-              <button className="feed__action" title={t("commit.remove")} onClick={() => void onRemove(c)}><Icon name="close" /></button>
+              <button className="btn btn--danger" title={t("commit.remove")} onClick={() => void onRemove(c)}><Icon name="close" /></button>
             </div>
           ))}
         </div>

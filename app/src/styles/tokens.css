@@ -1,22 +1,40 @@
 /* amenbo design tokens */
 :root {
-  /* ----- color: neutral (warm gray) -----
-     One set of grounds for the whole application, and no face defines its own. The window shows the
-     ledger or the terminal (`AMB-D-753`), and the same part in the same place must be the same colour
-     across the switch — a ground that changed with the face made one window read as two applications.
-     The rule the grounds are put on is the same on both: the edges (the sidebar or the rail, the band
-     over them) sit above the middle on `--c-surface-2`, what the middle holds is `--c-surface`, and
-     the middle itself is `--c-bg`. A terminal's black belongs to the program drawing in the pane, not
-     to the face the pane is on, and never widens past it — the pane's own ground is the one exception
-     to the sentence above, and it is written out below. */
+  /* ----- one set of grounds for the whole application -----
+     No face defines its own. The window shows the ledger or the terminal (`AMB-D-753`), and the same
+     part in the same place must be the same colour across the switch — a ground that changed with the
+     face made one window read as two applications. The three steps below are put on both the same way:
+     the edges (the sidebar or the rail, the band over them) stand on `--c-surface`, and the middle
+     they frame is `--c-bg`. A terminal's black belongs to the program drawing in the pane, not to the
+     face the pane is on, and never widens past it — the pane's own ground is the one exception to the
+     sentence above, and it is written out below. */
+
+  /* ----- the ground, in three steps, and the hover laid on it -----
+     A page, the cards on it, and the wells cut into a card (`AMB-D-840`). The steps stay shallow —
+     what tells one region from the next is the rule around it and the space between, not the ground
+     under it. Widening them would mean moving every ink above them to hold AA, so they do not widen.
+
+     `--c-hover` is the fourth thing and not a fourth step: the ground a row takes while the pointer
+     is on it. Its value is the darkest (lightest, on the dark theme) that still leaves every ink AA
+     over it, which is what caps how far a hover can be pushed here. */
   --c-bg: #f7f6f3;
   --c-surface: #ffffff;
-  --c-surface-2: #fbfaf8;
-  --c-surface-sunken: #f1efe9;
-  --c-border: #e4e1d9;
-  --c-border-strong: #d2cec3;
+  --c-sunken: #f1efe9;
+  --c-hover: #f0ede6;
+
+  /* ----- the two jobs a line does (`AMB-D-840`) -----
+     A control's outline has to be found before it can be used, so it carries the 3:1 the outline of
+     a component is asked for; a divider only has to be seen once the eye is already on the page.
+     Held as one token, the two pull against each other: raised to 3:1 the dividers turn the screen
+     into a grid, and set where a divider belongs the outlines disappear. */
+  --c-edge: #91876d; /* the outline of a control — input, button, checkbox */
+  --c-rule: #beb6a3; /* a divider — a row's underline, a card's edge */
+
+  /* ----- color: neutral (warm gray) ----- */
   --c-text: #23211c;
   --c-text-muted: #6f6a5e;
+  /* Not for text (`AMB-D-840`): a separator, or the pale side of an icon. Reading ink is `--c-text`
+     and `--c-text-muted` — no value light enough to read as a third step clears AA on these grounds. */
   --c-text-faint: #9b958a;
 
   /* ----- color: accent (teal) -----
@@ -25,7 +43,7 @@
      and the row being read keeps `weak` (`app/src/files/FilesPanel.tsx`). It is the accent and not
      a grey because what is on it is the reader's own doing, and the greys are where their hand
      happens to be at this instant — the hover and the tab stop. */
-  --c-accent: #0e7c7b;
+  --c-accent: #0d7777;
   --c-accent-weak: #d6ecec;
   --c-accent-faint: #e9f4f4;
   --c-accent-text: #095a59;
@@ -57,8 +75,8 @@
   --c-brand-mark: #000000;
 
   /* ----- semantic ----- */
-  --c-human: #3b6bd6; /* human */
-  --c-ai: #8a4fd0;    /* AI */
+  --c-human: #3365d4; /* human */
+  --c-ai: #884bcf;    /* AI */
 
   /* ----- what git says about a file (`AMB-D-785`) -----
      Off the ladder below, like `--c-human` and `--c-ai`: these ask nothing of the reader. They say
@@ -86,13 +104,23 @@
      A mark that carries a colour of its own is already off the ladder, having nothing to ask:
      `--c-done` on something that went through, the accent on a way in. */
   --c-stop: #c0392b;              /* nothing moves until a hand is put to it */
-  --c-heed: #c6791f;              /* it moves — know this while it does */
-  --c-plain: var(--c-text-faint); /* nothing is asked */
+  --c-heed: #995d18;              /* it moves — know this while it does */
+  --c-plain: var(--c-text-muted); /* nothing is asked */
+
+  /* ----- the ink on a fill -----
+     A fill and the words on it are one pairing, so each fill carries the ink it is read with
+     (`AMB-D-840`). White is not that ink: a theme swaps the fill and the white stays put, which is
+     how all three came to fail in dark. One rule sets the value — white where the fill is dark,
+     a deep tone of the fill's own family where the fill is light — and the pair holds AA either
+     way round, so a control may also invert it (a white button on a stop band). */
+  --c-on-accent: #ffffff;
+  --c-on-heed: #ffffff;
+  --c-on-stop: #ffffff;
 
   /* status */
   --c-todo: var(--c-plain);
-  --c-progress: #0e7c7b;
-  --c-done: #2fae66;
+  --c-progress: var(--c-accent);
+  --c-done: #217a48;
   --c-blocked: var(--c-heed);
 
   /* priority */
@@ -134,19 +162,28 @@
   /* ----- typography ----- */
   --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
-  /* text scale */
-  --fs-2xs: 10px; /* badges / superscript markers */
-  --fs-xs: 12px;
-  --fs-sm: 13px;
-  --fs-md: 14px;
+  /* text scale — four steps, because four is how many a reader can tell apart (`AMB-D-842`).
+     The seven it replaces ran 10 / 12 / 13 / 14 / 16 / 17 / 20, three of those a single pixel
+     from their neighbour: a name nobody can see the effect of is a name the next writer picks
+     at random, and a heading a hair larger than the line under it is not a heading. */
+  --fs-xs: 12px; /* badges, superscript markers, chips */
+  --fs-md: 14px; /* the default */
   --fs-body: 16px; /* detail-pane reading body */
-  --measure-prose: 40rem; /* reading-width cap for detail-pane body text (~40 CJK chars) */
-  --fs-lg: 17px;
   --fs-xl: 20px;
   --fw-normal: 400;
   --fw-medium: 550;
   --fw-bold: 680;
   --lh: 1.5;
+
+  /* ----- how wide a run of text is let get (`AMB-D-842`) -----
+     Two steps, because a line of prose and a box to type in are read differently. Prose is read
+     across, so its cap is the width the eye returns from without losing the next line (~40 CJK
+     characters). A form field is not read across at all — the value in it is taken in at a glance —
+     so a box wider than the longest value it holds only makes the eye travel to find the caret.
+     Held as one step, every field on the page would take the reading width, and a port number would
+     be typed into a box forty characters long. */
+  --measure-prose: 40rem; /* a body of text — the detail pane, an author's paragraph */
+  --measure-form: 28rem;  /* a box a value is filled into — an input, a select */
 
   /* ----- icon (the drawings themselves are in components/Icon.tsx) -----
      Which step an icon takes follows from what it does, not from the screen it is on
@@ -157,14 +194,19 @@
   --icon-md: 20px; /* headings and chips */
   --icon-lg: 24px; /* banners and onboarding */
 
-  /* ----- spacing ----- */
+  /* ----- spacing -----
+     Six steps on a 4px grid (`AMB-D-842`). The seven before them ran 4 / 6 / 8 at the bottom, and
+     two pixels is not a difference anyone can see — asked for the gap between a label and its
+     field, a writer picked whichever of the three came to hand, which is how the plugin screen came
+     to step 8 then 6 down one column. Dropping the 6px step leaves a ladder where every rung is
+     visibly a rung, so the gap is chosen for what it separates rather than for whichever name was
+     nearest. */
   --s-1: 4px;
-  --s-2: 6px;
-  --s-3: 8px;
-  --s-4: 12px;
-  --s-5: 16px;
-  --s-6: 24px;
-  --s-7: 32px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
 
   /* ----- radius / shadow ----- */
   --r-sm: 5px;
@@ -188,10 +230,10 @@
 [data-theme="dark"] {
   --c-bg: #1b1a17;
   --c-surface: #242320;
-  --c-surface-2: #2a2925;
-  --c-surface-sunken: #1f1e1b;
-  --c-border: #3a3833;
-  --c-border-strong: #4c4a43;
+  --c-sunken: #1f1e1b;
+  --c-hover: #2c2b27;
+  --c-edge: #787569;
+  --c-rule: #514f48;
   --c-text: #ece9e1;
   --c-text-muted: #a8a399;
   --c-text-faint: #7d786e;
@@ -212,10 +254,14 @@
 
   /* The two steps that hold a value of their own; the third and everything derived from the
      three follow from the light side, which names them once. */
-  --c-stop: #e06155;
+  --c-stop: #e37166;
   --c-heed: #e0a04a;
 
-  --c-progress: #2ba6a4;
+  /* The fills are light on this side, so the ink over them is the deep tone of each family. */
+  --c-on-accent: #0e3434;
+  --c-on-heed: #5a3a10;
+  --c-on-stop: #551610;
+
   --c-done: #46c97e;
 
   /* The same thirteen, lifted onto the dark ground. `variable` follows the body text, as it does

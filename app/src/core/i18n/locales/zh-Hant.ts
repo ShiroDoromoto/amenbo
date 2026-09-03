@@ -670,6 +670,7 @@ export const zhHant: Translation = {
     "mcp.projects": "本應用程式可以存取的專案",
     "mcp.handover": "勾選的專案就是請求文字與檔案的內容。交出去後，這個應用的項目會被整個取代，包括它現在能到達的資料夾。",
     "mcp.noProjects": "還沒有專案綁定資料夾，伺服器沒有可指向的地方。",
+    "mcp.pickNone": "沒有勾選任何專案，就沒有可交出的內容——請先勾選一個。",
     "mcp.stale": "舊版 Amenbo 留下的",
     "app.crashTitle": "出了點問題",
     "app.crashHint": "畫面繪製失敗。重新載入即可恢復——你的資料是安全的。",

@@ -114,7 +114,7 @@ function Running({
   return (
     <div className="migrate__body">
       {pending && (
-        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+        <div className="meta">
           {tf(
             "migrate.space",
             {
@@ -127,11 +127,11 @@ function Running({
           )}
         </div>
       )}
-      <span style={{ fontSize: "var(--fs-sm)" }}>{label}</span>
+      <span>{label}</span>
       <div className="migrate__bar">
         <div className="migrate__bar-fill" style={{ width: pct !== null ? `${pct}%` : "100%" }} />
       </div>
-      <p className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("migrate.safety", lang)}</p>
+      <p className="meta">{t("migrate.safety", lang)}</p>
     </div>
   );
 }
@@ -155,11 +155,11 @@ function Done({
         </div>
       )}
       {report.superseded.length > 0 && (
-        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+        <div className="meta">
           {tn("migrate.superseded", report.superseded.length, lang)}
         </div>
       )}
-      <p className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("migrate.olderBuilds", lang)}</p>
+      <p className="meta">{t("migrate.olderBuilds", lang)}</p>
       <div className="migrate__actions">
         <button className="btn btn--primary" onClick={onDone}>{t("migrate.continue", lang)}</button>
       </div>

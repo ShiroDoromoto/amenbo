@@ -245,9 +245,15 @@ function McpAppRow({
       <button className="mcp__head" aria-expanded={open} onClick={onToggle}>
         <span className="mcp__headtext">
           <span className="mcp__name">{app.label}</span>
-          <span className={app.configured ? "mcp__state" : "mcp__state faint"}>
-            {app.configured ? t("mcp.configured") : t("mcp.unconfigured")}
-            {app.folders.map((at) => <code className="path" key={at}>{at}</code>)}
+          {/* Whether it is set up, said as the mark a state is said with everywhere else (`AMB-D-841`).
+              It was faint text before, which is how the plugin screen's chip and this screen's word
+              came to be two drawings of one thing — and the fainter of the two was the answer a reader
+              came here for. */}
+          <span className="mcp__state">
+            <span className="chip">
+              {app.configured ? t("mcp.configured") : t("mcp.unconfigured")}
+            </span>
+            {app.folders.map((at) => <code className="path" title={at} key={at}>{at}</code>)}
           </span>
         </span>
         <span className="faint"><Icon name={open ? "chevronDown" : "chevronRight"} /></span>
@@ -264,8 +270,11 @@ function McpAppRow({
                   checked={picked.includes(project.id)}
                   onChange={() => toggle(project.id)}
                 />
-                {project.name}
-                <code className="path">{project.folder}</code>
+                {/* The name is a cell of its own rather than a bare word between two elements: what a
+                    grid does with loose text is not something to leave to the browser, and the column
+                    it sits in is what the folders beside it begin after. */}
+                <span className="mcp__projname">{project.name}</span>
+                <code className="path" title={project.folder}>{project.folder}</code>
               </label>
             ))}
           </div>
@@ -294,6 +303,10 @@ function McpAppRow({
                 {t("mcp.copyAdd")}
               </button>
             )}
+            {/* Why that button is shut, beside it: a greyed button says only that it cannot be pressed,
+                never what would open it, and the ticks that would are a scroll above it on a long list.
+                It is on both roads, the emptiness being the same one. */}
+            {picked.length === 0 && <span className="hint">{t("mcp.pickNone")}</span>}
             {/* Offered only where there is something to remove: a request to delete an entry nobody
                 has would send a reader looking through a file for a line that is not in it. It is not
                 shut on an empty selection, the ticks being no part of it — what it asks for is the
@@ -315,8 +328,8 @@ function McpAppRow({
               <div className="fieldlabel">{t("mcp.stale")}</div>
               {app.stale.map((old) => (
                 <div className="mcp__staleRow" key={old.name}>
-                  <code className="path">{old.name}</code>
-                  {old.folder && <code className="path">{old.folder}</code>}
+                  <code className="path" title={old.name}>{old.name}</code>
+                  {old.folder && <code className="path" title={old.folder}>{old.folder}</code>}
                   <button className="btn" onClick={() => void copy(old.name, old.removeRequest)}>
                     {t("mcp.copyRemove")}
                   </button>

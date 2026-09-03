@@ -166,7 +166,7 @@ function DefaultViewSetting() {
         <select className="btn" value={view} onChange={change}>
           {VIEWS.map((v) => <option key={v} value={v}>{viewLabel(v)}</option>)}
         </select>
-        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.defaultViewNote")}</div>
+        <div className="meta">{t("settings.defaultViewNote")}</div>
       </span>
     </div>
   );
@@ -243,7 +243,7 @@ function NameSetting() {
             {t("settings.facetNamesSave")}
           </button>
         </div>
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.facetNamesHint")}</span>
+        <span className="meta">{t("settings.facetNamesHint")}</span>
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
     </div>
@@ -300,7 +300,7 @@ function AvatarSlot({ kind }: { kind: "human" | "ai" }) {
           : <Identicon seed={actor ? identiconSeed(actor) : kind} size={48} />}
       </span>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={{ fontSize: "var(--fs-xs)" }}>
+        <span className="settings__fine">
           {actor && <FacetAvatar actor={actor} />} {actor?.name ?? ""}
         </span>
         <div style={{ display: "flex", gap: 8 }}>
@@ -393,7 +393,7 @@ function ExportImportSetting() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn" disabled={busy !== null} onClick={() => void exportJson()}>{t("settings.exportJson")}</button>
         </div>
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.dataNote")}</span>
+        <span className="meta">{t("settings.dataNote")}</span>
         <NoteLine note={msg} />
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
@@ -471,7 +471,7 @@ function BackupSetting() {
           <button className="btn" disabled={busy} onClick={() => void backup()}>{t("settings.backupBtn")}</button>
           <button className="btn" disabled={busy} onClick={() => void restore()}>{t("settings.restoreBtn")}</button>
         </div>
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.backupNote")}</span>
+        <span className="meta">{t("settings.backupNote")}</span>
         <NoteLine note={msg} />
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
@@ -570,7 +570,7 @@ function DoctorSetting() {
             {busy && !report ? t("settings.doctorChecking") : t("settings.doctorRecheck")}
           </button>
           {report && (
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+            <span className="meta">
               {report.issues.length === 0
                 ? <DoneNote>{t("settings.doctorClean")}</DoneNote>
                 : tf("settings.doctorFound", { errors: report.errors, warnings: report.warnings })}
@@ -583,7 +583,7 @@ function DoctorSetting() {
         {groups.map((group) => {
           const { fixHint } = doctorText(group.shown[0]);
           return (
-            <div key={group.kind} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "var(--fs-xs)" }}>
+            <div key={group.kind} className="settings__fine" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {group.shown.map((iss, i) => {
                 const { message } = doctorText(iss);
                 const repair = doctorRepair(iss);
@@ -612,7 +612,7 @@ function DoctorSetting() {
             </div>
           );
         })}
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.doctorNote")}</span>
+        <span className="meta">{t("settings.doctorNote")}</span>
         {/* The sweep is its own act, set apart from the counts above on purpose: it does not repair
             what the list is showing, and standing next to "0 errors / 412 warnings" is exactly how it
             got read as the button that clears them. Its label names what it sweeps instead. */}
@@ -621,10 +621,10 @@ function DoctorSetting() {
             {busy && report ? t("settings.doctorFixing") : t("settings.doctorFix")}
           </button>
           {report && report.issues.length > 0 && !anyRepairable && (
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.doctorNoneRepairable")}</span>
+            <span className="meta">{t("settings.doctorNoneRepairable")}</span>
           )}
         </div>
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.doctorFixNote")}</span>
+        <span className="meta">{t("settings.doctorFixNote")}</span>
         <NoteLine note={msg} />
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
@@ -649,7 +649,7 @@ function PerfLogSetting() {
           <option value="budget-only">{t("settings.perfLogBudget")}</option>
           <option value="verbose">{t("settings.perfLogVerbose")}</option>
         </select>
-        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.perfLogNote")}</div>
+        <div className="meta">{t("settings.perfLogNote")}</div>
       </span>
     </div>
   );
@@ -675,7 +675,7 @@ function UpdateCheckSetting() {
           <option value="on">{t("settings.updateCheckOn")}</option>
           <option value="off">{t("settings.updateCheckOff")}</option>
         </select>
-        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.updateCheckNote")}</div>
+        <div className="meta">{t("settings.updateCheckNote")}</div>
       </span>
     </div>
   );
@@ -699,7 +699,7 @@ function AutostartSetting() {
           <option value="on">{t("settings.autostartOn")}</option>
           <option value="off">{t("settings.autostartOff")}</option>
         </select>
-        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.autostartNote")}</div>
+        <div className="meta">{t("settings.autostartNote")}</div>
       </span>
     </div>
   );
@@ -748,9 +748,9 @@ function TickSetting() {
           <option value="on">{t("settings.tickOn")}</option>
           <option value="off">{t("settings.tickOff")}</option>
         </select>
-        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.tickNote")}</div>
+        <div className="meta">{t("settings.tickNote")}</div>
         {rowRemains && (
-          <div style={{ fontSize: "var(--fs-xs)" }}><DoneNote>{t("settings.tickRowRemains")}</DoneNote></div>
+          <div className="settings__fine"><DoneNote>{t("settings.tickRowRemains")}</DoneNote></div>
         )}
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </span>
@@ -776,7 +776,7 @@ function DataLocationSetting() {
   return (
     <div className="settings__row">
       <span className="settings__k">{t("settings.dataPath")}</span>
-      <code style={{ fontSize: "var(--fs-xs)", wordBreak: "break-all" }}>{loc ? loc.root : "…"}</code>
+      <code className="settings__fine" style={{ wordBreak: "break-all" }}>{loc ? loc.root : "…"}</code>
     </div>
   );
 }
@@ -800,7 +800,7 @@ function LogsSetting() {
       <span className="settings__k">{t("settings.logs")}</span>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div><button className="btn" onClick={() => void open()}>{t("settings.logsOpen")}</button></div>
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.logsNote")}</span>
+        <span className="meta">{t("settings.logsNote")}</span>
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
     </div>

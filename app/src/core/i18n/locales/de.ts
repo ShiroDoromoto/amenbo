@@ -681,6 +681,7 @@ export const de: Translation = {
     "mcp.projects": "Projekte, die diese App erreichen darf",
     "mcp.handover": "Die angehakten Projekte sind genau der Inhalt der Anfrage und der Datei. Beim Übergeben wird der Eintrag dieser App vollständig ersetzt — samt der Ordner, die sie bereits erreicht.",
     "mcp.noProjects": "Noch hat kein Projekt einen Ordner, also gibt es nichts, worauf ein Server zeigen könnte.",
+    "mcp.pickNone": "Nichts angehakt heißt nichts zu übergeben – haken Sie zuerst ein Projekt an.",
     "mcp.stale": "Von einem älteren Amenbo hinterlassen",
     "app.crashTitle": "Etwas ist schiefgelaufen",
     "app.crashHint": "Der Bildschirm ließ sich nicht darstellen. Lade neu, um weiterzumachen — deine Daten sind sicher.",

@@ -62,6 +62,9 @@ vi.mock("../files/FilesPanel", () => ({
   },
 }));
 
+// The tree draws nothing here either: it is beside the panes on every run now (`AMB-D-838`), and
+// mounting the real one would have it listening to a host that is not in this test.
+vi.mock("../files/FolderTree", () => ({ FolderTree: () => null }));
 vi.mock("../mock/adapter", () => ({
   dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }] },
 }));

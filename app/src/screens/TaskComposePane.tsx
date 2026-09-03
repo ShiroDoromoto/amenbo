@@ -84,7 +84,7 @@ export function TaskComposePane({
         </div>
 
         <div className="compose__actions" style={{ marginTop: "var(--s-2)" }}>
-          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("compose.hint")}</span>
+          <span className="meta">{t("compose.hint")}</span>
           <span>
             <button className="btn" onClick={onCancel}>{t("compose.cancel")}</button>
             <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={!title.trim()} onClick={() => void submit()}>{t("compose.create")}</button>

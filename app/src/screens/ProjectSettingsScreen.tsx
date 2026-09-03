@@ -696,7 +696,7 @@ function PluginsSection({ projectId }: { projectId: number }) {
               <div className="pluggate" key={i.name}>
                 <span className="chip">{i.name}</span>
                 {i.device?.enabled && <span className="chip">{t("plugins.enabledChip")}</span>}
-                <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+                <span className="meta">
                   {t("plugins.scope.machine")}
                 </span>
               </div>

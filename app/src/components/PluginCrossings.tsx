@@ -59,7 +59,7 @@ export function PluginCrossings({ install, projects }: {
   return (
     <>
       {shown.length === 0 && (
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+        <span className="meta">
           {t("plugins.gate.offEverywhere")}
         </span>
       )}

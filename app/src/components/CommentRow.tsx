@@ -99,7 +99,7 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
             }}
           />
           <div className="compose__actions">
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.notesHint")}</span>
+            <span className="meta">{t("detail.notesHint")}</span>
             <span>
               <button className="btn" onClick={cancelEdit}>{t("detail.cancel")}</button>
               <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={!draft.trim()} onClick={() => void save()}>

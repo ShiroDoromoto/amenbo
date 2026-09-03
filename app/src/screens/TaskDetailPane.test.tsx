@@ -110,13 +110,18 @@ describe("TaskDetailPane finishing a creation", () => {
 });
 
 describe("TaskDetailPane dating the task", () => {
+  // Named by what the row says rather than by where it stands: the class the stamps wear is worn by
+  // every quiet line on the pane, so the first one carrying it is whichever the layout puts first.
+  const stampsRow = () =>
+    [...container.querySelectorAll(".meta")].find((e) => e.textContent?.includes(t("detail.created"))) ?? null;
+
   // The question the page could not answer before: how long has this been sitting here. The stamp is
   // written in the reader's locale, so the assertion is on the year rather than on a formatted string.
   it("says when the task was written, and when it was last written to", async () => {
     render({ taskId: 1 }); // The fixture that has moved since it was filed (mock/data.ts)
     await settle();
 
-    const meta = container.querySelector(".meta");
+    const meta = stampsRow();
     expect(meta).not.toBeNull();
     expect(meta!.textContent).toContain(t("detail.updated"));
     // Both stamps are there — filed in June, last written to a fortnight later.
@@ -128,7 +133,7 @@ describe("TaskDetailPane dating the task", () => {
     render({ taskId: 2 }); // Filed and untouched: created and updated are the same instant
     await settle();
 
-    const meta = container.querySelector(".meta");
+    const meta = stampsRow();
     expect(meta).not.toBeNull();
     expect(meta!.textContent).toContain(t("detail.created"));
     expect(meta!.textContent).not.toContain(t("detail.updated"));

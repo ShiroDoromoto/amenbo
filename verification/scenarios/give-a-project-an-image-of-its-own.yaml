@@ -1,0 +1,112 @@
+# The image a project shows for itself, from the file a reader picks to the square the surfaces draw
+# it in. It is a screen road and could be no other: the terminal's whole door onto a project's fields
+# takes a name, a note, a colour and a view, and there is nowhere on it to hand over an image.
+#
+# What the road is for is the half no build-time test reaches. The screen bakes the small square, the
+# file the reader chose goes to core as bytes, and core writes the pair — the version the surfaces draw
+# and the original it was baked from, kept so a larger one can be made later without asking for the
+# file again. Every part of that has its own test; what none of them walks is a person choosing a file
+# off a real disk and the pair coming back out of a real store afterwards.
+#
+# So the road leaves the settings and comes back, and that is the step that matters. A form holding
+# what was typed into it draws exactly what a stored image draws, and the two come apart only where
+# the screen was left and returned to. Everything before that arrival says the screen moved; only the
+# arrival says the store did.
+#
+# The image is a fixture rather than something the road describes: what is under test is a picture
+# being drawn, so any file of the right name would prove nothing. It lands in the folder the run makes
+# for itself, and the run says that path before the first step is handed over — nothing in these
+# instructions can name it, since they are rendered from this file alone.
+id: give-a-project-an-image-of-its-own
+title: A project is given an image to show for itself, it is still there after the screen is left and returned to, and taking it away puts the colour and the letter back
+description: >
+  Open the settings a project keeps for itself, read the square it draws while it has no image of its
+  own — the project's colour with the first letter of its name on it — and give it one, choosing a file
+  off the disk and saving the form. Then walk out to the board and back in, which is the only way to
+  ask whether what is drawn came out of the store rather than out of the form. Take the image away
+  again last, and the colour and the letter are what the square holds once more.
+given:
+  # The project the road works on. Raising one is a road of its own and this one opens on the settings,
+  # so what stands the project up is the premise.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  # The file the picker is pointed at. A screen road cannot make one — every move it has is a move on a
+  # record — and this is an image, which no line of YAML holds.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: image/scenario-icon.png
+      path: scenario-icon.png
+
+steps_gui:
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  # What a project draws before anybody gives it an image. It is read first because the two states are
+  # told apart by an eye, and an eye that never saw the fallback has nothing to tell the image from.
+  - type: assert
+    domain: project
+    op: icon
+    with:
+      target: greenhouse
+      present: false
+
+  - type: action
+    domain: project
+    op: set-icon
+    with:
+      target: greenhouse
+      file: scenario-icon.png
+
+  - type: assert
+    domain: project
+    op: icon
+    with:
+      target: greenhouse
+      present: true
+
+  # Out to the board and back onto the settings. The reading after this is the one the road is for: a
+  # square filled by the form and a square filled from the store are the same picture, and only a screen
+  # that was left and returned to says which one has been standing there.
+  - type: action
+    domain: project
+    op: open
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  - type: assert
+    domain: project
+    op: icon
+    with:
+      target: greenhouse
+      present: true
+
+  # And the way back off. Clearing takes the original with the version that was drawn, so what the
+  # square falls back to is the same thing it held before the road began.
+  - type: action
+    domain: project
+    op: clear-icon
+    with:
+      target: greenhouse
+
+  - type: assert
+    domain: project
+    op: icon
+    with:
+      target: greenhouse
+      present: false

@@ -32,9 +32,13 @@ impl Driver<'_> {
                 std::fs::write(&full, content).map_err(|e| format!("could not write {path}: {e}"))?;
                 Ok(Outcome::action(format!("wrote {} ({} bytes)", full.display(), content.len())))
             }
-            // The same, for text a scenario cannot hold itself. A file under `fixtures/` is where the
+            // The same, for what a scenario cannot hold itself. A file under `fixtures/` is where the
             // reference form lives: this tree's prose rule keeps a bare ref out of every `.yaml`, and
-            // the lint has nothing to find unless something really carries one.
+            // the lint has nothing to find unless something really carries one. Bytes that are not text
+            // at all come off the same shelf — an image a screen road has an operator choose in a
+            // picker — which is why the copy is made of the bytes rather than of a string, and why the
+            // line it leaves names where the file landed: on a screen road that path is what the
+            // operator hunts the picker with, the instructions being rendered from the YAML alone.
             "copy-fixture" => {
                 let from = req_str(with, "from")?;
                 let path = req_str(with, "path")?;
@@ -48,7 +52,11 @@ impl Driver<'_> {
                 let bytes = std::fs::read(&src)
                     .map_err(|e| format!("could not read the fixture {}: {e}", src.display()))?;
                 std::fs::write(&full, &bytes).map_err(|e| format!("could not write {path}: {e}"))?;
-                Ok(Outcome::action(format!("copied the fixture {from} to {path} ({} bytes)", bytes.len())))
+                Ok(Outcome::action(format!(
+                    "copied the fixture {from} to {} ({} bytes)",
+                    full.display(),
+                    bytes.len()
+                )))
             }
             // The hooks are written into a git repository, so the scenario has to stand one up first.
             // This is the one step that is not Amenbo — everything it proves is about what Amenbo

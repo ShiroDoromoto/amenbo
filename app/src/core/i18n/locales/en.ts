@@ -101,7 +101,7 @@ const ui = {
   "projset.harnessRequestHint": "Pick the tool you work with and copy the text for it. It is here whether or not this project is wired already.",
   "projset.harnessRequestDirs": "Paste it into these folders:",
   "nav.settings": "Settings", "nav.onboarding": "Get started",
-  "nav.decisions": "Decisions", "nav.commands": "Commands", "nav.mcp": "Connect via MCP", "nav.search": "Search",
+  "nav.decisions": "Decisions", "nav.mcp": "Connect via MCP", "nav.search": "Search",
   "dec.title": "Decision records",
   "dec.empty": "No decisions yet", "dec.new": "Record a decision", "dec.newTitlePh": "Decision title",
   "dec.newBodyPh": "Conclusion + rationale (don't paste raw discussion)", "dec.add": "Record", "dec.cancel": "Cancel",
@@ -400,13 +400,9 @@ const ui = {
   // names one hit.
   "search.on.task": "Task", "search.on.taskComment": "Comment on a task",
   "search.on.decision": "Decision", "search.on.decisionComment": "Comment on a decision",
-  "commands.note": "Full command reference (from agent --json · read-only)",
-  "commands.prefix": "Each line below is typed after this:",
   // The one line a screen shows in place of a command, where nothing on the machine reaches this
   // build's CLI yet (a Linux preview before its member installs it; see components/NoCli.tsx).
   "cli.none": "No command is on your PATH yet. This preview ships its CLI as a file beside the app — copy it into ~/.local/bin (or anywhere on your PATH) and it becomes the command to type.",
-  "commands.search": "Search commands", "commands.empty": "No commands", "commands.loading": "Loading…",
-  "commands.other": "Other", "commands.required": "required", "commands.examples": "Examples",
   // plugin market (the "find one" tab)
   "plugins.market": "Market", "plugins.searchPh": "Search plugins",
   "plugins.category": "Category", "plugins.anyCategory": "Any",

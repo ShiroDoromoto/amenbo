@@ -35,7 +35,7 @@ const EMPTY_CATALOG: PluginCatalog = { entries: [], sources: [], dropped: 0 };
  *
  * Outside Tauri — `npm run dev` in a browser — there is nothing to merge: the catalogs are read through
  * core, from this machine's registry cache, so the browser mock has no honest answer and returns an
- * empty one. The same call the command reference makes.
+ * empty one.
  */
 export async function fetchPluginCatalog(lang: string): Promise<PluginCatalog> {
   if (inTauri()) return invoke<PluginCatalog>("plugin_catalog_browse", { lang });

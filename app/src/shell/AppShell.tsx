@@ -8,7 +8,6 @@ import { isBlankSpaceClose } from "./outsideClose";
 import { Sidebar } from "./Sidebar";
 import { BoardScreen } from "../screens/BoardScreen";
 import { ActivityFeed } from "../screens/ActivityFeed";
-import { CommandCatalogScreen } from "../screens/CommandCatalogScreen";
 import { PluginInstalledScreen } from "../screens/PluginInstalledScreen";
 import { PluginMarketScreen } from "../screens/PluginMarketScreen";
 import { PluginUpdateBanner } from "../components/PluginUpdateBanner";
@@ -679,7 +678,6 @@ export function AppShell() {
           {nav.type === "view" && nav.id === "search" && (
             <SearchScreen onOpenTask={selectTask} onOpenDecision={selectDecision} />
           )}
-          {nav.type === "view" && nav.id === "commands" && <CommandCatalogScreen />}
           {nav.type === "view" && nav.id === "plugins" && (
             <PluginMarketScreen
               onOpenInstalled={() => navTo({ type: "view", id: "pluginsInstalled" })}

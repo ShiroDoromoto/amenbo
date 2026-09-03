@@ -172,10 +172,7 @@ export function DecisionDetailPane({
         ) : (
           <span style={editable ? { cursor: "text" } : undefined} title={editable ? t("detail.edit") : undefined} onDoubleClick={editable ? startEdit : undefined}>{d.title}</span>
         )}
-        <span style={{
-          fontSize: "var(--fs-xs)", padding: "1px 8px", borderRadius: 10, color: "#fff",
-          background: statusColor(d.status),
-        }}>{t(`dec.status.${d.status}`)}</span>
+        <span className="chip chip--status" style={{ background: statusColor(d.status) }}>{t(`dec.status.${d.status}`)}</span>
         {!editing && editable && (
           <button className="feed__action" style={{ marginLeft: 6 }} onClick={startEdit}>{t("detail.edit")}</button>
         )}
@@ -212,7 +209,7 @@ export function DecisionDetailPane({
           </div>
         </div>
       ) : d.body ? (
-        <div className="markdown" style={{ marginTop: 8, fontSize: "var(--fs-body)", maxWidth: "var(--measure-prose)" }} onDoubleClick={editable ? startEdit : undefined}>
+        <div className="markdown decbody" onDoubleClick={editable ? startEdit : undefined}>
           <Markdown>{d.body}</Markdown>
         </div>
       ) : null}
@@ -520,7 +517,7 @@ function DecisionEdges({ d, onOpenDecision }: {
           {inTauri() && (
             <button
               className="feed__action"
-              style={{ marginLeft: 6, fontSize: "var(--fs-xs)" }}
+              style={{ marginLeft: 6 }}
               onClick={() => void unlink(r)}
             >
               {t("dec.edge.unlink")}

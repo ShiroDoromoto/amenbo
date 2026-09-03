@@ -242,6 +242,10 @@
 /* The elements react-markdown emits. The line height and paragraph spacing keep Japanese
    text from feeling cramped. */
 .markdown { line-height: 1.7; }
+/* A decision's body — the one long read the app has. It is the only place that asks for the reading
+   size and the prose measure, so the two sit here rather than on `.markdown`, which is the renderer
+   and says nothing about how wide the thing it renders should be. */
+.decbody { font-size: var(--fs-body); max-width: var(--measure-prose); margin-top: var(--s-2); }
 .markdown > :first-child { margin-top: 0; }
 .markdown > :last-child { margin-bottom: 0; }
 .markdown p { margin: var(--s-2) 0; }
@@ -338,6 +342,10 @@
    keeps them apart is that a premise nobody can pass is drawn one step above it. */
 .chip--block { white-space: nowrap; cursor: default; }
 .chip--official { background: var(--c-accent); color: #fff; }
+/* A status said as a filled chip, the fill naming which status it is (`statusColor`, kept beside the
+   two places that draw it). White on a colour, so it reads as a stamp on the title rather than as one
+   more word after it, and rounder than the chips it can sit beside for the same reason. */
+.chip--status { border-radius: 10px; color: #fff; white-space: nowrap; }
 /* The index's recommendation, which sits beside the trust badge rather than on its ladder. Outlined
    in the accent instead of filled with it, so the two read as different kinds of claim at a glance
    and the solid one stays the rarer, stronger of the pair. */
@@ -375,6 +383,10 @@
 .catsrc__row { display: flex; align-items: center; gap: var(--s-2); }
 .catsrc__url { font-size: var(--fs-xs); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .catsrc__name { font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12em; }
+/* Why adding or dropping a source did not go through, said under the row that asked for it. The heed
+   step: the catalog the user already has is untouched, so nothing is broken — the ask simply did not
+   land. */
+.catsrc__err { font-size: var(--fs-xs); color: var(--c-heed); }
 /* What registering pins, while the user decides (`AMB-D-389`). Set apart from the rows above it,
    because it is a question and they are a list. */
 .catsrc__consent { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2); border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-surface); }
@@ -683,6 +695,11 @@ button.feed__target:hover { color: var(--c-accent); }
 .settings__form { padding: var(--s-4); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-4); }
 .settings__row { display: flex; gap: var(--s-3); font-size: var(--fs-md); }
 .settings__k { width: 220px; flex: none; color: var(--c-text-muted); }
+/* Fine print inside a settings row — the name under an avatar, a path, what doctor found, the note
+   after a switch. It carries the size alone, because what colours these is never the same thing: the
+   step class on a doctor line, the tick on a DoneNote, the page's own colour on the rest. `.meta` and
+   `.hint` would each overrule that with muted. */
+.settings__fine { font-size: var(--fs-xs); }
 /* Profile avatar preview: a 48px circular base (registered image or identicon). */
 .avatar-preview {
   display: inline-flex; width: 48px; height: 48px; flex: none;

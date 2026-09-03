@@ -272,10 +272,7 @@ function DecisionCard({ d, selected, onSelect }: {
     >
       {d.ref && <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
       <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</span>
-      <span style={{
-        fontSize: "var(--fs-xs)", padding: "1px 8px", borderRadius: 10, color: "#fff", whiteSpace: "nowrap",
-        background: statusColor(d.status),
-      }}>{t(`dec.status.${d.status}`)}</span>
+      <span className="chip chip--status" style={{ background: statusColor(d.status) }}>{t(`dec.status.${d.status}`)}</span>
       {/* The edge, said in the row: which decision overturned this one. It sits beside the status rather
           than instead of it — a rejected decision that was later superseded is both, and a badge that
           picked one of the two would be hiding the other. */}

@@ -320,7 +320,7 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
           </button>
         </div>
       )}
-      {error && <div style={{ color: "var(--c-heed)", fontSize: "var(--fs-xs)" }}>{error}</div>}
+      {error && <div className="catsrc__err">{error}</div>}
       <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.sourcesNote")}</div>
     </div>
   );

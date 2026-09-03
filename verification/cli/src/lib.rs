@@ -109,15 +109,16 @@ pub fn stand_world<'a>(
         let outcome = driver.exec(step).map_err(|e| format!("given step {}: {e}", i + 1))?;
         stood.push(outcome.note);
     }
-    Ok(World { stood, _driver: driver })
+    Ok(World { stood, driver })
 }
 
 /// A world that has been stood up, and is standing for as long as this is held.
 pub struct World<'a> {
     stood: Vec<String>,
-    /// Held, never read: the driver owns what a premise put on the loopback, and dropping it would
-    /// close the port a registration is pinned to while the run is still pointed at it.
-    _driver: Driver<'a>,
+    /// The driver that stood the world up, kept for two reasons. It owns what a premise put on the
+    /// loopback, so dropping it would close the port a registration is pinned to while the run is
+    /// still pointed at it; and it is the way back into the store afterwards ([`World::read`]).
+    driver: Driver<'a>,
 }
 
 impl World<'_> {
@@ -125,6 +126,23 @@ impl World<'_> {
     /// road — so what a run stood on is readable beside what it then walked.
     pub fn stood(&self) -> &[String] {
         &self.stood
+    }
+
+    /// Put one assert to the store the world stands in, and hand back the verdict and the line the
+    /// CLI road would report it with. `Err` is an execution failure (the binary would not run, the
+    /// op is not one this driver maps); an assert that ran and came out false is `Ok((false, …))`.
+    ///
+    /// This is what the screen harness closes its unshowable asserts with. It is the
+    /// very arm the CLI road judges that assert with, reached through the driver that stood the
+    /// premise up — so the two drivers answer one question one way, and a road does not have to say
+    /// which of them is asking.
+    ///
+    /// An action handed here would be **carried out**, since that is what `exec` does with one. The
+    /// caller is the one that knows an assert from an action, and the screen harness only sends the
+    /// asserts on its own closed table.
+    pub fn read(&mut self, step: &Step) -> Result<(bool, String), String> {
+        let outcome = self.driver.exec(step)?;
+        Ok((outcome.pass, outcome.note))
     }
 }
 

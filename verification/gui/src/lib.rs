@@ -12,10 +12,12 @@
 //!
 //! An assert step is judged from that shot by asking the same tool to read it (macOS **Vision**
 //! behind it): the harness derives the text the step expects on screen and matches it against the
-//! reading, passing when it is present (or absent, for a `present: false` assert). An assert OCR
-//! cannot mechanically judge — a structured field value — is left as a `Review`: its shot is kept
-//! for an AI/human eye, the run is not failed by it. tesseract stays the Linux container path
-//! (`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to its own world.
+//! reading, passing when it is present (or absent, for a `present: false` assert). What no screen
+//! draws at all is put to the store instead, through the CLI the bundle ships — a short, closed
+//! table ([`reads_the_store`]). An assert neither of them can settle — a structured
+//! field value — is left as a `Review`: its shot is kept for an AI/human eye, the run is not failed
+//! by it. tesseract stays the Linux container path (`scripts/docker/gui-e2e.sh`); each driver maps
+//! the one scenario source to its own world.
 //!
 //! The screen tool is the input primitive too, called by whoever drives the screen between steps:
 //! its `find` / `click-named` / `click` / `dblclick` / `type` / `key` / `scroll` carry out the action
@@ -482,7 +484,8 @@ impl Instructor {
     /// however they are folded. What is worth saying is that the `present: false` half is the more
     /// dangerous one: a reading that cannot find a title it is looking at passes an absence step, so
     /// such a line reads green while proving nothing. Both halves go to a `Review`, which is the same
-    /// answer this harness gives every assert OCR cannot judge.
+    /// answer this harness gives every assert OCR cannot judge — bar the few it reads off the store
+    /// instead ([`reads_the_store`]), which are settled before an expectation is ever asked for.
     ///
     /// `found` is judged on the same text again — every hit row leads with the ref and the title of the
     /// record it belongs to, whichever face the words were written on. What that settles is that the
@@ -1549,6 +1552,17 @@ impl Instructor {
                     facet_face(with)?
                 ),
             },
+            // The one assert on this road nobody is asked to look at. How many images the store kept
+            // is drawn on no screen, so the step is closed by reading the store after the shot
+            // (`reads_the_store`) — and the line still says what is being asked, so an operator
+            // reading the checklist knows why a step they do nothing for is standing in it.
+            (Domain::Store, "blobs") => {
+                let n = count(with, "count")?;
+                format!(
+                    "Nothing to do at the screen — this step is closed by reading the store, which is asked to be holding {n} blob {}.",
+                    if n == 1 { "file" } else { "files" }
+                )
+            }
             // A nudge came up by itself, or has gone. Nothing is pressed here and nothing is opened —
             // what is under test is that the offer arrives unasked, on a device that has been used
             // enough for it, so the line is the screen as the app left it.
@@ -2627,14 +2641,15 @@ fn show(v: &serde_yaml::Value) -> String {
 // ---------------------------------------------------------------------------
 
 /// One step's verdict. An action carries no screen judgment; an OCR-judged assert is `Pass` or
-/// `Fail`; an assert OCR cannot mechanically judge is `Review` — kept for an AI/human eye, never a
-/// run failure.
+/// `Fail`; an assert closed by reading the store is `Read` (or `Fail`); an assert neither of them
+/// can judge is `Review` — kept for an AI/human eye, never a run failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
     Action,
     Pass,
     Fail,
     Review,
+    Read,
 }
 
 impl Verdict {
@@ -2644,8 +2659,27 @@ impl Verdict {
             Verdict::Pass => "pass",
             Verdict::Fail => "fail",
             Verdict::Review => "review",
+            Verdict::Read => "read",
         }
     }
+}
+
+/// Whether an assert is closed by reading the store rather than by reading the screen.
+///
+/// What is on this table is state **no surface draws** — the original image an ingest kept, and
+/// nothing else yet. Neither OCR nor an eye can settle that, so left to them it goes down as a
+/// `Review` nobody can close, and a road walked before a release says nothing about it.
+///
+/// The table is closed and stays short on purpose. An assert whose words *are* on screen remains
+/// the screen's: a road that read the store for those would be checking the build's records
+/// against themselves, rather than against what a reader sees.
+pub fn reads_the_store(domain: Domain, op: &str) -> bool {
+    matches!((domain, op), (Domain::Store, "blobs"))
+}
+
+/// The same question of a whole step — an action is never one of these, however it is written.
+pub fn step_reads_the_store(step: &Step) -> bool {
+    matches!(step, Step::Assert { domain, op, .. } if reads_the_store(*domain, op))
 }
 
 /// What one step left behind: its instruction, the screenshot proving the operator stood at it,
@@ -2666,10 +2700,15 @@ pub struct StepRecord {
     /// whose shot is worth an eye, and a run where several of them do is a reader going wrong rather
     /// than a screen.
     pub slipped: bool,
+    /// What the store answered, for an assert closed by reading it ([`reads_the_store`]) — the same
+    /// line the CLI road reports that assert with. It is the whole of the evidence for such a step:
+    /// the shot beside it is of a screen that draws none of what was asked.
+    pub told: Option<String>,
 }
 
-/// The whole walk: the per-step records and the roll-up. `passed` is the AND of every OCR-judged
-/// assert (actions and `Review` steps never fail it), so a release gate reads it directly.
+/// The whole walk: the per-step records and the roll-up. `passed` is the AND of every assert a
+/// machine judged — the OCR-judged ones and the ones read off the store — while actions and
+/// `Review` steps never fail it, so a release gate reads it directly.
 #[derive(Debug)]
 pub struct WalkOutcome {
     pub records: Vec<StepRecord>,
@@ -2694,27 +2733,37 @@ pub struct StepBrief<'a> {
 /// Walk a scenario step by step: capture one screenshot per step into `evidence_dir`, and for an
 /// assert OCR can judge, read the shot back and decide `Pass`/`Fail` against the expected text.
 /// Every side effect is injected — `capture` and `read_text` shell out to the screen tool,
-/// `hand_over` gives the step away before it is taken; a test passes closures that only
-/// touch/return fixtures — so the walk is verifiable without a GUI. A capture failure aborts the
-/// walk (a missing shot is missing evidence); each judged step's reading is written next to its
-/// shot as it came back from the reader, before the fold the match is taken on.
+/// `hand_over` gives the step away before it is taken, `read_store` asks the store what a shot
+/// cannot show; a test passes closures that only touch/return fixtures — so the walk is verifiable
+/// without a GUI. A capture failure aborts the walk (a missing shot is missing evidence); each
+/// OCR-judged step's reading is written next to its shot as it came back from the reader, before
+/// the fold the match is taken on.
 ///
 /// `hand_over` is what puts somebody at the screen for every shot. It is called with
 /// the step about to be taken, **before** anything is captured, and it is called for the first step
 /// as well as the rest — so the screen a shot is taken of is one somebody was asked to stand up,
 /// and no shot is filed as evidence of a step nobody carried out. A hand-over that fails aborts the
 /// walk, since a run nobody is holding would shoot whatever screen was left standing.
-pub fn walk<C, O, H>(
+///
+/// `read_store` closes the asserts on [`reads_the_store`], and it is asked **in the step's own
+/// place** rather than once the road has been walked. The order is the whole point: a road says how
+/// many blobs the store holds before an image is registered and again after, and a reading taken at
+/// the end would answer both with the state the last step left. Those steps are handed over and shot
+/// like every other, since what makes the reading honest is that the screen ahead of it is the one
+/// the step before stood up.
+pub fn walk<C, O, H, R>(
     scenario: &Scenario,
     evidence_dir: &Path,
     mut capture: C,
     mut read_text: O,
     mut hand_over: H,
+    mut read_store: R,
 ) -> Result<WalkOutcome, String>
 where
     C: FnMut(&Path) -> Result<(), String>,
     O: FnMut(&Path) -> Result<Reading, String>,
     H: FnMut(&StepBrief<'_>) -> Result<(), String>,
+    R: FnMut(&Step) -> Result<(bool, String), String>,
 {
     std::fs::create_dir_all(evidence_dir)
         .map_err(|e| format!("could not create evidence dir {}: {e}", evidence_dir.display()))?;
@@ -2732,6 +2781,7 @@ where
         };
         let instruction = instructor.render(step)?;
         let expected = instructor.expectation(step);
+        let from_store = kind == "assert" && reads_the_store(domain, &op);
         let domain = domain_str(domain);
         let screenshot = format!("{:02}-{kind}-{domain}-{op}.png", i + 1);
         let shot_path = evidence_dir.join(&screenshot);
@@ -2748,6 +2798,30 @@ where
 
         capture(&shot_path)
             .map_err(|e| format!("step {}: capturing `{screenshot}` failed: {e}", i + 1))?;
+
+        // The asserts nothing draws, put to the store instead of to the shot. Asked first, since a
+        // step on that table names no expectation and would otherwise fall through to `Review`.
+        if from_store {
+            let (pass, note) = read_store(step)
+                .map_err(|e| format!("step {}: reading the store failed: {e}", i + 1))?;
+            if !pass {
+                passed = false;
+            }
+            records.push(StepRecord {
+                index: i,
+                kind,
+                domain: domain.to_string(),
+                op,
+                instruction,
+                screenshot,
+                verdict: if pass { Verdict::Read } else { Verdict::Fail },
+                expected: None,
+                found: None,
+                slipped: false,
+                told: Some(note),
+            });
+            continue;
+        }
 
         // Judge an assert that named an expectation; keep the reading as evidence.
         let (verdict, found, slipped) = match (kind, &expected) {
@@ -2784,13 +2858,15 @@ where
             expected,
             found,
             slipped,
+            told: None,
         };
         records.push(record);
     }
     Ok(WalkOutcome { records, passed })
 }
 
-fn domain_str(d: Domain) -> &'static str {
+/// A domain as a road writes it — the other half of the `store blobs` a message names a step by.
+pub fn domain_str(d: Domain) -> &'static str {
     match d {
         Domain::Task => "task",
         Domain::Decision => "decision",
@@ -2836,8 +2912,15 @@ pub fn write_manifest(
                 ),
                 _ => String::new(),
             };
+            // What the store answered, for a step the screen had no answer for. It carries the whole
+            // reading rather than a flag: the verdict says whether the count met, and this says what
+            // it was — which is what a reader coming back to a red step needs and cannot re-ask for.
+            let told = match &r.told {
+                Some(t) => format!(",\"told\":{}", js(t)),
+                None => String::new(),
+            };
             format!(
-                "{{\"step\":{},\"kind\":{},\"domain\":{},\"op\":{},\"verdict\":{},\"instruction\":{},\"screenshot\":{}{}}}",
+                "{{\"step\":{},\"kind\":{},\"domain\":{},\"op\":{},\"verdict\":{},\"instruction\":{},\"screenshot\":{}{}{}}}",
                 r.index + 1,
                 js(r.kind),
                 js(&r.domain),
@@ -2845,7 +2928,8 @@ pub fn write_manifest(
                 js(r.verdict.as_str()),
                 js(&r.instruction),
                 js(&r.screenshot),
-                expect
+                expect,
+                told
             )
         })
         .collect();
@@ -2913,6 +2997,13 @@ steps_gui:
         let s = amenbo_scenario::load_str(yaml).expect("parses");
         s.validate().expect("valid");
         s
+    }
+
+    /// The reader handed to a walk over a road with no step on [`reads_the_store`]. Being called at
+    /// all is this harness sending a step somewhere it does not belong, so it says so rather than
+    /// answering.
+    fn nothing_to_read(_: &Step) -> Result<(bool, String), String> {
+        unreachable!("no step on this road is closed by reading the store")
     }
 
     #[test]
@@ -5322,6 +5413,7 @@ steps_gui:
             // The board OCRs to text that contains the seed title.
             |_| Ok(reading("me-ai board\nSEED\nsome other card")),
             |_| Ok(()),
+            nothing_to_read,
         )
         .expect("walk");
 
@@ -5359,6 +5451,7 @@ steps_gui:
             |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("an empty board with no such card")),
             |_| Ok(()),
+            nothing_to_read,
         )
         .expect("walk");
 
@@ -5466,6 +5559,7 @@ steps_gui:
             |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("SCENARIO — nobodv holds it")),
             |_| Ok(()),
+            nothing_to_read,
         )
         .expect("walk");
 
@@ -5485,8 +5579,15 @@ steps_gui:
         let s = load(SCENARIO);
         let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-fail-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let err = walk(&s, &dir, |_| Err("no screen".to_string()), |_| Ok(reading("")), |_| Ok(()))
-            .unwrap_err();
+        let err = walk(
+            &s,
+            &dir,
+            |_| Err("no screen".to_string()),
+            |_| Ok(reading("")),
+            |_| Ok(()),
+            nothing_to_read,
+        )
+        .unwrap_err();
         assert!(err.contains("step 1") && err.contains("no screen"), "got: {err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -5516,6 +5617,7 @@ steps_gui:
                 assert!(!b.instruction.is_empty(), "a step is handed over as a sentence to carry out");
                 Ok(())
             },
+            nothing_to_read,
         )
         .expect("walk");
 
@@ -5547,10 +5649,131 @@ steps_gui:
             },
             |_| Ok(reading("")),
             |_| Err("nobody is watching".to_string()),
+            nothing_to_read,
         )
         .unwrap_err();
         assert!(err.contains("step 1") && err.contains("nobody is watching"), "got: {err}");
         assert_eq!(*shots.borrow(), 0, "nothing was shot");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A road whose last step asks the store something no screen draws.
+    const OFF_THE_STORE: &str = r#"
+id: sample-store
+title: The bytes an ingest kept, which no screen draws
+steps_gui:
+  - type: action
+    domain: store
+    op: open-settings
+  - type: assert
+    domain: store
+    op: blobs
+    with: { count: 1 }
+"#;
+
+    /// The table is what decides where an assert goes, and it holds only what no surface draws. A
+    /// slot a reader can see stays the screen's — a road that read the store for that would be
+    /// checking the build's records against themselves.
+    #[test]
+    fn only_what_no_screen_draws_is_read_off_the_store() {
+        assert!(reads_the_store(Domain::Store, "blobs"));
+        assert!(!reads_the_store(Domain::Store, "avatar"), "a slot on screen is OCR's or an eye's");
+        assert!(!reads_the_store(Domain::Task, "listed"));
+        assert!(
+            !step_reads_the_store(&Step::Action {
+                domain: Domain::Store,
+                op: "blobs".to_string(),
+                with: Args::new(),
+                bind: None,
+            }),
+            "an action is never read as an assert, however it is written",
+        );
+    }
+
+    /// The step nothing draws, closed by the store rather than by the shot: it never reaches the
+    /// reader, it carries what the store said, and its shot is kept beside it all the same.
+    #[test]
+    fn an_assert_nothing_draws_is_closed_by_reading_the_store() {
+        let s = load(OFF_THE_STORE);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-read-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let asked: RefCell<usize> = RefCell::new(0);
+        let outcome = walk(
+            &s,
+            &dir,
+            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("a step read off the store is never sent to OCR"),
+            |_| Ok(()),
+            |_| {
+                *asked.borrow_mut() += 1;
+                Ok((true, "the store holds 1 blob file(s) (expected 1, as expected)".to_string()))
+            },
+        )
+        .expect("walk");
+
+        assert!(outcome.passed);
+        assert_eq!(*asked.borrow(), 1, "asked once, for the one step on the table");
+        let rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
+        assert_eq!(rec.verdict, Verdict::Read);
+        assert_eq!(rec.found, None, "nothing was looked for on the shot");
+        assert!(rec.told.as_deref().unwrap().contains("1 blob file"), "got: {:?}", rec.told);
+        assert!(
+            dir.join(&rec.screenshot).exists(),
+            "the screen it was read beside is evidence too",
+        );
+
+        let manifest = write_manifest(&dir, &s, &[], &outcome).expect("manifest");
+        let text = std::fs::read_to_string(manifest).unwrap();
+        assert!(text.contains("\"verdict\":\"read\""), "got: {text}");
+        assert!(text.contains("\"told\":\"the store holds 1 blob"), "got: {text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// And a store that says otherwise reddens the run, the way a missing word on a shot does — the
+    /// whole point of the reading is that it is a gate and not a note for somebody to close.
+    #[test]
+    fn a_store_that_says_otherwise_reds_the_run() {
+        let s = load(OFF_THE_STORE);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-read-red-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let outcome = walk(
+            &s,
+            &dir,
+            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("a step read off the store is never sent to OCR"),
+            |_| Ok(()),
+            |_| Ok((false, "the store holds 0 blob file(s) (expected 1, MISMATCH)".to_string())),
+        )
+        .expect("walk");
+
+        assert!(!outcome.passed, "the reading is a gate, not a note");
+        let rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
+        assert_eq!(rec.verdict, Verdict::Fail);
+        assert!(rec.told.as_deref().unwrap().contains("MISMATCH"), "got: {:?}", rec.told);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A store that could not be read at all is an execution failure, not a red step: the run has
+    /// nothing to say about the state it was sent to ask about.
+    #[test]
+    fn a_store_that_cannot_be_read_aborts_the_walk() {
+        let s = load(OFF_THE_STORE);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-read-err-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let err = walk(
+            &s,
+            &dir,
+            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("a step read off the store is never sent to OCR"),
+            |_| Ok(()),
+            |_| Err("the binary would not run".to_string()),
+        )
+        .unwrap_err();
+
+        assert!(err.contains("step 2") && err.contains("would not run"), "got: {err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

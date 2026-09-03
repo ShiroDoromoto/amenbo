@@ -243,8 +243,9 @@ key is a monospace word of five or six characters, well under the floor, and `ch
 which no reading of a photograph could do anyway. A lowercase `i` is deliberately not in the set: the
 face this serves draws it with a dot, so folding it onto `l` would give away discrimination against a
 misreading this screen does not produce. A green earned this way carries `slipped` like any other.
-An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
-kept for an AI/human eye and does not fail the run. A task's **title is one of those once the task
+An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`, unless it is
+one of the few read off the store instead (below): its shot is kept for an AI/human eye and does not
+fail the run. A task's **title is one of those once the task
 has ended**: done and rejected are drawn with a line through them, and the reader returns the glyphs
 under that line as other letters (`SCENARIO — work is over` came back as `SCENARIOwotk is eveF`), so
 no fold brings the two sides together. The harness follows each binding through its terminal states
@@ -253,6 +254,35 @@ absent one: a reading that cannot find a title it is looking straight at passes 
 step, so those lines read green while proving nothing — which is what this takes away. Write the
 machine-judged half of a road on cards that are still open. tesseract stays the Linux container path
 (`scripts/docker/gui-e2e.sh`); each driver walks the road written for it.
+
+### The asserts no screen draws — read off the store
+
+OCR and an eye can close only what is drawn somewhere, and some state is not. The file a reader
+chose for an avatar is kept beside the 96px square baked from it, and no screen draws that
+original: left as a `Review`, a step about it says nothing a release could stand on, since its
+shot is of a screen the state was never on.
+
+So a short, closed table of asserts is put to the **store** instead — `amenbo_verify_gui::reads_the_store`,
+which holds `store blobs` and nothing else yet. Such a step is judged by the very arm
+the CLI road judges it with, reached through the driver that stood the world up, so the two drivers
+answer one question one way. It comes out `read` in the summary (`☑`) and in `manifest.json`, and
+carries what the store said as `told`. A count that does not meet reds the run like any failed
+assert; a store that cannot be read at all ends it.
+
+Where the reading is taken settles three things:
+
+- **The step is still handed over and still shot.** What makes the reading honest is that the screen
+  in front of it is the one the step before stood up, and the shot is the evidence of that.
+- **It is read in the step's own place, not once the road has been walked.** A road says how many
+  blobs the store holds before an image is registered and again after; a single reading at the end
+  would answer both with the state the last step left.
+- **A road carrying one needs a `given:`.** What reads the store is the premise's own driver, and
+  booting one for a road that declared no world would raise a project the road was written without —
+  so such a road is turned away before a store is made.
+
+What stays off that table is as much the point. An assert whose words *are* on screen remains the
+screen's: reading the store for those would check the build's records against themselves rather than
+against what a reader sees.
 
 The Linux container carries no toolchain, so it can't read the scenario itself. Its host launcher
 (`make verify-gui-linux`) resolves the scenario through the `emit` bin and passes the card — the
@@ -291,9 +321,9 @@ a tool other than the repo's own, and `--fixtures <dir>` at a shelf other than
 `verification/fixtures`. Both of those last two are resolved from where the harness was compiled
 when they are left out, so both have to be given to a run that is not standing in this tree — which
 is what `devtool vm verify run` passes for a run in the VM.
-Exit is 0 when every OCR-judged assert passed and every step was
-captured, non-zero on a failed assert or a load/capture/reading failure — a `Review` step is closed
-by a human from the evidence, not by the exit code.
+Exit is 0 when every assert a machine judged — off the shot, or off the store — passed and every
+step was captured, non-zero on a failed assert or a load/capture/reading failure — a `Review` step is
+closed by a human from the evidence, not by the exit code.
 
 **Name what to press rather than aim at it.** `swift scripts/screen.swift find <pid>` lists every
 element on screen with the name it answers to and where it stands, and `click-named <pid> <name>`

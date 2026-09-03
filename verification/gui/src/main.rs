@@ -4,8 +4,13 @@
 //! instruction (no command line, no pixel), launches the app bundle it was pointed at against a
 //! throwaway store, and hands the shooting and the reading to the screen tool
 //! (`scripts/screen.swift`): the app is named by the pid that launch answered with, one shot per
-//! step lands in an evidence directory, and each assert OCR can judge is decided from that shot. An
-//! assert it cannot judge is left as a `Review` for a human eye, and its shot is kept.
+//! step lands in an evidence directory, and each assert OCR can judge is decided from that shot.
+//!
+//! Three things can close an assert, and which one is on it follows from what the assert asks about.
+//! Words on the screen are OCR's. State **no screen draws** — the original image an ingest kept — is
+//! read back out of the store the app is running against, through the CLI the same bundle ships;
+//! what is on that table is [`amenbo_verify_gui::reads_the_store`], and it is short.
+//! Everything else is left as a `Review` for a human eye, with its shot kept.
 //!
 //! Usage: `verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>]
 //!                    [--fixtures <dir>] [--json]`
@@ -34,7 +39,10 @@
 //! Into that store, before the app is started, goes the world the scenario declared: `given` is
 //! walked with the CLI the same bundle ships, so a road that stands on records it never makes finds
 //! them there. The screen's own moves are not among them — those are the road, and the operator
-//! walks them.
+//! walks them. What stood the world up is held for the length of the run, since it is also what
+//! reads the store back for the asserts no screen can answer — so a road carrying one of those and
+//! declaring no world is turned away at the door rather than booting a driver, which would raise a
+//! project the road was written without.
 //!
 //! **Every step is handed over before it is taken, and there is no way to ask for otherwise.**
 //! The run prints the step it is about to shoot and waits for a line on stdin;
@@ -53,9 +61,10 @@
 //! [`amenbo_verify_gui::instructions`] returns, one to a line, which is the very text a run hands the
 //! operator; a road carrying an op this harness has not mapped fails here exactly as it would there.
 //!
-//! Exit code is the machine signal: 0 when every OCR-judged assert passed and every step was
-//! captured, non-zero on a failed assert, a load failure, or a capture/OCR failure. A `Review`
-//! step (an assert OCR cannot judge) does not fail the run — a human closes it from the evidence.
+//! Exit code is the machine signal: 0 when every assert a machine judged — off the shot or off the
+//! store — passed and every step was captured, non-zero on a failed assert, a load failure, or a
+//! capture/OCR/store-read failure. A `Review` step does not fail the run — a human closes it from
+//! the evidence.
 
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -80,7 +89,7 @@ fn main() -> ExitCode {
 
     match run(&opts) {
         Ok(true) => ExitCode::SUCCESS,
-        Ok(false) => ExitCode::FAILURE, // the scenario ran but an OCR-judged assert failed
+        Ok(false) => ExitCode::FAILURE, // the scenario ran but an assert a machine judged failed
         Err(msg) => {
             eprintln!("verify-gui: {msg}");
             ExitCode::FAILURE
@@ -123,6 +132,25 @@ fn run(opts: &Opts) -> Result<bool, String> {
     // evidence a run files is only worth what the build behind it is.
     amenbo_verify_gui::shipped::ensure_release_build(bundle)?;
 
+    // An assert closed by reading the store needs a reader, and the reader is the premise's own
+    // driver. Asked before a store is made, because standing one up for a road that declared no
+    // world is not the way out: the driver raises a project as it boots, which would put a record on
+    // the screen this road was written without.
+    if scenario.given.is_empty() {
+        if let Some(step) = scenario
+            .steps(amenbo_scenario::Driver::Gui)
+            .iter()
+            .find(|s| amenbo_verify_gui::step_reads_the_store(s))
+        {
+            return Err(format!(
+                "`{}` carries a step closed by reading the store ({}), and declares no `given:` — \
+                 what reads the store is the premise's own driver, so give the road a world to stand on",
+                scenario.id,
+                step_name(step)
+            ));
+        }
+    }
+
     // The store comes next, and everything after it is pointed at it: the world is stood up in it,
     // and the app is launched at it. Both are let go of before it is, which is what the order of
     // these bindings says — the app goes down, then whatever the premise was holding, then the store.
@@ -132,7 +160,7 @@ fn run(opts: &Opts) -> Result<bool, String> {
     // The world the scenario declared, stood up with the CLI this very bundle ships. Before the
     // launch, because a store is read as the app starts; and before there is an evidence directory,
     // because a premise that could not be stood up must leave no shots of a half-built world.
-    let world = stand_world(&scenario, bundle, &store, opts.fixtures.clone())?;
+    let mut world = stand_world(&scenario, bundle, &store, opts.fixtures.clone())?;
 
     let mut gui = launch::launch(bundle, &store)?;
     gui.wait_until_shootable(&opts.screen)?;
@@ -163,6 +191,13 @@ fn run(opts: &Opts) -> Result<bool, String> {
         |path| shoot(pid, path, &screen),
         |image| read_shot(image, &screen),
         |brief| hand_over(&stdin, brief),
+        // The store the app is running against, asked through the driver that stood its world up.
+        // A road with no world never reaches here — the door above turned it away — so a step that
+        // arrives with nothing to read is this harness having gone wrong, not the road.
+        |step| match world.as_mut() {
+            Some(w) => w.read(step),
+            None => Err("internal: a step to read the store, on a road that stood none up".into()),
+        },
     )?;
 
     let stood = world.as_ref().map(World::stood).unwrap_or_default();
@@ -226,10 +261,17 @@ fn step_lines(r: &StepRecord) -> String {
         Verdict::Pass => "✓",
         Verdict::Fail => "✗",
         Verdict::Review => "?",
+        Verdict::Read => "☑",
     };
     let slip = if r.slipped { "  (the words met on a forgiven glyph — worth an eye)" } else { "" };
+    // What the store said, on a step whose shot says nothing about it. It goes under the shot rather
+    // than in place of it: the screen it was read beside is part of the evidence either way.
+    let told = match &r.told {
+        Some(t) => format!("\n        store: {t}"),
+        None => String::new(),
+    };
     format!(
-        "  {mark} {:02} [{}] {}\n        → {}{slip}",
+        "  {mark} {:02} [{}] {}\n        → {}{slip}{told}",
         r.index + 1,
         r.kind,
         r.instruction,
@@ -264,6 +306,15 @@ fn hand_over(stdin: &std::io::Stdin, brief: &StepBrief<'_>) -> Result<(), String
         Ok(_) => Ok(()),
         Err(e) => Err(format!("could not read the go-ahead from stdin: {e}")),
     }
+}
+
+/// A step named the way a road writes it (`store blobs`), for a message about the road itself.
+fn step_name(step: &amenbo_scenario::Step) -> String {
+    let (domain, op) = match step {
+        amenbo_scenario::Step::Action { domain, op, .. }
+        | amenbo_scenario::Step::Assert { domain, op, .. } => (domain, op),
+    };
+    format!("{} {op}", amenbo_verify_gui::domain_str(*domain))
 }
 
 /// A fresh evidence dir under the temp tree, named for the scenario and the wall clock so two

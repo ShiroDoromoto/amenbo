@@ -984,8 +984,9 @@ written as the CLI writes it, since the chips carrying them are in the reader's 
 `filters-folded` reads what the fold leaves: the values off the screen, and the count of narrowing
 axes on the control they folded into.
 
-The decisions tab has that same panel over its own list, and its own entries for it —
-`decision open-filters` / `choose-filter` / `close-filters` / `filters-folded` / `narrowed`. They are
+The decisions tab has that same panel over its own list — and a box of its own beside it — and its own
+entries for both: `decision narrow` / `open-filters` / `choose-filter` / `close-filters` /
+`filters-folded` / `narrowed`. They are
 separate from the board's rather than shared with them because a road has to say which of the two
 tabs it is standing on: a step that named neither could be walked on either and would prove whichever
 the operator happened to be looking at. On the decision side `narrowed` is the screen's answer to what
@@ -1219,6 +1220,29 @@ together, and the second as a pair of offsets. Both are declared on `found` like
 the GUI harness renders them into the line an eye closes, and the CLI driver refuses a step naming
 either instead of passing over it. Silence would be worse than a red: a step that asked and was never
 answered reads exactly like one that was.
+
+**A number is a query no scenario can write.** The store issues it, so a road knows which record it
+means and never what that record was numbered — which is why the three steps that put something into a
+search box (`task found` / `decision found`, `task narrow`, `task open-hit`) take `number_of:` naming a
+binding in place of `words:`, and exactly one of the two. `spelled:` is the shape it goes in as, `bare`
+(`12`) or `hash` (`#12`), both of which the box reads. The two roads fill it in differently and for the
+same reason the rest of this section names: the CLI driver knows what the run created and substitutes
+the number, while the GUI harness renders its lines from the YAML alone — before any world stands up —
+so it names the record instead and the operator reads the number off the screen. Which box was typed
+into is what settles the side a number with no type code is read as: `task narrow` types over the
+columns and answers with a task, `decision narrow` types over the rows on the other tab and answers
+with a decision.
+
+What such a query is answered with is a record put at the **top** of the answer, ahead of whatever the
+words matched, so `first: true` on `found` asks for that place rather than for a place anywhere in it.
+The CLI driver reads the order off the hits; the GUI harness leaves it as a `Review`, a reading giving
+back which words are on a shot and never which line they were on.
+
+The words below that top row are reached the same way round. `mentions:` on `task update` and `task
+comment` names a record whose number is written into the text the step writes, after the words it
+wrote — the only way a road can put one record's number inside another's, since the store issues it.
+That is what lets one answer hold both halves: the record the number names at the top, and the record
+that merely wrote it down underneath.
 
 An argument can also mean two different things on the two roads, and `attach`'s `file:` is the one
 that does. To the CLI driver it is a path in the run's own folder, put there by a `repo write-file` a

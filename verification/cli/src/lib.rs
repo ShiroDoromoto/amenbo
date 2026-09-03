@@ -671,6 +671,21 @@ impl<'a> Driver<'a> {
         Ok(kind.spell(id))
     }
 
+    /// The text a step writes, with the number of the record its `mentions` names put on the end of it
+    /// as a word of its own. Left out, the text is what the step wrote and nothing more.
+    ///
+    /// A number goes in this way rather than being typed into the text because the store issues it: a
+    /// road knows which record it means and never what that record was numbered. What it is for is a
+    /// search — a number is asked as a word underneath the record it pins, which is only visible where
+    /// another record has it written in it.
+    fn mentioning(&self, with: &Args, text: &str) -> Result<String, String> {
+        if !with.contains_key("mentions") {
+            return Ok(text.to_string());
+        }
+        let id = self.resolve_key(with, "mentions")?;
+        Ok(format!("{text} {id}"))
+    }
+
     /// The same, for an op that names a second object under its own key (`decision link`'s `task`).
     fn resolve_key(&self, with: &Args, key: &str) -> Result<i64, String> {
         let name = req_str(with, key)?;

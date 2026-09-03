@@ -422,7 +422,7 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
         {pc.addedBlockers.map((b) => (
           <button
             type="button"
-            className="chip chip--link"
+            className="feed__target"
             key={`b${b.id}`}
             style={{ marginRight: 4 }}
             title={t("detail.premiseAdded")}
@@ -434,7 +434,7 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
         {pc.addedDecisions.map((d) => (
           <button
             type="button"
-            className="chip chip--link"
+            className="feed__target"
             key={`d${d.id}`}
             style={{ marginRight: 4 }}
             title={t("detail.premiseAdded")}
@@ -446,7 +446,7 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
         {pc.reopenedDecisions.map((d) => (
           <button
             type="button"
-            className="chip chip--link"
+            className="feed__target"
             key={`r${d.id}`}
             style={{ marginRight: 4 }}
             title={t("detail.premiseReopened")}

@@ -246,6 +246,9 @@ const gatePicker = (i = 0) => rows()[i].querySelector<HTMLSelectElement>("select
 const options = (el: HTMLSelectElement) => Array.from(el.options).map((o) => o.textContent);
 /** Every badge on screen, in order — the row's own state, told apart from the prose around it. */
 const chips = () => Array.from(container.querySelectorAll(".chip")).map((c) => c.textContent);
+/** What each row is named for — a project, or the device. A name is written rather than badged
+ *  (`AMB-D-841`), so the two are read apart here as well. */
+const rowNames = () => Array.from(container.querySelectorAll(".rowname")).map((c) => c.textContent);
 
 beforeEach(() => {
   hoisted.installs = [];
@@ -337,7 +340,8 @@ describe("moving a gate from the list", () => {
     render();
 
     act(() => { select(gatePicker(), "2"); });
-    expect(chips()).toEqual(["beta"]);
+    expect(rowNames()).toEqual(["beta"]);
+    expect(chips(), "a crossing just picked carries no state yet").toEqual([]);
     expect(hoisted.gated, "picking writes nothing on its own").toEqual([]);
 
     await act(async () => { button(t("plugins.enable"))!.click(); });
@@ -361,10 +365,11 @@ describe("moving a gate from the list", () => {
     hoisted.installs = [row({ name: "notify", on: [1, 3] })];
     render();
 
+    expect(rowNames()).toEqual(["alpha", "gamma"]);
     expect(chips()).toEqual([
       t("plugins.enabledChip"),
-      "alpha", t("plugins.enabledChip"),
-      "gamma", t("plugins.enabledChip"),
+      t("plugins.enabledChip"),
+      t("plugins.enabledChip"),
     ]);
     expect(options(gatePicker())).toEqual([t("plugins.gate.addProject"), "beta"]);
   });
@@ -425,7 +430,8 @@ describe("a plugin this build cannot speak to", () => {
       }),
     ];
     render();
-    expect(chips()).toEqual([t("plugins.notFiring"), "alpha", t("plugins.enabledChip")]);
+    expect(rowNames()).toEqual(["alpha"]);
+    expect(chips()).toEqual([t("plugins.notFiring"), t("plugins.enabledChip")]);
     // Core's own line, not a second judgement of our own.
     expect(container.textContent).toContain("payload v2, this build speaks v1");
   });
@@ -434,7 +440,8 @@ describe("a plugin this build cannot speak to", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [row({ name: "notify", on: [1] })];
     render();
-    expect(chips()).toEqual([t("plugins.enabledChip"), "alpha", t("plugins.enabledChip")]);
+    expect(rowNames()).toEqual(["alpha"]);
+    expect(chips()).toEqual([t("plugins.enabledChip"), t("plugins.enabledChip")]);
   });
 });
 
@@ -451,7 +458,8 @@ describe("the layer a plugin declared", () => {
     expect(container.textContent).toContain(t("plugins.scope.machine"));
     // One row, named for the device rather than for a project — and no project to add beside it, since
     // there is no crossing to make.
-    expect(chips()).toEqual([t("plugins.gate.device")]);
+    expect(rowNames()).toEqual([t("plugins.gate.device")]);
+    expect(chips()).toEqual([]);
     expect(container.querySelector("select")).toBeNull();
     expect(container.textContent).not.toContain(t("plugins.gate.offEverywhere"));
   });
@@ -463,9 +471,9 @@ describe("the layer a plugin declared", () => {
 
     // The badge on the plugin itself reads the device's gate too: a machine-wide plugin has no project
     // row for `firesAnywhere` to have found.
+    expect(rowNames()).toEqual([t("plugins.gate.device")]);
     expect(chips()).toEqual([
       t("plugins.enabledChip"),
-      t("plugins.gate.device"),
       t("plugins.enabledChip"),
     ]);
   });

@@ -339,7 +339,7 @@ export function TaskDetailPane({
                 {task.blockedBy.map((b) => (
                   <button
                     type="button"
-                    className="chip chip--link"
+                    className="feed__target"
                     key={b.id}
                     style={{ marginRight: 4 }}
                     onClick={() => refNav.selectTask?.(b.id)}

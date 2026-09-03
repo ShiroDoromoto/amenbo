@@ -85,7 +85,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: var(--s-2) var(--s-3);
   background: var(--banner-ground); color: var(--banner-ink);
   border-bottom: 1px solid var(--c-rule);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 /* The two steps that fill the band, and the accent one beside them: an offer is not a step on the
    ladder — nothing is wrong, the reader is being handed something. */
@@ -160,7 +160,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 /* "amenbo" is a link that opens the product page (https://amenbo.work/) in the default
    browser. */
-.topbar__ws { font-weight: var(--fw-bold); font-size: var(--fs-lg); cursor: pointer; }
+.topbar__ws { font-weight: var(--fw-bold); font-size: var(--fs-xl); cursor: pointer; }
 .topbar__ws:hover { text-decoration: underline; }
 .topbar__ws:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; border-radius: 2px; }
 /* The reflect flourish: the moment an external write (AI/CLI) reaches the GUI, a rainbow
@@ -218,7 +218,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 24px; background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
-  color: var(--c-text-muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer;
+  color: var(--c-text-muted); font-size: var(--fs-xl); line-height: 1; cursor: pointer;
 }
 .topbar__navbtn:hover:not(:disabled) { color: var(--c-text); }
 .topbar__navbtn:disabled { opacity: 0.35; cursor: default; }
@@ -285,7 +285,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .navitem__count--heed { background: var(--c-heed); color: #fff; font-weight: var(--fw-medium); }
 .navitem--active .navitem__count--stop { background: var(--c-stop); color: #fff; }
 .navitem--active .navitem__count--heed { background: var(--c-heed); color: #fff; }
-.navitem--muted { color: var(--c-text-muted); font-size: var(--fs-sm); cursor: pointer; }
+.navitem--muted { color: var(--c-text-muted); font-size: var(--fs-md); cursor: pointer; }
 
 /* ---------- main ---------- */
 .main { grid-area: main; overflow: auto; min-width: 0; display: flex; flex-direction: column; }
@@ -314,7 +314,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rightpane__resizer:hover::after, .rightpane__resizer:active::after { opacity: 1; }
 .rightpane__empty {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  color: var(--c-text-muted); font-size: var(--fs-sm); padding: var(--s-5); text-align: center;
+  color: var(--c-text-muted); font-size: var(--fs-md); padding: var(--s-5); text-align: center;
 }
 
 /* ---------- generic ---------- */

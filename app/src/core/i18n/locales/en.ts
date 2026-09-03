@@ -667,6 +667,9 @@ const ui = {
   // The reading column with nothing in it. Finding a file is the rail's now, so what stands here is
   // the line saying so rather than the tree this column used to hold.
   "files.nothingOpen": "Nothing is open.",
+  // One control with two ends, so the word names neither of them: what it says is the pair, and which
+  // way this press goes is the mark on it (`AMB-D-835`).
+  "files.width": "Wider or narrower",
   "files.folderGone": "This folder is not there any more.",
   "files.back": "Back to the list",
   "files.edit": "Edit",

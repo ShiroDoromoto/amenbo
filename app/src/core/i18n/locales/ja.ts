@@ -589,6 +589,7 @@ export const ja: Translation = {
     "files.unwatchedHow": "枠はこの機械の利用者ごとで、ほかのアプリと分け合っています。fs.inotify.max_user_watches を上げると増やせます。",
     "files.noFolder": "このプロジェクトにはフォルダがありません。",
     "files.nothingOpen": "開いているファイルはありません。",
+    "files.width": "幅を変える",
     "files.folderGone": "このフォルダは見つかりません。",
     "files.back": "一覧へ戻る",
     "files.edit": "編集",

@@ -598,6 +598,7 @@ export const it: Translation = {
     "files.unwatchedHow": "Il limite è per utente ed è condiviso con l'editor che hai aperto. Alzare fs.inotify.max_user_watches lascia più spazio.",
     "files.noFolder": "Questo progetto non ha ancora una cartella.",
     "files.nothingOpen": "Non c'è nulla di aperto.",
+    "files.width": "Più largo o più stretto",
     "files.folderGone": "Questa cartella non c'è più.",
     "files.back": "Torna all'elenco",
     "files.edit": "Modifica",

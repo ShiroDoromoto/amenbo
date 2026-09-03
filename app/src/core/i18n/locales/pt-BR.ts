@@ -599,6 +599,7 @@ export const ptBR: Translation = {
     "files.unwatchedHow": "O limite é por usuário e é dividido com o editor que você deixou aberto. Aumentar fs.inotify.max_user_watches dá mais folga.",
     "files.noFolder": "Este projeto ainda não tem pasta.",
     "files.nothingOpen": "Nada está aberto.",
+    "files.width": "Mais largo ou mais estreito",
     "files.folderGone": "Esta pasta não está mais lá.",
     "files.back": "Voltar para a lista",
     "files.edit": "Editar",

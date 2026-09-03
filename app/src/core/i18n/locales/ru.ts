@@ -606,6 +606,7 @@ export const ru: Translation = {
     "files.unwatchedHow": "Лимит задан на пользователя и делится с открытым редактором. Увеличение fs.inotify.max_user_watches даёт больше места.",
     "files.noFolder": "У этого проекта пока нет папки.",
     "files.nothingOpen": "Ничего не открыто.",
+    "files.width": "Шире или уже",
     "files.folderGone": "Этой папки больше нет.",
     "files.back": "Назад к списку",
     "files.edit": "Править",

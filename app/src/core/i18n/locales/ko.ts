@@ -576,6 +576,7 @@ export const ko: Translation = {
     "files.unwatchedHow": "한도는 사용자마다 정해져 있고, 열어 둔 편집기와 나눠 씁니다. fs.inotify.max_user_watches를 올리면 늘릴 수 있습니다.",
     "files.noFolder": "이 프로젝트에는 아직 폴더가 없습니다.",
     "files.nothingOpen": "열린 파일이 없습니다.",
+    "files.width": "넓게 또는 좁게",
     "files.folderGone": "이 폴더는 더 이상 없습니다.",
     "files.back": "목록으로 돌아가기",
     "files.edit": "편집",

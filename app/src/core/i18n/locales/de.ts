@@ -587,6 +587,7 @@ export const de: Translation = {
     "files.unwatchedHow": "Das Kontingent gilt pro Benutzer und wird mit dem geöffneten Editor geteilt. fs.inotify.max_user_watches zu erhöhen schafft mehr Platz.",
     "files.noFolder": "Dieses Projekt hat noch keinen Ordner.",
     "files.nothingOpen": "Nichts ist geöffnet.",
+    "files.width": "Breiter oder schmaler",
     "files.folderGone": "Dieser Ordner ist nicht mehr da.",
     "files.back": "Zurück zur Liste",
     "files.edit": "Bearbeiten",

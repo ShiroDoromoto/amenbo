@@ -603,6 +603,7 @@ export const pl: Translation = {
     "files.unwatchedHow": "Limit jest na użytkownika i dzielony z otwartym edytorem. Podniesienie fs.inotify.max_user_watches daje więcej miejsca.",
     "files.noFolder": "Ten projekt nie ma jeszcze folderu.",
     "files.nothingOpen": "Nic nie jest otwarte.",
+    "files.width": "Szerzej lub węziej",
     "files.folderGone": "Tego folderu już nie ma.",
     "files.back": "Powrót do listy",
     "files.edit": "Edytuj",

@@ -577,6 +577,7 @@ export const tr: Translation = {
     "files.unwatchedHow": "Hak kullanıcı başınadır ve açık olan düzenleyiciyle paylaşılır. fs.inotify.max_user_watches değerini yükseltmek daha çok yer açar.",
     "files.noFolder": "Bu projenin henüz bir klasörü yok.",
     "files.nothingOpen": "Açık bir şey yok.",
+    "files.width": "Daha geniş ya da dar",
     "files.folderGone": "Bu klasör artık yok.",
     "files.back": "Listeye dön",
     "files.edit": "Düzenle",

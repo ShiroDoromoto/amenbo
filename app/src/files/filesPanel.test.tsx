@@ -294,6 +294,9 @@ type Props = Parameters<typeof FilesPanel>[0] & Parameters<typeof FolderTree>[0]
  */
 function Columns({ show, ...props }: Partial<Props> & { projectId: number | null }) {
   const [reading, setReading] = useState<{ root: string; path: string[] } | null>(null);
+  // The step the column is standing on, which opening a file asks for and the face keeps
+  // (`../shell/TerminalFace`).
+  const [wide, setWide] = useState(false);
   const gone = (root: string, went: string[]) => setReading((now) =>
     now !== null && now.root === root && went.includes(now.path.join("/")) ? null : now
   );
@@ -313,7 +316,7 @@ function Columns({ show, ...props }: Partial<Props> & { projectId: number | null
     createElement("div", { className: "rail" }, createElement(FolderTree, {
       projectId: props.projectId,
       reading,
-      onRead: setReading,
+      onRead: (at: { root: string; path: string[] }) => { setReading(at); setWide(true); },
       onGone: gone,
       onHandOver: props.onHandOver,
       onCarry: props.onCarry,
@@ -325,6 +328,8 @@ function Columns({ show, ...props }: Partial<Props> & { projectId: number | null
       onBack: () => setReading(null),
       onGone: gone,
       onClose: props.onClose ?? (() => {}),
+      wide,
+      onWide: setWide,
       onOpenLedger: props.onOpenLedger,
       onHandOver: props.onHandOver,
     })),
@@ -874,26 +879,48 @@ describe("the file face", () => {
 
   // Two things are over the page once a file is open, so "back" has to mean one of them at a time.
   // Both on the same key, because a reader pressing it twice is saying the same thing twice.
-  it("takes one layer per Escape — the file first, and the panel after it", async () => {
+  it("takes one layer per Escape — the wide width first, and the column after it", async () => {
     hoisted.entries[""] = [{ name: "a.md", isDir: false, ignored: false }];
     let closed = 0;
     await drawOpen({ onClose: () => { closed += 1; } });
+    // Opening a file asks for the wide width, which is the layer the first press takes off
+    // (`AMB-D-835`).
     await openFile(button("a.md"));
     await settle();
-    expect(pressable(t("files.back"))).toBeDefined();
+    const width = () => container.querySelector<HTMLElement>(".files__width")!;
+    expect(width().getAttribute("aria-pressed")).toBe("true");
 
-    // On the column the file is in: the layers this key takes off are the file and the column
-    // holding it, and the tree in the rail is neither of them (`AMB-D-835`).
+    // On the column the file is in: the layers this key takes off are the width and the column
+    // holding it, and the tree in the rail is neither of them.
     const column = () => container.querySelector(".termface__column--side .files")!;
     await press(column(), "Escape");
     await settle();
-    // The file is put away and the column is not: one press, one layer.
-    expect(pressable(t("files.back"))).toBeUndefined();
+    // The column is narrow and it is not closed: one press, one layer. The file stays where it is —
+    // what a reader asked for is the panes back, not the file put away.
+    expect(width().getAttribute("aria-pressed")).toBe("false");
+    expect(pressable(t("files.back"))).toBeDefined();
     expect(closed).toBe(0);
 
     await press(column(), "Escape");
     await settle();
     expect(closed).toBe(1);
+  });
+
+  it("goes between the two widths from the control beside the way out", async () => {
+    hoisted.entries[""] = [{ name: "a.md", isDir: false, ignored: false }];
+    await drawOpen();
+    const width = () => container.querySelector<HTMLElement>(".files__width")!;
+    // Nothing open yet: the column is narrow, and the control offers the room to read in.
+    expect(width().getAttribute("aria-pressed")).toBe("false");
+
+    await click(width());
+    await settle();
+    expect(width().getAttribute("aria-pressed")).toBe("true");
+
+    // Pressed again it gives the panes back: one control, two ends.
+    await click(width());
+    await settle();
+    expect(width().getAttribute("aria-pressed")).toBe("false");
   });
 
   // Held by the folder it is about, so a binding somebody removed must take its own answer with it

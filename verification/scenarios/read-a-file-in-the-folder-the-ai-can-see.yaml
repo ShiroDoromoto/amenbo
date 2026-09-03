@@ -231,11 +231,10 @@ steps_gui:
       note: link
 
   # The other way out, and the one a reader already has under their hands. It takes one layer per
-  # press: the file goes first, and the column it was drawn in only once nothing is open in it. Both
-  # presses are walked because it is the count that is the answer — a face that closed the whole
-  # column on the first press would carry a reader who meant "shut this file" further than they
-  # asked, and a face that only ever shut the file would leave the column with no way out but the
-  # pointer.
+  # press: the wide width goes first, and the column itself once it is standing narrow. Both presses
+  # are walked because it is the count that is the answer — a face that closed the whole column on
+  # the first press would carry a reader who meant "give the panes back" further than they asked, and
+  # a face that only ever narrowed it would leave the column with no way out but the pointer.
   - type: action
     domain: files
     op: press

@@ -577,6 +577,7 @@ export const zhHant: Translation = {
     "files.unwatchedHow": "名額按使用者分配，和你開著的編輯器共用。調高 fs.inotify.max_user_watches 可以留出更多餘裕。",
     "files.noFolder": "這個專案還沒有資料夾。",
     "files.nothingOpen": "沒有開啟任何檔案。",
+    "files.width": "變寬或變窄",
     "files.folderGone": "這個資料夾已經不在了。",
     "files.back": "返回列表",
     "files.edit": "編輯",

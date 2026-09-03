@@ -274,6 +274,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
    what decides whether the words are readable is the pane, and the same row is drawn in the split-out
    window, where the window's own width is the pane's. */
 .slot__plate { flex: 1; min-width: 0; container-type: inline-size; }
+/* The line while a name is being typed in its place. Out of sight and still on the page: what
+   draws the row is mounted once and keeps drawing into this box, so taking it away would be taking
+   the label down to type a name (`../talk/plate`). */
+.slot__plate--behind { display: none; }
+/* Where a pane's name is typed (`../shell/TerminalPane`). It takes the line's own place and the
+   line's own width, so the row does not change height or shuffle the two controls along while it is
+   up. */
+.slot__rename {
+  flex: 1; min-width: 0;
+  /* The line it stands in for is held off the pane by that much (`.plate`), and a box that sat
+     against it would move the terminal down every time somebody named a pane. */
+  margin-bottom: var(--s-2);
+  padding: 0 var(--s-1); border-radius: var(--r-sm);
+  border: 1px solid var(--c-accent); background: var(--c-surface);
+  color: var(--c-text); font-size: var(--fs-sm);
+}
+/* The box is drawn only while it holds the keyboard — it goes as soon as it is left — so the accent
+   border around it is already the whole of "this is where you are typing", and the machine's own ring
+   over it would be a second one saying the same thing. */
+.slot__rename:focus-visible { outline: none; }
 /* The one control the place has: it removes the frame, terminal and all (`../shell/TerminalPane`). It
    is drawn quietly and sits at the end of the row — nothing else on this face takes anything away, so
    a control that looked urgent would be pressed by mistake more often than on purpose. What stops the

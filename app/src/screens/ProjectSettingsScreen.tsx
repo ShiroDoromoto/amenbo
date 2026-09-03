@@ -700,7 +700,7 @@ function PluginsSection({ projectId }: { projectId: number }) {
             <span className="hint">{t("projset.pluginsDevice")}</span>
             {deviceWide.map((i) => (
               <div className="pluggate" key={i.name}>
-                <span className="chip">{i.name}</span>
+                <span className="rowname">{i.name}</span>
                 {i.device?.enabled && <span className="chip">{t("plugins.enabledChip")}</span>}
                 <span className="meta">
                   {t("plugins.scope.machine")}

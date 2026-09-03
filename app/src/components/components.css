@@ -323,12 +323,14 @@
 .compose { margin-top: var(--s-2); }
 .compose__input { width: 100%; min-height: 64px; }
 .compose__actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-2); }
-/* A small label chip, as used for a blocker or a reference to a decision. */
+/* One word for how a thing stands — enabled, filled, overdue, filed here. That is the whole of the
+   chip's job (`AMB-D-841`): a box around a word that is not pressable, which only reads as a state
+   while nothing else on the row wears one. A name is not a state and is written plainly (`.rowname`),
+   and something that can be pressed is a button or a link, never this. */
 .chip { font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm); background: var(--c-sunken); }
-/* A clickable chip: the link that navigates to a dependency's blocker. It drops the button
-   defaults to keep the chip's look, and turns accent on hover to show it can be pressed. */
-.chip--link { border: 0; cursor: pointer; color: inherit; font-family: inherit; line-height: inherit; }
-.chip--link:hover { background: var(--c-hover); color: var(--c-accent-text); }
+/* The name of the thing a row is about — a project, a device, a plugin. Written, not boxed, and a
+   step up from the words around it so the row still starts with what it names. */
+.rowname { font-size: var(--fs-md); font-weight: var(--fw-medium); }
 /* The chip for a premise that holds a reserve back (ready===false). It carries the shape alone: which
    step it takes is decided per premise where it is drawn (`atoms.tsx`), an unfinished blocker being a
    stop and a start day still ahead a heed. It stays clear of the human-declared status=blocked and its

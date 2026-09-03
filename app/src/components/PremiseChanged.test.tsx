@@ -106,7 +106,7 @@ describe("PremiseChangedChip", () => {
 });
 
 describe("PremiseChangedField (the detail pane's spelled-out surface)", () => {
-  const fieldChips = () => Array.from(container.querySelectorAll("button.chip--link"));
+  const fieldChips = () => Array.from(container.querySelectorAll("button.feed__target"));
 
   it("draws every axis, the reopened one included, and navigates to what it names", () => {
     const opened: number[] = [];

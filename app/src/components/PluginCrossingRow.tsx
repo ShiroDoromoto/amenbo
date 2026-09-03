@@ -81,7 +81,7 @@ export function PluginCrossingRow({ install, layer, name }: {
   return (
     <div className="plugcross">
       <div className="pluggate">
-        <span className="chip">{name}</span>
+        <span className="rowname">{name}</span>
         {at.enabled && <span className="chip">{t("plugins.enabledChip")}</span>}
         {/* What the settings at this crossing amount to, in one word: the refusal waiting to happen, or
             that something is filled in — which is also why an off project is on the list at all. */}

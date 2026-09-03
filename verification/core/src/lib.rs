@@ -2493,6 +2493,18 @@ const REGISTRY: &[OpSpec] = &[
     // those out of the screen is an operator's. So the instruction says where to put the pointer and
     // what to watch follow it, and the shot after it is what an eye closes.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drag-side", required: &["side", "toward"], refs: &[], strings: &["side", "toward"], binds: false },
+    // A press on a pane, meaning nothing but the press. It is what puts the reading column back to
+    // its narrow width: the next press outside that column says where the reader is looking, and a
+    // pane is the answer that says they have gone back to the work. So what it proves is on the
+    // other side of the panes from what it touches.
+    //
+    // **It is not `type-line` with the typing left out.** That step's press is a way to reach the
+    // input line and what it is about is the line; this one leaves the pane as it found it, and a
+    // road that typed to get here would be reading a column beside a pane that had changed under it.
+    //
+    // `shows` is which pane, named the way `type-line` and `paste` name one: by the words a road
+    // typed into it earlier. Left out, it is the page's one pane.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-pane", required: &[], refs: &[], strings: &["shows"], binds: false },
     // Whether a column is beside the panes at all. `present: false` is the half the folding is proved
     // by, and it is the half worth having: a column that went away is what gives the panes the width,
     // and a face that drew it anyway would look exactly like one that had honoured the press until
@@ -2593,6 +2605,42 @@ const REGISTRY: &[OpSpec] = &[
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
+    // Which half of the rail is up — the two lists, or the folder tree. The rail swaps its halves
+    // rather than stacking them, and which one it stands on is kept per project
+    // (`app/src/shell/PaneRail.tsx`), so this is a reading a road makes after moving between
+    // projects rather than a thing it sets once.
+    //
+    // It is this domain's and not the terminal's because the half is what decides whether the tree
+    // is standing at all: every row-addressed op above reaches its rows through it, and `tree` is
+    // the press that puts it up. This is the other end — what the rail came back on, having been
+    // left there.
+    //
+    // Named by what each half draws rather than by the words on the two controls, for the reason
+    // `section` and `note` are named that way.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "half", required: &["half"], refs: &[], strings: &["half"], binds: false },
+
+    // ── the files the column is holding ───────────────────────────────────────────────────────────
+    // The reading column holds several files at once, as a row of tabs above the one on top
+    // (`app/src/files/FilesPanel.tsx`), and these are the three ways a road walks that row.
+    //
+    // One tab pressed, bringing its file up. `name` is the file's, which is what the tab is drawn
+    // with; left out, it is the draft page, the one tab with no name a road could type — its words
+    // are the interface's own, and it is the only tab that is always there. The two are one op
+    // because they are one row, the way `menu-on-folder`'s two are one menu.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "tab", required: &[], refs: &[], strings: &["name"], binds: false },
+    // The same file reached from the control at the end of that row instead. It is a second door and
+    // not a convenience: the row scrolls sideways and never wraps, so a tab far enough along it is
+    // off the end, and this is the only way to one that is. It names a file and never the draft
+    // page — what the control lists is what a reader opened.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "more-tabs", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // And the row read back: which files it holds, in the order they were opened. `names` is all of
+    // them, so a road reads what is **not** there as well — a file opened twice is one tab, and a
+    // tab closed leaves the rest standing.
+    //
+    // A `Review`, though every word on it is the road's own. What is being asked is an order and a
+    // whole: a reading finds each name wherever it stands, and finds them all with a fourth tab
+    // beside them. Both are what this exists to catch.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "tabs", required: &["names"], refs: &[], strings: &[], binds: false },
 
     // ── changing what is in a file ────────────────────────────────────────────────────────────────
     // The words typed into the editor an opened file draws. They go on the end and on a line of their

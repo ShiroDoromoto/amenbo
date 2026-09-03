@@ -1071,10 +1071,14 @@ button.feed__target:hover { color: var(--c-accent); }
 .tl { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-3) var(--s-4); gap: var(--s-2); overflow-y: auto; }
 .tl__axis, .tl__row { display: grid; grid-template-columns: 200px 1fr 84px; align-items: center; gap: var(--s-2); }
 .tl__axis { padding-bottom: var(--s-2); border-bottom: 1px solid var(--c-rule); position: sticky; top: 0; background: var(--c-bg); z-index: 1; }
-.tl__ruler { position: relative; height: 16px; font-size: var(--fs-2xs); color: var(--c-text-faint); }
-.tl__ruler-end { position: absolute; right: 0; top: 0; }
-.tl__ruler-start { right: auto; left: 0; }
-.tl__ruler-today { position: absolute; top: 0; transform: translateX(-50%); color: var(--c-accent); font-weight: var(--fw-medium); white-space: nowrap; }
+/* Three labels on one line, laid out as tracks so they can never paint over each other: the two
+   date tracks carry the today marker's share of the axis (set inline), and the marker itself takes
+   the width it needs between them. Near an edge the date track there shrinks away and the marker
+   comes to rest flush against that edge, instead of running off the window. */
+.tl__ruler { display: grid; align-items: center; column-gap: var(--s-1); height: 16px; font-size: var(--fs-2xs); color: var(--c-text-faint); }
+.tl__ruler-date { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl__ruler-date--end { text-align: right; }
+.tl__ruler-today { color: var(--c-accent); font-weight: var(--fw-medium); white-space: nowrap; }
 .tl__rows { display: flex; flex-direction: column; }
 .tl__row { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--c-rule); padding: var(--s-2) 0; cursor: pointer; }
 .tl__row:hover { background: var(--c-hover); }

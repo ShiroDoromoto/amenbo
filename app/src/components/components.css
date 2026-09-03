@@ -40,6 +40,10 @@
 .hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* The bold lead-in over a field or a group of them. */
 .fieldlabel { font-weight: var(--fw-bold); font-size: var(--fs-md); }
+/* The word in front of a control on a toolbar — a filter's or a sort's, wrapping the control it
+   names. It carries the size alone: the row it sits on reads at the page's colour, and the two
+   classes above would each take that away in a different direction. */
+.ctllabel { font-size: var(--fs-xs); }
 /* A folder path, which is one long unbreakable word: it scrolls inside its own box rather than
    pushing the column it sits in as wide as the deepest path a reader happens to have. */
 .path {

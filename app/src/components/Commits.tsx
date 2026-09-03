@@ -63,7 +63,7 @@ export function Commits({ taskId }: { taskId: number }) {
     <div>
       <div className="detail__section-h">{t("commit.section")}</div>
       {commits.length === 0 ? (
-        <div className="faint" style={{ fontSize: "var(--fs-md)" }}>{t("commit.none")}</div>
+        <div className="faint">{t("commit.none")}</div>
       ) : (
         <div className="commits">
           {commits.map((c) => (

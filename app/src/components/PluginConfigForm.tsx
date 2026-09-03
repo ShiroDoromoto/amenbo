@@ -420,7 +420,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           {busy ? t("plugins.cfg.saving") : t("plugins.cfg.save")}
         </button>
         {done && !busy && (
-          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t(done)}</span>
+          <span className="meta">{t(done)}</span>
         )}
         {error && <div className="pluggate__note">{error}</div>}
       </div>

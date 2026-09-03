@@ -140,7 +140,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   return (
     <>
       <div className="filterbar">
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}><Icon name="scales" /> {t("dec.title")}</span>
+        <span className="meta"><Icon name="scales" /> {t("dec.title")}</span>
         <input
           {...asTyped}
           className="board__search"
@@ -168,7 +168,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           <Icon name="search" /> {t("board.filters")}
           {narrowedAxes > 0 && <span className="filtertoggle__count">{narrowedAxes}</span>}
         </button>
-        <label style={{ fontSize: "var(--fs-xs)" }}>
+        <label className="ctllabel">
           {t("dec.sort")}{" "}
           <select value={sort} onChange={(e) => setSort(e.target.value as DecisionSort)}>
             {SORTS.map((s) => (
@@ -280,12 +280,12 @@ function DecisionCard({ d, selected, onSelect }: {
           than instead of it — a rejected decision that was later superseded is both, and a badge that
           picked one of the two would be hiding the other. */}
       {d.supersededBy.length > 0 && (
-        <span className="faint" style={{ fontSize: "var(--fs-xs)", whiteSpace: "nowrap" }}>
+        <span className="meta" style={{ whiteSpace: "nowrap" }}>
           {tf("dec.supersededByRef", { by: d.supersededBy.map((r) => r.ref ?? decisionRef(r.id)).join(", ") })}
         </span>
       )}
       <span style={{ flex: 1 }} />
-      {date && <span style={{ fontSize: "var(--fs-md)", color: "var(--c-muted)", whiteSpace: "nowrap" }}>{date}</span>}
+      {date && <span style={{ color: "var(--c-muted)", whiteSpace: "nowrap" }}>{date}</span>}
     </div>
   );
 }

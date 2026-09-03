@@ -448,7 +448,7 @@ export function TaskDetailPane({
                   }}
                 />
                 <div className="compose__actions">
-                  <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.notesHint")}</span>
+                  <span className="meta">{t("detail.notesHint")}</span>
                   <span>
                     <button className="btn" onClick={() => setEditingNotes(false)}>{t("detail.cancel")}</button>
                     <button className="btn btn--primary" style={{ marginLeft: 6 }} onClick={saveNotes}>{t("detail.save")}</button>
@@ -460,7 +460,7 @@ export function TaskDetailPane({
                 <Markdown>{task.notes}</Markdown>
               </div>
             ) : (
-              <div className="faint" style={{ fontSize: "var(--fs-md)" }}>{t("detail.noNotes")}</div>
+              <div className="faint">{t("detail.noNotes")}</div>
             )}
           </div>
 
@@ -477,7 +477,7 @@ export function TaskDetailPane({
           <div>
             <div className="detail__section-h">{t("detail.activityCategory")} · <Icon name="comment" size="md" /> {task.comments}</div>
             {comments.length === 0 ? (
-              <div className="faint" style={{ marginTop: 6, fontSize: "var(--fs-md)" }}>{t("detail.noComments")}</div>
+              <div className="faint" style={{ marginTop: 6 }}>{t("detail.noComments")}</div>
             ) : (
               <div className="comments">
                 {olderCount > 0 && (
@@ -516,7 +516,7 @@ export function TaskDetailPane({
               />
               {commentError && <ErrorNote>{commentError}</ErrorNote>}
               <div className="compose__actions">
-                <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
+                <span className="meta">{t("detail.commentHint")}</span>
                 <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
               </div>
             </div>

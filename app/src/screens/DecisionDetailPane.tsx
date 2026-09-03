@@ -200,11 +200,11 @@ export function DecisionDetailPane({
             }}
           />
           {d.status === "accepted" && (
-            <div className="faint" style={{ fontSize: "var(--fs-md)", marginTop: 4 }}>{t("dec.editAcceptedHint")}</div>
+            <div className="faint" style={{ marginTop: 4 }}>{t("dec.editAcceptedHint")}</div>
           )}
           {editError && <ErrorNote>{editError}</ErrorNote>}
           <div className="compose__actions">
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.notesHint")}</span>
+            <span className="meta">{t("detail.notesHint")}</span>
             <span>
               <button className="btn" onClick={() => setEditing(false)}>{t("detail.cancel")}</button>
               <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={editBusy || !titleDraft.trim()} onClick={() => void saveEdit()}>{t("detail.save")}</button>
@@ -220,7 +220,7 @@ export function DecisionDetailPane({
       <DecisionEdges d={d} onOpenDecision={onOpenDecision} />
 
       {d.linkedTasks.length > 0 && (
-        <div style={{ marginTop: 8, fontSize: "var(--fs-md)" }}>
+        <div style={{ marginTop: 8 }}>
           {t("dec.linkedTasks")}:{" "}
           {d.linkedTasks.map((lt, i) => (
             <span key={lt.id} style={isClosed(lt.status) ? { color: "var(--c-muted)" } : undefined}>
@@ -233,7 +233,7 @@ export function DecisionDetailPane({
                 {lt.ref ?? ""} {lt.name}
               </button>
               {lt.status !== "todo" && (
-                <span className="faint" style={{ fontSize: "var(--fs-xs)" }}> · {statusLabel(lt.status)}</span>
+                <span className="meta"> · {statusLabel(lt.status)}</span>
               )}
             </span>
           ))}
@@ -245,7 +245,7 @@ export function DecisionDetailPane({
           // Confirming an accept or reject, with an optional reason that is left behind as one comment.
           <div className="compose" style={{ marginTop: 12 }}>
             {confirming === "reject" && standingOn(d).length > 0 && (
-              <div style={{ marginBottom: 8, fontSize: "var(--fs-md)" }}>
+              <div style={{ marginBottom: 8 }}>
                 <div className="faint">{t("dec.revisit")}</div>
                 {standingOn(d).map((s) => (
                   <button
@@ -274,7 +274,7 @@ export function DecisionDetailPane({
             />
             {error && <ErrorNote>{error}</ErrorNote>}
             <div className="compose__actions">
-              <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
+              <span className="meta">{t("detail.commentHint")}</span>
               <span>
                 <button className="btn" onClick={() => { setConfirming(null); setReason(""); setError(null); }}>{t("dec.cancel")}</button>
                 <button className="btn btn--primary" style={{ marginLeft: 6 }} disabled={busy} onClick={() => void runDecision()}>
@@ -312,7 +312,7 @@ export function DecisionDetailPane({
           <div>
             <div className="detail__section-h">{t("dec.comments")} · <Icon name="comment" size="md" /> {formatNumber(comments.length)}</div>
             {comments.length === 0 ? (
-              <div className="faint" style={{ marginTop: 6, fontSize: "var(--fs-md)" }}>{t("detail.noComments")}</div>
+              <div className="faint" style={{ marginTop: 6 }}>{t("detail.noComments")}</div>
             ) : (
               <div className="comments">
                 {comments.map((c) => (
@@ -346,7 +346,7 @@ export function DecisionDetailPane({
               />
               {commentError && <ErrorNote>{commentError}</ErrorNote>}
               <div className="compose__actions">
-                <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
+                <span className="meta">{t("detail.commentHint")}</span>
                 <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
               </div>
             </div>
@@ -389,7 +389,7 @@ function DecisionStamps({ d }: { d: Decision }) {
     stamps.push({ key: "changed", label: t("dec.lastChanged"), at: d.updatedAt });
   }
   return (
-    <div className="faint" style={{ marginTop: 4, fontSize: "var(--fs-xs)" }}>
+    <div className="meta" style={{ marginTop: 4 }}>
       {stamps.map((s, i) => (
         // The separator sits outside the stamp so a narrow pane breaks the line between two of them
         // rather than through the middle of one date.
@@ -502,7 +502,7 @@ function DecisionEdges({ d, onOpenDecision }: {
       {rows.map((r) => (
         <div
           key={`${r.labelKey}-${r.target.id}`}
-          style={{ marginTop: 4, fontSize: "var(--fs-md)", color: "var(--c-muted)" }}
+          style={{ marginTop: 4, color: "var(--c-muted)" }}
         >
           {t(r.labelKey)}:{" "}
           <button
@@ -602,11 +602,11 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
         <button className="btn" onClick={() => { setOpen(false); setQuery(""); }}>{t("dec.edge.cancel")}</button>
       </div>
       {promotesToAccepted(d, kind) && (
-        <div style={{ fontSize: "var(--fs-md)", color: "#c0504d" }}><Icon name="warning" /> {t("dec.edge.supersedeAccepts")}</div>
+        <div style={{ color: "#c0504d" }}><Icon name="warning" /> {t("dec.edge.supersedeAccepts")}</div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
       {candidates.length === 0 ? (
-        <div className="faint" style={{ fontSize: "var(--fs-md)" }}>{t("dec.edge.noCandidates")}</div>
+        <div className="faint">{t("dec.edge.noCandidates")}</div>
       ) : (
         <ul className="apick__menu apick__menu--scroll" role="listbox" style={{ position: "static" }}>
           {candidates.map((c) => (

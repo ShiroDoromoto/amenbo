@@ -374,7 +374,7 @@ export function BoardScreen({
         )}
         {view === "board" && (
           <div className="groupby">
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("board.group")}</span>
+            <span className="meta">{t("board.group")}</span>
             <button
               className={`filterchip ${group === STATUS_GROUP ? "filterchip--on" : ""}`}
               onClick={() => setGroup(STATUS_GROUP)}

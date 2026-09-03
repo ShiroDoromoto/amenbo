@@ -5,10 +5,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   clampRailWidth, clampSideNarrow, clampSideWide, getRailShown, getRailTab, getRailWidth,
-  getSideNarrow, getSideShown, getSideTab, getSideWide, PANE_MIN, RAIL_DEFAULT, RAIL_MIN,
-  setRailShown, setRailTab, setRailWidth, setSideNarrow, setSideShown, setSideTab, setSideWide,
-  railMax, sideNarrowMax, sideWideMax, SIDE_MIN, SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT,
+  getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, PANE_MIN, RAIL_DEFAULT,
+  RAIL_MIN, setRailShown, setRailTab, setRailWidth, setSideNarrow, setSideShown, setSideTab,
+  setSideWide, setTabsCompact, tabsWidth, railMax, sideNarrowMax, sideWideMax, SIDE_MIN,
+  SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT,
 } from "./columns";
+
+/** What the tab column is taking while nothing has been folded — it comes off the window before any
+ *  of these are measured, so every ceiling below is written against it. */
+const TABS = tabsWidth(false);
 
 /** Two projects, because most of what is kept here is kept for one of them and not the other. */
 const ONE = 1;
@@ -102,10 +107,10 @@ describe("the file face's two widths", () => {
 
   // The wide width lies over the panes, so a pane's floor is not in its sum. What it leaves is the
   // rail, which is never covered.
-  it("lets the wide one take the window, less the rail", () => {
+  it("lets the wide one take the window, less the rail and the tabs", () => {
     window.innerWidth = 960;
-    expect(sideWideMax(RAIL_DEFAULT)).toBe(960 - RAIL_DEFAULT);
-    expect(clampSideWide(9999, RAIL_DEFAULT)).toBe(960 - RAIL_DEFAULT);
+    expect(sideWideMax(RAIL_DEFAULT)).toBe(960 - TABS - RAIL_DEFAULT);
+    expect(clampSideWide(9999, RAIL_DEFAULT)).toBe(960 - TABS - RAIL_DEFAULT);
     // Where the narrow one stops is well short of that: it is drawn beside the panes.
     expect(sideNarrowMax(RAIL_DEFAULT)).toBeLessThan(sideWideMax(RAIL_DEFAULT));
   });
@@ -151,6 +156,25 @@ describe("which half of the rail is up", () => {
   });
 });
 
+describe("whether the project tabs are compact", () => {
+  // A first run that came up with a column of coloured letters would be asking a person to learn
+  // which is which before being told any of it once.
+  it("is the names on a device that has never said otherwise", () => {
+    expect(getTabsCompact()).toBe(false);
+  });
+
+  it("is remembered once they are folded, and again once they are brought back", () => {
+    expect(setTabsCompact(true)).toBe(true);
+    expect(getTabsCompact()).toBe(true);
+    setTabsCompact(false);
+    expect(getTabsCompact()).toBe(false);
+  });
+
+  it("takes less of the window folded than named", () => {
+    expect(tabsWidth(true)).toBeLessThan(tabsWidth(false));
+  });
+});
+
 describe("which half of the file face is up", () => {
   it("is the memo on a device that has never said otherwise", () => {
     expect(getSideTab()).toBe("memo");
@@ -175,14 +199,23 @@ describe("a column's ceiling", () => {
   // leave 288px in the middle — under the floor a pane is drawn at.
   it("is what the window has left once the other column and a pane's floor are out of it", () => {
     window.innerWidth = 960;
-    expect(railMax(SIDE_NARROW_DEFAULT)).toBe(960 - SIDE_NARROW_DEFAULT - PANE_MIN);
-    expect(sideNarrowMax(RAIL_DEFAULT)).toBe(960 - RAIL_DEFAULT - PANE_MIN);
+    expect(railMax(SIDE_NARROW_DEFAULT)).toBe(960 - TABS - SIDE_NARROW_DEFAULT - PANE_MIN);
+    expect(sideNarrowMax(RAIL_DEFAULT)).toBe(960 - TABS - RAIL_DEFAULT - PANE_MIN);
   });
 
   // Closing a column is what makes room, so what it is taking is nought and the other may have it.
   it("grows by what a column the person closed is no longer taking", () => {
     window.innerWidth = 960;
-    expect(sideNarrowMax(0)).toBe(960 - PANE_MIN);
+    expect(sideNarrowMax(0)).toBe(960 - TABS - PANE_MIN);
+  });
+
+  // The tabs are never closed, so what they take is off the window before anything else is measured:
+  // folding their names away is the one thing that gives any of it back (`AMB-D-838`).
+  it("grows by what the tabs give back when their names are folded away", () => {
+    window.innerWidth = 960;
+    const named = sideNarrowMax(RAIL_DEFAULT);
+    setTabsCompact(true);
+    expect(sideNarrowMax(RAIL_DEFAULT) - named).toBe(TABS - tabsWidth(true));
   });
 
   // The middle is what the ceiling is for: dragged to it, a pane still has its floor.
@@ -190,7 +223,7 @@ describe("a column's ceiling", () => {
     window.innerWidth = 960;
     const side = clampSideNarrow(9999, RAIL_DEFAULT);
     const rail = clampRailWidth(9999, side);
-    expect(960 - rail - side).toBeGreaterThanOrEqual(PANE_MIN);
+    expect(960 - TABS - rail - side).toBeGreaterThanOrEqual(PANE_MIN);
   });
 
   // A floor is a floor. On a window too narrow for one there is nothing to be done by making the

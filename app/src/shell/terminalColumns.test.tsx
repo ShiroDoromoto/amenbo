@@ -25,7 +25,7 @@ vi.mock("../core/boundFolders", () => ({
 }));
 
 import { TerminalFace } from "./TerminalFace";
-import { RAIL_DEFAULT, SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT } from "../talk/columns";
+import { RAIL_DEFAULT, SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT, tabsWidth } from "../talk/columns";
 import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -79,6 +79,39 @@ describe("the columns beside the panes", () => {
     await mount();
     expect(q(".termface__grip--rail")).not.toBeNull();
     expect(q(".termface__grip--side")).not.toBeNull();
+  });
+});
+
+// The tab column is the one at the edge that is neither dragged nor closed (`AMB-D-838`). What it
+// buys is being told about a turn standing in a project nobody is looking at, and a way to close it
+// would be a way to stop being told.
+describe("the project tabs", () => {
+  it("are drawn at the width the face keeps for them, with no edge to drag", async () => {
+    await mount();
+    expect(q(".ptabs")).not.toBeNull();
+    const style = (q(".termface") as HTMLElement).style;
+    expect(style.getPropertyValue("--tabs-w")).toBe(`${tabsWidth(false)}px`);
+    expect(q(".termface__grip--tabs")).toBeNull();
+  });
+
+  it("stay when both columns beside the panes are closed", async () => {
+    await mount();
+    await click(bar(t("face.rail")));
+    await click(bar(t("files.side")));
+    expect(q(".termface__column--rail")).toBeNull();
+    expect(q(".termface__column--side")).toBeNull();
+    expect(q(".ptabs")).not.toBeNull();
+  });
+
+  it("give the middle back what their names were taking, and keep the answer", async () => {
+    await mount();
+    await click(q(".ptabs__fold"));
+    const style = () => (q(".termface") as HTMLElement).style.getPropertyValue("--tabs-w");
+    expect(style()).toBe(`${tabsWidth(true)}px`);
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await mount();
+    expect(style()).toBe(`${tabsWidth(true)}px`);
   });
 });
 
@@ -166,10 +199,12 @@ describe("the two widths the reading column stands on", () => {
 
 describe("the narrowest window the application opens", () => {
   // 960px is the floor (`app/src-tauri/tauri.conf.json`), and the three floors together are 640px —
-  // so a column never has to stop being one (`AMB-D-816`).
+  // so a column never has to stop being one (`AMB-D-816`). The tabs come off the window before any
+  // of that is measured (`AMB-D-838`), and at their widest they still leave the three their floors.
   it("draws both columns beside the panes, and no drawer over them", async () => {
     window.innerWidth = 960;
     await mount();
+    expect(q(".ptabs")).not.toBeNull();
     expect(q(".termface__column--rail")).not.toBeNull();
     expect(q(".termface__column--side")).not.toBeNull();
     expect(q(".termface__drawer")).toBeNull();

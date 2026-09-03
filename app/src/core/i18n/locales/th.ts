@@ -537,6 +537,8 @@ export const th: Translation = {
     "face.railHalves": "สิ่งที่แสดงในแถบ",
     "face.railPanes": "บานหน้าต่าง",
     "face.railFolders": "โฟลเดอร์",
+    "face.tabsCompact": "แสดงเฉพาะสี",
+    "face.tabsNamed": "แสดงชื่อโปรเจกต์",
     "face.paneCount": "จำนวนบานหน้าต่างบนหน้าจอ",
     "face.paneOrient": "การจัดวางสองบานหน้าต่าง",
     "face.paneAcross": "เรียงข้างกัน",

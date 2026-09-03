@@ -556,6 +556,8 @@ export const ptBR: Translation = {
     "face.railHalves": "O que a barra mostra",
     "face.railPanes": "Painéis",
     "face.railFolders": "Pastas",
+    "face.tabsCompact": "Mostrar apenas as cores",
+    "face.tabsNamed": "Mostrar os nomes dos projetos",
     "face.paneCount": "Painéis na tela",
     "face.paneOrient": "Disposição dos dois painéis",
     "face.paneAcross": "Lado a lado",

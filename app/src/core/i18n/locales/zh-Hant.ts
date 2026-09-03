@@ -534,6 +534,8 @@ export const zhHant: Translation = {
     "face.railHalves": "側欄顯示什麼",
     "face.railPanes": "窗格",
     "face.railFolders": "資料夾",
+    "face.tabsCompact": "只顯示顏色",
+    "face.tabsNamed": "顯示專案名稱",
     "face.paneCount": "畫面上的窗格數",
     "face.paneOrient": "兩個窗格的排列",
     "face.paneAcross": "左右並排",

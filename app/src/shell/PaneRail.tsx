@@ -15,6 +15,11 @@ import { asTyped, isEnterSubmit } from "../core/keys";
  * puts its panes on the face and takes the others off; picking a pane goes to it, bringing its page up
  * with it.
  *
+ * **The projects are also drawn at the edge of the face** (`./ProjectTabs`, `AMB-D-838`), which is
+ * where that choice is moving to: a project is what everything else here is inside, and the list of
+ * them sitting in one half of one column had the top of the hierarchy drawn under the bottom of it.
+ * Both are on the screen for now — this half is what `AMB-T-4281` takes away, leaving the tree.
+ *
  * **Only the shown project's panes are listed.** The others are one row each: what a person does with
  * a project they are not in is go to it, and a rail that unfolded every one of them would be a list of
  * everything this machine has ever opened. What a folded project still says is that somebody's turn is

@@ -533,6 +533,8 @@ export const ko: Translation = {
     "face.railHalves": "레일에 표시할 항목",
     "face.railPanes": "페인",
     "face.railFolders": "폴더",
+    "face.tabsCompact": "색상만 표시",
+    "face.tabsNamed": "프로젝트 이름 표시",
     "face.paneCount": "화면에 보일 페인 수",
     "face.paneOrient": "두 페인의 배치",
     "face.paneAcross": "좌우로 나란히",

@@ -563,6 +563,8 @@ export const ru: Translation = {
     "face.railHalves": "Что показывать на панели",
     "face.railPanes": "Панели",
     "face.railFolders": "Папки",
+    "face.tabsCompact": "Показывать только цвета",
+    "face.tabsNamed": "Показывать названия проектов",
     "face.paneCount": "Панелей на экране",
     "face.paneOrient": "Расположение двух панелей",
     "face.paneAcross": "Рядом",

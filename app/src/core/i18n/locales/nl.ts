@@ -534,6 +534,8 @@ export const nl: Translation = {
     "face.railHalves": "Wat de balk toont",
     "face.railPanes": "Deelvensters",
     "face.railFolders": "Mappen",
+    "face.tabsCompact": "Alleen de kleuren tonen",
+    "face.tabsNamed": "Projectnamen tonen",
     "face.paneCount": "Deelvensters op het scherm",
     "face.paneOrient": "Indeling van de twee deelvensters",
     "face.paneAcross": "Naast elkaar",

@@ -4,6 +4,7 @@ import { EmptySlot } from "./EmptySlot";
 import { FolderChoice } from "./FolderChoice";
 import { TerminalPane } from "./TerminalPane";
 import { PaneRail } from "./PaneRail";
+import { ProjectTabs } from "./ProjectTabs";
 import {
   frameNames, keepLayout, nameFrame, paneLabels, savedLayout, type FrameNames, type NamedBy,
 } from "../talk/frames";
@@ -14,8 +15,8 @@ import {
 } from "../talk/layout";
 import {
   clampRailWidth, clampSideNarrow, clampSideWide, getRailShown, getRailTab, getRailWidth,
-  getSideNarrow, getSideShown, getSideTab, getSideWide, setRailShown, setRailTab, setRailWidth,
-  setSideNarrow, setSideShown, setSideTab, setSideWide,
+  getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, setRailShown, setRailTab,
+  setRailWidth, setSideNarrow, setSideShown, setSideTab, setSideWide, setTabsCompact, tabsWidth,
   type RailTab, type SideTab,
 } from "../talk/columns";
 import { FilesPanel, openKey, type OpenFile } from "../files/FilesPanel";
@@ -44,9 +45,9 @@ import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal"
  * (`AMB-D-747`). What this face adds is the thing no agent can add for itself — several of them at
  * once, each answering for a folder, with a ledger on the other side of one switch.
  *
- * **The project is chosen first and the pane after it.** The rail names the projects; the one picked
- * there owns the whole screen, and a pane opened on it works in one of *that project's* folders
- * (`./FolderChoice`). There is no way to point a pane anywhere else, which is what makes the division
+ * **The project is chosen first and the pane after it.** The tabs down the edge name the projects;
+ * the one picked there owns the whole screen, and a pane opened on it works in one of *that
+ * project's* folders (`./FolderChoice`). There is no way to point a pane anywhere else, which is what makes the division
  * a division rather than a label.
  *
  * It is put up once and then left alone. Switching back to the ledger hides it with CSS rather than
@@ -88,6 +89,11 @@ import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal"
  * (`app/src/components/FirstLoop.tsx`). It is where to work and whose project that is, and not what
  * to do about it: whether a pane is made or an open one reached for is this face's own
  * (`../talk/layout`).
+ *
+ * **The tabs are the one column that stays.** They are drawn at the edge of everything else because a
+ * project holds everything else, and they cannot be closed: a turn standing in a project nobody is
+ * looking at is knocked about there, and a way to close them would be a way to stop being told
+ * (`./ProjectTabs`, `AMB-D-838`). What folds is the width their names take, and that is kept.
  *
  * **Both columns beside the panes can be put away, and each carries the way back.** The rail's is on
  * the top row and the file face's is on the panel itself, opened again from the same row; either can
@@ -178,6 +184,10 @@ export function TerminalFace({
   // has no project until it is told which one it is on; the read below is what brings that project's
   // own answers in. What the file face is drawn at is its narrow width — the wide one is `AMB-T-4253`.
   const [railShown, setRailShownState] = useState(getRailShown);
+  // Whether the project tabs are drawn compact. The column itself is neither closed nor dragged
+  // (`./ProjectTabs`), so this is the whole of what the face keeps about it, and it is kept for the
+  // device the way the wishes above it are (`../talk/columns`).
+  const [tabsCompact, setTabsCompactState] = useState(getTabsCompact);
   const [sideShown, setSideShownState] = useState(getSideShown);
   const [railWidth, setRailWidthState] = useState(() => getRailWidth(null));
   const [narrowWidth, setNarrowWidthState] = useState(() => getSideNarrow(null));
@@ -663,6 +673,19 @@ export function TerminalFace({
     setSideShownState(setSideShown(want));
   }, []);
 
+  /** Fold the project names away, or bring them back. Kept the same way the wishes above are. */
+  const wantCompact = useCallback((want: boolean) => {
+    setTabsCompactState(setTabsCompact(want));
+  }, []);
+
+  /** Go to a project. It is the one move two places on this face make — the tabs at the edge and the
+   *  rail's list of projects — and what it does is the same from either: the question about where a
+   *  pane works goes with the project it was asked about (`./EmptySlot`). */
+  const takeProject = useCallback((project: number) => {
+    setAsking(null);
+    setLayout((was) => goProject(was, project));
+  }, []);
+
   // Dragging the edge between a column and the panes. The width follows the pointer while it moves
   // and is kept when it stops, the way the board's own columns are dragged (`../shell/AppShell`).
   const dragging = useCallback(
@@ -687,9 +710,10 @@ export function TerminalFace({
 
   const dragRail = useMemo(
     () => dragging(
-      // The rail's edge is its right one, so the width is how far the pointer is from the face's left.
+      // The rail's edge is its right one, and what is to its left is the tab column: the width is
+      // how far the pointer is from the face's left, less what the tabs are taking.
       (at) => clampRailWidth(
-        at - (rootRef.current?.getBoundingClientRect().left ?? 0),
+        at - (rootRef.current?.getBoundingClientRect().left ?? 0) - tabsWidth(tabsCompact),
         sideShown ? narrowWidth : 0,
       ),
       setRailWidthState,
@@ -697,7 +721,7 @@ export function TerminalFace({
     ),
     // The narrow width and not the drawn one: the wide column lies over the panes rather than
     // pushing them aside, so it takes nothing the rail could have had (`AMB-D-835`).
-    [dragging, layout.project, sideShown, narrowWidth],
+    [dragging, layout.project, sideShown, narrowWidth, tabsCompact],
   );
 
   // The edge of whichever width the column is standing on. Dragging the wide one leaves the narrow
@@ -746,7 +770,10 @@ export function TerminalFace({
     setRailWidthState((px) => clampRailWidth(px));
     setNarrowWidthState((px) => clampSideNarrow(px));
     setWideWidthState((px) => clampSideWide(px));
-  }, [width]);
+    // The tabs are in it because unfolding them takes room off the middle exactly as a window
+    // dragged narrower does: the width they take comes out before anything else is measured
+    // (`../talk/columns`).
+  }, [width, tabsCompact]);
   // The paths alone, and a stable one per set of them: the empty frame reads what the agents are
   // traced across off this, and a fresh array every render would send it back to the host on every
   // keystroke elsewhere on the page (`./EmptySlot`).
@@ -848,10 +875,7 @@ export function TerminalFace({
           onCarry={carry}
         />
       }
-      onProject={(project) => {
-        setAsking(null);
-        setLayout((was) => goProject(was, project));
-      }}
+      onProject={takeProject}
       onPick={(frame) => {
         setAsking(null);
         setLayout((was) => focusOn(was, frame));
@@ -864,7 +888,11 @@ export function TerminalFace({
     <div
       className="termface"
       ref={rootRef}
-      style={{ "--rail-w": `${railWidth}px`, "--side-w": `${sideWidth}px` } as CSSProperties}
+      style={{
+        "--tabs-w": `${tabsWidth(tabsCompact)}px`,
+        "--rail-w": `${railWidth}px`,
+        "--side-w": `${sideWidth}px`,
+      } as CSSProperties}
     >
       <div className="termface__bar">
         {/* Two windows or one, from whichever of them the reader is in. The press says nothing about
@@ -994,6 +1022,17 @@ export function TerminalFace({
         </div>
       </div>
       <div className="termface__body">
+        {/* The projects, at the edge of everything else because that is what they hold (`AMB-D-838`).
+            It is drawn whatever the columns beside the panes are doing: it is the one column here
+            that cannot be put away. */}
+        <ProjectTabs
+          layout={layout}
+          projects={projects}
+          needy={needy}
+          compact={tabsCompact}
+          onCompact={wantCompact}
+          onProject={takeProject}
+        />
         {/* The rail, with the panes beside it. The edge between the column and them is where its
             width is dragged. */}
         {railShown && (

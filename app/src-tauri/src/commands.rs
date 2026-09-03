@@ -3155,17 +3155,25 @@ pub fn config_set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<Writ
     Ok(WriteAck::new(&[]))
 }
 
-/// Write the roster's two avatars (human / AI) to `config.human_avatar` / `ai_avatar`. Each argument
-/// has three states: `None` leaves that facet alone, `Some("")` clears it (back to the identicon),
-/// and `Some(dataUrl)` sets it. Unlike display names ([`write_facet_names`]), an avatar **can be
-/// cleared**, so an empty string and an absent key mean different things. Format and size limits are
-/// checked by core's [`amenbo_core::config::validate_avatar`] before anything is written.
-fn write_facet_avatars(human: Option<&str>, ai: Option<&str>) -> Result<(), CmdError> {
+/// Write the roster's two avatars (human / AI): the display version into `config.human_avatar` /
+/// `ai_avatar`, and the image the user picked into the blob store, named on that facet's
+/// `*_avatar_source` (`AMB-D-839`). Each argument has three states: `None` leaves that facet alone,
+/// `Some(("", _))` clears it (back to the identicon), and `Some((dataUrl, _))` sets it. Unlike display
+/// names ([`write_facet_names`]), an avatar **can be cleared**, so an empty string and an absent key
+/// mean different things. Format and size limits are checked by core's
+/// [`amenbo_core::config::validate_avatar`] before anything is written, and the two halves go in
+/// together through [`amenbo_core::config::Config::set_avatar`], so a display version never stands
+/// beside the previous image's original. A facet handed no bytes keeps a display version alone —
+/// which is what happens when the caller has no original to keep.
+fn write_facet_avatars(
+    human: Option<(&str, Option<&[u8]>)>,
+    ai: Option<(&str, Option<&[u8]>)>,
+) -> Result<(), CmdError> {
     if human.is_none() && ai.is_none() {
         return Ok(());
     }
     for (key, v) in [("human_avatar", human), ("ai_avatar", ai)] {
-        if let Some(val) = v.map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(val) = v.map(|(display, _)| display.trim()).filter(|s| !s.is_empty()) {
             amenbo_core::config::validate_avatar(key, val)?;
         }
     }
@@ -3175,22 +3183,37 @@ fn write_facet_avatars(human: Option<&str>, ai: Option<&str>) -> Result<(), CmdE
         return Ok(());
     }
     let mut store = Store::open_at(paths)?;
-    if let Some(h) = human {
-        store.config.set("human_avatar", h.trim())?;
-    }
-    if let Some(a) = ai {
-        store.config.set("ai_avatar", a.trim())?;
+    for (kind, arg) in [(ActorKind::Human, human), (ActorKind::Ai, ai)] {
+        let Some((display, source)) = arg else { continue };
+        let display = Some(display.trim()).filter(|s| !s.is_empty());
+        // The original goes in only beside a display version: clearing takes both away.
+        let hash = match (display, source) {
+            (Some(_), Some(bytes)) => Some(store.blobs().ingest_bytes(bytes)?.hash),
+            _ => None,
+        };
+        store.config.set_avatar(kind, display, hash.as_deref())?;
     }
     store.save_config()?;
     Ok(())
 }
 
 /// Set or clear the per-facet (human / AI) avatars from the settings screen. The counterpart of
-/// [`write_facet_names`] for display names: the roster's two faces live in config. For each
-/// argument, an absent key leaves it alone, an empty string clears it, and a data URL sets it.
+/// [`write_facet_names`] for display names: the roster's two faces live in config. For each facet, an
+/// absent key leaves it alone, an empty string clears it, and a data URL sets it. `human_source` /
+/// `ai_source` carry the bytes of the image the user picked, kept as the original beside the display
+/// version the front end shrank (`AMB-D-839`); a facet sent no bytes is registered with a display
+/// version alone.
 #[tauri::command]
-pub fn set_facet_avatars(human_avatar: Option<String>, ai_avatar: Option<String>) -> Result<WriteAck, CmdError> {
-    write_facet_avatars(human_avatar.as_deref(), ai_avatar.as_deref())?;
+pub fn set_facet_avatars(
+    human_avatar: Option<String>,
+    ai_avatar: Option<String>,
+    human_source: Option<Vec<u8>>,
+    ai_source: Option<Vec<u8>>,
+) -> Result<WriteAck, CmdError> {
+    write_facet_avatars(
+        human_avatar.as_deref().map(|d| (d, human_source.as_deref())),
+        ai_avatar.as_deref().map(|d| (d, ai_source.as_deref())),
+    )?;
     Ok(WriteAck::new(&[]))
 }
 

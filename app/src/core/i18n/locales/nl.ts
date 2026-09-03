@@ -232,7 +232,7 @@ export const nl: Translation = {
     "settings.humanNameLabel": "Weergavenaam van de mens", "settings.aiNameLabel": "Weergavenaam van de AI",
     "settings.facetNamesHint": "Verandert beide namen (Mens / AI) (een leeg veld laat die kant ongemoeid).",
     "settings.avatarChoose": "Afbeelding kiezen…", "settings.avatarReset": "Terug naar identicon",
-    "settings.avatarHint": "Geef Mens en AI elk een gezicht. Afbeeldingen worden vóór het opslaan verkleind naar 96px (zonder afbeelding krijgt elke kant een eigen identicon).",
+    "settings.avatarHint": "Geef Mens en AI elk een gezicht. Voor de weergave wordt een tot 96px verkleinde versie gebruikt; de gekozen afbeelding blijft zelf bewaard (zonder afbeelding krijgt elke kant een eigen identicon).",
     "settings.avatarImageFailed": "De afbeelding kon niet worden geladen",
     "settings.avatarCanvasFailed": "Het canvas kon niet worden geïnitialiseerd",
     "settings.appearance": "Weergave", "settings.theme": "Thema", "settings.language": "Taal",

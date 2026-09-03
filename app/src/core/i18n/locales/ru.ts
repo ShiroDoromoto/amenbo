@@ -239,7 +239,7 @@ export const ru: Translation = {
     "settings.humanNameLabel": "Отображаемое имя человека", "settings.aiNameLabel": "Отображаемое имя ИИ",
     "settings.facetNamesHint": "Меняет два имени в списке (Человек / ИИ) (пустое поле оставляет эту сторону как есть).",
     "settings.avatarChoose": "Выбрать изображение…", "settings.avatarReset": "Вернуть идентикон",
-    "settings.avatarHint": "Задайте лицо человеку и ИИ. Перед сохранением изображения уменьшаются до 96 пикселей (если ничего не задано, для каждой стороны берётся идентикон).",
+    "settings.avatarHint": "Задайте лицо человеку и ИИ. Для показа используется версия, уменьшенная до 96 пикселей, а выбранное изображение сохраняется как есть (если ничего не задано, для каждой стороны берётся идентикон).",
     "settings.avatarImageFailed": "Не удалось загрузить изображение",
     "settings.avatarCanvasFailed": "Не удалось инициализировать canvas",
     "settings.appearance": "Оформление", "settings.theme": "Тема", "settings.language": "Язык",

@@ -235,7 +235,7 @@ export const th: Translation = {
     "settings.humanNameLabel": "ชื่อที่แสดงของมนุษย์", "settings.aiNameLabel": "ชื่อที่แสดงของ AI",
     "settings.facetNamesHint": "เปลี่ยนชื่อทั้งสอง (มนุษย์ / AI) (ช่องที่เว้นว่างไว้จะไม่ไปแตะฝั่งนั้น)",
     "settings.avatarChoose": "เลือกรูป…", "settings.avatarReset": "กลับไปใช้ identicon",
-    "settings.avatarHint": "ลงทะเบียนใบหน้าให้ทั้งมนุษย์และ AI รูปจะถูกย่อเหลือ 96px ก่อนบันทึก (ถ้าไม่ตั้ง จะใช้ identicon ของแต่ละฝั่ง)",
+    "settings.avatarHint": "ลงทะเบียนใบหน้าให้ทั้งมนุษย์และ AI การแสดงผลใช้รูปที่ย่อเหลือ 96px ส่วนรูปที่เลือกจะถูกเก็บไว้ตามเดิม (ถ้าไม่ตั้ง จะใช้ identicon ของแต่ละฝั่ง)",
     "settings.avatarImageFailed": "ไม่สามารถโหลดรูปภาพได้",
     "settings.avatarCanvasFailed": "ไม่สามารถเริ่มต้น canvas ได้",
     "settings.appearance": "รูปลักษณ์", "settings.theme": "ธีม", "settings.language": "ภาษา",

@@ -238,7 +238,7 @@ export const it: Translation = {
     "settings.humanNameLabel": "Nome mostrato della persona", "settings.aiNameLabel": "Nome mostrato dell'IA",
     "settings.facetNamesHint": "Cambia i due nomi dell'elenco (Persona / IA) (un campo vuoto lascia quella faccia com'è).",
     "settings.avatarChoose": "Scegli un'immagine…", "settings.avatarReset": "Torna all'identicon",
-    "settings.avatarHint": "Registra un volto per la persona e per l'IA. Le immagini vengono ridotte a 96px prima di salvarle (senza immagine si usa un identicon per ciascuna faccia).",
+    "settings.avatarHint": "Registra un volto per la persona e per l'IA. Per la visualizzazione si usa una versione ridotta a 96px e l'immagine scelta viene conservata così com'è (senza immagine si usa un identicon per ciascuna faccia).",
     "settings.avatarImageFailed": "Impossibile caricare l'immagine",
     "settings.avatarCanvasFailed": "Impossibile inizializzare il canvas",
     "settings.appearance": "Aspetto", "settings.theme": "Tema", "settings.language": "Lingua",

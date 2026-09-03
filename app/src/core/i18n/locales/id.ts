@@ -235,7 +235,7 @@ export const id: Translation = {
     "settings.humanNameLabel": "Nama tampilan manusia", "settings.aiNameLabel": "Nama tampilan AI",
     "settings.facetNamesHint": "Mengubah kedua nama (Manusia / AI) (kolom yang dikosongkan membiarkan sisi itu apa adanya).",
     "settings.avatarChoose": "Pilih gambar…", "settings.avatarReset": "Kembalikan ke identicon",
-    "settings.avatarHint": "Daftarkan satu wajah untuk Manusia dan AI. Gambar diperkecil ke 96px sebelum disimpan (tanpa gambar, dipakai identicon untuk masing-masing sisi).",
+    "settings.avatarHint": "Daftarkan satu wajah untuk Manusia dan AI. Tampilan memakai versi yang diperkecil ke 96px, dan gambar yang dipilih tetap disimpan apa adanya (tanpa gambar, dipakai identicon untuk masing-masing sisi).",
     "settings.avatarImageFailed": "Gambar tidak dapat dimuat",
     "settings.avatarCanvasFailed": "Canvas tidak dapat diinisialisasi",
     "settings.appearance": "Tampilan", "settings.theme": "Tema", "settings.language": "Bahasa",

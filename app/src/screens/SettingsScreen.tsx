@@ -212,9 +212,10 @@ function NameSetting() {
 }
 
 /** One slot for setting or clearing a facet's avatar image (human or AI). With none set it shows the
- *  facet's identicon; with one set it shows the image, large. It is stored in `config.human_avatar` /
- *  `ai_avatar` (which is what snapshot.roster carries), and the subscription updates the preview as
- *  soon as it is saved. */
+ *  facet's identicon; with one set it shows the image, large. The display version is stored in
+ *  `config.human_avatar` / `ai_avatar` (which is what snapshot.roster carries) and the picked file is
+ *  kept beside it as the original (`AMB-D-839`); the subscription updates the preview as soon as it is
+ *  saved. */
 function AvatarSlot({ kind }: { kind: "human" | "ai" }) {
   const snap = useSyncExternalStore(subscribe, getSnapshot);
   const actor = snap.roster.find((a) => a.kind === kind);
@@ -229,8 +230,10 @@ function AvatarSlot({ kind }: { kind: "human" | "ai" }) {
     setBusy(true);
     setError(null);
     try {
+      // The display version is baked here; the file itself goes in as the original (`AMB-D-839`).
       const dataUrl = await fileToAvatarDataUrl(file);
-      await setFacetAvatar(kind, dataUrl);
+      const source = new Uint8Array(await file.arrayBuffer());
+      await setFacetAvatar(kind, dataUrl, source);
     } catch (err) {
       setError(errText(err));
     } finally {

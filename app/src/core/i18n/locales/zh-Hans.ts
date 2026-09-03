@@ -233,7 +233,7 @@ export const zhHans: Translation = {
     "settings.humanNameLabel": "人的显示名称", "settings.aiNameLabel": "AI 的显示名称",
     "settings.facetNamesHint": "更改名册上的两个名称（人／AI）（留空的字段保持不变）。",
     "settings.avatarChoose": "选择图片…", "settings.avatarReset": "恢复为默认图案",
-    "settings.avatarHint": "为人和 AI 各登记一张脸。图片会先缩小到 96px 再保存（未设置时使用各自的默认图案）。",
+    "settings.avatarHint": "为人和 AI 各登记一张脸。显示用的是缩小到 96px 的版本，所选图片本身也会原样保留（未设置时使用各自的默认图案）。",
     "settings.avatarImageFailed": "无法加载图片",
     "settings.avatarCanvasFailed": "无法初始化 canvas",
     "settings.appearance": "外观", "settings.theme": "主题", "settings.language": "语言",

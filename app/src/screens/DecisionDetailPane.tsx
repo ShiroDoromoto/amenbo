@@ -156,7 +156,7 @@ export function DecisionDetailPane({
 
   return (
     <div className="detail__body">
-      <div className="detail__title" style={{ alignItems: "baseline", gap: 8 }}>
+      <div className="detail__title">
         {d.ref && <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
         {editing ? (
           <input
@@ -174,7 +174,7 @@ export function DecisionDetailPane({
         )}
         <span className="chip chip--status" style={{ background: statusColor(d.status) }}>{t(`dec.status.${d.status}`)}</span>
         {!editing && editable && (
-          <button className="btn" style={{ marginLeft: 6 }} onClick={startEdit}>{t("detail.edit")}</button>
+          <button className="btn" onClick={startEdit}>{t("detail.edit")}</button>
         )}
       </div>
 

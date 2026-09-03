@@ -98,7 +98,7 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
 
         {/* Everything below this line came from GitHub, not from the catalog. */}
         <div className="plugdet__figures">
-          <button className="feed__action" onClick={() => void openExternalUrl(repoUrl(entry.repo))}>
+          <button className="btn" onClick={() => void openExternalUrl(repoUrl(entry.repo))}>
             {tf("plugins.openRepo", { repo: entry.repo })}
           </button>
           {loading && <span className="faint">{t("plugins.factsLoading")}</span>}
@@ -217,7 +217,7 @@ function PluginActions({ entry, install, onOpenInstalled }: {
     return (
       <div className="plugdet__actions">
         <span className="chip">{t("plugins.installed")}</span>
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.landedInert")}</span>
+        <span className="meta">{t("plugins.landedInert")}</span>
         <button className="btn" onClick={onOpenInstalled}>{t("plugins.turnItOn")}</button>
       </div>
     );
@@ -240,7 +240,7 @@ function PluginActions({ entry, install, onOpenInstalled }: {
       <button className="btn" disabled={busy} onClick={() => void runInstall()}>
         {busy ? t("plugins.installing") : t("plugins.install")}
       </button>
-      <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.installNote")}</span>
+      <span className="meta">{t("plugins.installNote")}</span>
       {error && <div className="plugdet__note">{error}</div>}
     </div>
   );

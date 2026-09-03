@@ -363,7 +363,7 @@ export function BoardScreen({
           placeholder={t("board.searchPh")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ fontSize: "var(--fs-xs)", width: 180 }}
+          style={{ width: 180 }}
         />
         {/* A search that could not run narrows nothing, and narrowing nothing looks exactly like a word
             that matched everything. Say which it was, next to the box that asked. */}
@@ -374,7 +374,7 @@ export function BoardScreen({
         )}
         {view === "board" && (
           <div className="groupby">
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("board.group")}</span>
+            <span className="meta">{t("board.group")}</span>
             <button
               className={`filterchip ${group === STATUS_GROUP ? "filterchip--on" : ""}`}
               onClick={() => setGroup(STATUS_GROUP)}
@@ -596,7 +596,6 @@ function AddDimension({ onAdd }: { onAdd: (name: string) => void }) {
       autoFocus
       value={text}
       placeholder={t("board.dimensionNamePh")}
-      style={{ fontSize: "var(--fs-xs)" }}
       onChange={(e) => setText(e.target.value)}
       onKeyDown={(e) => { if (isEnterSubmit(e)) { commit(); setAdding(false); } if (e.key === "Escape") setAdding(false); }}
       onBlur={() => { commit(); setAdding(false); }}

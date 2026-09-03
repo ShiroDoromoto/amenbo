@@ -9,6 +9,62 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button { font: inherit; color: inherit; cursor: pointer; }
+
+/* ---------- the boxes a reader fills in (`AMB-D-841`, `AMB-D-842`) ---------- */
+/* Every input, select and textarea in the app, drawn the same way once, here. Left to the browser
+   they were drawn by the platform — a different box on macOS, on Windows and on Linux, none of them
+   carrying a single token of the palette they sit in, and each screen that wanted one to look like
+   the app restyled its own. So the base is the whole of the look, and a class above it says only
+   what is different about that one box.
+
+   Sunken, because a box to type in is a well cut into the surface it sits on, which is the same
+   thing the ground's third step says elsewhere (`AMB-D-840`). The outline is `--c-edge` and not
+   `--c-rule`: this is a control, and has to be found before it can be used.
+
+   The width is capped rather than set, so a box takes what its container gives it up to the point
+   where it stops being one box (`--measure-form`). A container narrower than that still decides —
+   the cap only says where growing stops. */
+input, select, textarea {
+  font: inherit;
+  color: var(--c-text);
+  background: var(--c-sunken);
+  border: 1px solid var(--c-edge);
+  border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-3);
+  max-width: var(--measure-form);
+}
+/* One focus ring for everything, drawn outside the box so it is not confused with the border it
+   would otherwise recolour, and only for the keyboard: a pointer already knows where it clicked. */
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+/* A textarea holds something written rather than a value filled in, so it takes the reading width
+   and not the form one: what is typed in it is shown back at `--measure-prose` (a note, a comment,
+   a decision's body), and a box narrower than that would break the lines somewhere else than the
+   page does. It is dragged taller and never wider — widening it breaks the column its neighbours
+   are laid out in. */
+textarea { resize: vertical; max-width: var(--measure-prose); }
+select { cursor: pointer; }
+/* A tick box is drawn by the platform and stays that way: the rule above is for boxes with a value
+   typed into them, and its padding, ground and border would each take a piece of the tick. What it
+   keeps from the rule is the accent, so the tick is the app's colour and not the system's. */
+input[type="checkbox"], input[type="radio"] {
+  width: var(--s-4); height: var(--s-4);
+  margin: 0; padding: 0;
+  max-width: none;
+  border: none; background: none; border-radius: 0;
+  accent-color: var(--c-accent);
+  cursor: pointer;
+}
+/* A colour well shows a value rather than holding one typed in, so the padding of the rule above
+   would eat the only thing it has to show. It keeps the outline and the corner, and gives the
+   inside over to the colour. */
+input[type="color"] {
+  width: var(--s-6); height: var(--s-5);
+  padding: 2px;
+  cursor: pointer;
+}
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--c-edge); border-radius: 6px; border: 2px solid var(--c-bg); }
 
@@ -79,7 +135,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   --banner-edge: var(--c-rule);
   /* The one accented thing on a quiet band; the loud ones override the pair below. */
   --banner-btn-ground: var(--c-accent);
-  --banner-btn-ink: #fff;
+  --banner-btn-ink: var(--c-on-accent);
 
   display: flex; align-items: flex-start; gap: var(--s-2);
   padding: var(--s-2) var(--s-3);
@@ -90,19 +146,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The two steps that fill the band, and the accent one beside them: an offer is not a step on the
    ladder — nothing is wrong, the reader is being handed something. */
 .healthbanner--stop, .healthbanner--heed, .healthbanner--offer {
-  --banner-ink: #fff;
   --banner-tint: rgba(0, 0, 0, 0.18);
   --banner-tint-hover: rgba(0, 0, 0, 0.3);
   --banner-edge: rgba(255, 255, 255, 0.35);
-  --banner-btn-ground: #fff;
+  /* The action on a loud band turns the pairing round rather than taking a colour of its own: the
+     band's ink becomes its ground and the band's ground its ink. The pair holds AA read either
+     way, so one declaration covers all three bands and both themes. */
+  --banner-btn-ground: var(--banner-ink);
   --banner-btn-ink: var(--banner-ground);
   border-bottom-color: transparent;
 }
-.healthbanner--stop { --banner-ground: var(--c-stop); }
-.healthbanner--heed { --banner-ground: var(--c-heed); }
+/* Each band names the fill and the ink together — they are one pairing, and a theme swaps both. */
+.healthbanner--stop { --banner-ground: var(--c-stop); --banner-ink: var(--c-on-stop); }
+.healthbanner--heed { --banner-ground: var(--c-heed); --banner-ink: var(--c-on-heed); }
 /* The re-sync affordance for an outdated managed block, and the rest of the guidance the app offers
    rather than warns about. Accent, so it reads as an offer wherever it stands beside a step. */
-.healthbanner--offer { --banner-ground: var(--c-accent); }
+.healthbanner--offer { --banner-ground: var(--c-accent); --banner-ink: var(--c-on-accent); }
 .healthbanner__body { flex: 1; min-width: 0; }
 .healthbanner__title { font-weight: var(--fw-bold); }
 .healthbanner__line { font-size: var(--fs-xs); opacity: 0.95; word-break: break-word; }
@@ -115,11 +174,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .healthbanner__close:hover { background: var(--banner-tint-hover); }
 .healthbanner__close:disabled { opacity: 0.5; cursor: default; }
-/* The button that runs the action (re-sync). It outweighs the close button. */
+/* The button that runs the action (re-sync). It is the filled system (`AMB-D-841`) drawn in the
+   band's own pairing rather than the accent — the fill and the size of a primary button, taking the
+   ground and ink the band hands it. It outweighs the close button, which stays at the band's
+   reading size. */
 .healthbanner__action {
   flex: none; color: var(--banner-btn-ink); background: var(--banner-btn-ground);
   border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-2);
-  font-size: var(--fs-xs); font-weight: var(--fw-bold); cursor: pointer;
+  font-size: var(--fs-md); font-weight: var(--fw-bold); cursor: pointer;
 }
 .healthbanner__action:hover { opacity: 0.85; }
 .healthbanner__action:disabled { opacity: 0.6; cursor: default; }
@@ -199,7 +261,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .topbar__envbadge {
   font-family: var(--font-mono);
   font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: 0.04em;
-  color: #fff; background: var(--c-heed);
+  color: var(--c-on-heed); background: var(--c-heed);
   border-radius: var(--r-sm); padding: 1px var(--s-2);
   white-space: nowrap;
 }
@@ -273,18 +335,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .navitem--active .navitem__count { background: var(--c-surface); }
 /* The inbox's needs-attention badge: the accent colour carries "unread / needs a look". */
-.navitem__count--alert { background: var(--c-accent); color: #fff; font-weight: var(--fw-medium); }
-.navitem--active .navitem__count--alert { background: var(--c-accent); color: #fff; }
+.navitem__count--alert { background: var(--c-accent); color: var(--c-on-accent); font-weight: var(--fw-medium); }
+.navitem--active .navitem__count--alert { background: var(--c-accent); color: var(--c-on-accent); }
 /* The due row warns on two steps at once, so its badges travel as a group. Only the group takes the
    auto margin: two of them side by side would each claim a share of the free space and drift apart. */
 .navitem__counts { margin-left: auto; display: flex; align-items: center; gap: var(--s-1); }
 .navitem__counts .navitem__count { margin-left: 0; }
 /* Its day has gone or is today — nothing moves until a hand is put to it. Its day is tomorrow — it
    moves on its own, and the badge is there to be known while it comes (the steps of `tokens.css`). */
-.navitem__count--stop { background: var(--c-stop); color: #fff; font-weight: var(--fw-medium); }
-.navitem__count--heed { background: var(--c-heed); color: #fff; font-weight: var(--fw-medium); }
-.navitem--active .navitem__count--stop { background: var(--c-stop); color: #fff; }
-.navitem--active .navitem__count--heed { background: var(--c-heed); color: #fff; }
+.navitem__count--stop { background: var(--c-stop); color: var(--c-on-stop); font-weight: var(--fw-medium); }
+.navitem__count--heed { background: var(--c-heed); color: var(--c-on-heed); font-weight: var(--fw-medium); }
+.navitem--active .navitem__count--stop { background: var(--c-stop); color: var(--c-on-stop); }
+.navitem--active .navitem__count--heed { background: var(--c-heed); color: var(--c-on-heed); }
 .navitem--muted { color: var(--c-text-muted); font-size: var(--fs-md); cursor: pointer; }
 
 /* ---------- main ---------- */

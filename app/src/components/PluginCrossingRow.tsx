@@ -91,7 +91,7 @@ export function PluginCrossingRow({ install, layer, name }: {
           at.hasValue && <span className="chip">{t("plugins.cfg.filled")}</span>
         )}
         <button
-          className="feed__action"
+          className="btn btn--primary"
           disabled={busy || (!at.enabled && !install.compatible)}
           onClick={() => void move(!at.enabled)}
         >
@@ -101,7 +101,7 @@ export function PluginCrossingRow({ install, layer, name }: {
             whether there is anything to configure, and it is not worth a button. Operations count as
             something to open it for: a plugin with a button and no field still has a form. */}
         {(install.config.length > 0 || install.actions.length > 0) && (
-          <button className="feed__action" onClick={() => setOpen((s) => !s)}>
+          <button className="btn" onClick={() => setOpen((s) => !s)}>
             {t(open ? "plugins.cfg.hide" : "plugins.cfg.open")}
           </button>
         )}

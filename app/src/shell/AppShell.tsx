@@ -476,7 +476,7 @@ export function AppShell() {
 function PaneHeader({ onClose }: { onClose: () => void }) {
   return (
     <div style={{ display: "flex", justifyContent: "flex-end", padding: "4px 8px", borderBottom: "1px solid var(--c-rule)" }}>
-      <button className="feed__action" onClick={onClose}><Icon name="close" /> {t("pane.close")}</button>
+      <button className="btn" onClick={onClose}><Icon name="close" /> {t("pane.close")}</button>
     </div>
   );
 }

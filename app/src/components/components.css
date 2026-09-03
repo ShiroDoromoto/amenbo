@@ -40,6 +40,10 @@
 .hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
 /* The bold lead-in over a field or a group of them. */
 .fieldlabel { font-weight: var(--fw-bold); font-size: var(--fs-md); }
+/* The word in front of a control on a toolbar — a filter's or a sort's, wrapping the control it
+   names. It carries the size alone: the row it sits on reads at the page's colour, and the two
+   classes above would each take that away in a different direction. */
+.ctllabel { font-size: var(--fs-xs); }
 /* A folder path, which is one long unbreakable word: it scrolls inside its own box rather than
    pushing the column it sits in as wide as the deepest path a reader happens to have. */
 .path {
@@ -67,19 +71,15 @@
 }
 /* One thing being filled in: what it is above, what it is filled in with below. */
 .field { display: flex; flex-direction: column; gap: var(--s-2); }
-/* The box a reader types into. */
-.textinput {
-  padding: var(--s-2); border: 1px solid var(--c-edge); border-radius: var(--r-md);
-  font-size: var(--fs-md); background: var(--c-surface); color: var(--c-text); outline: none;
-}
-.textinput:focus { border-color: var(--c-accent); }
 /* A folder and what can be done with it, on one line while the line is wide enough for both. */
 .folderrow { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 /* The buttons a form is finished with, set apart from the fields above them. */
 .actions { display: flex; gap: var(--s-2); }
 /* Buttons offered beside something rather than under a form: closer together, and wrapping rather
    than running off the edge, since a row of them is as long as the words a language spells them in. */
-.buttonrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+/* A row of buttons, wherever one stands: the three consent rows that each wrote this out
+   again now carry it too (`AMB-D-841`). */
+.buttonrow { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 
 .due--overdue { color: var(--c-due-overdue); }
 .due--today { color: var(--c-due-today); }
@@ -114,6 +114,11 @@
 .decisionsbtn__count { font-size: var(--fs-xs); color: var(--c-text-muted); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
 .decisionsbtn--active .decisionsbtn__count { background: var(--c-surface); }
 .filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); flex-wrap: wrap; }
+/* The box that narrows a list, wherever a screen puts one. A control takes the page's font from the
+   base rule, and a toolbar reads a step below the page — so the step is said here, once, rather than
+   at each of the five tags that mount one. How wide it stands is the screen's own business and stays
+   with the tag. */
+.board__search { font-size: var(--fs-xs); }
 /* A chip is a name, so it is never squeezed: it keeps its own size (`flex: none`) and its label stays on
    one line. Left to shrink, a chip in a row that has lost width — the board's group row once the detail
    pane opens beside it — breaks its label a character at a time and reads as nothing. The rows that hold
@@ -157,7 +162,9 @@
   border: 1px dashed var(--c-edge); background: none; border-radius: var(--r-md); padding: var(--s-2) var(--s-2);
 }
 .board__addcol:hover { color: var(--c-accent); border-color: var(--c-accent); }
-.column__addinput { border: 1px solid var(--c-accent); border-radius: var(--r-md); padding: var(--s-2) var(--s-2); font-size: var(--fs-md); outline: none; }
+/* The box that is open only while a column is being named: it is already the thing being typed
+   into, so it wears the accent on its border from the moment it appears. */
+.column__addinput { border-color: var(--c-accent); font-size: var(--fs-xs); }
 .board__addcolinput { width: 200px; flex: none; align-self: flex-start; }
 
 /* ---------- drag & drop (moving between the status board's columns) ---------- */
@@ -182,7 +189,7 @@
   max-width: 80%; padding: var(--s-2) var(--s-3); border-radius: var(--r-md);
   font-size: var(--fs-md); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); cursor: pointer;
 }
-.toast--warn { color: #fff; background: var(--c-heed); }
+.toast--warn { color: var(--c-on-heed); background: var(--c-heed); }
 
 /* ---------- card ---------- */
 .card {
@@ -205,10 +212,7 @@
 .card__footer { display: flex; align-items: center; gap: var(--s-2); color: var(--c-text-muted); font-size: var(--fs-xs); }
 .card__spacer { flex: 1; }
 /* A compact select sat inline among a card's or row's chips (the status control, a dimension value). */
-.inlineselect {
-  font-size: var(--fs-xs); color: var(--c-text); background: var(--c-surface);
-  border: 1px solid var(--c-edge); border-radius: var(--r-sm); padding: 0 2px; cursor: pointer;
-}
+.inlineselect { font-size: var(--fs-xs); padding: 0 2px; }
 /* The axis the board is grouped by. Its row is what the detail pane takes width from (the toolbar above
    spans the pane, this does not), so it folds onto a second line rather than crushing the buttons — the
    heading beside them holds its line for the same reason. */
@@ -289,7 +293,7 @@
 }
 /* Task lists (`- [ ]`): drop the bullet, keep the checkbox tinted and spaced from the label. */
 .markdown .contains-task-list { list-style: none; padding-left: 0; }
-.markdown .task-list-item input { margin: 0 var(--s-2) 0 0; accent-color: var(--c-accent); }
+.markdown .task-list-item input { margin: 0 var(--s-2) 0 0; }
 /* GFM tables. The right pane is a fixed 480px, so a wide table scrolls sideways in its own
    wrapper (see Markdown.tsx) rather than wrapping and blowing up the row height. */
 .markdown__tablewrap { overflow-x: auto; margin: var(--s-2) 0; }
@@ -321,13 +325,7 @@
 .markdown a.reflink:hover { text-decoration: underline; }
 
 .compose { margin-top: var(--s-2); }
-.compose__input {
-  width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px;
-  font-family: inherit; font-size: var(--fs-md); line-height: 1.5;
-  border: 1px solid var(--c-edge); border-radius: var(--r-md);
-  padding: var(--s-2) var(--s-2); background: var(--c-surface); color: var(--c-text); outline: none;
-}
-.compose__input:focus { border-color: var(--c-accent); }
+.compose__input { width: 100%; min-height: 64px; }
 .compose__actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-2); }
 /* A small label chip, as used for a blocker or a reference to a decision. */
 .chip { font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm); background: var(--c-sunken); }
@@ -341,10 +339,12 @@
    --c-blocked, which is the heed step in the status range — the two must not be confused, and what
    keeps them apart is that a premise nobody can pass is drawn one step above it. */
 .chip--block { white-space: nowrap; cursor: default; }
-.chip--official { background: var(--c-accent); color: #fff; }
+.chip--official { background: var(--c-accent); color: var(--c-on-accent); }
 /* A status said as a filled chip, the fill naming which status it is (`statusColor`, kept beside the
    two places that draw it). White on a colour, so it reads as a stamp on the title rather than as one
-   more word after it, and rounder than the chips it can sit beside for the same reason. */
+   more word after it, and rounder than the chips it can sit beside for the same reason. The white is
+   plain rather than `--c-on-accent`: that one flips with the theme, and these fills do not — they are
+   the same three colours in both, so what reads on them is the same in both. */
 .chip--status { border-radius: 10px; color: #fff; white-space: nowrap; }
 /* The index's recommendation, which sits beside the trust badge rather than on its ladder. Outlined
    in the accent instead of filled with it, so the two read as different kinds of claim at a glance
@@ -417,6 +417,9 @@
 /* One plugin's switch, wherever it is drawn — the market's detail and the installed list share the
    control, so they share its shape. Same row rules as the actions above it. */
 .pluggate { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-2); }
+/* The row reads a step below the page, and the picker on it follows the row rather than the base
+   rule's inherited page font. */
+.pluggate select { font-size: var(--fs-xs); }
 .pluggate .pluggate { margin-bottom: 0; }
 /* One project × plugin crossing (`AMB-D-447`): its line, and the settings it opens underneath. Ruled off
    from the next crossing, since two rows of chips and buttons otherwise read as one. */
@@ -428,15 +431,16 @@
 .plugcfg__field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-2); align-items: flex-start; }
 .plugcfg__field input { width: 100%; }
 .plugcfg__label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
-/* A field whose author declared candidates: one row per candidate, each box only as wide as a box (the
-   rule above stretches a text input to the field's width, which would swallow a checkbox). */
+/* A field whose author declared candidates: one row per candidate, each box only as wide as a box.
+   The rule above stretches every input in the field to the field's width, and a tick box stretched
+   that far is a bar with a tick at one end, so this hands it back the size a tick box has. */
 .plugcfg__choices { display: flex; flex-direction: column; gap: var(--s-1); }
 .plugcfg__choice { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
-.plugcfg__choice input { width: auto; }
+.plugcfg__choice input { width: var(--s-4); }
 .plugcfg__note { font-size: var(--fs-xs); }
 /* The author's paragraph under an input (`AMB-D-656`). Their line breaks are kept — it is a body, and
    the only shape it has is the one they typed — and nothing in it is drawn as markup or as a link. */
-.plugcfg__help { font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
+.plugcfg__help { max-width: var(--measure-prose); font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A field whose value the plugin writes, standing where its input would (`AMB-D-656`). */
 .plugcfg__fixed { font-size: var(--fs-md); overflow-wrap: anywhere; }
 /* The operations the author declared (`AMB-D-664`), under the fields they act on and ruled off from them:
@@ -530,15 +534,23 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   background: var(--c-sunken); padding: 2px var(--s-2); border-radius: var(--r-sm);
 }
+/* The three systems every pressable thing in the app is drawn as (`AMB-D-841`): this outlined one
+   for the ordinary move, `--primary` for the one the screen is for, `--danger` for a delete. A
+   fourth look is not a variant to add here — a button that needs one is a button in the wrong
+   system. What is not pressable carries neither a fill nor an edge. */
 .btn {
   border: 1px solid var(--c-edge); background: var(--c-surface);
   border-radius: var(--r-sm); padding: var(--s-1) var(--s-2); font-size: var(--fs-md);
 }
+/* The pointer lifts the edge, which is the only thing the outlined one has to give. The two that
+   carry a colour answer in that colour instead, below. */
+.btn:hover:not(:disabled) { border-color: var(--c-accent); }
 /* A button that cannot be pressed says so before it is pressed: faded, and without the pointer
    the global button rule hands every button. This is the base every variant inherits — a variant
    that wants a different fade overrides it, but none may leave the disabled state invisible. */
 .btn:disabled { opacity: 0.5; cursor: default; }
-.btn--primary { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
+.btn--primary { background: var(--c-accent); color: var(--c-on-accent); border-color: var(--c-accent); }
+.btn--primary:hover:not(:disabled) { opacity: 0.9; }
 /* The assignee picker: a small custom dropdown that puts a FacetAvatar on each facet,
    which a native <select> cannot draw. The trigger keeps the .btn look and fits the
    avatar, the name and the caret on one line. */
@@ -563,7 +575,7 @@
 /* The button for a destructive operation (delete): a restrained red outline that fills in
    on hover. */
 .btn--danger { color: var(--c-stop); border-color: var(--c-stop); background: transparent; }
-.btn--danger:hover:not(:disabled) { background: var(--c-stop); color: #fff; }
+.btn--danger:hover:not(:disabled) { background: var(--c-stop); color: var(--c-on-stop); border-color: var(--c-stop); }
 .detail__danger { margin-top: var(--s-2); display: flex; justify-content: flex-end; }
 .notes { background: var(--c-sunken); border-radius: var(--r-md); padding: var(--s-3); font-size: var(--fs-body); line-height: 1.7; white-space: pre-wrap; max-width: var(--measure-prose); }
 /* Notes rendered as Markdown are a run of block elements, so pre-wrap comes back off (this
@@ -589,11 +601,6 @@
 button.feed__target:hover { color: var(--c-accent); }
 .feed__target--gone { color: var(--c-text-muted); }
 .feed__meta { font-size: var(--fs-xs); color: var(--c-text-muted); display: flex; gap: var(--s-2); margin-top: 2px; }
-.feed__action { font-size: var(--fs-xs); color: var(--c-text-muted); border: none; background: none; }
-/* Only a pressable one turns accent, and a disabled one fades: this class is the borderless
-   sibling of .btn and carries the same rule, since it is disabled in as many places. */
-.feed__action:hover:not(:disabled) { color: var(--c-accent); }
-.feed__action:disabled { opacity: 0.5; cursor: default; }
 
 /* ---------- search (where a word is written) ---------- */
 /* Every control on this row keeps its size, and the note — the one thing on the row nobody presses —
@@ -671,17 +678,6 @@ button.feed__target:hover { color: var(--c-accent); }
    split by colour — read takes the accent, archive stays neutral — keeping the two
    concepts apart. */
 .row__actions { flex: none; display: inline-flex; align-items: center; gap: var(--s-2); }
-.row__action {
-  background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-sm); cursor: pointer;
-  padding: 2px var(--s-2); font-size: var(--fs-md); line-height: 1.4; white-space: nowrap;
-  color: var(--c-text-muted);
-}
-/* Mark read: leans on the accent — a forward move that clears the mark while the item is
-   still untouched. */
-.row__action--read:hover, .row__action--read:focus-visible { color: var(--c-accent); border-color: var(--c-accent); }
-/* Archive / restore: neutral — tidying that moves an item out of the inbox or brings it
-   back, not a delete. */
-.row__action--dismiss:hover, .row__action--dismiss:focus-visible { color: var(--c-text); border-color: var(--c-text-muted); }
 
 /* ---------- settings ---------- */
 .settings { padding: var(--s-4); max-width: 720px; display: flex; flex-direction: column; gap: var(--s-4); }
@@ -717,8 +713,9 @@ button.feed__target:hover { color: var(--c-accent); }
   border-radius: var(--r-md); overflow: hidden;
 }
 .iconpick__img { display: block; width: 100%; height: 100%; object-fit: cover; }
-/* On the project's own colour, which is chosen for a background — the same pairing the surfaces draw. */
-.iconpick__letter { color: #fff; font-size: var(--fs-xl); font-weight: 600; }
+/* On the project's own colour. The ink is not written here: the ground is a value the human picks, so no token
+   can hold the pair and it is worked out from the colour at render instead (`core/ink.ts`). */
+.iconpick__letter { font-size: var(--fs-xl); font-weight: 600; }
 
 /* ---------- new project (creation screen) ---------- */
 .newproj { padding: var(--s-4); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-4); }
@@ -740,7 +737,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .firstloop__step { display: flex; gap: var(--s-2); }
 .firstloop__num {
   width: 24px; height: 24px; flex: none; border-radius: 50%;
-  background: var(--c-accent); color: #fff; font-size: var(--fs-md); font-weight: var(--fw-bold);
+  background: var(--c-accent); color: var(--c-on-accent); font-size: var(--fs-md); font-weight: var(--fw-bold);
   display: flex; align-items: center; justify-content: center;
 }
 .firstloop__stepbody { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
@@ -881,33 +878,31 @@ button.feed__target:hover { color: var(--c-accent); }
 .onboard__hero h2 { margin: var(--s-2) 0 var(--s-2); }
 .onboard__steps { display: flex; flex-direction: column; gap: var(--s-3); }
 .onboard__step { display: flex; gap: var(--s-3); }
-.onboard__num { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--c-accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); }
+.onboard__num { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--c-accent); color: var(--c-on-accent); display: flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); }
 .onboard__steptitle { font-weight: var(--fw-bold); margin-bottom: 2px; }
 .onboard__cmd, .onboard__step code { font-family: var(--font-mono); font-size: var(--fs-md); background: var(--c-sunken); border-radius: var(--r-sm); padding: 1px var(--s-2); }
 .onboard__cmd { display: inline-block; margin-top: var(--s-2); color: var(--c-accent-text); }
 /* The empty state's primary actions (create / open). Each moves on inside the app. */
 .onboard__actions { display: flex; gap: var(--s-2); justify-content: center; margin-top: var(--s-4); flex-wrap: wrap; }
+/* A card in shape and an outlined button in colour: the ground, the edge and the fade a disabled
+   one takes all come from `.btn`, which these carry alongside this class. What is left here is the
+   layout — a card wide enough to hold a label over a hint. */
 .onboard__action {
   display: flex; align-items: flex-start; gap: var(--s-2); text-align: left;
-  flex: 1 1 240px; max-width: 300px;
-  background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-md);
-  padding: var(--s-2); cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  flex: 1 1 240px; max-width: 300px; border-radius: var(--r-md);
+  padding: var(--s-2); transition: border-color 0.15s, background 0.15s;
 }
-.onboard__action:hover { border-color: var(--c-accent); background: var(--c-hover); }
+.onboard__action:hover:not(:disabled) { border-color: var(--c-accent); background: var(--c-hover); }
 .onboard__action-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .onboard__action-label { font-weight: var(--fw-bold); display: flex; align-items: center; gap: var(--s-2); }
 .onboard__action-hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* The create card — the primary action, which moves to a screen inside the GUI. The accent
-   lifts it a little above the rest. */
-.onboard__action--primary { border-color: var(--c-accent); }
 .onboard__go { font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-accent-text); margin-top: var(--s-2); }
 /* The open card once it is asking which project: the same card, now holding controls of its own, so it
    stops behaving like one big button (no pointer, no hover) and takes the width its select needs. */
 .onboard__action--open { cursor: default; flex-basis: 320px; max-width: 100%; }
-.onboard__action--open:hover { border-color: var(--c-edge); background: var(--c-surface); }
+.onboard__action--open:hover:not(:disabled) { border-color: var(--c-edge); background: var(--c-surface); }
 .onboard__action--open .onboard__action-body { flex: 1; gap: var(--s-2); }
 .onboard__field { display: flex; flex-direction: column; gap: var(--s-1); margin-top: var(--s-2); }
-.onboard__select { padding: var(--s-2); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); }
 .onboard__actionrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .onboard__error { color: var(--c-stop); font-size: var(--fs-xs); }
 /* The heading of the reference section. */
@@ -916,7 +911,11 @@ button.feed__target:hover { color: var(--c-accent); }
 
 /* ---------- palette-derived shared bits ---------- */
 /* The search screen's input, styled as the palette's was. */
-.palette__input { width: 100%; border: none; border-bottom: 1px solid var(--c-edge); padding: var(--s-3); font-size: var(--fs-xl); background: none; outline: none; }
+.palette__input {
+  width: 100%; max-width: none;
+  border: none; border-bottom: 1px solid var(--c-edge); border-radius: 0;
+  padding: var(--s-3); font-size: var(--fs-xl); background: none;
+}
 
 /* ---------- the shared modal chrome ---------- */
 /* `.modal__overlay` is the backdrop **every** modal wears, the feature blocks below included. It is
@@ -950,11 +949,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .rejectask__modal { width: min(480px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
 .rejectask__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
 .rejectask__why { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
-.rejectask__input { width: 100%; box-sizing: border-box; resize: vertical; padding: var(--s-2); font: inherit; color: var(--c-text); background: var(--c-sunken); border: 1px solid var(--c-edge); border-radius: var(--r-md); margin-bottom: var(--s-2); }
-.rejectask__actions { display: flex; align-items: center; gap: var(--s-2); }
-.rejectask__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-sunken); color: var(--c-text); cursor: pointer; }
-.rejectask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.rejectask__action:disabled { opacity: 0.5; cursor: default; }
+.rejectask__input { width: 100%; margin-bottom: var(--s-2); }
 
 .hookconsent__modal { width: min(520px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 .hookconsent__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
@@ -965,11 +960,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .hookconsent__slots ul { margin: 0; padding-left: var(--s-4); }
 .hookconsent__guidance { margin: var(--s-2) 0 0; padding: var(--s-2); background: var(--c-sunken); border-radius: var(--r-md); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-all; }
 .hookconsent__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
-.hookconsent__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.hookconsent__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-sunken); cursor: pointer; }
-.hookconsent__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.hookconsent__action--never { color: var(--c-text-muted); }
-.hookconsent__action:disabled { opacity: 0.5; cursor: default; }
 .hookconsent__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-2); }
 
 /* ---------- a usage nudge (NudgeHost and the views it puts) ---------- */
@@ -979,10 +969,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .nudge__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); }
 .nudge__why { margin-bottom: var(--s-3); }
 .nudge__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
-.nudge__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.nudge__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-sunken); color: var(--c-text); cursor: pointer; }
-.nudge__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.nudge__action:disabled { opacity: 0.5; cursor: default; }
 .nudge__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-2); }
 
 /* ---------- the classification management panel (DimensionManager) ---------- */
@@ -1030,8 +1016,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__date:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
 .dimmgr__open { background: transparent; border: 1px dashed var(--c-edge); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
 .dimmgr__open:hover { border-color: var(--c-accent); color: var(--c-accent); }
-.dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: #fff; font-size: var(--fs-xs); }
-.dimmgr__danger { color: var(--c-stop); white-space: nowrap; }
+.dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: var(--c-on-accent); font-size: var(--fs-xs); }
 /* The removal that has to say where the tasks go first. It stands in the delete button's place inside
    the value's pill, so the row keeps its width and the question is asked where the press landed. */
 .dimmgr__reassign { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); }
@@ -1092,10 +1077,14 @@ button.feed__target:hover { color: var(--c-accent); }
 .tl { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-3) var(--s-4); gap: var(--s-2); overflow-y: auto; }
 .tl__axis, .tl__row { display: grid; grid-template-columns: 200px 1fr 84px; align-items: center; gap: var(--s-2); }
 .tl__axis { padding-bottom: var(--s-2); border-bottom: 1px solid var(--c-rule); position: sticky; top: 0; background: var(--c-bg); z-index: 1; }
-.tl__ruler { position: relative; height: 16px; font-size: var(--fs-xs); color: var(--c-text-muted); }
-.tl__ruler-end { position: absolute; right: 0; top: 0; }
-.tl__ruler-start { right: auto; left: 0; }
-.tl__ruler-today { position: absolute; top: 0; transform: translateX(-50%); color: var(--c-accent); font-weight: var(--fw-medium); white-space: nowrap; }
+/* Three labels on one line, laid out as tracks so they can never paint over each other: the two
+   date tracks carry the today marker's share of the axis (set inline), and the marker itself takes
+   the width it needs between them. Near an edge the date track there shrinks away and the marker
+   comes to rest flush against that edge, instead of running off the window. */
+.tl__ruler { display: grid; align-items: center; column-gap: var(--s-1); height: 16px; font-size: var(--fs-xs); color: var(--c-text-muted); }
+.tl__ruler-date { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl__ruler-date--end { text-align: right; }
+.tl__ruler-today { color: var(--c-accent); font-weight: var(--fw-medium); white-space: nowrap; }
 .tl__rows { display: flex; flex-direction: column; }
 .tl__row { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--c-rule); padding: var(--s-2) 0; cursor: pointer; }
 .tl__row:hover { background: var(--c-hover); }

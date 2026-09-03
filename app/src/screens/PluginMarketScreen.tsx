@@ -94,7 +94,7 @@ export function PluginMarketScreen({ onOpenInstalled }: {
   return (
     <>
       <div className="filterbar">
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}><Icon name="puzzle" /> {t("plugins.market")}</span>
+        <span className="meta"><Icon name="puzzle" /> {t("plugins.market")}</span>
         <input
           {...asTyped}
           className="board__search"
@@ -102,9 +102,9 @@ export function PluginMarketScreen({ onOpenInstalled }: {
           placeholder={t("plugins.searchPh")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ fontSize: "var(--fs-xs)", width: 180 }}
+          style={{ width: 180 }}
         />
-        <label style={{ fontSize: "var(--fs-xs)" }}>
+        <label className="ctllabel">
           {t("plugins.category")}{" "}
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">{t("plugins.anyCategory")}</option>
@@ -113,7 +113,7 @@ export function PluginMarketScreen({ onOpenInstalled }: {
             ))}
           </select>
         </label>
-        <label style={{ fontSize: "var(--fs-xs)" }}>
+        <label className="ctllabel">
           {t("plugins.os")}{" "}
           <select value={os} onChange={(e) => setOs(e.target.value)}>
             <option value="">{t("plugins.anyOs")}</option>
@@ -122,7 +122,7 @@ export function PluginMarketScreen({ onOpenInstalled }: {
             ))}
           </select>
         </label>
-        <label style={{ fontSize: "var(--fs-xs)" }}>
+        <label className="ctllabel">
           {t("plugins.layer")}{" "}
           <select value={origin} onChange={(e) => setOrigin(e.target.value)}>
             <option value="">{t("plugins.anyLayer")}</option>
@@ -136,7 +136,7 @@ export function PluginMarketScreen({ onOpenInstalled }: {
             ))}
           </select>
         </label>
-        <label style={{ fontSize: "var(--fs-xs)" }}>
+        <label className="ctllabel">
           {t("plugins.sort")}{" "}
           <select value={sort} onChange={(e) => setSort(e.target.value as PluginSort)}>
             {SORT_CHOICES.map((s) => (
@@ -145,10 +145,10 @@ export function PluginMarketScreen({ onOpenInstalled }: {
           </select>
         </label>
         <span className="topbar__spacer" style={{ flex: 1 }} />
-        <button className="feed__action" onClick={() => setSourcesOpen((v) => !v)}>
+        <button className="btn" onClick={() => setSourcesOpen((v) => !v)}>
           {tf("plugins.sources", { count: catalog.sources.length })} <Icon name={sourcesOpen ? "chevronDown" : "chevronRight"} />
         </button>
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+        <span className="meta">
           {tf("plugins.count", { shown: shown.length, total: catalog.entries.length })}
         </span>
       </div>
@@ -162,13 +162,13 @@ export function PluginMarketScreen({ onOpenInstalled }: {
         {unreachable.length > 0 && (
           <div style={{ color: "var(--c-heed)", padding: "var(--s-2) 0" }}>
             {tn("plugins.unreachable", unreachable.length)}
-            <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{unreachable.join(" / ")}</div>
+            <div className="meta">{unreachable.join(" / ")}</div>
           </div>
         )}
         {/* A catalog that sheds entries must not do it silently: what the door refused is missing from
             the list, and only saying so tells a short list from a complete one. */}
         {catalog.dropped > 0 && (
-          <div className="faint" style={{ fontSize: "var(--fs-xs)", padding: "var(--s-2) 0" }}>
+          <div className="meta" style={{ padding: "var(--s-2) 0" }}>
             {tn("plugins.dropped", catalog.dropped)}
           </div>
         )}
@@ -281,14 +281,14 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
           <span className="catsrc__url">{s.url}</span>
           {/* The key its plugins are trusted on (`AMB-D-389`), on every row — the one with nothing to
               show is the one worth noticing, because nothing from it can be installed. */}
-          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+          <span className="meta">
             {s.fingerprint ? tf("plugins.sourceKey", { fp: s.fingerprint }) : t("plugins.sourceNoKey")}
           </span>
-          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+          <span className="meta">
             {s.reachable ? tn("plugins.offered", s.offered) : t("plugins.sourceDown")}
           </span>
           {!s.official && (
-            <button className="feed__action" disabled={busy} onClick={() => void run(() => removeCatalogSource(s.url))}>
+            <button className="btn btn--danger" disabled={busy} onClick={() => void run(() => removeCatalogSource(s.url))}>
               {t("plugins.removeSource")}
             </button>
           )}
@@ -313,7 +313,7 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") check(); }}
-            style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0 }}
+            style={{ flex: 1, minWidth: 0 }}
           />
           <button className="btn" disabled={busy || !url.trim()} onClick={check}>
             {busy ? t("plugins.sourceChecking") : t("plugins.addSource")}
@@ -321,7 +321,7 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
         </div>
       )}
       {error && <div className="catsrc__err">{error}</div>}
-      <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.sourcesNote")}</div>
+      <div className="meta">{t("plugins.sourcesNote")}</div>
     </div>
   );
 }
@@ -345,24 +345,24 @@ function SourceConsent({ probe, name, onName, busy, onConfirm, onCancel }: {
 }) {
   return (
     <div className="catsrc__consent">
-      <div style={{ fontSize: "var(--fs-md)" }}>{tf("plugins.trustTitle", { url: probe.url })}</div>
+      <div>{tf("plugins.trustTitle", { url: probe.url })}</div>
       {probe.fingerprint ? (
         <>
           <div className="catsrc__fp">
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.fingerprint")}</span>{" "}
+            <span className="meta">{t("plugins.fingerprint")}</span>{" "}
             <strong>{probe.fingerprint}</strong>
           </div>
-          <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.trustNote")}</div>
-          <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.keyChangeNote")}</div>
+          <div className="meta">{t("plugins.trustNote")}</div>
+          <div className="meta">{t("plugins.keyChangeNote")}</div>
         </>
       ) : (
-        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.noKeyNote")}</div>
+        <div className="meta">{t("plugins.noKeyNote")}</div>
       )}
       {probe.registered && (
-        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.alreadyRegistered")}</div>
+        <div className="meta">{t("plugins.alreadyRegistered")}</div>
       )}
       <div className="catsrc__row">
-        <label style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0, display: "flex", gap: "var(--s-2)", alignItems: "center" }}>
+        <label className="ctllabel" style={{ flex: 1, minWidth: 0, display: "flex", gap: "var(--s-2)", alignItems: "center" }}>
           {t("plugins.sourceName")}
           <input
             {...asTyped}
@@ -372,10 +372,10 @@ function SourceConsent({ probe, name, onName, busy, onConfirm, onCancel }: {
             placeholder={probe.suggestedName}
             onChange={(e) => onName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") onConfirm(); }}
-            style={{ fontSize: "var(--fs-xs)", flex: 1, minWidth: 0 }}
+            style={{ flex: 1, minWidth: 0 }}
           />
         </label>
-        <button className="feed__action" disabled={busy} onClick={onCancel}>{t("plugins.sourceCancel")}</button>
+        <button className="btn" disabled={busy} onClick={onCancel}>{t("plugins.sourceCancel")}</button>
         <button className="btn" disabled={busy} onClick={onConfirm}>
           {t(probe.fingerprint ? "plugins.trustAndAdd" : "plugins.addSource")}
         </button>
@@ -438,13 +438,13 @@ function PluginCard({ entry, install, onOpen }: {
             </>
           )}
           {entry.addedAt && (
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}> {tf("plugins.added", { date: entry.addedAt.slice(0, 10) })}</span>
+            <span className="meta"> {tf("plugins.added", { date: entry.addedAt.slice(0, 10) })}</span>
           )}
         </div>
         {/* The author's line in the reader's language where the catalog published one (`AMB-D-623`),
             and the author's own where it did not — with nothing on the row to say which it is. */}
-        <div className="muted" style={{ fontSize: "var(--fs-md)" }}>{pluginDesc(entry)}</div>
-        <div className="faint" style={{ fontSize: "var(--fs-xs)", display: "flex", gap: "var(--s-2)", flexWrap: "wrap", marginTop: 2 }}>
+        <div className="muted">{pluginDesc(entry)}</div>
+        <div className="meta" style={{ display: "flex", gap: "var(--s-2)", flexWrap: "wrap", marginTop: 2 }}>
           <span>{entry.author}</span>
           <span>·</span>
           <span>{entry.category}</span>

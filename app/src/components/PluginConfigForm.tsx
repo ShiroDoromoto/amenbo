@@ -402,7 +402,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           )}
           {!f.readonly && held(heldFor(f.key)) && (
             <button
-              className="feed__action"
+              className="btn"
               disabled={busy}
               onClick={() => void onClear(f)}
             >
@@ -420,7 +420,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           {busy ? t("plugins.cfg.saving") : t("plugins.cfg.save")}
         </button>
         {done && !busy && (
-          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t(done)}</span>
+          <span className="meta">{t(done)}</span>
         )}
         {error && <div className="pluggate__note">{error}</div>}
       </div>
@@ -433,9 +433,6 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           {!enabled && <div className="plugcfg__note">{t("plugins.act.needsEnabled")}</div>}
           {actions.map((a) => (
             <div key={a.cmd} className="plugcfg__act">
-              {/* A real button, not the link-styled feed__action: the author's own words are the label,
-                  so a borderless faint one is read as one more line of their prose and never pressed —
-                  and pressing these in turn is the whole way a plugin's setup is walked. */}
               <button
                 className="btn"
                 disabled={!enabled || pressing !== null}

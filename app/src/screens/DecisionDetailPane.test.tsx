@@ -147,7 +147,12 @@ afterEach(() => {
 });
 
 describe("the stamps that say how fresh the record is", () => {
-  const stamps = () => container.querySelector(".faint")?.textContent ?? "";
+  // Named by what the row says rather than by where it stands: the class the stamps wear is worn by
+  // every quiet line on the pane, so the first one carrying it is whichever the layout puts first.
+  const stamps = () =>
+    [...container.querySelectorAll(".meta")]
+      .map((e) => e.textContent ?? "")
+      .find((text) => text.includes(t("dec.recorded"))) ?? "";
 
   it("say when it was recorded, and nothing more while it has not moved since", () => {
     hoisted.decisions.set(1, decision(1));

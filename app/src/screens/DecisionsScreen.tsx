@@ -140,7 +140,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   return (
     <>
       <div className="filterbar">
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}><Icon name="scales" /> {t("dec.title")}</span>
+        <span className="meta"><Icon name="scales" /> {t("dec.title")}</span>
         <input
           {...asTyped}
           className="board__search"
@@ -148,7 +148,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           placeholder={t("dec.searchPh")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ fontSize: "var(--fs-xs)", width: 180 }}
+          style={{ width: 180 }}
         />
         {/* A search that could not run narrows nothing, and narrowing nothing looks exactly like a word
             that matched everything. Say which it was, next to the box that asked. */}
@@ -168,7 +168,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           <Icon name="search" /> {t("board.filters")}
           {narrowedAxes > 0 && <span className="filtertoggle__count">{narrowedAxes}</span>}
         </button>
-        <label style={{ fontSize: "var(--fs-xs)" }}>
+        <label className="ctllabel">
           {t("dec.sort")}{" "}
           <select value={sort} onChange={(e) => setSort(e.target.value as DecisionSort)}>
             {SORTS.map((s) => (
@@ -177,7 +177,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           </select>
         </label>
         <span className="topbar__spacer" style={{ flex: 1 }} />
-        <button className="feed__action" onClick={() => setComposing((v) => !v)}><Icon name="plus" /> {t("dec.new")}</button>
+        <button className="btn" onClick={() => setComposing((v) => !v)}><Icon name="plus" /> {t("dec.new")}</button>
       </div>
 
       {/* The filters themselves, opened in place under the bar the toggle sits in. One line per axis,
@@ -277,12 +277,12 @@ function DecisionCard({ d, selected, onSelect }: {
           than instead of it — a rejected decision that was later superseded is both, and a badge that
           picked one of the two would be hiding the other. */}
       {d.supersededBy.length > 0 && (
-        <span className="faint" style={{ fontSize: "var(--fs-xs)", whiteSpace: "nowrap" }}>
+        <span className="meta" style={{ whiteSpace: "nowrap" }}>
           {tf("dec.supersededByRef", { by: d.supersededBy.map((r) => r.ref ?? decisionRef(r.id)).join(", ") })}
         </span>
       )}
       <span style={{ flex: 1 }} />
-      {date && <span style={{ fontSize: "var(--fs-md)", color: "var(--c-muted)", whiteSpace: "nowrap" }}>{date}</span>}
+      {date && <span style={{ color: "var(--c-muted)", whiteSpace: "nowrap" }}>{date}</span>}
     </div>
   );
 }
@@ -369,13 +369,13 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
       ))}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <button
-          className="feed__action"
+          className="btn btn--primary"
           disabled={busy || !title.trim() || unmet.length > 0}
           onClick={() => void submit()}
         >
           {t("dec.add")}
         </button>
-        <button className="feed__action" onClick={onDone}>{t("dec.cancel")}</button>
+        <button className="btn" onClick={onDone}>{t("dec.cancel")}</button>
         {/* Why the button is held, named rather than left to a tooltip — the selects are right above.
             The sentence is the task pane's, because it is the same sentence: fill these in first. */}
         {unmet.length > 0 && (

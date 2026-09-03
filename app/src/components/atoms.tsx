@@ -184,11 +184,11 @@ function RejectReasonModal({ id, onCancel, onReject }: {
             if (e.key === "Escape") onCancel();
           }}
         />
-        <div className="rejectask__actions">
-          <button className="rejectask__action rejectask__action--go" disabled={!reason} onClick={submit}>
+        <div className="buttonrow">
+          <button className="btn btn--primary" disabled={!reason} onClick={submit}>
             {t("reject.confirm")}
           </button>
-          <button className="rejectask__action" onClick={onCancel}>{t("reject.cancel")}</button>
+          <button className="btn" onClick={onCancel}>{t("reject.cancel")}</button>
         </div>
       </div>
     </div>,
@@ -243,7 +243,7 @@ export function DateField({ label, value, onChange }: {
     return (
       <span>
         <span className="faint">{t("detail.none")}</span>
-        <button className="feed__action" style={{ marginLeft: 6 }} onClick={() => setNaming(true)}>
+        <button className="btn" style={{ marginLeft: 6 }} onClick={() => setNaming(true)}>
           {t("detail.add")}
         </button>
       </span>
@@ -260,7 +260,7 @@ export function DateField({ label, value, onChange }: {
         onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
       />
       <button
-        className="feed__action"
+        className="btn"
         style={{ marginLeft: 6 }}
         onClick={() => {
           setNaming(false);

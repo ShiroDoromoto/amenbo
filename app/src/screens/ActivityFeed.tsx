@@ -127,17 +127,17 @@ export function ActivityFeed({
   return (
     <>
       <div className="board__toolbar">
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("activity.filterKind")}</span>
+        <span className="meta">{t("activity.filterKind")}</span>
         <button className={chipCls(kindFilter === "all")} onClick={() => setKindFilter("all")}>{t("activity.filterAll")}</button>
         <button className={chipCls(kindFilter === "system")} onClick={() => setKindFilter("system")}>{t("activity.filterSystem")}</button>
         <button className={chipCls(kindFilter === "comment")} onClick={() => setKindFilter("comment")}>{t("activity.filterComment")}</button>
         <div className="board__sep" />
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("activity.filterFacet")}</span>
+        <span className="meta">{t("activity.filterFacet")}</span>
         <button className={chipCls(facetFilter === "all")} onClick={() => setFacetFilter("all")}>{t("activity.filterAll")}</button>
         <button className={chipCls(facetFilter === "human")} onClick={() => setFacetFilter("human")}>{t("activity.filterHuman")}</button>
         <button className={chipCls(facetFilter === "ai")} onClick={() => setFacetFilter("ai")}>{t("activity.filterAi")}</button>
         <div className="topbar__spacer" />
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("activity.note")}</span>
+        <span className="meta">{t("activity.note")}</span>
       </div>
       <div
         ref={scrollerRef}
@@ -174,7 +174,7 @@ export function ActivityFeed({
                   )}
                   {actsOn && (
                     <button
-                      className="feed__action"
+                      className="btn"
                       onClick={() =>
                         actsOn === "task" ? onReplyToTask(it.target.id) : onReplyToDecision(it.target.id)
                       }
@@ -185,7 +185,7 @@ export function ActivityFeed({
                   {inTauri() && actsOn && (
                     <>
                       <button
-                        className="feed__action"
+                        className="btn"
                         title={t("comment.edit")}
                         onClick={() =>
                           actsOn === "task"
@@ -196,7 +196,7 @@ export function ActivityFeed({
                         <Icon name="pencil" />
                       </button>
                       <button
-                        className="feed__action"
+                        className="btn btn--danger"
                         title={t("comment.remove")}
                         onClick={() => void remove(it, actsOn)}
                       >

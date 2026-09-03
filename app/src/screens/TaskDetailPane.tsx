@@ -234,7 +234,7 @@ export function TaskDetailPane({
               <input
                 {...asTyped}
                 className="compose__input"
-                style={{ minHeight: "unset", fontSize: "inherit", fontWeight: "inherit", flex: 1 }}
+                style={{ minHeight: "unset", flex: 1 }}
                 autoFocus
                 value={titleDraft}
                 placeholder={t("compose.titlePh")}
@@ -248,7 +248,7 @@ export function TaskDetailPane({
             ) : (
               <>
                 <span style={{ cursor: "text" }} title={t("detail.edit")} onDoubleClick={startEditTitle}>{task.title}</span>
-                <button className="feed__action" style={{ marginLeft: 6 }} onClick={startEditTitle}>{t("detail.edit")}</button>
+                <button className="btn" style={{ marginLeft: 6 }} onClick={startEditTitle}>{t("detail.edit")}</button>
               </>
             )}
             <TaskIdChip id={taskId} />
@@ -407,7 +407,7 @@ export function TaskDetailPane({
                     <span key={d.id}>
                       {i > 0 && ", "}
                       <button
-                        className="feed__action"
+                        className="feed__target"
                         style={{ padding: "0 4px" }}
                         title={unsettled ? t("detail.premiseUnsettled") : undefined}
                         onClick={() => onSelectDecision?.(d.id)}
@@ -427,7 +427,7 @@ export function TaskDetailPane({
             <div className="detail__section-h">
               {t("detail.notes")}
               {!editingNotes && (
-                <button className="feed__action" style={{ marginLeft: 8 }} onClick={startEditNotes}>
+                <button className="btn" style={{ marginLeft: 8 }} onClick={startEditNotes}>
                   {task.notes ? t("detail.edit") : <><Icon name="plus" /> {t("detail.add")}</>}
                 </button>
               )}
@@ -448,7 +448,7 @@ export function TaskDetailPane({
                   }}
                 />
                 <div className="compose__actions">
-                  <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.notesHint")}</span>
+                  <span className="meta">{t("detail.notesHint")}</span>
                   <span>
                     <button className="btn" onClick={() => setEditingNotes(false)}>{t("detail.cancel")}</button>
                     <button className="btn btn--primary" style={{ marginLeft: 6 }} onClick={saveNotes}>{t("detail.save")}</button>
@@ -460,7 +460,7 @@ export function TaskDetailPane({
                 <Markdown>{task.notes}</Markdown>
               </div>
             ) : (
-              <div className="faint" style={{ fontSize: "var(--fs-md)" }}>{t("detail.noNotes")}</div>
+              <div className="faint">{t("detail.noNotes")}</div>
             )}
           </div>
 
@@ -477,11 +477,11 @@ export function TaskDetailPane({
           <div>
             <div className="detail__section-h">{t("detail.activityCategory")} · <Icon name="comment" size="md" /> {task.comments}</div>
             {comments.length === 0 ? (
-              <div className="faint" style={{ marginTop: 6, fontSize: "var(--fs-md)" }}>{t("detail.noComments")}</div>
+              <div className="faint" style={{ marginTop: 6 }}>{t("detail.noComments")}</div>
             ) : (
               <div className="comments">
                 {olderCount > 0 && (
-                  <button className="feed__action" onClick={() => setCommentLimit((n) => n + COMMENT_PAGE)}>
+                  <button className="btn" onClick={() => setCommentLimit((n) => n + COMMENT_PAGE)}>
                     {tf("common.loadMore", { n: olderCount })}
                   </button>
                 )}
@@ -516,7 +516,7 @@ export function TaskDetailPane({
               />
               {commentError && <ErrorNote>{commentError}</ErrorNote>}
               <div className="compose__actions">
-                <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
+                <span className="meta">{t("detail.commentHint")}</span>
                 <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
               </div>
             </div>

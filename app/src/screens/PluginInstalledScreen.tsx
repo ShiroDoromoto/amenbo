@@ -55,26 +55,26 @@ export function PluginInstalledScreen() {
   return (
     <>
       <div className="filterbar">
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}><Icon name="puzzle" /> {t("plugins.installed")}</span>
+        <span className="meta"><Icon name="puzzle" /> {t("plugins.installed")}</span>
         <span className="topbar__spacer" style={{ flex: 1 }} />
         {/* Ahead of the verdict, not after it: a reader who takes "up to date" at face value has already
             stopped reading by the time a footnote arrives. */}
         {framing && (
-          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{framing}</span>
+          <span className="meta">{framing}</span>
         )}
         {checked && !checking && updates.length === 0 && (
-          <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.updates.none")}</span>
+          <span className="meta">{t("plugins.updates.none")}</span>
         )}
         {/* Asking in so many words goes to the catalog whatever the cache's age (`AMB-D-462`), and also
             un-dismisses: a build waved away earlier is what the asker wants told. */}
         <button
-          className="feed__action"
+          className="btn"
           disabled={checking}
           onClick={() => { setChecked(true); clearDismissedPluginUpdates(); refreshPluginUpdates("now"); }}
         >
           {checking ? t("plugins.updates.checking") : t("plugins.updates.check")}
         </button>
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+        <span className="meta">
           {tf("plugins.installedCount", { count: installs.length })}
         </span>
       </div>
@@ -86,7 +86,7 @@ export function PluginInstalledScreen() {
         {/* The receipt outlives the row it is about: what an uninstall took can only be said once the
             plugin is gone from the list, so it is said here rather than where the row was. */}
         {removed && (
-          <div className="faint" style={{ fontSize: "var(--fs-xs)", padding: "var(--s-2) 0" }}>
+          <div className="meta" style={{ padding: "var(--s-2) 0" }}>
             {removed.parts
               ? tf("plugins.removed", { name: removed.name, what: removed.parts })
               : tf("plugins.removedNothing", { name: removed.name })}
@@ -98,7 +98,7 @@ export function PluginInstalledScreen() {
         {!loading && installs.length === 0 && (
           <div style={{ color: "var(--c-muted)", padding: 16 }}>
             <div>{t("plugins.emptyInstalled")}</div>
-            <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.emptyInstalledNote")}</div>
+            <div className="meta">{t("plugins.emptyInstalledNote")}</div>
           </div>
         )}
         {installs.map((install) => (
@@ -226,7 +226,7 @@ function InstalledRow({ install, update, projects, onRemoved }: {
             device-wide plugin gets a sentence and not a second switch, and a project's plugin gets
             nothing, that being the ordinary case the rows below already read as. */}
         {install.scope === "machine" && (
-          <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.scope.machine")}</div>
+          <div className="meta">{t("plugins.scope.machine")}</div>
         )}
         <PluginCrossings install={install} projects={projects} />
         {(update || moved) && (
@@ -246,7 +246,7 @@ function InstalledRow({ install, update, projects, onRemoved }: {
               update && (
                 <>
                   <span className="chip">{t("plugins.updates.waiting")}</span>
-                  <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{pluginDesc(update)}</span>
+                  <span className="meta">{pluginDesc(update)}</span>
                   <button className="btn" disabled={busy} onClick={() => void onUpdate()}>
                     {busy ? t("plugins.updates.applying") : t("plugins.updates.apply")}
                   </button>
@@ -254,14 +254,14 @@ function InstalledRow({ install, update, projects, onRemoved }: {
               )
             )}
             {moved && !busy && (
-              <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{moved}</span>
+              <span className="meta">{moved}</span>
             )}
           </div>
         )}
         {/* Set apart from the gate: disabling is a switch that can be flicked back, this is not
             (`AMB-D-357`). */}
         <div className="pluggate">
-          <button className="feed__action" disabled={busy} onClick={() => void onRemove()}>
+          <button className="btn btn--danger" disabled={busy} onClick={() => void onRemove()}>
             {busy ? t("plugins.removing") : t("plugins.remove")}
           </button>
           {error && <div className="pluggate__note">{error}</div>}

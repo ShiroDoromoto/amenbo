@@ -45,10 +45,13 @@ export function TimelineView({ tasks, selectedTaskId, onSelectTask }: {
         <>
           <div className="tl__axis">
             <span className="tl__axispad" />
-            <span className="tl__ruler">
-              <span className="tl__ruler-end tl__ruler-start">{m.axisStart}</span>
-              <span className="tl__ruler-today" style={{ left: `${m.todayPct}%` }}>{t("cal.today")}</span>
-              <span className="tl__ruler-end">{m.axisEnd}</span>
+            <span
+              className="tl__ruler"
+              style={{ gridTemplateColumns: `minmax(0, ${m.todayPct}fr) auto minmax(0, ${100 - m.todayPct}fr)` }}
+            >
+              <span className="tl__ruler-date">{m.axisStart}</span>
+              <span className="tl__ruler-today">{t("cal.today")}</span>
+              <span className="tl__ruler-date tl__ruler-date--end">{m.axisEnd}</span>
             </span>
             <span className="tl__axispad" />
           </div>

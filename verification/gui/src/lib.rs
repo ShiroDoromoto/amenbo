@@ -730,6 +730,12 @@ impl Instructor {
     /// nothing. `side-width` is further out still: what it asks is where an edge stands compared with
     /// the shot before it, which is two pictures rather than one.
     ///
+    /// `terminal panes-sit` is a `Review` beside them, and for the same reason once more: what it
+    /// reads is where two regions of the screen are in relation to one another, and the panes carry
+    /// the road's own lines whichever way round they sit. A reading would find those words on the
+    /// shot in both shapes and settle nothing, so the picture goes to an eye — which is all one is
+    /// needed for, two boxes side by side and two stacked being as far apart as pictures get.
+    ///
     /// `dimension key` is read, and it is the cleanest reading on these roads. A key is neither a word
     /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
     /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
@@ -1992,6 +1998,19 @@ impl Instructor {
             (Domain::Terminal, "set-panes") => format!(
                 "At the top of the terminal face, in the row of pane counts, press the one that says {}. It is words rather than a bare digit — the page numbers beside it are the digits — and the one in force is the one that is not dimmed. The page redraws at that split whether or not there are panes to fill it, and the screen stays with the pane being worked in, so it may end up on a different page from the one it was on.",
                 count(with, "count")?
+            ),
+            // Which way the two of them sit. The control carries no words at all — it is drawn as the
+            // two shapes — so the step says what the shape it presses looks like rather than naming
+            // it, the way `hide-side`'s controls are said by what they do.
+            //
+            // What the press does *not* do is written as plainly as what it does. It stands beside
+            // the counts and is drawn at their size, and the count re-pages every frame on the
+            // device — so an operator expecting the same of this one would read a page that stayed
+            // where it was as a press that never landed.
+            (Domain::Terminal, "set-orient") => format!(
+                "At the top of the terminal face, just past the row of pane counts, press the small control drawn as a box divided {} — the page with its two panes {}. The pair carries no words: each is the shape itself, and the one in force is the one that is not dimmed. The page redraws in that shape under the panes already standing on it: nothing opens, nothing closes, and the page you are on stays the one you are on.",
+                orient(with)?.glyph(),
+                orient(with)?.phrase()
             ),
             // Paging. The digits are the pages, so the step names the one it presses and says the
             // whole screen moves: a pane that was on the page being left is not on the screen after
@@ -3389,6 +3408,15 @@ impl Instructor {
                     gave
                 )
             }
+            // The shape the page is drawn in, read off the two panes standing on it. What it is about
+            // is the width each of them ends up with rather than the arrangement for its own sake:
+            // `down` is pressed so that a pane keeps the whole of it, and a grid that shuffled the
+            // panes about without handing them that width would have honoured the press and missed
+            // what it was for.
+            (Domain::Terminal, "panes-sit") => match orient(with)? {
+                Orient::Across => "On the terminal face, confirm the two panes are side by side — one to the left of the other, each taking about half the width between the columns, and neither of them above or below the other.".to_string(),
+                Orient::Down => "On the terminal face, confirm the two panes are one above the other — one stacked on the other, each taking the whole width between the columns rather than half of it, and neither of them beside the other.".to_string(),
+            },
             // What the empty frame is set to open with, read on the row above its press. The row is
             // every agent Amenbo knows how to start, and which of them this machine has is the
             // machine's own business: the ones it has not got are folded away behind a
@@ -3862,6 +3890,46 @@ fn side(with: &Args) -> Result<Side, String> {
         Some("files") => Ok(Side::Files),
         Some(other) => Err(format!("`side` does not know `{other}` — it is rail or files")),
         None => Err("arg `side` must say which of the two columns".to_string()),
+    }
+}
+
+/// Which way the two panes of a two-pane page sit (`app/src/talk/layout.ts`).
+///
+/// They are named by the shape they make and not by a heading, for the reason [`Side`] is: the
+/// control that picks between them is drawn rather than written, so there is no word on the screen
+/// for an operator to read either of them off.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Orient {
+    Across,
+    Down,
+}
+
+impl Orient {
+    /// The shape in words, written to fit after "two panes".
+    fn phrase(self) -> &'static str {
+        match self {
+            Orient::Across => "side by side",
+            Orient::Down => "one above the other",
+        }
+    }
+
+    /// And what the control that picks it is drawn as, which is the same shape a size smaller: one
+    /// box with a line through it, standing for the page (`app/src/components/Icon`). An operator
+    /// told only what the press means would be looking for a word, and the pair carries none.
+    fn glyph(self) -> &'static str {
+        match self {
+            Orient::Across => "down the middle",
+            Orient::Down => "across the middle",
+        }
+    }
+}
+
+fn orient(with: &Args) -> Result<Orient, String> {
+    match with.get("orient").and_then(|v| v.as_str()) {
+        Some("across") => Ok(Orient::Across),
+        Some("down") => Ok(Orient::Down),
+        Some(other) => Err(format!("`orient` does not know `{other}` — it is across or down")),
+        None => Err("arg `orient` must say which way the two panes sit".to_string()),
     }
 }
 
@@ -6889,6 +6957,76 @@ steps_gui:
         for one in [&lines[2], &lines[3]] {
             assert!(one.contains("leaving the row above that press as it came up"), "got: {one}");
             assert!(one.contains("choose any of them first"), "got: {one}");
+        }
+    }
+
+    /// The one move on that row that re-cuts nothing, and the reading that closes it. Two things have
+    /// to be on the instruction: the shape the control is drawn as, since it carries no word an
+    /// operator could look for, and that the page stays where it is — the counts beside it re-page
+    /// every frame on the device, and somebody expecting the same here would read a page that held
+    /// still as a press that never landed. What the reading is about is the width each pane came out
+    /// with rather than where the boxes went: a grid that shuffled them about and handed neither of
+    /// them more room would have honoured the press and missed what it was for.
+    #[test]
+    fn the_orientation_is_pressed_by_its_shape_and_read_by_the_width_it_gives() {
+        let s = load(r#"
+id: x
+title: Two panes are stacked and then put back
+steps_gui:
+  - type: action
+    domain: terminal
+    op: set-orient
+    with: { orient: down }
+  - type: assert
+    domain: terminal
+    op: panes-sit
+    with: { orient: down }
+  - type: action
+    domain: terminal
+    op: set-orient
+    with: { orient: across }
+  - type: assert
+    domain: terminal
+    op: panes-sit
+    with: { orient: across }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[0].contains("a box divided across the middle") && lines[0].contains("one above the other"),
+            "the press is found by the shape it is drawn as: {}",
+            lines[0]
+        );
+        assert!(
+            lines[2].contains("a box divided down the middle") && lines[2].contains("side by side"),
+            "and so is the way back: {}",
+            lines[2]
+        );
+        for pressed in [&lines[0], &lines[2]] {
+            assert!(
+                pressed.contains("nothing opens, nothing closes")
+                    && pressed.contains("the page you are on stays the one you are on"),
+                "what the press does not do is said as plainly as what it does: {pressed}"
+            );
+        }
+        assert!(
+            lines[1].contains("the whole width between the columns rather than half of it"),
+            "the reading is the width, not the arrangement: {}",
+            lines[1]
+        );
+        assert!(
+            lines[3].contains("about half the width between the columns"),
+            "and the shape it started in is read the same way: {}",
+            lines[3]
+        );
+        // Neither is a reading: what tells the two shapes apart is where two boxes are, and the road's
+        // own lines are on the panes whichever way round they sit.
+        for step in s.steps(Driver::Gui) {
+            assert!(
+                Instructor::new().expectation(step).is_none(),
+                "where the panes sit is an eye's, not a reading's",
+            );
         }
     }
 

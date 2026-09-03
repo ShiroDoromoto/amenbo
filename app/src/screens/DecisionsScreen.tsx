@@ -148,7 +148,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           placeholder={t("dec.searchPh")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ fontSize: "var(--fs-xs)", width: 180 }}
+          style={{ width: 180 }}
         />
         {/* A search that could not run narrows nothing, and narrowing nothing looks exactly like a word
             that matched everything. Say which it was, next to the box that asked. */}

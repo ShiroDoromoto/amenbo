@@ -112,6 +112,11 @@
 .decisionsbtn__count { font-size: var(--fs-xs); color: var(--c-text-muted); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
 .decisionsbtn--active .decisionsbtn__count { background: var(--c-surface); }
 .filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); flex-wrap: wrap; }
+/* The box that narrows a list, wherever a screen puts one. A control takes the page's font from the
+   base rule, and a toolbar reads a step below the page — so the step is said here, once, rather than
+   at each of the five tags that mount one. How wide it stands is the screen's own business and stays
+   with the tag. */
+.board__search { font-size: var(--fs-xs); }
 /* A chip is a name, so it is never squeezed: it keeps its own size (`flex: none`) and its label stays on
    one line. Left to shrink, a chip in a row that has lost width — the board's group row once the detail
    pane opens beside it — breaks its label a character at a time and reads as nothing. The rows that hold
@@ -157,7 +162,7 @@
 .board__addcol:hover { color: var(--c-accent); border-color: var(--c-accent); }
 /* The box that is open only while a column is being named: it is already the thing being typed
    into, so it wears the accent on its border from the moment it appears. */
-.column__addinput { border-color: var(--c-accent); }
+.column__addinput { border-color: var(--c-accent); font-size: var(--fs-xs); }
 .board__addcolinput { width: 200px; flex: none; align-self: flex-start; }
 
 /* ---------- drag & drop (moving between the status board's columns) ---------- */
@@ -396,6 +401,9 @@
 /* One plugin's switch, wherever it is drawn — the market's detail and the installed list share the
    control, so they share its shape. Same row rules as the actions above it. */
 .pluggate { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-2); }
+/* The row reads a step below the page, and the picker on it follows the row rather than the base
+   rule's inherited page font. */
+.pluggate select { font-size: var(--fs-xs); }
 .pluggate .pluggate { margin-bottom: 0; }
 /* One project × plugin crossing (`AMB-D-447`): its line, and the settings it opens underneath. Ruled off
    from the next crossing, since two rows of chips and buttons otherwise read as one. */

@@ -261,7 +261,7 @@ function AvatarSlot({ kind }: { kind: "human" | "ai" }) {
           : <Identicon seed={actor ? identiconSeed(actor) : kind} size={48} />}
       </span>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span style={{ fontSize: "var(--fs-xs)" }}>
+        <span className="settings__fine">
           {actor && <FacetAvatar actor={actor} />} {actor?.name ?? ""}
         </span>
         <div style={{ display: "flex", gap: 8 }}>
@@ -544,7 +544,7 @@ function DoctorSetting() {
         {groups.map((group) => {
           const { fixHint } = doctorText(group.shown[0]);
           return (
-            <div key={group.kind} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: "var(--fs-xs)" }}>
+            <div key={group.kind} className="settings__fine" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {group.shown.map((iss, i) => {
                 const { message } = doctorText(iss);
                 const repair = doctorRepair(iss);
@@ -711,7 +711,7 @@ function TickSetting() {
         </select>
         <div className="meta">{t("settings.tickNote")}</div>
         {rowRemains && (
-          <div style={{ fontSize: "var(--fs-xs)" }}><DoneNote>{t("settings.tickRowRemains")}</DoneNote></div>
+          <div className="settings__fine"><DoneNote>{t("settings.tickRowRemains")}</DoneNote></div>
         )}
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </span>
@@ -737,7 +737,7 @@ function DataLocationSetting() {
   return (
     <div className="settings__row">
       <span className="settings__k">{t("settings.dataPath")}</span>
-      <code style={{ fontSize: "var(--fs-xs)", wordBreak: "break-all" }}>{loc ? loc.root : "…"}</code>
+      <code className="settings__fine" style={{ wordBreak: "break-all" }}>{loc ? loc.root : "…"}</code>
     </div>
   );
 }

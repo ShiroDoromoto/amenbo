@@ -405,6 +405,22 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A terminal is already standing in a project — the folder it is run from says
     // which — so there is nowhere to move to and nothing this would do.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "open-settings", required: &["project"], refs: &[], strings: &["project"], binds: false },
+    // The image a project shows for itself, given to it and taken away again — the one pair of moves on
+    // that face carrying bytes rather than words. `file` names the image to choose, and it is a file a
+    // premise laid down rather than one the operator brings: an attachment is reached by what it is
+    // called and this is reached by what it looks like, so any file of the right name would do there and
+    // none would do here. Clearing names nothing beside the project, a row holding one image and not a
+    // set of them.
+    //
+    // Both write the form rather than the row, so both end at the button the name and the colour beside
+    // them wait for: a road that stopped at the picker would be reading a screen that has changed and a
+    // store that has not.
+    //
+    // A screen road alone. `project update` is the terminal's whole door onto these fields and it takes
+    // a name, a note, a colour and a view — there is nowhere to hand it an image, so a road written here
+    // would be naming a command that does not exist.
+    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "set-icon", required: &["target", "file"], refs: &["target"], strings: &["file"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "clear-icon", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // And back onto the board that project keeps. It is the move a road needs where what is under test
     // is drawn when a project is opened rather than held from before: walking out and back in is the
     // only way to ask a screen what it does on arrival, and a road that assumed the arrival would be
@@ -1383,6 +1399,13 @@ const REGISTRY: &[OpSpec] = &[
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "listed", required: &["target"], refs: &["target"], strings: &["position"], binds: false },
+    // Whether the project draws the image it was given, read on the face it was given one from. The
+    // absent side is not a blank: with no image a project draws its colour with the first letter of its
+    // name on it, so the instruction names that fallback rather than asking an eye to find nothing.
+    //
+    // A screen road alone, and a `Review` it could be nothing else than: what stands on the shot is a
+    // picture, and a reading answers which words are on one.
+    OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "icon", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The same crossing `plugin fires-in` reads, read from the other face: there a plugin's rows are
     // its projects, here a project's rows are its plugins.
     //
@@ -2026,6 +2049,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // recorded nowhere, so a bound folder that already carries a provider's settings — the state every
     // road about wiring an AI starts from — is a world no amount of store seeding reaches.
     (Domain::Repo, "write-file"),
+    // And the same for bytes a scenario cannot hold: an image is not text, so the file a road has an
+    // operator choose in a picker comes off the fixtures shelf rather than out of the YAML. A screen
+    // road cannot make a file at all — every move it has is a move on a record — so a road that needs
+    // one lying on the disk has no other way to arrive at it.
+    (Domain::Repo, "copy-fixture"),
     // And a folder already wired, which is the same kind of world one step further on. The wiring is a
     // file and not a record, so nothing in the store reaches it — and writing the settings out by hand
     // would put the launch command's own name in the scenario, which is the one thing the build under

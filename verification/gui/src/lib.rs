@@ -670,6 +670,10 @@ impl Instructor {
     ///
     /// `decision field` is a `Review` for the reason the task's own is: what a pane says of a state is
     /// a word of the interface's, so an eye closes it.
+    ///
+    /// `project icon` is a `Review` further out than any of those, and on both of its states: what it
+    /// reads is a picture. A reading answers which words are on a shot, and neither the image a project
+    /// was given nor the colour it falls back to puts one there.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -1058,6 +1062,24 @@ impl Instructor {
             (Domain::Project, "open-settings") => format!(
                 "Open the settings the project \"{}\" keeps for itself.",
                 req(with, "project")?
+            ),
+            // Giving that face the image the project shows for itself, and taking it away again. Both
+            // lines end at the button the form is written with, because that is where the store hears
+            // about either: the picker and the button beside it change what is drawn and nothing else,
+            // so a step that stopped at the choosing would leave the road reading a screen that had
+            // moved on from a store that had not.
+            //
+            // The file is named, and where it is lying is not: these lines are rendered from the YAML
+            // alone, and the folder a premise wrote into is made per run. The run says that path on its
+            // way in, which is what an operator hunts the picker with.
+            (Domain::Project, "set-icon") => format!(
+                "On the settings the project \"{}\" keeps for itself, press the button that chooses an image for it, pick the file \"{}\" the run laid down, and save the form.",
+                self.target_label(with),
+                req(with, "file")?
+            ),
+            (Domain::Project, "clear-icon") => format!(
+                "On the settings the project \"{}\" keeps for itself, press the button that takes its image away, and save the form.",
+                self.target_label(with)
             ),
             // Back onto the board, and it says "again" because that is what is under test: what a screen
             // draws on arrival is not what it was holding before the road walked away from it.
@@ -1753,6 +1775,21 @@ impl Instructor {
             // The same reading, one level up: a field a project keeps for itself, read off the face it
             // keeps it on. It is a `Review` like the task's own — what stands on that face is a
             // pull-down, and which of four is standing in it is a thing an eye settles and OCR does not.
+            // What that same face draws for the project itself. Both sides are a picture and neither is
+            // an absence: with an image registered the square holds it, and with none it holds the
+            // project's colour with the first letter of its name on it. So the line names what an eye
+            // should find rather than asking for one of them to be missing — a square nobody can
+            // describe is a step nobody can close.
+            (Domain::Project, "icon") => match present(with) {
+                true => format!(
+                    "Confirm the settings the project \"{}\" keeps for itself draw the image registered for it, in the square beside the button that chooses one.",
+                    self.target_label(with)
+                ),
+                false => format!(
+                    "Confirm the settings the project \"{}\" keeps for itself draw no image for it: the square beside the button that chooses one holds the project's colour with the first letter of its name on it.",
+                    self.target_label(with)
+                ),
+            },
             (Domain::Project, "field") => format!(
                 "Confirm the project \"{}\" shows {} = {}.",
                 self.target_label(with),
@@ -3537,6 +3574,67 @@ steps_gui:
 
         for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
             assert!(ins.expectation(st).is_none(), "step {i} turns on a button's label, which no reading settles");
+        }
+    }
+
+    /// The image a project shows for itself, given and taken away on the same face. Both moves end at
+    /// the button the form is written with, since the picker and the button beside it change what is
+    /// drawn and nothing else — a line that stopped at the choosing would have the road reading a
+    /// screen that had moved on from a store that had not. The two readings are told apart by what an
+    /// eye should find, never by an absence: with no image the square holds the project's colour with
+    /// the first letter of its name on it, and both are pictures, so neither is a reading.
+    #[test]
+    fn an_image_a_project_shows_for_itself_is_given_read_and_taken_away() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Greenhouse }
+    as: greenhouse
+steps_gui:
+  - type: assert
+    domain: project
+    op: icon
+    with: { target: greenhouse, present: false }
+  - type: action
+    domain: project
+    op: set-icon
+    with: { target: greenhouse, file: scenario-icon.png }
+  - type: assert
+    domain: project
+    op: icon
+    with: { target: greenhouse, present: true }
+  - type: action
+    domain: project
+    op: clear-icon
+    with: { target: greenhouse }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[0].contains("first letter of its name") && lines[0].contains("Greenhouse"),
+            "the fallback is named rather than an absence looked for: {}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains("scenario-icon.png") && lines[1].contains("save the form"),
+            "the file is named and the form is written: {}",
+            lines[1]
+        );
+        assert!(lines[2].contains("draw the image registered for it"), "got: {}", lines[2]);
+        assert!(
+            lines[3].contains("takes its image away") && lines[3].contains("save the form"),
+            "clearing waits for the same button: {}",
+            lines[3]
+        );
+
+        for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
+            assert!(ins.expectation(st).is_none(), "step {i} reads a picture, which no reading settles");
         }
     }
 

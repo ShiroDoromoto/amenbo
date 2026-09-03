@@ -21,7 +21,7 @@ development tooling; that is what it is for, and it is not this harness's road.
 ```
 verification/
   scenarios/   the single source of truth (YAML). Every driver walks its own road through these.
-  fixtures/    text a scenario cannot hold itself (a file carrying an amenbo ref for the lint)
+  fixtures/    what a scenario cannot hold itself (a file carrying an amenbo ref for the lint, an image a picker is pointed at)
   core/        the scenario schema + validating loader (crate `amenbo-scenario`, `lint` + `emit` bins)
   cli/         CLI driver + runner — drive the shipped binary, assert via --json (crate `amenbo-verify-cli`)
   gui/         mac harness — scenario → screen checklist, shot and read by the screen tool (crate `amenbo-verify-gui`).
@@ -634,9 +634,11 @@ driver reaches past the binary's face: the two scalars Amenbo tallies into, and 
 per day asked for (the store has to hold at least that many). A store is a plain SQLite file — no
 shipped path keys one — so this crate carries `rusqlite` for that single op and for nothing else.
 
-`fixtures/` is for text a scenario cannot hold itself. This tree's prose rule keeps a bare Amenbo
+`fixtures/` is for what a scenario cannot hold itself. This tree's prose rule keeps a bare Amenbo
 reference out of every `.yaml`, and the lint has nothing to find unless a file really carries one —
-so the file carries it and the scenario names the file.
+so the file carries it and the scenario names the file. Bytes that are not text at all are the other
+half of the same shelf: an image a screen road has an operator choose in a picker is a picture being
+drawn, so any file of the right name would prove nothing.
 
 ```yaml
 id: delegate-to-ai
@@ -899,6 +901,16 @@ answers is English whatever the setting says, so a road that changed it there wo
 nothing it could then read depends on — and the sentences this is about are drawn in one place. `line`
 is the one under a market row's name, `asks` the one a settings form draws a field, or one of a choice's
 answers, under.
+
+Giving a project the image it shows for itself, taking that image away, and reading which of the two
+the square holds (`project set-icon` / `clear-icon` / `icon`), are one road's for the plainest reason
+of all: `project update` is the terminal's whole door onto these fields and it takes a name, a note, a
+colour and a view. There is nowhere on it to hand over an image, so a road written for the CLI would
+be naming a command that does not exist. The reading is a `Review` on both of its states — what is on
+the shot is a picture, and neither the image nor the colour-and-letter a project falls back to puts a
+word there. `file:` here is not `attach`'s: what is under test is the picture, so the road names a
+file a premise copied off the fixtures shelf rather than one the operator brings, and the run says
+where it landed before the first step is handed over.
 
 One road's alone is sometimes an *argument* rather than a whole op, and then it is the driver that
 cannot answer it which says so. A search hit is the case: what the row **calls** the place it points

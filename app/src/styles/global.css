@@ -250,7 +250,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sidebar__label {
   font-size: var(--fs-xs); font-weight: var(--fw-bold);
   text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--c-text-faint); padding: 0 var(--s-3); margin-bottom: var(--s-2);
+  color: var(--c-text-muted); padding: 0 var(--s-3); margin-bottom: var(--s-2);
 }
 .navitem {
   display: flex; align-items: center; gap: var(--s-3);
@@ -268,7 +268,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .navitem--drop-before { box-shadow: inset 0 2px 0 0 var(--c-accent); }
 .navitem--drop-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
 .navitem__count {
-  margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-faint);
+  margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-muted);
   background: var(--c-surface-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
 }
 .navitem--active .navitem__count { background: var(--c-surface); }
@@ -285,7 +285,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .navitem__count--heed { background: var(--c-heed); color: #fff; font-weight: var(--fw-medium); }
 .navitem--active .navitem__count--stop { background: var(--c-stop); color: #fff; }
 .navitem--active .navitem__count--heed { background: var(--c-heed); color: #fff; }
-.navitem--muted { color: var(--c-text-faint); font-size: var(--fs-sm); cursor: pointer; }
+.navitem--muted { color: var(--c-text-muted); font-size: var(--fs-sm); cursor: pointer; }
 
 /* ---------- main ---------- */
 .main { grid-area: main; overflow: auto; min-width: 0; display: flex; flex-direction: column; }
@@ -314,7 +314,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rightpane__resizer:hover::after, .rightpane__resizer:active::after { opacity: 1; }
 .rightpane__empty {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  color: var(--c-text-faint); font-size: var(--fs-sm); padding: var(--s-6); text-align: center;
+  color: var(--c-text-muted); font-size: var(--fs-sm); padding: var(--s-6); text-align: center;
 }
 
 /* ---------- generic ---------- */
@@ -323,11 +323,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm);
   background: var(--c-surface-sunken); color: var(--c-text-muted); white-space: nowrap;
 }
-.muted { color: var(--c-text-muted); }
-.faint { color: var(--c-text-faint); }
+/* Reading ink is two steps (`AMB-D-840`), so these two hand over one value: `.faint` is the older
+   name, kept while its callers are still written that way. */
+.muted, .faint { color: var(--c-text-muted); }
 /* The step a mark takes, set on the thing the mark sits in rather than on the mark: an icon draws in
    `currentColor` (`AMB-D-686`), so it is the chip, the row or the line that decides what it asks of
    the reader. Two classes and not three — the third step asks nothing, and a mark that asks nothing
-   takes the tone of the words it stands in (`.muted` / `.faint`) or a colour of its own. */
+   takes the tone of the words it stands in (`.muted`) or a colour of its own. */
 .step-stop { color: var(--c-stop); }
 .step-heed { color: var(--c-heed); }

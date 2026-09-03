@@ -264,7 +264,7 @@ function DecisionCard({ d, selected, onSelect }: {
       data-pane-select
       style={{
         display: "flex", alignItems: "baseline", gap: 8,
-        border: `1px solid ${selected ? "var(--c-accent)" : "var(--c-border)"}`,
+        border: `1px solid ${selected ? "var(--c-accent)" : "var(--c-rule)"}`,
         background: selected ? "var(--c-accent-weak)" : undefined,
         borderRadius: 8, padding: "6px 10px", marginBottom: 6,
         cursor: onSelect ? "pointer" : undefined,
@@ -329,7 +329,7 @@ export function DecisionCompose({ projectId, onDone }: { projectId: number; onDo
   }
 
   return (
-    <div style={{ border: "1px solid var(--c-border)", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+    <div style={{ border: "1px solid var(--c-rule)", borderRadius: 8, padding: 12, marginBottom: 12 }}>
       <input
         {...asTyped}
         style={{ width: "100%", marginBottom: 8 }}

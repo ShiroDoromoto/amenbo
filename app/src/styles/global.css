@@ -10,7 +10,7 @@ body {
 }
 button { font: inherit; color: inherit; cursor: pointer; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--c-border-strong); border-radius: 6px; border: 2px solid var(--c-bg); }
+::-webkit-scrollbar-thumb { background: var(--c-edge); border-radius: 6px; border: 2px solid var(--c-bg); }
 
 /* ---------- app shell grid ---------- */
 /* Rows: topbar / the bands / body. Each child is given its row outright, because a child placed by
@@ -72,19 +72,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
    The loud ones fill the band, and there the parts are cut out of the ground rather than laid on it:
    `--banner-tint` for the patch a control sits on, and an action that swaps ink for ground. */
 .healthbanner {
-  --banner-ground: var(--c-surface-2);
+  --banner-ground: var(--c-surface);
   --banner-ink: var(--c-text);
-  --banner-tint: var(--c-surface-sunken);
-  --banner-tint-hover: var(--c-border);
-  --banner-edge: var(--c-border-strong);
+  --banner-tint: var(--c-sunken);
+  --banner-tint-hover: var(--c-rule);
+  --banner-edge: var(--c-rule);
   /* The one accented thing on a quiet band; the loud ones override the pair below. */
   --banner-btn-ground: var(--c-accent);
   --banner-btn-ink: #fff;
 
-  display: flex; align-items: flex-start; gap: var(--s-3);
-  padding: var(--s-2) var(--s-4);
+  display: flex; align-items: flex-start; gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
   background: var(--banner-ground); color: var(--banner-ink);
-  border-bottom: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--c-rule);
   font-size: var(--fs-md);
 }
 /* The two steps that fill the band, and the accent one beside them: an offer is not a step on the
@@ -118,7 +118,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The button that runs the action (re-sync). It outweighs the close button. */
 .healthbanner__action {
   flex: none; color: var(--banner-btn-ink); background: var(--banner-btn-ground);
-  border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-3);
+  border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-2);
   font-size: var(--fs-xs); font-weight: var(--fw-bold); cursor: pointer;
 }
 .healthbanner__action:hover { opacity: 0.85; }
@@ -145,17 +145,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- topbar ---------- */
 .topbar {
-  display: flex; align-items: center; gap: var(--s-4);
-  padding: 0 var(--s-4);
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 0 var(--s-3);
   background: var(--c-surface);
-  border-bottom: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--c-rule);
 }
 /* The brand mark tightens its gap a little so it reads as a pair with the workspace name.
    It is drawn in `currentColor`, so the colour it takes is the one set here — black on the light
    ground, white on the dark one — and not the topbar's text colour. */
 .topbar__brand {
   display: inline-flex; align-items: center;
-  margin-right: calc(var(--s-2) - var(--s-4));
+  margin-right: calc(var(--s-2) - var(--s-3));
   color: var(--c-brand-mark);
 }
 /* "amenbo" is a link that opens the product page (https://amenbo.work/) in the default
@@ -206,7 +206,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .topbar__spacer { flex: 1; }
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1; cursor: pointer;
 }
@@ -216,7 +216,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .topbar__nav { display: inline-flex; gap: var(--s-1); }
 .topbar__navbtn {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 24px; background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  min-width: 24px; background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-xl); line-height: 1; cursor: pointer;
 }
@@ -231,9 +231,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sidebar-wrap { grid-area: sidebar; position: relative; display: flex; min-height: 0; min-width: 0; }
 .sidebar {
   flex: 1; min-width: 0;
-  background: var(--c-surface-2);
-  border-right: 1px solid var(--c-border);
-  overflow-y: auto; padding: var(--s-3) var(--s-2);
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-rule);
+  overflow-y: auto; padding: var(--s-2) var(--s-2);
 }
 /* The resize handle on the right edge: a thin hit area straddling the border, showing its line
    only on hover or drag. Mirrors .rightpane__resizer on the opposite edge. */
@@ -246,19 +246,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-accent); opacity: 0; transition: opacity 0.12s;
 }
 .sidebar__resizer:hover::after, .sidebar__resizer:active::after { opacity: 1; }
-.sidebar__group { margin-bottom: var(--s-5); }
+.sidebar__group { margin-bottom: var(--s-4); }
 .sidebar__label {
   font-size: var(--fs-xs); font-weight: var(--fw-bold);
   text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--c-text-faint); padding: 0 var(--s-3); margin-bottom: var(--s-2);
+  color: var(--c-text-faint); padding: 0 var(--s-2); margin-bottom: var(--s-2);
 }
 .navitem {
-  display: flex; align-items: center; gap: var(--s-3);
+  display: flex; align-items: center; gap: var(--s-2);
   width: 100%; text-align: left; background: none; border: none;
-  padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
   color: var(--c-text); font-size: var(--fs-md);
 }
-.navitem:hover { background: var(--c-surface-sunken); }
+.navitem:hover { background: var(--c-hover); }
 .navitem--active { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 .navitem__dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 /* Drag-and-drop reordering of projects. The row being held fades, and the drop target
@@ -269,7 +269,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .navitem--drop-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
 .navitem__count {
   margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-faint);
-  background: var(--c-surface-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
+  background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
 }
 .navitem--active .navitem__count { background: var(--c-surface); }
 /* The inbox's needs-attention badge: the accent colour carries "unread / needs a look". */
@@ -298,7 +298,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rightpane-wrap { grid-area: pane; position: relative; display: flex; min-height: 0; min-width: 0; }
 .rightpane {
   flex: 1; min-width: 0;
-  background: var(--c-surface); border-left: 1px solid var(--c-border);
+  background: var(--c-surface); border-left: 1px solid var(--c-rule);
   overflow-y: auto; display: flex; flex-direction: column;
 }
 /* The resize handle on the left edge: a thin hit area straddling the border, showing its
@@ -314,14 +314,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rightpane__resizer:hover::after, .rightpane__resizer:active::after { opacity: 1; }
 .rightpane__empty {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  color: var(--c-text-faint); font-size: var(--fs-md); padding: var(--s-6); text-align: center;
+  color: var(--c-text-faint); font-size: var(--fs-md); padding: var(--s-5); text-align: center;
 }
 
 /* ---------- generic ---------- */
 .chip {
   display: inline-flex; align-items: center; gap: var(--s-1);
   font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm);
-  background: var(--c-surface-sunken); color: var(--c-text-muted); white-space: nowrap;
+  background: var(--c-sunken); color: var(--c-text-muted); white-space: nowrap;
 }
 .muted { color: var(--c-text-muted); }
 .faint { color: var(--c-text-faint); }

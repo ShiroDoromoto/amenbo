@@ -32,10 +32,13 @@ impl Driver<'_> {
                 std::fs::write(&full, content).map_err(|e| format!("could not write {path}: {e}"))?;
                 Ok(Outcome::action(format!("wrote {} ({} bytes)", full.display(), content.len())))
             }
-            // The same, for bytes a scenario cannot hold itself. A file under `fixtures/` is where
-            // they live: this tree's prose rule keeps a bare ref out of every `.yaml`, so the lint has
-            // nothing to find unless something really carries one — and a file that is deliberately
-            // not text cannot be spelt out in YAML at all.
+            // The same, for what a scenario cannot hold itself. A file under `fixtures/` is where the
+            // reference form lives: this tree's prose rule keeps a bare ref out of every `.yaml`, and
+            // the lint has nothing to find unless something really carries one. Bytes that are not text
+            // at all come off the same shelf — an image a screen road has an operator choose in a
+            // picker — which is why the copy is made of the bytes rather than of a string, and why the
+            // line it leaves names where the file landed: on a screen road that path is what the
+            // operator hunts the picker with, the instructions being rendered from the YAML alone.
             //
             // `dir` says where it lands, the way `write-file`'s does and for the same reason: what a
             // face reads off a folder is read off that folder, so a file that has to be in one can
@@ -59,7 +62,11 @@ impl Driver<'_> {
                 let bytes = std::fs::read(&src)
                     .map_err(|e| format!("could not read the fixture {}: {e}", src.display()))?;
                 std::fs::write(&full, &bytes).map_err(|e| format!("could not write {path}: {e}"))?;
-                Ok(Outcome::action(format!("copied the fixture {from} to {path} ({} bytes)", bytes.len())))
+                Ok(Outcome::action(format!(
+                    "copied the fixture {from} to {} ({} bytes)",
+                    full.display(),
+                    bytes.len()
+                )))
             }
             // A name in that folder that is a link rather than a file. `path` is the name and `to`
             // is what it points at, read in the run's own folder — outside every folder a `folder`

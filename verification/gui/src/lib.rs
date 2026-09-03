@@ -674,6 +674,10 @@ impl Instructor {
     /// `project icon` is a `Review` further out than any of those, and on both of its states: what it
     /// reads is a picture. A reading answers which words are on a shot, and neither the image a project
     /// was given nor the colour it falls back to puts one there.
+    ///
+    /// `store avatar` is the same reading one face further in, and a `Review` for the same reason: a
+    /// registered image and the pattern drawn in its place are both pictures, and a slot holding either
+    /// puts no word on a shot.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -1289,6 +1293,27 @@ impl Instructor {
                 "In Amenbo's own settings, set the view a newly created project opens in to the one stored as \"{}\", then return to the screen the road was on.",
                 req(with, "view")?
             ),
+            // The screen the two faces are made on, opened. It is a step of its own rather than a
+            // clause on the ones below because the road walks it twice, and the second walk is what
+            // the road is for: a slot redrawn under the operator's eye says the screen heard, and only
+            // coming back to it says the store did.
+            (Domain::Store, "open-settings") => "Open Amenbo's own settings.".to_string(),
+            // Giving a face its image, and taking it away again. Neither line ends at a button the way
+            // a project's icon does: this row writes the store as the picker closes, so a step that
+            // waited for a save would be waiting for a press the screen has none of.
+            //
+            // The file is named and where it is lying is not, for the reason the project's own icon
+            // step gives: these lines are rendered from the YAML alone, and the folder a premise wrote
+            // into is made per run. The run says that path on its way in.
+            (Domain::Store, "set-avatar") => format!(
+                "In the row of avatars in Amenbo's own settings, on the slot for the {} face, press the button that chooses an image and pick the file \"{}\" the run laid down.",
+                facet_face(with)?,
+                req(with, "file")?
+            ),
+            (Domain::Store, "clear-avatar") => format!(
+                "In the row of avatars in Amenbo's own settings, on the slot for the {} face, press the button that puts back the pattern Amenbo draws for a face with no image of its own.",
+                facet_face(with)?
+            ),
             (Domain::Plugin, "open-entry") => format!(
                 "Open the row for \"{}\", the one served by the catalog \"{}\".",
                 req(with, "name")?,
@@ -1510,6 +1535,20 @@ impl Instructor {
 
     fn assert(&self, domain: Domain, op: &str, with: &Args) -> Result<String, String> {
         Ok(match (domain, op) {
+            // What a facet's slot draws. Both sides are a picture and neither is an absence: with an
+            // image registered the slot holds it, and with none it holds the pattern Amenbo draws from
+            // the face's own name. So the line names what an eye should find rather than asking for one
+            // of them to be missing — a slot nobody can describe is a step nobody can close.
+            (Domain::Store, "avatar") => match present(with) {
+                true => format!(
+                    "Confirm the slot for the {} face, in the row of avatars in Amenbo's own settings, draws the image registered for it.",
+                    facet_face(with)?
+                ),
+                false => format!(
+                    "Confirm the slot for the {} face, in the row of avatars in Amenbo's own settings, draws no image of its own: what stands in it is the pattern Amenbo draws for a face that has none.",
+                    facet_face(with)?
+                ),
+            },
             // A nudge came up by itself, or has gone. Nothing is pressed here and nothing is opened —
             // what is under test is that the offer arrives unasked, on a device that has been used
             // enough for it, so the line is the screen as the app left it.
@@ -2528,6 +2567,18 @@ fn place(landed_on: &str) -> Result<&'static str, String> {
 /// prove, since "not official" is the reading a badge has to earn.
 fn official(with: &Args) -> bool {
     with.get("official").and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
+/// Which of the two faces a step is about, said the way a reader meets it rather than by the word the
+/// store files it under. The row draws the pair one above the other, each under its own display name,
+/// and only one of those names is the same in every language — so what the line names is the face
+/// itself, which is what tells the two slots apart on any screen.
+fn facet_face(with: &Args) -> Result<&'static str, String> {
+    match req(with, "facet")? {
+        "human" => Ok("human"),
+        "ai" => Ok("AI"),
+        other => Err(format!("`facet` is one of `human` / `ai`, not `{other}`")),
+    }
 }
 
 /// Whether a step asks for what it names to be on screen, rather than gone from it. Absence is
@@ -3631,6 +3682,68 @@ steps_gui:
             lines[3].contains("takes its image away") && lines[3].contains("save the form"),
             "clearing waits for the same button: {}",
             lines[3]
+        );
+
+        for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
+            assert!(ins.expectation(st).is_none(), "step {i} reads a picture, which no reading settles");
+        }
+    }
+
+    /// The two faces a store writes as, each given an image and one of them cleared again. No line
+    /// waits for a button: this row writes the store as the picker closes, so a step that asked for a
+    /// save would be asking for a press the screen has none of. The readings are told apart by what an
+    /// eye should find, never by an absence — a face with no image of its own is drawn as a pattern,
+    /// and both are pictures, so neither is a reading.
+    #[test]
+    fn a_face_is_given_to_each_facet_read_back_and_cleared() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: store
+    op: avatar
+    with: { facet: human, present: false }
+  - type: action
+    domain: store
+    op: set-avatar
+    with: { facet: human, file: scenario-avatar.png }
+  - type: assert
+    domain: store
+    op: avatar
+    with: { facet: ai, present: false }
+  - type: action
+    domain: store
+    op: open-settings
+  - type: assert
+    domain: store
+    op: avatar
+    with: { facet: ai, present: true }
+  - type: action
+    domain: store
+    op: clear-avatar
+    with: { facet: human }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[0].contains("the slot for the human face") && lines[0].contains("pattern"),
+            "the pattern is named rather than an absence looked for: {}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains("scenario-avatar.png") && !lines[1].contains("save"),
+            "the file is named and nothing is saved: {}",
+            lines[1]
+        );
+        assert!(lines[2].contains("the slot for the AI face"), "the neighbour is named as itself: {}", lines[2]);
+        assert!(lines[3].contains("Amenbo's own settings"), "the way back on is its own step: {}", lines[3]);
+        assert!(lines[4].contains("draws the image registered for it"), "got: {}", lines[4]);
+        assert!(
+            lines[5].contains("the slot for the human face") && lines[5].contains("puts back the pattern"),
+            "clearing names the button by what it does: {}",
+            lines[5]
         );
 
         for (i, st) in s.steps(Driver::Gui).iter().enumerate() {

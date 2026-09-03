@@ -582,6 +582,28 @@ const REGISTRY: &[OpSpec] = &[
     // the word `config set default_view` takes. The pull-down draws each of the four in the reader's
     // own language, and a table of those here would be a second copy of nineteen dictionaries.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "set-default-view", required: &["view"], refs: &[], strings: &["view"], binds: false },
+    // The face each of the two facets is given, registered and taken away again on the row that draws
+    // the pair of them. `facet` names which slot the step is about — `human` or `ai`, the two words the
+    // store files them under — and `file` the image to choose. That file is one a premise laid down
+    // rather than one the operator brings, for the reason a project's icon is: what is under test is a
+    // picture being drawn, so any file of the right name would prove nothing.
+    //
+    // Neither move waits for a button beside it. Choosing writes the store where it stands and so does
+    // clearing, so each step ends where the picker closes rather than at a form being saved.
+    //
+    // A screen road alone. `config set human_avatar` is the terminal's whole door onto this and what it
+    // takes is the display version as a data URL — the original that version was baked from arrives
+    // only where a picker handed the bytes over, so a road written for the CLI would walk past the
+    // half this one exists for.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "set-avatar", required: &["facet", "file"], refs: &[], strings: &["facet", "file"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "clear-avatar", required: &["facet"], refs: &[], strings: &["facet"], binds: false },
+    // And back onto the screen those two are made on, for a road that walked off it. It is the move the
+    // avatar road turns on: a slot redrawn where the operator is standing says the screen heard, and
+    // only an arrival says the store did.
+    //
+    // A screen road alone: a terminal stands in a folder and not on a screen, so it has nothing to
+    // open and nothing to come back to.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "open-settings", required: &[], refs: &[], strings: &[], binds: false },
     // The other face of the integrity check: the one that puts right what the reading face reports.
     // It is an action and not an assert precisely because it writes — what it swept is read back by
     // asking the reading face again.
@@ -1503,6 +1525,13 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "config", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "identity", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "update", required: &["field", "equals"], refs: &[], strings: &["field"], binds: false },
+    // Which of the two a facet's slot holds: the image registered for it, or the pattern Amenbo draws
+    // for a face that has none. The absent side is not a blank, so the instruction names that pattern
+    // rather than asking an eye to find nothing.
+    //
+    // A screen road alone, and a `Review` it could be nothing else than: both sides are a picture, and
+    // a reading answers which words are on a shot.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "avatar", required: &["facet"], refs: &[], strings: &["facet"], binds: false },
     // Whether a folder is bound, asked from inside it — and, with `project`, which one it names.
     // `resynced` asks the other half: whether the guidance block there is at this build's version,
     // which is answered by a resync finding nothing left to write.

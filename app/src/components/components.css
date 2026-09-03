@@ -472,7 +472,15 @@
 .detail__tab { border: none; background: none; padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-md); color: var(--c-text-muted); }
 .detail__tab--active { background: var(--c-sunken); color: var(--c-text); font-weight: var(--fw-medium); }
 .detail__body { padding: var(--s-3); display: flex; flex-direction: column; gap: var(--s-3); }
-.detail__title { font-size: var(--fs-xl); font-weight: var(--fw-bold); }
+/* The line a detail pane opens with: a ref, the title, what state it is in, and the way into
+   editing it. Laid out here rather than at each pane, because a row of separate elements is what
+   both of them are — and JSX eats the whitespace between two of them on separate lines, so a row
+   that reads as a row on the page reads as one word without this. It wraps: a long title on a
+   narrow pane takes the chips down with it rather than pushing them off the edge. */
+.detail__title {
+  font-size: var(--fs-xl); font-weight: var(--fw-bold);
+  display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap;
+}
 .detail__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 .detail__field { display: flex; gap: var(--s-2); font-size: var(--fs-md); align-items: baseline; }
 /* The label column is fixed so the values line up down the pane, and it is given in `em` so the

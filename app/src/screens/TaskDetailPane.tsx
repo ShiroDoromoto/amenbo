@@ -248,7 +248,7 @@ export function TaskDetailPane({
             ) : (
               <>
                 <span style={{ cursor: "text" }} title={t("detail.edit")} onDoubleClick={startEditTitle}>{task.title}</span>
-                <button className="feed__action" style={{ marginLeft: 6 }} onClick={startEditTitle}>{t("detail.edit")}</button>
+                <button className="feed__action" onClick={startEditTitle}>{t("detail.edit")}</button>
               </>
             )}
             <TaskIdChip id={taskId} />

@@ -156,7 +156,7 @@ export function DecisionDetailPane({
 
   return (
     <div className="detail__body">
-      <div className="detail__title" style={{ alignItems: "baseline", gap: 8 }}>
+      <div className="detail__title">
         {d.ref && <span style={{ color: "var(--c-muted)", fontVariantNumeric: "tabular-nums" }}>{d.ref}</span>}
         {editing ? (
           <input
@@ -177,7 +177,7 @@ export function DecisionDetailPane({
           background: statusColor(d.status),
         }}>{t(`dec.status.${d.status}`)}</span>
         {!editing && editable && (
-          <button className="feed__action" style={{ marginLeft: 6 }} onClick={startEdit}>{t("detail.edit")}</button>
+          <button className="feed__action" onClick={startEdit}>{t("detail.edit")}</button>
         )}
       </div>
 

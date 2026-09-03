@@ -37,13 +37,9 @@ import { t } from "../core/i18n";
 let container: HTMLDivElement;
 let root: Root;
 
-const field = () => container.querySelector<HTMLTextAreaElement>("textarea")
-  ?? document.body.querySelector<HTMLTextAreaElement>(".memo__page textarea")!;
-const button = (text: string) =>
-  [...document.body.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
-/** How the page says the writing stands, read off the face that is in front of the reader. */
-const word = () => (document.body.querySelector<HTMLElement>(".memo__page .memo__word")
-  ?? container.querySelector<HTMLElement>(".memo__word")!).textContent;
+const field = () => container.querySelector<HTMLTextAreaElement>("textarea")!;
+/** How the page says the writing stands. */
+const word = () => container.querySelector<HTMLElement>(".memo__word")!.textContent;
 
 async function draw(projectId: number) {
   await act(async () => {
@@ -140,30 +136,5 @@ describe("the project's draft page", () => {
     // The quiet is the anxious part. Showing the word for a moment and taking it away again would
     // leave the reader who is looking at exactly this moment with nothing.
     expect(word()).toBe(t("files.memoKept"));
-  });
-
-  it("starts the wide page on a blank mark", async () => {
-    await draw(1);
-    await type("長い依頼");
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    await act(async () => { button(t("files.memoWide"))!.click(); });
-    expect(word()).toBe("");
-
-    // And the wide page reports its own writing from there.
-    await type("長い依頼をもっと");
-    expect(word()).toBe(t("files.memoTyping"));
-  });
-
-  it("opens wide, and comes back", async () => {
-    hoisted.kept[1] = "広く書きたい";
-    await draw(1);
-    await act(async () => { button(t("files.memoWide"))!.click(); });
-    // The same text, in the middle of the window and at a readable width — not a second copy of it.
-    expect(document.body.querySelectorAll("textarea")).toHaveLength(1);
-    expect(document.body.querySelector<HTMLTextAreaElement>(".memo__field--wide")!.value)
-      .toBe("広く書きたい");
-
-    await act(async () => { button(t("files.memoNarrow"))!.click(); });
-    expect(document.body.querySelector(".memo__page")).toBeNull();
   });
 });

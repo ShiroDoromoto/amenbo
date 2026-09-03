@@ -579,8 +579,6 @@ export const ja: Translation = {
     "face.more": "その他",
     "files.tab": "フォルダ",
     "files.memo": "メモ",
-    "files.memoWide": "広く書く",
-    "files.memoNarrow": "パネルに戻す",
     "files.memoTyping": "入力中",
     "files.memoKept": "保存済",
     "files.tree": "フォルダ",

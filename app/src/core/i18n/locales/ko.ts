@@ -566,8 +566,6 @@ export const ko: Translation = {
     "face.more": "더 보기",
     "files.tab": "파일",
     "files.memo": "메모",
-    "files.memoWide": "넓게 쓰기",
-    "files.memoNarrow": "패널로 돌아가기",
     "files.memoTyping": "입력 중",
     "files.memoKept": "저장됨",
     "files.tree": "폴더",

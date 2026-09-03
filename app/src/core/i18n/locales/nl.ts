@@ -567,8 +567,6 @@ export const nl: Translation = {
     "face.more": "Meer",
     "files.tab": "Bestanden",
     "files.memo": "De pagina",
-    "files.memoWide": "Breed schrijven",
-    "files.memoNarrow": "Terug naar het paneel",
     "files.memoTyping": "Aan het typen",
     "files.memoKept": "Bewaard",
     "files.tree": "De map",

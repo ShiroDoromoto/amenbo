@@ -299,6 +299,9 @@ function Columns({ show, ...props }: Partial<Props> & { projectId: number | null
   const [showing, setShowing] = useState<string | null>(null);
   // The step the column is standing on, which opening a file asks for and the face keeps.
   const [wide, setWide] = useState(false);
+  // Which half is up. The face keeps it and the column reads it, so the harness holds it too
+  // (`../talk/columns`).
+  const [tab, setTab] = useState<"files" | "memo">(props.tab ?? "files");
   const reading = open.find((one) => openKey(one) === showing) ?? open[0] ?? null;
   const openOne = (at: OpenFile) => {
     setOpen((was) => (was.some((one) => openKey(one) === openKey(at)) ? was : [...was, at]));
@@ -338,7 +341,8 @@ function Columns({ show, ...props }: Partial<Props> & { projectId: number | null
     })),
     createElement("div", { className: "termface__column--side" }, createElement(FilesPanel, {
       projectId: props.projectId,
-      tab: props.tab ?? "files",
+      tab,
+      onTab: setTab,
       open,
       reading,
       onPick: (at: OpenFile) => setShowing(openKey(at)),
@@ -575,15 +579,32 @@ describe("the file face", () => {
     expect(container.textContent).toContain("a.md");
   });
 
-  it("draws no switch of its own between the two halves", async () => {
+  it("draws the draft page as a tab, beside the files, rather than as a switch of its own", async () => {
     await draw();
-    // The switch is the terminal face's top row, which is reachable while the panel is closed as
-    // well. A second one in here would be two controls doing the same thing, and a reader would
-    // have to work out which is the right one (`../shell/TerminalFace`).
+    // No second row of controls: the draft page is one of the tabs, which is what the files beside
+    // it are (`AMB-D-835`). The top row of the terminal face stays the way in while this column is
+    // closed, and it is not drawn in here.
     expect(container.querySelector("[role=\"tablist\"]")).toBeNull();
-    expect(button(t("files.memo"))).toBeUndefined();
-    // What did stay is the way out: it ends the panel rather than choosing a half.
+    expect(container.querySelector(".files__tabname")?.textContent).toBe(t("files.memo"));
+    // What did stay is the way out: it ends the column rather than choosing a half.
     expect(container.querySelector(".files__close")).not.toBeNull();
+  });
+
+  it("brings the draft page up from its tab, and it cannot be closed from one", async () => {
+    hoisted.entries[""] = [{ name: "a.md", isDir: false, ignored: false }];
+    await drawOpen();
+    await openFile(button("a.md"));
+    await settle();
+    expect(container.querySelector(".termface__column--side textarea")).toBeNull();
+
+    await click(container.querySelectorAll<HTMLElement>(".files__tabname")[0]);
+    await settle();
+    // The page is up, and the file is still held: what a tab does is choose between them.
+    expect(container.querySelector(".termface__column--side textarea")).not.toBeNull();
+    expect([...container.querySelectorAll<HTMLElement>(".files__tabname")].map((one) =>
+      one.textContent)).toEqual([t("files.memo"), "a.md"]);
+    // One cross, and it is the file's: a project has its draft page whether or not anyone opened it.
+    expect(container.querySelectorAll(".files__tabclose")).toHaveLength(1);
   });
 
   it("goes and asks again when the host says the folder moved", async () => {
@@ -2025,25 +2046,26 @@ describe("the file face", () => {
 
     it("keeps the first open when the second is, and puts the new one on top", async () => {
       await twoOpen();
-      expect(tabs()).toEqual(["a.md", "b.md"]);
+      // The draft page is the first tab and is always there (`./MemoPage`).
+      expect(tabs()).toEqual([t("files.memo"), "a.md", "b.md"]);
       expect(onTop()).toBe("b.md");
       expect(hoisted.asked).toContain(`read:${ROOT}:b.md`);
     });
 
     it("brings one back up from its tab", async () => {
       await twoOpen();
-      await click(container.querySelectorAll<HTMLElement>(".files__tabname")[0]);
+      await click(container.querySelectorAll<HTMLElement>(".files__tabname")[1]);
       await settle();
       expect(onTop()).toBe("a.md");
       // Both are still held: pressing a tab is choosing between them, not closing one.
-      expect(tabs()).toEqual(["a.md", "b.md"]);
+      expect(tabs()).toEqual([t("files.memo"), "a.md", "b.md"]);
     });
 
     it("lets one go from its own cross, and stands on the tab beside it", async () => {
       await twoOpen();
       await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[1]);
       await settle();
-      expect(tabs()).toEqual(["a.md"]);
+      expect(tabs()).toEqual([t("files.memo"), "a.md"]);
       expect(onTop()).toBe("a.md");
     });
 

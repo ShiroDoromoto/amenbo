@@ -18,11 +18,11 @@
 // not taken away afterwards, because the quiet after typing is exactly when a person looks to see
 // whether anything was kept (`AMB-T-3684`).
 //
-// **The page has two widths.** The panel is a column beside a terminal, and a paragraph typed in a
-// column is read a few words at a time. The wide one is the same text in the middle of the window,
-// stopped at a width a paragraph is read at.
+// **How much room it gets is the column's answer, not its own.** The page is one of the reading
+// column's tabs, and that column has a narrow width the panes are drawn beside and a wide one that
+// lies over them (`AMB-D-835`). A page carrying a second answer to the same question would be one
+// question with two controls, drifting apart at the first change.
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { createPortal } from "react-dom";
 import { t } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { projectMemo, setProjectMemo } from "./memo";
@@ -35,7 +35,6 @@ type Keep = "none" | "typing" | "kept";
 
 export function MemoPage({ projectId }: { projectId: number }) {
   const [text, setText] = useState("");
-  const [wide, setWide] = useState(false);
   const [keep, setKeep] = useState<Keep>("none");
   // A CSS animation starts on an element that is new and not on one that has re-rendered, so every
   // keystroke hands the ring a fresh key and it fills from nothing again.
@@ -76,61 +75,31 @@ export function MemoPage({ projectId }: { projectId: number }) {
   const field = (
     <textarea
       {...asTyped}
-      className={wide ? "memo__field memo__field--wide" : "memo__field"}
+      className="memo__field"
       value={text}
       aria-label={t("files.memo")}
       onChange={(e) => typed(e.target.value)}
-      // Nothing here submits: there is nothing to submit to. Escape closes the wide page, which is
-      // the one thing this can be asked to do.
-      onKeyDown={(e) => { if (e.key === "Escape" && wide) setWide(false); }}
     />
-  );
-
-  /** The head of a face: what the page is, how the writing stands, and the way to the other one. */
-  const bar = (shown: Keep, toWide: boolean) => (
-    <div className="memo__bar">
-      <h3 className="files__head">{t("files.memo")}</h3>
-      <span className={shown === "none" ? "memo__keep" : `memo__keep memo__keep--on memo__keep--${shown}`}>
-        <span
-          key={fills}
-          className="memo__ring"
-          style={{ "--memo-settle": `${SETTLE_MS}ms` } as CSSProperties}
-        />
-        {/* The state is said as well as drawn: a ring is nothing to a reader being read to. */}
-        <span className="memo__word" aria-live="polite">
-          {shown === "none" ? "" : t(shown === "typing" ? "files.memoTyping" : "files.memoKept")}
-        </span>
-      </span>
-      <button
-        className="files__back"
-        // The wide page opens on a blank mark. It is a face just arrived at, and whatever the ring
-        // was in the middle of saying, it was saying to the panel.
-        onClick={() => { if (toWide) setKeep("none"); setWide(toWide); }}
-      >
-        {t(toWide ? "files.memoWide" : "files.memoNarrow")}
-      </button>
-    </div>
   );
 
   return (
     <div className="files__row memo">
-      {bar(wide ? "none" : keep, true)}
-      {/* One field at a time: the wide page is the same text in the middle of the window, not a
-          second copy of it beside the first. */}
-      {!wide && field}
-      {wide && createPortal(
-        <div
-          className="modal__overlay"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) setWide(false); }}
-        >
-          <div className="memo__page" role="dialog" aria-modal="true" aria-label={t("files.memo")}>
-            {bar(keep, false)}
-            {field}
-          </div>
-        </div>,
-        document.body,
-      )}
+      {/* How the writing stands, and nothing else on the row: which page this is, is said by the tab
+          it is under (`./FilesPanel`). */}
+      <div className="memo__bar">
+        <span className={keep === "none" ? "memo__keep" : `memo__keep memo__keep--on memo__keep--${keep}`}>
+          <span
+            key={fills}
+            className="memo__ring"
+            style={{ "--memo-settle": `${SETTLE_MS}ms` } as CSSProperties}
+          />
+          {/* The state is said as well as drawn: a ring is nothing to a reader being read to. */}
+          <span className="memo__word" aria-live="polite">
+            {keep === "none" ? "" : t(keep === "typing" ? "files.memoTyping" : "files.memoKept")}
+          </span>
+        </span>
+      </div>
+      {field}
     </div>
   );
 }

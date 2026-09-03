@@ -570,8 +570,6 @@ export const id: Translation = {
     "face.more": "Lainnya",
     "files.tab": "Berkas",
     "files.memo": "Halaman",
-    "files.memoWide": "Tulis melebar",
-    "files.memoNarrow": "Kembali ke panel",
     "files.memoTyping": "Mengetik",
     "files.memoKept": "Tersimpan",
     "files.tree": "Folder",

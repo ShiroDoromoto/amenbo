@@ -577,8 +577,6 @@ export const de: Translation = {
     "face.more": "Mehr",
     "files.tab": "Dateien",
     "files.memo": "Die Seite",
-    "files.memoWide": "Breit schreiben",
-    "files.memoNarrow": "Zurück in die Leiste",
     "files.memoTyping": "Wird getippt",
     "files.memoKept": "Gesichert",
     "files.tree": "Der Ordner",

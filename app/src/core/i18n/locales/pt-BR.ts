@@ -589,8 +589,6 @@ export const ptBR: Translation = {
     "face.more": "Mais",
     "files.tab": "Arquivos",
     "files.memo": "A página",
-    "files.memoWide": "Escrever amplo",
-    "files.memoNarrow": "Voltar ao painel",
     "files.memoTyping": "Digitando",
     "files.memoKept": "Guardado",
     "files.tree": "A pasta",

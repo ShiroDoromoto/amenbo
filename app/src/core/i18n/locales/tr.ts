@@ -567,8 +567,6 @@ export const tr: Translation = {
     "face.more": "Daha fazla",
     "files.tab": "Dosyalar",
     "files.memo": "Sayfa",
-    "files.memoWide": "Geniş yaz",
-    "files.memoNarrow": "Panele dön",
     "files.memoTyping": "Yazılıyor",
     "files.memoKept": "Saklandı",
     "files.tree": "Klasör",

@@ -1135,6 +1135,7 @@ export function TerminalFace({
               projectId={layout.project}
               onOpenLedger={onOpenLedger}
               tab={tab}
+              onTab={takeTab}
               open={open}
               reading={reading}
               onPick={(at) => setShowing(openKey(at))}

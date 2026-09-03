@@ -195,6 +195,14 @@ devtool devgui install 696 --vm          # put the built bundle in there again
 # /Applications/amenbo (dev 696).app
 ```
 
+**One build per id at a time.** The make route runs under a lock named for the id
+(`~/Library/Caches/amenbo-devgui-<id>.lock`), and a second run of the same id stops
+rather than queues behind the first. Two runs of one id share a worktree and so one
+cargo `target`, where the second does not fail but waits ("Blocking waiting for file
+lock on build directory") — so a build asked for twice looks alive from the outside
+while neither side moves. Another id is another worktree and another `target`, and is
+not held up by this. See `scripts/devgui-build-lock.sh`.
+
 **The build stays on the host.** Only the placing moves, so the guest needs
 neither Rust nor node, and the `.app` baked here runs in there unchanged — same
 arch, same OS generation (43MB across in 0.96s, measured).

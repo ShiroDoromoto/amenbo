@@ -380,11 +380,6 @@ input[type="color"] {
 }
 
 /* ---------- generic ---------- */
-.chip {
-  display: inline-flex; align-items: center; gap: var(--s-1);
-  font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm);
-  background: var(--c-sunken); color: var(--c-text-muted); white-space: nowrap;
-}
 /* Reading ink is two steps (`AMB-D-840`), so these two hand over one value: `.faint` is the older
    name, kept while its callers are still written that way. */
 .muted, .faint { color: var(--c-text-muted); }

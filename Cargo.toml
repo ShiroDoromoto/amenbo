@@ -6,7 +6,7 @@ members = ["crates/amenbo-core", "crates/amenbo-cli", "crates/amenbo-scratch", "
 exclude = ["app/src-tauri"]
 
 [workspace.package]
-version = "20.0.0"
+version = "20.1.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/ShiroDoromoto/amenbo"

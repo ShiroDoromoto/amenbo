@@ -128,6 +128,22 @@ describe("parseRefQuery: recognizing ref numbers in the search box", () => {
     expect(parseRefQuery("fix #12")).toBeNull();
     expect(parseRefQuery("D-")).toBeNull();
   });
+
+  it("a number alone is read as the side the box searches", () => {
+    expect(parseRefQuery("123", "task")).toEqual({ num: 123, space: "task" });
+    expect(parseRefQuery("123", "decision")).toEqual({ num: 123, space: "decision" });
+    // `#<n>` carries no type code either, so the side settles it the same way — the board's own
+    // reading, and the decisions list's the other way.
+    expect(parseRefQuery("#7", "decision")).toEqual({ num: 7, space: "decision" });
+    expect(parseRefQuery("  42  ", "task")).toEqual({ num: 42, space: "task" });
+  });
+
+  it("a type code outranks the side the box searches", () => {
+    // Typing a decision ref into the board is not a decision drawn on it: the board keeps only what it
+    // holds, and the ref says outright this is not one of them.
+    expect(parseRefQuery("D-80", "task")).toEqual({ num: 80, space: "decision" });
+    expect(parseRefQuery("AMB-T-9", "decision")).toEqual({ num: 9, space: "task" });
+  });
 });
 
 describe("filters: the decisions tab narrows the same way the board does", () => {

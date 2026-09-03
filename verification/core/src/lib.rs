@@ -327,7 +327,13 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "finish-creating", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "assign", required: &["target", "assignee"], refs: &["target"], strings: &["assignee"], binds: false },
     // Posting binds the comment, since editing, removing and promoting one all name it afterwards.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: true },
+    // `mentions` names a record whose **number** is written into the text, after the words the step
+    // wrote. It is a key rather than something a road spells out because the store issues the number:
+    // a scenario knows which record it means and never what that record was numbered, so a road that
+    // wants one record's text to carry another's number has no way to type it. What the number is for
+    // is a search: a number is asked as a word underneath the record it pins, and that is only visible
+    // where some other record has it written in it.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], refs: &["target", "mentions"], strings: &["text"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "edit", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "rm", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "promote", required: &["target", "title"], refs: &["target"], strings: &["title"], binds: true },
@@ -346,7 +352,7 @@ const REGISTRY: &[OpSpec] = &[
     // what the word names is a **folder**, one of the folders the task's own project offers, so the
     // driver hands over the path it placed that folder at rather than the word itself. It is also the
     // only field here that another road can take away: unbinding the folder empties it.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "update", required: &["target"], refs: &["target"], strings: &["title", "notes", "due", "start", "priority", "at"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "update", required: &["target"], refs: &["target", "mentions"], strings: &["title", "notes", "due", "start", "priority", "at"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "clear", required: &["target", "field"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "move", required: &["target"], refs: &["target", "project"], strings: &["position"], binds: false },
     // Narrowing a listing that is already drawn, by the words a reader types over it. The words travel
@@ -356,7 +362,18 @@ const REGISTRY: &[OpSpec] = &[
     //
     // A screen road alone. A terminal has no listing standing in front of it to narrow: the words and
     // the reading are one command there, which is what `found` walks.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "narrow", required: &["words"], refs: &[], strings: &["words"], binds: false },
+    //
+    // What is typed is `words`, or `number_of` naming a record whose **number** is typed instead —
+    // one of the two, since they are the one query written two ways (see `takes_a_query`). A number
+    // is what a reader types to reach a record they already hold the ref of, and it cannot be written
+    // as words: the store issues it, so no scenario knows it in advance. `spelled` is the shape it is
+    // typed in — `bare` (`12`) or `hash` (`#12`), both of which the box reads.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "narrow", required: &[], refs: &["number_of"], strings: &["words", "spelled"], binds: false },
+    // The same box over the decisions tab, and a separate entry for the reason the panel's three moves
+    // are: a road has to say which of the two tabs it is standing on, or it could be walked on either.
+    // The side is what the box is read in — a number typed here is a decision's, where the same number
+    // typed over the board is a task's.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "narrow", required: &[], refs: &["number_of"], strings: &["words", "spelled"], binds: false },
     // The other narrowing on that same board, and the three moves it takes: the values are opened, some
     // of them are chosen, and they are folded away again. Opening and folding are written as moves of
     // their own rather than left around the choosing, because what the fold gives back is the room the
@@ -387,7 +404,7 @@ const REGISTRY: &[OpSpec] = &[
     //
     // A screen road alone. A terminal prints its hits as text and the reader types the ref it read
     // into `show`, so there is nothing there to press.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-hit", required: &["words", "target"], refs: &["target"], strings: &["words"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-hit", required: &["target"], refs: &["target", "number_of"], strings: &["words", "spelled"], binds: false },
     // Onto a smart view, from the row in the sidebar that stands for it. A smart view is a standing
     // selection of tasks and not a project's board, so opening one is a move of its own: what the row
     // says before it is pressed and what the press lands on are two claims about the same view, and
@@ -1201,8 +1218,15 @@ const REGISTRY: &[OpSpec] = &[
     // tells an attachment on a record from an attachment on a remark, the pair a face alone leaves
     // together. `marked` is the run of characters the excerpt has to show marked, which does not
     // survive a pipe at all: a highlight is a pair of offsets in `--json` and paint on the screen.
-    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter", "standing", "landed_on", "marked"], binds: false },
-    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "found", required: &["words", "target"], refs: &["target", "project"], strings: &["words", "face", "only_face", "kind", "filter", "standing", "landed_on", "marked"], binds: false },
+    //
+    // The question is `words`, or `number_of` naming a record whose **number** is asked for instead —
+    // one of the two (see `takes_a_query`), and `spelled` is `bare` or `hash`. A number is a question
+    // no scenario can write as words, the store being the one that issues it, and it is a different
+    // question from a word besides: the record it names is put at the top of the answer whether or not
+    // anything is written on it. `first` is that top — a step naming it asks not only that the record
+    // is among the hits but that it is ahead of what the words matched.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "found", required: &["target"], refs: &["target", "project", "number_of"], strings: &["words", "spelled", "face", "only_face", "kind", "filter", "standing", "landed_on", "marked"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "found", required: &["target"], refs: &["target", "project", "number_of"], strings: &["words", "spelled", "face", "only_face", "kind", "filter", "standing", "landed_on", "marked"], binds: false },
     // The box `filter` is written into, asked whether it can be used at all. The grammar it is read in
     // is the side's own, so with no side chosen there is none for the words to be read in and the box
     // takes nothing — which is a state only a screen has. A flag either arrives on a command line or it
@@ -2930,6 +2954,19 @@ fn may_stand(domain: Domain, op: &str) -> bool {
     PREMISE_OPS.iter().any(|(d, o)| *d == domain && *o == op)
 }
 
+/// The ops whose step carries a query — the words a reader types, or the number of a record they
+/// already hold. It is checked apart from `required` because neither key is required on its own:
+/// exactly one of them is, and a spec can only say that a key must be there.
+///
+/// Why a number is not simply written as words: the store issues it, so a scenario has no way to
+/// know it in advance, and `number_of` names the record instead and leaves the driver to fill it in.
+fn takes_a_query(domain: Domain, op: &str) -> bool {
+    matches!(
+        (domain, op),
+        (Domain::Task, "narrow" | "open-hit" | "found") | (Domain::Decision, "narrow" | "found")
+    )
+}
+
 /// What is wrong with an `offers:` value, if anything — the rows a stood catalog publishes.
 ///
 /// Two words are a row's floor: the `name` it is fetched and badged by, and the `desc` a row draws
@@ -3296,8 +3333,42 @@ impl Scenario {
             // cannot work without, `away` whether a word said in a pane is armed and left behind,
             // `folded` whether the ref being pressed in a pane is one the fold broke across two
             // rows, `asks` whether the press that opens a pane meets the question of which folder
-            // rather than a pane, and the two key questions whether a catalog serves a signing key
-            // and whether one of its is pinned.
+            // rather than a pane, the two key questions whether a catalog serves a signing key and
+            // whether one of its is pinned, and `first` whether a hit stands at the top of the
+            // answer rather than merely somewhere in it.
+            // The query, in whichever of its two spellings — one of them, never both and never
+            // neither. `spelled` belongs to the number alone: a word is typed as it is written, so a
+            // step naming a shape for one is a step that means a number and left the record out.
+            if takes_a_query(step.domain(), step.op()) {
+                let words = step.with().contains_key("words");
+                let numbered = step.with().contains_key("number_of");
+                if words && numbered {
+                    errs.push(at(i, "`words` and `number_of` are the one query written two ways — name one of them".to_string()));
+                } else if !words && !numbered {
+                    errs.push(at(i, "the query is missing — write `words`, or `number_of` naming the record whose number is typed".to_string()));
+                }
+                if step.with().contains_key("spelled") && !numbered {
+                    errs.push(at(i, "`spelled` is the shape a number is typed in, so it belongs with `number_of`".to_string()));
+                }
+                if let Some(v) = step.with().get("spelled") {
+                    if !matches!(v.as_str(), Some("bare" | "hash")) {
+                        errs.push(at(i, "`spelled` must be `bare` (`12`) or `hash` (`#12`)".to_string()));
+                    }
+                }
+            }
+
+            // A number written into text needs text to be written into. On an update that is a title
+            // or a notes field, and a step that named neither would be asking for a number to be put
+            // nowhere.
+            if step.domain() == Domain::Task
+                && step.op() == "update"
+                && step.with().contains_key("mentions")
+                && !step.with().contains_key("notes")
+                && !step.with().contains_key("title")
+            {
+                errs.push(at(i, "`mentions` writes a number into text, so it needs a `notes` or a `title` to write it into".to_string()));
+            }
+
             for key in [
                 "present",
                 "ok",
@@ -3308,6 +3379,7 @@ impl Scenario {
                 "asks",
                 "publishes_key",
                 "pinned_key",
+                "first",
             ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
@@ -3597,6 +3669,61 @@ steps_cli:
 "#;
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("`task: ghost` does not resolve")));
+    }
+
+    /// The query is one thing written two ways, and a step names one of them. Neither is `required`
+    /// on its own, so this is the check that keeps a road from asking for nothing — or from asking
+    /// for two things and leaving the driver to pick.
+    #[test]
+    fn a_search_step_names_one_query_and_not_two_or_none() {
+        let road = |with: &str| {
+            format!(
+                "id: x\ntitle: y\nsteps_cli:\n  - type: action\n    domain: task\n    op: create\n    with: {{ title: T }}\n    as: seed\n  - type: assert\n    domain: task\n    op: found\n    with: {{ target: seed, {with} }}\n"
+            )
+        };
+        let errs = |with: &str| {
+            load_str(&road(with)).unwrap().validate().unwrap_err().iter().map(|e| e.message.clone()).collect::<Vec<_>>().join(" / ")
+        };
+
+        load_str(&road("words: SEED")).unwrap().validate().expect("words alone is a query");
+        load_str(&road("number_of: seed")).unwrap().validate().expect("a record's number is the other one");
+        load_str(&road("number_of: seed, spelled: hash")).unwrap().validate().expect("and it may say which shape");
+
+        assert!(
+            errs("words: SEED, number_of: seed").contains("one query written two ways"),
+            "both at once leaves the driver to pick: {}", errs("words: SEED, number_of: seed")
+        );
+        assert!(errs("present: true").contains("the query is missing"), "neither asks for nothing");
+        assert!(
+            errs("words: SEED, spelled: hash").contains("belongs with `number_of`"),
+            "a shape with no number is a step that meant one"
+        );
+        assert!(errs("number_of: seed, spelled: sideways").contains("`bare`"), "and the shapes are two");
+        assert!(errs("number_of: ghost").contains("does not resolve"), "the record is a binding like any other");
+    }
+
+    /// A number written into one record's text is how a road shows that a number is still asked as a
+    /// word: the store issues it, so there is no other way for a scenario to put one record's number
+    /// inside another's. It needs text to land in, and the record it names is a binding like any other.
+    #[test]
+    fn a_number_written_into_text_needs_text_to_land_in() {
+        let road = |with: &str| {
+            format!(
+                "id: x\ntitle: y\nsteps_cli:\n  - type: action\n    domain: task\n    op: create\n    with: {{ title: T }}\n    as: seed\n  - type: action\n    domain: task\n    op: update\n    with: {{ target: seed, {with} }}\n"
+            )
+        };
+        let errs = |with: &str| {
+            load_str(&road(with)).unwrap().validate().unwrap_err().iter().map(|e| e.message.clone()).collect::<Vec<_>>().join(" / ")
+        };
+
+        load_str(&road("notes: SEE, mentions: seed")).unwrap().validate().expect("notes is text to land in");
+        load_str(&road("title: SEE, mentions: seed")).unwrap().validate().expect("and so is a title");
+
+        assert!(
+            errs("due: today, mentions: seed").contains("needs a `notes` or a `title`"),
+            "a day is not text: {}", errs("due: today, mentions: seed")
+        );
+        assert!(errs("notes: SEE, mentions: ghost").contains("does not resolve"), "the record is a binding");
     }
 
     #[test]

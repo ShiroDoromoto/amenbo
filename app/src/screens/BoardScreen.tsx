@@ -79,9 +79,11 @@ const DONE_COLUMN_CAP = 20;
  * (the whole store is never held), and column grouping and the filter chips are layered on client-side (bounded
  * by the size of a project).
  *
- * **The search is core's, not the client's.** When the box recognises a task ref (`AMB-T-<n>`, or the bare
- * `#<n>` / `T-<n>`) it narrows to that number without asking core at all; anything else goes to `task_search`
- * ({@link useTaskSearchIds}) and comes back as the ids to narrow the page by. It has to: the word index spans
+ * **The search is core's, not the client's.** A task ref (`AMB-T-<n>`, the bare `#<n>` / `T-<n>`, or — this
+ * box reading the task side — a number alone) pins that task without asking core at all. The pin is added
+ * rather than substituted (`AMB-D-833`): the query still goes to `task_search`
+ * ({@link useTaskSearchIds}) and comes back as the ids to narrow the page by, so a number written in
+ * someone's notes reaches them below the task it names. It has to: the word index spans
  * five faces — title, notes, raw comment bodies, the labels the task was placed on, and the names of what is
  * attached to it — and a card carries only the first two (a comment is a count here, not a body). The term
  * goes over structurally rather than through this page's filter, so a phrase survives the trip: the filter
@@ -181,10 +183,13 @@ export function BoardScreen({
   }, [armMove, store]);
   const project = dataAdapter.getProject(projectId);
   const rawQ = search.trim();
-  const ref = parseRefQuery(search);
-  // A ref query is answered here, so it never becomes a text search: `T-12` is a number, not a word to look
-  // for. `null` back from the hook is "nothing was asked", which is not the same as "nothing matched".
-  const { hits, error: searchError } = useTaskSearchIds(projectId, ref ? "" : rawQ);
+  // This box searches tasks, so a number with no type code on it is a task ref (`AMB-D-833`) — the side
+  // the decisions list reads the other way.
+  const ref = parseRefQuery(search, "task");
+  // The words are asked for whether or not the query is also a ref: the pin sits on top of what they
+  // match, it does not stand in for it. `null` back from the hook is "nothing was asked", which is not the
+  // same as "nothing matched".
+  const { hits, error: searchError } = useTaskSearchIds(projectId, rawQ);
   const { tasks: all } = useTaskPage({ projectId, sort: "order" });
   // The board is the task side, so an axis narrowed to decisions is not one of its axes at all
   // (`AMB-D-789`) — filtered once, here, and everything downstream follows: the filter chips, the
@@ -263,11 +268,16 @@ export function BoardScreen({
   // How many axes are actually narrowing, counted over the axes that exist: a selection left behind by a
   // deleted dimension narrows nothing and must not be counted as if it did.
   const narrowedAxes = dims.filter((d) => (sel[d.id]?.length ?? 0) > 0).length;
+  // The pinned task is kept whatever the words did, and drawn ahead of them — in the flat list it is the
+  // first row, and in the columns the first card of its own. The sort is stable, so everything the words
+  // matched keeps the order the page came in.
+  const pinnedId = ref?.space === "task" ? ref.num : null;
   const tasks = all
     .filter((t) => passesFilters(t, dims, sel))
     .filter((t) =>
-      ref ? ref.space === "task" && Number(t.id) === ref.num : hits === null || hits.has(Number(t.id)),
-    );
+      Number(t.id) === pinnedId || hits === null || hits.has(Number(t.id)),
+    )
+    .sort((a, b) => Number(Number(b.id) === pinnedId) - Number(Number(a.id) === pinnedId));
   // view=list (the flat list) is windowed by the pager, which resets to the first page when the view or filters
   // change. usePager is a Hook, so it has to sit above the early-return guard below: if the open project is
   // deleted and `project` flips defined→undefined, the number of Hooks must stay the same (Rules of Hooks — a

@@ -429,6 +429,33 @@ impl Instructor {
             .unwrap_or("task")
     }
 
+    /// What a step has the operator put into a box: the `words` it wrote, or — where it wrote
+    /// `number_of` instead — a number, said by the record that carries it rather than by the number
+    /// itself. The store issues that number and these lines are rendered from the YAML alone, so the
+    /// operator is sent to read it off the screen; `spelled` is the shape it goes in as.
+    fn typed(&self, with: &Args) -> Result<String, String> {
+        let Some(name) = with.get("number_of").and_then(|v| v.as_str()) else {
+            return Ok(format!("\"{}\"", req(with, "words")?));
+        };
+        let label = self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>"));
+        let noun = self.kinds.get(name).map(|k| k.noun()).unwrap_or("task");
+        Ok(match arg_str(with, "spelled") {
+            Some("hash") => format!("the number of the {noun} \"{label}\" with a `#` in front of it"),
+            _ => format!("the number of the {noun} \"{label}\" and nothing else"),
+        })
+    }
+
+    /// What a step's `mentions` adds to the end of a text it writes: the number of a record, said by
+    /// the record rather than by the number, which is what the operator reads off the screen. The store
+    /// issues that number and these lines are rendered before any world stands up, so there is nothing
+    /// else to name it by. Left out, nothing is added.
+    fn mentioning(&self, with: &Args) -> String {
+        let Some(name) = with.get("mentions").and_then(|v| v.as_str()) else { return String::new() };
+        let label = self.labels.get(name).cloned().unwrap_or_else(|| format!("<{name}>"));
+        let noun = self.kinds.get(name).map(|k| k.noun()).unwrap_or("task");
+        format!(", followed by the number of the {noun} \"{label}\"")
+    }
+
     /// One step → one instruction. Fails closed on a registry op this harness has not mapped yet
     /// — the same contract the CLI driver keeps, so a new op surfaces loudly here too rather than
     /// walking past with a blank instruction. An action also records the label later steps read by.
@@ -625,6 +652,12 @@ impl Instructor {
     /// listed a second time on that same screen, among the ones bound to the project, so a reading of
     /// the name would pass over a build that dropped the inventory and kept the binding.
     ///
+    /// `found` is a `Review` on the one reading of it that is about order — a step carrying `first`,
+    /// which asks that the record a number names leads the answer rather than sitting anywhere in it.
+    /// A reading answers which words are on a shot and never which line they were on, so passing such a
+    /// step on its presence would read green off a build that had stopped putting the pin on top. Every
+    /// other `found` keeps its expectation.
+    ///
     /// `narrowing-shut` is a `Review`, and doubly so. What it is about is a box refusing the hand, which
     /// leaves no text on a shot either way — and what tells a box shut from a box merely empty is the
     /// words standing in it in place of an example, which are the interface's own and would hold this
@@ -721,6 +754,11 @@ impl Instructor {
             {
                 None
             }
+            // Where a hit stands in the answer is not something a reading gives back — it answers
+            // which words are on the shot, and every one of them is on it whichever line it took. A
+            // step asking for the top is left for an eye rather than passed on its presence, which
+            // would read green off a build that had stopped pinning anything.
+            (Domain::Task, "found") | (Domain::Decision, "found") if first(with) => None,
             (Domain::Task, "listed")
             | (Domain::Task, "narrowed")
             | (Domain::Task, "view-lists")
@@ -916,17 +954,26 @@ impl Instructor {
                 req(with, "assignee")?
             ),
             (Domain::Task, "comment") => format!(
-                "Open the task \"{}\" and add the comment \"{}\".",
+                "Open the task \"{}\" and add the comment \"{}\"{}.",
                 self.target_label(with),
-                req(with, "text")?
+                req(with, "text")?,
+                self.mentioning(with)
             ),
             // The op names whichever of a task's own fields the step is setting, so the instruction names
             // those and no others: a line that recited the whole form would have the operator wondering
             // what to put in the fields the road never mentioned.
             (Domain::Task, "update") => {
+                // The number a `mentions` asks for lands in the two fields that carry text, and the
+                // loader has already held the step to naming one of them.
+                let mentioned = self.mentioning(with);
                 let set: Vec<String> = ["title", "notes", "due", "start", "priority"]
                     .iter()
-                    .filter_map(|k| arg_str(with, k).map(|v| format!("its {k} to \"{v}\"")))
+                    .filter_map(|k| {
+                        arg_str(with, k).map(|v| match *k {
+                            "title" | "notes" => format!("its {k} to \"{v}\"{mentioned}"),
+                            _ => format!("its {k} to \"{v}\""),
+                        })
+                    })
                     .collect();
                 if set.is_empty() {
                     return Err("action `update` names no field to set".to_string());
@@ -1018,8 +1065,16 @@ impl Instructor {
             // are: the screen it arrives at is the whole of the road, so it is photographed rather than
             // taken on trust.
             (Domain::Task, "narrow") => format!(
-                "On the board, type \"{}\" into the search box over the columns.",
-                req(with, "words")?
+                "On the board, type {} into the search box over the columns.",
+                self.typed(with)?
+            ),
+            // The same box on the decisions tab. It is written out rather than shared with the board's,
+            // for the reason that tab's other moves are: the box sits over the decisions and not over the
+            // columns, and a line that did not say which of the two an operator is standing at could be
+            // walked on either.
+            (Domain::Decision, "narrow") => format!(
+                "On the decisions tab, type {} into the search box over the rows.",
+                self.typed(with)?
             ),
             // The other narrowing on that board, opened and folded from the one control it has. The line
             // names that control by what it does rather than by its wording, the way every button here is
@@ -1063,8 +1118,8 @@ impl Instructor {
             // asking is part of the move rather than a step of its own: a hit cannot be pressed before
             // it is drawn, and what the shot after this catches is where the press landed.
             (Domain::Task, "open-hit") => format!(
-                "Take the face that searches across every record, search it for \"{}\", and press the ref on the hit for \"{}\".",
-                req(with, "words")?,
+                "Take the face that searches across every record, search it for {}, and press the ref on the hit for \"{}\".",
+                self.typed(with)?,
                 self.target_label(with)
             ),
             // Onto a smart view. The row is named by what it stands for and not by its label: the
@@ -2497,7 +2552,7 @@ impl Instructor {
             // move to arrive at — the words, the narrowing and the reading are one thing a reader does.
             (Domain::Task, "found") | (Domain::Decision, "found") => {
                 let side = if domain == Domain::Task { "task" } else { "decision" };
-                let mut line = format!("Ask the cross-cutting search for \"{}\"", req(with, "words")?);
+                let mut line = format!("Ask the cross-cutting search for {}", self.typed(with)?);
                 if let Some(kind) = arg_str(with, "kind") {
                     line.push_str(&format!(", narrowed to {kind}"));
                 }
@@ -2525,6 +2580,11 @@ impl Instructor {
                 ));
                 if let Some(face) = arg_str(with, "face") {
                     line.push_str(&format!(", on its {face}"));
+                }
+                // Where in the answer it stands. The eye's, for the reason every other ordering here is:
+                // a reading says which words are on the shot and never which line they were on.
+                if first(with) {
+                    line.push_str(", and that its row is the first of the answer, ahead of whatever the words matched");
                 }
                 // What the row says about the record it points at, which the eye closing the shot reads
                 // off the same line as the ref.
@@ -3946,6 +4006,12 @@ fn grouping(with: &Args) -> bool {
     with.get("grouping").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
+/// Whether a `found` step asks for the top of the answer rather than merely a place in it. Off unless
+/// written, the way every other reading of the shape a step wants is.
+fn first(with: &Args) -> bool {
+    with.get("first").and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
 /// Render an arbitrary scalar arg for display: a string as itself, anything else through YAML so
 /// `equals: false` reads `false` and `equals: 3` reads `3`.
 fn show(v: &serde_yaml::Value) -> String {
@@ -4305,6 +4371,144 @@ steps_gui:
         assert!(lines[0].contains("Create a task titled \"SEED\""));
         assert!(lines[1].contains("\"SEED\"") && lines[1].contains("me-ai"));
         assert!(lines[2].contains("\"SEED\"") && lines[2].contains("present in"));
+    }
+
+    /// A number the store issues is nothing a road could write, and nothing these lines could print:
+    /// they are rendered from the YAML alone, before any world stands up. So the operator is sent to
+    /// the record instead and reads the number off the screen, and the shape it goes in as is said.
+    #[test]
+    fn a_number_is_named_by_the_record_that_carries_it() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: task
+    op: narrow
+    with: { number_of: seed }
+  - type: assert
+    domain: task
+    op: found
+    with: { number_of: seed, spelled: hash, target: seed, first: true }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[1].contains("the number of the task \"SEED\"") && !lines[1].contains("`#`"),
+            "got: {}", lines[1]
+        );
+        assert!(lines[2].contains("the number of the task \"SEED\"") && lines[2].contains("`#`"), "got: {}", lines[2]);
+        assert!(lines[2].contains("first of the answer"), "and the top is what the step asks for: {}", lines[2]);
+    }
+
+    /// The two boxes that read one side each. A number carrying no type code is whichever side the box
+    /// it was typed into reads, so the line has to say which of the two tabs the operator is standing
+    /// at — one that named neither could be walked on either.
+    #[test]
+    fn the_two_boxes_that_read_one_side_each_are_told_apart() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: decision
+    op: create
+    with: { title: WHY }
+    as: why
+  - type: action
+    domain: task
+    op: narrow
+    with: { number_of: seed }
+  - type: action
+    domain: decision
+    op: narrow
+    with: { number_of: why }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[2].contains("On the board") && lines[2].contains("over the columns"), "got: {}", lines[2]);
+        assert!(
+            lines[3].contains("On the decisions tab") && lines[3].contains("the number of the decision \"WHY\""),
+            "got: {}", lines[3]
+        );
+    }
+
+    /// A number written into another record's text is said the same way a number typed into a box is:
+    /// by the record that carries it, the operator reading it off the screen.
+    #[test]
+    fn a_number_written_into_text_is_named_by_the_record_that_carries_it() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: task
+    op: create
+    with: { title: OTHER }
+    as: other
+  - type: action
+    domain: task
+    op: update
+    with: { target: other, notes: SEE, mentions: seed }
+  - type: action
+    domain: task
+    op: comment
+    with: { target: other, text: SEE, mentions: seed }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        for line in &lines[2..] {
+            assert!(
+                line.contains("followed by the number of the task \"SEED\""),
+                "got: {line}"
+            );
+        }
+    }
+
+    /// Where a hit stands is not something a reading gives back, so that step is left for an eye —
+    /// while every other `found` keeps the expectation the reader closes it with.
+    #[test]
+    fn the_top_of_an_answer_is_left_for_an_eye() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: assert
+    domain: task
+    op: found
+    with: { number_of: seed, target: seed, first: true }
+  - type: assert
+    domain: task
+    op: found
+    with: { number_of: seed, target: seed }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        for st in steps {
+            ins.render(st).unwrap();
+        }
+        assert!(ins.expectation(&steps[1]).is_none(), "the top of the answer is the eye's to close");
+        assert!(ins.expectation(&steps[2]).is_some(), "and merely being in it is still read");
     }
 
     /// A setting the plugin fills in for itself: what the operator is asked to confirm is an absence,

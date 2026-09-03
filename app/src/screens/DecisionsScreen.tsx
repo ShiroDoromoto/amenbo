@@ -111,16 +111,23 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   // deleted dimension narrows nothing and must not be counted as if it did.
   const narrowedAxes = dims.filter((d) => (sel[d.id]?.length ?? 0) > 0).length;
   const q = search.trim();
-  const ref = parseRefQuery(search);
-  // A ref query is answered here, so it never becomes a text search: `D-12` is a number, not a word to look
-  // for. `null` back from the hook is "nothing was asked", which is not the same as "nothing matched".
-  const { hits, error: searchError } = useDecisionSearchIds(projectId, ref ? "" : q);
+  // This box searches decisions, so a number with no type code on it is a decision ref (`AMB-D-833`) —
+  // the side the board reads the other way.
+  const ref = parseRefQuery(search, "decision");
+  // The words are asked for whether or not the query is also a ref: the pin sits on top of what they
+  // match, it does not stand in for it. `null` back from the hook is "nothing was asked", which is not the
+  // same as "nothing matched".
+  const { hits, error: searchError } = useDecisionSearchIds(projectId, q);
+  // The pinned decision is kept whatever the words did, and drawn ahead of them — it is the first row, and
+  // the chosen sort orders everything below it.
+  const pinnedId = ref?.space === "decision" ? ref.num : null;
   const shown = decisions
     .filter((d) => passesFilters(d, dims, sel))
     .filter((d) =>
-      ref ? ref.space === "decision" && Number(d.id) === ref.num : hits === null || hits.has(Number(d.id)),
+      Number(d.id) === pinnedId || hits === null || hits.has(Number(d.id)),
     )
-    .sort((a, b) => compareDecisions(a, b, sort));
+    .sort((a, b) => compareDecisions(a, b, sort))
+    .sort((a, b) => Number(Number(b.id) === pinnedId) - Number(Number(a.id) === pinnedId));
   // Paging sits outside filtering and sorting: change the filter, the search or the sort and we return to the first page.
   const pager = usePager(shown, `${projectId}|${selectionKey(sel)}|${sort}|${q}`);
   // One value on one axis, turned on or off. Selecting is what composes the question (`AMB-D-655`), so

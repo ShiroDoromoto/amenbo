@@ -25,7 +25,7 @@ vi.mock("../core/boundFolders", () => ({
 }));
 
 import { TerminalFace } from "./TerminalFace";
-import { RAIL_DEFAULT, SIDE_DEFAULT } from "../talk/columns";
+import { RAIL_DEFAULT, SIDE_NARROW_DEFAULT } from "../talk/columns";
 import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -72,7 +72,7 @@ describe("the columns beside the panes", () => {
     expect(q(".termface__column--side")).not.toBeNull();
     const style = (q(".termface") as HTMLElement).style;
     expect(style.getPropertyValue("--rail-w")).toBe(`${RAIL_DEFAULT}px`);
-    expect(style.getPropertyValue("--side-w")).toBe(`${SIDE_DEFAULT}px`);
+    expect(style.getPropertyValue("--side-w")).toBe(`${SIDE_NARROW_DEFAULT}px`);
   });
 
   it("each carry the edge their width is dragged by", async () => {

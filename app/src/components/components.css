@@ -398,6 +398,10 @@
 
 /* A market row is the way into the detail, so it says so on hover — the click is what costs a request
    to GitHub (`AMB-D-347`), and a row that looked inert would hide that. */
+/* The name of an installed plugin, heading the crossings listed under it: a step up from the row's
+   own words, or "mail" and "slack" read as one more line of the list (`AMB-D-842`). */
+.plugname { font-size: var(--fs-body); font-weight: var(--fw-bold); }
+
 .plugcard { cursor: pointer; }
 .plugcard:hover { background: var(--c-hover); }
 
@@ -425,13 +429,42 @@
 .pluggate .pluggate { margin-bottom: 0; }
 /* One project × plugin crossing (`AMB-D-447`): its line, and the settings it opens underneath. Ruled off
    from the next crossing, since two rows of chips and buttons otherwise read as one. */
-.plugcross { border-left: 2px solid var(--c-rule); padding-left: var(--s-2); margin-bottom: var(--s-2); }
+.plugcross { border-left: 2px solid var(--c-rule); padding: var(--s-1) var(--s-2); margin-bottom: var(--s-2); }
+/* A crossing the plugin fires at: the accent down its left edge and a ground under the whole row, so
+   which projects are on is read by running the eye down the list rather than by finding the word on
+   each line. The word stays where it was — a colour is not a label, and the row still has to say what
+   it is to anyone the colour does not reach. */
+.plugcross--on { border-left-color: var(--c-accent); background: var(--c-sunken); }
+/* Every crossing draws the same four columns — the project, what its settings amount to, the switch,
+   and the way into the form — so the switch stands in one place down the list however long a name
+   runs. The width left over is a column of its own at the end rather than space handed to the states,
+   which would push the controls to the far edge of a wide window and away from the row they act on.
+   Only the crossings: the other rows that share `.pluggate` are one-off lines of controls. */
+.plugcross > .pluggate {
+  display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 12rem) auto auto 1fr;
+  align-items: center; column-gap: var(--s-2); row-gap: var(--s-1);
+}
+/* What the row says under itself — a refusal, or the events a disable dropped — runs the whole width. */
+.plugcross > .pluggate > .pluggate__note { grid-column: 1 / -1; }
+/* The chips of the states column, held as one cell so an absent chip does not move the columns. */
+.pluggate__states { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .pluggate__note { flex-basis: 100%; color: var(--c-heed); font-size: var(--fs-xs); }
 /* The settings a plugin's author declared (`AMB-D-356`), drawn as a form amenbo generates. Set inside a
    frame of its own: it is a place to type, not another control on the row's line. */
 .plugcfg { flex-basis: 100%; border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-bg); padding: var(--s-2); margin-bottom: var(--s-2); font-size: var(--fs-md); }
-.plugcfg__field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-2); align-items: flex-start; }
-.plugcfg__field input { width: 100%; }
+/* One setting, ruled off from the next: the button that clears a value sits under the box it clears,
+   and without a line under the pair it reads as belonging to the label below it instead. */
+.plugcfg__field {
+  display: flex; flex-direction: column; gap: var(--s-1); align-items: flex-start;
+  border-bottom: 1px solid var(--c-rule); padding-bottom: var(--s-2); margin-bottom: var(--s-2);
+}
+/* The last one has nothing to be told apart from: the operations below carry a rule of their own. */
+.plugcfg__field:last-child, .plugcfg__field:has(+ .plugcfg__acts) { border-bottom: 0; }
+/* A box a value is typed into takes the form width and stops there (`AMB-D-842`) — unless the author's
+   own default or example says the value is a short one, and then it is only as wide as that: a port
+   number in a box the width of a token reads as a box waiting for a token. */
+.plugcfg__field input { width: 100%; max-width: var(--measure-form); }
+.plugcfg__field input.plugcfg__short { width: auto; }
 .plugcfg__label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
 /* A field whose author declared candidates: one row per candidate, each box only as wide as a box.
    The rule above stretches every input in the field to the field's width, and a tick box stretched

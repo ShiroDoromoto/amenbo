@@ -13,9 +13,15 @@
   --c-sunken: #f1efe9;
   --c-hover: #f0ede6;
 
+  /* ----- the two jobs a line does (`AMB-D-840`) -----
+     A control's outline has to be found before it can be used, so it carries the 3:1 the outline of
+     a component is asked for; a divider only has to be seen once the eye is already on the page.
+     Held as one token, the two pull against each other: raised to 3:1 the dividers turn the screen
+     into a grid, and set where a divider belongs the outlines disappear. */
+  --c-edge: #91876d; /* the outline of a control — input, button, checkbox */
+  --c-rule: #beb6a3; /* a divider — a row's underline, a card's edge */
+
   /* ----- color: neutral (warm gray) ----- */
-  --c-border: #e4e1d9;
-  --c-border-strong: #d2cec3;
   --c-text: #23211c;
   --c-text-muted: #6f6a5e;
   --c-text-faint: #9b958a;
@@ -135,8 +141,8 @@
   --c-surface: #242320;
   --c-sunken: #1f1e1b;
   --c-hover: #2c2b27;
-  --c-border: #3a3833;
-  --c-border-strong: #4c4a43;
+  --c-edge: #787569;
+  --c-rule: #514f48;
   --c-text: #ece9e1;
   --c-text-muted: #a8a399;
   --c-text-faint: #7d786e;

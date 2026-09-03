@@ -69,7 +69,7 @@
 .field { display: flex; flex-direction: column; gap: var(--s-2); }
 /* The box a reader types into. */
 .textinput {
-  padding: var(--s-2); border: 1px solid var(--c-border); border-radius: var(--r-md);
+  padding: var(--s-2); border: 1px solid var(--c-edge); border-radius: var(--r-md);
   font-size: var(--fs-md); background: var(--c-surface); color: var(--c-text); outline: none;
 }
 .textinput:focus { border-color: var(--c-accent); }
@@ -98,7 +98,7 @@
    character at a time. The label that names the chips beside it is a name, so it holds its line too. */
 .board__toolbar {
   display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; row-gap: var(--s-2);
-  padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-border); background: var(--c-sunken);
+  padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); background: var(--c-sunken);
 }
 .board__toolbar > .faint { white-space: nowrap; }
 .board__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-right: var(--s-2); }
@@ -107,28 +107,28 @@
 .viewtab--active { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-medium); box-shadow: var(--shadow-sm); }
 /* A vertical separator plus a standalone button, setting the view switcher apart from
    decisions (a different kind of entity). */
-.board__sep { align-self: stretch; width: 1px; margin: var(--s-1) 0; background: var(--c-border); }
-.decisionsbtn { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-border); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
+.board__sep { align-self: stretch; width: 1px; margin: var(--s-1) 0; background: var(--c-rule); }
+.decisionsbtn { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
 .decisionsbtn--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 /* Under-discussion (proposed) decision count on the decisions button. Standalone (not the sidebar's task+decision sum), since this surface is the decisions face. */
 .decisionsbtn__count { font-size: var(--fs-xs); color: var(--c-text-faint); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
 .decisionsbtn--active .decisionsbtn__count { background: var(--c-surface); }
-.filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-border); flex-wrap: wrap; }
+.filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); flex-wrap: wrap; }
 /* A chip is a name, so it is never squeezed: it keeps its own size (`flex: none`) and its label stays on
    one line. Left to shrink, a chip in a row that has lost width — the board's group row once the detail
    pane opens beside it — breaks its label a character at a time and reads as nothing. The rows that hold
    chips wrap instead. */
-.filterchip { font-size: var(--fs-xs); border: 1px solid var(--c-border); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-2); color: var(--c-text-muted); flex: none; white-space: nowrap; }
+.filterchip { font-size: var(--fs-xs); border: 1px solid var(--c-edge); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-2); color: var(--c-text-muted); flex: none; white-space: nowrap; }
 .filterchip--on { border-color: var(--c-accent); color: var(--c-accent-text); background: var(--c-accent-weak); }
 /* The filters, opened under the bar. One axis per line: a row of values is as wide as it needs to be,
    and axes read down the panel rather than running into one another. */
-.filterpanel { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-border); background: var(--c-sunken); }
+.filterpanel { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); background: var(--c-sunken); }
 .filterpanel__axis { display: flex; align-items: baseline; gap: var(--s-2); }
 .filterpanel__label { font-size: var(--fs-xs); flex: none; min-width: 6em; }
 .filterpanel__values { display: flex; align-items: center; gap: var(--s-1); flex-wrap: wrap; }
 /* The toggle that opens them, carrying how many axes narrow while they are closed. Built like the
    decisions button beside it — both are standing controls in the toolbar. */
-.filtertoggle { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-border); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
+.filtertoggle { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-edge); background: var(--c-surface); padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
 .filtertoggle--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 .filtertoggle__count { font-size: var(--fs-xs); color: var(--c-text-faint); background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
 .filtertoggle--active .filtertoggle__count { background: var(--c-surface); }
@@ -145,7 +145,7 @@
 .column__addbtn {
   margin-left: auto; width: 22px; height: 22px; flex: none;
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--c-border); border-radius: var(--r-sm);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
   background: var(--c-surface); color: var(--c-text-muted); cursor: pointer; line-height: 1;
 }
 .column__addbtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
@@ -154,7 +154,7 @@
 .board__addcol {
   width: 200px; flex: none; align-self: flex-start;
   text-align: left; font-size: var(--fs-sm); color: var(--c-text-faint);
-  border: 1px dashed var(--c-border-strong); background: none; border-radius: var(--r-md); padding: var(--s-2) var(--s-2);
+  border: 1px dashed var(--c-edge); background: none; border-radius: var(--r-md); padding: var(--s-2) var(--s-2);
 }
 .board__addcol:hover { color: var(--c-accent); border-color: var(--c-accent); }
 .column__addinput { border: 1px solid var(--c-accent); border-radius: var(--r-md); padding: var(--s-2) var(--s-2); font-size: var(--fs-md); outline: none; }
@@ -168,7 +168,7 @@
 .column__seeall {
   text-align: center; width: 100%; padding: var(--s-2);
   font-size: var(--fs-sm); color: var(--c-text-muted);
-  background: none; border: 1px dashed var(--c-border); border-radius: var(--r-md); cursor: pointer;
+  background: none; border: 1px dashed var(--c-edge); border-radius: var(--r-md); cursor: pointer;
 }
 .column__seeall:hover { color: var(--c-accent); border-color: var(--c-accent); }
 .column--droppable { min-height: 72px; border-radius: var(--r-md); transition: background 0.1s ease; }
@@ -187,7 +187,7 @@
 /* ---------- card ---------- */
 .card {
   text-align: left; width: 100%;
-  background: var(--c-surface); border: 1px solid var(--c-border);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
   border-radius: var(--r-md); padding: var(--s-2); box-shadow: var(--shadow-sm);
   display: flex; flex-direction: column; gap: var(--s-2);
   /* Render windowing: a card off screen skips layout and paint while keeping its DOM and
@@ -196,7 +196,7 @@
   content-visibility: auto;
   contain-intrinsic-size: auto 110px;
 }
-.card:hover { border-color: var(--c-border-strong); }
+.card:hover { border-color: var(--c-edge); }
 .card--selected { border-color: var(--c-accent); box-shadow: 0 0 0 1px var(--c-accent); }
 .card--closed .card__title { color: var(--c-text-faint); text-decoration: line-through; }
 .card__title { font-size: var(--fs-md); font-weight: var(--fw-medium); overflow-wrap: anywhere; }
@@ -207,7 +207,7 @@
 /* A compact select sat inline among a card's or row's chips (the status control, a dimension value). */
 .inlineselect {
   font-size: var(--fs-xs); color: var(--c-text); background: var(--c-surface);
-  border: 1px solid var(--c-border-strong); border-radius: var(--r-sm); padding: 0 2px; cursor: pointer;
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm); padding: 0 2px; cursor: pointer;
 }
 /* The axis the board is grouped by. Its row is what the detail pane takes width from (the toolbar above
    spans the pane, this does not), so it folds onto a second line rather than crushing the buttons — the
@@ -260,20 +260,20 @@
 }
 .markdown code {
   font-family: var(--font-mono); font-size: 0.92em;
-  background: var(--c-surface); border: 1px solid var(--c-border);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
   border-radius: var(--r-sm); padding: 0 0.3em;
 }
 .markdown pre {
-  background: var(--c-surface); border: 1px solid var(--c-border);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
   border-radius: var(--r-md); padding: var(--s-2); overflow-x: auto;
 }
 .markdown pre code { background: none; border: none; padding: 0; }
 /* Other GFM block elements. Token-driven, so dark/light follow automatically. */
 .markdown blockquote {
   margin: var(--s-2) 0; padding-left: var(--s-2);
-  border-left: 3px solid var(--c-border-strong); color: var(--c-text-muted);
+  border-left: 3px solid var(--c-rule); color: var(--c-text-muted);
 }
-.markdown hr { border: none; border-top: 1px solid var(--c-border); margin: var(--s-3) 0; }
+.markdown hr { border: none; border-top: 1px solid var(--c-rule); margin: var(--s-3) 0; }
 /* An image's alt text, drawn in place of the picture (see Markdown.tsx): no image is ever emitted, so
    this is what a README's badge row and any inline figure come out as. inline-block keeps a link's
    underline off it, and the tokens make it read as a quiet label rather than as prose. */
@@ -291,10 +291,10 @@
 .markdown__tablewrap { overflow-x: auto; margin: var(--s-2) 0; }
 .markdown table { border-collapse: collapse; font-size: var(--fs-sm); }
 .markdown th, .markdown td {
-  border: 1px solid var(--c-border); padding: var(--s-1) var(--s-2); text-align: left;
+  border: 1px solid var(--c-rule); padding: var(--s-1) var(--s-2); text-align: left;
 }
 .markdown th {
-  background: var(--c-sunken); border-bottom: 1px solid var(--c-border-strong);
+  background: var(--c-sunken); border-bottom: 1px solid var(--c-rule);
   font-weight: var(--fw-bold);
 }
 .markdown a { color: var(--c-accent); }
@@ -307,7 +307,7 @@
 .markdown .mermaid__note {
   margin: 0 0 var(--s-1); font-size: var(--fs-xs); color: var(--c-text-muted);
 }
-.markdown .mermaid--failed { border-left: 2px solid var(--c-border-strong); padding-left: var(--s-2); }
+.markdown .mermaid--failed { border-left: 2px solid var(--c-rule); padding-left: var(--s-2); }
 /* A reference link inside a body, jumping to its target on click. */
 .markdown a.reflink {
   cursor: pointer; color: var(--c-accent-text);
@@ -320,7 +320,7 @@
 .compose__input {
   width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px;
   font-family: inherit; font-size: var(--fs-sm); line-height: 1.5;
-  border: 1px solid var(--c-border-strong); border-radius: var(--r-md);
+  border: 1px solid var(--c-edge); border-radius: var(--r-md);
   padding: var(--s-2) var(--s-2); background: var(--c-surface); color: var(--c-text); outline: none;
 }
 .compose__input:focus { border-color: var(--c-accent); }
@@ -330,7 +330,7 @@
 /* A clickable chip: the link that navigates to a dependency's blocker. It drops the button
    defaults to keep the chip's look, and turns accent on hover to show it can be pressed. */
 .chip--link { border: 0; cursor: pointer; color: inherit; font-family: inherit; line-height: inherit; }
-.chip--link:hover { background: var(--c-border-strong); color: var(--c-accent); }
+.chip--link:hover { background: var(--c-rule); color: var(--c-accent); }
 /* The chip for a premise that holds a reserve back (ready===false). It carries the shape alone: which
    step it takes is decided per premise where it is drawn (`atoms.tsx`), an unfinished blocker being a
    stop and a start day still ahead a heed. It stays clear of the human-declared status=blocked and its
@@ -371,13 +371,13 @@
 .chip__x:hover { color: var(--c-accent); }
 
 /* The plugin market's catalog panel: one row per registered catalog, plus the row that adds one. */
-.catsrc { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-border); background: var(--c-sunken); }
+.catsrc { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); background: var(--c-sunken); }
 .catsrc__row { display: flex; align-items: center; gap: var(--s-2); }
 .catsrc__url { font-size: var(--fs-xs); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .catsrc__name { font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12em; }
 /* What registering pins, while the user decides (`AMB-D-389`). Set apart from the rows above it,
    because it is a question and they are a list. */
-.catsrc__consent { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface); }
+.catsrc__consent { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2); border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-surface); }
 /* The fingerprint is what is being trusted, so it is read character by character: monospace, and big
    enough to compare against what the publisher states. */
 .catsrc__fp strong { font-family: var(--font-mono); font-size: var(--fs-sm); letter-spacing: 0.04em; user-select: text; }
@@ -390,14 +390,14 @@
 /* The one plugin a user opened: the catalog's own fields, then what was fetched from GitHub for this
    entry alone. Taller than the other modals because a README is the bulk of it, and it scrolls
    inside itself rather than growing the page. */
-.plugdet { width: min(720px, 100%); max-height: 84vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
+.plugdet { width: min(720px, 100%); max-height: 84vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
 .plugdet__head { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2); }
 .plugdet__name { font-size: var(--fs-lg); }
 .plugdet__desc { margin-bottom: var(--s-2); }
 .plugdet__meta { display: flex; gap: var(--s-2); flex-wrap: wrap; font-size: var(--fs-xs); }
 /* What the catalog's detail document says installing would mean (`AMB-D-385`). Set off from the entry's
    own lines above it by a rule, because it is a different document answering a different question. */
-.plugdet__wants { border-top: 1px solid var(--c-border); margin-top: var(--s-2); padding-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-1); }
+.plugdet__wants { border-top: 1px solid var(--c-rule); margin-top: var(--s-2); padding-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-1); }
 .plugdet__figures { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin: var(--s-2) 0; font-size: var(--fs-sm); }
 .plugdet__note { color: var(--c-heed); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
 /* Install, then enable — the two acts, on one line, wrapping rather than pushing the README down. */
@@ -408,11 +408,11 @@
 .pluggate .pluggate { margin-bottom: 0; }
 /* One project × plugin crossing (`AMB-D-447`): its line, and the settings it opens underneath. Ruled off
    from the next crossing, since two rows of chips and buttons otherwise read as one. */
-.plugcross { border-left: 2px solid var(--c-border); padding-left: var(--s-2); margin-bottom: var(--s-2); }
+.plugcross { border-left: 2px solid var(--c-rule); padding-left: var(--s-2); margin-bottom: var(--s-2); }
 .pluggate__note { flex-basis: 100%; color: var(--c-heed); font-size: var(--fs-xs); }
 /* The settings a plugin's author declared (`AMB-D-356`), drawn as a form amenbo generates. Set inside a
    frame of its own: it is a place to type, not another control on the row's line. */
-.plugcfg { flex-basis: 100%; border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-bg); padding: var(--s-2); margin-bottom: var(--s-2); font-size: var(--fs-sm); }
+.plugcfg { flex-basis: 100%; border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-bg); padding: var(--s-2); margin-bottom: var(--s-2); font-size: var(--fs-sm); }
 .plugcfg__field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-2); align-items: flex-start; }
 .plugcfg__field input { width: 100%; }
 .plugcfg__label { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
@@ -429,7 +429,7 @@
 .plugcfg__fixed { font-size: var(--fs-sm); overflow-wrap: anywhere; }
 /* The operations the author declared (`AMB-D-664`), under the fields they act on and ruled off from them:
    these run somebody else's code, where everything above only writes a value down. */
-.plugcfg__acts { border-top: 1px solid var(--c-border); margin-top: var(--s-2); padding-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-2); }
+.plugcfg__acts { border-top: 1px solid var(--c-rule); margin-top: var(--s-2); padding-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-2); }
 .plugcfg__act { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); }
 /* What one press asks for and nothing keeps — indented under its own button, so the boxes read as part of
    the press rather than as more settings. */
@@ -455,8 +455,8 @@
    background is one many scanners will not take. Sized off the form's own type so it grows with it. */
 .plugshow__qr { width: 12rem; max-width: 100%; height: auto; border-radius: var(--r-sm); }
 
-.plugdet__readme { border-top: 1px solid var(--c-border); padding-top: var(--s-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
-.plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-3); padding-top: var(--s-2); font-size: var(--fs-xs); }
+.plugdet__readme { border-top: 1px solid var(--c-rule); padding-top: var(--s-2); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.plugdet__foot { border-top: 1px solid var(--c-rule); margin-top: var(--s-3); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from
    --block (why anyone cannot start it) — this is what changed since *you* took it — so it speaks through
    its own bell mark. Like --block it carries the shape alone and takes its step where it is drawn:
@@ -468,7 +468,7 @@
 .chip--blockglyph { flex: none; cursor: default; margin-right: 2px; }
 /* ---------- detail pane ---------- */
 .detail { display: flex; flex-direction: column; }
-.detail__tabs { display: flex; gap: var(--s-1); padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--c-border); }
+.detail__tabs { display: flex; gap: var(--s-1); padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--c-rule); }
 .detail__tab { border: none; background: none; padding: var(--s-1) var(--s-2); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
 .detail__tab--active { background: var(--c-sunken); color: var(--c-text); font-weight: var(--fw-medium); }
 .detail__body { padding: var(--s-3); display: flex; flex-direction: column; gap: var(--s-3); }
@@ -476,11 +476,11 @@
 .detail__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 .detail__field { display: flex; gap: var(--s-2); font-size: var(--fs-md); align-items: baseline; }
 .detail__flabel { width: 64px; flex: none; color: var(--c-text-faint); font-size: var(--fs-sm); }
-.detail__sep { height: 1px; background: var(--c-border); }
+.detail__sep { height: 1px; background: var(--c-rule); }
 .detail__section-h { font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--c-text-muted); }
 
 /* The attachment view: a drag-and-drop target plus a preview chosen by mime type. */
-.attach__drop { margin-top: var(--s-2); border: 1px dashed var(--c-border); border-radius: var(--r-sm); padding: var(--s-2); }
+.attach__drop { margin-top: var(--s-2); border: 1px dashed var(--c-edge); border-radius: var(--r-sm); padding: var(--s-2); }
 .attach__drop--active { border-color: var(--c-accent); background: var(--c-accent-weak); }
 /* The space-saving attachment right under a comment. Quieter padding and border than a
    body attachment, so it reads as nested under the comment it belongs to. */
@@ -489,7 +489,7 @@
 .attach__compactadd { font-size: var(--fs-xs); }
 .attach__drophint { font-size: var(--fs-sm); padding: var(--s-2); text-align: center; }
 .attach__list { display: flex; flex-direction: column; gap: var(--s-2); }
-.attach__item { border: 1px solid var(--c-border); border-radius: var(--r-sm); padding: var(--s-2); }
+.attach__item { border: 1px solid var(--c-rule); border-radius: var(--r-sm); padding: var(--s-2); }
 .attach__head { display: flex; align-items: center; gap: var(--s-2); }
 .attach__name { font-size: var(--fs-sm); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
 .attach__meta { font-size: var(--fs-2xs); flex: none; }
@@ -503,7 +503,7 @@
 .attach__pre { white-space: pre-wrap; word-break: break-word; background: var(--c-sunken); padding: var(--s-2); border-radius: var(--r-sm); }
 .attach__csvwrap { max-height: 320px; overflow: auto; margin-top: var(--s-2); }
 .attach__csv { border-collapse: collapse; font-size: var(--fs-2xs); }
-.attach__csv th, .attach__csv td { border: 1px solid var(--c-border); padding: 2px 6px; text-align: left; white-space: nowrap; }
+.attach__csv th, .attach__csv td { border: 1px solid var(--c-rule); padding: 2px 6px; text-align: left; white-space: nowrap; }
 .attach__csv th { background: var(--c-sunken); position: sticky; top: 0; }
 .attach__missing, .attach__unsupported, .attach__loading { margin-top: var(--s-2); font-size: var(--fs-sm); }
 .attach__url { margin-top: var(--s-1); font-size: var(--fs-sm); word-break: break-all; }
@@ -515,7 +515,7 @@
   background: var(--c-sunken); padding: 2px var(--s-2); border-radius: var(--r-sm);
 }
 .btn {
-  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  border: 1px solid var(--c-edge); background: var(--c-surface);
   border-radius: var(--r-sm); padding: var(--s-1) var(--s-2); font-size: var(--fs-sm);
 }
 /* A button that cannot be pressed says so before it is pressed: faded, and without the pointer
@@ -532,7 +532,7 @@
 .apick__menu {
   position: absolute; top: calc(100% + 2px); left: 0; z-index: 20; margin: 0; padding: var(--s-1);
   list-style: none; min-width: 100%; background: var(--c-surface);
-  border: 1px solid var(--c-border-strong); border-radius: var(--r-sm);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
 }
 .apick__opt {
@@ -561,7 +561,7 @@
    only within itself, which is what windowing rests on. */
 .feed--virtual { flex: 1; min-height: 0; overflow-y: auto; }
 .feed__daygroup { padding: var(--s-2) var(--s-4) 0; font-size: var(--fs-xs); font-weight: var(--fw-bold); color: var(--c-text-faint); }
-.feed__item { display: flex; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-border); align-items: flex-start; }
+.feed__item { display: flex; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); align-items: flex-start; }
 .feed__item:hover { background: var(--c-hover); }
 .feed__body { flex: 1; min-width: 0; }
 .feed__line { font-size: var(--fs-md); line-height: 1.6; }
@@ -628,7 +628,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .row {
   display: flex; align-items: center; gap: var(--s-2);
   width: 100%; text-align: left; background: none; border: none;
-  padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-border);
+  padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule);
 }
 .row:hover { background: var(--c-hover); }
 .row--selected { background: var(--c-accent-weak); }
@@ -656,7 +656,7 @@ button.feed__target:hover { color: var(--c-accent); }
    concepts apart. */
 .row__actions { flex: none; display: inline-flex; align-items: center; gap: var(--s-2); }
 .row__action {
-  background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-sm); cursor: pointer;
+  background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-sm); cursor: pointer;
   padding: 2px var(--s-2); font-size: var(--fs-sm); line-height: 1.4; white-space: nowrap;
   color: var(--c-text-muted);
 }
@@ -669,7 +669,7 @@ button.feed__target:hover { color: var(--c-accent); }
 
 /* ---------- settings ---------- */
 .settings { padding: var(--s-4); max-width: 720px; display: flex; flex-direction: column; gap: var(--s-4); }
-.settings__section { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); padding: var(--s-3); }
+.settings__section { background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); padding: var(--s-3); }
 .settings__h { font-weight: var(--fw-bold); margin-bottom: var(--s-2); }
 .settings__body { display: flex; flex-direction: column; gap: var(--s-2); }
 /* A section body holding a form rather than rows of fact: its own reading width, and the room between
@@ -710,7 +710,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ---------- the first loop (ask an AI, see it land on the board) ---------- */
 .firstloop {
   display: flex; flex-direction: column; gap: var(--s-3);
-  padding: var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md);
+  padding: var(--s-3); border: 1px solid var(--c-rule); border-radius: var(--r-md);
   background: var(--c-surface);
 }
 .firstloop__head { display: flex; flex-direction: column; gap: 2px; }
@@ -753,7 +753,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .standingrow {
   display: flex; flex-direction: column; gap: var(--s-2);
   padding: var(--s-3);
-  border: 1px solid var(--c-border); border-left: 3px solid var(--c-accent); border-radius: var(--r-md);
+  border: 1px solid var(--c-rule); border-left: 3px solid var(--c-accent); border-radius: var(--r-md);
   background: var(--c-surface); max-width: 720px;
 }
 /* The folders whose AI is not started on amenbo, on the project's own screen: the board's surface
@@ -843,7 +843,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .boardwarn {
   display: flex; flex-direction: column; gap: var(--s-2);
   margin: var(--s-3) var(--s-4) 0; padding: var(--s-3);
-  border: 1px solid var(--c-border); border-left: 3px solid var(--c-heed); border-radius: var(--r-md);
+  border: 1px solid var(--c-rule); border-left: 3px solid var(--c-heed); border-radius: var(--r-md);
   background: var(--c-surface); max-width: 720px;
 }
 .boardwarn__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
@@ -869,7 +869,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .onboard__action {
   display: flex; align-items: flex-start; gap: var(--s-2); text-align: left;
   flex: 1 1 240px; max-width: 300px;
-  background: var(--c-surface); border: 1px solid var(--c-border-strong); border-radius: var(--r-md);
+  background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-md);
   padding: var(--s-2); cursor: pointer; transition: border-color 0.15s, background 0.15s;
 }
 .onboard__action:hover { border-color: var(--c-accent); background: var(--c-hover); }
@@ -883,10 +883,10 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The open card once it is asking which project: the same card, now holding controls of its own, so it
    stops behaving like one big button (no pointer, no hover) and takes the width its select needs. */
 .onboard__action--open { cursor: default; flex-basis: 320px; max-width: 100%; }
-.onboard__action--open:hover { border-color: var(--c-border-strong); background: var(--c-surface); }
+.onboard__action--open:hover { border-color: var(--c-edge); background: var(--c-surface); }
 .onboard__action--open .onboard__action-body { flex: 1; gap: var(--s-2); }
 .onboard__field { display: flex; flex-direction: column; gap: var(--s-1); margin-top: var(--s-2); }
-.onboard__select { padding: var(--s-2); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); }
+.onboard__select { padding: var(--s-2); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); }
 .onboard__actionrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .onboard__error { color: var(--c-stop); font-size: var(--fs-xs); }
 /* The heading of the reference section. */
@@ -895,7 +895,7 @@ button.feed__target:hover { color: var(--c-accent); }
 
 /* ---------- palette-derived shared bits ---------- */
 /* The search screen's input, styled as the palette's was. */
-.palette__input { width: 100%; border: none; border-bottom: 1px solid var(--c-border); padding: var(--s-3); font-size: var(--fs-lg); background: none; outline: none; }
+.palette__input { width: 100%; border: none; border-bottom: 1px solid var(--c-edge); padding: var(--s-3); font-size: var(--fs-lg); background: none; outline: none; }
 
 /* ---------- the shared modal chrome ---------- */
 /* `.modal__overlay` is the backdrop **every** modal wears, the feature blocks below included. It is
@@ -914,7 +914,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* Over another modal rather than beside it: the rejection asks its question from the status control
    of a task the reader may have opened from one. */
 .modal__overlay--raised { z-index: 60; }
-.modal__card { width: min(440px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
+.modal__card { width: min(440px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 /* Wide enough for the migration report, whose paths and version pairs read badly wrapped. */
 .modal__card--wide { width: min(680px, 100%); max-height: 84vh; overflow-y: auto; }
 .modal__hero { text-align: center; margin-bottom: var(--s-4); }
@@ -926,16 +926,16 @@ button.feed__target:hover { color: var(--c-accent); }
    than a share of the hook consent's: the two happen to look alike, and a modal borrowing another
    feature's class names cannot be restyled without touching that feature. The backdrop is the one
    exception — it is `.modal__overlay` for all of them, which is what `outsideClose` reads. */
-.rejectask__modal { width: min(480px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
+.rejectask__modal { width: min(480px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
 .rejectask__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-2); }
 .rejectask__why { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
-.rejectask__input { width: 100%; box-sizing: border-box; resize: vertical; padding: var(--s-2); font: inherit; color: var(--c-text); background: var(--c-sunken); border: 1px solid var(--c-border); border-radius: var(--r-md); margin-bottom: var(--s-2); }
+.rejectask__input { width: 100%; box-sizing: border-box; resize: vertical; padding: var(--s-2); font: inherit; color: var(--c-text); background: var(--c-sunken); border: 1px solid var(--c-edge); border-radius: var(--r-md); margin-bottom: var(--s-2); }
 .rejectask__actions { display: flex; align-items: center; gap: var(--s-2); }
-.rejectask__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-sunken); color: var(--c-text); cursor: pointer; }
+.rejectask__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-sunken); color: var(--c-text); cursor: pointer; }
 .rejectask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 .rejectask__action:disabled { opacity: 0.5; cursor: default; }
 
-.hookconsent__modal { width: min(520px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
+.hookconsent__modal { width: min(520px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 .hookconsent__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-2); }
 .hookconsent__why { margin-bottom: var(--s-2); }
 .hookconsent__where { font-size: var(--fs-xs); color: var(--c-text-muted); word-break: break-all; margin-bottom: var(--s-3); }
@@ -945,7 +945,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .hookconsent__guidance { margin: var(--s-2) 0 0; padding: var(--s-2); background: var(--c-sunken); border-radius: var(--r-md); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-all; }
 .hookconsent__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
 .hookconsent__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.hookconsent__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-sunken); cursor: pointer; }
+.hookconsent__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-sunken); cursor: pointer; }
 .hookconsent__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 .hookconsent__action--never { color: var(--c-text-muted); }
 .hookconsent__action:disabled { opacity: 0.5; cursor: default; }
@@ -954,12 +954,12 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ---------- a usage nudge (NudgeHost and the views it puts) ---------- */
 /* An offer, not a gate: the same modal shape as the consent question, one size down, and its decline is
    the plain button rather than a muted one — nothing here is being asked permission for. */
-.nudge__modal { width: min(460px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
+.nudge__modal { width: min(460px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
 .nudge__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-2); }
 .nudge__why { margin-bottom: var(--s-3); }
 .nudge__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
 .nudge__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.nudge__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-sunken); color: var(--c-text); cursor: pointer; }
+.nudge__action { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-sunken); color: var(--c-text); cursor: pointer; }
 .nudge__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 .nudge__action:disabled { opacity: 0.5; cursor: default; }
 .nudge__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-2); }
@@ -970,7 +970,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); }
 .dimmgr__empty { margin: 0; }
 .dimmgr__list { display: flex; flex-direction: column; gap: var(--s-2); overflow-y: auto; }
-.dimmgr__dim { border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-sunken); padding: var(--s-2) var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); }
+.dimmgr__dim { border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-sunken); padding: var(--s-2) var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); }
 /* The head carries the name and every flag the axis holds, so it wraps: the fourth toggle
    (required) is what took it past one line at this width, and without wrapping the delete
    button is the item that gets squeezed until its label breaks a character at a time. */
@@ -981,11 +981,11 @@ button.feed__target:hover { color: var(--c-accent); }
    so it is set in the mono face and kept quiet next to the name it belongs to. */
 .dimmgr__slug { width: 14ch; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
 .dimmgr__valslug { width: 12ch; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
-.dimmgr__name:hover, .dimmgr__notes:hover, .dimmgr__valname:hover, .dimmgr__slug:hover, .dimmgr__valslug:hover { border-color: var(--c-border); }
+.dimmgr__name:hover, .dimmgr__notes:hover, .dimmgr__valname:hover, .dimmgr__slug:hover, .dimmgr__valslug:hover { border-color: var(--c-edge); }
 .dimmgr__name:focus, .dimmgr__notes:focus, .dimmgr__valname:focus, .dimmgr__slug:focus, .dimmgr__valslug:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
 .dimmgr__values { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-left: var(--s-2); }
 .dimmgr__vlabel { font-size: var(--fs-xs); margin-right: var(--s-1); }
-.dimmgr__val { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--c-border); border-radius: 999px; padding: 1px var(--s-2); background: var(--c-surface); }
+.dimmgr__val { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--c-rule); border-radius: 999px; padding: 1px var(--s-2); background: var(--c-surface); }
 .dimmgr__valname { background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-sm); width: 8ch; }
 /* Only ordered values go into a single vertical column. A cloud of chips wraps in two
    dimensions, so the up/down controls stop matching what is visually above and below, and
@@ -1005,16 +1005,16 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__val--closed .dimmgr__valname { text-decoration: line-through; text-decoration-color: var(--c-text-muted); }
 .dimmgr__period { display: inline-flex; align-items: center; gap: 2px; margin: 0 2px; font-size: var(--fs-xs); }
 .dimmgr__date { background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-size: var(--fs-xs); }
-.dimmgr__date:hover { border-color: var(--c-border); }
+.dimmgr__date:hover { border-color: var(--c-edge); }
 .dimmgr__date:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
-.dimmgr__open { background: transparent; border: 1px dashed var(--c-border); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
+.dimmgr__open { background: transparent; border: 1px dashed var(--c-edge); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
 .dimmgr__open:hover { border-color: var(--c-accent); color: var(--c-accent); }
 .dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: #fff; font-size: var(--fs-xs); }
 .dimmgr__danger { color: var(--c-stop); white-space: nowrap; }
 /* The removal that has to say where the tasks go first. It stands in the delete button's place inside
    the value's pill, so the row keeps its width and the question is asked where the press landed. */
 .dimmgr__reassign { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); }
-.dimmgr__reassignpick { max-width: 14ch; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-xs); }
+.dimmgr__reassignpick { max-width: 14ch; background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-xs); }
 .dimmgr__adddim { align-self: flex-start; }
 .dimmgr__ordered { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--c-text-muted); cursor: pointer; white-space: nowrap; }
 .dimmgr__reorder { display: inline-flex; gap: 1px; margin-right: 2px; }
@@ -1028,12 +1028,12 @@ button.feed__target:hover { color: var(--c-accent); }
 .cal__month { font-size: var(--fs-lg); font-weight: var(--fw-bold); min-width: 9ch; }
 .cal__nav {
   width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid var(--c-border); border-radius: var(--r-sm); background: var(--c-surface);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm); background: var(--c-surface);
   color: var(--c-text-muted); cursor: pointer; line-height: 1;
 }
 .cal__nav:hover { color: var(--c-accent); border-color: var(--c-accent); }
 .cal__todaybtn {
-  margin-left: var(--s-2); font-size: var(--fs-xs); border: 1px solid var(--c-border);
+  margin-left: var(--s-2); font-size: var(--fs-xs); border: 1px solid var(--c-edge);
   background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-2); color: var(--c-text-muted); cursor: pointer;
 }
 .cal__todaybtn:hover { color: var(--c-accent); border-color: var(--c-accent); }
@@ -1042,7 +1042,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--s-1); }
 .cal__cell {
   min-height: 92px; display: flex; flex-direction: column; gap: 2px;
-  border: 1px solid var(--c-border); border-radius: var(--r-sm); background: var(--c-surface); padding: var(--s-1);
+  border: 1px solid var(--c-rule); border-radius: var(--r-sm); background: var(--c-surface); padding: var(--s-1);
 }
 .cal__cell--out { background: var(--c-sunken); }
 .cal__cell--out .cal__date { color: var(--c-text-faint); }
@@ -1063,20 +1063,20 @@ button.feed__target:hover { color: var(--c-accent); }
 .cal__chip--selected { background: var(--c-accent-weak); box-shadow: inset 0 0 0 1px var(--c-accent); }
 .cal__chip:hover { background: var(--c-hover); }
 .cal__more { font-size: var(--fs-2xs); color: var(--c-text-faint); padding: 0 var(--s-2); }
-.cal__nodue { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-top: var(--s-2); border-top: 1px dashed var(--c-border); }
+.cal__nodue { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-top: var(--s-2); border-top: 1px dashed var(--c-rule); }
 .cal__nodue-label { font-size: var(--fs-xs); color: var(--c-text-faint); font-weight: var(--fw-medium); }
-.cal__nodue .cal__chip { display: inline-block; width: auto; max-width: 220px; border-left-width: 3px; border-left-color: var(--c-border-strong); }
+.cal__nodue .cal__chip { display: inline-block; width: auto; max-width: 220px; border-left-width: 3px; border-left-color: var(--c-rule); }
 
 /* ---------- timeline (gantt) view ---------- */
 .tl { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: var(--s-3) var(--s-4); gap: var(--s-2); overflow-y: auto; }
 .tl__axis, .tl__row { display: grid; grid-template-columns: 200px 1fr 84px; align-items: center; gap: var(--s-2); }
-.tl__axis { padding-bottom: var(--s-2); border-bottom: 1px solid var(--c-border); position: sticky; top: 0; background: var(--c-bg); z-index: 1; }
+.tl__axis { padding-bottom: var(--s-2); border-bottom: 1px solid var(--c-rule); position: sticky; top: 0; background: var(--c-bg); z-index: 1; }
 .tl__ruler { position: relative; height: 16px; font-size: var(--fs-2xs); color: var(--c-text-faint); }
 .tl__ruler-end { position: absolute; right: 0; top: 0; }
 .tl__ruler-start { right: auto; left: 0; }
 .tl__ruler-today { position: absolute; top: 0; transform: translateX(-50%); color: var(--c-accent); font-weight: var(--fw-medium); white-space: nowrap; }
 .tl__rows { display: flex; flex-direction: column; }
-.tl__row { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--c-border); padding: var(--s-2) 0; cursor: pointer; }
+.tl__row { width: 100%; text-align: left; background: none; border: none; border-bottom: 1px solid var(--c-rule); padding: var(--s-2) 0; cursor: pointer; }
 .tl__row:hover { background: var(--c-hover); }
 .tl__row--selected { background: var(--c-accent-weak); }
 .tl__label { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
@@ -1095,7 +1095,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .restart__error { margin-bottom: var(--s-2); padding: var(--s-2); border: 1px solid var(--c-stop); border-radius: var(--r-md); color: var(--c-stop); font-size: var(--fs-xs); }
 .restart__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 /* The way out when restarting is not the answer: secondary to the button, but always present. */
-.restart__stuck { margin-top: var(--s-3); padding-top: var(--s-2); border-top: 1px solid var(--c-border); font-size: var(--fs-xs); }
+.restart__stuck { margin-top: var(--s-3); padding-top: var(--s-2); border-top: 1px solid var(--c-rule); font-size: var(--fs-xs); }
 .restart__stuck h3 { margin: 0 0 var(--s-2); font-size: var(--fs-sm); }
 .restart__stuck p { margin: 0 0 var(--s-2); }
 .restart__detail { margin: 0 0 var(--s-2); padding: var(--s-2); border-radius: var(--r-md); background: var(--c-sunken); font-family: var(--font-mono); font-size: var(--fs-2xs); overflow-x: auto; }
@@ -1103,6 +1103,6 @@ button.feed__target:hover { color: var(--c-accent); }
 /* The migration screen shown at startup (MigrationScreen). */
 .migrate__body { display: flex; flex-direction: column; gap: var(--s-2); }
 .migrate__path { display: block; margin-top: var(--s-1); font-size: var(--fs-xs); word-break: break-all; }
-.migrate__bar { height: 6px; background: var(--c-border); border-radius: 3px; overflow: hidden; }
+.migrate__bar { height: 6px; background: var(--c-rule); border-radius: 3px; overflow: hidden; }
 .migrate__bar-fill { height: 100%; background: var(--c-accent); }
 .migrate__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }

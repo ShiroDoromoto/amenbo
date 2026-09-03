@@ -916,6 +916,19 @@ word there. `file:` here is not `attach`'s: what is under test is the picture, s
 file a premise copied off the fixtures shelf rather than one the operator brings, and the run says
 where it landed before the first step is handed over.
 
+Giving each of the two faces a store writes as an image of its own, clearing one again, reading which
+of the two a slot holds, and the way back onto the screen all of that is done on (`store set-avatar` /
+`clear-avatar` / `avatar` / `open-settings`), are one road's for a reason a shade narrower. The setting
+is reachable from a terminal — `config set human_avatar` takes the display version as a data URL — but
+the original that version was baked from arrives only where a picker handed the bytes over, so a road
+written for the CLI would walk past the half this one exists for. `facet:` is `human` or `ai`, the two
+words the store files them under, and the line names the face rather than the display name beside it:
+only one of those two names is the same in every language. Neither move waits for a button, this row
+writing the store as the picker closes, and the reading is a `Review` on both of its states — an image
+and the pattern drawn for a face that has none are both pictures. `open-settings` is a step of its own
+because the road walks it twice: a slot redrawn under the operator's eye says the screen heard, and
+only coming back to it says the store did.
+
 One road's alone is sometimes an *argument* rather than a whole op, and then it is the driver that
 cannot answer it which says so. A search hit is the case: what the row **calls** the place it points
 at (`landed_on`) and the run of characters it **marks** inside its excerpt (`marked`) are drawn, not

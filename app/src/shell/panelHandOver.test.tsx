@@ -101,12 +101,11 @@ async function mount() {
   });
 }
 
-/** Press the rail's row for a pane, which is how a reader says which one they are working in. */
-async function focusPane(name: string) {
-  const row = [...container.querySelectorAll<HTMLElement>(".rail__row")]
-    .find((one) => one.querySelector(".rail__name")?.textContent === name);
+/** Press a pane, which is how a reader says which one they are working in (`AMB-D-838`). */
+async function focusPane(frame: string) {
   await act(async () => {
-    row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    container.querySelector<HTMLElement>(`[data-hand="${frame}"]`)
+      ?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     await new Promise((r) => setTimeout(r, 0));
   });
 }
@@ -142,7 +141,7 @@ afterEach(() => {
 describe("handing a file from the panel to a pane", () => {
   it("puts the path in front of what is running in the pane being worked in", async () => {
     await mount();
-    await focusPane("b");
+    await focusPane("2");
     await act(async () => {
       hoisted.handOver?.(["/work/a/notes.md"]);
       await new Promise((r) => setTimeout(r, 0));
@@ -155,7 +154,7 @@ describe("handing a file from the panel to a pane", () => {
    *  all three machines, and an unquoted path splits into two words before the reader sees it. */
   it("quotes the path it hands over", async () => {
     await mount();
-    await focusPane("b");
+    await focusPane("2");
     await act(async () => {
       hoisted.handOver?.(["/work/a/it's a shot.png"]);
       await new Promise((r) => setTimeout(r, 0));
@@ -167,7 +166,7 @@ describe("handing a file from the panel to a pane", () => {
    *  several files puts in a pane (`AMB-T-4242`). */
   it("puts every path it is handed in front of what is running, one line", async () => {
     await mount();
-    await focusPane("b");
+    await focusPane("2");
     await act(async () => {
       hoisted.handOver?.(["/work/a/notes.md", "/work/a/a shot.png"]);
       await new Promise((r) => setTimeout(r, 0));

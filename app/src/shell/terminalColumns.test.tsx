@@ -96,7 +96,7 @@ describe("the project tabs", () => {
 
   it("stay when both columns beside the panes are closed", async () => {
     await mount();
-    await click(bar(t("face.rail")));
+    await click(bar(t("face.railFolders")));
     await click(bar(t("files.side")));
     expect(q(".termface__column--rail")).toBeNull();
     expect(q(".termface__column--side")).toBeNull();
@@ -118,11 +118,11 @@ describe("the project tabs", () => {
 describe("closing a column, and opening it again", () => {
   it("takes the rail away on the press that brings it back", async () => {
     await mount();
-    await click(bar(t("face.rail")));
+    await click(bar(t("face.railFolders")));
     expect(q(".termface__column--rail")).toBeNull();
     // The press is still there, and it says the rail is not.
-    expect(bar(t("face.rail"))?.getAttribute("aria-expanded")).toBe("false");
-    await click(bar(t("face.rail")));
+    expect(bar(t("face.railFolders"))?.getAttribute("aria-expanded")).toBe("false");
+    await click(bar(t("face.railFolders")));
     expect(q(".termface__column--rail")).not.toBeNull();
   });
 
@@ -147,7 +147,7 @@ describe("closing a column, and opening it again", () => {
 
   it("keeps the answer, so a column closed is still closed on the next run", async () => {
     await mount();
-    await click(bar(t("face.rail")));
+    await click(bar(t("face.railFolders")));
     await act(async () => root.unmount());
     root = createRoot(container);
     await mount();

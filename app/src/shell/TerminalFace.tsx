@@ -3,7 +3,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { EmptySlot } from "./EmptySlot";
 import { FolderChoice } from "./FolderChoice";
 import { TerminalPane } from "./TerminalPane";
-import { PaneRail } from "./PaneRail";
+import { FolderRail } from "./FolderRail";
 import { ProjectTabs } from "./ProjectTabs";
 import {
   frameNames, keepLayout, nameFrame, paneLabels, savedLayout, type FrameNames, type NamedBy,
@@ -14,10 +14,10 @@ import {
   paneIn, panesOf, restored, roomOnPage, setCount, setOrient, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import {
-  clampRailWidth, clampSideNarrow, clampSideWide, getRailShown, getRailTab, getRailWidth,
-  getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, setRailShown, setRailTab,
-  setRailWidth, setSideNarrow, setSideShown, setSideTab, setSideWide, setTabsCompact, tabsWidth,
-  type RailTab, type SideTab,
+  clampRailWidth, clampSideNarrow, clampSideWide, getRailShown, getRailWidth, getSideNarrow,
+  getSideShown, getSideTab, getSideWide, getTabsCompact, setRailShown, setRailWidth, setSideNarrow,
+  setSideShown, setSideTab, setSideWide, setTabsCompact, tabsWidth,
+  type SideTab,
 } from "../talk/columns";
 import { FilesPanel, openKey, type OpenFile } from "../files/FilesPanel";
 import { FolderTree } from "../files/FolderTree";
@@ -203,10 +203,6 @@ export function TerminalFace({
   // switch living inside it could not be the one that opens it (`../files/FilesPanel`). What it
   // starts as is this device's own answer, kept between runs (`../talk/columns`).
   const [tab, setTabState] = useState<SideTab>(getSideTab);
-  // Which half of the rail is up — the two lists, or the folder tree (`AMB-D-835`). It is kept per
-  // project, so a project the reader was last reading files in comes back on the tree; the read
-  // below is what brings that project's own answer in.
-  const [railTab, setRailTabState] = useState<RailTab>(() => getRailTab(null));
   // The files the reading column is holding, in the order they were opened, and which of them is on
   // top. They are held here rather than in either column because both answer to them: the tree in
   // the rail marks the row the file on top was opened from, and the column on the other side of the
@@ -658,11 +654,6 @@ export function TerminalFace({
     setTabState(setSideTab(which));
   }, []);
 
-  /** The same for the rail's two halves, kept per project (`../talk/columns`). */
-  const takeRailTab = useCallback((which: RailTab) => {
-    setRailTabState(setRailTab(layout.project, which));
-  }, [layout.project]);
-
   /** Ask for a side, or put it away. The wish is kept either way — a person who closed the rail has
    *  closed it, and it stays closed across runs until they ask for it again. */
   const wantRail = useCallback((want: boolean) => {
@@ -754,10 +745,8 @@ export function TerminalFace({
     // And standing on the narrow step, which is where a project is arrived at: the wide one is
     // asked for by opening a file, and no file is open on a project just moved to.
     setWideState(false);
-    // And which half of the rail this project was left on. The file goes with the project it was
-    // opened from: a path is read against one project's folders, so carrying it to the next would be
-    // drawing a file the rail beside it has no row for.
-    setRailTabState(getRailTab(layout.project));
+    // And nothing is being read: the file goes with the project it was opened from, since a path is
+    // read against one project's folders and the tree beside the next one has no row for it.
     setOpen([]);
     setShowing(null);
   }, [layout.project]);
@@ -858,13 +847,8 @@ export function TerminalFace({
   }, [show?.nth, roots]);
 
   const rail = (
-    <PaneRail
-      layout={layout}
-      names={names}
-      projects={projects}
-      needy={needy}
-      tab={railTab}
-      onTab={takeRailTab}
+    <FolderRail
+      project={projects.find((one) => one.id === layout.project) ?? null}
       folders={
         <FolderTree
           projectId={layout.project}
@@ -875,12 +859,6 @@ export function TerminalFace({
           onCarry={carry}
         />
       }
-      onProject={takeProject}
-      onPick={(frame) => {
-        setAsking(null);
-        setLayout((was) => focusOn(was, frame));
-      }}
-      onRename={(frame, name) => named(frame, name, "person")}
     />
   );
 
@@ -903,18 +881,20 @@ export function TerminalFace({
         <button className="termface__action" onClick={() => onWindow()}>
           <Icon name="newWindow" /> {t(ownWindow ? "face.merge" : "face.splitOut")}
         </button>
-        {/* The rail's way in, and its way out. It is here whether the rail is a column or a drawer:
-            a column nobody can close goes on taking width from the panes on a small screen, and one
-            closed with no way back is worse than one that never closed. */}
+        {/* The folder panel's way in, and its way out. It is here whether the panel is a column or a
+            drawer: a column nobody can close goes on taking width from the panes on a small screen,
+            and one closed with no way back is worse than one that never closed. **It is not the way
+            to fold the project tabs** — those are at the edge and carry their own control, and one
+            press doing both would take away the pair a reader is most likely to want: the tabs
+            compact with the folders open (`AMB-D-838`). */}
         <button
           className={`termface__action${railShown ? " termface__action--on" : ""}`}
           onClick={() => wantRail(!railShown)}
           aria-expanded={railShown}
-          // The rail is what it opens, and the rail is what it is called. The face says it with the
-          // bars rather than the word: the row it sits in already counts panes twice over, and a
-          // third "panes" on it would be three controls a reader has to tell apart by reading.
-          aria-label={t("face.rail")}
-          title={t("face.rail")}
+          // The panel is what it opens, and the folders are what it is called: what the column holds
+          // now is the tree, and nothing else on this row says so.
+          aria-label={t("face.railFolders")}
+          title={t("face.railFolders")}
         >
           <Icon name="menu" />
         </button>

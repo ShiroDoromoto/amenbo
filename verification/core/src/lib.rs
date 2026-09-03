@@ -2488,6 +2488,11 @@ const REGISTRY: &[OpSpec] = &[
     // only ever grows is half a control and the half a reader is left with is the one that took
     // their pane's room.
     //
+    // `broad` is the third, and it is a place rather than a distance: drag until the column is about
+    // as wide as the panes. It is here for the width a road has to be able to *recognise* later
+    // (`side-span`), which the other two cannot hand it — a finger's width either way is a difference
+    // between two shots, and nothing an eye can name on one.
+    //
     // **It is the one step on these roads aimed at a line.** The edge carries no name, so nothing
     // reaches it the way a button is reached — the screen tool drags between two points, and working
     // those out of the screen is an operator's. So the instruction says where to put the pointer and
@@ -2515,6 +2520,18 @@ const REGISTRY: &[OpSpec] = &[
     // stood on the shot before — the two pictures side by side are the reading, which is why this one
     // is left to an eye rather than to a search for words.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-width", required: &["side", "wider"], refs: &[], strings: &["side"], binds: false },
+    // And how wide it stands, on one picture. The neighbour above answers against the shot before it,
+    // which is an answer a road loses the moment the whole face changes underneath: crossing to
+    // another project redraws every column on it, and "wider than it was" is then about two faces
+    // rather than about one width. So this one is read against what is beside the column on its own
+    // shot — the panes, whose width is whatever the column left them.
+    //
+    // `span` is `thin` for a column the panes are plainly wider than, `broad` for one that has taken
+    // about their width or more. Two answers rather than a number, because what closes it is an eye
+    // at a picture and a person at the screen has no ruler. Which is also why `broad` is reached by
+    // `drag-side toward: broad` and not by the finger's width the other direction moves: a difference
+    // an eye is to swear to has to be a difference an eye can see.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-span", required: &["side", "span"], refs: &[], strings: &["side", "span"], binds: false },
     // Which face the lamp on a pane's label is showing. It is the one reading that says a pane is
     // *alive* rather than drawn: a terminal that ended leaves its last output where it was, so words
     // on a pane outlive the process that wrote them and a road reading only those cannot tell a
@@ -2592,8 +2609,9 @@ const REGISTRY: &[OpSpec] = &[
     // that spelt an encoding its own way would be asking for a label nothing draws — and what it
     // proves is that the row follows the reader rather than the guess.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "read-as", required: &["encoding"], refs: &[], strings: &["encoding"], binds: false },
-    // What an opened file draws. `shows` is words the road itself put in the file, so a reading finds
-    // them because the bytes reached the screen and for no other reason.
+    // What the column has open draws — a file, or the draft page that sits on the first of its tabs.
+    // `shows` is words the road itself put there, so a reading finds them because what was written
+    // reached the screen and for no other reason.
     //
     // `as` says what the words are standing in. Two of its three answers are a Markdown file's forms,
     // and asking for either hands the whole step to an eye: they carry the same words — that is what

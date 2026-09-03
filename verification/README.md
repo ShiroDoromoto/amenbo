@@ -783,8 +783,9 @@ from inside Amenbo: the folder itself, folded down, with what git says about eac
 colour on it. Every op takes a `section` saying which part of the column a row is being looked for
 in — there is one part to name today, and the arg is kept because the panel is not finished growing.
 `tree` unfolds the folder's section, `enter` opens one folder a level, `open` presses a file and
-`back` leaves it; `listed`, `reading` and `says` read what a row is, what an opened file draws, and
-one of the face's standing lines. `row-mark` reads the colour a row wears, named by what git says —
+`back` leaves it; `listed`, `reading` and `says` read what a row is, what the column has open draws
+— a file, or the draft page on the first of its tabs — and one of the face's standing lines.
+`row-mark` reads the colour a row wears, named by what git says —
 `untracked`, `added`, `modified` — rather than by the colour itself, since which colour that is
 belongs to the theme. It is a `Review` and can be nothing else: a shot is read for words, and a row
 wearing a colour says the same letters as the row beside it that wears none.

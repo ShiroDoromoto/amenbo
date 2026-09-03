@@ -1165,9 +1165,28 @@ pub fn blob_hashes_for_target(
     blob_hashes(conn, &any_blob().and(on_target(target_type, target_id)))
 }
 
-/// Every blob hash the store's attachments reference — the root set of the blob GC.
+/// Every blob hash the store's attachments reference. It is most of the GC root set but not all of it —
+/// the images a human registered name their originals too ([`crate::Store::gc_blobs`] adds those).
 pub fn referenced_blob_hashes(conn: &Connection) -> Result<std::collections::HashSet<String>> {
     blob_hashes(conn, &any_blob())
+}
+
+/// Every blob hash a project's icon names as its original (`AMB-D-839`) — the other half of the GC root
+/// set that lives in the engine. A project with no icon carries NULL, so the `None`s fall out here.
+pub fn project_icon_sources(conn: &Connection) -> Result<std::collections::HashSet<String>> {
+    const P: col::project::Cols = col::project::ALL;
+    let mut sel = Select::new();
+    sel.distinct();
+    let source = sel.col(P.icon_source);
+    let mut sql = Sql::from(&sel, P.table);
+    sql.push_where(Some(&Pred::is_not_null(P.icon_source)));
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| source.get(r))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<Option<String>>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows.into_iter().flatten().collect())
 }
 
 /// How many live `blob` attachments reference `hash` — its refcount. Zero means the bytes are
@@ -4402,7 +4421,7 @@ pub fn project_name(conn: &Connection, project_id: i64) -> Result<Option<String>
     scalar_by_id(conn, P.id, P.name, project_id)
 }
 
-/// The editable fields of a single project (name/notes/colour/view/archived) — served from the
+/// The editable fields of a single project (name/notes/colour/icon/view/archived) — served from the
 /// read-model so the GUI settings screen can prefill its form without hydrating the whole `project` Vec.
 /// Includes archived projects (the settings screen is the unarchive path); excludes only the deleted.
 /// `None` when the project is absent/deleted.
@@ -4411,6 +4430,10 @@ pub struct ProjectSettingsRow {
     pub name: String,
     pub notes: String,
     pub color: Option<String>,
+    /// The display version of the project's icon, as a `data:image/…` URL (`AMB-D-839`) — what the screen
+    /// shows beside the choose/clear buttons. The original's hash is not here: the screen never sends it
+    /// back, and re-registering replaces both halves at once.
+    pub icon: Option<String>,
     pub default_view: String,
     pub archived: bool,
 }
@@ -4419,7 +4442,8 @@ pub fn project_settings(conn: &Connection, project_id: i64) -> Result<Option<Pro
     const P: col::project::Cols = col::project::ALL;
     let mut sel = Select::new();
     let (id, name, notes) = (sel.col(P.id), sel.col(P.name), sel.col(P.notes));
-    let (color, default_view) = (sel.col(P.color), sel.col(P.default_view));
+    let (color, icon) = (sel.col(P.color), sel.col(P.icon));
+    let default_view = sel.col(P.default_view);
     // `COALESCE`d: a row that carries no value for the column reads as NULL.
     let archived = sel.expr::<bool>(format!("COALESCE({}, 0)", P.archived.to_sql()));
     let mut sql = Sql::from(&sel, P.table);
@@ -4430,6 +4454,7 @@ pub fn project_settings(conn: &Connection, project_id: i64) -> Result<Option<Pro
             name: name.get(r)?,
             notes: notes.get(r)?,
             color: color.get(r)?,
+            icon: icon.get(r)?,
             default_view: default_view.get(r)?,
             archived: archived.get(r)?,
         })

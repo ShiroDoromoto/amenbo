@@ -2042,7 +2042,14 @@ export type ProjectRefDto = { id: number, name: string, };
  * light), so we fetch them with `project_get` only when the settings screen opens. `archived` is
  * included (unarchiving is driven from this screen too).
  */
-export type ProjectSettingsDto = { id: number, name: string, notes: string, color: string, view: "list" | "board" | "calendar" | "timeline", archived: boolean, };
+export type ProjectSettingsDto = { id: number, name: string, notes: string, color: string, 
+/**
+ * The image the project shows for itself, as a `data:image/…` URL, or `null` where it has none and
+ * the surfaces fall back to the colour and the first letter of the name (`AMB-D-839`). The
+ * original it was baked from stays in the blob store and never rides out here — the screen shows
+ * the display version and sends a whole new pair when the human registers another image.
+ */
+icon: string | null, view: "list" | "board" | "calendar" | "timeline", archived: boolean, };
 
 /**
  * One chunk of a terminal's output, on its way to the pane drawing it (the payload of the talk

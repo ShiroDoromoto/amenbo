@@ -691,6 +691,21 @@ taken by — exit 0, nothing delivered.
 reached on the wrong window is a check that passed without looking at the screen
 it was written for.
 
+**A date field is written with `set-date`, never clicked and typed into.** The
+click that reaches one opens a picker, and the picker takes every key sent after
+it — `type "12312099"` and a raw keycode arrive nowhere alike — while the year
+moves one step per press of the up arrow, which is seventy presses to reach 2099.
+`set-date <pid> <name> <yyyy-mm-dd>` puts the day in with one call and reads it
+back. `--near <name>` says which row is meant, for a screen where one name reaches
+several fields: the dimension manager's value rows each carry a `Start date` and
+an `End date`, where the task pane carries one `Due date` and one `Start date`.
+
+**A day nobody has named yet has no field to write into.** An empty date input
+draws today as its placeholder, so both screens say the absence in words instead
+and put the field up only once somebody asks for one — `None` with an `Add` beside
+it on the task pane, `No start date` / `Ongoing` on a dimension's value. Press that
+first, or `set-date` answers `no date field on screen is called <name>`.
+
 ### `devtool vm golden [--refresh]`
 
 Reports on the image clones are cut from — is the base pulled, is the golden
@@ -768,6 +783,7 @@ The road itself is still walked by whoever is driving. In the guest that is the 
 devtool vm exec -- 'PID=$(pgrep -f "Amenbo.app/Contents/MacOS/amenbo-app" | head -1);
   swift /Users/admin/screen.swift find $PID'
 devtool vm exec -- '… swift /Users/admin/screen.swift click-named $PID "Link a folder"'
+devtool vm exec -- '… swift /Users/admin/screen.swift set-date $PID "Due date" 2099-12-31'
 ```
 
 ### Host and guest drifting apart

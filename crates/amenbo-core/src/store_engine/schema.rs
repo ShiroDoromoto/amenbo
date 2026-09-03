@@ -532,6 +532,11 @@ datasets! {
         name: col(REQ),
         notes: col(REQ),
         color: col(OPT),
+        // The image a project shows for itself, and the original it was baked from (`AMB-D-839`): a
+        // small `data:image/…` URL, and the BLAKE3 hash naming the original in the blob store. The
+        // pair is the same one the facet avatars keep in config; here it is a project's own row.
+        icon: col(OPT),
+        icon_source: col(OPT),
         default_view: enum_col("list", "board", "calendar", "timeline"),
         archived: bool_col,
         order_key: col(ORDER_KEY),

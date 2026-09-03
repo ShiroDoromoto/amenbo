@@ -38,6 +38,10 @@ const hoisted = vi.hoisted(() => ({
   wake: { candidates: [], offered: [] } as unknown,
   /** The commands that went straight to the host, arguments and all. */
   sent: [] as Array<[string, unknown]>,
+  /** The icon the project comes back with (`null` for one that has none). */
+  icon: null as string | null,
+  /** What `updateProject` was handed, in order — the patch itself, not just the name of the write. */
+  patches: [] as Array<Record<string, unknown>>,
 }));
 
 // The device's own answers go by the command seam rather than through `mutations`: which agent a
@@ -79,12 +83,20 @@ vi.mock("../core/mutations", () => {
   };
   return {
     fetchProjectSettings: (id: number) =>
-      Promise.resolve({ id, name: "検証PJ", notes: "", color: "#9aa7b2", view: "board", archived: false }),
+      Promise.resolve({ id, name: "検証PJ", notes: "", color: "#9aa7b2", icon: hoisted.icon, view: "board", archived: false }),
+    // Baking the small version goes through canvas, which jsdom does not draw — the screen's business is
+    // what it does with the two versions, so the bake is answered with a fixed one.
+    fileToAvatarDataUrl: () => Promise.resolve("data:image/png;base64,BAKED"),
     fetchBoundFolders: () => Promise.resolve(hoisted.folders),
     bindFolder: record("bindFolder"), unbindFolder: record("unbindFolder"),
     revealFolder: record("revealFolder"), openTerminal: record("openTerminal"),
     pickFolder: () => Promise.resolve(null),
-    updateProject: record("updateProject"), deleteProject: record("deleteProject"),
+    updateProject: (projectId: number, patch: Record<string, unknown>) => {
+      hoisted.calls.push(["updateProject", projectId]);
+      hoisted.patches.push(patch);
+      return Promise.resolve();
+    },
+    deleteProject: record("deleteProject"),
     setProjectArchived: record("setProjectArchived"),
     fetchAgentHookConsent: () => Promise.resolve(hoisted.consent),
     fetchAgentHookProjectWiring: () => Promise.resolve(hoisted.waiting),
@@ -152,6 +164,8 @@ beforeEach(() => {
   hoisted.calls.length = 0;
   hoisted.wake = { candidates: [], offered: [] };
   hoisted.sent.length = 0;
+  hoisted.icon = null;
+  hoisted.patches.length = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -658,5 +672,69 @@ describe("the agent this project's panes open with", () => {
       "wake_choices",
       { project: 1, folders: ["/w/one", "/w/two"] },
     ]);
+  });
+});
+
+/**
+ * The icon is registered as a pair (`AMB-D-839`): the small version the surfaces draw, and the file it
+ * was baked from, which core keeps so a larger one can be baked later. What is checked here is that the
+ * screen never sends half of it — and that it waits for Save like every other field on the form.
+ */
+describe("the image a project shows for itself", () => {
+  const iconRow = () =>
+    Array.from(container.querySelectorAll(".settings__row"))
+      .find((r) => r.textContent?.includes(t("projset.iconLabel"))) as HTMLElement;
+  const save = () => button(container, t("projset.save"))!;
+
+  /** Hand the hidden file input a file, the way the picker does. jsdom has no DataTransfer. */
+  async function choose(bytes: number[]) {
+    const input = iconRow().querySelector("input[type=file]") as HTMLInputElement;
+    const file = new File([new Uint8Array(bytes)], "logo.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  it("sends the baked version and the original together, and only once Save is pressed", async () => {
+    await render([]);
+    await choose([1, 2, 3]);
+
+    // Picking writes nothing on its own — the form is dirty, not saved.
+    expect(hoisted.patches).toEqual([]);
+    expect(iconRow().querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,BAKED");
+
+    await act(async () => {
+      save().click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(hoisted.patches).toHaveLength(1);
+    expect(hoisted.patches[0].icon).toBe("data:image/png;base64,BAKED");
+    expect(Array.from(hoisted.patches[0].iconOriginal as Uint8Array)).toEqual([1, 2, 3]);
+  });
+
+  it("clears with null, and carries no original with it — there is none to keep", async () => {
+    hoisted.icon = "data:image/png;base64,OLD";
+    await render([]);
+
+    await act(async () => {
+      button(iconRow(), t("projset.iconClear"))!.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    await act(async () => {
+      save().click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(hoisted.patches).toEqual([expect.objectContaining({ icon: null, iconOriginal: undefined })]);
+  });
+
+  // A project with no icon has nothing to remove, and the surfaces already say what it falls back to.
+  it("offers the removal only where there is an image to remove", async () => {
+    await render([]);
+    expect(button(iconRow(), t("projset.iconClear"))).toBeUndefined();
+    expect(iconRow().textContent).toContain("検");
   });
 });

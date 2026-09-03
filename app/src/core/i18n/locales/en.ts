@@ -64,6 +64,8 @@ const ui = {
   "projset.title": "Project settings", "projset.back": "Back to board",
   "projset.general": "General", "projset.nameLabel": "Name", "projset.notesLabel": "Notes",
   "projset.colorLabel": "Color", "projset.viewLabel": "Default view",
+  "projset.iconLabel": "Icon", "projset.iconClear": "Remove image",
+  "projset.iconHint": "Shown on the project tabs. Without one, the colour and the first letter of the name are shown.",
   "projset.save": "Save", "projset.saved": "Saved", "projset.saving": "Saving…",
   "projset.notesPh": "Notes for this project (optional)",
   "projset.danger": "Archive & delete", "projset.archivedBadge": "Archived",

@@ -55,6 +55,8 @@ export const th: Translation = {
     "projset.title": "ตั้งค่าโปรเจกต์", "projset.back": "กลับไปที่บอร์ด",
     "projset.general": "ทั่วไป", "projset.nameLabel": "ชื่อ", "projset.notesLabel": "บันทึก",
     "projset.colorLabel": "สี", "projset.viewLabel": "มุมมองเริ่มต้น",
+    "projset.iconLabel": "ไอคอน", "projset.iconClear": "เอารูปออก",
+    "projset.iconHint": "แสดงบนแท็บโปรเจกต์ ถ้าไม่มีจะแสดงสีและอักษรตัวแรกของชื่อ",
     "projset.save": "บันทึก", "projset.saved": "บันทึกแล้ว", "projset.saving": "กำลังบันทึก…",
     "projset.notesPh": "บันทึกของโปรเจกต์นี้ (ไม่บังคับ)",
     "projset.danger": "เก็บเข้าคลังและลบ", "projset.archivedBadge": "เก็บเข้าคลังแล้ว",

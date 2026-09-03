@@ -56,6 +56,8 @@ export const ptBR: Translation = {
     "projset.title": "Configurações do projeto", "projset.back": "Voltar ao quadro",
     "projset.general": "Geral", "projset.nameLabel": "Nome", "projset.notesLabel": "Anotações",
     "projset.colorLabel": "Cor", "projset.viewLabel": "Visão padrão",
+    "projset.iconLabel": "Ícone", "projset.iconClear": "Remover imagem",
+    "projset.iconHint": "Aparece nas abas de projeto. Sem imagem, aparecem a cor e a primeira letra do nome.",
     "projset.save": "Salvar", "projset.saved": "Salvo", "projset.saving": "Salvando…",
     "projset.notesPh": "Anotações deste projeto (opcional)",
     "projset.danger": "Arquivar e excluir", "projset.archivedBadge": "Arquivado",

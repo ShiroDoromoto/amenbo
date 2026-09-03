@@ -53,6 +53,8 @@ export const zhHans: Translation = {
     "projset.title": "项目设置", "projset.back": "返回看板",
     "projset.general": "常规", "projset.nameLabel": "名称", "projset.notesLabel": "备注",
     "projset.colorLabel": "颜色", "projset.viewLabel": "默认视图",
+    "projset.iconLabel": "图标", "projset.iconClear": "移除图片",
+    "projset.iconHint": "显示在项目标签上。没有图片时显示颜色和名称首字。",
     "projset.save": "保存", "projset.saved": "已保存", "projset.saving": "正在保存…",
     "projset.notesPh": "这个项目的备注（可选）",
     "projset.danger": "归档与删除", "projset.archivedBadge": "已归档",

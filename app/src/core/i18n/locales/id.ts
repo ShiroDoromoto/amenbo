@@ -55,6 +55,8 @@ export const id: Translation = {
     "projset.title": "Pengaturan proyek", "projset.back": "Kembali ke papan",
     "projset.general": "Umum", "projset.nameLabel": "Nama", "projset.notesLabel": "Catatan",
     "projset.colorLabel": "Warna", "projset.viewLabel": "Tampilan bawaan",
+    "projset.iconLabel": "Ikon", "projset.iconClear": "Hapus gambar",
+    "projset.iconHint": "Tampil di tab proyek. Tanpa gambar, warna dan huruf pertama nama yang tampil.",
     "projset.save": "Simpan", "projset.saved": "Tersimpan", "projset.saving": "Menyimpan…",
     "projset.notesPh": "Catatan untuk proyek ini (opsional)",
     "projset.danger": "Arsipkan & hapus", "projset.archivedBadge": "Diarsipkan",

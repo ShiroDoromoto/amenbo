@@ -52,6 +52,8 @@ export const tr: Translation = {
     "projset.title": "Proje ayarları", "projset.back": "Panoya dön",
     "projset.general": "Genel", "projset.nameLabel": "Ad", "projset.notesLabel": "Notlar",
     "projset.colorLabel": "Renk", "projset.viewLabel": "Varsayılan görünüm",
+    "projset.iconLabel": "Simge", "projset.iconClear": "Görseli kaldır",
+    "projset.iconHint": "Proje sekmelerinde görünür. Görsel yoksa renk ve adın ilk harfi görünür.",
     "projset.save": "Kaydet", "projset.saved": "Kaydedildi", "projset.saving": "Kaydediliyor…",
     "projset.notesPh": "Bu projeye dair notlar (isteğe bağlı)",
     "projset.danger": "Arşivle ve sil", "projset.archivedBadge": "Arşivlenmiş",

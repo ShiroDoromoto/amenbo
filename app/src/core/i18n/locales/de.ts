@@ -52,6 +52,8 @@ export const de: Translation = {
     "projset.title": "Projekteinstellungen", "projset.back": "Zurück zum Board",
     "projset.general": "Allgemein", "projset.nameLabel": "Name", "projset.notesLabel": "Notizen",
     "projset.colorLabel": "Farbe", "projset.viewLabel": "Standardansicht",
+    "projset.iconLabel": "Symbol", "projset.iconClear": "Bild entfernen",
+    "projset.iconHint": "Wird auf den Projekt-Tabs gezeigt. Ohne Bild erscheinen die Farbe und der erste Buchstabe des Namens.",
     "projset.save": "Speichern", "projset.saved": "Gespeichert", "projset.saving": "Wird gespeichert…",
     "projset.notesPh": "Notizen zu diesem Projekt (optional)",
     "projset.danger": "Archivieren & löschen", "projset.archivedBadge": "Archiviert",

@@ -52,6 +52,8 @@ export const hi: Translation = {
     "projset.title": "प्रोजेक्ट सेटिंग", "projset.back": "बोर्ड पर लौटें",
     "projset.general": "सामान्य", "projset.nameLabel": "नाम", "projset.notesLabel": "नोट",
     "projset.colorLabel": "रंग", "projset.viewLabel": "डिफ़ॉल्ट दृश्य",
+    "projset.iconLabel": "आइकन", "projset.iconClear": "छवि हटाएँ",
+    "projset.iconHint": "प्रोजेक्ट टैब पर दिखती है। छवि न होने पर रंग और नाम का पहला अक्षर दिखते हैं।",
     "projset.save": "सहेजें", "projset.saved": "सहेजा गया", "projset.saving": "सहेजा जा रहा है…",
     "projset.notesPh": "इस प्रोजेक्ट के नोट (वैकल्पिक)",
     "projset.danger": "संग्रह और विलोपन", "projset.archivedBadge": "संग्रहीत",

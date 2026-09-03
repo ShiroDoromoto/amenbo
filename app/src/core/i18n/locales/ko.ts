@@ -52,6 +52,8 @@ export const ko: Translation = {
     "projset.title": "프로젝트 설정", "projset.back": "보드로 돌아가기",
     "projset.general": "일반", "projset.nameLabel": "이름", "projset.notesLabel": "메모",
     "projset.colorLabel": "색상", "projset.viewLabel": "기본 뷰",
+    "projset.iconLabel": "아이콘", "projset.iconClear": "이미지 지우기",
+    "projset.iconHint": "프로젝트 탭에 표시됩니다. 없으면 색과 이름의 첫 글자가 표시됩니다.",
     "projset.save": "저장", "projset.saved": "저장했습니다", "projset.saving": "저장 중…",
     "projset.notesPh": "이 프로젝트의 메모(선택)",
     "projset.danger": "보관 및 삭제", "projset.archivedBadge": "보관됨",

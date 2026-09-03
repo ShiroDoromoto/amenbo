@@ -1,12 +1,12 @@
 // The project settings screen. Not a modal but a screen (a nav destination), taking rename / notes / colour /
-// default-view edits plus archive, unarchive and delete across several sections. The snapshot's ProjectDto does not
+// icon / default-view edits plus archive, unarchive and delete across several sections. The snapshot's ProjectDto does not
 // carry notes or archived, so we hydrate with `fetchProjectSettings` on open and prefill from that. Saving sends the
 // diff (only the fields that changed) to `updateProject`. Destructive operations go through a plugin-dialog confirmation.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   bindFolder, clearAgentHookConsent, deleteProject, fetchAgentHookConsent, fetchAgentHookRequests,
-  fetchBoundFolders, fetchProjectSettings, openTerminal, pickFolder, revealFolder, setProjectArchived,
-  unbindFolder, updateProject,
+  fetchBoundFolders, fetchProjectSettings, fileToAvatarDataUrl, openTerminal, pickFolder, revealFolder,
+  setProjectArchived, unbindFolder, updateProject,
 } from "../core/mutations";
 import { useAgentHookWiring } from "./AgentHookWiringRow";
 import { McpSetup } from "./McpSetup";
@@ -32,6 +32,11 @@ export function ProjectSettingsScreen({
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
   const [color, setColor] = useState("#9aa7b2");
+  // The display version on screen, and the bytes it was baked from — held together until save, because
+  // core writes the pair in one act (`AMB-D-839`). `iconOriginal` is unset for an icon that came back
+  // from the store (its original is already in the blob store) and for one being cleared.
+  const [icon, setIcon] = useState<string | null>(null);
+  const [iconOriginal, setIconOriginal] = useState<Uint8Array | undefined>(undefined);
   const [view, setView] = useState<View>("board");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -45,6 +50,8 @@ export function ProjectSettingsScreen({
       setName(p.name);
       setNotes(p.notes);
       setColor(p.color);
+      setIcon(p.icon);
+      setIconOriginal(undefined);
       setView(p.view);
     });
     return () => { alive = false; };
@@ -57,7 +64,8 @@ export function ProjectSettingsScreen({
   }
 
   // Send only the fields that changed (the rest stay put). Core rejects an empty name, but the UI disables save as well.
-  const dirty = name.trim() !== loaded.name || notes !== loaded.notes || color !== loaded.color || view !== loaded.view;
+  const dirty = name.trim() !== loaded.name || notes !== loaded.notes || color !== loaded.color
+    || icon !== loaded.icon || view !== loaded.view;
   const canSave = dirty && name.trim().length > 0 && !busy;
 
   const save = async () => {
@@ -68,9 +76,16 @@ export function ProjectSettingsScreen({
         name: name.trim() !== loaded.name ? name.trim() : undefined,
         notes: notes !== loaded.notes ? notes : undefined,
         color: color !== loaded.color ? color : undefined,
+        icon: icon !== loaded.icon ? icon : undefined,
+        // Only ever with the display version it was baked from: re-picking the image already registered
+        // bakes the same data URL, and sending the bytes for a field nothing changed is IPC for nothing.
+        iconOriginal: icon !== loaded.icon ? iconOriginal : undefined,
         view: view !== loaded.view ? view : undefined,
       });
-      setLoaded({ ...loaded, name: name.trim(), notes, color, view });
+      setLoaded({ ...loaded, name: name.trim(), notes, color, icon, view });
+      // The original has landed in the blob store; a later save that does not touch the icon must not
+      // send those bytes again.
+      setIconOriginal(undefined);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -145,6 +160,18 @@ export function ProjectSettingsScreen({
               <input type="color" value={color} onChange={(e) => setColor(e.target.value)} />
             </div>
             <div className="settings__row">
+              <span className="settings__k">{t("projset.iconLabel")}</span>
+              <IconPicker
+                name={name}
+                color={color}
+                icon={icon}
+                busy={busy}
+                onPick={(display, original) => { setIcon(display); setIconOriginal(original); }}
+                onClear={() => { setIcon(null); setIconOriginal(undefined); }}
+                onError={setError}
+              />
+            </div>
+            <div className="settings__row">
               <span className="settings__k">{t("projset.viewLabel")}</span>
               <select className="btn" value={view} onChange={(e) => setView(e.target.value as View)}>
                 {VIEWS.map((v) => <option key={v} value={v}>{viewLabel(v)}</option>)}
@@ -190,6 +217,70 @@ export function ProjectSettingsScreen({
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Choosing the image a project shows for itself, or taking it away (`AMB-D-838`, `AMB-D-839`).
+ *
+ * Two versions leave here, not one: the small square the surfaces draw, and the file the human chose,
+ * which core keeps in the blob store so a larger version can be baked later without asking for the file
+ * a second time. Neither is written on the spot — both wait for Save, like the name and the colour
+ * beside them, so one press writes the whole form and giving up leaves nothing behind.
+ *
+ * With no icon the preview shows what the surfaces fall back to: the project's colour, and the first
+ * letter of its name. It reads from the form's own state rather than the saved project, so a colour
+ * being changed at the same time is already in it.
+ */
+function IconPicker({
+  name, color, icon, busy, onPick, onClear, onError,
+}: {
+  name: string;
+  color: string;
+  icon: string | null;
+  busy: boolean;
+  onPick: (display: string, original: Uint8Array) => void;
+  onClear: () => void;
+  onError: (message: string) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const pick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // So that picking the same file twice in a row still fires change
+    if (!file) return;
+    try {
+      const display = await fileToAvatarDataUrl(file);
+      onPick(display, new Uint8Array(await file.arrayBuffer()));
+    } catch (err) {
+      onError(errText(err));
+    }
+  };
+
+  return (
+    <div className="iconpick">
+      <span className="iconpick__preview" style={{ background: icon ? undefined : color }}>
+        {icon
+          ? <img className="iconpick__img" src={icon} alt="" />
+          : <span className="iconpick__letter">{[...name.trim()][0] ?? ""}</span>}
+      </span>
+      <div className="buttonrow">
+        <button className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
+          {t("settings.avatarChoose")}
+        </button>
+        {icon && (
+          <button className="btn" disabled={busy} onClick={onClear}>{t("projset.iconClear")}</button>
+        )}
+      </div>
+      <span className="hint">{t("projset.iconHint")}</span>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => void pick(e)}
+      />
+    </div>
   );
 }
 

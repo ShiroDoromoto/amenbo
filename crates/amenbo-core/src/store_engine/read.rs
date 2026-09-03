@@ -4421,7 +4421,7 @@ pub fn project_name(conn: &Connection, project_id: i64) -> Result<Option<String>
     scalar_by_id(conn, P.id, P.name, project_id)
 }
 
-/// The editable fields of a single project (name/notes/colour/view/archived) — served from the
+/// The editable fields of a single project (name/notes/colour/icon/view/archived) — served from the
 /// read-model so the GUI settings screen can prefill its form without hydrating the whole `project` Vec.
 /// Includes archived projects (the settings screen is the unarchive path); excludes only the deleted.
 /// `None` when the project is absent/deleted.
@@ -4430,6 +4430,10 @@ pub struct ProjectSettingsRow {
     pub name: String,
     pub notes: String,
     pub color: Option<String>,
+    /// The display version of the project's icon, as a `data:image/…` URL (`AMB-D-839`) — what the screen
+    /// shows beside the choose/clear buttons. The original's hash is not here: the screen never sends it
+    /// back, and re-registering replaces both halves at once.
+    pub icon: Option<String>,
     pub default_view: String,
     pub archived: bool,
 }
@@ -4438,7 +4442,8 @@ pub fn project_settings(conn: &Connection, project_id: i64) -> Result<Option<Pro
     const P: col::project::Cols = col::project::ALL;
     let mut sel = Select::new();
     let (id, name, notes) = (sel.col(P.id), sel.col(P.name), sel.col(P.notes));
-    let (color, default_view) = (sel.col(P.color), sel.col(P.default_view));
+    let (color, icon) = (sel.col(P.color), sel.col(P.icon));
+    let default_view = sel.col(P.default_view);
     // `COALESCE`d: a row that carries no value for the column reads as NULL.
     let archived = sel.expr::<bool>(format!("COALESCE({}, 0)", P.archived.to_sql()));
     let mut sql = Sql::from(&sel, P.table);
@@ -4449,6 +4454,7 @@ pub fn project_settings(conn: &Connection, project_id: i64) -> Result<Option<Pro
             name: name.get(r)?,
             notes: notes.get(r)?,
             color: color.get(r)?,
+            icon: icon.get(r)?,
             default_view: default_view.get(r)?,
             archived: archived.get(r)?,
         })

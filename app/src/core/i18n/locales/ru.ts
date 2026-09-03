@@ -55,6 +55,8 @@ export const ru: Translation = {
     "projset.title": "Настройки проекта", "projset.back": "Назад к доске",
     "projset.general": "Общее", "projset.nameLabel": "Название", "projset.notesLabel": "Заметки",
     "projset.colorLabel": "Цвет", "projset.viewLabel": "Представление по умолчанию",
+    "projset.iconLabel": "Значок", "projset.iconClear": "Убрать изображение",
+    "projset.iconHint": "Показывается на вкладках проектов. Без него видны цвет и первая буква названия.",
     "projset.save": "Сохранить", "projset.saved": "Сохранено", "projset.saving": "Сохранение…",
     "projset.notesPh": "Заметки по этому проекту (необязательно)",
     "projset.danger": "Архив и удаление", "projset.archivedBadge": "В архиве",

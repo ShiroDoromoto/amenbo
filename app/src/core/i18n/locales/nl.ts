@@ -52,6 +52,8 @@ export const nl: Translation = {
     "projset.title": "Projectinstellingen", "projset.back": "Terug naar het bord",
     "projset.general": "Algemeen", "projset.nameLabel": "Naam", "projset.notesLabel": "Notities",
     "projset.colorLabel": "Kleur", "projset.viewLabel": "Standaardweergave",
+    "projset.iconLabel": "Pictogram", "projset.iconClear": "Afbeelding verwijderen",
+    "projset.iconHint": "Wordt op de projecttabs getoond. Zonder afbeelding verschijnen de kleur en de eerste letter van de naam.",
     "projset.save": "Opslaan", "projset.saved": "Opgeslagen", "projset.saving": "Bezig met opslaan…",
     "projset.notesPh": "Notities bij dit project (optioneel)",
     "projset.danger": "Archiveren en verwijderen", "projset.archivedBadge": "Gearchiveerd",

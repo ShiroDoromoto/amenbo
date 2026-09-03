@@ -687,6 +687,18 @@ button.feed__target:hover { color: var(--c-accent); }
 .avatar-preview svg { display: block; width: 100%; height: 100%; }
 .avatar-preview__img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
+/* ---------- a project's icon, on the project settings screen ---------- */
+/* Square with the corners taken off, not a circle: this is a project, and the round one is a face. */
+.iconpick { display: flex; flex-direction: column; gap: var(--s-2); align-items: flex-start; }
+.iconpick__preview {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px; flex: none;
+  border-radius: var(--r-md); overflow: hidden;
+}
+.iconpick__img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* On the project's own colour, which is chosen for a background — the same pairing the surfaces draw. */
+.iconpick__letter { color: #fff; font-size: var(--fs-lg); font-weight: 600; }
+
 /* ---------- new project (creation screen) ---------- */
 .newproj { padding: var(--s-5); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-5); }
 

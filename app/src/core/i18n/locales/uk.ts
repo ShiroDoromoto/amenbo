@@ -55,6 +55,8 @@ export const uk: Translation = {
     "projset.title": "Налаштування проєкту", "projset.back": "Назад до дошки",
     "projset.general": "Загальне", "projset.nameLabel": "Назва", "projset.notesLabel": "Нотатки",
     "projset.colorLabel": "Колір", "projset.viewLabel": "Типове подання",
+    "projset.iconLabel": "Значок", "projset.iconClear": "Прибрати зображення",
+    "projset.iconHint": "Показується на вкладках проєктів. Без нього видно колір і першу літеру назви.",
     "projset.save": "Зберегти", "projset.saved": "Збережено", "projset.saving": "Збереження…",
     "projset.notesPh": "Нотатки до цього проєкту (необов'язково)",
     "projset.danger": "Архівування та видалення", "projset.archivedBadge": "В архіві",

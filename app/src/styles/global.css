@@ -50,7 +50,7 @@ select { cursor: pointer; }
    typed into them, and its padding, ground and border would each take a piece of the tick. What it
    keeps from the rule is the accent, so the tick is the app's colour and not the system's. */
 input[type="checkbox"], input[type="radio"] {
-  width: var(--s-5); height: var(--s-5);
+  width: var(--s-4); height: var(--s-4);
   margin: 0; padding: 0;
   max-width: none;
   border: none; background: none; border-radius: 0;
@@ -61,7 +61,7 @@ input[type="checkbox"], input[type="radio"] {
    would eat the only thing it has to show. It keeps the outline and the corner, and gives the
    inside over to the colour. */
 input[type="color"] {
-  width: var(--s-7); height: var(--s-6);
+  width: var(--s-6); height: var(--s-5);
   padding: 2px;
   cursor: pointer;
 }
@@ -131,17 +131,17 @@ input[type="color"] {
   --banner-ground: var(--c-surface);
   --banner-ink: var(--c-text);
   --banner-tint: var(--c-sunken);
-  --banner-tint-hover: var(--c-rule);
+  --banner-tint-hover: var(--c-hover);
   --banner-edge: var(--c-rule);
   /* The one accented thing on a quiet band; the loud ones override the pair below. */
   --banner-btn-ground: var(--c-accent);
   --banner-btn-ink: #fff;
 
-  display: flex; align-items: flex-start; gap: var(--s-3);
-  padding: var(--s-2) var(--s-4);
+  display: flex; align-items: flex-start; gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
   background: var(--banner-ground); color: var(--banner-ink);
   border-bottom: 1px solid var(--c-rule);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
 }
 /* The two steps that fill the band, and the accent one beside them: an offer is not a step on the
    ladder — nothing is wrong, the reader is being handed something. */
@@ -174,7 +174,7 @@ input[type="color"] {
 /* The button that runs the action (re-sync). It outweighs the close button. */
 .healthbanner__action {
   flex: none; color: var(--banner-btn-ink); background: var(--banner-btn-ground);
-  border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-3);
+  border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-2);
   font-size: var(--fs-xs); font-weight: var(--fw-bold); cursor: pointer;
 }
 .healthbanner__action:hover { opacity: 0.85; }
@@ -201,8 +201,8 @@ input[type="color"] {
 
 /* ---------- topbar ---------- */
 .topbar {
-  display: flex; align-items: center; gap: var(--s-4);
-  padding: 0 var(--s-4);
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: 0 var(--s-3);
   background: var(--c-surface);
   border-bottom: 1px solid var(--c-rule);
 }
@@ -211,12 +211,12 @@ input[type="color"] {
    ground, white on the dark one — and not the topbar's text colour. */
 .topbar__brand {
   display: inline-flex; align-items: center;
-  margin-right: calc(var(--s-2) - var(--s-4));
+  margin-right: calc(var(--s-2) - var(--s-3));
   color: var(--c-brand-mark);
 }
 /* "amenbo" is a link that opens the product page (https://amenbo.work/) in the default
    browser. */
-.topbar__ws { font-weight: var(--fw-bold); font-size: var(--fs-lg); cursor: pointer; }
+.topbar__ws { font-weight: var(--fw-bold); font-size: var(--fs-xl); cursor: pointer; }
 .topbar__ws:hover { text-decoration: underline; }
 .topbar__ws:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; border-radius: 2px; }
 /* The reflect flourish: the moment an external write (AI/CLI) reaches the GUI, a rainbow
@@ -274,7 +274,7 @@ input[type="color"] {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 24px; background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
-  color: var(--c-text-muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer;
+  color: var(--c-text-muted); font-size: var(--fs-xl); line-height: 1; cursor: pointer;
 }
 .topbar__navbtn:hover:not(:disabled) { color: var(--c-text); }
 .topbar__navbtn:disabled { opacity: 0.35; cursor: default; }
@@ -289,7 +289,7 @@ input[type="color"] {
   flex: 1; min-width: 0;
   background: var(--c-surface);
   border-right: 1px solid var(--c-rule);
-  overflow-y: auto; padding: var(--s-3) var(--s-2);
+  overflow-y: auto; padding: var(--s-2) var(--s-2);
 }
 /* The resize handle on the right edge: a thin hit area straddling the border, showing its line
    only on hover or drag. Mirrors .rightpane__resizer on the opposite edge. */
@@ -302,16 +302,16 @@ input[type="color"] {
   background: var(--c-accent); opacity: 0; transition: opacity 0.12s;
 }
 .sidebar__resizer:hover::after, .sidebar__resizer:active::after { opacity: 1; }
-.sidebar__group { margin-bottom: var(--s-5); }
+.sidebar__group { margin-bottom: var(--s-4); }
 .sidebar__label {
   font-size: var(--fs-xs); font-weight: var(--fw-bold);
   text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--c-text-faint); padding: 0 var(--s-3); margin-bottom: var(--s-2);
+  color: var(--c-text-muted); padding: 0 var(--s-2); margin-bottom: var(--s-2);
 }
 .navitem {
-  display: flex; align-items: center; gap: var(--s-3);
+  display: flex; align-items: center; gap: var(--s-2);
   width: 100%; text-align: left; background: none; border: none;
-  padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
+  padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
   color: var(--c-text); font-size: var(--fs-md);
 }
 .navitem:hover { background: var(--c-hover); }
@@ -324,7 +324,7 @@ input[type="color"] {
 .navitem--drop-before { box-shadow: inset 0 2px 0 0 var(--c-accent); }
 .navitem--drop-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
 .navitem__count {
-  margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-faint);
+  margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-muted);
   background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
 }
 .navitem--active .navitem__count { background: var(--c-surface); }
@@ -341,7 +341,7 @@ input[type="color"] {
 .navitem__count--heed { background: var(--c-heed); color: #fff; font-weight: var(--fw-medium); }
 .navitem--active .navitem__count--stop { background: var(--c-stop); color: #fff; }
 .navitem--active .navitem__count--heed { background: var(--c-heed); color: #fff; }
-.navitem--muted { color: var(--c-text-faint); font-size: var(--fs-sm); cursor: pointer; }
+.navitem--muted { color: var(--c-text-muted); font-size: var(--fs-md); cursor: pointer; }
 
 /* ---------- main ---------- */
 .main { grid-area: main; overflow: auto; min-width: 0; display: flex; flex-direction: column; }
@@ -370,7 +370,7 @@ input[type="color"] {
 .rightpane__resizer:hover::after, .rightpane__resizer:active::after { opacity: 1; }
 .rightpane__empty {
   flex: 1; display: flex; align-items: center; justify-content: center;
-  color: var(--c-text-faint); font-size: var(--fs-sm); padding: var(--s-6); text-align: center;
+  color: var(--c-text-muted); font-size: var(--fs-md); padding: var(--s-5); text-align: center;
 }
 
 /* ---------- generic ---------- */
@@ -379,11 +379,12 @@ input[type="color"] {
   font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm);
   background: var(--c-sunken); color: var(--c-text-muted); white-space: nowrap;
 }
-.muted { color: var(--c-text-muted); }
-.faint { color: var(--c-text-faint); }
+/* Reading ink is two steps (`AMB-D-840`), so these two hand over one value: `.faint` is the older
+   name, kept while its callers are still written that way. */
+.muted, .faint { color: var(--c-text-muted); }
 /* The step a mark takes, set on the thing the mark sits in rather than on the mark: an icon draws in
    `currentColor` (`AMB-D-686`), so it is the chip, the row or the line that decides what it asks of
    the reader. Two classes and not three — the third step asks nothing, and a mark that asks nothing
-   takes the tone of the words it stands in (`.muted` / `.faint`) or a colour of its own. */
+   takes the tone of the words it stands in (`.muted`) or a colour of its own. */
 .step-stop { color: var(--c-stop); }
 .step-heed { color: var(--c-heed); }

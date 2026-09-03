@@ -24,10 +24,12 @@
   /* ----- color: neutral (warm gray) ----- */
   --c-text: #23211c;
   --c-text-muted: #6f6a5e;
+  /* Not for text (`AMB-D-840`): a separator, or the pale side of an icon. Reading ink is `--c-text`
+     and `--c-text-muted` — no value light enough to read as a third step clears AA on these grounds. */
   --c-text-faint: #9b958a;
 
   /* ----- color: accent (teal) ----- */
-  --c-accent: #0e7c7b;
+  --c-accent: #0d7777;
   --c-accent-weak: #d6ecec;
   --c-accent-text: #095a59;
 
@@ -40,8 +42,8 @@
   --c-brand-mark: #000000;
 
   /* ----- semantic ----- */
-  --c-human: #3b6bd6; /* human */
-  --c-ai: #8a4fd0;    /* AI */
+  --c-human: #3365d4; /* human */
+  --c-ai: #884bcf;    /* AI */
 
   /* ----- the step a mark takes -----
      What a colour says is what the mark asks of its reader — not what happened to produce it.
@@ -56,13 +58,13 @@
      A mark that carries a colour of its own is already off the ladder, having nothing to ask:
      `--c-done` on something that went through, the accent on a way in. */
   --c-stop: #c0392b;              /* nothing moves until a hand is put to it */
-  --c-heed: #c6791f;              /* it moves — know this while it does */
-  --c-plain: var(--c-text-faint); /* nothing is asked */
+  --c-heed: #995d18;              /* it moves — know this while it does */
+  --c-plain: var(--c-text-muted); /* nothing is asked */
 
   /* status */
   --c-todo: var(--c-plain);
-  --c-progress: #0e7c7b;
-  --c-done: #2fae66;
+  --c-progress: var(--c-accent);
+  --c-done: #217a48;
   --c-blocked: var(--c-heed);
 
   /* priority */
@@ -80,13 +82,13 @@
   /* ----- typography ----- */
   --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
-  /* text scale */
-  --fs-2xs: 10px; /* badges / superscript markers */
-  --fs-xs: 12px;
-  --fs-sm: 13px;
-  --fs-md: 14px;
+  /* text scale — four steps, because four is how many a reader can tell apart (`AMB-D-842`).
+     The seven it replaces ran 10 / 12 / 13 / 14 / 16 / 17 / 20, three of those a single pixel
+     from their neighbour: a name nobody can see the effect of is a name the next writer picks
+     at random, and a heading a hair larger than the line under it is not a heading. */
+  --fs-xs: 12px; /* badges, superscript markers, chips */
+  --fs-md: 14px; /* the default */
   --fs-body: 16px; /* detail-pane reading body */
-  --fs-lg: 17px;
   --fs-xl: 20px;
   --fw-normal: 400;
   --fw-medium: 550;
@@ -112,14 +114,19 @@
   --icon-md: 20px; /* headings and chips */
   --icon-lg: 24px; /* banners and onboarding */
 
-  /* ----- spacing ----- */
+  /* ----- spacing -----
+     Six steps on a 4px grid (`AMB-D-842`). The seven before them ran 4 / 6 / 8 at the bottom, and
+     two pixels is not a difference anyone can see — asked for the gap between a label and its
+     field, a writer picked whichever of the three came to hand, which is how the plugin screen came
+     to step 8 then 6 down one column. Dropping the 6px step leaves a ladder where every rung is
+     visibly a rung, so the gap is chosen for what it separates rather than for whichever name was
+     nearest. */
   --s-1: 4px;
-  --s-2: 6px;
-  --s-3: 8px;
-  --s-4: 12px;
-  --s-5: 16px;
-  --s-6: 24px;
-  --s-7: 32px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
 
   /* ----- radius / shadow ----- */
   --r-sm: 5px;
@@ -162,10 +169,9 @@
 
   /* The two steps that hold a value of their own; the third and everything derived from the
      three follow from the light side, which names them once. */
-  --c-stop: #e06155;
+  --c-stop: #e37166;
   --c-heed: #e0a04a;
 
-  --c-progress: #2ba6a4;
   --c-done: #46c97e;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);

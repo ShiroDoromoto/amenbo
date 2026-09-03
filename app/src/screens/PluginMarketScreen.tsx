@@ -345,7 +345,7 @@ function SourceConsent({ probe, name, onName, busy, onConfirm, onCancel }: {
 }) {
   return (
     <div className="catsrc__consent">
-      <div style={{ fontSize: "var(--fs-sm)" }}>{tf("plugins.trustTitle", { url: probe.url })}</div>
+      <div style={{ fontSize: "var(--fs-md)" }}>{tf("plugins.trustTitle", { url: probe.url })}</div>
       {probe.fingerprint ? (
         <>
           <div className="catsrc__fp">
@@ -443,7 +443,7 @@ function PluginCard({ entry, install, onOpen }: {
         </div>
         {/* The author's line in the reader's language where the catalog published one (`AMB-D-623`),
             and the author's own where it did not — with nothing on the row to say which it is. */}
-        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{pluginDesc(entry)}</div>
+        <div className="muted" style={{ fontSize: "var(--fs-md)" }}>{pluginDesc(entry)}</div>
         <div className="faint" style={{ fontSize: "var(--fs-xs)", display: "flex", gap: "var(--s-2)", flexWrap: "wrap", marginTop: 2 }}>
           <span>{entry.author}</span>
           <span>·</span>

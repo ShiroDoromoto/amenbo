@@ -72,9 +72,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
    The loud ones fill the band, and there the parts are cut out of the ground rather than laid on it:
    `--banner-tint` for the patch a control sits on, and an action that swaps ink for ground. */
 .healthbanner {
-  --banner-ground: var(--c-surface-2);
+  --banner-ground: var(--c-surface);
   --banner-ink: var(--c-text);
-  --banner-tint: var(--c-surface-sunken);
+  --banner-tint: var(--c-sunken);
   --banner-tint-hover: var(--c-rule);
   --banner-edge: var(--c-rule);
   /* The one accented thing on a quiet band; the loud ones override the pair below. */
@@ -206,7 +206,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .topbar__spacer { flex: 1; }
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--c-surface-sunken); border: 1px solid var(--c-edge);
+  background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1; cursor: pointer;
 }
@@ -216,7 +216,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .topbar__nav { display: inline-flex; gap: var(--s-1); }
 .topbar__navbtn {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 24px; background: var(--c-surface-sunken); border: 1px solid var(--c-edge);
+  min-width: 24px; background: var(--c-sunken); border: 1px solid var(--c-edge);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-2);
   color: var(--c-text-muted); font-size: var(--fs-lg); line-height: 1; cursor: pointer;
 }
@@ -231,7 +231,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sidebar-wrap { grid-area: sidebar; position: relative; display: flex; min-height: 0; min-width: 0; }
 .sidebar {
   flex: 1; min-width: 0;
-  background: var(--c-surface-2);
+  background: var(--c-surface);
   border-right: 1px solid var(--c-rule);
   overflow-y: auto; padding: var(--s-3) var(--s-2);
 }
@@ -258,7 +258,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
   color: var(--c-text); font-size: var(--fs-md);
 }
-.navitem:hover { background: var(--c-surface-sunken); }
+.navitem:hover { background: var(--c-hover); }
 .navitem--active { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 .navitem__dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 /* Drag-and-drop reordering of projects. The row being held fades, and the drop target
@@ -269,7 +269,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .navitem--drop-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
 .navitem__count {
   margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-faint);
-  background: var(--c-surface-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
+  background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
 }
 .navitem--active .navitem__count { background: var(--c-surface); }
 /* The inbox's needs-attention badge: the accent colour carries "unread / needs a look". */
@@ -321,7 +321,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chip {
   display: inline-flex; align-items: center; gap: var(--s-1);
   font-size: var(--fs-xs); padding: 1px var(--s-2); border-radius: var(--r-sm);
-  background: var(--c-surface-sunken); color: var(--c-text-muted); white-space: nowrap;
+  background: var(--c-sunken); color: var(--c-text-muted); white-space: nowrap;
 }
 .muted { color: var(--c-text-muted); }
 .faint { color: var(--c-text-faint); }

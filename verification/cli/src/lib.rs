@@ -180,6 +180,10 @@ fn default_fixtures_dir() -> PathBuf {
 pub(crate) struct Driver<'a> {
     bin: std::path::PathBuf,
     session: &'a scratch::Session,
+    /// The project a step files under when it names none, raised by the `init` this driver boots
+    /// with. Zero once a premise has taken the device back to nothing raised on it
+    /// (`store nothing-raised`) — read through [`Driver::standing_project`], which turns that into
+    /// a refusal by name rather than a write to a project that is gone.
     project_id: i64,
     bindings: HashMap<String, i64>,
     /// Which number space each binding's id lives in, for the ops that hand an id back to Amenbo as a
@@ -247,7 +251,10 @@ pub(crate) struct Driver<'a> {
 const REFUSED: &str = "\u{1}refused:";
 
 impl<'a> Driver<'a> {
-    /// Boot a fresh store: `init` creates it and hands back the project every `task add` needs.
+    /// Boot a fresh store: `init` creates it and hands back the project every `task add` needs. A
+    /// premise that wants a device with nothing raised on it takes this one away again as it opens
+    /// (`store nothing-raised`) — the store has to have somewhere to file what a premise stands up
+    /// before it can have nowhere.
     ///
     /// `fixtures` names the shelf a `copy-fixture` step reads from; `None` takes the one beside the
     /// scenarios in this repository.
@@ -281,6 +288,19 @@ impl<'a> Driver<'a> {
             .ok_or("init did not report a project_id")?;
         d.tick_at_start = d.tick_registered()?;
         Ok(d)
+    }
+
+    /// The project a step files under when it names none — the one `init` raised as this driver
+    /// booted. An `Err` once a premise has taken the device back to nothing raised on it
+    /// (`store nothing-raised`), which is a world where filing something without saying where has
+    /// no answer: better to say so by name than to send the row to a project that was deleted.
+    fn standing_project(&self) -> Result<i64, String> {
+        match self.project_id {
+            0 => Err("nothing is raised on this device — a step that files something has to name \
+                      the project it goes in (`store nothing-raised` took the last one away)"
+                .to_string()),
+            id => Ok(id),
+        }
     }
 
     /// Spawn the shipped binary in the isolated store, from a chosen folder. Every call goes

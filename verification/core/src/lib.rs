@@ -680,6 +680,17 @@ const REGISTRY: &[OpSpec] = &[
     // `launches` is written to the tally as it stands, and `days` spreads the records already in the
     // store back over that many separate days (the store has to hold at least that many).
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "worn-in", required: &["launches", "days"], refs: &[], strings: &[], binds: false },
+    // A machine nobody has raised anything on. The driver raises a project as it boots — the store
+    // has to have somewhere to file what a premise stands up — so a road that opens on the screen a
+    // first-time reader meets could not be given a world at all: the moment it declared one, there
+    // was a project on the screen it was written without. This takes the store back to none.
+    //
+    // It goes **first** in a premise. Losing a project releases the folders still pointing at it, so
+    // anything laid on the disk beforehand goes with the projects — what such a road wants lying in
+    // a folder is written by the steps after this one, the way `folder legacy-pointer` writes its
+    // own. `project delete` is the same move on a road and is not this: a road that emptied the
+    // device would be walking `retire-a-project` instead of its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "nothing-raised", required: &[], refs: &[], strings: &[], binds: false },
     // The answer given to a nudge that came up on its own. A screen road alone: nothing in a terminal
     // puts one, so the CLI driver never meets it.
     //
@@ -3051,6 +3062,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // it stands up is the passage of time itself — launches tallied across days written on — which a
     // road can only be given, never earn.
     (Domain::Store, "worn-in"),
+    // And a device nothing has been raised on at all, which is the world every road about the screen
+    // a first-time reader meets opens on. It is here for the state it leaves rather than for the act,
+    // the way `folder unbind` is: what the driver does to have somewhere to file a premise is itself
+    // a project, so there is no other way to arrive at a store holding none — and no road reaches it
+    // either, since a road that emptied the device would be walking `retire-a-project`.
+    (Domain::Store, "nothing-raised"),
     // A folder already answering for a project — what a screen showing bindings has to be looking at.
     // Taking a pointer back off is here for the state it leaves rather than for the act: a project
     // with no folder left is what one whole notice is about, and creating a project links one, so
@@ -4332,6 +4349,27 @@ steps_gui:
 "#;
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("cannot stand a world up")));
+    }
+
+    /// The world a road about a first-time reader's screen opens on: a device with nothing raised on
+    /// it. The driver raises a project to have somewhere to file a premise, so this is the one world
+    /// a scenario cannot arrive at by declaring records — it declares the absence of them instead.
+    #[test]
+    fn a_premise_may_take_the_device_back_to_nothing_raised_on_it() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: store
+    op: nothing-raised
+steps_gui:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Greenhouse }
+"#;
+        load_str(yaml).unwrap().validate().expect("a premise may empty the device");
     }
 
     /// A refusal leaves nothing standing, so it cannot be a premise: a driver that seeded one would

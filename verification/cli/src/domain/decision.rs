@@ -15,7 +15,7 @@ impl Driver<'_> {
                 // A step that names no project files it where everything else in the run goes.
                 let pid = match with.get("project") {
                     Some(_) => self.resolve_key(with, "project")?.to_string(),
-                    None => self.project_id.to_string(),
+                    None => self.standing_project()?.to_string(),
                 };
                 // The decision side of the same flag, and the side where it also answers a demand: an
                 // axis the project requires is read at the acceptance, so filling it here is what keeps

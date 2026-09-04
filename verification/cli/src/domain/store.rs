@@ -110,6 +110,41 @@ impl Driver<'_> {
                 let worn = wear_in(&self.session.home, launches, days)?;
                 Ok(Outcome::action(worn))
             }
+            // Take the device back to a machine nobody has raised anything on. The driver raises a
+            // project as it boots — the store has to have somewhere to file what a premise stands up
+            // — so this is the only way a premise reaches a store holding none, and a road that opens
+            // on the screen a first-time reader meets is a road that has to.
+            //
+            // **It goes first in a premise, not last.** Deleting a project releases the folders that
+            // still point at it — their `.amenbo` pointers along with the registry rows — so anything
+            // laid on the disk beforehand is taken off with the projects. What such a road wants
+            // lying in a folder afterwards is written by the steps that follow this one.
+            //
+            // The archived ones go too. They are a listing of their own, and a project the everyday
+            // list does not carry is still one the store holds — leaving one would say nothing is
+            // raised while a screen showing the archived could name it.
+            "nothing-raised" => {
+                let mut ids = self.projects_held(&["project", "list", "--json"])?;
+                for id in self.projects_held(&["project", "list", "--archived", "--json"])? {
+                    // The two listings overlap — the archived one carries the everyday rows beside
+                    // the put-away ones — and a number asked for twice is a number the second call
+                    // cannot find.
+                    if !ids.contains(&id) {
+                        ids.push(id);
+                    }
+                }
+                for id in &ids {
+                    self.delete_project(*id)?;
+                }
+                // Nothing left to fall back to: a later step that files something without naming
+                // where is refused by name rather than sent to a project that has been deleted.
+                self.project_id = 0;
+                Ok(Outcome::action(format!(
+                    "took the device back to nothing raised on it ({} project(s) gone, and the \
+                     pointers they had put in folders with them)",
+                    ids.len()
+                )))
+            }
             "config-set" => {
                 let key = req_str(with, "key")?;
                 let value = req_str(with, "value")?;
@@ -119,6 +154,21 @@ impl Driver<'_> {
             _ => Err(unmapped(Domain::Store, op)),
         }
     }
+    /// The ids one project listing carries, for the op that empties the store of them. Asked
+    /// through the listing rather than off the driver's own bookkeeping: what a premise raised is
+    /// bound by name, but a project the boot raised is nobody's binding, and the store is the one
+    /// place both are counted alike.
+    fn projects_held(&self, args: &[&str]) -> Result<Vec<i64>, String> {
+        let v = self.run_json(args)?;
+        Ok(v["projects"]
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+            .iter()
+            .filter_map(|p| p["id"].as_i64())
+            .collect())
+    }
+
     pub(crate) fn store_assert(&self, op: &str, with: &Args) -> Result<Outcome, String> {
         match op {
             "snapshot" => {

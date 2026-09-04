@@ -62,6 +62,11 @@ fn every_crossing_a_settings_step_names_is_a_project_that_stands() {
                 );
             }
             if let Step::Action { domain, op, with, .. } = step {
+                // And the premise that takes them all away again: a device with nothing raised on it
+                // is somewhere no setting is held, so a step naming a crossing after it names none.
+                if (*domain, op.as_str()) == (Domain::Store, "nothing-raised") {
+                    standing.clear();
+                }
                 if (*domain, op.as_str()) == (Domain::Project, "create") {
                     if let Some(name) = with.get("name").and_then(|v| v.as_str()) {
                         standing.insert(name);

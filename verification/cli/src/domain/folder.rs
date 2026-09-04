@@ -26,7 +26,7 @@ impl Driver<'_> {
                 // Which project a folder is pointed at: this run's own unless the step names another.
                 let pid = match with.get("project") {
                     Some(_) => self.resolve_key(with, "project")?,
-                    None => self.project_id,
+                    None => self.standing_project()?,
                 };
                 let dir = self.folder(with)?;
                 let path = dir.to_string_lossy().into_owned();
@@ -113,7 +113,7 @@ impl Driver<'_> {
                 let gone = self.moved_path(with, "moved")?;
                 let pid = match with.get("project") {
                     Some(_) => self.resolve_key(with, "project")?,
-                    None => self.project_id,
+                    None => self.standing_project()?,
                 };
                 let id = self.vanished_id(&dir, &gone)?;
                 let path = dir.to_string_lossy().into_owned();

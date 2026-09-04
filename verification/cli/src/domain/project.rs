@@ -66,14 +66,22 @@ impl Driver<'_> {
             }
             "delete" => {
                 let target = self.resolve(with)?;
-                // Destructive, and the run has nobody to ask: `--yes` is how a non-interactive caller
-                // declares the confirmation the command would otherwise stop for.
-                self.run_json(&["project", "delete", &target.to_string(), "--yes", "--json"])?;
+                self.delete_project(target)?;
                 Ok(Outcome::action(format!("deleted project {target}")))
             }
             _ => Err(unmapped(Domain::Project, op)),
         }
     }
+    /// Take one project off the store. Destructive, and the run has nobody to ask: `--yes` is how a
+    /// non-interactive caller declares the confirmation the command would otherwise stop for.
+    ///
+    /// Read for its exit code rather than for JSON: the delete face reports nothing on its way out,
+    /// so a caller waiting for an object waits for one that never comes. Shared with the premise
+    /// that empties the store (`store nothing-raised`), so the shape of the call is settled once.
+    pub(crate) fn delete_project(&self, id: i64) -> Result<(), String> {
+        self.run_bare(&["project", "delete", &id.to_string(), "--yes"])
+    }
+
     pub(crate) fn project_assert(&self, op: &str, with: &Args) -> Result<Outcome, String> {
         match op {
             "listed" => {

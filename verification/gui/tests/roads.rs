@@ -70,19 +70,84 @@ fn every_project_a_screen_road_opens_is_a_project_that_exists() {
 
 /// The projects an operator could find in the list when a road opens: whatever the world raised, and
 /// the one the run is standing in before it raised anything.
+///
+/// Walked in order, because a premise can take them all away again: `store nothing-raised` leaves a
+/// device with none, and a road opening on that names no project at all.
 fn projects_standing(scenario: &Scenario) -> HashSet<String> {
     let mut names: HashSet<String> = HashSet::new();
     names.insert(amenbo_verify_cli::scratch::CWD_DIR.to_string());
     for step in &scenario.given {
         if let Step::Action { domain, op, with, .. } = step {
-            if (*domain, op.as_str()) == (Domain::Project, "create") {
-                if let Some(name) = with.get("name").and_then(|v| v.as_str()) {
-                    names.insert(name.to_string());
+            match (*domain, op.as_str()) {
+                (Domain::Project, "create") => {
+                    if let Some(name) = with.get("name").and_then(|v| v.as_str()) {
+                        names.insert(name.to_string());
+                    }
                 }
+                (Domain::Store, "nothing-raised") => names.clear(),
+                _ => {}
             }
         }
     }
     names
+}
+
+/// A premise that takes the device back to nothing raised on it leaves no project to name — the
+/// boot's own included. Held here rather than left to the scan above, because no scenario walks that
+/// world yet: the roads it exists for are written against ops that are still being added, and until
+/// one of them lands the rule would be a line nothing ever reaches.
+#[test]
+fn a_premise_that_empties_the_device_leaves_no_project_to_name() {
+    let emptied = amenbo_scenario::load_str(
+        r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Greenhouse }
+  - type: action
+    domain: store
+    op: nothing-raised
+steps_gui:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Seedbed }
+"#,
+    )
+    .expect("loads");
+    assert!(
+        projects_standing(&emptied).is_empty(),
+        "nothing stands on a device the premise emptied — not what it raised, and not the boot's own"
+    );
+
+    let raised = amenbo_scenario::load_str(
+        r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: store
+    op: nothing-raised
+  - type: action
+    domain: project
+    op: create
+    with: { name: Greenhouse }
+steps_gui:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Seedbed }
+"#,
+    )
+    .expect("loads");
+    assert_eq!(
+        projects_standing(&raised),
+        ["Greenhouse".to_string()].into_iter().collect::<HashSet<String>>(),
+        "and what the premise raises after it does stand — the emptying is a moment, not a mode"
+    );
 }
 
 fn scenario_files() -> Vec<PathBuf> {

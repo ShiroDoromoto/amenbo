@@ -2,27 +2,32 @@
 # otherwise entirely optional — a task filed under nothing is a task like any other — so what this
 # raises is the exception: the axis whose answer a project will not do without. The demand lands on
 # the steps a record passes through once — the one that ends a task's creation, and, on the decision
-# side, both the record itself and the ruling that settles it — and nowhere else, which is what keeps
-# raising it from stopping a board that is already full: the work already filed is finished being
-# written, so it never meets the guard. A road that walked only the filing would read the same over a
-# build whose flag does nothing, so this one is written to be turned away eight times — on the axis
-# nobody could answer, on the creation that left the answer out, on the decision that would be
-# recorded without it, on the acceptance that left it out, on the supersession that would settle a
-# decision the same way, on the hand that would take the answer back off one task at a time, on the
-# removal that would take it off every task at once, and on the removal that would leave the axis
-# with nothing to answer with at all. The decision's two doors are walked by different people — one
-# writes, another rules — which is why both are here, and why the rulings that meet the second door
-# are the ones written before the demand went up.
+# side, every way a record is written and the ruling that settles it — and nowhere else, which is
+# what keeps raising it from stopping a board that is already full: the work already filed is
+# finished being written, so it never meets the guard. A road that walked only the filing would read
+# the same over a build whose flag does nothing, so this one is written to be turned away nine times
+# — on the axis nobody could answer, on the creation that left the answer out, on the decision that
+# would be recorded without it, on the promotion that would raise one out of a comment the same way,
+# on the acceptance that left it out, on the supersession that would settle a decision the same way,
+# on the hand that would take the answer back off one task at a time, on the removal that would take
+# it off every task at once, and on the removal that would leave the axis with nothing to answer with
+# at all. The decision's two doors are walked by different people — one writes, another rules — which
+# is why both are here, and why the rulings that meet the second door are the ones written before the
+# demand went up. Writing itself has two ways in rather than one, so the promotion is walked beside
+# the record: a demand read at only one of them is a demand anyone could go around by saying the thing
+# on a timeline first.
 id: make-an-axis-nobody-can-leave-empty
-title: An axis marked required turns away the creation, the record and the acceptance that left it empty, and holds the answer on once it is there
+title: An axis marked required turns away the creation, the record, the promotion and the acceptance that left it empty, and holds the answer on once it is there
 description: >
   Raise the demand on an axis offering no values and be refused — a requirement nobody could answer
   would stop every creation on the project. Raise it on an axis that offers two, file a task without
   answering it, and watch the creation refused and the task held out of the mailbox. Put a value on
   and watch the same creation end. A decision left blank is turned away as it is recorded, and goes
-  through once the answer rides along with it; the rulings written before the demand went up meet it
-  where they are settled, through the acceptance and through the supersession that promotes one, and
-  answering the axis opens both. Then try to take the value back off and be refused there too —
+  through once the answer rides along with it; a comment raised into a decision of its own meets the
+  same demand at the same place, and is refused before anything is written. The rulings written before
+  the demand went up meet it where they are settled, through the acceptance and through the
+  supersession that promotes one, and answering the axis opens both. Then try to take the value back
+  off and be refused there too —
   from the task, and from the axis itself, where removing the value would empty every task on it at
   once unless the removal says where they go. Say where, and the value goes with the task carried
   over, and with the decision beside it; the axis's last value does not go at all, until the demand
@@ -206,6 +211,46 @@ steps_cli:
       dimension: Medium
       value: print
     as: ruling
+
+  # The other way in to that first door. A record is not always typed out: a line already said on a
+  # timeline can be raised into one, and a demand read only where a decision is typed would leave that
+  # way in open — say the thing as a comment first, promote it, and the axis is empty again.
+  - type: action
+    domain: task
+    op: comment
+    with:
+      target: seed
+      text: SCENARIO — the reasoning that turned out to be worth a record of its own
+    as: note
+
+  - type: action
+    domain: comment
+    op: promote
+    with:
+      target: note
+      title: SCENARIO SEED — raised out of a comment with the answer missing
+      refused: invalid_decision_required_dimension
+
+  # And the answer rides along here too, on the same word the record takes it on. The comment is still
+  # there to raise a second time, which is what says the refusal happened before anything was written
+  # rather than after — a promotion turned away halfway would have taken its line with it.
+  - type: action
+    domain: comment
+    op: promote
+    with:
+      target: note
+      title: SCENARIO SEED — raised out of a comment with the answer given
+      dimension: Medium
+      value: print
+    as: raised
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "dim:Medium=print"
+      target: raised
+      present: true
 
   # And the second door, met by a ruling written before the demand went up. Raising a flag does not
   # reach back, so this one is on the board with the axis blank — and it is the settling that reads it.

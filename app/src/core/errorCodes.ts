@@ -94,6 +94,10 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_dimension_close_last_open",
   "invalid_dimension_set_closed_value",
   "invalid_task_required_dimension",
+  // A status a task still being created cannot take (`AMB-D-846`). The panel does not draw the controls
+  // on a draft card, so the refusal is the backstop under a window drawn before another device reopened
+  // the creation.
+  "invalid_task_status_draft",
   // Its decision twin: the same flag, read at the other door a record passes through once
   // (`decision accept`), and the decision pane is where that button is.
   "invalid_decision_required_dimension",

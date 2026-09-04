@@ -857,6 +857,7 @@ export const es: Translation = {
     invalid_dimension_close_last_open: "«{name}» es una categoría obligatoria y «{value}» es el último valor que aún ofrece, así que cerrarlo dejaría una exigencia que nadie puede cumplir: desactiva primero «Obligatoria».",
     invalid_dimension_set_closed_value: "«{value}» está cerrado en «{name}», así que ya no se clasifica nada nuevo con él: elige un valor abierto, o reábrelo.",
     invalid_task_required_dimension: "Esta tarea no lleva ningún valor en {names}, que este proyecto exige.",
+    invalid_task_status_draft: "{ref} todavía se está creando, así que su estado no se puede cambiar: termina de crearla o elimínala.",
     invalid_decision_required_dimension: "Esta decisión no lleva ningún valor en {names}, que este proyecto exige.",
     invalid_dimension_values_unordered:
       "Los valores de esta categoría no llevan orden, así que no se pueden reordenar.",

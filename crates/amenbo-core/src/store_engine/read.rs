@@ -1499,6 +1499,16 @@ pub fn task_status(conn: &Connection, id: i64) -> Result<Option<crate::model::Ta
         .and_then(crate::model::TaskStatus::parse))
 }
 
+/// Whether this task's creation is still open, read for the same reason [`task_status`] is: the guard on a
+/// status transition judges on it (`AMB-D-846`), and only the truth source, read inside the write
+/// transaction, can say whether another device finished the creation a moment ago. A row that is not there
+/// answers `false` — the status guard ahead of it is what turns a missing task into `not_found`, and this
+/// read has nothing to add to that.
+pub fn task_draft(conn: &Connection, id: i64) -> Result<bool> {
+    const TA: col::task::Cols = col::task::ALL;
+    Ok(scalar_by_id(conn, TA.id, TA.draft, id)?.unwrap_or(false))
+}
+
 /// The project this task is filed under, or `None` when it is unfiled (inbox) or gone. Read inside the
 /// system event's transaction, because the activity ledger's line carries the project itself — the file
 /// cannot join against the DB.

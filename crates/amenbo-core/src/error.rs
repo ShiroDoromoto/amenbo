@@ -336,6 +336,10 @@ pub enum ErrorCode {
     InvalidDimensionCloseLastOpen,
     InvalidDimensionSetClosedValue,
     InvalidTaskRequiredDimension,
+    // A status transition turned away because the task's creation is still open (`AMB-D-846`). It is not
+    // `not_ready`: that sentence opens with "cannot reserve", and this one is refusing to close or stall a
+    // task, not to start it.
+    InvalidTaskStatusDraft,
     InvalidDecisionRequiredDimension,
     InvalidDecisionEditRejected,
     InvalidDecisionAcceptRejected,
@@ -502,6 +506,7 @@ impl ErrorCode {
             ErrorCode::InvalidDimensionCloseLastOpen => "invalid_dimension_close_last_open",
             ErrorCode::InvalidDimensionSetClosedValue => "invalid_dimension_set_closed_value",
             ErrorCode::InvalidTaskRequiredDimension => "invalid_task_required_dimension",
+            ErrorCode::InvalidTaskStatusDraft => "invalid_task_status_draft",
             ErrorCode::InvalidDecisionRequiredDimension => "invalid_decision_required_dimension",
             ErrorCode::InvalidDecisionEditRejected => "invalid_decision_edit_rejected",
             ErrorCode::InvalidDecisionAcceptRejected => "invalid_decision_accept_rejected",
@@ -626,6 +631,7 @@ impl ErrorCode {
         ErrorCode::InvalidDimensionCloseLastOpen,
         ErrorCode::InvalidDimensionSetClosedValue,
         ErrorCode::InvalidTaskRequiredDimension,
+        ErrorCode::InvalidTaskStatusDraft,
         ErrorCode::InvalidDecisionRequiredDimension,
         ErrorCode::InvalidDecisionEditRejected,
         ErrorCode::InvalidDecisionAcceptRejected,
@@ -879,6 +885,7 @@ mod tests {
             "invalid_dimension_close_last_open",
             "invalid_dimension_set_closed_value",
             "invalid_task_required_dimension",
+            "invalid_task_status_draft",
             "invalid_decision_required_dimension",
             "invalid_decision_edit_rejected",
             "invalid_decision_accept_rejected",

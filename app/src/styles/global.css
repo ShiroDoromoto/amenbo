@@ -1470,17 +1470,6 @@ body.dragging-row { user-select: none; }
   color: var(--c-text-muted); font-size: var(--fs-md); padding: var(--s-5); text-align: center;
 }
 
-/* ---------- generic ---------- */
-/* Reading ink is two steps (`AMB-D-840`), so these two hand over one value: `.faint` is the older
-   name, kept while its callers are still written that way. */
-.muted, .faint { color: var(--c-text-muted); }
-/* The step a mark takes, set on the thing the mark sits in rather than on the mark: an icon draws in
-   `currentColor` (`AMB-D-686`), so it is the chip, the row or the line that decides what it asks of
-   the reader. Two classes and not three — the third step asks nothing, and a mark that asks nothing
-   takes the tone of the words it stands in (`.muted`) or a colour of its own. */
-.step-stop { color: var(--c-stop); }
-.step-heed { color: var(--c-heed); }
-
 /* Which agent a pane starts as (`app/src/talk/agent.ts`). The classes are here rather than beside
    either face's own because both faces draw this frame, and only one of them loads `talk.css`. The
    pane's own box is not here for the same reason in reverse: each face styles its terminal itself,

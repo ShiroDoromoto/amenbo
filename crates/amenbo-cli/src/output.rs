@@ -523,10 +523,19 @@ impl From<amenbo_core::Error> for CliError {
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidTaskRequiredDimension) => Some(format!(
                 "This project requires a value on that axis before a creation can be finished. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <AMB-T-n> <axis> <value>` puts one on the task."
             )),
-            // The decision side of the same door. The way out is the same two steps, on the ref the
-            // other kind is named by — and `dimension set` takes either, so only the ref changes.
+            // The decision side of the same door — and this code comes out of two of them, so the way
+            // out is written for both (`AMB-D-847`). At the record there is no decision yet to put a
+            // value on, so the only road is the flag that classifies it as it is written — named on its
+            // own, since either door that records one (`decision add`, `decision promote`) takes it; at
+            // the settling the decision exists, and `dimension set` fills the axis in on it.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidDecisionRequiredDimension) => Some(format!(
-                "This project requires a value on that axis before a decision can be settled. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <AMB-D-n> <axis> <value>` puts one on the decision."
+                "This project requires a value on that axis. `{cmd} dimension show <axis>` lists what it offers; then classify it as you record it with `--dim <axis>=<value>`, or put a value on a decision already recorded with `{cmd} dimension set <AMB-D-n> <axis> <value>`."
+            )),
+            // A status a draft cannot take. The caller was closing or stalling the task, so the two ways
+            // out point opposite ways — finish writing it and the status opens, or the draft was written
+            // in error and `delete` is what it leaves by. `reject` is not one of them (`AMB-D-846`).
+            E::Invalid(m) if m.code() == Some(ErrorCode::InvalidTaskStatusDraft) => Some(format!(
+                "A task still being created stays at `todo`. End the creation with `{cmd} task finish-creating <AMB-T-n>` and the status opens up — or, if it was written in error, remove it with `{cmd} task delete <AMB-T-n>`."
             )),
             // Lowering the flag is the other way out, and it is the one nobody thinks of while holding a
             // task they only wanted to reclassify.

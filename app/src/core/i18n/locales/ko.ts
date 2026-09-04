@@ -825,6 +825,7 @@ export const ko: Translation = {
     invalid_dimension_close_last_open: "«{name}»은 필수 분류이고 «{value}»는 아직 열려 있는 마지막 값이라, 닫으면 아무도 답할 수 없는 요구가 남습니다 — 먼저 «필수»를 끄세요.",
     invalid_dimension_set_closed_value: "«{value}»는 «{name}»에서 닫혀 있어 새로 붙일 수 없습니다 — 열려 있는 값을 고르거나 이 값을 다시 여세요.",
     invalid_task_required_dimension: "이 작업은 {names}에 값이 없습니다. 이 프로젝트가 필수로 두는 분류입니다.",
+    invalid_task_status_draft: "{ref}은(는) 아직 작성 중이라 상태를 바꿀 수 없습니다. 작성을 마치거나 삭제하세요.",
     invalid_decision_required_dimension: "이 결정은 {names}에 값이 없습니다. 이 프로젝트가 필수로 두는 분류입니다.",
     invalid_dimension_values_unordered: "이 분류의 값에는 순서가 없어 재정렬할 수 없습니다.",
     invalid_decision_edit_rejected: "{ref}은(는) 기각되었습니다. 기각된 결정은 편집할 수 없습니다.",

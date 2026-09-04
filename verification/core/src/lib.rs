@@ -336,7 +336,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], refs: &["target", "mentions"], strings: &["text"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "edit", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "rm", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "promote", required: &["target", "title"], refs: &["target"], strings: &["title"], binds: true },
+    // Promoting writes a decision, so it carries the same `dimension` / `value` a decision's own
+    // create does: an axis the project requires is read here too, and a road that could not answer it
+    // could only ever walk the refusal.
+    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "promote", required: &["target", "title"], refs: &["target"], strings: &["title", "dimension", "value"], binds: true },
     // The progress states, each by the command a user reaches for: `status` is the explicit move
     // (and the reserve), `done` / `reopen` / `block` are the three the CLI gives their own verb.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], refs: &["target"], strings: &["status"], binds: false },
@@ -1311,6 +1314,20 @@ const REGISTRY: &[OpSpec] = &[
     //
     // A screen road alone. The row is a way to press, and a terminal has nowhere to press it to.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "pane", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
+    // Which of a task's own controls the face draws, and which it does not. `opened` asks
+    // *whose* record is standing there and answers it with a phrase off the record's face; this asks
+    // what that face **offers to press**, which no phrase witnesses — a control that was taken away
+    // leaves no word behind to look for, and the word its absence would be read by is on every other
+    // card besides.
+    //
+    // `control` names one of the four (`status`, `drag`, `finish-creating`, `delete`) and `where` says
+    // on which of the two faces a task wears them, the card or its own page. Both halves are worth a
+    // step: `present: false` is the guard, and `present: true` beside it is what keeps a build that
+    // drew nothing at all from reading green.
+    //
+    // A screen road alone — a terminal offers no controls, only commands, and what it refuses is
+    // already `status`'s `refused:`.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "offers", required: &["target", "control", "where", "present"], refs: &["target"], strings: &["control", "where"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     // The row the panel left standing, and the fold it folded into — the decision-side twins of the

@@ -1,0 +1,23 @@
+/* The classes a caller puts on an element to say what colour of ink it is written in, whatever the
+   element already is. They are one line each and they have no component of their own — what they
+   have instead is a place in the cascade: this sheet is loaded after every other one (`main.tsx`),
+   so a rule here is the last word on the property it sets.
+
+   That place is the whole point of the file. A utility and a component's base rule are both one
+   class deep, so which of them wins is decided by nothing but the order the sheets were read in —
+   and while these lived among the base rules, that order was an accident of where in a file each
+   one happened to sit. `.chip` sets a colour of its own, and the day it moved into
+   `components/components.css` the chips that a premise holds back stopped being drawn in the stop
+   step, with nothing anywhere saying they had (`AMB-T-4321`). Read last, a utility cannot lose that
+   way. Nothing but such a class belongs here: a rule that is not meant to beat a component's own
+   would beat it anyway. */
+
+/* Reading ink is two steps (`AMB-D-840`), so these two hand over one value: `.faint` is the older
+   name, kept while its callers are still written that way. */
+.muted, .faint { color: var(--c-text-muted); }
+/* The step a mark takes, set on the thing the mark sits in rather than on the mark: an icon draws in
+   `currentColor` (`AMB-D-686`), so it is the chip, the row or the line that decides what it asks of
+   the reader. Two classes and not three — the third step asks nothing, and a mark that asks nothing
+   takes the tone of the words it stands in (`.muted`) or a colour of its own. */
+.step-stop { color: var(--c-stop); }
+.step-heed { color: var(--c-heed); }

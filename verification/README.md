@@ -380,6 +380,18 @@ across. The pointer is put in the middle of the window first, since a wheel land
 pointing rather than on whatever holds focus; something else on the screen that scrolls is reached by
 clicking into it and scrolling after.
 
+**A card is carried with `drag <pid> <x1> <y1> <x2> <y2> [steps]`, and not out of two clicks.** Filing
+work by moving its card is a road on the board, and what the screen is watching for is the run of
+moves between the press and the release — a press at one place and a release at another is a click at
+the second one. So the pointer is walked across with the button held, in `steps` moves rather than
+one: a webview works out where the pointer is on every move it is given, and a jump straight to the
+far end gives it exactly one.
+
+**Both ends are points and not names**, unlike everything else that can be aimed by one. Where a drag
+lands is decided by which side of a row's middle it is let go on, and both sides of that line are the
+same row — a name says which row and cannot say which side of it. So the arithmetic is the caller's,
+and `find`'s rectangle is what each end is built from.
+
 **A day goes in through `set-date <pid> <name> <yyyy-mm-dd>` rather than through the keys.** A date
 field is one control with three numbered parts in it, and typing into it is a digit at a time — but
 every digit that leaves the value a valid day makes the app commit and redraw the field, and the
@@ -417,7 +429,7 @@ cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml 
 
 A screen road is walked by somebody, always. The run prints the step it is about to shoot and waits
 for a line on stdin; between the two, the screen belongs to whoever is driving — carry the step out
-by hand, or with the screen tool's `click-named` / `type` / `key` / `scroll` / `set-date`, and send the line
+by hand, or with the screen tool's `click-named` / `drag` / `type` / `key` / `scroll` / `set-date`, and send the line
 once the screen is standing where the step says it should. There is no flag for running it any other way.
 
 **The hand-over comes before the step, the first one included.** That is what lets a road open with a
@@ -1229,6 +1241,11 @@ shape the box takes while no side is chosen and there is no grammar to read the 
 button takes while there is no answer left to clear, and the shape either road's button takes while the
 row has no folder to hand over. All three are read off how the control is drawn, not off what it does
 when used: one shut in the build and painted like a live one is one a reader still reaches for.
+Whether a task's face draws one of its own controls at all (`task offers`) is the other side of those
+three — not a control shut but a control gone, which is what a task still being created is read for:
+its status stands as plain text, its card takes no drag, and what is left to press is the two ways out
+of a creation. A terminal has none of this: what it offers is commands, and the one it would turn away
+is already `task status`'s `refused:`.
 
 Pressing a smart view open from the sidebar, reading the warning its row carries before that press, and
 reading which tasks the listing behind it holds (`task open-view` / `task view-warns` / `task

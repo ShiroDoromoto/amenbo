@@ -7056,6 +7056,8 @@ mod tests {
                 .id
         };
         let task = task_add(Some(project_id), "やらないと決めた作業".into(), None, None, None).unwrap().tasks[0];
+        // A creation still open has no status to close (`AMB-D-846`), and the reason is what is under test.
+        finish_creating(task);
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
         let err = task_reject(task, "   ".into()).err().expect("an empty reason must be refused");
@@ -7416,6 +7418,8 @@ mod tests {
         let pending = task_add(Some(project_id), "GUI を追従させる".into(), None, None, None).unwrap().tasks[0];
         decision_set_link(head, shipped, true).unwrap();
         decision_set_link(head, pending, true).unwrap();
+        // A creation still open has no status to close (`AMB-D-846`); what the card reads is the link.
+        finish_creating(shipped);
         task_status(shipped, "done".into()).unwrap();
 
         let c = card(head);
@@ -8333,6 +8337,8 @@ mod tests {
                     done_id = Some(t.id);
                 }
             }
+            // A creation still open has no status to close (`AMB-D-846`), and paging is the subject here.
+            store.finish_task_creation(done_id.unwrap(), ActorKind::Human).unwrap();
             store.set_task_completed(done_id.unwrap(), true, ActorKind::Human).unwrap();
             p.id
         };

@@ -830,6 +830,7 @@ export const nl: Translation = {
     invalid_dimension_close_last_open: "«{name}» is een verplichte categorie en «{value}» is de laatste waarde die ze nog aanbiedt: sluiten zou een eis achterlaten die niemand kan vervullen — zet eerst «Verplicht» uit.",
     invalid_dimension_set_closed_value: "«{value}» is gesloten op «{name}», er wordt niets nieuws meer onder ondergebracht — kies een open waarde, of heropen deze.",
     invalid_task_required_dimension: "Deze taak draagt geen waarde op {names}, wat dit project vereist.",
+    invalid_task_status_draft: "{ref} wordt nog aangemaakt, dus de status kan niet worden gewijzigd — rond het aanmaken af of verwijder de taak.",
     invalid_decision_required_dimension: "Deze beslissing draagt geen waarde op {names}, wat dit project vereist.",
     invalid_dimension_values_unordered:
       "De waarden van deze categorie hebben geen volgorde en kunnen dus niet worden herschikt.",

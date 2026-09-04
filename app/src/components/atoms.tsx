@@ -88,8 +88,12 @@ export function FacetAvatar({ actor, showName }: { actor: Actor; showName?: bool
  * `rejected` is the one option that does not write on being picked: it asks for the reason first
  * ({@link RejectReasonModal}), and hands it on with the status. Cancelling writes nothing, and the
  * control snaps back to the status it is set to.
+ *
+ * A task still being created is the one case with no control at all: its status cannot move anywhere
+ * (`AMB-D-846`), so drawing a pull-down would only be a door that refuses. The status is written out
+ * instead, and the ways out of a creation — finishing it, deleting it — are the detail pane's.
  */
-export function StatusSelect({ id, status, onStatus, premiseChange, className = "inlineselect" }: {
+export function StatusSelect({ id, status, onStatus, premiseChange, draft, className = "inlineselect" }: {
   id: number;
   status: Status;
   // The reason rides along with the status because one status requires it: `rejected` is refused
@@ -100,6 +104,9 @@ export function StatusSelect({ id, status, onStatus, premiseChange, className = 
   // transition, with a change present, a firm toast fires before the change is handed on. The transition is
   // never blocked (surface, not veto): the holder may still ship the part that stands on its own.
   premiseChange?: PremiseChangeDto | null;
+  // Whether the task is still being created. Every surface that mounts this has the task in hand, so it
+  // passes the flag rather than deriving it; the control is the one place that decides what to draw.
+  draft?: boolean;
   // The surfaces differ in how the control is dressed — compact among a card's chips, a full button in the
   // detail pane's action row — but it is one control, so the styling is the only thing a caller may vary.
   className?: string;
@@ -117,6 +124,9 @@ export function StatusSelect({ id, status, onStatus, premiseChange, className = 
     if (next === "rejected") setRejecting(true);
     else commit(next);
   };
+  // The status still reads — a row keeps the column it has, and a card the footer it has — but there is
+  // nothing to pick. The tooltip is the draft chip's, since that is the whole reason there is no control.
+  if (draft) return <span className="meta" title={t("block.draft")}>{statusLabel(status)}</span>;
   return (
     <>
       <select

@@ -829,6 +829,7 @@ export const tr: Translation = {
     invalid_dimension_close_last_open: "«{name}» zorunlu bir kategori ve «{value}» onun hâlâ sunduğu son değer; kapatmak kimsenin karşılayamayacağı bir zorunluluk bırakır — önce «Zorunlu» seçeneğini kapatın.",
     invalid_dimension_set_closed_value: "«{value}» «{name}» üzerinde kapalı, altına yeni bir şey sınıflanmaz — açık bir değer seçin ya da bunu yeniden açın.",
     invalid_task_required_dimension: "Bu görev {names} alanında değer taşımıyor, oysa bu proje onu zorunlu tutuyor.",
+    invalid_task_status_draft: "{ref} hâlâ oluşturuluyor, bu yüzden durumu değiştirilemez — oluşturmayı bitirin ya da görevi silin.",
     invalid_decision_required_dimension: "Bu karar {names} alanında değer taşımıyor, oysa bu proje onu zorunlu tutuyor.",
     invalid_dimension_values_unordered: "Bu kategorinin değerleri sıralı değil, bu yüzden yeniden sıralanamaz.",
     invalid_decision_edit_rejected: "{ref} reddedildi ve reddedilmiş bir karar düzenlenemez.",

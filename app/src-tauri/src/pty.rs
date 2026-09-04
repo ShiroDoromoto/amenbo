@@ -972,6 +972,7 @@ pub fn pty_resize(
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     use portable_pty::CommandBuilder;
 
     /// The tail a pane adopting a session is given never outgrows its cap, however much the
@@ -1099,6 +1100,7 @@ mod tests {
     }
 
     /// Read a terminal to its end and hand back everything that came out of it, as bytes.
+    #[cfg(unix)]
     fn read_to_end(mut reader: Box<dyn Read + Send>) -> Vec<u8> {
         let mut out = Vec::new();
         let mut buf = [0u8; 1024];

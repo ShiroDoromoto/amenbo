@@ -497,6 +497,7 @@ mod tests {
     use std::path::PathBuf;
 
     /// A folder with something in it, and a sibling holding a secret that must stay out of reach.
+    #[cfg(unix)]
     fn folders() -> (tempfile::TempDir, Vec<PathBuf>) {
         let dir = tempfile::tempdir().expect("a temp dir");
         let root = dir.path().join("work");

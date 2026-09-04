@@ -4,7 +4,7 @@
 use serde_json::json;
 
 use amenbo_core::config::Paths;
-use amenbo_core::model::{AttachmentTarget, ClassifiedSide, TaskStatus};
+use amenbo_core::model::{AttachmentTarget, ClassifiedSide, DimensionRole, TaskStatus};
 use amenbo_core::{ops, query, Store};
 
 use crate::cli::*;
@@ -48,10 +48,10 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             let mut resource = serde_json::to_value(&detail).unwrap();
             let unmet = unmet_on_new_decision(store, d.id, &mut resource)?;
             write_envelope(flags, "decision.add", "decision", resource, None, false, format!("✓ Recorded decision: {} ({})", d.title, decision_label(d.id)));
-            // The two ways in, because this command has both: the flag it was just typed with, and the
-            // command that fills an axis in afterwards.
+            // The two ways in: the flag it was just typed with, and the command that fills an axis in
+            // afterwards.
             if !unmet.is_empty() {
-                human(flags, still_to_classify(&unmet, d.id, "pass --dim <axis>=<value> here, or fill it in with"));
+                human(flags, still_to_classify(&unmet, d.id));
             }
         }
         DecisionCmd::List { project, filter, sort, limit, offset, with_body } => {
@@ -325,23 +325,21 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 write_envelope(flags, "decision.link", "decision_task_link", serde_json::to_value(&l).unwrap(), None, !created, format!("✓ Linked {} ⇄ {}", decision_label(did), task_label(tid)));
             }
         }
-        DecisionCmd::Promote { comment, title, project } => {
+        DecisionCmd::Promote { comment, title, project, dim } => {
             let from_task = store.resolve_task_comment(&comment).map_err(CliError::from)?.first().copied();
             let from_decision = store.resolve_decision_comment(&comment).map_err(CliError::from)?.first().copied();
             let (did, source) = match (from_task, from_decision) {
                 (Some(a), Some(b)) => return Err(ambiguous_comment(&comment, a, b)),
-                (Some(cid), None) => (promote_task_comment(store, cid, title, project)?, task_comment_label(cid)),
-                (None, Some(cid)) => (promote_decision_comment(store, cid, title, project)?, decision_comment_label(cid)),
+                (Some(cid), None) => (promote_task_comment(store, cid, title, project, &dim)?, task_comment_label(cid)),
+                (None, Some(cid)) => (promote_decision_comment(store, cid, title, project, &dim)?, decision_comment_label(cid)),
                 (None, None) => return Err(comment_not_found(&comment)),
             };
             let detail = store.decision_detail(did).map_err(CliError::from)?;
             let mut resource = serde_json::to_value(&detail).unwrap();
             let unmet = unmet_on_new_decision(store, did, &mut resource)?;
             write_envelope(flags, "decision.promote", "decision", resource, None, false, format!("✓ Promoted {source} to decision: {} ({})", detail.title, decision_label(did)));
-            // One way in, not two: a promotion carries no `--dim`, so naming one here would send the
-            // reader to a flag this command does not have.
             if !unmet.is_empty() {
-                human(flags, still_to_classify(&unmet, did, "fill it in with"));
+                human(flags, still_to_classify(&unmet, did));
             }
         }
         DecisionCmd::Comment { sub } => return decision_comment(store, flags, sub),
@@ -362,7 +360,9 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
 /// wrote it. Saying nothing at the create leaves the writer no moment to notice at all.
 ///
 /// Nothing blank means the key is **absent** rather than an empty list: a reader testing for it is
-/// testing for something to do. It names, it does not refuse — the record is written either way.
+/// testing for something to do. It names, it does not refuse — the record is written either way. On a
+/// promotion that leaves it only what no door asks for, since [`classify_new_decision`] has already
+/// turned away everything the project demands: a required time axis no era of the project covers.
 fn unmet_on_new_decision(
     store: &Store,
     decision_id: i64,
@@ -377,21 +377,72 @@ fn unmet_on_new_decision(
     Ok(unmet)
 }
 
-/// The human-facing half of [`unmet_on_new_decision`]: the axes still blank, and the way in. `ways` is
-/// the caller's, since a promotion has no `--dim` to send anyone to and `add` does.
-fn still_to_classify(unmet: &[String], decision_id: i64, ways: &str) -> String {
+/// The human-facing half of [`unmet_on_new_decision`]: the axes still blank, and the way in. Both doors
+/// that create a decision take `--dim`, so both are told the same two ways in.
+fn still_to_classify(unmet: &[String], decision_id: i64) -> String {
     format!(
-        "  still to classify: {} — {ways} `{} dimension set {} <axis> <value>` (accepting it is refused until then)",
+        "  still to classify: {} — pass --dim <axis>=<value> here, or fill it in with `{} dimension set {} <axis> <value>` (accepting it is refused until then)",
         unmet.join(", "),
         Paths::command_name(),
         decision_label(decision_id),
     )
 }
 
+/// The classification a promotion is filed with, refused before anything is written (`AMB-D-847`).
+///
+/// `decision promote` is the second door onto a new decision, and it leaves the same gap `add` does: the
+/// one who writes the record is not the one who accepts it, so a required axis left blank here is a
+/// refusal that lands on somebody else, hours later. The demand is therefore read at the create — and
+/// **before** it, since a refusal after the write would leave a decision behind that only exists to be
+/// classified by hand.
+///
+/// The range is the project's required axes that classify decisions (`AMB-D-789`), minus the time axis:
+/// the create fills that one with the era containing today (`AMB-D-147`), so demanding it would ask for
+/// an answer the store is about to write anyway. The same range the GUI's compose form holds its button
+/// on.
+fn classify_new_decision(
+    store: &Store,
+    project_id: i64,
+    dim: &[String],
+) -> Result<Vec<i64>, CliError> {
+    let value_ids = resolve_dim_pairs(store, project_id, dim, ClassifiedSide::Decision)?;
+    let mut named: Vec<i64> = Vec::with_capacity(value_ids.len());
+    for &value_id in &value_ids {
+        if let Some(v) = store.dimension_value(value_id).map_err(CliError::from)? {
+            named.push(v.dimension_id);
+        }
+    }
+    let unmet: Vec<String> = store
+        .dimensions(project_id)
+        .map_err(CliError::from)?
+        .into_iter()
+        .filter(|d| d.required && d.applies_to.on_decision() && d.role != DimensionRole::TimeAxis)
+        .filter(|d| !named.contains(&d.id))
+        .map(|d| d.name)
+        .collect();
+    if unmet.is_empty() {
+        return Ok(value_ids);
+    }
+    // The accept door's own hint sends the reader to `dimension set <AMB-D-n>`, and there is no such ref
+    // yet — nothing was written. The way out here is the flag that was left off.
+    Err(CliError {
+        code: "invalid_decision_required_dimension",
+        message: format!(
+            "this decision would carry no value on {}, which this project requires",
+            unmet.join(", ")
+        ),
+        hint: Some(format!(
+            "Answer each axis here with `--dim \"<axis>=<value>\"`, repeated per axis. `{} dimension show <axis>` lists what it offers.",
+            Paths::command_name()
+        )),
+        exit: 1,
+    })
+}
+
 /// The task-comment side of `decision promote`: the comment's text becomes the body, its task's project
 /// becomes the home, and the new decision is linked back to that task — the decision is that task's
 /// premise, which is exactly what the edge says.
-fn promote_task_comment(store: &mut Store, cid: i64, title: String, project: Option<String>) -> Result<i64, CliError> {
+fn promote_task_comment(store: &mut Store, cid: i64, title: String, project: Option<String>, dim: &[String]) -> Result<i64, CliError> {
     let c = store.task_comment(cid).map_err(CliError::from)?.ok_or_else(|| comment_not_found(&task_comment_label(cid)))?;
     let task_id = c.task_id;
     let body = c.text.clone();
@@ -401,7 +452,8 @@ fn promote_task_comment(store: &mut Store, cid: i64, title: String, project: Opt
             .and_then(|t| t.project_id)
             .ok_or_else(|| CliError { code: "invalid_value", message: "the comment's task has no project; pass --project".to_string(), hint: None, exit: 2 })?,
     };
-    let d = store.add_decision(ops::decision::NewDecision { title, body, project_id }).map_err(CliError::from)?;
+    let value_ids = classify_new_decision(store, project_id, dim)?;
+    let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id }, &value_ids).map_err(CliError::from)?;
     store.link_decision(d.id, task_id).map_err(CliError::from)?;
     Ok(d.id)
 }
@@ -410,7 +462,7 @@ fn promote_task_comment(store: &mut Store, cid: i64, title: String, project: Opt
 /// gives the home, but **no edge is drawn back to it**. A record raised out of a decision's comment thread
 /// is a question that turned into its own, and an automatic link would claim a relation promote cannot
 /// know. Where one does hold, its author names it — `builds-on`, `amend`, `supersede`.
-fn promote_decision_comment(store: &mut Store, cid: i64, title: String, project: Option<String>) -> Result<i64, CliError> {
+fn promote_decision_comment(store: &mut Store, cid: i64, title: String, project: Option<String>, dim: &[String]) -> Result<i64, CliError> {
     let c = store.decision_comment(cid).map_err(CliError::from)?.ok_or_else(|| comment_not_found(&decision_comment_label(cid)))?;
     let body = c.text.clone();
     let project_id = match project {
@@ -419,7 +471,8 @@ fn promote_decision_comment(store: &mut Store, cid: i64, title: String, project:
             .project.map(|p| p.id)
             .ok_or_else(|| CliError { code: "invalid_value", message: "the comment's decision has no project; pass --project".to_string(), hint: None, exit: 2 })?,
     };
-    let d = store.add_decision(ops::decision::NewDecision { title, body, project_id }).map_err(CliError::from)?;
+    let value_ids = classify_new_decision(store, project_id, dim)?;
+    let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id }, &value_ids).map_err(CliError::from)?;
     Ok(d.id)
 }
 

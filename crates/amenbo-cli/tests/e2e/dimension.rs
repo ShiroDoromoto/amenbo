@@ -178,38 +178,81 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
     assert_eq!(all["count"], before, "a refused create leaves no unclassified decision behind: {all}");
 }
 
-/// The other door that records a decision. `decision promote` raises one out of a comment, and it
-/// leaves the same gap `decision add` did: the demand is read where the decision is settled, by
-/// somebody else. So the response names the axes still blank here too — and names one way in rather
-/// than two, since a promotion carries no `--dim` to send anyone to.
+/// The other door that records a decision (`AMB-D-847`). `decision promote` raises one out of a comment
+/// and leaves the same gap `decision add` does — the demand is read where the decision is settled, by
+/// somebody else — so it is turned away here too, before anything is written, and `--dim` is the way
+/// through. Both comment kinds meet the door, and the time axis is not asked for.
 #[test]
-fn promoting_a_comment_names_the_required_axes_too() {
+fn promoting_a_comment_is_refused_until_the_required_axes_are_answered() {
     let cli = Cli::new();
     let pid = id_str(&cli.json(&["project", "add", "--name", "昇格PJ", "--json"])["project"]["id"]);
     cli.json(&["dimension", "add", "--project", &pid, "--name", "テーマ", "--json"]);
     cli.json(&["dimension", "value-add", "テーマ", "--name", "メイン", "--json"]);
+    cli.json(&["dimension", "value-add", "テーマ", "--name", "対話ウィンドウ", "--json"]);
     cli.json(&["dimension", "update", "テーマ", "--required", "true", "--json"]);
+    // A required time axis is the store's to fill, so it is never what the promotion is refused for.
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "フェーズ", "--ordered", "--time-axis", "--json"]);
+    cli.json(&["dimension", "value-add", "フェーズ", "--name", "運用第2期", "--start", "2000-01-01", "--json"]);
+    cli.json(&["dimension", "update", "フェーズ", "--required", "true", "--json"]);
 
     let tid = id_str(&cli.json(&["task", "add", "--project", &pid, "--title", "土台", "--json"])["task"]["id"]);
     let cid = id_str(&cli.json(&["comment", "add", &task_ref(&tid), "--text", "UTC で保存する", "--json"])["comment"]["id"]);
 
-    let response = cli.json(&[
-        "decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC", "--json",
-    ]);
-    let promoted = &response["decision"];
+    // The blank axis turns the promotion away, and the way out is the flag that was left off.
+    let (err, code) = cli.run_err(&["decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC"]);
+    assert_ne!(code, 0, "the promotion is refused: {err}");
+    assert!(err.contains("テーマ"), "and the axis is named: {err}");
+    assert!(!err.contains("フェーズ"), "but not the time axis the create fills: {err}");
+    assert!(err.contains("--dim"), "and the hint says how to answer it: {err}");
+
+    // The refusal in --json carries the code a caller can branch on, and nothing was written: a promotion
+    // turned away leaves no decision behind to classify by hand.
+    let (refused, code) = cli.run_err(&["decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC", "--json"]);
+    assert_ne!(code, 0);
+    let refused: serde_json::Value = serde_json::from_str(&refused).expect("the refusal is JSON");
+    assert_eq!(refused["error"]["code"], "invalid_decision_required_dimension");
+    assert_eq!(cli.json(&["decision", "list", "--project", &pid, "--json"])["count"], 0);
+
+    // Answered, it goes through — and the value rides with the create rather than being put on afterwards.
+    let did = id_str(&cli.json(&[
+        "decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC", "--dim", "テーマ=メイン", "--json",
+    ])["decision"]["id"]);
+    let shown = cli.json(&["decision", "show", &did, "--json"]);
+    let named: Vec<&str> = shown["dimensions"].as_array().unwrap().iter()
+        .map(|d| d["value"].as_str().unwrap()).collect();
+    assert!(named.contains(&"メイン"), "the promotion carries what was named: {shown}");
+    assert!(named.contains(&"運用第2期"), "and the era the create fills: {shown}");
+
+    // The decision-comment side meets the same door.
+    let dcid = id_str(&cli.json(&["decision", "comment", "add", &decision_ref(&did), "--text", "桁も決める", "--json"])["comment"]["id"]);
+    let (err, code) = cli.run_err(&["decision", "promote", &format!("AMB-DC-{dcid}"), "--title", "桁を決める"]);
+    assert_ne!(code, 0, "the other kind of comment is refused too: {err}");
+    assert!(err.contains("テーマ"), "and names the same axis: {err}");
     assert_eq!(
-        promoted["unmet_required_dimensions"],
-        serde_json::json!(["テーマ"]),
-        "the promotion names what is still blank: {promoted}"
+        cli.json(&["decision", "promote", &format!("AMB-DC-{dcid}"), "--title", "桁を決める", "--dim", "テーマ=対話ウィンドウ", "--json"])
+            ["decision"]["title"],
+        "桁を決める",
+        "and goes through once answered",
     );
 
-    // The human face says it too, and points at the one command that fills it in — a promotion has no
-    // flag of its own to offer.
-    let (said, code) = cli.run(&["decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC2"]);
-    assert_eq!(code, 0, "naming it is not refusing it: {said}");
-    assert!(said.contains("テーマ"), "the axis is named: {said}");
-    assert!(said.contains("dimension set"), "and the way to fill it in: {said}");
-    assert!(!said.contains("--dim"), "but not a flag this command does not have: {said}");
+    // `--dim` resolves the way `decision add`'s does, so its refusals are the same — and they land before
+    // the promotion is written.
+    let before = cli.json(&["decision", "list", "--project", &pid, "--json"])["count"].clone();
+    for bad in [
+        vec!["--dim", "テーマ=メイン", "--dim", "テーマ=対話ウィンドウ"],
+        vec!["--dim", "テーマ=無い値"],
+        vec!["--dim", "テーマ"],
+    ] {
+        let promote = format!("AMB-TC-{cid}");
+        let mut argv = vec!["decision", "promote", &promote, "--title", "断られる", "--json"];
+        argv.extend(bad.iter().copied());
+        let (out, code) = cli.run(&argv);
+        assert_ne!(code, 0, "refused before the decision exists: {out}");
+    }
+    assert_eq!(
+        cli.json(&["decision", "list", "--project", &pid, "--json"])["count"], before,
+        "a refused promotion leaves no unclassified decision behind",
+    );
 }
 
 /// Only values on a time axis (role: time_axis) carry a period `[start_on, end_on]`. value-add /

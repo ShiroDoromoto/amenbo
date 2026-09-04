@@ -16,7 +16,16 @@ beforeEach(() => {
       </span>
       <button class="topbar__refresh" id="refresh">↻</button>
     </div>
+    <div class="shell__header">
+      <div class="board__toolbar">
+        <button class="filtertoggle" id="filters">Filters</button>
+        <div class="topbar__spacer" id="toolbar-gap"></div>
+      </div>
+    </div>
     <div class="main">
+      <div class="board__toolbar" id="inline-toolbar">
+        <input class="board__search" id="screen-search" />
+      </div>
       <ul>
         <li data-pane-select id="row"><span id="row-label">task</span></li>
       </ul>
@@ -43,6 +52,21 @@ describe("isBlankSpaceClose", () => {
 
   it("does NOT close on the TopBar chrome itself (bubbled from a child)", () => {
     expect(isBlankSpaceClose(document.querySelector(".topbar"), rightpane)).toBe(false);
+  });
+
+  // The board's controls stand in the shell's header slot, portalled there rather than drawn in the list,
+  // which is the one place a press is chrome and reads as blank space by its position alone.
+  it("does NOT close on the board toolbar's own controls", () => {
+    expect(isBlankSpaceClose(at("filters"), rightpane)).toBe(false);
+    expect(isBlankSpaceClose(at("toolbar-gap"), rightpane)).toBe(false);
+    expect(isBlankSpaceClose(document.querySelector(".shell__header .board__toolbar"), rightpane)).toBe(false);
+  });
+
+  // The same toolbar drawn inline by the screens that do not portal it (search, activity), which show the
+  // pane just as the board does.
+  it("does NOT close on a toolbar a screen draws inline", () => {
+    expect(isBlankSpaceClose(at("screen-search"), rightpane)).toBe(false);
+    expect(isBlankSpaceClose(at("inline-toolbar"), rightpane)).toBe(false);
   });
 
   it("does NOT close on a list row/card — switching is left to onClick", () => {

@@ -129,6 +129,24 @@ describe("the two stages of a creation (browser-loop mock)", () => {
     expect(getSnapshot().tasks.find((t) => t.id === id)!.status).toBe("in_progress");
   });
 
+  it("refuses the three closing transitions while the creation is open, and takes them once it is ended", async () => {
+    // The reservation is refused by `ready`; these three are refused by a guard of their own (`AMB-D-846`),
+    // so a mock that only carried the first would let browser iteration close a half-written task.
+    seedTasks([]);
+    const id = (await addTask(1, "作りかけ"))!;
+    for (const status of ["done", "blocked", "rejected"] as const) {
+      await expect(setStatus(id, status)).rejects.toMatchObject({ code: "invalid_task_status_draft" });
+    }
+    // Refused means nothing moved — not the status, and not the reason a rejection would have written.
+    expect(getSnapshot().tasks.find((t) => t.id === id)!.status).toBe("todo");
+    await expect(rejectTask(id, "作りかけのまま畳む")).rejects.toMatchObject({ code: "invalid_task_status_draft" });
+    expect(getSnapshot().tasks.find((t) => t.id === id)!.comments).toBe(0);
+
+    await finishTaskCreation(id);
+    await setStatus(id, "done");
+    expect(getSnapshot().tasks.find((t) => t.id === id)!.status).toBe("done");
+  });
+
   it("ending a creation does not lift the premises that are someone else's to lift", async () => {
     seedTasks([]);
     const id = (await addTask(1, "先行待ち"))!;

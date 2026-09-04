@@ -25,7 +25,15 @@ impl Driver<'_> {
                 // The two comment tables number independently, so a store holding both can have this id
                 // twice and a bare number is refused. This domain is the task side; say so in the ref.
                 let target_ref = format!("AMB-TC-{target}");
-                let v = self.run_json(&["decision", "promote", &target_ref, "--title", title, "--json"])?;
+                // What comes out is a decision, so the axes a project requires are read here as they
+                // are at `decision add` — and answered the same way, on the way in.
+                let mut args: Vec<String> =
+                    vec!["decision".into(), "promote".into(), target_ref, "--title".into(), title.into(), "--json".into()];
+                if let Some(dim) = with.get("dimension").and_then(|v| v.as_str()) {
+                    args.push("--dim".into());
+                    args.push(format!("{dim}={}", req_str(with, "value")?));
+                }
+                let v = self.run_json(&args.iter().map(String::as_str).collect::<Vec<_>>())?;
                 let id = v["decision"]["id"].as_i64().ok_or("decision promote did not report an id")?;
                 if let Some(name) = bind {
                     self.bindings.insert(name.to_string(), id);

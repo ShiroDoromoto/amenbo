@@ -450,18 +450,6 @@ func find(pid: Int, name: String?, window: String?) {
 
 /// Click where that name is on screen.
 ///
-/// A name is often on more than one element without being ambiguous: a link and the text inside it
-/// both answer to it, and they sit one on top of the other, so a click anywhere they overlap reaches
-/// whatever is uppermost there — which is the thing a person clicking the word would have hit. So the
-/// point aimed at is where every element of that name overlaps. Two of a name in two *places* has no
-/// such point, and that is refused rather than guessed at: `find` is how to see both and aim at one.
-///
-/// Matching a part of a name (above) is what puts *several* names within reach of one word, and that
-/// is a different ambiguity: ステータス is a label, a filter's pop-up and a group's button; 未着手 is
-/// a column header and every card standing under it. Nothing here can tell which was meant, so the
-/// names it reached are printed and nothing is pressed — pressing the first would be a click on
-/// whatever the tree happened to hold first, reported as success.
-///
 /// The click is a real one, at where the element stands now: what the name saves is the arithmetic,
 /// not the input path, and a press delivered through the accessibility API would go through whether
 /// or not anything was covering the element.
@@ -484,6 +472,19 @@ func rightClickNamed(pid: Int, name: String, window: String?) {
 
 /// Where a name stands, with the app brought to the front — the arithmetic both named presses share,
 /// and the refusals they share with it.
+///
+/// A name is often on more than one element without being ambiguous: a link and the text inside it
+/// both answer to it, and they sit one on top of the other, so a press anywhere they overlap reaches
+/// whatever is uppermost there — which is the thing a person pressing the word would have hit. So the
+/// point aimed at is where every element of that name overlaps. Two of a name in two *places* has no
+/// such point, and that is refused rather than guessed at: `find` is how to see both and aim at one.
+///
+/// Matching a part of a name (above) is what puts *several* names within reach of one word, and that
+/// is a different ambiguity: ステータス is a label, a filter's pop-up and a group's button; 未着手 is
+/// a column header and every card standing under it. Nothing here can tell which was meant, so the
+/// names it reached are printed and nothing is pressed — pressing the first would be a press on
+/// whatever the tree happened to hold first, reported as success.
+///
 func pointOf(pid: Int, name: String, window: String?) -> CGPoint {
     front(pid: pid, window: window)
     let found = named(name, among: windowElements(pid: pid, window: window))

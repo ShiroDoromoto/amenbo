@@ -38,6 +38,9 @@ fn full_task_lifecycle() {
     let list = cli.json(&["task", "list", "--project", &pid, "--json"]);
     assert_eq!(list["count"], 2);
 
+    // Ending the creation is what opens the status up: until then the task stays at `todo` (`AMB-D-846`).
+    cli.finish_creating(&tid);
+
     // Completion is idempotent.
     let done = cli.json(&["task", "done", &tid, "--json"]);
     assert_eq!(done["task"]["completed"], true);
@@ -284,6 +287,10 @@ fn done_asks_whether_a_task_is_closed_and_status_asks_which_way() {
         .iter()
         .map(|t| id_str(&cli.json(&["task", "add", "--title", t, "--project", &pid, "--json"])["task"]["id"]))
         .collect();
+    // A creation still open has no status to close (`AMB-D-846`), and this test is about the two terminals.
+    for id in &ids {
+        cli.finish_creating(id);
+    }
     cli.json(&["task", "done", &ids[1], "--json"]);
     cli.json(&["task", "status", &ids[2], "rejected", "--json"]);
 
@@ -610,6 +617,9 @@ fn rejecting_a_task_demands_a_reason_and_keeps_it_on_the_timeline() {
     cli.run(&["init", "--name", "tester"]);
     let pid = cli.a_project();
     let tid = id_str(&cli.json(&["task", "add", "--title", "弱ハードの実測", "--project", &pid, "--json"])["task"]["id"]);
+    // A task still being created is turned away before the reason is ever read (`AMB-D-846`), and what is
+    // under test here is the reason.
+    cli.finish_creating(&tid);
 
     // No --reason at all: clap refuses the invocation (exit 2) — the flag is required, not optional.
     let (_o, code) = cli.run(&["task", "reject", &tid]);
@@ -835,6 +845,47 @@ fn reserving_a_not_ready_task_is_refused_with_a_way_out() {
     cli.json(&["decision", "accept", &did, "--json"]);
     let ok = cli.json(&["task", "status", &tid, "in_progress", "--actor", "ai", "--json"]);
     assert_eq!(ok["task"]["status"], "in_progress");
+}
+
+/// A task still being created has no status to move (`AMB-D-846`), and the refusal is not the reserve's:
+/// `not_ready` opens with "cannot reserve", which says nothing about a caller trying to close one. The
+/// guard sits in `set_status`, so all four doors that reach it are turned away with the same code, and the
+/// hint names the two ways out — end the creation, or delete what was written in error. `→ todo` is where
+/// a draft already stands, so it stays the no-op success it was.
+#[test]
+fn a_task_still_being_created_refuses_every_status_that_closes_or_stalls_it() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let id = id_str(&cli.json(&["task", "add", "--title", "書きかけ", "--actor", "ai", "--json"])["task"]["id"]);
+
+    let refused = |args: &[&str]| {
+        let (stderr, code) = cli.run_err(args);
+        assert_ne!(code, 0, "{args:?} must fail: {stderr}");
+        let v: Value = serde_json::from_str(stderr.trim()).unwrap_or_else(|_| panic!("error JSON: {stderr}"));
+        assert_eq!(v["error"]["code"], "invalid_task_status_draft", "{args:?}: {stderr}");
+        let hint = v["error"]["hint"].as_str().unwrap_or_default();
+        assert!(hint.contains("finish-creating") && hint.contains("task delete"), "the hint names both ways out: {hint}");
+        let show = cli.json(&["task", "show", &id, "--json"]);
+        assert_eq!(show["status"], "todo", "{args:?}: a refused transition does not move the status");
+        assert_eq!(show["draft"], true, "{args:?}: nor does it end the creation");
+    };
+
+    // The three closing or stalling statuses, by the command that names one directly.
+    refused(&["task", "status", &id, "done", "--actor", "ai", "--json"]);
+    refused(&["task", "status", &id, "blocked", "--actor", "ai", "--json"]);
+    refused(&["task", "status", &id, "rejected", "--actor", "ai", "--json"]);
+    // And the three commands that carry one of their own.
+    refused(&["task", "done", &id, "--actor", "ai", "--json"]);
+    refused(&["task", "block", &id, "--reason", "外の都合", "--actor", "ai", "--json"]);
+    refused(&["task", "reject", &id, "--reason", "やらないと決めた", "--actor", "ai", "--json"]);
+
+    // The way back to `todo` is not a transition at all — a draft is already there.
+    let todo = cli.json(&["task", "status", &id, "todo", "--actor", "ai", "--json"]);
+    assert_eq!(todo["ok"], true, "{todo}");
+
+    // Ending the creation opens them: the same command that was refused a moment ago goes through.
+    cli.finish_creating(&id);
+    assert_eq!(cli.json(&["task", "done", &id, "--actor", "ai", "--json"])["task"]["status"], "done");
 }
 
 /// `task show` bundles the four things an agent must read before starting — body, notes, the

@@ -829,6 +829,7 @@ export const hi: Translation = {
     invalid_dimension_close_last_open: "«{name}» अनिवार्य श्रेणी है और «{value}» वह आख़िरी मान है जो वह अब भी देती है, इसे बंद करने पर ऐसी माँग बचेगी जिसे कोई पूरा नहीं कर सकता — पहले «अनिवार्य» बंद करें।",
     invalid_dimension_set_closed_value: "«{value}» «{name}» पर बंद है, इसलिए इसके नीचे कुछ नया वर्गीकृत नहीं होता — कोई खुला मान चुनें, या इसे फिर खोलें।",
     invalid_task_required_dimension: "इस कार्य का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
+    invalid_task_status_draft: "{ref} अभी बन ही रही है, इसलिए इसकी स्थिति नहीं बदली जा सकती — पहले इसे बनाना पूरा करें, या इसे मिटा दें।",
     invalid_decision_required_dimension: "इस निर्णय का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
     invalid_dimension_values_unordered:
       "इस श्रेणी के मानों का कोई क्रम नहीं है, इसलिए उन्हें दोबारा क्रमबद्ध नहीं किया जा सकता।",

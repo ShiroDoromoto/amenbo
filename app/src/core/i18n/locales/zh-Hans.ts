@@ -826,6 +826,7 @@ export const zhHans: Translation = {
     invalid_dimension_close_last_open: "“{name}”是必填分类，“{value}”是它仍在提供的最后一个取值，关闭后就留下没人能满足的要求：请先关掉“必填”。",
     invalid_dimension_set_closed_value: "“{value}”在“{name}”上已关闭，不再归入新的记录：请选一个未关闭的取值，或者重新打开它。",
     invalid_task_required_dimension: "这个任务在 {names} 上没有值，而本项目要求填写。",
+    invalid_task_status_draft: "{ref} 还在创建中，无法更改状态——请先完成创建，或将其删除。",
     invalid_decision_required_dimension: "这个决定在 {names} 上没有值，而本项目要求填写。",
     invalid_dimension_values_unordered: "该分类的值没有顺序，无法重新排序。",
     invalid_decision_edit_rejected: "{ref} 已被否决，被否决的决策无法编辑。",

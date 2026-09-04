@@ -849,6 +849,7 @@ export const ja: Translation = {
     invalid_dimension_close_last_open: "「{name}」は必須の分類で、「{value}」は開いている最後の値です。閉じると誰も答えられなくなります。先に「必須」を外してください。",
     invalid_dimension_set_closed_value: "「{value}」は「{name}」で閉じています。新しく付けることはできません。開いている値を選ぶか、この値を開き直してください。",
     invalid_task_required_dimension: "このタスクは {names} に値がありません。このプロジェクトが必須にしている分類です。",
+    invalid_task_status_draft: "{ref} はまだ作成中です。ステータスは動かせません。作成を終えるか、削除してください。",
     invalid_decision_required_dimension: "この決定は {names} に値がありません。このプロジェクトが必須にしている分類です。",
     invalid_dimension_values_unordered: "この分類の値は順序を持たないため、並べ替えできません。",
     invalid_decision_edit_rejected: "{ref} は却下済みです。却下された決定は編集できません。",

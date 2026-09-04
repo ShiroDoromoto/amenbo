@@ -763,6 +763,11 @@ impl Instructor {
     /// `decision field` is a `Review` for the reason the task's own is: what a pane says of a state is
     /// a word of the interface's, so an eye closes it.
     ///
+    /// `task offers` is a `Review` on both of its states, and the only one here where no word exists to
+    /// pass on. What it asks about is a control, and a control that was taken away leaves nothing
+    /// behind to look for — while the word its absence would be read by (the status it was set to) is
+    /// standing on every other card on the board.
+    ///
     /// `project icon` is a `Review` further out than any of those, and on both of its states: what it
     /// reads is a picture. A reading answers which words are on a shot, and neither the image a project
     /// was given nor the colour it falls back to puts one there. `terminal tab-icon` is the same
@@ -2825,6 +2830,17 @@ impl Instructor {
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
             ),
+            // What a task's face offers to press. Both halves name the control by what it does, since
+            // the labels are the interface's own words: the operator is looking for a control, not for
+            // a phrase, which is why nothing of this is passed to a reading.
+            (Domain::Task, "offers") => {
+                let (there, gone) = task_control(req(with, "control")?)?;
+                format!(
+                    "{}, and confirm {}.",
+                    task_face(req(with, "where")?, &self.target_label(with))?,
+                    if present(with) { there } else { gone }
+                )
+            }
             // The same reading on the record the other side of the store keeps. A `Review` like the
             // task's own, and for the same reason once more: what a decision's pane says of its state is
             // a word of the interface's, so an eye closes it. It is also the one thing a road can say
@@ -4005,6 +4021,53 @@ fn view_row(id: &str) -> Result<&'static str, String> {
         other => {
             return Err(format!("`view: {other}` is not a smart view the sidebar draws"))
         }
+    })
+}
+
+/// One of a task's own controls, named by what it does rather than by what it is labelled with — the
+/// labels are translated, and a road that spelled one would be held to whichever language the run was
+/// started in. The set is closed: a name outside it is refused here rather than passed on to an
+/// operator as a control to go and look for.
+///
+/// Both halves are written out per control, because what stands in a control's place is the control's
+/// own business. The status is the one that matters: taken away, it does not leave a gap — the status
+/// still reads, as plain text — so an operator sent looking for "nothing at all" would find the word
+/// and answer no over a build that had it right.
+fn task_control(control: &str) -> Result<(&'static str, &'static str), String> {
+    Ok(match control {
+        "status" => (
+            "the status stands in a control that offers the other statuses",
+            "the status reads as plain text, with no control offering another",
+        ),
+        "drag" => (
+            "the card can be picked up and dropped into another status column",
+            "the card cannot be picked up at all",
+        ),
+        "finish-creating" => (
+            "the button that ends the task's creation is there to press",
+            "no button offers to end the task's creation",
+        ),
+        "delete" => (
+            "the button that deletes the task outright is there to press",
+            "no button offers to delete the task",
+        ),
+        other => return Err(format!(
+            "`control: {other}` is not a control a task's face keeps (status / drag / finish-creating / delete)"
+        )),
+    })
+}
+
+/// Which of the two faces a task wears its controls on, said as the move that gets an operator in front
+/// of it. A card is the task among the others; a page is the task on its own. The claim means nothing
+/// without one of them: a control taken off the card and left on the page is a build that half-carried
+/// the change, and a road that did not say where would read green over either half.
+fn task_face(where_: &str, label: &str) -> Result<String, String> {
+    Ok(match where_ {
+        "card" => format!("Find the task \"{label}\" among the cards on the board"),
+        "page" => format!("Open the task \"{label}\" on its own page"),
+        other => return Err(format!(
+            "`where: {other}` is not a face a task is drawn on (card / page)"
+        )),
     })
 }
 

@@ -843,6 +843,7 @@ export const de: Translation = {
     invalid_dimension_close_last_open: "„{name}“ ist eine Pflichtkategorie und „{value}“ der letzte Wert, den sie noch anbietet: Schließen ließe eine Forderung zurück, die niemand erfüllen kann — schalten Sie zuerst „Pflicht“ aus.",
     invalid_dimension_set_closed_value: "„{value}“ ist in „{name}“ geschlossen, es wird nichts Neues mehr darunter abgelegt — wählen Sie einen offenen Wert, oder öffnen Sie diesen wieder.",
     invalid_task_required_dimension: "Diese Aufgabe trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
+    invalid_task_status_draft: "{ref} wird noch erstellt, deshalb lässt sich der Status nicht ändern — schließen Sie die Erstellung ab, oder löschen Sie die Aufgabe.",
     invalid_decision_required_dimension: "Diese Entscheidung trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
     invalid_dimension_values_unordered:
       "Die Werte dieser Kategorie tragen keine Reihenfolge und lassen sich deshalb nicht umsortieren.",

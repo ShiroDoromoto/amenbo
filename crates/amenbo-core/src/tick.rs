@@ -749,6 +749,8 @@ mod tests {
 
         // Nothing dated left: the warning only ever speaks about open work with a day on it, so there is
         // nothing here for the timer to say.
+        // A creation still open has no status to close (`AMB-D-846`); what is under test here is the banner.
+        store.finish_task_creation(dated, crate::model::ActorKind::Human).unwrap();
         store
             .set_task_status(dated, crate::model::TaskStatus::Done, crate::model::ActorKind::Human)
             .unwrap();

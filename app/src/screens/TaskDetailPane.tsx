@@ -294,7 +294,7 @@ export function TaskDetailPane({
           </div>
 
           <div className="detail__actions">
-            <StatusSelect id={taskId} status={task.status} onStatus={store.setStatus} premiseChange={task.premiseChange} className="btn" />
+            <StatusSelect id={taskId} status={task.status} onStatus={store.setStatus} premiseChange={task.premiseChange} draft={task.draft} className="btn" />
             <PriorityDot priority={task.priority} />
             <select
               className="btn"

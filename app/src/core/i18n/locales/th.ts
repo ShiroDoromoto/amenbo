@@ -830,6 +830,7 @@ export const th: Translation = {
     invalid_dimension_close_last_open: "«{name}» เป็นหมวดที่จำเป็น และ «{value}» คือค่าสุดท้ายที่ยังเปิดอยู่ การปิดจะเหลือข้อกำหนดที่ไม่มีใครทำได้ — ปิด «จำเป็น» ก่อน",
     invalid_dimension_set_closed_value: "«{value}» ถูกปิดใน «{name}» จึงไม่มีรายการใหม่ถูกจัดไว้ใต้มัน — เลือกค่าที่เปิดอยู่ หรือเปิดค่านี้ใหม่",
     invalid_task_required_dimension: "งานนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
+    invalid_task_status_draft: "{ref} ยังสร้างไม่เสร็จ จึงเปลี่ยนสถานะไม่ได้ — กรุณาสร้างให้เสร็จ หรือลบทิ้ง",
     invalid_decision_required_dimension: "การตัดสินใจนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
     invalid_dimension_values_unordered: "ค่าของหมวดนี้ไม่มีลำดับ จึงจัดเรียงใหม่ไม่ได้",
     invalid_decision_edit_rejected: "{ref} ถูกปฏิเสธไปแล้ว และการตัดสินใจที่ถูกปฏิเสธจะแก้ไขไม่ได้",

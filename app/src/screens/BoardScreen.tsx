@@ -65,6 +65,10 @@ function byReadyFirst(a: TaskCard, b: TaskCard): number {
   if (a.ready === b.ready) return 0;
   return a.ready ? -1 : 1;
 }
+// Which cards the status board lets go of: a task still being created has no status to move (`AMB-D-846`),
+// so its card takes no drag rather than being dropped into a refusal. Module-level, so the columns' memo
+// holds across a re-render.
+const movableStatus = (t: TaskCard) => !t.draft;
 // How many cards the closed column stacks. What has ended grows without bound as time passes, so the column
 // carries only the most recent N and sends the rest to the list view through the "see closed in list" affordance.
 const DONE_COLUMN_CAP = 20;
@@ -503,6 +507,7 @@ export function BoardScreen({
                 over={drag.overColumn === `status:${st}`}
                 draggingId={drag.draggingId}
                 homeOf={statusHome}
+                canGrab={movableStatus}
                 onPress={drag.press}
               />
             );
@@ -563,7 +568,7 @@ export function BoardScreen({
             {/* The row is a div, not a button: it carries the status control, and a select may not nest inside a button. */}
             {listPager.pageItems.map((t) => (
               <div key={t.id} className={`row ${t.id === selectedTaskId ? "row--selected" : ""}`} onClick={() => onSelectTask(t.id)} role="button" data-pane-select>
-                <span className="row__status"><StatusSelect id={t.id} status={t.status} onStatus={store.setStatus} premiseChange={t.premiseChange} /></span>
+                <span className="row__status"><StatusSelect id={t.id} status={t.status} onStatus={store.setStatus} premiseChange={t.premiseChange} draft={t.draft} /></span>
                 <span className={`row__title ${isClosed(t.status) ? "row__title--closed" : ""}`}>{t.title}</span>
                 <span className="row__spacer" />
                 <BlockedChips task={t} />
@@ -646,7 +651,7 @@ function AddDimensionValue({ onAdd }: { onAdd: (name: string) => void }) {
 // handlers are fresh each render); what matters is that a change of selection stops before the sibling cards.
 const Column = memo(function Column({
   name, cards, chips, count, note, overflow, onSeeAllList, selectedTaskId, onSelectTask, onStatus, onAdd,
-  dropKey, over, draggingId, homeOf, onPress,
+  dropKey, over, draggingId, homeOf, canGrab, onPress,
 }: {
   name: string;
   cards: TaskCard[];
@@ -688,6 +693,13 @@ const Column = memo(function Column({
    * keeps that meaning.
    */
   homeOf?: (card: TaskCard) => string;
+  /**
+   * Which cards may be grabbed, where the answer is not "all of them". The status board asks it: a drop
+   * there writes status, and a task still being created has none to write (`AMB-D-846`), so the card is
+   * left where it is rather than dragged into a refusal. The dimension board writes a value, not a
+   * status, so it passes nothing and every card stays grabbable.
+   */
+  canGrab?: (card: TaskCard) => boolean;
   onPress?: (id: number, from: string, event: PointerEvent<HTMLElement>) => void;
 }) {
   // Capping: for the done column the caller has already trimmed to N and passed `overflow`. Any other column is
@@ -717,6 +729,7 @@ const Column = memo(function Column({
           chips={chips[t.id]}
           selected={t.id === selectedTaskId}
           home={homeOf?.(t)}
+          canGrab={canGrab?.(t) ?? true}
           dragging={t.id === draggingId}
           onPress={onPress}
           onSelect={onSelectTask}
@@ -742,7 +755,7 @@ const Column = memo(function Column({
 // task.id. The status select in the footer must stop the press to suppress the card's drag start, or selecting
 // and dragging cannot both work.
 const TaskCardView = memo(function TaskCardView({
-  task, chips, selected, home, dragging, onPress, onSelect, onStatus,
+  task, chips, selected, home, canGrab = true, dragging, onPress, onSelect, onStatus,
 }: {
   task: TaskCard;
   /** The values this task carries on the axes flagged for the card. Undefined when it carries none. */
@@ -750,12 +763,14 @@ const TaskCardView = memo(function TaskCardView({
   selected: boolean;
   /** Where this card already is, which is what says a drop back onto it changes nothing (see `Column`). */
   home?: string;
+  /** Whether this one may be grabbed at all (see `Column`'s `canGrab`). */
+  canGrab?: boolean;
   dragging?: boolean;
   onPress?: (id: number, from: string, event: PointerEvent<HTMLElement>) => void;
   onSelect: (id: number) => void;
   onStatus: (id: number, status: Status, reason?: string) => void;
 }) {
-  const grabbable = onPress !== undefined && home !== undefined;
+  const grabbable = onPress !== undefined && home !== undefined && canGrab;
   return (
     <div
       className={[
@@ -808,7 +823,7 @@ const TaskCardView = memo(function TaskCardView({
         {task.comments > 0 && <span><Icon name="comment" /> {task.comments}</span>}
         <TaskIdChip id={task.id} />
         <span className="card__spacer" />
-        <StatusSelect id={task.id} status={task.status} onStatus={onStatus} premiseChange={task.premiseChange} />
+        <StatusSelect id={task.id} status={task.status} onStatus={onStatus} premiseChange={task.premiseChange} draft={task.draft} />
       </div>
     </div>
   );

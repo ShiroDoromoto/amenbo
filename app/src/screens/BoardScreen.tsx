@@ -64,6 +64,10 @@ function byReadyFirst(a: TaskCard, b: TaskCard): number {
   if (a.ready === b.ready) return 0;
   return a.ready ? -1 : 1;
 }
+// Which cards the status board lets go of: a task still being created has no status to move (`AMB-D-846`),
+// so its card takes no drag rather than being dropped into a refusal. Module-level, so the columns' memo
+// holds across a re-render.
+const movableStatus = (t: TaskCard) => !t.draft;
 // How many cards the closed column stacks. What has ended grows without bound as time passes, so the column
 // carries only the most recent N and sends the rest to the list view through the "see closed in list" affordance.
 const DONE_COLUMN_CAP = 20;
@@ -473,6 +477,7 @@ export function BoardScreen({
                 draggingId={draggingId}
                 onCardDragStart={setDraggingId}
                 onCardDragEnd={clearDragging}
+                canDragCard={movableStatus}
                 onDropTask={(id) => {
                   const tk = all.find((t) => t.id === id);
                   if (tk && tk.status !== st) store.setStatus(id, st);
@@ -548,7 +553,7 @@ export function BoardScreen({
             {/* The row is a div, not a button: it carries the status control, and a select may not nest inside a button. */}
             {listPager.pageItems.map((t) => (
               <div key={t.id} className={`row ${t.id === selectedTaskId ? "row--selected" : ""}`} onClick={() => onSelectTask(t.id)} role="button" data-pane-select>
-                <span className="row__status"><StatusSelect id={t.id} status={t.status} onStatus={store.setStatus} premiseChange={t.premiseChange} /></span>
+                <span className="row__status"><StatusSelect id={t.id} status={t.status} onStatus={store.setStatus} premiseChange={t.premiseChange} draft={t.draft} /></span>
                 <span className={`row__title ${isClosed(t.status) ? "row__title--closed" : ""}`}>{t.title}</span>
                 <span className="row__spacer" />
                 <BlockedChips task={t} />
@@ -631,7 +636,7 @@ function AddDimensionValue({ onAdd }: { onAdd: (name: string) => void }) {
 // handlers are fresh each render); what matters is that a change of selection stops before the sibling cards.
 const Column = memo(function Column({
   name, cards, chips, count, note, overflow, onSeeAllList, selectedTaskId, onSelectTask, onStatus, onAdd,
-  droppable, draggingId, onDropTask, onCardDragStart, onCardDragEnd,
+  droppable, draggingId, onDropTask, onCardDragStart, onCardDragEnd, canDragCard,
 }: {
   name: string;
   cards: TaskCard[];
@@ -661,6 +666,13 @@ const Column = memo(function Column({
   onDropTask?: (id: number) => void;
   onCardDragStart?: (id: number) => void;
   onCardDragEnd?: () => void;
+  /**
+   * Which cards may be grabbed, where the answer is not "all of them". The status board asks it: a drop
+   * there writes status, and a task still being created has none to write (`AMB-D-846`), so the card is
+   * left where it is rather than dragged into a refusal. The dimension board writes a value, not a
+   * status, so it passes nothing and every card stays draggable.
+   */
+  canDragCard?: (task: TaskCard) => boolean;
 }) {
   const [over, setOver] = useState(false);
   // Capping: for the done column the caller has already trimmed to N and passed `overflow`. Any other column is
@@ -700,7 +712,7 @@ const Column = memo(function Column({
           task={t}
           chips={chips[t.id]}
           selected={t.id === selectedTaskId}
-          draggable={!!onCardDragStart}
+          draggable={!!onCardDragStart && (canDragCard?.(t) ?? true)}
           dragging={t.id === draggingId}
           onBeginDrag={onCardDragStart}
           onEndDrag={onCardDragEnd}
@@ -797,7 +809,7 @@ const TaskCardView = memo(function TaskCardView({
         {task.comments > 0 && <span><Icon name="comment" /> {task.comments}</span>}
         <TaskIdChip id={task.id} />
         <span className="card__spacer" />
-        <StatusSelect id={task.id} status={task.status} onStatus={onStatus} premiseChange={task.premiseChange} />
+        <StatusSelect id={task.id} status={task.status} onStatus={onStatus} premiseChange={task.premiseChange} draft={task.draft} />
       </div>
     </div>
   );

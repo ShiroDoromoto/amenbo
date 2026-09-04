@@ -13,17 +13,19 @@ vi.mock("../core/snapshot", () => ({
   getSnapshot: () => ({ language: "ja", roster: [] }),
 }));
 
+import { statusLabel } from "../core/i18n";
 import { StatusSelect } from "./atoms";
 
 let host: HTMLDivElement;
 let root: Root;
 let calls: Array<[number, Status, string | undefined]>;
 
-async function render(status: Status = "todo") {
+async function render(status: Status = "todo", draft = false) {
   await act(async () => {
     root.render(createElement(StatusSelect, {
       id: 7,
       status,
+      draft,
       onStatus: (id: number, next: Status, reason?: string) => { calls.push([id, next, reason]); },
     }));
   });
@@ -107,5 +109,22 @@ describe("StatusSelect", () => {
     expect(dialog()).toBeNull();
     // The control is set from the status it was given, so dropping the question leaves it where it was.
     expect(host.querySelector("select")!.value).toBe("todo");
+  });
+});
+
+// A task still being created cannot move status at all, so the door is not drawn rather than drawn and
+// refused (`AMB-D-846`). What it leaves behind is the status as text: the row keeps its column, and the
+// ways out of a creation — finishing it, deleting it — are the detail pane's.
+describe("StatusSelect on a task still being created", () => {
+  it("draws no control, and writes the status out instead", async () => {
+    await render("todo", true);
+    expect(host.querySelector("select")).toBeNull();
+    expect(host.textContent).toBe(statusLabel("todo"));
+  });
+
+  it("has nothing to pick, so nothing can be written from it", async () => {
+    await render("todo", true);
+    expect(host.querySelectorAll("option")).toHaveLength(0);
+    expect(calls).toEqual([]);
   });
 });

@@ -40,19 +40,16 @@ description: >
   that runs the whole line — arguments and all — rather than the program at the front of it.
 
 given:
+  # The folder is named here rather than bound in a step of its own: creating a project links one
+  # either way, so a bind beside it leaves the project on two — and two is the question this road
+  # says it is not asking (`leave-the-question-about-where-a-pane-runs`).
   - type: action
     domain: project
     op: create
     with:
       name: Lighthouse
-    as: lighthouse
-
-  - type: action
-    domain: folder
-    op: bind
-    with:
       dir: lamproom
-      project: lighthouse
+    as: lighthouse
 
   # Two, so there is a row to write under: with one thing to start there is no choice to draw, and
   # with none there is no row.

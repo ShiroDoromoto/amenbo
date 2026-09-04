@@ -44,19 +44,16 @@ description: >
   merely written into the pane and abandoned there.
 
 given:
+  # The folder is named here rather than bound in a step of its own: creating a project links one
+  # either way, so a bind beside it leaves the project on two — and two is the question this road
+  # says it is not asking (`leave-the-question-about-where-a-pane-runs`).
   - type: action
     domain: project
     op: create
     with:
       name: Lantern
-    as: lantern
-
-  - type: action
-    domain: folder
-    op: bind
-    with:
       dir: lampstore
-      project: lantern
+    as: lantern
 
   # Two, so there is a row to register under: with one thing to start there is no choice to draw, and
   # with none there is no row.

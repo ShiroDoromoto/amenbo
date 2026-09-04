@@ -4,7 +4,7 @@
 use serde_json::json;
 
 use amenbo_core::config::Paths;
-use amenbo_core::model::{AttachmentTarget, ClassifiedSide, DimensionRole, TaskStatus};
+use amenbo_core::model::{AttachmentTarget, ClassifiedSide, TaskStatus};
 use amenbo_core::{ops, query, Store};
 
 use crate::cli::*;
@@ -361,9 +361,9 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
 /// where that would otherwise first be heard, by somebody who did not write it.
 ///
 /// Nothing blank means the key is **absent** rather than an empty list: a reader testing for it is
-/// testing for something to do. It names, it does not refuse: what a project demands was turned away
-/// before there was a decision to report on — by [`classify_new_decision`] on a promotion, and by the
-/// store's own door on every create — so what reaches this is the one axis neither asks for.
+/// testing for something to do. It names, it does not refuse: what a project demands was turned away by
+/// the store's own door, inside the write, so what reaches this is the one axis that door does not ask
+/// for.
 fn unmet_on_new_decision(
     store: &Store,
     decision_id: i64,
@@ -389,57 +389,6 @@ fn still_to_classify(unmet: &[String], decision_id: i64) -> String {
     )
 }
 
-/// The classification a promotion is filed with, refused before anything is written (`AMB-D-847`).
-///
-/// `decision promote` is the second door onto a new decision, and it leaves the same gap `add` does: the
-/// one who writes the record is not the one who accepts it, so a required axis left blank here is a
-/// refusal that lands on somebody else, hours later. The demand is therefore read at the create — and
-/// **before** it, since a refusal after the write would leave a decision behind that only exists to be
-/// classified by hand.
-///
-/// The range is the project's required axes that classify decisions (`AMB-D-789`), minus the time axis:
-/// the create fills that one with the era containing today (`AMB-D-147`), so demanding it would ask for
-/// an answer the store is about to write anyway. The same range the GUI's compose form holds its button
-/// on.
-fn classify_new_decision(
-    store: &Store,
-    project_id: i64,
-    dim: &[String],
-) -> Result<Vec<i64>, CliError> {
-    let value_ids = resolve_dim_pairs(store, project_id, dim, ClassifiedSide::Decision)?;
-    let mut named: Vec<i64> = Vec::with_capacity(value_ids.len());
-    for &value_id in &value_ids {
-        if let Some(v) = store.dimension_value(value_id).map_err(CliError::from)? {
-            named.push(v.dimension_id);
-        }
-    }
-    let unmet: Vec<String> = store
-        .dimensions(project_id)
-        .map_err(CliError::from)?
-        .into_iter()
-        .filter(|d| d.required && d.applies_to.on_decision() && d.role != DimensionRole::TimeAxis)
-        .filter(|d| !named.contains(&d.id))
-        .map(|d| d.name)
-        .collect();
-    if unmet.is_empty() {
-        return Ok(value_ids);
-    }
-    // The accept door's own hint sends the reader to `dimension set <AMB-D-n>`, and there is no such ref
-    // yet — nothing was written. The way out here is the flag that was left off.
-    Err(CliError {
-        code: "invalid_decision_required_dimension",
-        message: format!(
-            "this decision would carry no value on {}, which this project requires",
-            unmet.join(", ")
-        ),
-        hint: Some(format!(
-            "Answer each axis here with `--dim \"<axis>=<value>\"`, repeated per axis. `{} dimension show <axis>` lists what it offers.",
-            Paths::command_name()
-        )),
-        exit: 1,
-    })
-}
-
 /// The task-comment side of `decision promote`: the comment's text becomes the body, its task's project
 /// becomes the home, and the new decision is linked back to that task — the decision is that task's
 /// premise, which is exactly what the edge says.
@@ -453,7 +402,10 @@ fn promote_task_comment(store: &mut Store, cid: i64, title: String, project: Opt
             .and_then(|t| t.project_id)
             .ok_or_else(|| CliError { code: "invalid_value", message: "the comment's task has no project; pass --project".to_string(), hint: None, exit: 2 })?,
     };
-    let value_ids = classify_new_decision(store, project_id, dim)?;
+    // Resolved before the create, the way `decision add`'s are: a misspelled axis or value — or one
+    // that does not classify decisions at all — is an error with no decision left behind to go and
+    // classify by hand. The demand for a required axis is the store's own door, one call further in.
+    let value_ids = resolve_dim_pairs(store, project_id, dim, ClassifiedSide::Decision)?;
     let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id }, &value_ids).map_err(CliError::from)?;
     store.link_decision(d.id, task_id).map_err(CliError::from)?;
     Ok(d.id)
@@ -472,7 +424,8 @@ fn promote_decision_comment(store: &mut Store, cid: i64, title: String, project:
             .project.map(|p| p.id)
             .ok_or_else(|| CliError { code: "invalid_value", message: "the comment's decision has no project; pass --project".to_string(), hint: None, exit: 2 })?,
     };
-    let value_ids = classify_new_decision(store, project_id, dim)?;
+    // Resolved before the create, for the reason written on the task-comment side above.
+    let value_ids = resolve_dim_pairs(store, project_id, dim, ClassifiedSide::Decision)?;
     let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id }, &value_ids).map_err(CliError::from)?;
     Ok(d.id)
 }

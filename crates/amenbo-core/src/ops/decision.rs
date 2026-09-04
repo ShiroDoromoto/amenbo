@@ -238,6 +238,57 @@ pub fn unmet_required_axes(conn: &rusqlite::Connection, decision: &Decision) -> 
     Ok(empty)
 }
 
+/// Refuse the *recording* of a decision that is blank on an axis its project requires (`AMB-D-847`).
+///
+/// The sibling of [`refuse_unmet_required_axes`], one door earlier. The acceptance check stays where
+/// it is; this one exists because the two doors are walked by different people. A task is finished by
+/// whoever created it, so a blank axis is caught by the writer; a decision is written by one and
+/// settled by another, so a demand read only at the settling turns away somebody who cannot answer it.
+///
+/// **The range is narrower than the acceptance's, by one axis.** The time axis is not asked for here:
+/// it is filled at the record, from the era that contains today (`AMB-D-147`), so demanding it would
+/// refuse a write over a value the store puts on it in the same transaction. What is left is the range
+/// the GUI's creation form already holds to.
+///
+/// Read inside the caller's transaction, after the classification it was given has been written — the
+/// answer has to be about the decision as it will be committed, not as it arrived.
+pub(crate) fn refuse_unmet_required_axes_at_record(tx: &WriteTx<'_>, decision: &Decision) -> Result<()> {
+    let empty = unmet_required_axes_at_record(tx.conn(), decision)?;
+    if empty.is_empty() {
+        return Ok(());
+    }
+    Err(Error::Invalid(
+        Msg::new(format!(
+            "this decision carries no value on {}, which this project requires",
+            empty.join(", ")
+        ))
+        .coded(ErrorCode::InvalidDecisionRequiredDimension)
+        .with("names", empty.join(", ")),
+    ))
+}
+
+/// The names of the required axes a decision being recorded is blank on, in display order — the range
+/// [`refuse_unmet_required_axes_at_record`] refuses over. [`unmet_required_axes`] minus the time axis,
+/// for the reason written there. Empty is the pass.
+fn unmet_required_axes_at_record(
+    conn: &rusqlite::Connection,
+    decision: &Decision,
+) -> Result<Vec<String>> {
+    let mut empty = Vec::new();
+    for (axis_id, name) in
+        read::required_dimensions(conn, decision.project_id, crate::model::ClassifiedSide::Decision)?
+    {
+        let role = read::dimension(conn, axis_id)?.map(|d| d.role);
+        if role == Some(crate::model::DimensionRole::TimeAxis) {
+            continue;
+        }
+        if read::decision_assignment_ids_on_axis(conn, decision.id, axis_id)?.is_empty() {
+            empty.push(name);
+        }
+    }
+    Ok(empty)
+}
+
 /// Reject a decision (`Proposed` → `Rejected`). Idempotent when it is already `Rejected`.
 /// Rejecting an `Accepted` decision is an error — a settled decision is replaced by superseding it.
 ///

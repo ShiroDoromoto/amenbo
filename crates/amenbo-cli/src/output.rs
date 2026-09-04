@@ -463,10 +463,12 @@ impl From<amenbo_core::Error> for CliError {
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidTaskRequiredDimension) => Some(format!(
                 "This project requires a value on that axis before a creation can be finished. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <AMB-T-n> <axis> <value>` puts one on the task."
             )),
-            // The decision side of the same door. The way out is the same two steps, on the ref the
-            // other kind is named by — and `dimension set` takes either, so only the ref changes.
+            // The decision side of the same door — and this code comes out of two of them, so the way
+            // out is written for both (`AMB-D-847`). At the record there is no decision yet to put a
+            // value on, so the only road is the flag that classifies it as it is written; at the
+            // settling the decision exists, and `dimension set` fills the axis in on it.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidDecisionRequiredDimension) => Some(format!(
-                "This project requires a value on that axis before a decision can be settled. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <AMB-D-n> <axis> <value>` puts one on the decision."
+                "This project requires a value on that axis. `{cmd} dimension show <axis>` lists what it offers; then classify it as you record it with `{cmd} decision add … --dim <axis>=<value>`, or put a value on a decision already recorded with `{cmd} dimension set <AMB-D-n> <axis> <value>`."
             )),
             // Lowering the flag is the other way out, and it is the one nobody thinks of while holding a
             // task they only wanted to reclassify.

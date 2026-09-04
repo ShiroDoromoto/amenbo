@@ -1732,7 +1732,7 @@ impl Instructor {
             // What is worth confirming while walking it is that nothing else is asked — no name, no
             // submit — since the whole of this road is one press and a folder.
             (Domain::Terminal, "open-folder") => format!(
-                "On the terminal face, press the one control it offers — the way in in the middle — and in the picker that opens choose a folder the road calls \"{}\". The folder is bound to the project the face is on, and the face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none — and nothing is named and nothing is submitted.",
+                "On the terminal face, press the one control it offers — the way in in the middle — and in the picker that opens choose a folder the road calls \"{}\". The folder is bound to the project the face is on, and on a machine with no project it raises the one it belongs to. Either way the face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none — and nothing is named and nothing is submitted.",
                 req(with, "dir")?
             ),
             // Getting to a plain shell, which is what a road that speaks in a pane speaks to. It is

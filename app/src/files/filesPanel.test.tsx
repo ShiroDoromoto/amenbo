@@ -782,9 +782,12 @@ describe("the file face", () => {
     expect(container.querySelector("h1")?.textContent).toBe("again");
   });
 
-  it("says a project with no folder has none, rather than drawing empty rows", async () => {
+  // No project at all — the face before it has been told which one it is on, and the machine that has
+  // none (`AMB-T-4358`). Nothing is read and nothing is said: the line under the tree is about a
+  // project's folders, and there is no project here for it to be about.
+  it("says nothing about a project's folders where there is no project", async () => {
     await draw({ projectId: null });
-    expect(container.querySelector(".files__none")?.textContent).toBe(t("files.noFolder"));
+    expect(container.querySelector(".rail .files__none")).toBe(null);
     expect(hoisted.asked).toEqual([]);
   });
 

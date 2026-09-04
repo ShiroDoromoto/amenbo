@@ -26,7 +26,9 @@ export function FolderChoice({
   /** The folders this project is bound to that are actually there. */
   folders: readonly BoundFolderDto[];
   onPick: (folder: string) => void;
-  /** Bind this project's first folder — offered only where it has none. */
+  /** Choose the first folder from outside the list — offered only where there is no list. It binds
+   *  this project's first folder, or, on a machine with no project, raises the one the folder
+   *  belongs to (`./TerminalFace`). */
   onBind: () => void;
   note: string | null;
 }) {

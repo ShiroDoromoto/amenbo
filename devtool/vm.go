@@ -43,6 +43,12 @@ const (
 	vmUser = "admin"
 	// vmKeyName is the key enrolled in the golden's authorized_keys, under ~/.ssh.
 	vmKeyName = "amenbo-vm"
+	// vmPassword is that account's password, published with the third-party image the golden is cut
+	// from. It is written down because one road needs it typed rather than held: the postinstall's
+	// migration off a system-wide install asks for an admin password on the guest's own screen, and
+	// a dialog nobody answers is a road that stops there. What it opens is a throwaway clone on this
+	// machine's private network, cut fresh from a public image and thrown away when a person says so.
+	vmPassword = "admin"
 	// vmScreenPath is where the compiled screen tool is put in the guest. Fixed, so a caller
 	// that sent it and a caller that uses it need not agree on anything but this.
 	vmScreenPath = "/Users/" + vmUser + "/screen"

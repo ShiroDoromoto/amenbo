@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -57,6 +58,14 @@ const (
 	vmGuestSystemCLI = "/usr/local/bin/amenbo"
 	// vmReleaseArtifact is the CI artifact the mac build is published as.
 	vmReleaseArtifact = "dist-macos"
+	// vmVerifyInstallScript, vmVerifyInstallLog and vmVerifyInstallStatus are the three files an
+	// install started in the guest's screen session leaves behind: the runner, what the installer
+	// said, and the code it ended with. They exist because that install is not waited on — the one
+	// dialog it can raise is answered from here, and a command still blocked inside the installer
+	// could not type into it.
+	vmVerifyInstallScript = vmGuestHome + "/install-in-session.sh"
+	vmVerifyInstallLog    = vmGuestHome + "/install-in-session.log"
+	vmVerifyInstallStatus = vmGuestHome + "/install-in-session.status"
 )
 
 // vmVerifyCmd dispatches `vm verify`: one command to put a build in there, and four to walk a road
@@ -169,17 +178,18 @@ func vmVerifyInstall(pkg, fromRun string) error {
 		return err
 	}
 
-	version, err := vmVerifyInstallPkg(ip, pkg)
-	if err != nil {
-		return err
-	}
-
 	// The first `swift <source>` on a machine builds a module cache and takes some twenty seconds;
 	// every one after it is under a second. Paid here rather than inside the harness's own window
-	// for the app to draw a window, which that first call would otherwise run out.
+	// for the app to draw a window, which that first call would otherwise run out — and ahead of the
+	// install, which reaches for the same tool when the postinstall puts a dialog up.
 	logf("  verify  : warming the screen tool")
 	if _, err := sshRun(ip, "swift "+vmScreenSource+" trusted"); err != nil {
 		logf("  verify  : warning — the screen tool did not answer (%v); the first step will be slow or fail", err)
+	}
+
+	version, err := vmVerifyInstallPkg(ip, pkg)
+	if err != nil {
+		return err
 	}
 
 	logf("✓ %s installed in %s — `devtool vm verify run <scenario.yaml>` walks a road", version, vmCloneName)
@@ -221,14 +231,152 @@ func vmVerifyInstallPkg(ip, pkg string) (string, error) {
 		logf("  verify  : over %s", standing)
 	}
 	logf("  verify  : installing %s", filepath.Base(pkg))
-	if _, err := sshRun(ip, "installer -pkg "+guestPkg+" -target CurrentUserHomeDirectory"); err != nil {
-		return "", fmt.Errorf("installing the build in the guest: %w", err)
+	if err := vmVerifyInstallInSession(ip, guestPkg); err != nil {
+		return "", err
 	}
 	version, err := sshRun(ip, vmGuestCLI+" --version")
 	if err != nil {
 		return "", fmt.Errorf("the build installed but does not answer: %w", err)
 	}
 	return strings.TrimSpace(version), nil
+}
+
+// vmVerifyInstallBudget is how long an install in the guest is given to end. It covers the install
+// itself, the dialog it can raise, and the app the postinstall relaunches afterwards — an install
+// measured at some fifteen seconds, so what this bounds is a road that has stopped, not a slow one.
+const vmVerifyInstallBudget = 3 * time.Minute
+
+// vmVerifyInstallInSession runs the installer in the session that owns the guest's screen, and
+// answers the one dialog it can raise.
+//
+// **An install over ssh has no session to draw a dialog in.** The postinstall's one-time migration
+// off a system-wide copy asks for an admin password with `osascript … with administrator
+// privileges`; over ssh that comes straight back as `-60007` with nobody having seen anything, and
+// the block being best-effort, the install goes on without it. The old copy is then still standing
+// afterwards, with its CLI still ahead of the new one on the stock PATH — which is the hazard the
+// migration exists for. `launchctl asuser` puts the installer in the session that has a screen, and
+// the question is really asked (measured in the guest 2026-09-05: seeded 22.2.0 system-wide, then
+// installed 22.3.0 this way — the dialog came up, and both old paths were gone afterwards).
+//
+// **The installer is run as the account, not as root.** `asuser` moves a process into the session
+// without dropping its privileges, and osascript asked for a privilege it already holds does not
+// ask anybody for it — the install would go through with no dialog at all, which reads exactly like
+// a migration that worked.
+//
+// It is started detached and then watched, because this side has to be free to type while the
+// installer waits.
+func vmVerifyInstallInSession(ip, guestPkg string) error {
+	if _, err := sshRun(ip, fmt.Sprintf(vmVerifyInstallStart, guestPkg)); err != nil {
+		return fmt.Errorf("starting the install in the guest's screen session: %w", err)
+	}
+	var answeredAt time.Time
+	deadline := time.Now().Add(vmVerifyInstallBudget)
+	for {
+		if code, ended := vmVerifyInstallEnded(ip); ended {
+			if code != 0 {
+				out, _ := sshRun(ip, "cat "+vmVerifyInstallLog)
+				return fmt.Errorf("installing the build in the guest: exit %d: %s", code, strings.TrimSpace(out))
+			}
+			return nil
+		}
+		prompt := vmAdminPromptPid(ip)
+		switch {
+		case prompt != "" && answeredAt.IsZero():
+			if err := vmAnswerAdminPrompt(ip, prompt); err != nil {
+				return err
+			}
+			answeredAt = time.Now()
+		case prompt != "" && time.Since(answeredAt) > 20*time.Second:
+			// A dialog still standing this long after being answered is one that refused the
+			// answer. It is taken down rather than left there: the guest's screen is what runs
+			// next, and a modal nobody expects swallows that run's first press.
+			vmDismissAdminPrompt(ip, prompt)
+			return fmt.Errorf("the admin password prompt in %s refused the image's password — nothing here can answer the migration now, and the install was left to finish without it", vmCloneName)
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("the install in %s has not ended after %s — a dialog left standing on its screen is what that usually is; `devtool vm exec -- cat %s` says how far it got", vmCloneName, vmVerifyInstallBudget, vmVerifyInstallLog)
+		}
+		time.Sleep(time.Second)
+	}
+}
+
+// vmVerifyInstallStart writes the runner and starts it detached. `%q` is the build in the guest.
+//
+// The exit code is put on disk rather than answered with, because the command that starts this comes
+// back long before the install ends — a file is what the two have between them.
+const vmVerifyInstallStart = `set -e
+rm -f ` + vmVerifyInstallLog + ` ` + vmVerifyInstallStatus + `
+cat > ` + vmVerifyInstallScript + ` <<'RUN'
+sudo -n launchctl asuser $(id -u) sudo -u ` + vmUser + ` /usr/sbin/installer -pkg "$1" -target CurrentUserHomeDirectory > ` + vmVerifyInstallLog + ` 2>&1
+echo $? > ` + vmVerifyInstallStatus + `
+RUN
+nohup sh ` + vmVerifyInstallScript + ` %q > /dev/null 2>&1 &
+`
+
+// vmVerifyInstallEnded reads the code the install ended with, and whether it has ended at all. A
+// status file that is not there yet is a run still going, not a failure to read one.
+func vmVerifyInstallEnded(ip string) (int, bool) {
+	out, err := sshRun(ip, "cat "+vmVerifyInstallStatus+" 2>/dev/null")
+	if err != nil {
+		return 0, false
+	}
+	code, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return 0, false
+	}
+	return code, true
+}
+
+// vmAdminPromptPid is the authorization dialog standing on the guest's screen, or "" for none.
+//
+// **The process is not the dialog.** SecurityAgent goes on running after one has been answered
+// (measured in the guest 2026-09-05), so what decides is a window: the agent with one is a question
+// waiting, and the agent without one is an agent. A guest with no screen tool in it answers "" the
+// same way — nothing in there could have typed into a dialog either.
+func vmAdminPromptPid(ip string) string {
+	out, err := sshRun(ip, "pgrep -x SecurityAgent | head -1")
+	if err != nil {
+		return ""
+	}
+	pid := strings.TrimSpace(out)
+	if pid == "" {
+		return ""
+	}
+	if _, err := sshRun(ip, "swift "+vmScreenSource+" find "+pid+" > /dev/null 2>&1"); err != nil {
+		return ""
+	}
+	return pid
+}
+
+// vmAnswerAdminPrompt types the guest account's password into that dialog and presses Return.
+//
+// **The password field is not aimed at.** It carries no name for `find` to answer with — the one
+// named field in that dialog is the account, which is not the field being typed into — and it is
+// the field the dialog opens focused. So the dialog is brought to the front and the keys go where
+// the caret already is (measured in the guest 2026-09-05: the dots appear in the password field and
+// the elevation goes through).
+func vmAnswerAdminPrompt(ip, pid string) error {
+	logf("  verify  : answering the admin password prompt")
+	if _, err := sshRun(ip, vmScreenTyping(pid, "type "+vmPassword, "key 36")); err != nil {
+		return fmt.Errorf("answering the admin password prompt in %s: %w", vmCloneName, err)
+	}
+	return nil
+}
+
+// vmDismissAdminPrompt presses Escape on a dialog nothing else is going to close.
+func vmDismissAdminPrompt(ip, pid string) {
+	_, _ = sshRun(ip, vmScreenTyping(pid, "key 53"))
+}
+
+// vmScreenTyping is a run of screen-tool moves against one window, with the window brought to the
+// front first and a beat between moves. The beats are what was measured: the front takes effect on
+// the window server's own schedule, and keys sent into the gap land nowhere.
+func vmScreenTyping(pid string, moves ...string) string {
+	lines := []string{"swift " + vmScreenSource + " front " + pid}
+	for _, move := range moves {
+		lines = append(lines, "sleep 1", "swift "+vmScreenSource+" "+move)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // vmVerifyStanding is the build the guest already carries, and where — "" for a machine carrying

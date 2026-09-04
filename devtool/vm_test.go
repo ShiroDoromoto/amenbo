@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -227,5 +228,43 @@ func TestOriginRepoReadsBothURLForms(t *testing.T) {
 	}
 	if _, err := originRepo(dir); err == nil {
 		t.Error("a non-GitHub remote was accepted; downloading from the wrong repository is worse than refusing")
+	}
+}
+
+// TestInstallIsRunWhereADialogCanBeDrawn covers the two things that decide whether the migration
+// question is ever asked. An install over ssh has no session to draw it in, and one run as root is
+// never asked for a privilege it already holds — either way the postinstall's `osascript … with
+// administrator privileges` comes back without a dialog, the block being best-effort lets the
+// install go on, and the old system-wide copy stays where it was. Both failures look like a
+// migration that worked.
+func TestInstallIsRunWhereADialogCanBeDrawn(t *testing.T) {
+	start := fmt.Sprintf(vmVerifyInstallStart, "/Users/admin/amenbo-darwin-arm64.pkg")
+	for _, want := range []string{
+		"launchctl asuser $(id -u)",
+		"sudo -u " + vmUser + " /usr/sbin/installer",
+		"-target CurrentUserHomeDirectory",
+		"echo $? > " + vmVerifyInstallStatus,
+		`"/Users/admin/amenbo-darwin-arm64.pkg"`,
+	} {
+		if !strings.Contains(start, want) {
+			t.Errorf("the install runner does not %q", want)
+		}
+	}
+	// Detached, because the dialog is answered by the side that started it.
+	if !strings.Contains(start, "nohup sh "+vmVerifyInstallScript) {
+		t.Error("the install is waited on rather than watched — nothing would be free to type into the dialog")
+	}
+}
+
+// TestTheAdminPromptIsTypedIntoWhereTheCaretIs covers the shape of the answer. The password field
+// carries no name to aim at — the one named field in that dialog is the account — so what makes the
+// keys land is the front and the beat before them.
+func TestTheAdminPromptIsTypedIntoWhereTheCaretIs(t *testing.T) {
+	got := vmScreenTyping("321", "type "+vmPassword, "key 36")
+	want := "swift " + vmScreenSource + " front 321\n" +
+		"sleep 1\nswift " + vmScreenSource + " type admin\n" +
+		"sleep 1\nswift " + vmScreenSource + " key 36"
+	if got != want {
+		t.Errorf("the answer is\n%s\nwant\n%s", got, want)
 	}
 }

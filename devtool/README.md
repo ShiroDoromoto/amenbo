@@ -752,6 +752,13 @@ screen tool.
   step, upstream of this, which is what handing this command a path keeps room for.
 - **A build for the other architecture is refused by name.** It installs cleanly and then will not
   start, which is a failure several steps away from its cause.
+- **The install is run in the session that owns the guest's screen** (`launchctl asuser`), as the
+  account rather than as root, and watched rather than waited on. That is what lets the postinstall's
+  one-time migration ask its admin password where somebody can see it — and what answers it is this
+  side, typing the image's password into the field the dialog opens focused and pressing Return.
+  Measured 2026-09-05: 22.2.0 seeded system-wide, 22.3.0 installed over it, `/Applications/Amenbo.app`
+  and `/usr/local/bin/amenbo` both gone afterwards. A machine with no old copy is asked nothing, and
+  the install goes through untouched.
 - **Nothing is built for the guest.** Host and guest are the same architecture, so the harness
   compiled here runs there, and the guest needs neither Rust nor node.
 - The first `swift <source>` on a machine builds a module cache and takes some twenty seconds; every
@@ -777,12 +784,13 @@ next `install` goes on over.
 - **The old build itself is not the seed — the shape is.** A build from that era is not obtainable
   any more, and it is not what the next install reads: the postinstall keys on those two paths
   (`scripts/build-pkg-mac.sh`) and on nothing else about what stood there.
-- **The password itself is not asked from here.** The postinstall asks with `osascript … with
-  administrator privileges`, and an install driven over ssh has no session to draw that dialog in: it
-  comes back `-60007`, and the block being best-effort, the install goes on without it. Measured: the
-  old copy and its link are both still there afterwards, and the link still shadows the new CLI on
-  the stock PATH — which is the hazard the migration exists for. What the seed gives is the machine
-  the question is asked on; asking it takes an install started in the guest's own screen session.
+- **The password is answered by `install`, on the guest's own screen.** What the seed gives is the
+  machine the question is asked on; the asking is the next command's, and both halves of it are easy
+  to lose. An install driven over ssh has no session to draw the dialog in — `osascript … with
+  administrator privileges` comes back `-60007`, and the block being best-effort the install goes on
+  without it — and an install run as root is never asked for a privilege it already holds. Either way
+  the old copy and its link are still there afterwards, with the link still shadowing the new CLI on
+  the stock PATH, and the run reads exactly like a migration that worked.
 
 **`run`** starts one road and comes back when the harness has handed over its first step. It does
 not wait for the run: a road is walked by somebody, and that somebody is whoever calls `step`

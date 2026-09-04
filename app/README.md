@@ -57,6 +57,7 @@ src/
   screens/     BoardScreen · ListScreen · ActivityFeed · DecisionsScreen ·
                CalendarView · SearchScreen · detail panes
   components/  reusable pieces: BrandMark · Markdown · Mermaid · Pager · Attachments
-  styles/      tokens.css (design tokens) · global.css (shell grid, form-element base)
+  styles/      tokens.css (design tokens) · global.css (shell grid, form-element base) ·
+               utilities.css (ink classes, read last so they win)
   mock/        types.ts · data.ts · adapter.ts — the browser-dev fallback
 ```

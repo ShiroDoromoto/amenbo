@@ -378,14 +378,3 @@ input[type="color"] {
   flex: 1; display: flex; align-items: center; justify-content: center;
   color: var(--c-text-muted); font-size: var(--fs-md); padding: var(--s-5); text-align: center;
 }
-
-/* ---------- generic ---------- */
-/* Reading ink is two steps (`AMB-D-840`), so these two hand over one value: `.faint` is the older
-   name, kept while its callers are still written that way. */
-.muted, .faint { color: var(--c-text-muted); }
-/* The step a mark takes, set on the thing the mark sits in rather than on the mark: an icon draws in
-   `currentColor` (`AMB-D-686`), so it is the chip, the row or the line that decides what it asks of
-   the reader. Two classes and not three — the third step asks nothing, and a mark that asks nothing
-   takes the tone of the words it stands in (`.muted`) or a colour of its own. */
-.step-stop { color: var(--c-stop); }
-.step-heed { color: var(--c-heed); }

@@ -795,6 +795,7 @@ export const uk: Translation = {
   err: {
     ambiguous_id: "Ідентифікатор «{prefix}» збігається з кількома кандидатами ({candidates})",
     binding_stale: "Прив'язаний каталог проєкту не знайдено: {path}",
+    pointer_other_store: "Файл .amenbo цієї папки записав «{recorded}», а ця збірка — «{running}», тож тут немає проєкту, який можна відкрити: {path}",
     init_pointer_exists: "Ця папка (або одна з тих, що вище) уже прив'язана до проєкту Amenbo: {path}",
     init_ambiguous_owners:
       "На цю папку претендує кілька живих проєктів ({candidates}), тож загублену позначку не можна повернути для когось одного з них: {path}",

@@ -212,7 +212,9 @@ export const CORE_ERROR_CODES = [
 /** GUI-specific codes the Tauri command layer raises via `CmdError::coded(...)` — contexts core knows nothing about.
  * They come from the guards in `project_add_folder`, which makes a folder into a new project (an existing
  * `.amenbo` gives `init_pointer_exists`; a marker plus several live stores claiming ownership is an
- * irrecoverable ambiguity and gives `init_ambiguous_owners`); the nested-binding guard in `project_bind_folder`,
+ * irrecoverable ambiguity and gives `init_ambiguous_owners`); the terminal face's way in
+ * (`folder_open`), which heals a pointer naming a project that is gone but leaves one written by
+ * another channel's build alone and says so (`pointer_other_store`, `AMB-D-685`); the nested-binding guard in `project_bind_folder`,
  * which binds an existing folder to an existing project; and every open blocked while a startup migration holds
  * the store (`migrate::gate()` — mid-migration the format is half-moved, and after a failure it is still old);
  * and the consent guard in `plugin_catalog_add_source`, where registering a catalog crosses a process
@@ -255,6 +257,7 @@ export const TAURI_ERROR_CODES = [
   "migration_running",
   "plugin_catalog_consent_required",
   "plugin_catalog_key_changed",
+  "pointer_other_store",
   "pty_failed",
   "pty_gone",
   "talk_blank",

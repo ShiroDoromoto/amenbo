@@ -787,6 +787,7 @@ export const ptBR: Translation = {
   err: {
     ambiguous_id: "O id “{prefix}” bate com vários candidatos ({candidates})",
     binding_stale: "O diretório vinculado ao projeto não foi encontrado: {path}",
+    pointer_other_store: "O .amenbo desta pasta foi escrito por “{recorded}”, e esta versão é “{running}”, então não há projeto algum para abrir aqui: {path}",
     init_pointer_exists: "Esta pasta (ou alguma acima dela) já está vinculada a um projeto do Amenbo: {path}",
     init_ambiguous_owners:
       "Vários projetos vivos reivindicam esta pasta ({candidates}), então a marca perdida não pode ser devolvida para um deles: {path}",

@@ -786,6 +786,7 @@ export const es: Translation = {
   err: {
     ambiguous_id: "El id «{prefix}» coincide con varios candidatos ({candidates})",
     binding_stale: "No se encontró el directorio vinculado al proyecto: {path}",
+    pointer_other_store: "El .amenbo de esta carpeta lo escribió «{recorded}», y esta versión es «{running}»: aquí no hay ningún proyecto que abrir: {path}",
     init_pointer_exists: "Esta carpeta (o alguna por encima) ya está vinculada a un proyecto de Amenbo: {path}",
     init_ambiguous_owners:
       "Varios proyectos vivos reclaman esta carpeta ({candidates}), así que la marca perdida no se puede devolver a uno solo de ellos: {path}",

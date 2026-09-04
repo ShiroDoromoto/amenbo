@@ -758,6 +758,7 @@ export const tr: Translation = {
   err: {
     ambiguous_id: "“{prefix}” kimliği birden çok adayla eşleşiyor ({candidates})",
     binding_stale: "Bağlı proje dizini bulunamadı: {path}",
+    pointer_other_store: "Bu klasörün .amenbo dosyasını “{recorded}” yazdı, bu yapı ise “{running}”; dolayısıyla burada açılacak bir proje yok: {path}",
     init_pointer_exists: "Bu klasör (ya da üstündeki bir klasör) zaten bir Amenbo projesine bağlı: {path}",
     init_ambiguous_owners:
       "Yaşayan birkaç proje bu klasörü sahipleniyor ({candidates}), bu yüzden kaybolan işaret bunlardan biri için geri konamıyor: {path}",

@@ -786,6 +786,7 @@ export const it: Translation = {
   err: {
     ambiguous_id: "L'id «{prefix}» corrisponde a più candidati ({candidates})",
     binding_stale: "La directory collegata al progetto non è stata trovata: {path}",
+    pointer_other_store: "Il .amenbo di questa cartella è stato scritto da «{recorded}», mentre questa build è «{running}»: qui non c'è nessun progetto da aprire: {path}",
     init_pointer_exists: "Questa cartella (o una sopra di essa) è già collegata a un progetto Amenbo: {path}",
     init_ambiguous_owners:
       "Più progetti vivi rivendicano questa cartella ({candidates}), quindi il segno perduto non si può rimettere per uno solo di essi: {path}",

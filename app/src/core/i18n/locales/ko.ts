@@ -756,6 +756,7 @@ export const ko: Translation = {
   err: {
     ambiguous_id: "ID “{prefix}”이(가) 여러 후보에 걸립니다({candidates})",
     binding_stale: "프로젝트와 연결된 디렉터리를 찾을 수 없습니다: {path}",
+    pointer_other_store: "이 폴더의 .amenbo는 “{recorded}”가 쓴 것이고 이 빌드는 “{running}”이라서, 여기에는 열 수 있는 프로젝트가 없습니다: {path}",
     init_pointer_exists: "이 폴더(또는 그 위)는 이미 Amenbo 프로젝트에 연결되어 있습니다: {path}",
     init_ambiguous_owners:
       "살아 있는 여러 프로젝트가 이 폴더를 주장하고 있어({candidates}), 사라진 표식을 어느 쪽으로 되돌릴지 정할 수 없습니다: {path}",

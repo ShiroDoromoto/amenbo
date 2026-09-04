@@ -760,6 +760,7 @@ export const vi: Translation = {
   err: {
     ambiguous_id: "Mã “{prefix}” khớp với nhiều ứng viên ({candidates})",
     binding_stale: "Không thấy thư mục dự án đã gắn: {path}",
+    pointer_other_store: "Tệp .amenbo của thư mục này do “{recorded}” ghi, còn bản dựng này là “{running}”, nên ở đây không có dự án nào để mở: {path}",
     init_pointer_exists: "Thư mục này (hoặc một thư mục trên nó) đã gắn với một dự án Amenbo: {path}",
     init_ambiguous_owners:
       "Nhiều dự án còn sống cùng nhận thư mục này ({candidates}), nên không thể đặt lại dấu mốc đã mất cho riêng một dự án nào: {path}",

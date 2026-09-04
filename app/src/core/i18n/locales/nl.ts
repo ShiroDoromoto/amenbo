@@ -758,6 +758,7 @@ export const nl: Translation = {
   err: {
     ambiguous_id: "De id “{prefix}” past op meerdere kandidaten ({candidates})",
     binding_stale: "De gekoppelde projectmap is niet gevonden: {path}",
+    pointer_other_store: "De .amenbo van deze map is geschreven door “{recorded}”, en deze build is “{running}”, dus hier valt geen project te openen: {path}",
     init_pointer_exists: "Deze map (of een map erboven) is al aan een Amenbo-project gekoppeld: {path}",
     init_ambiguous_owners:
       "Meerdere levende projecten claimen deze map ({candidates}), dus de verdwenen markering kan niet voor één ervan worden teruggezet: {path}",

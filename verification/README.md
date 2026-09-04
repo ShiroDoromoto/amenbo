@@ -900,6 +900,11 @@ shape the box takes while no side is chosen and there is no grammar to read the 
 button takes while there is no answer left to clear, and the shape either road's button takes while the
 row has no folder to hand over. All three are read off how the control is drawn, not off what it does
 when used: one shut in the build and painted like a live one is one a reader still reaches for.
+Whether a task's face draws one of its own controls at all (`task offers`) is the other side of those
+three — not a control shut but a control gone, which is what a task still being created is read for:
+its status stands as plain text, its card takes no drag, and what is left to press is the two ways out
+of a creation. A terminal has none of this: what it offers is commands, and the one it would turn away
+is already `task status`'s `refused:`.
 
 Pressing a smart view open from the sidebar, reading the warning its row carries before that press, and
 reading which tasks the listing behind it holds (`task open-view` / `task view-warns` / `task

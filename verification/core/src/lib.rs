@@ -1195,6 +1195,20 @@ const REGISTRY: &[OpSpec] = &[
     // its folders). `dir` names the folder the way every `folder` step does; `present: false` is the
     // other half and needs no name, since a task holding none has nothing to name.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "worked-in", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
+    // Which of a task's own controls the face draws, and which it does not. `opened` asks
+    // *whose* record is standing there and answers it with a phrase off the record's face; this asks
+    // what that face **offers to press**, which no phrase witnesses — a control that was taken away
+    // leaves no word behind to look for, and the word its absence would be read by is on every other
+    // card besides.
+    //
+    // `control` names one of the four (`status`, `drag`, `finish-creating`, `delete`) and `where` says
+    // on which of the two faces a task wears them, the card or its own page. Both halves are worth a
+    // step: `present: false` is the guard, and `present: true` beside it is what keeps a build that
+    // drew nothing at all from reading green.
+    //
+    // A screen road alone — a terminal offers no controls, only commands, and what it refuses is
+    // already `status`'s `refused:`.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "offers", required: &["target", "control", "where", "present"], refs: &["target"], strings: &["control", "where"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     // The row the panel left standing, and the fold it folded into — the decision-side twins of the

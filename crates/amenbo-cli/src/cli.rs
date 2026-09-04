@@ -1641,6 +1641,12 @@ pub enum DecisionCmd {
         /// project (defaults to the project of the comment's task or decision)
         #[arg(long)]
         project: Option<String>,
+        /// classify the new decision as `<axis>=<value>` — the same resolution as `dimension set` (id, or
+        /// an exact name, case-insensitive). Repeatable for different axes; an axis is single-select, so
+        /// naming one twice is refused, and so is an axis that does not classify decisions. A required
+        /// axis left empty turns the promotion away before anything is written, so fill it here.
+        #[arg(long = "dim", value_name = "AXIS=VALUE")]
+        dim: Vec<String>,
     },
     /// Discuss on a decision's timeline (append-only comments)
     Comment {

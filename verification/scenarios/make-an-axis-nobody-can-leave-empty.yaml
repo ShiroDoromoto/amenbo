@@ -15,7 +15,11 @@
 # is why both are here, and why the rulings that meet the second door are the ones written before the
 # demand went up. Writing itself has two ways in rather than one, so the promotion is walked beside
 # the record: a demand read at only one of them is a demand anyone could go around by saying the thing
-# on a timeline first.
+# on a timeline first. One axis stands outside that list rather than in it: a time axis is filled from
+# the era whose window covers today, so a demand read where a record is written would turn a writer
+# away over a value the same write is putting on. Where no era covers today there is nothing to fill it
+# with, and the record is written blank all the same — that one is asked for at the settling and
+# nowhere earlier, which is what says the record's door reads a range rather than the whole demand.
 id: make-an-axis-nobody-can-leave-empty
 title: An axis marked required turns away the creation, the record, the promotion and the acceptance that left it empty, and holds the answer on once it is there
 description: >
@@ -26,7 +30,9 @@ description: >
   through once the answer rides along with it; a comment raised into a decision of its own meets the
   same demand at the same place, and is refused before anything is written. The rulings written before
   the demand went up meet it where they are settled, through the acceptance and through the
-  supersession that promotes one, and answering the axis opens both. Then try to take the value back
+  supersession that promotes one, and answering the axis opens both. A required time axis is the one
+  the record does not read, its answer being the era the store writes itself: with no era covering
+  today it is recorded blank, and the settling is where it is asked for. Then try to take the value back
   off and be refused there too —
   from the task, and from the axis itself, where removing the value would empty every task on it at
   once unless the removal says where they go. Say where, and the value goes with the task carried
@@ -334,6 +340,76 @@ steps_cli:
       target: standing-revision
       field: status
       equals: accepted
+
+  # And the one axis this first door lets past. A time axis answers itself — the era whose window covers
+  # today goes on as the record is made — so reading the demand where the record is written would turn a
+  # writer away over a value that very write is putting on. Here every era the axis offers closed years
+  # ago, which is the one state where the axis is required and a new record still has nothing to carry:
+  # the record goes through all the same, and the exception is about which axis it is rather than about
+  # whether an answer arrived.
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Era
+
+  - type: action
+    domain: dimension
+    op: time-axis
+    with:
+      dimension: Era
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Era
+      value: Founding
+
+  - type: action
+    domain: dimension
+    op: period
+    with:
+      dimension: Era
+      value: Founding
+      start: "2000-01-01"
+      end: "2000-12-31"
+
+  - type: action
+    domain: dimension
+    op: required
+    with:
+      dimension: Era
+
+  # Recorded rather than refused. The other required axis is answered on the way in so that what is left
+  # blank is the time axis alone — a record turned away over `Medium` would say nothing about which of
+  # the two this door reads.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — recorded while no era covers today
+      dimension: Medium
+      value: print
+    as: eraless
+
+  # And the demand is real, one door further on. The settling reads every required axis, the time axis
+  # included, so what the record let past is what the acceptance asks for — and the ruling is left under
+  # discussion exactly as the one above it was.
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: eraless
+      refused: invalid_decision_required_dimension
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: eraless
+      field: status
+      equals: proposed
 
   # And the door does not swing back. A demand met only at the creation would be a demand anyone could
   # empty a minute later, so taking the value off a required axis is refused as well — the way back to

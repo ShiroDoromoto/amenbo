@@ -703,6 +703,10 @@ const ui = {
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",
+  // The one way on out of every file this panel does not draw — the binary, the one that could not
+  // be read, and the picture refused for its size. A line that only says no leaves the reader
+  // holding a file they still want opened (`AMB-T-4352`).
+  "files.openElsewhere": "Open it in another application",
   "files.dropStopped": "{name} could not be brought in: {why}",
   "files.dropPartly": "{count} came in. {name} did not: {why}",
   "files.stoppedTaken": "something with that name is already there",
@@ -731,7 +735,6 @@ const ui = {
   // (`AMB-D-783`).
   "files.tooBig": "This picture is too large to show here.",
   "files.tooBigPixels": "{width} × {height} pixels",
-  "files.tooBigOpen": "Open it in another application",
   // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
   // on Windows. What it warns about is not a right the user lacks but one they have too much of:
   // the terminal opens, and the tools behind scoop's links are unreachable from inside it

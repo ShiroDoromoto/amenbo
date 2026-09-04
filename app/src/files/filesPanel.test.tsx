@@ -1693,6 +1693,13 @@ describe("the file face", () => {
     await settle();
     // The name says Markdown and the bytes say otherwise; the bytes win (`crate::folder`).
     expect(container.textContent).toContain(t("files.notText"));
+
+    // A file this face cannot draw is still a file the reader wants opened, and what they are
+    // pointed at is the menu the rows already carry — nothing of its own for this state
+    // (`AMB-T-4352`).
+    await click(button(t("files.openElsewhere")));
+    await click(button(t("files.openWith")));
+    expect(hoisted.asked).toContain(`open:${ROOT}:a.md`);
   });
 
   /** A link is refused on purpose (`AMB-D-782`), and answering it with the sentence every other
@@ -1710,6 +1717,9 @@ describe("the file face", () => {
     await settle();
     expect(container.textContent).toContain(errLabel(link));
     expect(container.textContent).not.toContain(t("files.unreadable"));
+    // And no way on, because handing the name to the machine is following the link after all — the
+    // one thing this refusal exists to not do (`AMB-D-782`).
+    expect(button(t("files.openElsewhere"))).toBeUndefined();
     // The sentence is the reader's, not the English one that came with the refusal.
     expect(container.textContent).not.toContain(link.message_en);
   });
@@ -1728,6 +1738,11 @@ describe("the file face", () => {
     await settle();
     expect(container.textContent).toContain(t("files.unreadable"));
     expect(container.textContent).not.toContain("no such file");
+
+    // What Amenbo could not read, another application may well open (`AMB-T-4352`).
+    await click(button(t("files.openElsewhere")));
+    await click(button(t("files.openWith")));
+    expect(hoisted.asked).toContain(`open:${ROOT}:a.md`);
   });
 
   it("points a picture at the door that hands out a file, not at bytes of its own", async () => {
@@ -1757,7 +1772,7 @@ describe("the file face", () => {
     // being refused rather than failed to be read.
     expect(container.textContent).not.toContain(t("files.notText"));
 
-    await click(button(t("files.tooBigOpen")));
+    await click(button(t("files.openElsewhere")));
     // The way on is the one the list rows already open — nothing new was invented for this state.
     expect(button(t("files.chooseApp"))).toBeDefined();
     await click(button(t("files.openWith")));

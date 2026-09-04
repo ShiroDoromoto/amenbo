@@ -30,9 +30,10 @@
 # is the row that lists the folder: it names the store the folder belongs to, and stops calling it
 # one an AI can be started in. A row that went on saying ready would have the screen saying the
 # opposite of what happens to whoever walks in, which is the one way a reader ends up trusting a
-# folder nothing of theirs reaches. (The way in on the terminal face is another road and does not
-# read alike: a folder picked there is one the build has to open, so what it answers with is the
-# refusal itself, said under the control that was pressed.)
+# folder nothing of theirs reaches. (The way in on the terminal face does not read alike: a folder
+# picked there is one the build has to open, so what it answers with is the refusal itself, said
+# under the control that was pressed — which is
+# `be-answered-for-a-folder-that-already-holds-a-pointer`'s road and not this one.)
 #
 # ── What only the screen road ever says ──────────────────────────────────────────────────────────
 # A reader arriving with no folder linked yet is offered two ways in: raise a project, or open one

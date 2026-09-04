@@ -242,6 +242,15 @@ pub(crate) struct Driver<'a> {
     /// compiled in: the harness that walks a screen road is sent to a VM, and the compile-time path
     /// names nothing there.
     fixtures: PathBuf,
+    /// The pointer the run's own folder was holding when this driver booted, kept as its text.
+    ///
+    /// The two ops that leave a folder holding a pointer no build under test would write
+    /// (`folder foreign-pointer`, `folder lost-pointer`) copy this one rather than write one from
+    /// parts, so that everything but the field they move agrees. It is read here rather than at the
+    /// step, because a premise can take the folder's own away first: `store nothing-raised` deletes
+    /// the project the boot raised, and deleting a project releases every folder pointing at it —
+    /// the run's own included. Those two ops are exactly the ones a road walks on that world.
+    own_pointer: String,
 }
 
 /// What an expected refusal travels back on. A refusal has to reach [`Driver::refused`] from
@@ -281,11 +290,15 @@ impl<'a> Driver<'a> {
             tick_at_start: false,
             refusal: None,
             fixtures: fixtures.unwrap_or_else(default_fixtures_dir),
+            own_pointer: String::new(),
         };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;
         d.project_id = v["identity"]["project_id"]
             .as_i64()
             .ok_or("init did not report a project_id")?;
+        let ours = session.cwd.join(".amenbo");
+        d.own_pointer = std::fs::read_to_string(&ours)
+            .map_err(|e| format!("could not read the run's own pointer at {}: {e}", ours.display()))?;
         d.tick_at_start = d.tick_registered()?;
         Ok(d)
     }

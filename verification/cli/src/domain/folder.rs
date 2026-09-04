@@ -62,6 +62,13 @@ impl Driver<'_> {
             // catch. The id is a live key in this store and the slug beside it is that project's, so
             // the cross-check that would otherwise notice a stray pointer says nothing, and a build
             // reading it would go quietly to work under a number that means something here too.
+            // (On a world a premise emptied first the number names a project that has been deleted,
+            // and the fixture is no weaker for it: the name is read before anything resolves the id.)
+            //
+            // What it is copied from is the pointer the boot left in the run's own folder, taken down
+            // as the driver opened rather than read here — `store nothing-raised` releases that folder
+            // along with the project it named, and it is the very premise the roads that want this op
+            // stand on.
             //
             // Written from outside the folder, the way `legacy-pointer` is: a build run inside brings
             // a pointer forward to its own shape, so a visit would take the claim off before the guard
@@ -69,11 +76,8 @@ impl Driver<'_> {
             "foreign-pointer" => {
                 let dir = self.folder(with)?;
                 let by = req_str(with, "store")?;
-                let ours = self.session.cwd.join(".amenbo");
-                let text = std::fs::read_to_string(&ours)
-                    .map_err(|e| format!("could not read the run's own pointer at {}: {e}", ours.display()))?;
                 let claimed = dir.join(".amenbo");
-                std::fs::write(&claimed, claimed_by(&text, by)?)
+                std::fs::write(&claimed, claimed_by(&self.own_pointer, by)?)
                     .map_err(|e| format!("could not write {}: {e}", claimed.display()))?;
                 Ok(Outcome::action(format!("left {} claimed by {by}, everything but the name agreeing", dir.display())))
             }
@@ -88,11 +92,8 @@ impl Driver<'_> {
             // the way in rather than before anyone got there.
             "lost-pointer" => {
                 let dir = self.folder(with)?;
-                let ours = self.session.cwd.join(".amenbo");
-                let text = std::fs::read_to_string(&ours)
-                    .map_err(|e| format!("could not read the run's own pointer at {}: {e}", ours.display()))?;
                 let lost = dir.join(".amenbo");
-                std::fs::write(&lost, pointing_nowhere(&text)?)
+                std::fs::write(&lost, pointing_nowhere(&self.own_pointer)?)
                     .map_err(|e| format!("could not write {}: {e}", lost.display()))?;
                 Ok(Outcome::action(format!(
                     "left {} naming project {NO_SUCH_PROJECT}, which this store does not have",

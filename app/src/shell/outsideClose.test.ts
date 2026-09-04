@@ -26,6 +26,16 @@ beforeEach(() => {
       <div class="board__toolbar" id="inline-toolbar">
         <input class="board__search" id="screen-search" />
       </div>
+      <div class="filterbar">
+        <input class="board__search" id="board-search" />
+        <div class="groupby"><button class="filterchip" id="groupby-chip">status</button></div>
+      </div>
+      <div class="filterpanel">
+        <div class="filterpanel__axis">
+          <span class="filterpanel__label" id="axis-label">priority</span>
+          <div class="filterpanel__values"><button class="filterchip" id="axis-value">high</button></div>
+        </div>
+      </div>
       <ul>
         <li data-pane-select id="row"><span id="row-label">task</span></li>
       </ul>
@@ -67,6 +77,16 @@ describe("isBlankSpaceClose", () => {
   it("does NOT close on a toolbar a screen draws inline", () => {
     expect(isBlankSpaceClose(at("screen-search"), rightpane)).toBe(false);
     expect(isBlankSpaceClose(at("inline-toolbar"), rightpane)).toBe(false);
+  });
+
+  // Narrowing can take the very record the pane is holding out of the list, and the pane stays anyway: the
+  // press says which work the reader wants listed, not that they are finished with what they are reading.
+  it("does NOT close on the row that narrows the list, or on the filters opened under it", () => {
+    expect(isBlankSpaceClose(at("board-search"), rightpane)).toBe(false);
+    expect(isBlankSpaceClose(at("groupby-chip"), rightpane)).toBe(false);
+    expect(isBlankSpaceClose(at("axis-value"), rightpane)).toBe(false);
+    expect(isBlankSpaceClose(at("axis-label"), rightpane)).toBe(false);
+    expect(isBlankSpaceClose(document.querySelector(".filterpanel"), rightpane)).toBe(false);
   });
 
   it("does NOT close on a list row/card — switching is left to onClick", () => {

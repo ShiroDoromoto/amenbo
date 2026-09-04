@@ -7,11 +7,17 @@
  * (closing on pointerdown and relying on the following click to re-select fails — the reflow moves the row out
  * from under the click and all that happens is the close); the TopBar (.topbar) is ignored too (closing on
  * pointerdown would have closeRight push "no selection" onto the history, and the goBack of the following click
- * would only undo what was just pushed, leaving no way back past the detail pane); and a screen's own toolbar
- * (.board__toolbar) is ignored for the same reason the TopBar is — it is chrome the reader aims at, not blank
- * space. The class is what is excluded rather than the header slot it is portalled into (.shell__header),
- * because the toolbar is the only thing that ever stands in that slot, while the screens that draw one inline
- * (search, activity) show the pane too and press the same controls.
+ * would only undo what was just pushed, leaving no way back past the detail pane); and a screen's own chrome —
+ * its toolbar (.board__toolbar), the row that narrows the list (.filterbar) and the filters opened under it
+ * (.filterpanel) — is ignored for the same reason the TopBar is: it is what the reader aims at, not blank
+ * space, and the filters are a view of their own rather than part of the list (`AMB-D-654`). The toolbar's own
+ * class is excluded rather than the header slot it is portalled into (.shell__header), because the toolbar is
+ * the only thing that ever stands in that slot, while the screens that draw one inline (search, activity) show
+ * the pane too and press the same controls.
+ *
+ * Narrowing the list is where the two readings pull hardest: a value chosen here can take the very record the
+ * pane is holding out of the list. The pane stays — what a press on a filter says is which work the reader
+ * wants listed, and nothing about the one they are reading, which they close with the pane's own control.
  */
 export function isBlankSpaceClose(target: Node | null, rightpane: HTMLElement | null): boolean {
   if (target && rightpane?.contains(target)) return false; // inside the pane: ignore
@@ -20,5 +26,7 @@ export function isBlankSpaceClose(target: Node | null, rightpane: HTMLElement | 
   if (target.closest("[data-pane-select]")) return false; // a list row or card: leave the switch to onClick
   if (target.closest(".topbar")) return false;
   if (target.closest(".board__toolbar")) return false;
+  if (target.closest(".filterbar")) return false;
+  if (target.closest(".filterpanel")) return false;
   return true; // any other click on blank space: close
 }

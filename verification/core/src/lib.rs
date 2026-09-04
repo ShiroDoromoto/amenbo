@@ -295,7 +295,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "comment", required: &["target", "text"], refs: &["target", "mentions"], strings: &["text"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "edit", required: &["target", "text"], refs: &["target"], strings: &["text"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "rm", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "promote", required: &["target", "title"], refs: &["target"], strings: &["title"], binds: true },
+    // Promoting writes a decision, so it carries the same `dimension` / `value` a decision's own
+    // create does: an axis the project requires is read here too, and a road that could not answer it
+    // could only ever walk the refusal.
+    OpSpec { kind: Kind::Action, domain: Domain::Comment, op: "promote", required: &["target", "title"], refs: &["target"], strings: &["title", "dimension", "value"], binds: true },
     // The progress states, each by the command a user reaches for: `status` is the explicit move
     // (and the reserve), `done` / `reopen` / `block` are the three the CLI gives their own verb.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], refs: &["target"], strings: &["status"], binds: false },

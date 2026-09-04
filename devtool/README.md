@@ -691,6 +691,13 @@ taken by — exit 0, nothing delivered.
 reached on the wrong window is a check that passed without looking at the screen
 it was written for.
 
+**A name on two kinds of element is said apart with `--role <role>`.** The role is
+the first column `find` prints. The task pane's assignee is an `AXPopUpButton`
+called by the person it holds — `Assignee` is the static text beside it, and a
+press on that exits 0 having done nothing — while the filter panel's checkbox
+carries the same `Unassigned`. Without the role the tool refuses rather than
+pressing one of them, and a point is what that costs.
+
 **A date field is written with `set-date`, never clicked and typed into.** The
 click that reaches one opens a picker, and the picker takes every key sent after
 it — `type "12312099"` and a raw keycode arrive nowhere alike — while the year

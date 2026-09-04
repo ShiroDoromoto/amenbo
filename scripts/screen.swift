@@ -17,6 +17,7 @@
 //   swift screen.swift read <image.png>          the words on a shot, as JSON: corrected, and as read
 //   swift screen.swift find <pid> [name]         every named element on screen, or those that name reaches
 //   swift screen.swift click-named <pid> <name>  left-click what that name names (fronts the app first)
+//                                                — with `--role <role>` when the name is on several kinds
 //   swift screen.swift click <x> <y>             left-click at a screen point
 //   swift screen.swift dblclick <x> <y>          double-click at a screen point (what opens a dialog's row)
 //   swift screen.swift drag <pid> <x1> <y1> <x2> <y2> [steps]   press at the first point, move to the second, let go
@@ -38,6 +39,12 @@
 // road reading the wrong window finds nothing it expected and comes out red for a reason nobody can
 // see, or finds a name both windows carry and comes out green without having looked at the screen
 // under test.
+//
+// `find` / `click-named` / `right-click-named` take `--role <role>` the same way, for a name that is
+// on more than one kind of element. The role is the first column `find` prints, so it is read off the
+// screen rather than remembered: `--role AXPopUpButton` reaches the pane's own field where a filter's
+// `AXCheckBox` carries the same word, and it is the way past the refusal one name in two places
+// otherwise ends in.
 //
 // Reach for `click-named` over a point. A point costs two conversions a name costs neither of: a
 // shot's pixels are the window's points times the scale of *that* display, which is 2 on a built-in
@@ -439,13 +446,36 @@ func oneLine(_ s: String) -> String {
     s.replacingOccurrences(of: "\n", with: "\\n")
 }
 
-func find(pid: Int, name: String?, window: String?) {
-    let all = windowElements(pid: pid, window: window)
+/// The ones drawn as `role`, when the caller has said which kind of element it means.
+///
+/// A name is not the whole of what a screen carries: the pane's assignee is a pop-up button whose
+/// name is the person it holds, and the word standing beside it — the label a person would call it by
+/// — is a piece of static text. One name is also often on two controls at once, a filter's checkbox
+/// and the pane's own field both being called `Unassigned`. What separates them is the kind each is
+/// drawn as, which `find` prints in its first column, so the caller reads one off the screen and hands
+/// it back.
+func ofRole(_ role: String?, _ all: [Element]) -> [Element] {
+    guard let role else { return all }
+    return all.filter { $0.role == role }
+}
+
+/// What a caller asked for, as a phrase to refuse it in.
+func aimedAt(_ name: String?, _ role: String?) -> String {
+    switch (name, role) {
+    case let (name?, role?): return "called \(name) and drawn as \(role)"
+    case let (name?, nil): return "called \(name)"
+    case let (nil, role?): return "drawn as \(role)"
+    case (nil, nil): return "on it"
+    }
+}
+
+func find(pid: Int, name: String?, role: String?, window: String?) {
+    let all = ofRole(role, windowElements(pid: pid, window: window))
     let found = name.map { named($0, among: all) } ?? all
     for e in found {
         print("\(e.role)\t\(e.name)\t\(Int(e.frame.minX)) \(Int(e.frame.minY)) \(Int(e.frame.width)) \(Int(e.frame.height))")
     }
-    if found.isEmpty { fail("nothing on screen is called \(name ?? "anything")") }
+    if found.isEmpty { fail("nothing on screen is \(aimedAt(name, role))") }
 }
 
 /// Click where that name is on screen.
@@ -458,15 +488,15 @@ func find(pid: Int, name: String?, window: String?) {
 /// press lands on whatever is frontmost at that point, so anything that took the front — a sleeping
 /// display, a permission dialog — swallows the click and the run still exits 0. A shot says so by
 /// failing; a click cannot, so it is not asked to.
-func clickNamed(pid: Int, name: String, window: String?) {
-    let p = pointOf(pid: pid, name: name, window: window)
+func clickNamed(pid: Int, name: String, role: String?, window: String?) {
+    let p = pointOf(pid: pid, name: name, role: role, window: window)
     click(x: p.x, y: p.y)
 }
 
 /// The same, with the other button: what a row's own menu is opened by, and the only way to reach one
 /// from here. A menu drawn where the pointer is has no name to aim at until it is up.
-func rightClickNamed(pid: Int, name: String, window: String?) {
-    let p = pointOf(pid: pid, name: name, window: window)
+func rightClickNamed(pid: Int, name: String, role: String?, window: String?) {
+    let p = pointOf(pid: pid, name: name, role: role, window: window)
     rightClick(x: p.x, y: p.y)
 }
 
@@ -485,10 +515,14 @@ func rightClickNamed(pid: Int, name: String, window: String?) {
 /// names it reached are printed and nothing is pressed — pressing the first would be a press on
 /// whatever the tree happened to hold first, reported as success.
 ///
-func pointOf(pid: Int, name: String, window: String?) -> CGPoint {
+/// One name on two elements in two places is the third ambiguity, and the caller settles it with
+/// `--role`: the pane's assignee and a filter's checkbox are both called `Unassigned`, and what tells
+/// them apart is that one is drawn as a pop-up button and the other as a checkbox.
+///
+func pointOf(pid: Int, name: String, role: String?, window: String?) -> CGPoint {
     front(pid: pid, window: window)
-    let found = named(name, among: windowElements(pid: pid, window: window))
-    guard let first = found.first else { fail("nothing on screen is called \(name)") }
+    let found = named(name, among: ofRole(role, windowElements(pid: pid, window: window)))
+    guard let first = found.first else { fail("nothing on screen is \(aimedAt(name, role))") }
 
     var reached: [String] = []
     for e in found where !reached.contains(e.name) { reached.append(e.name) }
@@ -500,7 +534,12 @@ func pointOf(pid: Int, name: String, window: String?) -> CGPoint {
     let overlap = found.dropFirst().reduce(first.frame) { $0.intersection($1.frame) }
     if overlap.isNull || overlap.isEmpty {
         let places = found.map { "\(Int($0.frame.minX)),\(Int($0.frame.minY))" }.joined(separator: " ")
-        fail("\(found.count) elements are called \(oneLine(first.name)), in different places — at \(places); click a point instead")
+        // A point is the last way out rather than the first: it costs the two conversions the head of
+        // this file is about, so a caller is offered the kind it means before it is offered pixels.
+        let onward = role == nil
+            ? "say which kind with --role <the role find prints, e.g. \(found.map(\.role).joined(separator: " / "))>, or click a point instead"
+            : "click a point instead"
+        fail("\(found.count) elements are called \(oneLine(first.name)), in different places — at \(places); \(onward)")
     }
     return CGPoint(x: overlap.midX, y: overlap.midY)
 }
@@ -616,26 +655,26 @@ func key(_ code: CGKeyCode) {
     CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false)?.post(tap: .cghidEventTap)
 }
 
-/// Pull `--window <title>` out of the line, wherever in it the caller wrote it, and hand back what is
-/// left as the positional arguments each subcommand already reads. Which window is a qualifier on the
-/// aim rather than another thing to name, so it is not given a place in any subcommand's order — a
-/// `find <pid> [name]` whose optional name and optional window sat side by side would read a one-word
-/// call either way round.
-func takeWindow(_ argv: [String]) -> (window: String?, rest: [String]) {
-    var window: String?
+/// Pull `--<flag> <value>` out of the line, wherever in it the caller wrote it, and hand back what is
+/// left as the positional arguments each subcommand already reads. Which window, and which kind of
+/// element, are qualifiers on the aim rather than more things to name, so neither is given a place in
+/// any subcommand's order — a `find <pid> [name]` whose optional name and optional window sat side by
+/// side would read a one-word call either way round.
+func takeOption(_ flag: String, _ argv: [String], needs: String) -> (value: String?, rest: [String]) {
+    var value: String?
     var rest: [String] = []
     var i = 0
     while i < argv.count {
-        if argv[i] == "--window" {
-            guard i + 1 < argv.count else { fail("--window needs the title of a window") }
-            window = argv[i + 1]
+        if argv[i] == flag {
+            guard i + 1 < argv.count else { fail("\(flag) needs \(needs)") }
+            value = argv[i + 1]
             i += 2
             continue
         }
         rest.append(argv[i])
         i += 1
     }
-    return (window, rest)
+    return (value, rest)
 }
 
 /// Turn a wheel over the app's window.
@@ -791,9 +830,15 @@ func setDate(pid: Int, name: String, day: String, window: String?, near: String?
     if got != day { fail("\(oneLine(field.name)) holds \(got), not \(day)") }
 }
 
-let (window, args) = takeWindow(CommandLine.arguments)
+let (window, afterWindow) = takeOption("--window", CommandLine.arguments, needs: "the title of a window")
+let (role, args) = takeOption("--role", afterWindow, needs: "the role find prints in its first column")
 guard args.count >= 2 else {
     fail("usage: screen <front|shot|read|find|click-named|right-click-named|click|right-click|dblclick|drag|type|key|scroll|set-date|trusted> … [--window <title>]")
+}
+// Refused rather than ignored: a qualifier the subcommand never reads would narrow nothing and say so
+// nowhere, which is the silent miss every refusal in this file is written against.
+if role != nil, !["find", "click-named", "right-click-named"].contains(args[1]) {
+    fail("--role says which kind of element to reach, and only find / click-named / right-click-named take one")
 }
 
 switch args[1] {
@@ -807,14 +852,14 @@ case "read":
     guard args.count == 3 else { fail("usage: screen read <image.png>") }
     readText(path: args[2])
 case "find":
-    guard args.count == 3 || args.count == 4, let pid = Int(args[2]) else { fail("usage: screen find <pid> [name] [--window <title>]") }
-    find(pid: pid, name: args.count == 4 ? args[3] : nil, window: window)
+    guard args.count == 3 || args.count == 4, let pid = Int(args[2]) else { fail("usage: screen find <pid> [name] [--role <role>] [--window <title>]") }
+    find(pid: pid, name: args.count == 4 ? args[3] : nil, role: role, window: window)
 case "click-named":
-    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen click-named <pid> <name> [--window <title>]") }
-    clickNamed(pid: pid, name: args[3], window: window)
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen click-named <pid> <name> [--role <role>] [--window <title>]") }
+    clickNamed(pid: pid, name: args[3], role: role, window: window)
 case "right-click-named":
-    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen right-click-named <pid> <name> [--window <title>]") }
-    rightClickNamed(pid: pid, name: args[3], window: window)
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen right-click-named <pid> <name> [--role <role>] [--window <title>]") }
+    rightClickNamed(pid: pid, name: args[3], role: role, window: window)
 case "click":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen click <x> <y>") }
     click(x: x, y: y)

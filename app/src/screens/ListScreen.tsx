@@ -143,7 +143,7 @@ const TaskRow = memo(function TaskRow({
       <span className="row__unread" aria-hidden={!unread}>
         {unread && <span className="row__unread-dot" role="img" aria-label={t("list.unread")} />}
       </span>
-      <span className="row__status"><StatusSelect id={task.id} status={task.status} onStatus={onStatus} premiseChange={task.premiseChange} /></span>
+      <span className="row__status"><StatusSelect id={task.id} status={task.status} onStatus={onStatus} premiseChange={task.premiseChange} draft={task.draft} /></span>
       <span className={`row__title ${isClosed(task.status) ? "row__title--closed" : ""}`}>{task.title}</span>
       <span className="row__spacer" />
       <TaskIdChip id={task.id} />

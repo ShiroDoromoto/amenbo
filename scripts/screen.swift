@@ -1,5 +1,5 @@
 // screen — drive a mac screen from the outside and read what is on it: bring an app to the front,
-// click, type, send a key, shoot its window, and read the text off a shot.
+// click, carry a thing across it, type, send a key, shoot its window, and read the text off a shot.
 //
 // One tool rather than one per caller. What a caller needs of a screen is the moves, a shot and the
 // words on it — never a window id or its bounds, which is why neither leaves here: the tool shoots
@@ -19,6 +19,9 @@
 //   swift screen.swift click-named <pid> <name>  left-click what that name names (fronts the app first)
 //   swift screen.swift click <x> <y>             left-click at a screen point
 //   swift screen.swift dblclick <x> <y>          double-click at a screen point (what opens a dialog's row)
+//   swift screen.swift drag-named <pid> <from> <to>
+//                                                carry what one name names onto what another names and
+//                                                let it go there (fronts the app first)
 //   swift screen.swift type "text"               type into the focused element (Unicode direct, so no IME)
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 51=Backspace / 121=Page Down)
 //   swift screen.swift scroll <pid> <dx> <dy>    turn a wheel over that app's window (+dy is back toward the top)
@@ -368,19 +371,43 @@ func find(pid: Int, name: String?) {
     if found.isEmpty { fail("nothing on screen is called \(name ?? "anything")") }
 }
 
-/// Click where that name is on screen.
+/// The point on screen a name aims at.
 ///
 /// A name is often on more than one element without being ambiguous: a link and the text inside it
-/// both answer to it, and they sit one on top of the other, so a click anywhere they overlap reaches
-/// whatever is uppermost there — which is the thing a person clicking the word would have hit. So the
+/// both answer to it, and they sit one on top of the other, so a press anywhere they overlap reaches
+/// whatever is uppermost there — which is the thing a person pressing the word would have hit. So the
 /// point aimed at is where every element of that name overlaps. Two of a name in two *places* has no
 /// such point, and that is refused rather than guessed at: `find` is how to see both and aim at one.
 ///
 /// Matching a part of a name (above) is what puts *several* names within reach of one word, and that
 /// is a different ambiguity: ステータス is a label, a filter's pop-up and a group's button; 未着手 is
 /// a column header and every card standing under it. Nothing here can tell which was meant, so the
-/// names it reached are printed and nothing is pressed — pressing the first would be a click on
+/// names it reached are printed and nothing is pressed — pressing the first would be a press on
 /// whatever the tree happened to hold first, reported as success.
+///
+/// The elements are handed in rather than listed here, so that a caller naming two ends of one move
+/// reads them off one screen: listed twice, the second listing is of a screen the first end may
+/// already have moved.
+func spot(named wanted: String, among all: [Element]) -> CGPoint {
+    let found = named(wanted, among: all)
+    guard let first = found.first else { fail("nothing on screen is called \(wanted)") }
+
+    var reached: [String] = []
+    for e in found where !reached.contains(e.name) { reached.append(e.name) }
+    if reached.count > 1 {
+        let names = reached.map(oneLine).joined(separator: " / ")
+        fail("\(reached.count) names on screen hold \(wanted) — \(names); name one of them, or more of the one meant")
+    }
+
+    let overlap = found.dropFirst().reduce(first.frame) { $0.intersection($1.frame) }
+    if overlap.isNull || overlap.isEmpty {
+        let places = found.map { "\(Int($0.frame.minX)),\(Int($0.frame.minY))" }.joined(separator: " ")
+        fail("\(found.count) elements are called \(oneLine(first.name)), in different places — at \(places); aim at a point instead")
+    }
+    return CGPoint(x: overlap.midX, y: overlap.midY)
+}
+
+/// Click where that name is on screen.
 ///
 /// The click is a real one, at where the element stands now: what the name saves is the arithmetic,
 /// not the input path, and a press delivered through the accessibility API would go through whether
@@ -392,22 +419,8 @@ func find(pid: Int, name: String?) {
 /// failing; a click cannot, so it is not asked to.
 func clickNamed(pid: Int, name: String) {
     front(pid: pid)
-    let found = named(name, among: appElements(pid: pid))
-    guard let first = found.first else { fail("nothing on screen is called \(name)") }
-
-    var reached: [String] = []
-    for e in found where !reached.contains(e.name) { reached.append(e.name) }
-    if reached.count > 1 {
-        let names = reached.map(oneLine).joined(separator: " / ")
-        fail("\(reached.count) names on screen hold \(name) — \(names); name one of them, or more of the one meant")
-    }
-
-    let overlap = found.dropFirst().reduce(first.frame) { $0.intersection($1.frame) }
-    if overlap.isNull || overlap.isEmpty {
-        let places = found.map { "\(Int($0.frame.minX)),\(Int($0.frame.minY))" }.joined(separator: " ")
-        fail("\(found.count) elements are called \(oneLine(first.name)), in different places — at \(places); click a point instead")
-    }
-    click(x: overlap.midX, y: overlap.midY)
+    let p = spot(named: name, among: appElements(pid: pid))
+    click(x: p.x, y: p.y)
 }
 
 /// Move onto the point before pressing, so an element that expects a hover first (a button's hover
@@ -418,14 +431,21 @@ func hover(_ p: CGPoint) {
     usleep(120_000)
 }
 
-/// One down/up at a point, saying which press of a run it is. That number is the whole difference
-/// between two clicks and a double click: the events are otherwise identical, and what is listening
-/// reads the count off the field rather than timing the pair itself.
+/// One mouse event at a point — a button going down, a pointer moving with it held, or the button
+/// coming up. Every one of them carries which press of a run it belongs to, since that number is the
+/// whole difference between two clicks and a double click.
+func mouse(_ phase: CGEventType, at p: CGPoint, clickState: Int64) {
+    let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: .left)
+    e?.setIntegerValueField(.mouseEventClickState, value: clickState)
+    e?.post(tap: .cghidEventTap)
+}
+
+/// One down/up at a point, saying which press of a run it is: the events of a click and of the
+/// second half of a double click are otherwise identical, and what is listening reads the count off
+/// the field rather than timing the pair itself.
 func press(at p: CGPoint, clickState: Int64) {
     for phase in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
-        let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: .left)
-        e?.setIntegerValueField(.mouseEventClickState, value: clickState)
-        e?.post(tap: .cghidEventTap)
+        mouse(phase, at: p, clickState: clickState)
         usleep(60_000)
     }
 }
@@ -444,6 +464,44 @@ func doubleClick(x: Double, y: Double) {
     hover(p)
     press(at: p, clickState: 1)
     press(at: p, clickState: 2)
+}
+
+/// Carry what one name names onto what another names, and let it go there.
+///
+/// A press is one event and a carry is a run of them: what the screen is watching for is the run,
+/// and a down and an up at two points is a click at the second one. So the pointer is walked from
+/// one end to the other with the button held — far enough apart that a step is a step, close enough
+/// that none of them jumps over the thing being crossed.
+///
+/// Both ends are read off one listing of the screen. Card and column stand on the same screen at the
+/// moment the carry begins, and a second listing would be of a screen the grab had already moved.
+///
+/// The pauses are not padding. A drag on this screen is the web's own, so the press has to be seen
+/// as a grab before anything moves (the app draws the card as lifted), and the column has to be told
+/// the pointer is over it before the button comes up — a release in the same instant as the last
+/// move is a release nothing has been told about, and the card goes back where it came from.
+func dragNamed(pid: Int, from: String, to: String) {
+    front(pid: pid)
+    let all = appElements(pid: pid)
+    let start = spot(named: from, among: all)
+    let end = spot(named: to, among: all)
+
+    hover(start)
+    mouse(.leftMouseDown, at: start, clickState: 1)
+    usleep(200_000)
+
+    // About one step per 20 points, and never fewer than ten: a short carry still has to look like a
+    // carry, and the first steps are what take the press past the distance a drag begins at.
+    let steps = max(10, Int((hypot(end.x - start.x, end.y - start.y) / 20).rounded(.up)))
+    for i in 1...steps {
+        let t = Double(i) / Double(steps)
+        let at = CGPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)
+        mouse(.leftMouseDragged, at: at, clickState: 1)
+        usleep(30_000)
+    }
+
+    usleep(200_000)
+    mouse(.leftMouseUp, at: end, clickState: 1)
 }
 
 /// type sends the string itself rather than keycodes. It bypasses the IME, so any script goes in as-is.
@@ -625,7 +683,7 @@ func setDate(pid: Int, name: String, day: String, near: String?) {
 
 let args = CommandLine.arguments
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|type|key|scroll|set-date|trusted> …")
+    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|drag-named|type|key|scroll|set-date|trusted> …")
 }
 
 switch args[1] {
@@ -650,6 +708,9 @@ case "click":
 case "dblclick":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen dblclick <x> <y>") }
     doubleClick(x: x, y: y)
+case "drag-named":
+    guard args.count == 5, let pid = Int(args[2]) else { fail("usage: screen drag-named <pid> <from> <to>") }
+    dragNamed(pid: pid, from: args[3], to: args[4])
 case "type":
     guard args.count == 3 else { fail("usage: screen type <text>") }
     type(args[2])

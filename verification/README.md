@@ -310,7 +310,7 @@ one build produces alongside the app and one installer carries with it. The exec
 asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
 The screen tool is the input primitive too, called by whoever drives the screen between steps: its
-`find` / `click-named` / `click` / `dblclick` / `type` / `key` / `scroll` / `set-date` carry out the action
+`find` / `click-named` / `click` / `dblclick` / `drag-named` / `type` / `key` / `scroll` / `set-date` carry out the action
 steps the checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
 at all — the proof it waits for is a shot it throws away, since an app the system has taken up is
 not yet an app with a window, and a walk that started between the two would fail on its first step.
@@ -350,6 +350,15 @@ across. The pointer is put in the middle of the window first, since a wheel land
 pointing rather than on whatever holds focus; something else on the screen that scrolls is reached by
 clicking into it and scrolling after.
 
+**A card is carried with `drag-named <pid> <from> <to>`, and not out of two clicks.** Filing work by
+moving its card is a road on the board, and what the screen is watching for is the run of moves
+between the press and the release — a press at one place and a release at another is a click at the
+second one. So the pointer is walked across with the button held, both ends named the way
+`click-named` names one: `drag-named <pid> "SCENARIO SEED — the printed piece" print` carries the
+card onto the column headed `print` and lets it go there. Both names are read off one listing of the
+screen, since the grab moves what a second listing would be of. A column takes the card anywhere in
+it, its heading included, which is what makes an empty column reachable by the name on its head.
+
 **A day goes in through `set-date <pid> <name> <yyyy-mm-dd>` rather than through the keys.** A date
 field is one control with three numbered parts in it, and typing into it is a digit at a time — but
 every digit that leaves the value a valid day makes the app commit and redraw the field, and the
@@ -387,7 +396,7 @@ cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml 
 
 A screen road is walked by somebody, always. The run prints the step it is about to shoot and waits
 for a line on stdin; between the two, the screen belongs to whoever is driving — carry the step out
-by hand, or with the screen tool's `click-named` / `type` / `key` / `scroll` / `set-date`, and send the line
+by hand, or with the screen tool's `click-named` / `drag-named` / `type` / `key` / `scroll` / `set-date`, and send the line
 once the screen is standing where the step says it should. There is no flag for running it any other way.
 
 **The hand-over comes before the step, the first one included.** That is what lets a road open with a

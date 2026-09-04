@@ -1,0 +1,154 @@
+# What a folder says about the things it is hiding.
+#
+# The colours on the tree are git's answer drawn on the rows git named, and git names files. A folder
+# holding a changed file is named by nobody, so the row a reader is looking at — the folded one, the
+# only one on screen — used to say nothing at all, and finding out what an agent had been doing meant
+# opening every folder in turn.
+#
+# ── Why the repository has to be committed first ─────────────────────────────────────────────────
+# A repository that has only been made is one where nothing is tracked, and git answers about such a
+# folder by naming the top of it and stopping. Every row underneath then inherits that one answer,
+# which is a different rule and one another road already reads
+# (`see-what-changed-in-the-folder-without-touching-it`). What this road is about only exists on the
+# other side of a commit: a folder git is quiet about, holding a file git has something to say about.
+#
+# ── Why the reading is taken twice ───────────────────────────────────────────────────────────────
+# Folded, the row answers for what is under it. Open, it stops — the rows inside say it themselves,
+# and a colour running from the top of the tree down to the one file that changed would say only
+# "somewhere, something". Either half alone passes on a build carrying the other fault: a build that
+# never rolls up passes the second reading, and one that colours every folder on the way passes the
+# first.
+#
+# The file is written from outside while the app is up, the way the other road writes one, because a
+# folder does not stop being written in while somebody is looking at it.
+id: read-a-folded-folder-for-what-changed-inside-it
+title: A folded folder wears the colour of what git found inside it, and goes plain when it is opened
+description: >
+  Open the file column on a project whose folder is a repository with everything in it recorded, then
+  write a new file inside one of its folders from outside Amenbo. The folded folder — the only row
+  there is to look at — comes up in the colour that says something inside it is new to git. Open that
+  folder and it goes plain again, with the colour now on the file it was standing for.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # The folder the colours are about is the bound one, for the reason the other road gives: what git
+  # says is drawn on the face of the folder the project is bound to.
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse
+
+  # What the folder held before anybody looked. It is inside a folder of its own, because the row this
+  # road reads is that folder.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: orchard/pruning.md
+      content: SCENARIO cut back the old wood before the sap rises
+
+  # And recorded, which is what leaves git with nothing to say about `orchard` itself. Without it git
+  # names the whole folder as new and the row this road reads answers for itself rather than for what
+  # is under it.
+  - type: action
+    domain: repo
+    op: git-commit
+    with:
+      dir: greenhouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # The section that draws the bound folder stands unfolded from the start. What is not open is the
+  # folders inside it — which is the state this road is about, and what `open: []` leaves them in.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # Nothing has happened yet, and the row says so. Read first, so that the colour below reads as a
+  # colour that arrived rather than as one that was always there.
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: orchard
+      section: tree
+      mark: untracked
+      present: false
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: orchard/notes.md
+      content: SCENARIO the espaliered pear has taken
+
+  # The folder is folded and the file inside it is not on screen at all, so this colour is the whole
+  # of what the reader is told: there is something in here you cannot see.
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: orchard
+      section: tree
+      mark: untracked
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: orchard
+
+  # Open, the file says it for itself.
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: notes.md
+      section: tree
+      mark: untracked
+
+  # And the folder has stopped saying it. A tree that kept the colour on both would draw one change as
+  # a column of coloured rows, which is the reading this rule exists to avoid.
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: orchard
+      section: tree
+      mark: untracked
+      present: false

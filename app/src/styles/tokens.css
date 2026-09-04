@@ -1,5 +1,14 @@
 /* amenbo design tokens */
 :root {
+  /* ----- one set of grounds for the whole application -----
+     No face defines its own. The window shows the ledger or the terminal (`AMB-D-753`), and the same
+     part in the same place must be the same colour across the switch — a ground that changed with the
+     face made one window read as two applications. The three steps below are put on both the same way:
+     the edges (the sidebar or the rail, the band over them) stand on `--c-surface`, and the middle
+     they frame is `--c-bg`. A terminal's black belongs to the program drawing in the pane, not to the
+     face the pane is on, and never widens past it — the pane's own ground is the one exception to the
+     sentence above, and it is written out below. */
+
   /* ----- the ground, in three steps, and the hover laid on it -----
      A page, the cards on it, and the wells cut into a card (`AMB-D-840`). The steps stay shallow —
      what tells one region from the next is the rule around it and the space between, not the ground
@@ -28,10 +37,34 @@
      and `--c-text-muted` — no value light enough to read as a third step clears AA on these grounds. */
   --c-text-faint: #9b958a;
 
-  /* ----- color: accent (teal) ----- */
+  /* ----- color: accent (teal) -----
+     `faint` is a step under `weak`, for the ground of something a reader picked out themselves
+     while a stronger one is standing beside it: the rows picked in the file tree are drawn on it
+     and the row being read keeps `weak` (`app/src/files/FilesPanel.tsx`). It is the accent and not
+     a grey because what is on it is the reader's own doing, and the greys are where their hand
+     happens to be at this instant — the hover and the tab stop. */
   --c-accent: #0d7777;
   --c-accent-weak: #d6ecec;
+  --c-accent-faint: #e9f4f4;
   --c-accent-text: #095a59;
+
+  /* ----- the pane's inside -----
+     The one ground in the application that does **not** follow the theme. Light or dark, the inside
+     of a terminal pane is these values, and the emulator answers the background query (OSC 10 / 11)
+     with them too — the values below are the dark theme's, so the dark side is unchanged and the
+     light side is where a pane now differs from the face it sits on.
+
+     It is fixed because an agent picks its colours by asking the terminal what ground it is drawn on,
+     and a ground that moved would leave those answers behind: xterm.js does not implement the escape
+     that announces a colour change (DECSET 2031, measured in `AMB-T-3546`), so a terminal already
+     running cannot be told the theme was switched. Answering "dark" always is the one arrangement with
+     no terminal left painting for the wrong ground.
+
+     Only the inside. The rail, the band and the right-hand panel follow the theme like everything else
+     (`AMB-T-3676`) — what is fixed here stops at the pane's edge. */
+  --c-pane-bg: #242320;
+  --c-pane-text: #ece9e1;
+  --c-pane-cursor: #2ba6a4;
 
   /* ----- the brand mark -----
      Black on the light ground, white on the dark one — the pair every origin in `assets/brand/`
@@ -44,6 +77,19 @@
   /* ----- semantic ----- */
   --c-human: #3365d4; /* human */
   --c-ai: #884bcf;    /* AI */
+
+  /* ----- what git says about a file (`AMB-D-785`) -----
+     Off the ladder below, like `--c-human` and `--c-ai`: these ask nothing of the reader. They say
+     which of three things a name in the file tree is, and a reader who wants none of them can go on
+     ignoring all three — the row is drawn the same either way.
+
+     Three and not one per letter git has. What a person looking at a folder an agent has been
+     working in is asking is coarser than git's alphabet, and the reading is done in a column a
+     couple of centimetres wide (`app/src/files/gitMark.ts`). The hues are the ones every editor
+     has taught: changed is warm, new is green, and never-recorded is the odd one out. */
+  --c-git-modified: #c6791f;
+  --c-git-added: #2b9d5b;
+  --c-git-untracked: #7d7a2c;
 
   /* ----- the step a mark takes -----
      What a colour says is what the mark asks of its reader — not what happened to produce it.
@@ -88,6 +134,30 @@
   --c-due-today: var(--c-stop);
   --c-due-tomorrow: var(--c-heed);
   --c-due-future: var(--c-text-muted);
+
+  /* ----- the colours a file's own text is read in -----
+     Not the ladder above. A scope in a grammar asks nothing of the reader — it says what a run of
+     characters *is*, and the reader is looking for shape, not for a step to take. Borrowing
+     `--c-stop` for a keyword would put a red on the screen that means "nothing moves until a hand
+     is put to it" beside a `let`.
+     Named after what the token is rather than after a language's word for it, because one set has
+     to hold for twelve grammars (`files/grammars.ts`): `keyword` is `fn` in Rust and `def` in
+     Python. A kind with no entry here is drawn in `--c-text`, which is what most of a file is.
+     Held to the warm-gray ground the rest of the application is on, and to a contrast a body of
+     text can be read at — comment included, which is the one that is usually dimmed past it. */
+  --c-code-comment: #7a7263;
+  --c-code-keyword: #9a4f8c;
+  --c-code-string: #3d7a4a;
+  --c-code-number: #a35a24;
+  --c-code-constant: #a35a24;
+  --c-code-function: #2f6aa8;
+  --c-code-type: #0e7c7b;
+  --c-code-variable: #23211c;
+  --c-code-tag: #9a4f8c;
+  --c-code-attribute: #2f6aa8;
+  --c-code-operator: #6f6a5e;
+  --c-code-heading: #2f6aa8;
+  --c-code-invalid: #c0392b;
 
   /* ----- typography ----- */
   --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
@@ -170,12 +240,17 @@
 
   --c-accent: #2ba6a4;
   --c-accent-weak: #11403f;
+  --c-accent-faint: #0e2f2f;
   --c-accent-text: #7fd6d4;
 
   --c-brand-mark: #ffffff;
 
   --c-human: #6f97ec;
   --c-ai: #b083ea;
+
+  --c-git-modified: #e0a04a;
+  --c-git-added: #46c97e;
+  --c-git-untracked: #b6b25a;
 
   /* The two steps that hold a value of their own; the third and everything derived from the
      three follow from the light side, which names them once. */
@@ -188,6 +263,22 @@
   --c-on-stop: #551610;
 
   --c-done: #46c97e;
+
+  /* The same thirteen, lifted onto the dark ground. `variable` follows the body text, as it does
+     on the light side — most of a file is variables, and colouring them would colour everything. */
+  --c-code-comment: #8d8578;
+  --c-code-keyword: #cf8fc4;
+  --c-code-string: #86c98f;
+  --c-code-number: #e0a04a;
+  --c-code-constant: #e0a04a;
+  --c-code-function: #7fb0e8;
+  --c-code-type: #2ba6a4;
+  --c-code-variable: #ece9e1;
+  --c-code-tag: #cf8fc4;
+  --c-code-attribute: #7fb0e8;
+  --c-code-operator: #a8a399;
+  --c-code-heading: #7fb0e8;
+  --c-code-invalid: #e06155;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);

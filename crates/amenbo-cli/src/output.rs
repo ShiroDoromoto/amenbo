@@ -71,6 +71,14 @@ pub enum CliErrorCode {
     SyncGap,
     /// A road out of this store could not be walked — the snapshot could not be streamed.
     SyncError,
+    /// A verb of the surface layer was typed outside the talk window's terminal, where the session it
+    /// speaks about does not exist (`AMB-D-749`). It is a code of its own, and non-zero, because the
+    /// alternative — a quiet success — would leave the caller believing it had spoken.
+    TalkOutsideSurface,
+    /// The reason handed to `talk waiting` runs past what the pane's label holds
+    /// ([`amenbo_core::session::WAITING_LIMIT`]). Refused rather than cut: the row has three things on
+    /// it, and a reason that overran would push the other two into ellipses.
+    TalkReasonTooLong,
 }
 
 impl CliErrorCode {
@@ -91,6 +99,8 @@ impl CliErrorCode {
             CliErrorCode::AiGuardrail => "ai_guardrail",
             CliErrorCode::SyncGap => "sync_gap",
             CliErrorCode::SyncError => "sync_error",
+            CliErrorCode::TalkOutsideSurface => "talk_outside_surface",
+            CliErrorCode::TalkReasonTooLong => "talk_reason_too_long",
         }
     }
 
@@ -112,6 +122,8 @@ impl CliErrorCode {
         CliErrorCode::AiGuardrail,
         CliErrorCode::SyncGap,
         CliErrorCode::SyncError,
+        CliErrorCode::TalkOutsideSurface,
+        CliErrorCode::TalkReasonTooLong,
     ];
 }
 
@@ -334,6 +346,54 @@ impl CliError {
             } else {
                 format!("Pass a folder outside that tree, or bind this subdirectory on purpose with `{cmd} bind --project <name or id> --dir <path> --force`.")
             }),
+            exit: 1,
+        }
+    }
+
+    /// The surface layer, typed where it does not exist: no talk-window terminal handed this process a
+    /// session ([`amenbo_core::session::SESSION_VAR`]) and a place to leave statements in
+    /// ([`amenbo_core::session::DIR_VAR`]), so there is no pane for one to reach.
+    ///
+    /// Refusing is the whole point rather than a limitation (`AMB-D-749`). Every other answer available
+    /// here is a lie: accepting the statement and dropping it would tell the caller it had spoken, and it
+    /// would stop trying while the person's screen never changed. So the failure is loud, carries a code
+    /// of its own, and exits non-zero.
+    ///
+    /// The hint names no way in, because there is none to name: a session is the terminal it runs in, and
+    /// the way to have one is for a person to open a pane.
+    pub fn talk_outside_surface() -> CliError {
+        CliError {
+            code: CliErrorCode::TalkOutsideSurface.as_str(),
+            message: format!(
+                "`{} talk` speaks about the terminal it is running in, and this is not one of Amenbo's: no session was named to this process. Nothing was recorded.",
+                Paths::command_name()
+            ),
+            hint: Some(
+                "These verbs exist inside a pane of Amenbo's talk window and nowhere else — there is no pane here for one to reach, and no flag that makes one. What is true beyond this terminal goes in the store instead: a task's status, a comment, a decision.".to_string()
+            ),
+            exit: 1,
+        }
+    }
+
+    /// A reason for a person's turn that will not fit on the pane's label, refused at the door.
+    ///
+    /// **The row holds one line and three things on it** — what the pane is called, what its session is
+    /// on, and this — so a reason written past its share does not get more room, it takes the other
+    /// two's (`AMB-T-3673`). Cutting it here would be the same loss one step later, and quietly: the
+    /// agent would believe the person had been told the whole of it.
+    ///
+    /// So it is refused, and the refusal says what to write instead. One rewrite is the whole cost, and
+    /// what it buys is the sentence that belongs on a label rather than the paragraph that does not.
+    pub fn talk_reason_too_long(over: amenbo_core::session::Overlong) -> CliError {
+        CliError {
+            code: CliErrorCode::TalkReasonTooLong.as_str(),
+            message: format!(
+                "A person's turn is announced on one line of the pane's label, beside what the pane is called and what it is holding. This reason takes {} columns of it and the line holds {} — counted as a terminal counts them, so a character drawn double-width takes two. Nothing was recorded.",
+                over.got, over.limit,
+            ),
+            hint: Some(
+                "Say the one thing they have to decide, in a sentence. What led up to it belongs where it will still be true tomorrow — a comment on the task — rather than on a label that is gone with the window.".to_string()
+            ),
             exit: 1,
         }
     }
@@ -779,6 +839,8 @@ mod tests {
             "ai_guardrail",
             "sync_gap",
             "sync_error",
+            "talk_outside_surface",
+            "talk_reason_too_long",
         ]);
         let actual = set(CliErrorCode::ALL.iter().map(|c| c.as_str()));
         assert_eq!(actual, expected, "the full set of CLI error codes does not match the contract");

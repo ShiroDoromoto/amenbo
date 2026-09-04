@@ -1746,6 +1746,13 @@ fn all_commands() -> Value {
 /// comes back whole from the detail side (`agent --command <name>`, `<cmd> --help`, `agent --full`).
 /// Nothing becomes unreachable; only the route to it changes.
 pub fn build_index() -> Value {
+    index(crate::session::surface().is_some())
+}
+
+/// [`build_index`], with the one question it asks of the environment answered by the caller: is this
+/// process running inside a pane of the talk window? Separate so the size the entry is recorded at can
+/// be measured both ways without setting a process-wide variable in a suite that is not one.
+fn index(in_a_pane: bool) -> Value {
     let mut spec = build();
     let index: Vec<Value> = spec["commands"]
         .as_array()
@@ -1762,6 +1769,15 @@ pub fn build_index() -> Value {
             "commandDetail".to_string(),
             json!(format!("`commands` is an index: every command's name, and nothing more. For what one is for, read `capabilities` — it maps intent to command names. To use one, pull its full spec — summary, flags, args, examples — with `{cli} agent --command <name>` (or `{cli} <cmd> --help`); never guess a flag from the name. `{cli} agent --full` prints every command's full spec at once, but you rarely need it — pull the two or three you are about to run. Holding a word instead of a name is not an index lookup: `{cli} search <word> …` is the one command that reads words.")),
         );
+        // The second vocabulary, named only where it exists (`AMB-D-749`). Outside a pane the words it
+        // points at all fail, so teaching them there would be teaching a road that is closed — and the
+        // reader could not tell that from a road they had simply not tried yet.
+        if in_a_pane {
+            map.insert(
+                "talk".to_string(),
+                json!(format!("You are running in a pane of Amenbo's talk window, and there is a second vocabulary here: what you say about **this session** — the pane on the person's screen. It writes to no store and exists in this terminal alone, which is why `agent` does not carry it. Read `{cli} talk --json` and follow it; two of its words are owed, and the person sees only what you say.")),
+            );
+        }
     }
     spec
 }
@@ -1984,7 +2000,14 @@ mod tests {
     /// version is the one part of the document that moves without anyone writing a word, and a
     /// release that grows it by a digit would otherwise turn the snapshot red at the worst moment.
     fn entry_as_measured() -> Value {
-        let mut spec = build_index();
+        entry_as_measured_in(false)
+    }
+
+    /// [`entry_as_measured`], for either side of the one conditional the entry has. `false` is the
+    /// document nearly every reader is served; `true` adds the line served inside a pane of the talk
+    /// window, which is measured too so that line cannot grow unwatched either.
+    fn entry_as_measured_in(in_a_pane: bool) -> Value {
+        let mut spec = index(in_a_pane);
         if let Value::Object(map) = &mut spec {
             map.insert("version".to_string(), json!("x.y.z"));
         }
@@ -2011,7 +2034,39 @@ mod tests {
             out.push_str(&format!("{key:<16} {}\n", value.to_string().len()));
         }
         out.push_str(&format!("{:<16} {}\n", "TOTAL", spec.to_string().len()));
+        // And the one conditional: inside a pane of the talk window the entry carries a line naming the
+        // surface layer. Almost nobody is served it, so it is recorded apart from the total above rather
+        // than folded into it — and recorded all the same, so it cannot creep either.
+        out.push_str(&format!(
+            "{:<16} {}\n",
+            "TOTAL_IN_A_PANE",
+            entry_as_measured_in(true).to_string().len()
+        ));
         out
+    }
+
+    /// The entry names the second vocabulary only where it can be used. Inside a pane it points at
+    /// `talk --json` and says the words are owed; outside one it says nothing about it at all, which
+    /// is the whole of `AMB-D-749` as the entry point sees it — a reader outside cannot tell a road they
+    /// have not tried from one that is closed, so they are not shown a closed one.
+    #[test]
+    fn the_entry_names_the_surface_layer_only_inside_a_pane() {
+        let outside = index(false);
+        assert!(outside.get("talk").is_none(), "outside a pane the entry says nothing of it: {outside:#}");
+        assert!(
+            !outside.to_string().contains("talk --json"),
+            "and points at it nowhere else either",
+        );
+
+        let inside = index(true);
+        let said = inside["talk"].as_str().expect("inside a pane the entry names it");
+        assert!(said.contains("talk --json"), "it names the canon to read: {said}");
+        assert!(said.contains("owed"), "and says the layer asks something of the reader: {said}");
+        assert_eq!(
+            index(false).as_object().map(|m| m.len() + 1),
+            index(true).as_object().map(|m| m.len()),
+            "the pane adds that one section and moves nothing else",
+        );
     }
 
     /// Discipline: the entry point is the size it was last recorded as. The ceilings above catch a

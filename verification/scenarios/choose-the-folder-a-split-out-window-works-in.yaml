@@ -1,0 +1,135 @@
+# The window a terminal is split out into asks where its pane works, and offers this project's
+# folders and nothing else.
+#
+# A pane belongs to a project and works in a folder that project is bound to. That is the board's
+# rule, and it has to be the split-out window's rule too: the same session moves between the two, so
+# a window keeping a different rule would be a way out to any folder on the machine, reached by
+# pressing the one control that is supposed to change nothing but which screen the pane is drawn on.
+#
+# ── Why the terminal is split out with nothing running ───────────────────────────────────────────
+# A window that took up a running terminal never asks: where the session opened was settled when it
+# started. The question only comes up where the window has to start one, which is the split with
+# nothing to adopt — the one path on which a window chooses a folder for itself, and so the only one
+# where it could reach past the project for it. `put-the-terminal-on-its-own-screen` walks the other
+# half, where a session moves and is not restarted.
+#
+# ── Why the project keeps two folders ────────────────────────────────────────────────────────────
+# Bound to one, the window opens there without asking, and there would be no list to read. Two is
+# where the offer exists to be looked at — and what is under test is as much what is *not* on it: no
+# picker, and no way out to a folder this project is not bound to.
+#
+# ── How the windows are named ────────────────────────────────────────────────────────────────────
+# From the split onwards every step says which window it is walked in, because from there there are
+# two. The board is "Amenbo", its whole title. The other holds the whole terminal face rather than
+# one pane of it, so it is not named after anything on the screen: it carries the product's name with
+# a dash and a word after it, and the word is in the run's own language — so it is named here by the
+# part of its title every language keeps.
+id: choose-the-folder-a-split-out-window-works-in
+title: A terminal split into a window of its own with nothing running asks which of the project's folders it works in
+description: >
+  Split the terminal out of the board with nothing running in it. The window that opens does not
+  reach for the machine's folder picker: it asks which of this project's folders its pane works in,
+  offering those and nothing else. Answer it, and the pane opens there — a plain shell, taking the
+  first line typed into it as the window's name.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Chandlery
+    as: chandlery
+
+  # Two, because one would be answered without asking and this road is about the question.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: sail-loft
+      project: chandlery
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: rope-walk
+      project: chandlery
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and it is
+  # the project the window inherits — nobody chose one on the way into a window nothing was arranged
+  # in, so what it opens on is what the board was showing when it was split out.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Chandlery
+
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+
+  # The question, in the window that opened. Read by a folder the road itself put in the world, so
+  # both halves of it can be read on a screen in any language: this project's folder is on the list,
+  # and what is not on it is anything else.
+  - type: assert
+    domain: terminal
+    op: asking-folder
+    window: "Amenbo — "
+    with:
+      dir: rope-walk
+
+  - type: action
+    domain: terminal
+    op: pick-folder
+    window: "Amenbo — "
+    with:
+      dir: rope-walk
+
+  # And down to a plain shell, for the reason every road that types into a pane does it: what an
+  # agent does with a line typed at it is the agent's own, and this line has to sit where it was put.
+  - type: action
+    domain: terminal
+    op: open-shell
+    window: "Amenbo — "
+
+  # The line names the pane's frame — the row above the pane is where it shows, the window keeping
+  # its own name throughout. It is typed for the reason every road that speaks in a pane types one:
+  # it is the reader's own words, and so readable on a screen in any language.
+  - type: action
+    domain: terminal
+    op: type-line
+    window: "Amenbo — "
+    with:
+      text: SCENARIO the window that asked
+
+  - type: assert
+    domain: terminal
+    op: pane
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO the window that asked
+
+  # The question left nothing behind: the pane is standing where it was, and no half-made box beside
+  # it.
+  - type: assert
+    domain: terminal
+    op: asking-folder
+    window: "Amenbo — "
+    with:
+      dir: rope-walk
+      present: false
+
+  # Folded back, so the run leaves the machine in the shape it found it — one window, with the
+  # terminal on its face.
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: "Amenbo — "

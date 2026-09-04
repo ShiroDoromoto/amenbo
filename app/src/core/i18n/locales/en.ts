@@ -43,20 +43,18 @@ const ui = {
   "newproj.moreTitle": "Also",
   "newproj.copyStatus": "Copy {cmd} status", "newproj.copied": "Copied",
   "newproj.openTerminal": "Open in terminal", "newproj.openFinder": "Reveal in Finder",
+  "newproj.openExplorer": "Reveal in Explorer", "newproj.openFileManager": "Reveal in the file manager",
   "newproj.openProject": "Open the project",
   "firstloop.title": "Your first loop",
   "firstloop.intro": "Ask your AI to register the first tasks.",
-  "firstloop.s1title": "Open a terminal",
-  "firstloop.s1hint": "It opens in the linked folder.",
-  "firstloop.s1btn": "Open a terminal",
-  "firstloop.s1fallback": "The terminal would not open. Copy the path, open a terminal yourself, and cd into it.",
-  "firstloop.s1fallbackbtn": "Copy the path",
-  "firstloop.s2title": "Copy the request and paste it to your AI",
-  "firstloop.s2hint": "Any AI will do — launch yours and paste this text as it is.",
-  "firstloop.s2btn": "Copy the request",
+  "firstloop.start": "Start in the terminal",
+  "firstloop.startHint": "It opens in the linked folder.",
+  "firstloop.outside": "Start in your own terminal",
+  "firstloop.outsideHint": "Any AI will do — launch yours and paste this text as it is.",
+  "firstloop.copy": "Copy the request",
   "firstloop.copied": "Copied",
-  "firstloop.s3title": "The tasks it registers appear here",
-  "firstloop.s3hint": "The moment your AI writes to Amenbo, the board you are looking at shows it.",
+  "firstloop.appear": "The tasks it registers appear here",
+  "firstloop.appearHint": "The moment your AI writes to Amenbo, the board you are looking at shows it.",
   "firstloop.prompt": "This folder is managed with Amenbo. Run {cmd} agent --json and follow it, managing the work in Amenbo as you go.",
   "noFolder.title": "This project has no folder linked",
   "noFolder.hint": "An AI launched in the linked folder can operate this project. The folder is what a terminal opens in, and where the request goes.",
@@ -64,6 +62,7 @@ const ui = {
   "projset.title": "Project settings", "projset.back": "Back to board",
   "projset.general": "General", "projset.nameLabel": "Name", "projset.notesLabel": "Notes",
   "projset.colorLabel": "Color", "projset.viewLabel": "Default view",
+  "projset.agentLabel": "Agent", "projset.agentAuto": "Not set yet",
   "projset.iconLabel": "Icon", "projset.iconClear": "Remove image",
   "projset.iconHint": "Shown on the project tabs. Without one, the colour and the first letter of the name are shown.",
   "projset.save": "Save", "projset.saved": "Saved", "projset.saving": "Saving…",
@@ -201,6 +200,7 @@ const ui = {
   "detail.unassign": "Unassign", "detail.assignAi": "Delegate to AI",
   "detail.assignee": "Assignee", "detail.unassigned": "Unassigned",
   "detail.project": "Project", "detail.none": "None",
+  "detail.workingIn": "Worked in", "detail.goToPane": "Go to this pane",
   "detail.blockedBy": "Waiting on", "detail.blockedByHint": "blocked (dependency)",
   "detail.notStarted": "Starts on",
   // The fourth premise, and the move that ends it. Never "publish" or "approve": the one who created the
@@ -280,6 +280,13 @@ const ui = {
   "nudge.autostart.yes": "Yes, open it at login (recommended)",
   "nudge.autostart.no": "No thanks",
   "nudge.autostart.hint": "Settings › Startup switches it back whenever you like.",
+  // The file panel's own question, and the only place it can be turned back on: the checkbox
+  // that turns it off is drawn inside the question it silences (`AMB-D-777`).
+  "settings.files": "Files",
+  "settings.trashAsk": "Ask before binning",
+  "settings.trashAskOn": "Ask",
+  "settings.trashAskOff": "Do not ask",
+  "settings.trashAskNote": "The file panel asks before it moves a row to the bin. Turning the question off inside it is one-way; this is the way back.",
   "settings.updates": "Updates",
   "settings.updateCheck": "Update check",
   "settings.updateCheckOn": "On",
@@ -515,6 +522,7 @@ const ui = {
   "act.assigned": "Assigned “{title}”", "act.assignedAi": "Delegated “{title}” to AI",
   "act.unassigned": "Unassigned “{title}”",
   "act.moved": "Moved “{title}”", "act.unblocked": "“{title}” is now unblocked (ready)",
+  "act.proposed": "Proposed “{title}”",
   "act.deleted": "Deleted “{title}”",
   "act.deletedWith": "Deleted “{title}” ({tasks}, {decisions})",
   "act.updated": "Updated “{title}”",
@@ -527,6 +535,211 @@ const ui = {
   // to word, from the bare timestamp the backend sends (see core/i18n/format).
   // app / shell chrome
   "app.loadError": "Failed to load data.", "app.loading": "Loading…",
+  // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
+  // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
+  // `{face}` is the name of the face the window was split out with, taken from the same key the
+  // rest of the UI calls that face by (`face.terminal`), so the window and the button that opened
+  // it never say two different words for one thing.
+  "app.talkWindow": "Amenbo — {face}",
+  // talk window: the folder a pane opens in (`AMB-T-3606`), what it opens with — an agent, or the
+  // folder's own shell (`AMB-T-3646`) — and the row a closed frame offers (`AMB-T-3591`).
+  // `{commands}` is the list of program names that were looked for on the PATH. `talk.folder` says
+  // what the folder is rather than what the agent will do in it: what a given tool asks before it
+  // acts is not Amenbo's to promise (`AMB-D-749`).
+  "talk.folder": "Choose the folder you show the AI. What you put there is all it can see.",
+  "talk.chooseFolder": "Choose a folder",
+  "talk.searching": "Looking for the agents on this machine…",
+  "talk.ask": "Which agent do you work with in this project?",
+  "talk.none": "No agent Amenbo can start was found on this machine.",
+  "talk.noneHint": "Amenbo looked for these commands on your shell's PATH: {commands}. Install one, then search again.",
+  "talk.retry": "Search again",
+  "talk.open": "Open",
+  "talk.startWith": "Open with",
+  // The pane's own prompt, with nothing started at it. It stands wherever the frame puts a choice,
+  // so `talk.startWith` names what the row does rather than naming agents alone.
+  "talk.shell": "Plain shell",
+  // The one line above a pane of the talk window: what its session is on, and the one thing
+  // worth saying about it. "{n}" is a count of tasks.
+  "talk.idle": "Talking it over", "talk.holding": "{n} tasks",
+  "talk.finished": "{n} done", "talk.premiseBroken": "A premise has broken",
+  "talk.quiet": "quiet for {n} min",
+  // The sentence Amenbo opens an agent with, left sitting in the pane's input box. It names neither
+  // the agent's product nor anything its screen says: what a program calls its input box is the
+  // program's business and changes under us (`AMB-D-805`).
+  "talk.unsent": "Not sent yet. Press Enter to send it.",
+  // The two faces of the one window, and the moves between one window and two (`AMB-D-753`).
+  "face.switch": "Tasks or terminal",
+  "face.tasks": "Tasks",
+  "face.terminal": "Terminal",
+  "face.splitOut": "Open in a separate window",
+  "face.merge": "Back to one window",
+  "face.opening": "Opening the terminal in a window of its own…",
+  // The one control a pane has: it takes the place away, and the terminal in it with it
+  // (`app/src/shell/TerminalPane.tsx`). It asks first — nothing brings the frame back, and what a
+  // program exits with is on the screen to be read (`AMB-T-3666`).
+  "face.drop": "Remove this pane",
+  "face.dropConfirm": "Remove this pane? The terminal in it ends, and the place does not come back on the next run.",
+  "face.dropHolding": "This pane's session is still holding:",
+  "face.dropHandBack": "Hand back and remove",
+  "face.dropAnyway": "Remove as it is",
+  "face.dropCancel": "Cancel",
+  // The OS notification a pane raises when its turn has come and nobody is looking at the terminal
+  // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
+  // happened, and a toast that named one would answer in the one place a person cannot act on it.
+  "face.turnTitle": "Amenbo — your turn",
+  "face.turnBody": "A terminal is waiting on you.",
+  "face.ended": "The program in this terminal has exited.",
+  "face.projects": "Projects",
+  // The rail's two halves: the lists, and the folder tree that moved there off the other side of the
+  // panes (`AMB-D-835`). Each word names what its half holds rather than what pressing it does, because
+  // both are always drawn and one of them is always on.
+  "face.railFolders": "Folders",
+  "face.tabsCompact": "Show the colors only",
+  "face.tabsNamed": "Show the project names",
+  "face.paneCount": "Panes on screen",
+  // The orientation, named in words because the control itself is drawn
+  // (`app/src/shell/TerminalFace.tsx`): a shape with nothing said about it is a
+  // press to find out, and a screen reader has only what is written here.
+  "face.paneOrient": "How the two panes sit",
+  "face.paneAcross": "Side by side",
+  "face.paneDown": "One above the other",
+  // The split, as words rather than a bare digit: the row of pages beside it is digits too, so the
+  // count says what it counts (`app/src/shell/TerminalFace.tsx`).
+  "face.panes.one": "{n} pane", "face.panes.other": "{n} panes",
+  "face.pages": "Pages",
+  "face.page": "Page {n}",
+  // The line over the row of things a terminal can be opened with (`app/src/shell/EmptySlot.tsx`).
+  // The pills say by their shape that they can be pressed; this says it in words, because a row read
+  // as a caption is not something anybody tries. It does not say "choose an AI" — the plain shell is
+  // on the row and is not one.
+  "face.whichStart": "What does this pane open with?",
+  "face.open": "Open a terminal here",
+  // The same button before anybody has chosen — the first run, and only it. It says what to do
+  // rather than being pressable and doing nothing: what is missing is written on the thing the
+  // reader would press, so there is no refusal to explain afterwards (`AMB-T-3686`).
+  "face.openPick": "Choose one",
+  "face.moreStarts": "Not installed ({n})",
+  // The row while the machine is still being asked what it can start. It says what is
+  // happening rather than leaving an empty row to be read as an answer (`AMB-D-792`).
+  "face.startsChecking": "Checking what this machine can start…",
+  // The machine could not be asked at all — the probe's shell would not start, or was still
+  // reading the profile when the deadline ran out. It must not say "not installed" in either
+  // direction: on a machine with four agents on it, that would be a lie about their own
+  // machine.
+  "face.startsUnchecked": "Amenbo could not check what this machine can start.",
+  "face.startsRecheck": "Check again",
+  "face.startsOwn": "Commands you registered",
+  "face.startAdd": "Register a command",
+  "face.startName": "Name",
+  "face.startNamePh": "Claude (Opus)",
+  "face.startLine": "Command line",
+  "face.startLinePh": "claude --model opus",
+  "face.startRuns": "This is what runs in the terminal:",
+  "face.startSave": "Save",
+  "face.startCancel": "Cancel",
+  "face.startEdit": "Edit",
+  "face.startRemove": "Remove",
+  "face.openHere": "Room for another pane in this project",
+  "face.whichFolder": "Which folder does this pane work in?",
+  "face.rename": "Rename this pane",
+  "face.needsYou": "waiting on you",
+  "face.handHere": "Drop to paste the path",
+  "face.more": "More",
+  // The file face beside the terminal's pane: the project's folder, folded, with what git says
+  // about each row drawn as a colour rather than as words (`AMB-D-785`). What a file turns out not
+  // to be is said in its own words — a binary is not a failure, it is simply not something a panel
+  // can show.
+  "files.side": "Page and files",
+  "files.memo": "The page",
+  "files.memoTyping": "Typing",
+  "files.memoKept": "Kept",
+  "files.tree": "The folder",
+  "files.capped": "This folder is too big to look through all of.",
+  "files.unwatched": "This machine has run out of watches.",
+  "files.unwatchedHow": "The supply is per user and shared with the editor you have open. Raising fs.inotify.max_user_watches gives it more room.",
+  "files.noFolder": "This project has no folder yet.",
+  // The reading column with nothing in it. Finding a file is the rail's now, so what stands here is
+  // the line saying so rather than the tree this column used to hold.
+  "files.nothingOpen": "Nothing is open.",
+  // One control with two ends, so the word names neither of them: what it says is the pair, and which
+  // way this press goes is the mark on it (`AMB-D-835`).
+  "files.width": "Wider or narrower",
+  // The tab a reader cannot see, and the way to it. The row scrolls rather than paging, so what this
+  // names is everything the column is holding — the answer to "where did the fourth one go".
+  "files.openFiles": "Open files",
+  "files.folderGone": "This folder is not there any more.",
+  // What the row above a file offers, now that the column holds several of them and the tree is in
+  // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
+  // the list" while a file lay over the tree and there was a list to go back to.
+  "files.closeFile": "Close this file",
+  "files.edit": "Edit",
+  "files.read": "Read",
+  "files.reopenWith": "Reopen with an encoding",
+  "files.lineEndingMixed": "Mixed newlines",
+  // One word for a file and for a folder: what is copied is the row, and a menu that named the two
+  // differently would be saying they were two different doors (`AMB-D-832`).
+  "files.copyPath": "Copy the path",
+  "files.pasteFilePath": "Paste the file's path",
+  "files.pasteFolderPath": "Paste the folder's path",
+  "files.pastePaths": "Paste the paths",
+  "files.openWith": "Open with the usual application",
+  "files.chooseApp": "Open with an application I pick",
+  "files.appUsual": "{name} (the usual one)",
+  "files.reveal": "Show in the file manager",
+  // Taking a file out of the folder, which here means the machine's own bin and nothing further: a
+  // press that was a slip costs a trip to the bin rather than the file (`AMB-D-777`). The question
+  // says so, because what makes "yes" cheap to press is knowing where the file goes.
+  "files.trash": "Move to the bin",
+  "files.trashAsk": "Move {name} to the bin?",
+  "files.trashAskMany.one": "Move {n} item to the bin?", "files.trashAskMany.other": "Move {n} items to the bin?",
+  "files.trashUndoable": "It goes where this machine's deleted files go, and undo brings it back.",
+  "files.trashQuiet": "Do not ask again",
+  "files.trashGo": "Move it",
+  "files.trashKeep": "Cancel",
+  "files.newFile": "New file",
+  "files.newFolder": "New folder",
+  "files.rename": "Rename",
+  "files.name": "Name",
+  "files.notText": "This is not text, so it cannot be shown here.",
+  "files.cut": "Only the beginning is shown.",
+  "files.unreadable": "This file could not be read.",
+  "files.dropStopped": "{name} could not be brought in: {why}",
+  "files.dropPartly": "{count} came in. {name} did not: {why}",
+  "files.stoppedTaken": "something with that name is already there",
+  "files.stoppedInside": "a folder cannot be moved inside itself",
+  "files.stoppedNameless": "it has no name to be brought in under",
+  "files.stoppedNoBin": "that drive has no bin, so nothing would have been left to bring back",
+  "files.stoppedEmptied": "it is not in the bin any more",
+  // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+  // of the three it is, so there is no separate place for a reader to look for the answer.
+  "files.save": "Save",
+  "files.saving": "Saving…",
+  "files.saved": "Saved",
+  // The file moving under a reader who has typed into it. What is said is the fact and
+  // nothing else — which of the two texts is right is the pane's agent's to settle, not
+  // this panel's (`AMB-D-784`).
+  "files.changedUnderneath": "Somebody wrote to this file after it was opened here.",
+  "files.readAgain": "Read it again",
+  // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+  // line of the other, so the reader is told and asked (`AMB-D-773`).
+  "files.newlinesMixed": "This file has both kinds of line break. Saving makes them all the same.",
+  "files.newlineChoose": "Which line break to save it in",
+  "files.newlineLf": "Unix (LF)",
+  "files.newlineCrlf": "Windows (CRLF)",
+  // A picture the panel would not draw. What it is refused for travels with the
+  // refusal, because a reader shown nothing at all reads it as a damaged file
+  // (`AMB-D-783`).
+  "files.tooBig": "This picture is too large to show here.",
+  "files.tooBigPixels": "{width} × {height} pixels",
+  "files.tooBigOpen": "Open it in another application",
+  // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
+  // on Windows. What it warns about is not a right the user lacks but one they have too much of:
+  // the terminal opens, and the tools behind scoop's links are unreachable from inside it
+  // (`AMB-T-3565`). Amenbo will say they are not installed, and be wrong in a way only this can
+  // explain.
+  "talk.elevated.title": "Amenbo is running as administrator",
+  "talk.elevated.body": "A terminal opened here inherits that, and an administrator does not follow the links scoop installs its packages behind. Those tools cannot be reached from this window — Amenbo will report them as not installed, though they are.",
+  "talk.elevated.fix": "Quit Amenbo and start it again without “Run as administrator”, and they come back.",
   // A ```mermaid fence whose diagram could not be drawn: the raw source is shown in its place.
   "mermaid.failed": "The diagram could not be drawn",
   // lint hook consent: the question Amenbo asks before writing into .git/hooks
@@ -642,7 +855,7 @@ const ui = {
   "onboard.s1title": "Link a folder to the project",
   "onboard.s1a": "Places ", "onboard.s1b": " (the local binding) and ", "onboard.s1c": " in that folder. An AI started there can operate the project.",
   "onboard.s2title": "Ask your AI",
-  "onboard.s2body": "The done step of creating — and a board with nothing on it yet — opens a terminal in that folder and hands over this request. Launch your own AI there and paste it.",
+  "onboard.s2body": "The done step of creating — and a board with nothing on it yet — starts a terminal in that folder for you. Where you would rather use your own, the same request is a press away, ready to paste.",
   "onboard.s3title": "Then just drop tasks",
   "onboard.s3body": "Assign a task to the AI and it starts and proceeds autonomously. Everything shows up in the activity feed.",
   // list empty states
@@ -697,6 +910,31 @@ const err: Partial<Record<ErrorCode, string>> = {
     "Registering {url} means trusting its signing key ({serving}). Check the fingerprint before it is pinned.",
   plugin_catalog_key_changed:
     "{url} now publishes {serving}, not the {agreed} you were shown. Register it again and check the new fingerprint.",
+  pty_failed: "The terminal could not be started: {reason}",
+  pty_gone: "That terminal is no longer open.",
+  wake_unknown_agent: "Amenbo does not know how to start {agent}.",
+  wake_no_folder: "That folder could not be read: {reason}",
+  wake_no_config: "Amenbo could not find its own files.",
+  wake_not_kept: "The choice could not be saved.",
+  wake_not_registered: "A registered command needs both a name and a command line.",
+  window_failed: "That window could not be opened: {reason}",
+  talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
+  clip_refused: "The files could not be put on the clipboard: {reason}",
+  // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+  // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+  // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+  folder_link: "This is a link to another file, and Amenbo does not follow one — what it points at can be outside this project's folders.",
+  folder_taken: "{name} is already there.",
+  folder_name: "This machine will not take {name} as a name.",
+  folder_make: "{name} could not be made: {reason}",
+  folder_rename: "It could not be renamed to {name}: {reason}",
+  // What the file panel answers a save with (`crate::folder_save`). The character is named
+  // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+  folder_not_saved: "This file could not be saved: {reason}",
+  folder_unwritable_character: "“{character}” cannot be written in {encoding}, so nothing was saved.",
+  // And the save the panel does not make: the file moved between the read and the save,
+  // so what the editor holds is older than the file (`AMB-D-784`).
+  folder_changed_underneath: "Somebody wrote to this file after it was read here, so nothing was saved.",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

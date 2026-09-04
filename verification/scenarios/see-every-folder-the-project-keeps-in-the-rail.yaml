@@ -1,0 +1,143 @@
+# A project is bound to as many folders as somebody bound it to, and the rail beside the panes
+# draws every one of them. The form most projects are actually in is this one — Amenbo itself keeps
+# six — and until this road there was nothing before a release that stood in front of it.
+#
+# ── Why two files rather than two headings ───────────────────────────────────────────────────────
+# A heading is drawn from the folder's own name, and a section drawn empty draws its heading all the
+# same — so two headings on screen say two sections were made, never that either was read. What says
+# a folder was really read is something out of that folder in the rail, and the only thing there
+# that could not have come from anywhere else is a file the world put in it. So each folder gets a
+# file of its own name, and both are read off the trees: both rows are in the rail only if both
+# folders were read.
+#
+# The files sit directly in their folders rather than in a subfolder, because the tree opens one
+# level at a time and a road that had to open the same-named subfolder in each of two sections would
+# be naming a folder that is in both.
+#
+# ── Why one of them is then taken away ───────────────────────────────────────────────────────────
+# The half a reader meets by accident is a folder that has gone — renamed, moved somewhere tidier,
+# carried off on a disk that is no longer plugged in. What the tree did before was fall to "this
+# project has no folder yet" for the whole of it, which says the project has nothing when five of its
+# six folders are sitting right there. So the section stays and says what happened to that one
+# folder, and the reading is taken twice over: the sentence about the folder that went, and the row
+# from the folder that did not, still where it was.
+#
+# The move is a step and not a premise because *when* it happens is what is under test: the section
+# is drawn first, with the folder still there, and what the watch behind it does when the folder goes
+# out from under it is the whole answer. A world that had moved it before the app came up would be a
+# world with a binding that never pointed anywhere, which is a different reading on a different road
+# (`follow-a-folder-that-moved`).
+id: see-every-folder-the-project-keeps-in-the-rail
+title: The rail draws a section for every folder the project keeps, and one that goes away says so where it stood instead of taking the tree with it
+description: >
+  Raise a project bound to two folders, each holding a file of its own, and unfold the trees in the
+  rail beside the panes: each folder's tree carries its own file, so both were read. Then take
+  one of the folders away from outside Amenbo, with nothing on the app pressed: its section stays
+  and says the folder is not there any more, while the other folder's file is still in the rail
+  beside it.
+
+given:
+  # Creating a project links a folder to it, so this one is the project's first.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  # And the second, which is what makes the rail two sections rather than one.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: potting-shed
+      project: greenhouse
+
+  # One file per folder, named apart: the same name in both would leave a row in the rail that
+  # either folder could have put there.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: potting-shed
+      path: sieving.md
+      content: SCENARIO the loam is sieved before it goes into the trays
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face came up on is the run's business, so the road puts itself on the one it
+  # raised before reading anything off it.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # The first level of each is drawn from the start, one section per bound folder, so this says
+  # where the screen has to stand rather than working a control on each of them.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # Both folders, read by what is in each. Neither row could have come from the other folder, so the
+  # two readings together are the sections having been read and not merely drawn.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: sieving.md
+      section: tree
+
+  # Gone, from outside, while the app is watching. Nothing on the screen is pressed for this.
+  - type: action
+    domain: folder
+    op: move
+    with:
+      dir: potting-shed
+      to: potting-shed-elsewhere
+
+  # The section that lost its folder says so where it stood. A section that had simply vanished would
+  # leave a reader unable to tell a folder that went from a binding somebody removed.
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: folder-gone
+
+  # And the other folder is untouched beside it — which is the half the old behaviour got wrong: one
+  # folder going took the whole tree down to "this project has no folder yet".
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree

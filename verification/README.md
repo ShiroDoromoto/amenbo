@@ -173,8 +173,18 @@ that has one — it refuses the rest by name instead of shooting a road written 
 bakes in no command line and no pixel: each step becomes a plain-language instruction of what to do
 or confirm on screen, and the shooting is the screen tool's (`scripts/screen.swift`) — the harness
 names the app by pid and receives one file per step in an evidence directory (plus a
-`manifest.json` pairing each instruction, verdict and shot). Which window was shot, and the id it
-was shot by, stay inside the tool: a format nobody is handed is a format nobody parses.
+`manifest.json` pairing each instruction, verdict and shot). The id it was shot by stays inside the
+tool: a format nobody is handed is a format nobody parses.
+
+**A step says which window it happens in, once the app draws more than one.** `window: <title>` on a
+`steps_gui` step names the window by the title drawn in its bar — a whole title first, then any that
+holds it, the same way a name reaches an element — and it reaches the sentence the operator is
+handed, the shot the tool takes and the line the manifest keeps. Said nowhere, a step means the app's
+one window; against an app with two the tool refuses and lists the titles rather than shooting
+whichever was in front, because a shot of the wrong window is a picture of a screen nobody stood at
+and it reads on the manifest exactly like a picture of the right one. It is the screen road's alone:
+on `given` it names a window nothing has drawn yet, and on `steps_cli` one that never exists, and the
+loader turns both away.
 
 **The run owns the app it shoots.** It launches the `.app` bundle named by `--app`, with
 `AMENBO_HOME` pointed at a throwaway store of its own, holds the pid that launch answered with, and
@@ -186,13 +196,27 @@ would read the same. And a screen road creates projects, tasks and bindings, non
 in the store the operator actually works in; a store the run makes and drops leaves nothing for
 anyone to remember to tidy.
 
+**A road can ask for the app itself to be run again** (`store run-again`), which is the one step of a
+road the harness carries out rather than the operator: this app goes down, another comes up on the
+same store, and the pid moves with it. It is the harness's for the reason the first launch is —
+an app opened from the machine would come up on the operator's own backlog and under no pid the run
+can shoot — and it is where a road reads what Amenbo keeps of a run against what goes out with one.
+The app is killed rather than asked to quit, the way it is taken down at the end: asking goes through
+the app's name, and a name cannot pick out one instance. It happens before that step is handed over,
+so what the operator is asked to confirm is the window already in front of them.
+
 The executable inside the bundle is started directly rather than the bundle being `open`ed, since
 the environment is what carries the store and `open` hands the launch to launchd with an
 environment of its own. `AMENBO_HOME` is the product's own override, so the build under test is not
 a different build for having been asked. `AMENBO_UPDATE_CHECK=0` rides along with it, the same way
 it does on the CLI side: the app asks the release manifest as it comes up, and a road walked over
 and over would otherwise put every one of those launches into the numbers the product is measured
-by. The store follows this workspace's throwaway rules — one parent under the temp tree, a name
+by. The `PATH` is the third thing the launch carries, and the only one that is about the machine
+rather than about Amenbo: the session's own directory of stand-in programs goes in front of the
+inherited one, which is how a road says what a pane could be opened with
+([`terminal can-start`](#given--the-world-a-road-starts-from)). It is handed over on every launch and
+is empty unless a premise filled it, so a run that asked for nothing is a run on the operator's own
+machine. The store follows this workspace's throwaway rules — one parent under the temp tree, a name
 that does not lean on the pid, a sweep of what is over a day old on the way in — and the app is
 started from a directory of its own, since a child inherits the harness's, and the harness is run
 from this repository.
@@ -310,8 +334,9 @@ one build produces alongside the app and one installer carries with it. The exec
 asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
 The screen tool is the input primitive too, called by whoever drives the screen between steps: its
-`find` / `click-named` / `click` / `dblclick` / `drag-named` / `type` / `key` / `scroll` / `set-date` carry out the action
-steps the checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
+`find` / `click-named` / `right-click-named` / `click` / `right-click` / `dblclick` / `drag` /
+`type` / `key` / `scroll` / `set-date` carry out the action steps the
+checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
 at all — the proof it waits for is a shot it throws away, since an app the system has taken up is
 not yet an app with a window, and a walk that started between the two would fail on its first step.
 An app that never draws one inside a minute is reported as that, and one that exits on the way up is
@@ -329,7 +354,12 @@ closed by a human from the evidence, not by the exit code.
 element on screen with the name it answers to and where it stands, and `click-named <pid> <name>`
 clicks the one of that name — bringing that pid's app to the front first, since a press lands on
 whatever is frontmost where it is aimed and anything that took the front would swallow it silently.
+`right-click-named` is the same press with the other button, which is the only way to reach a menu
+drawn where the pointer is: until it is up there is no name on the screen to aim at.
 The screen is a webview, so both read it through the accessibility tree the app serves once asked.
+Both read one window and not the app, and take the same `--window <title>` a road's step does — an
+app drawing two draws two screens, and a name reached on the wrong one is a check that passed without
+looking at the screen it was written for.
 A part of a name will do — the name an element answers to is not the label
 on the screen (an emoji in front of the words belongs to it, and a card folds its lines into one
 string), so a whole one is rarely knowable in advance. When several names hold what was asked for,
@@ -350,14 +380,17 @@ across. The pointer is put in the middle of the window first, since a wheel land
 pointing rather than on whatever holds focus; something else on the screen that scrolls is reached by
 clicking into it and scrolling after.
 
-**A card is carried with `drag-named <pid> <from> <to>`, and not out of two clicks.** Filing work by
-moving its card is a road on the board, and what the screen is watching for is the run of moves
-between the press and the release — a press at one place and a release at another is a click at the
-second one. So the pointer is walked across with the button held, both ends named the way
-`click-named` names one: `drag-named <pid> "SCENARIO SEED — the printed piece" print` carries the
-card onto the column headed `print` and lets it go there. Both names are read off one listing of the
-screen, since the grab moves what a second listing would be of. A column takes the card anywhere in
-it, its heading included, which is what makes an empty column reachable by the name on its head.
+**A card is carried with `drag <pid> <x1> <y1> <x2> <y2> [steps]`, and not out of two clicks.** Filing
+work by moving its card is a road on the board, and what the screen is watching for is the run of
+moves between the press and the release — a press at one place and a release at another is a click at
+the second one. So the pointer is walked across with the button held, in `steps` moves rather than
+one: a webview works out where the pointer is on every move it is given, and a jump straight to the
+far end gives it exactly one.
+
+**Both ends are points and not names**, unlike everything else that can be aimed by one. Where a drag
+lands is decided by which side of a row's middle it is let go on, and both sides of that line are the
+same row — a name says which row and cannot say which side of it. So the arithmetic is the caller's,
+and `find`'s rectangle is what each end is built from.
 
 **A day goes in through `set-date <pid> <name> <yyyy-mm-dd>` rather than through the keys.** A date
 field is one control with three numbered parts in it, and typing into it is a digit at a time — but
@@ -396,7 +429,7 @@ cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml 
 
 A screen road is walked by somebody, always. The run prints the step it is about to shoot and waits
 for a line on stdin; between the two, the screen belongs to whoever is driving — carry the step out
-by hand, or with the screen tool's `click-named` / `drag-named` / `type` / `key` / `scroll` / `set-date`, and send the line
+by hand, or with the screen tool's `click-named` / `drag` / `type` / `key` / `scroll` / `set-date`, and send the line
 once the screen is standing where the step says it should. There is no flag for running it any other way.
 
 **The hand-over comes before the step, the first one included.** That is what lets a road open with a
@@ -510,7 +543,7 @@ the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin` /
-`mcp` / `tick`) and an
+`mcp` / `tick` / `terminal` / `files`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
 refers back to it with `target:` — an op that joins two objects names the second under its own key
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
@@ -561,7 +594,14 @@ the other two.
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
 a file there (what an attachment ingests, what the lint is pointed at), `copy-fixture` puts one
 there from `fixtures/`, and `git-init` makes the folder a git repository, which is the only way the
-hook slots are real enough to write into. `wire-ai` is the same kind of stand-in one tier up: Amenbo
+hook slots are real enough to write into. That one takes the same `dir` the first two do, and a road
+reading what git says about a folder on screen needs it: the colours are drawn on the face of the
+folder a project is **bound** to, and a repository anywhere else leaves every row of it bare.
+`git-commit` records everything lying in that folder, and it is there for one state nothing else
+reaches: until something is committed git names the whole folder and never the paths inside it, so a
+folder git is quiet about while a file in it is new — which is what a folded row on the tree answers
+for — does not exist on the near side of a commit.
+`wire-ai` is the same kind of stand-in one tier up: Amenbo
 hands over the text that starts a folder's AI on it and writes no settings file itself, so the road
 past that point exists only if someone pastes — and it pastes what the build under test handed over,
 into the file that build named. All of it stays inside the run's own throwaway folder — a
@@ -600,6 +640,268 @@ stays on the answer's side of the line `holds` draws: the answer having landed, 
 registration as an absolute. The last piece is a premise rather than a road: `deferred` stands up
 the day the band was last put off, because "later"'s whole meaning — quiet today, back tomorrow —
 spans two launches, and no single run holds both.
+
+And the last one is about no record at all. **`terminal`** is the face an agent is run in: whether
+the app is showing the ledger or the pane (`show-face`), what a reader typed into that pane
+(`type-line`) and what a reader set running in it (`keep-printing`), and whether the pane is a face
+of the one window or a window of its own (`split-out` / `fold-back`), with `pane` reading the line
+back. `say` is the other half — the surface layer, said
+with the CLI from *inside* the pane it is about (`verb` naming which of its words, `text` what was
+said in it) — and `label` reads what the row above the pane carries afterwards. It is a domain of its own because a session is a
+process — what is under test is *where it is drawn*, which is this machine's arrangement of one
+screen and nothing the store holds. Screen roads alone, and for a reason no other domain has: the
+terminal is the surface a reader is already typing in, so the question does not arise for somebody
+at a shell.
+
+What a road says *in* a pane it says to a shell. A pane comes up on whatever agent the folder starts
+with, and a command handed to an agent is a request — whether it is carried out is the agent's own —
+so `open-shell` takes the pane down to a plain prompt first, and every road that speaks in one takes
+it. `run` is a command run there for its output: it clears the pane before it, so what a step after
+it presses is one place on the screen rather than one of several, and where the command needs a
+record's own number it carries `<ref>` and names the record beside it, a road having no way to spell
+a number the run will mint. `press-ref` is the press itself — the ref where the output drew it,
+naming the record rather than the characters — and `folded: true` asks for the same press on a ref
+the pane broke across two rows. That last one is the only place the two ways a ref becomes pressable
+part company: what Amenbo's own output says of itself travels beside the characters and a fold cannot
+touch it, while reading them back off the screen means joining the rows a line was drawn across
+before anything can be found there at all.
+
+The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
+most of what there is: `set-panes` re-cuts the frames into pages of the count it names, `go-page` moves
+the whole screen to another page, `go-project` moves it to another project's panes altogether, and
+`open-pane` starts a terminal where there is not one yet — `from: face` at the empty frame a page with
+room draws, `from: strip` at the thin strip a full page draws instead, which opens nothing itself and
+moves the screen to the page with room, where that same frame is waiting. What they are
+walked for is what they must not do. Every one of those moves re-cuts or replaces what is drawn, and
+a pane that left the screen is a pane still running behind it.
+`come-back-to-the-terminal-a-page-turn-took-away` is the road for the two that re-cut. It types a
+second line into the pane once the page has come back, which is the half a reading of the first cannot
+carry: what a terminal printed stays printed, so the first line says the screen was restored and only
+something typed after the return says anything is still listening. And it keeps a second pane going
+for the length of it — with one frame there is nothing for a new count to move, so a road with a
+single pane walks `set-panes` past the only thing it is dangerous for.
+`go-to-the-panes-of-another-project` is the road for the one that replaces, and it reads the half the
+other cannot: the tabs down the edge are the division itself rather than a grouping laid over one
+list, so what a project's press leaves on the screen is that project's panes and nothing of any
+other's.
+
+`set-orient` is the one move on that row that re-cuts nothing. At two panes and at no other count it
+says which way they sit — side by side, or one above the other — and every frame stays on the page it
+was on. Two is where it is asked because two is where the face's rule turns around: width is spent
+before height everywhere else, and two across halves a pane's columns, which on a window with a
+column beside it is under the eighty a TUI wants.
+`stack-the-two-panes-so-each-keeps-the-whole-width` is the road, and what `panes-sit` reads there is
+the width rather than the arrangement — a build that shuffled the boxes about without handing either
+of them more room would have honoured the press and missed what it was for. Both shapes are walked,
+a page read only after the press having nothing to say about what it was before, and a terminal is
+kept running across the change for the reason the re-cut roads keep one: the grid is redrawn under
+the panes, and a page put up again rather than re-laid would come back drawn and with nothing on it.
+
+What none of those moves reaches is the end of the run itself, and the arrangement is two things at
+once: what the reader *set* — the split, the way two panes sit, the project they were looking at —
+and what they *opened*, the places and the names on them. The line between the two is drawn only when the app goes out, the
+first coming back and the second not, and `open-the-app-again-on-the-split-you-set-and-no-panes` is
+the road that walks it with `store run-again`. What it reads there is a count of boxes and never the words on a pane: what a terminal
+printed goes with the run whether or not its place came back, so a step reading for the line it typed
+would pass on both screens. A page offering one way in and a page with the last run's places standing
+on it are told apart by how many boxes are drawn, and the split by what the page does with a pane
+once there is one on it.
+`open-the-app-again-on-the-way-you-set-two-panes-to-sit` walks the same seam for the arrangement of
+two, which the split road cannot carry: it cuts the page to one on purpose, and which way two panes
+sit is only readable where two are standing. So that one presses no count at all — two is where a
+fresh run comes up — sets the panes to go down the page, ends the run, and opens two on the page that
+comes back. Both roads are about a line where **both sides look right**: a face that forgot and a face
+that remembered are each a working screen, and nothing goes red between them.
+
+Which folder a pane works in belongs to the same seam, because a pane belongs to a project and can
+work in no folder outside it. So the press that opens one does not open a picker: bound to a single
+folder the project is not a question and nothing is asked, and bound to several the press opens
+nothing at all — `asks: true` says so on `open-pane`, and `pick-folder` answers the question that
+comes up where the pane would have been.
+`open-a-pane-where-a-project-keeps-more-than-one-folder` is the road, and it presses both answers
+rather than one: a face that always opened the same folder whatever was pressed would walk a single
+answer green from end to end. Each pane is then asked where it is standing, by reading out a file
+lying in one of the two folders and not the other — a pane draws no path of its own, and that is the
+only reading on this face that says *where* a terminal is working.
+
+The other end of that question is where a frame comes from. A pane is made when the question is
+answered and not when it is asked, so the box drawn while it stands is the question and walking away
+takes it with it — `leave-question` is that move, and `leave-the-question-about-where-a-pane-runs` the
+road. Where the leaving is done is the driver's to say rather than the road's, the question coming
+down on a press anywhere else on the face. The road ends by answering the same question, since what
+the walking-away did not leave behind is exactly what an answer makes.
+`asking-folder` reads whether the question is standing, by a folder it offers: the rows carry the
+folders' own paths, so what a reading finds is a word the road put in the world and not one of the
+interface's, and its absent half is what says the box left with the question.
+
+`frames` counts what is standing on the page, and it is a `Review` for the reason `dot` below is —
+a box carries no words of the road's, and an empty one would carry the interface's. What it defends
+is that the pane count is the most a page draws rather than slots waiting to be filled:
+`find-one-way-in-rather-than-a-page-of-empty-boxes` sets the count to four with nothing open and
+reads the page still empty, then grows it one frame per pane opened. A face that filled its ceiling
+with boxes would be asking the same question four times over, and nothing else here would say so.
+
+`opens-with` reads the other thing an empty frame carries: the row above its press, which is what a
+pane opened there would start with. It names `shell` and nothing else — which agents are on that row
+is a probe of the run machine's own `PATH`, so a road naming one would run where that tool happens to
+be installed and nowhere else, while the plain shell is on every row by construction. The road is
+`open-a-pane-with-what-you-opened-the-last-one-with`, and what it defends is that a choice made once
+outlives the press that made it: the page is set to one so the frame read at the end is a frame drawn
+again rather than the one left standing, which is the difference between a build that keeps the
+answer and a button that stayed pressed. What the row comes up on *before* anybody has chosen is
+`start: none`, and it is the one reading here that no machine can be relied on to give — nothing on it
+where several agents were found, that one where a single agent was, no row at all where none were, all
+three correct on the machine they happen to be on. So the road that reads it stands the machine up
+first (`terminal can-start`, below) and reads before anything on the frame has been pressed: one press
+anywhere keeps this person's answer, and the first run is over in that store for good.
+`be-asked-what-to-open-with-on-the-first-run` is that road. It reads both halves of the state, since
+either alone passes on a build carrying the other fault — a row with nothing lit above a press that
+opens anyway is a build guessing quietly, and a press that asks with a name already lit is a build
+asking about an answer it has. Then it answers, and reads the frame standing beside the pane that
+opens: the row on that answer, the press live. That is what says the asking was a state and not a
+wall.
+
+`dot` is the one reading on these roads that is not text at all. The mark on a pane's label pulses
+while something is coming out of that terminal, and it is the only thing on screen that says a pane
+is *alive* rather than drawn — a terminal that ended leaves its last output where it was, so words on
+a pane outlive the process that wrote them. Two things follow for whoever writes a road with it in.
+The pane it reads has to be one the reader is not working in, the focused pane never pulsing, since
+somebody looking straight at a terminal can already see it moving. And the step is watched rather
+than shot: a pulse rests, twice a turn, at exactly the still dot's own step, so it is a `Review` and
+the instruction says how long to watch. A machine set to play no animation is in that instruction
+too, holding the mark at the bright end of the same two steps instead of moving between them: the
+fact survives with the movement gone, and an operator told only to watch for a fade would fail a dot
+saying exactly what the step asks about.
+
+The third thing about the mark is what `keep-printing` is for. A pane reads as moving for a moment
+and a half after its last output, so a pulse anybody can watch for a few seconds is a pane that keeps
+printing — and no other step on this face starts one. The line a road types is deliberately a command
+no shell knows, which prints once and is over. `keep-printing` sets something running in the pane and
+leaves it running: a bounded run, about half a minute of a line a second, ending on a line the road
+chose. It is not `run` with a longer command in it — that step is waited on and is over when the
+prompt is back, and this one is walked away from with the output still arriving. Bounded, because that is how the still half is reached. Every control a pane has is on the
+pane and the face takes a press anywhere in one as going to work in it, so there is no way to cut the
+output short by hand that does not also make that pane the one being worked in — and a dot read there
+is holding still because nothing draws it moving, which is a green step proving nothing. Left to run
+out, the same pane crosses from moving to still untouched, and the line it ends with is what a road
+waits on: `pane` reading the road's own words rather than a summary the interface writes in whatever
+language the machine is set to.
+`see-a-pane-is-still-running-without-looking-into-it` is the road, and its second pane is opened for
+one reason — opening one makes it the pane being worked in, which is what leaves the first drawn with
+nobody in it. Nothing is ever said to the second.
+
+What a `pane` assert reads is deliberately the reader's own words rather than the interface's. Every
+other word on that face belongs to Amenbo, so a reading of one would hold the gate to whichever
+language the run's machine is set to — and, more to the point, a pane showing a fresh prompt looks
+exactly like a pane still drawing the session that was running until a line the road put there is on
+it. That line is also what names the pane's frame, and a named frame is what its window's title bar
+carries: it is how `window:` names a window by a word the road chose instead of one the interface
+wrote. `put-the-terminal-on-its-own-screen` is the road, and it folds the window back before it ends
+— the shape a machine was last used in belongs to the webview rather than to the throwaway store, so
+a run that walked away split would hand the next person two windows they never asked for.
+
+`say` is the one action on any road here that a driver could not stand up as a premise even in
+principle. The surface layer has no existence outside a pane — said anywhere else it is refused, on
+purpose — so the pane has to be running before the words can be said at all, which is after the app
+is up and after a premise's turn is over. The operator types what an agent types, and that is not a
+shortcut around the seam: it is the only door there is.
+`be-told-in-the-pane-that-your-turn-has-come` is the road, and what it defends is the one thing
+nothing outside a pane can find out — an agent going quiet because it is waiting for a person, rather
+than because it is thinking — arriving where that person reads it.
+
+Every road that speaks *in* a pane takes `open-shell` first. A folder with an agent on it opens on
+the agent, which is what a reader wants and what a road cannot use: what an agent does with a line
+typed at it is the agent's own, so a gate resting on one carrying out a command rests on a promise
+nothing holds it to. One op covers the three shapes the face can come up in — a pane already running
+an agent, the offer of several, the notice that none was found — because a plain shell is reachable
+from every one of them, and which of the three is on screen is the run's machine's business rather
+than the road's.
+
+`face-badge` reads the one thing that crosses between the two faces: the mark the terminal's segment
+wears while a turn is standing behind it. It carries no number and no words, so a road says it is
+there or that it is not — and the absent half is half the goal, since being on the terminal face is
+being told and crossing over spends the mark. Raising one takes `say` with `away:`, the only word on
+these roads said from behind the face that reads it: the layer is spoken inside a pane and the mark
+is drawn on the other side of the switch, so the operator arms the word and crosses over before it
+lands. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
+
+`tab-icon` is the other reading on this face that answers with no words at all: what the tab of a
+project named is drawn with, the image registered for it or the colour and the letter it falls back to.
+It names the project rather than pressing its tab, every project having one whether or not the face is
+drawing that project's panes. `give-a-project-an-image-of-its-own` is the road, and it walks the
+settings the image is given on before it crosses here.
+
+And the last is the column beside those panes. **`files`** is the folder a project answers for, read
+from inside Amenbo: the folder itself, folded down, with what git says about each row drawn as a
+colour on it. Every op takes a `section` saying which part of the column a row is being looked for
+in — there is one part to name today, and the arg is kept because the panel is not finished growing.
+`tree` unfolds the folder's section, `enter` opens one folder a level, `open` presses a file and
+`back` leaves it; `listed`, `reading` and `says` read what a row is, what the column has open draws
+— a file, or the draft page on the first of its tabs — and one of the face's standing lines.
+`row-mark` reads the colour a row wears, named by what git says —
+`untracked`, `added`, `modified` — rather than by the colour itself, since which colour that is
+belongs to the theme. It is a `Review` and can be nothing else: a shot is read for words, and a row
+wearing a colour says the same letters as the row beside it that wears none.
+`show-as` puts a Markdown file in one of its two forms — `rendered` for what the text says, `source`
+for the text itself — and `reading` takes an `as` saying which of them its words are standing in,
+which hands that step to an eye: both forms carry the same words, and what separates them is
+punctuation the fold throws away and a size no reading reports.
+`reopen-with` reads an open file again as an encoding the road names, and `read-as` reads back what
+the row says it was read as. The two are one control apart and stay two ops: one is about the bytes
+and what they mean, the other about the screen and what it draws — a road that named an encoding to
+change a form would be asking one question with the other's word. What the *guess* said is never asserted: it reads the machine's own
+language out of its settings, so where it lands belongs to the box the run is on rather than to the
+build. What belongs to the build is that the row follows the reader, which two namings prove and one
+cannot.
+
+Three ops make a name rather than move one. `menu-on-folder` opens the menu a folder carries — over a
+folder's row, or over the heading at the top of the tree when it names none, the heading being the
+folder itself and the only way to make a name at the top level. `name` presses one of the two items
+that open a naming box and types into it, which is one move: the box takes a row's place, and a box
+nobody typed into is a name nobody asked for. `rename` is the same box over a name already on a row.
+Both refusals a name comes back with are read through `says` — `taken` for a name the folder already
+holds, `unnameable` for one the machine will not take at all — and both are read with the box still
+open, which is where the reader is looking when either arrives.
+`name-a-file-without-leaving-amenbo` is the road.
+
+**The box has a second door, and `press` is how the road walks it.** `press` names a key by what the
+face does with it, and the vocabulary is closed in the driver rather than in the registry: a key the
+face has no answer for fails on the way in instead of in front of a screen. Three keys are in it.
+`escape` is the panel's and takes one layer per press. `f2` and a single letter are a row's, and do
+nothing at all unless the keyboard is standing on one — a letter walks to the next row whose name
+begins with it, and F2 opens the naming box on wherever that left the keyboard. `rename` then types,
+under `by: key` so that the line says the box rather than a menu nothing put on the screen. The two
+keys are only readable together: a letter moves nothing a shot can tell from a row already stood on,
+and a box says nothing about how the keyboard reached it. The road presses a letter that walks past
+the row below to a further one, and the name that comes out says where it landed.
+
+**A rename that changes only the letters' case is not readable here.** Every screen reading is folded
+to one case before the shot and the expectation meet, so a row that was never renamed answers exactly
+like one that was. It is the rename most worth walking — a machine that reads the two names as one is
+the machine that would refuse it — and it is held in a unit test over the rename itself instead.
+
+`drop-in` is the row coming in: one dragged from somewhere else on the machine and let go over a
+folder's row. What it puts under test is the landing rather than the carrying — the drag is
+caught by the application and not by the face, so the part that can be wrong is which folder was
+under the pointer when the hand opened. What is brought is named and not pathed, for the reason `task
+attach` names one: a drop reads the disk the operator is sitting at, and nothing a run lays down is
+anywhere a hand can reach from there. `as` says whether a file or a folder is being dragged, and for
+a folder `holding` names a row that has to be inside it — what a folder's drop has to answer for is
+what came with it, and a row nobody was told to bring is one no reading can look for.
+`bring-a-file-in-from-the-machine` and `bring-a-folder-in-from-the-machine` are the roads: two,
+because a carry that made the folder and copied nothing into it passes every reading the file road
+makes.
+
+The rest are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks a row
+and `menu-on-file` reaches the same menu from the file that is open, which is where a file the face
+refuses to draw offers a way on and no row is under the pointer any more; `hand-over` presses one of
+the three items on the menu that comes up, and `handed-over` reads what the press left. Which item is
+meant travels as a `door` — `usual` for the application the machine already opens that kind of file
+with, `pick` for one the reader chooses for this file alone, `manager` for the file manager — rather
+than as the item's own words, which are the interface's and are drawn in whatever language the run's
+machine is set to. All three are the screen's alone, and the reading stops
+where Amenbo does: what a hand-over ends in belongs to the machine, so the road goes no further than
+the machine having taken the file. `hand-a-file-to-the-machine` is the road.
 
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.
@@ -829,6 +1131,19 @@ as it writes a pointer, so the one store that cannot leave another's is the one 
 screen there is not even a command to try it with. Both roads that read the claim — the terminal's
 refusal, the row the screen lists the folder as — therefore open on it.
 
+`terminal can-start` is the one premise that stands up **the machine** rather than anything Amenbo
+holds. What a frame offers to open a pane with is every agent the build could find, and it finds them
+by running the pane's own login shell over the `PATH` that shell reads — so a road left to itself is
+read against whatever the operator installed, which is a different row on every machine. The premise
+puts a program per agent in a directory of the session's own, and the GUI harness hands that directory
+to the app it launches in front of the `PATH` and to nothing else; it goes when the session does, and
+nothing is installed anywhere. **The count is a floor and never a ceiling** — nothing handed to a
+process can take an install off the operator's machine, and the profile that shell reads is theirs —
+so what a road may ask for is a row with *more* than one thing on it, which is the one shape worth
+standing up: it is where the first run has a question to put. A profile that rebuilds the `PATH` from
+scratch instead of adding to it drops the directory, and that shows as the road failing to find the
+row it stood up rather than as a quiet pass.
+
 **A premise that does not stand ends that scenario, red, on the line that failed, and the road is not
 walked at all.** Judging a road against a world half built says nothing about the road — every line it
 then wrote, passing or failing, would be about the wrong thing. It is that scenario's failure and not
@@ -856,6 +1171,32 @@ A screen has no exit status to compare, so on a `steps_gui` road the word change
 tells the operator that being turned away is the step going right rather than their own hand going wrong,
 and the shot they leave is the screen carrying the refusal. Which guard refused is then read by the assert
 after it — a screen offers a sentence, never a code.
+
+### `window:` — which screen a step is walked on
+
+A step on a `steps_gui` road may name the window it happens in, by the title drawn in that window's
+bar:
+
+```yaml
+steps_gui:
+  - { type: assert, domain: task, op: carded, with: { target: seed, present: true }, window: "Amenbo — Terminal" }
+```
+
+A whole title wins first, and any title holding what was written answers when none does — the same
+rule a name reaches an element by, and needed for the same reason: one window's title is often the
+start of another's, so `"Amenbo"` has to be able to mean the shorter of `"Amenbo"` and
+`"Amenbo — Terminal"`.
+
+**Say nothing and the step means the app's one window.** That is the honest default while an app
+draws one, and it stops being one the moment it draws two: the tool then refuses the step and lists
+the titles that are up, rather than shooting whichever window was in front. The refusal is the point.
+A shot of the wrong window is a picture of a screen nobody stood at, and on the manifest it reads
+exactly like a picture of the right one — red for a reason nobody can see, or green off a name both
+windows happened to carry.
+
+Where the word is written down is where it belongs: on `given` it would name a window nothing has
+drawn yet, and on `steps_cli` one that never exists, so the lint turns both away rather than reading
+past a road filed under the wrong key.
 
 ### `steps_cli` / `steps_gui` — one goal, a road apiece
 
@@ -958,7 +1299,12 @@ be naming a command that does not exist. The reading is a `Review` on both of it
 the shot is a picture, and neither the image nor the colour-and-letter a project falls back to puts a
 word there. `file:` here is not `attach`'s: what is under test is the picture, so the road names a
 file a premise copied off the fixtures shelf rather than one the operator brings, and the run says
-where it landed before the first step is handed over.
+where it landed before the first step is handed over. The tab that project carries down the edge of
+the terminal face draws the same image (`terminal tab-icon`), and is a second op rather than an
+argument on the first: it is another surface and not another way of asking, the square being the face
+an image is given on and the tabs being what it was given one for. That reading is a `Review` too, and
+names the project rather than pressing its tab — every project has one, and going to it would move the
+whole face onto the one tab being read.
 
 Giving each of the two faces a store writes as an image of its own, clearing one again, reading which
 of the two a slot holds, and the way back onto the screen all of that is done on (`store set-avatar` /

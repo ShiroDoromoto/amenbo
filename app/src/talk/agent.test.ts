@@ -1,0 +1,579 @@
+// @vitest-environment jsdom
+// The folder a frame opens in, the three shapes it draws once it has one, and the one rule about when
+// the agent may be changed.
+//
+// Only the three boundaries are stubbed — what the host answers, the folder the person chooses, and
+// the terminal itself — so the branching, the remembering, and the row on a closed pane all run for
+// real.
+//
+// **What is kept is the person's, never the project's** (`AMB-T-3686`): every press that chooses one
+// writes `wake_chose`, and nothing here ever writes `wake_remember` — that is the pin somebody puts
+// on a project on its own settings.
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { BoundFolderDto, PtySessionDto, WakeDto } from "../bindings/bindings";
+import type { PaneEvents } from "./terminal";
+
+const hoisted = vi.hoisted(() => ({
+  /** What `wake_probe` answers with, in order — the last one is repeated. */
+  answers: [] as WakeDto[],
+  /** Every command that crossed, as `[name, args]`. */
+  sent: [] as [string, Record<string, unknown> | undefined][],
+  /** Where each pane was started, most recent last. */
+  panes: [] as { cwd?: string | null; agent?: string | null }[],
+  /** Ends the pane most recently mounted, the way the host's `pty://closed` does. */
+  end: null as (() => void) | null,
+  /** What `pty_sessions` answers with — a terminal already running is one nothing is asked about. */
+  running: [] as PtySessionDto[],
+  /** What the folder dialog comes back with: a path, null for a cancel, or a refusal to throw. */
+  chosen: null as string | null,
+  /** Set to refuse the binding, the way a folder something else already owns is refused. */
+  refuse: null as Error | null,
+  /** How many times the person was taken to the folder dialog. */
+  chose: 0,
+  /** The folders the project this window is on is bound to, as the host answers. */
+  bound: [] as BoundFolderDto[],
+  /** Which projects were asked for their folders, in order. */
+  asked: [] as number[],
+  /** Which project the dialog was told to bind the folder it came back with to. */
+  boundTo: [] as number[],
+}));
+
+vi.mock("../core/ipc", () => ({
+  invoke: vi.fn(async (name: string, args?: Record<string, unknown>) => {
+    hoisted.sent.push([name, args]);
+    if (name === "pty_sessions") return hoisted.running;
+    if (name === "wake_probe") {
+      return hoisted.answers.length > 1 ? hoisted.answers.shift() : hoisted.answers[0];
+    }
+    return undefined;
+  }),
+}));
+vi.mock("../core/mutations", () => ({
+  chooseWorkFolder: vi.fn(async () => {
+    hoisted.chose += 1;
+    if (hoisted.refuse) throw hoisted.refuse;
+    return hoisted.chosen;
+  }),
+  chooseFolderFor: vi.fn(async (project: number) => {
+    hoisted.chose += 1;
+    hoisted.boundTo.push(project);
+    if (hoisted.refuse) throw hoisted.refuse;
+    return hoisted.chosen;
+  }),
+  fetchBoundFolders: vi.fn(async (project: number) => {
+    hoisted.asked.push(project);
+    return hoisted.bound;
+  }),
+}));
+vi.mock("./terminal", () => ({
+  // The one choice that is not a catalogued id, kept where the field it lands in is declared.
+  SHELL: "shell",
+  mountTerminal: vi.fn(
+    async (
+      host: HTMLElement,
+      on: PaneEvents,
+      // What the frame hands a terminal it is *starting*: where, with what, and never taking one up —
+      // adopting is settled before the question is put, and a started pane must not take a running
+      // terminal off another slot (`./layout`).
+      start: { cwd?: string | null; agent?: string | null; adopt?: boolean; session?: string | null },
+    ) => {
+      hoisted.panes.push(start);
+      // What the real one says: the session running here, and **where it runs** — which for a terminal
+      // the pane took up is where that one was started, not the folder this pane was handed.
+      const took = start.adopt !== false ? hoisted.running[0] : undefined;
+      const session = took?.session ?? "session-1";
+      on.opened(session, took?.startedAt ?? "2026-01-01T00:00:00Z", took?.folder ?? start.cwd ?? null);
+      hoisted.end = () => on.closed(session);
+      host.textContent = "(a terminal)";
+      return () => {};
+    },
+  ),
+}));
+
+import { mountAgentFrame } from "./agent";
+
+/** A host answer, with the parts a test does not care about filled in. */
+function wake(over: Partial<WakeDto> = {}): WakeDto {
+  return {
+    folder: "/work/here",
+    candidates: [
+      { id: "claude-code", label: "Claude Code", command: "claude", traced: true, installed: true },
+      { id: "codex-cli", label: "Codex CLI", command: "codex", traced: true, installed: true },
+    ],
+    offered: ["claude-code", "codex-cli"],
+    reach: "answered",
+    ...over,
+  };
+}
+
+/** A host answer from a machine the catalogue is wider than: `has` is installed, `lacks` is on the
+ *  row and not installed — the shape every real machine answers with. */
+function partly(has: string[], lacks: string[], over: Partial<WakeDto> = {}): WakeDto {
+  const row = [
+    ...has.map((id) => ({ id, label: id, command: id, traced: false, installed: true })),
+    ...lacks.map((id) => ({ id, label: id, command: id, traced: false, installed: false })),
+  ];
+  return {
+    folder: "/work/here",
+    candidates: row,
+    offered: row.map((one) => one.id),
+    reach: "answered",
+    ...over,
+  };
+}
+
+/** What the window is told by the panes under it, counted rather than kept. */
+const heard = { opened: 0, output: 0, chose: [] as string[], said: 0, closed: 0, named: 0 };
+const events: PaneEvents = {
+  opened: () => {
+    heard.opened += 1;
+  },
+  output: () => {
+    heard.output += 1;
+  },
+  chose: (folder) => {
+    heard.chose.push(folder);
+  },
+  said: () => {
+    heard.said += 1;
+  },
+  unsent: () => {},
+  sent: () => {},
+  path: () => {},
+  closed: () => {
+    heard.closed += 1;
+  },
+  name: () => {
+    heard.named += 1;
+  },
+};
+
+/** Put the frame up in a fresh page, with nothing chosen yet, and hand back its root. `project` is the
+ *  one the window is on — null is a machine that has no project for a pane to belong to yet. */
+async function put(answer: WakeDto, project: number | null = null): Promise<HTMLElement> {
+  hoisted.answers = [answer];
+  const root = document.createElement("div");
+  document.body.replaceChildren(root);
+  await mountAgentFrame(root, "en", events, {}, project);
+  return root;
+}
+
+/** A folder this project is bound to, as the host lists it. */
+function folder(path: string, exists = true): BoundFolderDto {
+  return { path, exists, mismatch: null, legacy: false, pointerMissing: false, foreign: null };
+}
+
+/** Press the invitation's button and let what it starts run out. */
+async function chooseFolder(root: HTMLElement): Promise<void> {
+  const choose = buttons(root).find((b) => b.textContent === "Choose a folder");
+  expect(choose, "there was no way to choose a folder").toBeTruthy();
+  choose?.click();
+  await new Promise((r) => setTimeout(r, 0));
+}
+
+/** The frame with a folder already chosen — where every question after the first one is asked from. */
+async function draw(answer: WakeDto, project: number | null = null): Promise<HTMLElement> {
+  hoisted.chosen = "/work/here";
+  const root = await put(answer, project);
+  await chooseFolder(root);
+  return root;
+}
+
+/** What was kept as this person's answer, in the order it crossed (`wake_chose`). */
+function kept(): string[] {
+  return hoisted.sent
+    .filter(([name]) => name === "wake_chose")
+    .map(([, args]) => String(args?.agent));
+}
+
+/** The buttons on screen, by their text. */
+function buttons(root: HTMLElement): HTMLButtonElement[] {
+  return [...root.querySelectorAll("button")];
+}
+
+beforeEach(() => {
+  hoisted.sent = [];
+  hoisted.panes = [];
+  hoisted.end = null;
+  hoisted.running = [];
+  hoisted.chosen = null;
+  hoisted.refuse = null;
+  hoisted.chose = 0;
+  hoisted.bound = [];
+  hoisted.asked = [];
+  hoisted.boundTo = [];
+  heard.opened = heard.said = heard.closed = heard.named = 0;
+  heard.chose = [];
+});
+
+describe("a frame with no folder asks for one, and asks for nothing else", () => {
+  it("puts the invitation and nothing else — the host is not asked what runs where", async () => {
+    const root = await put(wake({ offered: ["claude-code"], settled: "claude-code" }));
+
+    expect(root.textContent).toContain("Choose the folder you show the AI");
+    expect(buttons(root).map((b) => b.textContent)).toEqual(["Choose a folder"]);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_probe");
+    expect(hoisted.panes).toEqual([]);
+  });
+
+  it("opens the pane in the folder chosen, in one press and with nothing to submit", async () => {
+    hoisted.chosen = "/work/here";
+    const root = await put(wake({ offered: ["claude-code"], settled: "claude-code" }));
+    await chooseFolder(root);
+
+    expect(hoisted.chose, "the person was taken to the dialog more than once").toBe(1);
+    // Said as soon as it is answered, not when a terminal comes up: the slots beside this one open in
+    // the same folder, and on a machine with nothing startable no terminal ever follows.
+    expect(heard.chose, "the window was not told where this frame settled").toEqual(["/work/here"]);
+    expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/here", project: null }]);
+    expect(hoisted.panes).toEqual([{ adopt: false, cwd: "/work/here", agent: "claude-code" }]);
+  });
+
+  it("leaves the invitation standing when the dialog is cancelled", async () => {
+    hoisted.chosen = null;
+    const root = await put(wake({ settled: "claude-code" }));
+    await chooseFolder(root);
+
+    const again = buttons(root).find((b) => b.textContent === "Choose a folder");
+    expect(again, "cancelling took the invitation away").toBeTruthy();
+    expect(again?.disabled, "cancelling left the button unpressable").toBe(false);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_probe");
+  });
+
+  it("keeps the invitation, with the reason under it, when the folder cannot be taken", async () => {
+    hoisted.chosen = "/work/here";
+    hoisted.refuse = new Error("that folder belongs to something else");
+    const root = await put(wake({ settled: "claude-code" }));
+    await chooseFolder(root);
+
+    expect(root.textContent).toContain("that folder belongs to something else");
+    expect(buttons(root).find((b) => b.textContent === "Choose a folder")).toBeTruthy();
+    expect(hoisted.panes).toEqual([]);
+  });
+
+  it("asks nothing of a frame that adopts a terminal, and opens where that one runs when it ends", async () => {
+    hoisted.running = [{ session: "session-1", startedAt: "2026-01-01T00:00:00Z", folder: "/work/adopted" }];
+    const root = await put(wake({ offered: ["claude-code"], settled: "claude-code" }));
+
+    expect(hoisted.chose, "a running terminal was asked about").toBe(0);
+    // Taken up rather than started, so this pane is handed no folder to start in — it is the session
+    // that says where it runs, and saying so is what the frame learns its folder from.
+    expect(hoisted.panes).toEqual([{ cwd: null, agent: null }]);
+
+    // The program ends and the frame is asked to open again: it knows where, because the session it
+    // took up said so.
+    hoisted.running = [];
+    hoisted.end?.();
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(hoisted.chose, "the folder was asked for a second time").toBe(0);
+    expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/adopted", project: null }]);
+    expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({ adopt: false, cwd: "/work/here", agent: "claude-code" });
+  });
+});
+
+// A frame is told which project it is on by the face it sits on (`../shell/TerminalFace`), and from
+// there it keeps the rule that face keeps: a pane works in one of its project's folders and no other.
+describe("a window told which project it is on asks among that project's folders and no others", () => {
+  it("offers the project's folders, and never the machine's", async () => {
+    hoisted.bound = [folder("/work/site"), folder("/work/api")];
+    const root = await put(wake({ settled: "claude-code" }), 7);
+
+    expect(hoisted.asked, "this project's folders were not the ones read").toEqual([7]);
+    expect(root.textContent).toContain("Which folder does this pane work in?");
+    expect(buttons(root).map((b) => b.textContent)).toEqual(["/work/site", "/work/api"]);
+    expect(hoisted.chose, "the OS picker was opened on a project that has folders").toBe(0);
+  });
+
+  it("opens the pane in the folder pressed, with nothing to submit after it", async () => {
+    hoisted.bound = [folder("/work/site"), folder("/work/api")];
+    const root = await put(wake({ offered: ["claude-code"], settled: "claude-code" }), 7);
+    buttons(root).find((b) => b.textContent === "/work/api")?.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(heard.chose, "the window was not told where this frame settled").toEqual(["/work/api"]);
+    expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/api", project: 7 }]);
+    expect(hoisted.panes).toEqual([{ adopt: false, cwd: "/work/here", agent: "claude-code" }]);
+  });
+
+  it("leaves a folder that is not there off the list — nothing can be started in one", async () => {
+    hoisted.bound = [folder("/work/site"), folder("/work/moved", false)];
+    const root = await put(wake({ settled: "claude-code" }), 7);
+
+    expect(buttons(root).map((b) => b.textContent)).not.toContain("/work/moved");
+  });
+
+  it("asks nothing where the project is bound to one folder — the pane opens there", async () => {
+    hoisted.bound = [folder("/work/site")];
+    const root = await put(wake({ offered: ["claude-code"], settled: "claude-code" }), 7);
+
+    expect(root.textContent).not.toContain("Which folder does this pane work in?");
+    expect(heard.chose, "the one folder was not taken as the answer").toEqual(["/work/site"]);
+    expect(hoisted.panes).toEqual([{ adopt: false, cwd: "/work/here", agent: "claude-code" }]);
+  });
+
+  it("binds a project's first folder to that project, not to one the folder's name would raise", async () => {
+    hoisted.chosen = "/work/first";
+    const root = await put(wake({ settled: "claude-code" }), 7);
+
+    expect(root.textContent).toContain("Choose the folder you show the AI");
+    await chooseFolder(root);
+
+    expect(hoisted.boundTo, "the folder was bound somewhere other than this project").toEqual([7]);
+    expect(heard.chose).toEqual(["/work/first"]);
+  });
+});
+
+describe("the frame draws what the host settled", () => {
+  it("opens the pane without asking when one agent answers", async () => {
+    const root = await draw(wake({ offered: ["claude-code"], settled: "claude-code" }));
+
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code", adopt: false }]);
+    expect(buttons(root)).toEqual([]);
+    // Nobody chose anything: a pane that opened on what the host had already arrived at is not a
+    // decision, and writing one down would make the rank look like a press.
+    expect(kept()).toEqual([]);
+  });
+
+  it("offers the choice when several answer, and keeps the one that is picked", async () => {
+    const root = await draw(wake(), 7);
+    expect(hoisted.panes).toEqual([]);
+
+    const choice = buttons(root).find((b) => b.textContent === "Codex CLI");
+    expect(choice, "the offer did not name the agents").toBeTruthy();
+    choice?.click();
+    await Promise.resolve();
+
+    // Kept against the person, so the next pane they open — here, or in a project they have not made
+    // yet — comes up on it. The project's own pin is not touched: that is theirs to set on the
+    // project's settings, and one press is not them setting it.
+    expect(kept()).toEqual(["codex-cli"]);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
+  });
+
+  it("keeps it even where the frame belongs to no project — the answer is the person's", async () => {
+    const root = await draw(wake());
+
+    buttons(root).find((b) => b.textContent === "Codex CLI")?.click();
+    await Promise.resolve();
+
+    // A window split out before the board told it which project it is on still knows who is at it.
+    expect(kept()).toEqual(["codex-cli"]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
+  });
+
+  it("keeps what an empty frame chose, without putting the question a second time", async () => {
+    hoisted.chosen = "/work/here";
+    const root = await put(wake(), 7);
+    await chooseFolder(root);
+    document.body.replaceChildren();
+    hoisted.sent = [];
+    hoisted.panes = [];
+
+    // What the empty frame was pressed on rides in on the pane (`../shell/EmptySlot`).
+    const carried = document.createElement("div");
+    document.body.append(carried);
+    hoisted.answers = [wake()];
+    await mountAgentFrame(carried, "en", events, { cwd: "/work/here", agent: "codex-cli" }, 7);
+
+    expect(buttons(carried), "the question was put about a choice already made").toEqual([]);
+    expect(kept()).toEqual(["codex-cli"]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
+  });
+
+  it("puts only what this machine can start among the presses, and folds the rest away", async () => {
+    const root = await draw(partly(["claude"], ["codex", "cursor-agent"]));
+
+    // The offer is what a press can open: the one installed agent, the shell under it, and the press
+    // that unfolds the rest — which are on the page and out of sight until it is pressed.
+    expect(
+      buttons(root).filter((b) => !b.className.includes("--missing")).map((b) => b.textContent),
+    ).toEqual(["claude", "Plain shell", "Not installed (2)"]);
+    expect(root.querySelector(".agent__missing")?.hasAttribute("hidden"), "they were unfolded").toBe(true);
+
+    buttons(root).find((b) => b.textContent === "Not installed (2)")?.click();
+    expect(root.querySelector(".agent__missing")?.hasAttribute("hidden")).toBe(false);
+
+    // Unfolded they are on the offer and dead to a press: a reader who cannot see that Amenbo
+    // starts them has no way of learning that installing one would give them a choice.
+    const missing = [...root.querySelectorAll(".agent__choice--missing")] as HTMLButtonElement[];
+    expect(missing.map((b) => b.textContent)).toEqual(["codex", "cursor-agent"]);
+    expect(missing.every((b) => b.disabled), "one of them could be pressed").toBe(true);
+  });
+
+  it("says what it looked for, and looks again on request, when nothing is startable", async () => {
+    const root = await draw(partly([], ["claude", "codex"]));
+
+    expect(hoisted.panes).toEqual([]);
+    expect(root.textContent).toContain("claude, codex");
+
+    const again = buttons(root).find((b) => b.textContent === "Search again");
+    expect(again, "there was no way to look again").toBeTruthy();
+    hoisted.answers = [wake({ offered: ["claude-code"], settled: "claude-code" })];
+    again?.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code", adopt: false }]);
+  });
+});
+
+describe("the agent can be changed only on a frame that has closed", () => {
+  it("puts nothing to press while the pane is running", async () => {
+    const root = await draw(wake({ offered: ["claude-code"], settled: "claude-code" }));
+    expect(buttons(root)).toEqual([]);
+    expect(root.querySelector("select")).toBeNull();
+  });
+
+  it("offers the agent and open once the program has ended", async () => {
+    const root = await draw(wake({ settled: "claude-code" }), 7);
+    expect(root.querySelector("select")).toBeNull();
+
+    hoisted.end?.();
+    expect(heard.closed, "the window was not told the pane closed").toBe(1);
+    const choose = root.querySelector("select");
+    expect(choose, "the closed frame had no way to change the agent").toBeTruthy();
+    expect(choose?.value).toBe("claude-code");
+
+    if (choose) {
+      choose.value = "codex-cli";
+      choose.dispatchEvent(new Event("change"));
+    }
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await Promise.resolve();
+
+    // The pane opens on what was picked, and it is kept as the person's. **The project's pin stays
+    // where it was**: what the project opens with is changed on the project's own settings, never by
+    // somebody reaching for another tool on one frame (`AMB-T-3686`).
+    expect(kept()).toEqual(["codex-cli"]);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+    expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({
+      cwd: "/work/here",
+      agent: "codex-cli",
+      adopt: false,
+    });
+  });
+
+  it("keeps what the row opened with, the same as every other press that chooses one", async () => {
+    const root = await draw(wake(), 7);
+    buttons(root).find((b) => b.textContent === "Claude Code")?.click();
+    await Promise.resolve();
+    hoisted.sent.length = 0;
+    hoisted.answers = [wake()];
+
+    hoisted.end?.();
+    const choose = root.querySelector("select");
+    if (choose) {
+      choose.value = "codex-cli";
+      choose.dispatchEvent(new Event("change"));
+    }
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await Promise.resolve();
+
+    expect(kept()).toEqual(["codex-cli"]);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+  });
+
+  it("opens again on the same one, and says so again — the press is a choice either way", async () => {
+    const root = await draw(wake({ settled: "claude-code" }));
+    hoisted.sent = [];
+    hoisted.end?.();
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await Promise.resolve();
+
+    expect(kept()).toEqual(["claude-code"]);
+    expect(hoisted.panes).toHaveLength(2);
+  });
+});
+
+// The folder's own prompt, with nothing started at it. It stands wherever the frame puts a choice —
+// the offer, the notice, the closed frame's row — and nowhere else: a folder that settled on one
+// agent still opens on it unasked, because the shell is what a reader reaches for once the pane is
+// there rather than a question they answer on the way in.
+describe("the shell stands beside the agents, and answers nothing about the folder", () => {
+  it("puts the shell under the offer, and opens it without writing anything down", async () => {
+    const root = await draw(wake());
+
+    const shell = buttons(root).find((b) => b.textContent === "Plain shell");
+    expect(shell, "the offer left no way to open a shell").toBeTruthy();
+    shell?.click();
+    await Promise.resolve();
+
+    // Kept as the person's, the same as an agent would be: "what did you open with last time" is a
+    // question a plain prompt answers. What it is never written down as is the *project's* answer —
+    // "which agent do you work with here" is not.
+    expect(kept()).toEqual(["shell"]);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: null, adopt: false }]);
+  });
+
+  it("offers the shell where nothing is startable, which is the only terminal such a machine has", async () => {
+    const root = await draw(partly([], ["claude", "codex"]));
+
+    const shell = buttons(root).find((b) => b.textContent === "Plain shell");
+    expect(shell, "a machine with no agent on it was left with no terminal at all").toBeTruthy();
+    shell?.click();
+    await Promise.resolve();
+
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: null, adopt: false }]);
+  });
+
+  it("draws the row for a folder that settled on one agent, since the shell is the other choice", async () => {
+    const root = await draw(wake({ offered: ["claude-code"], settled: "claude-code" }));
+    hoisted.end?.();
+
+    const choose = root.querySelector("select");
+    expect(choose, "the row with one agent on it had nowhere to choose the shell").toBeTruthy();
+    expect([...(choose?.options ?? [])].map((one) => one.textContent)).toEqual([
+      "Claude Code",
+      "Plain shell",
+    ]);
+  });
+
+  it("keeps the ones this machine has not got off the row's menu", async () => {
+    const root = await draw(partly(["claude"], ["codex"], { settled: "claude" }));
+    hoisted.end?.();
+
+    // A bar is a place to start something. What could be installed is the offer's to say, and a menu
+    // line that opened a pane on `command not found` would be the worst way to say it.
+    expect([...(root.querySelector("select")?.options ?? [])].map((one) => one.textContent))
+      .toEqual(["claude", "Plain shell"]);
+  });
+
+  it("starts nothing, and keeps the shell as the person's, when the row opens it", async () => {
+    const root = await draw(wake({ settled: "claude-code" }));
+    hoisted.end?.();
+    const choose = root.querySelector("select");
+    if (choose) {
+      choose.value = "shell";
+      choose.dispatchEvent(new Event("change"));
+    }
+    hoisted.sent = [];
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await Promise.resolve();
+
+    expect(kept()).toEqual(["shell"]);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+    expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({
+      cwd: "/work/here",
+      agent: null,
+      adopt: false,
+    });
+  });
+
+  it("keeps the shell as what the next pane opens with, once one has been opened", async () => {
+    const root = await draw(wake({ offered: ["claude-code"], settled: "claude-code" }));
+    hoisted.end?.();
+    const choose = root.querySelector("select");
+    if (choose) {
+      choose.value = "shell";
+      choose.dispatchEvent(new Event("change"));
+    }
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    hoisted.end?.();
+    expect(root.querySelector("select")?.value, "the row fell back to the agent").toBe("shell");
+  });
+});

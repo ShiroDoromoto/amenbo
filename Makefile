@@ -229,6 +229,12 @@ CLI_DEV_LINUX_DIST := $(DIST_DIR)/$(GUI_DEV_DATA)
 # What dist-cli-linux writes. The release wants CLI_LINUX_DIST; a preview overrides it with the
 # line above, so the two callers differ by a name and not by a second copy of the recipe.
 CLI_LINUX_OUT     ?= $(CLI_LINUX_DIST)
+# Which app-data that CLI addresses. Empty is production, which is what the release wants; a preview
+# overrides it with the theme's own name, the same way its AppImage does (build-linux-gui.sh's
+# DEV_APP_NAME). The name has to travel as its own knob because the file name does not carry it:
+# CLI_LINUX_OUT only decides what the binary is CALLED, and a preview named for its theme that was
+# compiled without this reads and writes production's store — the one thing a preview must not touch.
+CLI_LINUX_APP_NAME ?=
 # The AppImage carries the GUI alone, so the e2e's separate writer — the CLI process the
 # check watches the webview react to — is brought in as its own binary, built for the host arch.
 CLI_LINUX_HOST    := $(DIST_DIR)/amenbo-linux-$(HOST_GUI_ARCH)
@@ -280,7 +286,7 @@ help:
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
 	@echo "make dist-gui-linux - build the Linux GUI AppImage in Docker into dist/ (needs Docker)"
 	@echo "make dist-cli-linux - build the shipped Linux CLI in the same Docker base as the AppImage, into dist/ (that base is the glibc floor of the distribution; LINUX_CLI_ARCH=arm64 for the other arch; needs Docker)"
-	@echo "make dist-cli-dev-linux AMB-THEME=<slug> - the same Linux CLI named for the build, for a theme preview to hand its member (needs Docker)"
+	@echo "make dist-cli-dev-linux AMB-THEME=<slug> - the same Linux CLI, named for the build and compiled against its app-data, for a theme preview to hand its member (needs Docker)"
 	@echo "make verify-gui-linux - exercise 'another process writes → the screen updates' on a real Linux GUI over Xvfb (needs Docker)"
 	@echo "make verify-network-linux - stand up real NFS/SMB and exercise store_watch's network-FS detection (needs Docker; also runs every time in CI)"
 	@echo "make verify-network-mac - the macOS version of the above (MNT_LOCAL detection). Mounts real SMB over loopback and exercises it (needs Docker)"
@@ -465,6 +471,7 @@ dist-cli-linux:
 	@# which compiles the same workspace in the same image (in CI they are fresh every time).
 	docker run --rm --platform linux/$(LINUX_CLI_ARCH) \
 	  -e OUT_NAME=$(notdir $(CLI_LINUX_OUT)) \
+	  -e DEV_APP_NAME="$(CLI_LINUX_APP_NAME)" \
 	  -v "amenbo-lint-registry-$(LINUX_CLI_ARCH):/root/.cargo/registry" \
 	  -v "amenbo-lint-target-$(LINUX_CLI_ARCH):/build/target" \
 	  -v "$(CURDIR):/src:ro" \
@@ -476,9 +483,12 @@ dist-cli-linux:
 ## the member beside its AppImage. The AppImage carries a copy, but it is mounted only while the GUI
 ## runs, so this standalone one is the only one with an address that outlives the run, and the name
 ## it lands under is the word the member will type once it is on their PATH.
+## That name is also the app-data it is compiled against, and the two are set together here: a
+## binary named for the theme but built without CLI_LINUX_APP_NAME opens production's store, and
+## nothing about the file a member copies onto their PATH says so.
 ## Takes AMB-THEME (or AMB-T-ID) like the rest of the dev channel; unset gives the shared dev build's name.
 dist-cli-dev-linux:
-	@$(MAKE) dist-cli-linux CLI_LINUX_OUT="$(CLI_DEV_LINUX_DIST)"
+	@$(MAKE) dist-cli-linux CLI_LINUX_OUT="$(CLI_DEV_LINUX_DIST)" CLI_LINUX_APP_NAME="$(GUI_DEV_DATA)"
 
 ## The scenario that drives verify-gui-linux. The check reads its `steps_gui` road — the screen is
 ## what it judges — and that road's listed/present title is the card it writes and OCRs back;
@@ -1088,6 +1098,14 @@ devtool-bin:
 ## by hand when the mark itself changes, and what moves is committed. See scripts/gen-brand.py.
 brand:
 	python3 scripts/gen-brand.py
+
+## Re-bake the file panel's language configurations out of VS Code's built-in extensions: what the
+## editor reads to know where a new line is indented, what folds, and which brackets pair up.
+## Like `brand`, everything it writes is tracked and nothing in a build waits on it — it wants the
+## network, and a merge should not. Run it by hand when the pinned VS Code release moves, and commit
+## what changes. See scripts/gen-lang-config.mjs.
+lang-config:
+	node scripts/gen-lang-config.mjs
 
 ## Local-only targets (each person's dev-environment tools) go in .local/local.mk, which is not
 ## tracked. If present it is included, if absent nothing happens. So it does not steal the default

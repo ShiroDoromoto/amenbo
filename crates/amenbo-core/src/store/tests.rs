@@ -1261,6 +1261,43 @@ fn deleting_a_task_leaves_its_only_trace_in_the_ledger() {
     fs::remove_dir_all(&dir).ok();
 }
 
+/// A proposal is a moment, and the ledger is the only place it can be kept.
+///
+/// The column says a decision **is** proposed; `status_changed_at` is overwritten by the verdict, and
+/// neither says who put it up or which pane they were in. So a proposal nobody ever settled is only
+/// findable if a line recorded that it was made (`AMB-T-3600`, `AMB-T-3639`). The line is keyed by
+/// the decision and by no task — the ledger's subject keys are one per entity kind, and a reader
+/// filtering on `task` must not see a decision's line.
+#[test]
+fn proposing_a_decision_is_kept_where_the_column_cannot_keep_it() {
+    let (mut s, dir) = fresh_store("ledger-decision-proposed");
+    let pid = s.project_add(project("PJ")).unwrap().id;
+    let d = s
+        .add_decision(crate::ops::decision::NewDecision {
+            title: "どちらの道を採るか".to_string(),
+            body: String::new(),
+            project_id: pid,
+        })
+        .unwrap();
+    s.add_decision_system_event(
+        crate::model::ActorKind::Ai,
+        d.id,
+        crate::activity_log::event::decision_proposed(&d.title),
+    )
+    .unwrap();
+
+    let lines = ledger(&s);
+    let last = lines.last().unwrap();
+    assert_eq!(last["event"]["kind"], serde_json::json!("decision.proposed"));
+    assert_eq!(last["event"]["title"], serde_json::json!("どちらの道を採るか"));
+    assert_eq!(last["decision"].as_i64(), Some(d.id));
+    assert_eq!(last["task"], serde_json::Value::Null, "a decision's line names no task");
+    assert_eq!(last["project"].as_i64(), Some(pid), "a line carries its own project");
+    assert_eq!(last["actor"], serde_json::json!("ai"));
+
+    fs::remove_dir_all(&dir).ok();
+}
+
 /// A deletion leaves no DB row, but it **still spends an activity sequence number**. Skip the
 /// increment and two consecutive deletions produce two lines with the same id, breaking the
 /// `(at, source, id)` tie-break that gives the ledger and the comment table a single total order.

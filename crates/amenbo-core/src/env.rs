@@ -27,6 +27,19 @@ pub fn home() -> Option<OsString> {
     var_os(HOME_VAR)
 }
 
+/// **The account's home directory** — not [`home`], which is Amenbo's own root.
+///
+/// The two sit together on purpose. `AMENBO_HOME` is a root a reader points at to isolate Amenbo's
+/// files, and this is where the operating system says the person lives; a caller reaching for one
+/// and getting the other is a bug that shows up as Amenbo reading somebody else's folder, so the
+/// names are kept apart and the difference is written here rather than left to be inferred.
+///
+/// It is what a shell handed no directory starts in, which is what makes it the folder a terminal
+/// opened with nothing named is actually standing in.
+pub fn home_dir() -> Option<std::path::PathBuf> {
+    directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf())
+}
+
 /// The name of [`plugin_reach`], for the runner that sets it on a plugin's process
 /// ([`crate::plugin_callback`]).
 pub const PLUGIN_REACH_VAR: &str = "AMENBO_PLUGIN_REACH";
@@ -54,13 +67,17 @@ pub fn path() -> Option<OsString> {
     var_os(PATH_VAR)
 }
 
-/// `SHELL` — the login shell the user chose. Amenbo reads it for one purpose, on macOS: to ask that shell
-/// where git is when [`PATH`](path) cannot say ([`crate::sys::git`]). A `.app` launched from Finder carries
-/// only `/usr/bin:/bin:/usr/sbin:/sbin`, and the profile that puts a Homebrew git in front is the shell's
-/// to read, not ours to guess at.
+/// `SHELL` — the shell of whoever's session this process was started from. Amenbo reads it in two places.
+/// On macOS it asks that shell where git is when [`PATH`](path) cannot say ([`crate::sys::git`]): a `.app`
+/// launched from Finder carries only `/usr/bin:/bin:/usr/sbin:/sbin`, and the profile that puts a Homebrew
+/// git in front is the shell's to read, not ours to guess at. In the GUI it is the fallback when the account
+/// database cannot say what this user's login shell is, so a terminal opened in the window still starts the
+/// shell they actually use (`app/src-tauri/launch.rs`).
 ///
-/// Unset (a process started by a scheduler, or by an installer) reads as `/bin/sh`, which is on every Unix
-/// and reads the same `PATH`-setting profile a plain login would.
+/// There it is a fallback and not the answer, because what it describes is the session rather than the user:
+/// a process several launches deep can be carrying one that was inherited from something else. Unset (a
+/// process started by a scheduler, or by an installer) reads as `/bin/sh`, which is on every Unix and reads
+/// the same `PATH`-setting profile a plain login would.
 pub fn shell() -> Option<OsString> {
     var_os("SHELL")
 }
@@ -97,6 +114,20 @@ pub fn mcp_dirs() -> Option<String> {
     var(MCP_DIRS_VAR)
 }
 
+/// `AMENBO_SESSION` — the id of the talk window's terminal this process was started inside
+/// ([`crate::session::SESSION_VAR`]). Set by the window on the terminal it opens, and inherited by
+/// everything started in it, which is the only way a process several levels deep can say which pane it
+/// belongs to. Unset everywhere else, and that is what tells the surface layer it is outside the window.
+pub fn session() -> Option<String> {
+    var(crate::session::SESSION_VAR)
+}
+
+/// `AMENBO_SESSION_DIR` — the throwaway directory the talk window reads this run's statements out of
+/// ([`crate::session::DIR_VAR`]). Set beside [`session`], on the same terminals, and gone with the run.
+pub fn session_dir() -> Option<OsString> {
+    var_os(crate::session::DIR_VAR)
+}
+
 /// `AMENBO_HW_ID` — override the machine UUID, to pose as a different machine during development.
 pub fn hw_id() -> Option<OsString> {
     var_os("AMENBO_HW_ID")
@@ -119,6 +150,24 @@ pub fn perf() -> Option<String> {
 /// `NO_COLOR=` counts too. Hence `Option`, and no parsing: a caller asks `is_some()`.
 pub fn no_color() -> Option<String> {
     var("NO_COLOR")
+}
+
+/// `TERM` — the OS's own name for what kind of terminal a program is running in, and hence which
+/// escape sequences it may use. Amenbo reads it to see whether the launch it is passing on already
+/// carries one, because a desktop launch carries none and a program that finds none assumes a
+/// terminal that can do nothing (`app/src-tauri/launch.rs`).
+pub fn term() -> Option<OsString> {
+    var_os("TERM")
+}
+
+/// The locale this process was launched with, in the precedence the C library reads them in:
+/// `LC_ALL` overrules `LANG`, so a session that set the first has answered whatever is asked of the
+/// second. Amenbo reads it for the same reason as [`term`] — to leave a launch that already carries
+/// an answer alone, and to name a UTF-8 one for a desktop launch that carries none.
+///
+/// The value is not parsed and not judged: presence is the whole of the question.
+pub fn locale() -> Option<OsString> {
+    var_os("LC_ALL").or_else(|| var_os("LANG"))
 }
 
 /// `AMENBO_UPDATE_CHECK` — the environment override for the update check (the update endpoint

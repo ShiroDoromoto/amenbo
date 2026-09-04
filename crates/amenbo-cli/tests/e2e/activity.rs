@@ -54,6 +54,38 @@ fn activity_records_system_events_and_comments() {
     assert_eq!(p_end["count"], 0);
 }
 
+/// The timeline names the facet and stops there. Two AI sessions are one facet, so every row an AI
+/// wrote reads the same on it — and the ledger says nothing else about who wrote one, in particular
+/// nothing about the pane it was written in. That belongs to a place that is emptied when the window
+/// closes (`AMB-D-758`, `crates/amenbo-cli/tests/e2e/talk.rs`), because a session id means nothing
+/// once its window has gone, and a permanent row is exactly where it must not be kept.
+#[test]
+fn the_timeline_names_the_facet_and_says_nothing_about_the_pane_a_write_came_from() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    let t = id_str(&cli.json(&["task", "add", "--title", "first", "--actor", "ai", "--json"])["task"]["id"]);
+    cli.finish_creating(&t);
+    let (stdout, code) = cli.run_env(
+        &[("AMENBO_SESSION", "pane-a")],
+        &["task", "status", &t, "in_progress", "--actor", "ai"],
+    );
+    assert_eq!(code, 0, "reserving inside a pane: {stdout}");
+    cli.run(&["comment", "add", &t, "--actor", "ai", "--text", "on it"]);
+    cli.run(&["task", "status", &t, "blocked", "--actor", "ai"]);
+
+    let rows = cli.json(&["activity", "--task", &t, "--json"]);
+    let rows = rows["items"].as_array().unwrap();
+    assert!(
+        rows.iter().all(|i| i["author"]["kind"] == "ai"),
+        "the facet says the same of every one of them: {rows:?}",
+    );
+    assert!(
+        rows.iter().all(|i| i["author"].get("session").is_none()),
+        "and no row names a pane, the one made inside one included: {rows:?}",
+    );
+}
+
 /// The ledger self-compacts at 8 MiB, so the very lines that carry a vanished subject's **name**
 /// (task.created / task.deleted) can age out — as can a name that falls outside the lookback budget. Core
 /// then returns an empty title, and piping that straight to a human leaves nothing after the "—", so the

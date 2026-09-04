@@ -381,7 +381,7 @@ func vmDevGUIPID(ip, id string) (int, error) {
 // Fronting is done by the guest's own copy of the screen tool, which `devtool vm screen` puts
 // there. A missing copy is reported and carried past: it costs a front, not the pid that was asked
 // for.
-func vmResolveDevGUI(id string, front bool) (ip string, target devGUITarget, err error) {
+func vmResolveDevGUI(id string, front bool, window string) (ip string, target devGUITarget, err error) {
 	id, err = vmInstanceID(id)
 	if err != nil {
 		return "", devGUITarget{}, err
@@ -399,7 +399,7 @@ func vmResolveDevGUI(id string, front bool) (ip string, target devGUITarget, err
 			taskDevBundle(id), vmCloneName, id, shq(vmTaskDevBundle(id)))
 	}
 	if front {
-		if _, err := sshRun(ip, shq(vmScreenPath)+" front "+strconv.Itoa(pid)); err != nil {
+		if _, err := sshRun(ip, shq(vmScreenPath)+" front "+strconv.Itoa(pid)+vmWindowArg(window)); err != nil {
 			logf("  warning: bringing %s forward in %s failed (%v) — is the screen tool in there? (`devtool vm screen`)", taskDevBundle(id), vmCloneName, err)
 		}
 	}
@@ -407,11 +407,20 @@ func vmResolveDevGUI(id string, front bool) (ip string, target devGUITarget, err
 	return ip, devGUITarget{bundle: taskDevBundle(id), pid: pid}, nil
 }
 
+// vmWindowArg is windowArgs for the guest, where the tool is reached through a shell line rather
+// than an argv.
+func vmWindowArg(window string) string {
+	if window == "" {
+		return ""
+	}
+	return " --window " + shq(window)
+}
+
 // vmDevGUIShowPID prints on stdout the pid of an instance running in the guest. It is a pid in
 // there, so what takes it is something driving that machine — the screen tool in the guest, or
 // `devtool vm exec`.
-func vmDevGUIShowPID(id string, front bool) error {
-	_, target, err := vmResolveDevGUI(id, front)
+func vmDevGUIShowPID(id string, front bool, window string) error {
+	_, target, err := vmResolveDevGUI(id, front, window)
 	if err != nil {
 		return err
 	}
@@ -422,17 +431,17 @@ func vmDevGUIShowPID(id string, front bool) error {
 // vmDevGUIShot captures the instance's window in the guest and prints the png's path **on this
 // machine**: the shot is taken in there by the guest's screen tool and brought back out, because
 // what looks at it is here.
-func vmDevGUIShot(id string, front bool) error {
+func vmDevGUIShot(id string, front bool, window string) error {
 	inst, err := vmInstanceID(id)
 	if err != nil {
 		return err
 	}
-	ip, target, err := vmResolveDevGUI(inst, front)
+	ip, target, err := vmResolveDevGUI(inst, front, window)
 	if err != nil {
 		return err
 	}
 	guest := filepath.Join(vmStagingDir, "amenbo-devgui-"+inst+".png")
-	if _, err := sshRun(ip, shq(vmScreenPath)+" shot "+strconv.Itoa(target.pid)+" "+shq(guest)); err != nil {
+	if _, err := sshRun(ip, shq(vmScreenPath)+" shot "+strconv.Itoa(target.pid)+" "+shq(guest)+vmWindowArg(window)); err != nil {
 		return fmt.Errorf("shooting the window of %s in %s failed: %w — the screen tool has to be in there (`devtool vm screen`)", target.bundle, vmCloneName, err)
 	}
 	file, err := os.CreateTemp("", fmt.Sprintf("amenbo-devgui-%s-*.png", inst))

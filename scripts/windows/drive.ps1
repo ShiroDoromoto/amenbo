@@ -57,6 +57,21 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+
+# Said before anything reads the screen, and it is what makes a plan aim true on a machine that is
+# not at 100%. Windows hands a process that has not said this a made-up desktop of logical pixels:
+# `SetCursorPos` is scaled up into real ones, while the screen copy a `shot` takes is not scaled at
+# all and comes back as the top-left corner of the real screen, cropped to the logical size. The two
+# then disagree by the scale factor, so a plan written by reading a picture presses somewhere else
+# entirely — and nothing reports an error, because both halves did what they were asked. Measured
+# at 150%: a press aimed at a row in the picture landed one and a half rows further down the screen.
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class AmenboDpi { [DllImport("user32.dll")] public static extern bool SetProcessDPIAware(); }
+"@
+[void][AmenboDpi]::SetProcessDPIAware()
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 

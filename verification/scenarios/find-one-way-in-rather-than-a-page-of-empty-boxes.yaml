@@ -1,0 +1,143 @@
+# A face with nothing open on it offers one empty frame, and grows a pane each time one is opened.
+#
+# The count at the top of this face is the most a page will draw and not a number of boxes to stand
+# up. The difference is the whole of this road. A page that filled its count with empty slots would
+# be asking the same question four times over — four boxes, each of them "which folder?" — and a
+# reader with nothing open would meet a screen of them before they had opened anything at all. So
+# there is one, at the first gap on the page, and it is the page saying it has room rather than a
+# button for opening a terminal.
+#
+# ── What is counted, and why it is counted rather than read ──────────────────────────────────────
+# The boxes carry no words the road put there: a pane that has not been typed into yet is a fresh
+# prompt, and the empty slots this road exists to rule out would carry the interface's own words in
+# whatever language the machine is set to. So the frames are counted by an eye. What that eye is
+# asked is not only how many panes are standing but that the rest of the page is *empty* — a count
+# that stopped at the panes would pass on the very screen this is about.
+#
+# ── Why a line is typed into the first one ───────────────────────────────────────────────────────
+# One step on this road is read rather than counted, and it is the one that says the frame which
+# appeared is a terminal and not a box. It is the reader's own words, so a reading finds them on the
+# pane drawing that session and nowhere else — and it is still there after the second pane opens,
+# which is the other half: a frame arriving beside it is not a re-cut of the first.
+#
+# ── Why the count is moved to four before anything is opened ─────────────────────────────────────
+# At one to a page there is nothing to tell the two readings apart: a page holding its ceiling in
+# empty boxes and a page holding nothing both draw at most one thing. Four is where the two come
+# apart, and it is set while nothing is open so that what follows is the page growing from nothing
+# rather than a page being cut down to size.
+id: find-one-way-in-rather-than-a-page-of-empty-boxes
+title: A project with nothing open draws one empty frame, and a pane appears for each one opened and for nothing else
+description: >
+  Open the terminal face on a project with nothing open in it: what is on the page is one empty
+  frame, and no other box. Set the page to four panes and it is still the one — the count is the
+  most a page draws, not slots waiting to be filled. Open a pane and get a line onto it, and there
+  is one terminal on the page, one empty frame beside it, and two bare quarters. Open a second and
+  there are two terminals, the first still showing its own line.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Sunroom
+    as: sunroom
+
+  # One folder, so nothing is asked: what this road is about is the frames, and the question of where
+  # a pane runs is another road's (`leave-the-question-about-where-a-pane-runs`).
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: sunroom
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The project this road is about, pressed rather than assumed: which project the face comes up on is
+  # the run's business, and a road that read a screen it had not put itself on would be reading
+  # somebody else's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Sunroom
+
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 0
+
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 4
+
+  # The count moved and the page did not fill. This is the step the road is named after: four is what
+  # the page may draw, and what it draws is what somebody opened.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 0
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  # One terminal, and the empty frame moved along to the next gap rather than being replaced by a
+  # second question. What is ruled out here is the page filling itself: the count is four and what
+  # stands on it is one pane and one remark about the room left.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 1
+
+  # And the one frame is a terminal. Down to a plain shell first, for the reason every road that
+  # speaks in a pane does it: what an agent does with a line typed at it is the agent's own.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the frame that was opened
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the frame that was opened
+
+  # A second one, from the empty frame that moved along to the next gap — which is the whole of what
+  # this road is named after. The folder is the project's, so nothing is asked on the way.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 2
+
+  # The first is untouched by the second arriving. A page that re-made its frames on every open would
+  # read the same on the count above and lose the session here.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the frame that was opened

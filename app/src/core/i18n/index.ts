@@ -10,7 +10,7 @@
 // silent by construction, coverage.test.ts counts it at build time and fails on a dictionary that
 // does not cover the English key set.
 import type { EventDto } from "../../bindings/bindings";
-import { isErrorCode } from "../errorCodes";
+import { type ErrorCode, isErrorCode } from "../errorCodes";
 import { type DoctorIssueKind, isDoctorIssueKind } from "../doctorKinds";
 import type { Priority, Status } from "../../mock/types";
 import type { DoctorTemplate, Translation, UiKey, ViewKind } from "./keys";
@@ -201,12 +201,27 @@ function doctorTemplate(kind: DoctorIssueKind, lang: Lang): DoctorTemplate {
  * Turns an invoke rejection into one human-readable line: a structured `CmdError` is localized by
  * code, a bare string or Error passes through. Every catch site must go through this — `String(e)`
  * would render a CmdError as "[object Object]".
+ *
+ * `lang` is named where the caller is not drawing from the snapshot: the talk window resolves its own
+ * language and never loads one, so leaving this to `currentLang()` there would answer in the default
+ * while every other sentence on the page is in the reader's.
  */
-export function errText(e: unknown): string {
-  if (isCmdError(e)) return errLabel(e);
+export function errText(e: unknown, lang: Lang = currentLang()): string {
+  if (isCmdError(e)) return errLabel(e, lang);
   if (typeof e === "string") return e;
   if (e instanceof Error) return e.message;
   return String(e);
+}
+
+/**
+ * Whether a rejection is one particular refusal. Every catch site prints its rejection with
+ * `errText`; this is for the few that answer one of them differently from the rest — the file panel
+ * says a link is a link rather than a file it could not read (`../../files/FilesPanel`).
+ *
+ * The code is asked for from the contract, so a screen cannot branch on a string no command sends.
+ */
+export function isErr(e: unknown, code: ErrorCode): boolean {
+  return isCmdError(e) && e.code === code;
 }
 
 export function statusLabel(s: Status, lang: Lang = currentLang()): string {
@@ -279,6 +294,8 @@ export function eventText(
       return tf("act.moved", { title: name }, lang);
     case "task.unblocked":
       return tf("act.unblocked", { title: name }, lang);
+    case "decision.proposed":
+      return tf("act.proposed", { title: name }, lang);
     case "task.deleted":
     case "decision.deleted":
       return tf("act.deleted", { title: name }, lang);

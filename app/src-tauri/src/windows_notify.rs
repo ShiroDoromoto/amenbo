@@ -15,6 +15,7 @@
 use std::path::MAIN_SEPARATOR;
 
 use notify_rust::{Notification, NotificationResponse};
+use crate::notify::Kind;
 use tauri::{Emitter, Manager};
 
 /// Name of the event emitted to the frontend on a click; the webview (AppShell) opens the inbox on
@@ -27,7 +28,7 @@ const ACTIVATED_EVENT: &str = "notification-activated";
 /// A failure to show (an unregistered AUMID, say) is not fatal and is only logged. `sound_name`
 /// names WinRT's default toast sound explicitly because, left unset, notify-rust sends
 /// `<audio silent="true"/>` and the toast is silent.
-pub fn send(app: &tauri::AppHandle, title: String, body: String) {
+pub fn send(app: &tauri::AppHandle, title: String, body: String, kind: Kind) {
     let mut notification = Notification::new();
     notification.summary(&title).body(&body).sound_name("Default");
 
@@ -41,7 +42,7 @@ pub fn send(app: &tauri::AppHandle, title: String, body: String) {
         Ok(handle) => {
             // A failed recv (the toast died before it answered, say) is not fatal — it did display.
             let _ = handle.wait_for_response(|response: &NotificationResponse| match response {
-                NotificationResponse::Default | NotificationResponse::Action(_) => on_activated(&app),
+                NotificationResponse::Default | NotificationResponse::Action(_) => on_activated(&app, kind),
                 // Dismissed, expired or replied to (Windows never sends this): no navigation.
                 NotificationResponse::Closed(_) | NotificationResponse::Reply(_) => {}
             });
@@ -50,18 +51,24 @@ pub fn send(app: &tauri::AppHandle, title: String, body: String) {
     });
 }
 
-/// What a toast click does: raise the window and ask the frontend to navigate to the inbox — the
+/// What a toast click does: raise the board and ask the frontend to navigate to the inbox — the
 /// same as `macos_notify`. An arrival notification aggregates a count (`notifyArrival(n)`), so no
-/// single task can be identified and the inbox is the right destination.
-fn on_activated(app: &tauri::AppHandle) {
+/// single task can be identified and the inbox is the right destination (`crate::windows`).
+fn on_activated(app: &tauri::AppHandle, kind: Kind) {
     // The OS activates the app itself through the AUMID, but unminimizing and raising is explicit.
-    if let Some(win) = app.get_webview_window("main") {
+    // Which window is raised follows what the toast was about: a turn is in the terminal, and with the
+    // terminal split out that is a window of its own (`AMB-D-753`).
+    let label = match kind {
+        Kind::Turn if app.get_webview_window(crate::windows::TALK).is_some() => crate::windows::TALK,
+        _ => crate::windows::BOARD,
+    };
+    if let Some(win) = app.get_webview_window(label) {
         let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();
     }
-    // Opening the inbox is the frontend's navigation call to make, so ask it with an event.
-    if let Err(e) = app.emit(ACTIVATED_EVENT, ()) {
+    // Going there is the frontend's navigation call to make, so ask it with an event.
+    if let Err(e) = app.emit(ACTIVATED_EVENT, kind.as_str()) {
         log::warn!("failed to emit {ACTIVATED_EVENT}: {e}");
     }
 }

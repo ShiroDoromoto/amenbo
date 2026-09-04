@@ -1,0 +1,113 @@
+# The sentence that points an agent at Amenbo, arriving in a pane Amenbo did not write the launch
+# line of.
+#
+# Every pane gets it — it is the plumbing that tells an agent to run `amenbo agent --json` before it
+# acts — and a row off the catalog gets it the certain way: as an argument, handed over before the
+# program starts. A line the reader registered has nowhere to put an argument. Amenbo does not know
+# where in `claude --model opus` an opening prompt would go, and does not guess, so the line is
+# started as it stands and the sentence follows it into the pane in two stages: pasted once the pane
+# has drawn something and gone quiet, and submitted once the pane draws the sentence back — or,
+# where a program acknowledges a paste without ever showing it, once the pane answers for it.
+#
+# ── What this road defends ───────────────────────────────────────────────────────────────────────
+# That the second stage happens at all. The first one is easy to get right and easy to mistake for
+# the whole: a build that pasted and never sent leaves a reader looking at a sentence nobody asked
+# for, sitting in an input box, one keypress from being sent — and the pane looks the same as a pane
+# that was handed its instruction properly. So the reading is not that the sentence is on the screen.
+# It is that the program running there gave it back, which only a program that was sent a line can
+# do.
+#
+# ── Why the line is this line ────────────────────────────────────────────────────────────────────
+# It has to do two things no catalogued agent's line does, and both are why the road registers its
+# own. It draws something the moment it starts and then stops, because a pane nothing has written to
+# is not pasted into and neither is one still drawing itself — those rules are what keep Amenbo from
+# typing at a program that has not begun reading yet. And
+# it gives back what it is handed, with a word of the road's own in front, so that what is read is
+# the sending rather than the writing. `printf` and `sed` are on every machine this harness runs on,
+# and neither is a tool a reader would be expected to have.
+#
+# ── Why the machine is stood up first ────────────────────────────────────────────────────────────
+# So the frame draws the row a command is registered under. Where a machine can start one thing there
+# is no row, and where it can start none there is none either — the same premise
+# `open-a-pane-with-a-command-you-wrote-down` stands up, for the same reason.
+#
+# The world is empty apart from the place to work: a terminal is not a record and needs none, and the
+# one folder is there so nothing is asked about where the pane runs.
+id: start-your-own-command-on-amenbo
+title: A command the reader registered is told how to work here, and the instruction is sent rather than left sitting
+description: >
+  Amenbo opens every pane by telling what runs in it to read `amenbo agent --json` first. A command
+  the reader wrote down themselves has nowhere for that sentence to ride in as an argument, so it
+  follows the command into the pane instead — put in once the program has drawn, and sent once the
+  screen shows it. The road registers a command that hands back what it is given, opens a pane on it,
+  and reads the sentence off the line the program gave back: the half that says it was sent, and not
+  merely written into the pane and abandoned there.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lantern
+    as: lantern
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: lampstore
+      project: lantern
+
+  # Two, so there is a row to register under: with one thing to start there is no choice to draw, and
+  # with none there is no row.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lantern
+
+  # A command that draws as it starts and then reads, giving back what it is handed under a word of
+  # this road's own. Both halves are load-bearing and neither is a flourish — see the head of the
+  # file.
+  - type: action
+    domain: terminal
+    op: register-start
+    with:
+      name: Lamp log
+      line: printf 'SCENARIO the pane is ready\n'; sed 's/^/SCENARIO back> /'
+
+  - type: action
+    domain: terminal
+    op: open-registered
+    with:
+      name: Lamp log
+
+  # The program is up and has drawn. This is read before the sentence because it is the state the
+  # hand-over waits for: a pane nothing has written to is never pasted into, so a road that found no
+  # sentence without this step could not say which of the two halves had failed.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane is ready
+
+  # And the sentence came, and was sent. It is on the marked line because the program was given a
+  # whole line to read, which is the one thing a paste left unsent could never produce.
+  - type: assert
+    domain: terminal
+    op: handed-over
+    with:
+      given-back: SCENARIO back>

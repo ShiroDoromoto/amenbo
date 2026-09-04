@@ -1,4 +1,4 @@
-//! One process per store: a second launch raises the window that is already open and ends, rather
+//! One process per store: a second launch raises the board that is already open and ends, rather
 //! than standing a second app up beside the first.
 //!
 //! Two of them come up without anyone asking for it. Start at login registers a launch with the OS
@@ -60,15 +60,18 @@ fn dbus_name(identifier: &str) -> String {
         .join(".")
 }
 
-/// What the launch that was turned away leaves behind: the window of the process that holds the
+/// What the launch that was turned away leaves behind: the board of the process that holds the
 /// claim, in front. Without this the second launch would look like nothing happening at all —
 /// clicking the app while its window sits minimized behind other work is exactly the case.
+///
+/// The board and not the talk window, because what a second launch asks for is the app itself
+/// (`crate::windows`).
 ///
 /// Restoring from minimized and coming to the front are spelled out separately, the same way a
 /// notification click does it (`crate::macos_notify`).
 fn raise(app: &tauri::AppHandle) {
     use tauri::Manager;
-    if let Some(win) = app.get_webview_window("main") {
+    if let Some(win) = app.get_webview_window(crate::windows::BOARD) {
         let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();

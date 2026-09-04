@@ -1,0 +1,317 @@
+# The folder a project answers for, read from inside Amenbo — and the one file it will not show.
+#
+# The folder is what an AI can reach, and that is the whole reason it is worth drawing: a person who
+# has handed a folder over is entitled to see what is in it without leaving the app to look. This road
+# walks from the names in the bound folder down to the words inside one file, and then to a file
+# whose bytes are not words at all.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here and no gap in one. Reading a file at a shell is `cat`, and Amenbo is
+# the subject of none of it.
+#
+# ── Why four names and not one ───────────────────────────────────────────────────────────────────
+# One file proves the bytes reach the screen. The second proves the **host decides from the bytes**,
+# and it is the half that can quietly rot: the verdict is taken from what is in the file and never
+# from its name, so a build that started trusting the name would draw a picture's bytes as text and
+# nothing on the happy path would notice. The road gives the second file a `.md` name — the one name
+# the face does treat specially, choosing between rendered Markdown and an editor with it — and puts
+# bytes in it that are not text. What has to come back is the refusal, not a rendering.
+#
+# The third is not a file at all. The two above are what the face **cannot** show; a link is what it
+# **will not**, and the point of walking it is that the two must not read alike. The refusal is
+# meant, and the reader who meets it first is somebody keeping one `CLAUDE.md` in one place and
+# pointing several projects at it — for whom "could not be read" is a hunt for damage that is not
+# there. Nothing is put on the far side of the link: what a name is, is read off the name.
+#
+# The fourth is a picture the face **will** recognise and still will not draw, and it is here because
+# these refusals are not one refusal. One says there is nothing to show; this one says there is, and
+# that it is too large — and it says how large, because a reader shown nothing at all reads a
+# refused picture as a damaged file. The road then takes the way on it offers, because a refusal that
+# only refuses leaves the reader holding a file they still want opened.
+#
+# ── Why the picture is thirty kilobytes and a hundred and forty megapixels ────────────────────────
+# The extreme is what the line is about. What the face refuses is measured twice, in bytes and in
+# pixels, and a fixture large in both would not say which of the two answered. This one is small
+# enough to sit in the tree and large enough that no screen would survive drawing it — which is the
+# case the pixel measurement exists for, and the only case a byte count alone would let through.
+#
+# ── Where the column is rooted ───────────────────────────────────────────────────────────────────
+# The two sections above the folder belong to the **project**, not to the pane beside them, and which
+# project is the one the ledger is on. The world stands up exactly one, so there is nothing to be on
+# but it.
+id: read-a-file-in-the-folder-the-ai-can-see
+title: The folder a project answers for is read from inside Amenbo, down to the words in a file — and a file it will not show says why
+description: >
+  Open the terminal face on a project whose folder already holds a small tree, unfold the folder's
+  section and open it one level at a time, then press a file and read the words that are in it. Come
+  back out and press a second file, named as Markdown but holding bytes that are not text: what comes
+  back is the line saying it cannot be shown, because the verdict is taken from the bytes and never
+  from the name. Come back out once more and press a name that is a link out of the folder: what comes back says
+  it is a link, which is not the answer either file above got — that one is whole and the refusal is meant. Then
+  press a picture the face does recognise and still will not draw: what comes back is that it is too large,
+  together with how large it was measured to be — and the way on it offers hands the file to the machine, out of
+  the same menu the rows carry.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # A small tree in it: one folder with one readable file inside, and one file whose bytes are not
+  # text sitting beside it under a name that says they are.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/watering.md
+      # Written with a mark on it, because the road below reads the file both ways round and a file
+      # with no marks in it draws the same picture either way.
+      content: "# SCENARIO the seedlings are watered every second morning"
+
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      dir: greenhouse
+      from: files/not-text.bin
+      path: notes/almanac.md
+
+  # And a real picture, of a size no screen would survive being handed: twelve thousand square, in
+  # thirty kilobytes.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      dir: greenhouse
+      from: files/too-many-pixels.png
+      path: notes/glasshouse-plan.png
+
+  # And a name in the folder that is a link out of it, pointing at a file kept where more than one
+  # project could share it.
+  - type: action
+    domain: repo
+    op: symlink
+    with:
+      dir: greenhouse
+      path: notes/shared-notes.md
+      to: shared/watering-rules.md
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The panel beside the panes opens on the page a person writes on rather than on the folder: a
+  # person goes to the files when they want them, and what an agent points at calls from the switch
+  # itself. So the road asks for the half it is about before reading anything in it.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # The folder's own section stands unfolded at its first level from the moment the half is drawn:
+  # the names in the bound folder are what a person came to the files half for. What is under them
+  # is not, which is a read per level and is asked for when somebody opens one.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  # The bytes reached the screen. This is the goal the road is named for.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+
+  # And the other half of what a Markdown file is. It opens as what its text says, which is what a
+  # person opens one to do; the text itself is a second thing to want, and the file is the same file
+  # either way — the marks are in it, and drawing them is a choice about the screen rather than about
+  # the bytes.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+      as: source
+
+  # Back, because a reader who cannot get back has been handed a one-way door: the form that opened
+  # is the one they came for, and the other is a look.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: rendered
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+      as: rendered
+
+  - type: action
+    domain: files
+    op: back
+
+  # The second file. Its name says Markdown and its bytes say otherwise, and the bytes are what is
+  # answered — a face that read the name would be drawing a file it cannot read.
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: almanac.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: not-text
+
+  - type: action
+    domain: files
+    op: back
+
+  # The third name is not a file at all. It is a link out of the folder, and what comes back says so
+  # rather than saying the file could not be read — the file on the other side is whole, and it is
+  # the refusal that is deliberate.
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: shared-notes.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: link
+
+  # The other way out, and the one a reader already has under their hands. It takes one layer per
+  # press: the wide width goes first, and the column itself once it is standing narrow. Both presses
+  # are walked because it is the count that is the answer — a face that closed the whole column on
+  # the first press would carry a reader who meant "give the panes back" further than they asked, and
+  # a face that only ever narrowed it would leave the column with no way out but the pointer.
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: escape
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: shared-notes.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: escape
+
+  - type: assert
+    domain: terminal
+    op: side
+    with:
+      side: files
+      present: false
+
+  # And back in, because the road is not finished. A panel opened again stands at the folder's first
+  # level, which is where every reader starts.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  # The fourth file. The face knows it is a picture and refuses it anyway, which is a different answer
+  # from the ones above — and it says what it measured, so the refusal cannot be read as a broken file.
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: glasshouse-plan.png
+      section: tree
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: too-big
+
+  # And the way on. A refusal that only refuses leaves the reader holding a file they still want opened, so the
+  # line comes with the same menu the rows carry — reached from here, where there is no row to right-click.
+  - type: action
+    domain: files
+    op: menu-on-file
+
+  # One door out of the three, and the one whose end is a chooser rather than a picture: what this road is about is
+  # that the menu came up here at all, and the three doors themselves are `hand-a-file-to-the-machine`.
+  - type: action
+    domain: files
+    op: hand-over
+    with:
+      door: pick
+
+  - type: assert
+    domain: files
+    op: handed-over
+    with:
+      door: pick

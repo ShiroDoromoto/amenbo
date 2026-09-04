@@ -1,0 +1,188 @@
+# A file written to from outside while it is open in the panel, and what the panel does about it.
+#
+# The pane beside this column is a terminal an agent is working in, and the folder it works in is the
+# folder this column draws — so a file being rewritten under a reader is the ordinary case here, not
+# the strange one. What the panel promises is two different things depending on whether the reader
+# has touched the text, and neither of them has ever been walked before a release.
+#
+# ── Why nothing is merged ────────────────────────────────────────────────────────────────────────
+# Lining up two texts is the work of the agent in the pane. What this face carries is the fact that
+# the file moved, and one offer: take what is on the disk. The road reads that offer being made and
+# then taken.
+#
+# ── Why the disk is read through the offer rather than by opening the file again ─────────────────
+# The editor holds what somebody typed until the offer is pressed, so a reading taken after pressing
+# it is a reading of the bytes and not of the screen. That is what turns "the save was refused" from
+# a line of prose into something a road can see: the words on screen afterwards are the ones the
+# outside wrote, and the ones that were typed are gone.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. Typing into a file at a shell is an editor of its own, and Amenbo is the
+# subject of none of it.
+id: keep-what-was-typed-when-a-file-moves-underneath
+title: A file rewritten from outside is taken up quietly, and said out loud once it is being typed in
+description: >
+  Open a file in the panel and rewrite it from outside: the column takes up the new words with no
+  fuss. Type into it, rewrite it from outside again: the panel says so and what was typed is still
+  there. Press save and it is turned away; press the offer to read it again and the disk's words
+  replace what was typed.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # One ordinary file with words in it, so every reading below is of a text somebody could have
+  # written rather than of an empty box.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: SCENARIO first the seedlings are watered every second morning
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  # What was there when it was opened. Read before anything is written under it, so a run that goes
+  # wrong further down fails on the writing rather than on a file that never held these words.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: first the seedlings
+
+  # ── nobody has typed: the column takes it up and says nothing ───────────────────────────────────
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: SCENARIO second the seedlings are watered at dusk
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: second the seedlings
+
+  # And silently: a reader who has typed nothing has nothing to lose, so there is nothing to tell
+  # them. The line being absent here is half of what the pair of promises is.
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: changed-underneath
+      present: false
+
+  # ── somebody has typed: the column says so and keeps what they wrote ────────────────────────────
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO typed and not yet kept
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: SCENARIO third the seedlings are watered before dawn
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: changed-underneath
+
+  # The other half of the promise, and the one that costs somebody their work if it breaks: what was
+  # typed is still on the screen. The disk's newest words are not — nothing was taken up under a
+  # reader who was writing.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: typed and not yet kept
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: third the seedlings
+      present: false
+
+  # ── the save that is turned away ────────────────────────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: save
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: changed-underneath
+
+  # ── the offer taken, which is the disk read out loud ────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: read-again
+
+  # What the disk holds is what the outside wrote last — so the save above wrote nothing, which is
+  # the whole of what being turned away means.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: third the seedlings
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: typed and not yet kept
+      present: false
+
+  # And the line has gone with it: what it was about is settled, so nothing is left standing over a
+  # file that is now the file on the disk.
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: changed-underneath
+      present: false

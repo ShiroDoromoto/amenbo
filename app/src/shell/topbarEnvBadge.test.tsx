@@ -36,6 +36,9 @@ const props = {
   canForward: false,
   sidebarCollapsed: false,
   onToggleSidebar: () => {},
+  face: "tasks" as const,
+  onSelectFace: () => {},
+  terminalBadge: false,
 };
 const badge = () => container.querySelector(".topbar__envbadge");
 

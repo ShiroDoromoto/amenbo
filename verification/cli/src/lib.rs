@@ -295,14 +295,13 @@ impl<'a> Driver<'a> {
         if !args.contains(&"--actor") {
             with_facet.extend_from_slice(&["--actor", "human"]);
         }
-        Command::new(&self.bin)
-            .args(&with_facet)
+        let mut cmd = Command::new(&self.bin);
+        cmd.args(&with_facet)
             .current_dir(cwd)
             .env("AMENBO_HOME", &self.session.home)
             .env("AMENBO_UPDATE_CHECK", "0")
-            .env("NO_COLOR", "1")
-            .output()
-            .map_err(|e| format!("could not run `{}`: {e}", self.bin.display()))
+            .env("NO_COLOR", "1");
+        cmd.output().map_err(|e| format!("could not run `{}`: {e}", self.bin.display()))
     }
 
     /// The same, from the run's own CWD — where every step that is not asking about a folder stands.
@@ -320,6 +319,15 @@ impl<'a> Driver<'a> {
     /// The same, from a chosen folder.
     fn run_json_in(&self, cwd: &Path, args: &[&str]) -> Result<serde_json::Value, String> {
         let out = self.invoke_in(cwd, args)?;
+        self.judge_json(args, out)
+    }
+
+    /// What every run of a `--json` command comes to: a refusal, an execution failure, or the answer.
+    fn judge_json(
+        &self,
+        args: &[&str],
+        out: std::process::Output,
+    ) -> Result<serde_json::Value, String> {
         if let Some(code) = self.refused_code(&out) {
             return Err(format!("{REFUSED}{code}"));
         }
@@ -479,7 +487,7 @@ impl<'a> Driver<'a> {
     /// errors.
     fn exec(&mut self, step: &Step) -> Result<Outcome, String> {
         match step {
-            Step::Action { domain, op, with, bind } => match with.get("refused") {
+            Step::Action { domain, op, with, bind, .. } => match with.get("refused") {
                 Some(code) => {
                     let want = code
                         .as_str()
@@ -489,7 +497,7 @@ impl<'a> Driver<'a> {
                 }
                 None => self.action(*domain, op, with, bind.as_deref()),
             },
-            Step::Assert { domain, op, with } => self.assert(*domain, op, with),
+            Step::Assert { domain, op, with, .. } => self.assert(*domain, op, with),
         }
     }
 
@@ -557,6 +565,13 @@ impl<'a> Driver<'a> {
             // `domain::tick`. The one action the wake-up carries is a premise's reach into the
             // run's own store, and nothing further.
             Domain::Tick => self.tick_action(op, with),
+            // Where a terminal is drawn is a question about a screen, and this driver has none —
+            // bar the one premise that stands the machine up underneath it (`domain::terminal`),
+            // which is settled before any app comes up and is nobody's screen.
+            Domain::Terminal => self.terminal_action(op, with),
+            // The file face is a screen too. Reading a file at a shell is `cat`, which is not Amenbo
+            // doing anything, so there is nothing here to walk and no gap in the road.
+            Domain::Files => Err(unmapped(domain, op)),
         }
     }
 
@@ -582,6 +597,9 @@ impl<'a> Driver<'a> {
             Domain::Plugin => self.plugin_assert(op, with),
             Domain::Mcp => self.mcp_assert(op, with),
             Domain::Tick => self.tick_assert(op, with),
+            // The screen's alone, the same way its actions are.
+            Domain::Terminal => Err(unmapped(domain, op)),
+            Domain::Files => Err(unmapped(domain, op)),
         }
     }
 
@@ -952,7 +970,7 @@ mod tests {
     fn the_premise_and_the_road_are_numbered_apart() {
         let mut report = Report::new(&scenario("premise-numbering"));
         report.push_premise(0, Outcome::action("a project is already there".to_string()));
-        report.push(0, &Step::Assert { domain: Domain::Task, op: "field".into(), with: Args::new() },
+        report.push(0, &Step::Assert { domain: Domain::Task, op: "field".into(), with: Args::new(), window: None },
             Outcome::assert(true, "the board holds it".to_string()));
 
         let lines = report.to_json();

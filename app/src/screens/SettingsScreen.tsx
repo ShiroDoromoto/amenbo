@@ -19,6 +19,7 @@ import { Identicon } from "../components/identicon";
 import { DataProgressModal } from "../components/DataProgressModal";
 import { facetColor, FacetAvatar, identiconSeed } from "../components/atoms";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
+import { asksBeforeTrash, setAsksBeforeTrash } from "../files/askBeforeTrash";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { Icon } from "../components/Icon";
 
@@ -50,6 +51,14 @@ export function SettingsScreen() {
         </div>
         <LanguageSetting />
         <DefaultViewSetting />
+      </Category>
+
+      {/* The file panel's own question. It is here rather than beside the panel because the only other
+          place it is written is the checkbox inside the question, and that one only ever turns it
+          off — a switch drawn inside the thing it silences cannot be the way back to it
+          (`../files/askBeforeTrash`). */}
+      <Category title={t("settings.files")}>
+        <TrashAskSetting />
       </Category>
 
       {/* Nor does a development build carry the startup section: it registers nothing at login, so the
@@ -90,6 +99,36 @@ export function SettingsScreen() {
       <Category title={t("settings.integrity")}>
         <DoctorSetting />
       </Category>
+    </div>
+  );
+}
+
+/** Whether the file panel asks before it puts a row in the bin (`../files/askBeforeTrash`).
+ *
+ *  **This is the only way back.** The other place it is written is the checkbox inside the question
+ *  itself, which turns it off and is then never drawn again — so without this row, a reader who
+ *  ticked it once had no way of ever being asked again (`AMB-D-777`).
+ *
+ *  Device-local rather than in the store, the way the theme above is: it is a habit of the person at
+ *  this machine and not a property of the project. So it is held in state here rather than read off
+ *  the snapshot — nothing else on this screen writes it. */
+function TrashAskSetting() {
+  const [asks, setAsks] = useState(asksBeforeTrash);
+  const change = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const on = e.target.value === "on";
+    setAsksBeforeTrash(on);
+    setAsks(on);
+  };
+  return (
+    <div className="settings__row">
+      <span className="settings__k">{t("settings.trashAsk")}</span>
+      <span>
+        <select className="btn" value={asks ? "on" : "off"} onChange={change}>
+          <option value="on">{t("settings.trashAskOn")}</option>
+          <option value="off">{t("settings.trashAskOff")}</option>
+        </select>
+        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.trashAskNote")}</div>
+      </span>
     </div>
   );
 }

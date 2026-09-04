@@ -33,6 +33,13 @@ describe("a system event as a line", () => {
     expect(eventText(empty, "空の PJ", "en")).toBe("Deleted “空の PJ”");
   });
 
+  // A proposal is the one thing about a decision the ledger holds and the columns cannot: what
+  // `status` says is that a decision *is* proposed, not that anybody put it up (`AMB-T-3639`).
+  it("says a decision was put up, in its own words rather than the generic line", () => {
+    expect(eventText({ kind: "decision.proposed" }, "どちらの道を採るか", "ja")).toBe("「どちらの道を採るか」を提案");
+    expect(eventText({ kind: "decision.proposed" }, "Which road", "en")).toBe("Proposed “Which road”");
+  });
+
   it("reports a deletion as a deletion, whichever kind of row was deleted", () => {
     expect(eventText({ kind: "task.deleted" }, "下書き", "ja")).toBe("「下書き」を削除");
     expect(eventText({ kind: "decision.deleted" }, "旧方針", "ja")).toBe("「旧方針」を削除");

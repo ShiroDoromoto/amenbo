@@ -26,18 +26,39 @@
 //! output of `agent --json`, which is 40 KB an agent holding the instruction fetches for itself. The
 //! block stays where it is: a wired folder is not a reason to strip it, and the hook adds reach over the
 //! block, not content.
+//!
+//! **There are two tables, because there are two questions** (`AMB-D-791`). Being wired and being started
+//! ask different things of a provider, and a row answering for both could hold neither on its own:
+//!
+//! | | [`HARNESSES`] — wired | [`LAUNCHES`] — started |
+//! |---|---|---|
+//! | what it does | a hook in the folder's own settings runs `amenbo agent` when a session starts | Amenbo opens a pane and starts the agent in it, saying the same thing as its first argument |
+//! | what a row holds | [`event`](Harness::event), [`places`](Harness::places), [`home`](Harness::home), [`paste_into`](Harness::paste_into), [`template`](Harness::template), [`json_layers`](Harness::json_layers) | [`command`](Launch::command), [`prompt_flag`](Launch::prompt_flag) |
+//!
+//! One product can stand in both, and Claude Code does — that repetition is what this costs. What it buys
+//! is a row for a provider that can only be started: with no session-start hook to write, the price of a
+//! seat at one table used to be a template for a wiring it does not have.
+//!
+//! **The same instruction travels both ways.** A pane Amenbo opens itself starts the agent with
+//! [`opening`] — the instruction handed over as an argument, read before the program has drawn anything,
+//! rather than printed by a hook the folder may never have been wired for. Which flag the argument goes
+//! behind is the one thing the providers spell differently, so it is a column ([`Launch::prompt_flag`])
+//! and not a branch, like everything else in these tables.
 
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-/// One AI harness Amenbo knows how to be wired into — the catalog row (`AMB-D-440`).
+/// One AI harness Amenbo knows how to be wired into — the wiring catalog's row (`AMB-D-440`).
 ///
 /// The fields split in two: [`places`](Harness::places) and [`event`](Harness::event) are what a probe
 /// reads, and [`paste_into`](Harness::paste_into) with [`template`](Harness::template) are what a
 /// [`request`] is built from. Nothing here is a schema — the config shapes have nothing in common (JSON
 /// depth, event casing, which key holds the command), which is why the whole of each one is carried as
 /// text.
+///
+/// **What starts the provider is not here.** That is the other table's ([`Launch`]), and the two are
+/// joined by [`id`](Harness::id) where a product stands in both.
 pub struct Harness {
     /// The stable token a face names this harness by (`claude-code`), lowercase and hyphenated. It is a
     /// key, not a rendering: a user reads [`label`](Harness::label).
@@ -71,8 +92,9 @@ pub struct Harness {
     pub json_layers: u8,
 }
 
-/// Every harness Amenbo lists, in the order a face offers them. The five settings-only providers of the
-/// first catalog (`AMB-D-440`).
+/// Every harness Amenbo can be wired into, in the order a face offers them — the wiring catalog
+/// (`AMB-D-440`). The five whose session-start hook Amenbo knows how to write; what a pane starts is
+/// [`LAUNCHES`].
 pub static HARNESSES: &[Harness] = &[
     Harness {
         id: "claude-code",
@@ -194,6 +216,102 @@ pub fn find(id: &str) -> Option<&'static Harness> {
     HARNESSES.iter().find(|harness| harness.id == id)
 }
 
+/// One AI Amenbo knows how to **start** — the launch catalog's row (`AMB-D-791`).
+///
+/// A row here holds what opening a pane needs and nothing else: the program to run, and the flag its
+/// opening prompt goes behind. Being able to write the provider's session-start hook is not asked of it,
+/// which is the whole reason this table is its own — a provider with no hook to write is still one a
+/// person opens a terminal on.
+pub struct Launch {
+    /// The stable token a face names this provider by (`claude-code`), lowercase and hyphenated. Where a
+    /// product stands in both tables it is the same token as [`Harness::id`], which is what joins them.
+    pub id: &'static str,
+    /// The product's own name for itself, as it appears in its documentation.
+    pub label: &'static str,
+    /// What this provider is started as in a terminal — the program name, resolved against the user's
+    /// own `PATH` rather than a path of Amenbo's ([`crate::wake`]).
+    pub command: &'static str,
+    /// The flag this provider takes an opening prompt behind, or `None` where the prompt is simply its
+    /// first argument — the one spelling these differ on ([`opening`]).
+    ///
+    /// What is named here is always the **interactive** one. Several of them also take a prompt behind
+    /// `-p`, which runs it and exits: a pane started that way holds a program that is already gone by
+    /// the time the person looks at it.
+    pub prompt_flag: Option<&'static str>,
+    /// Whether this row has been watched starting the provider on a real machine (`AMB-T-3819`).
+    ///
+    /// Every row is written from the product's own documentation, and that is not the same as having
+    /// seen a pane open on it and take the instruction. The mark is carried rather than the row left
+    /// out: an unconfirmed row is still the best answer Amenbo has for somebody who works with that
+    /// tool, and what it must not do is read as tried when nobody has tried it.
+    pub confirmed: bool,
+}
+
+/// Every AI Amenbo knows how to start, in the order a face offers them — the launch catalog
+/// (`AMB-D-791`). Wider than [`HARNESSES`]: a provider earns a row here by being startable, whether or
+/// not its session-start hook is one Amenbo can write.
+pub static LAUNCHES: &[Launch] = &[
+    Launch {
+        id: "claude-code",
+        label: "Claude Code",
+        command: "claude",
+        // The prompt is this one's first argument; `-p` is the form that prints and exits.
+        prompt_flag: None,
+        confirmed: true,
+    },
+    Launch {
+        id: "codex-cli",
+        label: "Codex CLI",
+        command: "codex",
+        prompt_flag: None,
+        confirmed: true,
+    },
+    Launch {
+        id: "github-copilot",
+        label: "GitHub Copilot CLI",
+        command: "copilot",
+        // `-p` runs a prompt and exits here, so the interactive one is spelled separately.
+        prompt_flag: Some("-i"),
+        confirmed: true,
+    },
+    Launch {
+        id: "gemini-cli",
+        label: "Gemini CLI",
+        command: "gemini",
+        // A bare query is interactive by default, but the default is a setting: the flag that says
+        // "run this and stay" is not.
+        prompt_flag: Some("-i"),
+        confirmed: true,
+    },
+    Launch {
+        id: "opencode",
+        label: "OpenCode",
+        command: "opencode",
+        // The base command's own flag. `opencode run` takes a prompt too and is the non-interactive
+        // form, so a pane started that way would hold a program that has already printed and gone.
+        prompt_flag: Some("--prompt"),
+        confirmed: true,
+    },
+    Launch {
+        id: "cursor",
+        label: "Cursor",
+        command: "cursor-agent",
+        // Not `agent`, the shorter name this was also given: it is a general enough word that a script
+        // of the reader's own could answer to it, and starting that would open a pane on somebody
+        // else's program.
+        prompt_flag: None,
+        // Written from the documentation and never run — the tool is not on the machine the other five
+        // were tried on (`AMB-T-3838`).
+        confirmed: false,
+    },
+];
+
+/// The launch row with this [`id`](Launch::id), or `None` when nothing lists it.
+pub fn find_launch(id: &str) -> Option<&'static Launch> {
+    LAUNCHES.iter().find(|launch| launch.id == id)
+}
+
+
 /// The configuration for one harness, with the launch instruction in place. `cmd` is the launch command
 /// name ([`crate::config::Paths::command_name`]), so a dev-channel build describes wiring for the binary
 /// the user is actually running.
@@ -205,6 +323,36 @@ pub fn find(id: &str) -> Option<&'static Harness> {
 pub fn configuration(harness: &Harness, cmd: &str) -> String {
     let instruction = json_escaped(&crate::agents::launch_instruction(cmd), harness.json_layers);
     harness.template.replace("{instruction}", &instruction)
+}
+
+/// What `launch` is started with so that the launch instruction is the first thing said to it: the
+/// arguments that follow the program ([`Launch::command`]), in the order they are written.
+///
+/// **An argument rather than something typed at the program**, because it is the certain route: the
+/// agent is handed this before it starts, so nothing about what it draws first can eat it, and it is
+/// done in one move. A terminal cannot know when the agent in it is ready to be typed at, and there is
+/// no signal that says so — a program turns bracketed paste on within a tenth of a second of starting,
+/// long before it has drawn an input box (`AMB-T-3819`).
+///
+/// **That is a reason to prefer this route, and no longer a reason there is only one.** Typing at the
+/// program was refused here on two grounds — that readiness cannot be known, and that a trust prompt
+/// standing in front would eat what was typed — and both were grounds against typing *blind*. Amenbo
+/// holds the reading side of the terminal as well, so the sentence can be pasted, watched for on the
+/// screen, and submitted only once it is there; neither ground survives that (`AMB-D-793`, walked in
+/// `app/src-tauri/src/handover.rs`). It stays the second route rather than the first: it is a loop with
+/// a patience and a way of running out of one, and this is an argument.
+///
+/// `cmd` is the launch command name ([`crate::config::Paths::command_name`]), so a dev-channel build
+/// tells the agent to run the binary the person is actually running — the same text, and the same
+/// reason, as [`configuration`].
+///
+/// **Nothing here is quoted or escaped.** What comes back is an argument list, and the shell it will be
+/// written into belongs to the caller (`app/src-tauri/src/launch.rs`): a quoting rule chosen in core
+/// would be one written for a shell core cannot see.
+pub fn opening(launch: &Launch, cmd: &str) -> Vec<String> {
+    let mut args: Vec<String> = launch.prompt_flag.map(str::to_string).into_iter().collect();
+    args.push(crate::agents::launch_instruction(cmd));
+    args
 }
 
 /// What a face hands the reader for one harness: a request addressed to the AI they work with, carrying
@@ -603,6 +751,71 @@ mod tests {
         }
         let ids: std::collections::BTreeSet<_> = HARNESSES.iter().map(|h| h.id).collect();
         assert_eq!(ids.len(), HARNESSES.len(), "two rows answer to one id");
+    }
+
+    /// The launch catalog's own shape: every row is addressable and names the program it starts. The
+    /// mark on an unconfirmed row is part of that shape — a row written from a product's documentation
+    /// and never watched opening a pane is worth saying so about, and flipping the mark without running
+    /// the tool is exactly the quiet change this catches (`AMB-T-3838`).
+    #[test]
+    fn every_launch_row_is_addressable_and_says_whether_anyone_has_run_it() {
+        for launch in LAUNCHES {
+            assert_eq!(
+                find_launch(launch.id).map(|one| one.id),
+                Some(launch.id),
+                "{} is not findable",
+                launch.id
+            );
+            assert!(!launch.command.is_empty(), "{} names no program", launch.id);
+        }
+        let ids: std::collections::BTreeSet<_> = LAUNCHES.iter().map(|one| one.id).collect();
+        assert_eq!(ids.len(), LAUNCHES.len(), "two rows answer to one id");
+        assert_eq!(
+            LAUNCHES.iter().filter(|one| !one.confirmed).map(|one| one.id).collect::<Vec<_>>(),
+            ["cursor"],
+            "the rows nobody has watched start",
+        );
+        // The tables part in one direction only. A provider whose hook Amenbo writes is one it tells a
+        // folder to run `amenbo agent` in — and a pane unable to open on that provider would leave the
+        // wiring pointing at an agent this machine has no way to start.
+        for harness in HARNESSES {
+            assert!(find_launch(harness.id).is_some(), "{} is wired and not startable", harness.id);
+        }
+    }
+
+    /// The opening prompt, row by row: the instruction is what is said, it is said last, and a row that
+    /// spells a flag puts that in front of it. This is the shape a new row has to hold to as much as the
+    /// template is — a row that opened on nothing would start an agent that was never told where it is
+    /// working, and nothing on the screen would look wrong.
+    #[test]
+    fn every_row_opens_by_saying_the_launch_instruction() {
+        let instruction = crate::agents::launch_instruction("amenbo");
+        for launch in LAUNCHES {
+            let args = opening(launch, "amenbo");
+            assert_eq!(
+                args.last().map(String::as_str),
+                Some(instruction.as_str()),
+                "{} says something else first",
+                launch.id
+            );
+            match launch.prompt_flag {
+                None => assert_eq!(args.len(), 1, "{} passes an argument it never declared", launch.id),
+                Some(flag) => {
+                    assert!(flag.starts_with('-'), "{}: {flag} is not a flag", launch.id);
+                    assert_eq!(args, vec![flag.to_string(), instruction.clone()], "{}", launch.id);
+                }
+            }
+        }
+    }
+
+    /// The opening prompt points the agent at the binary the user is running, for the reason the
+    /// configuration does: a dev-channel window telling an agent to run `amenbo` names a command the
+    /// reader may not have.
+    #[test]
+    fn the_opening_prompt_names_the_running_command() {
+        let said = opening(find_launch("claude-code").unwrap(), "amenbo-dev").pop().unwrap();
+        assert!(said.contains("amenbo-dev agent --json"), "{said}");
+        assert!(!said.contains("`amenbo agent"), "{said}");
     }
 
     /// The two signs that an AI is worked with in a folder, each enough on its own (`AMB-D-680`) — and a

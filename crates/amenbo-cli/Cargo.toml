@@ -49,6 +49,11 @@ amenbo-static-host.workspace = true
 # (`-E 'binary(/^cli_e2e/)'`), so a new slice added here joins that run by being named like its
 # siblings. Cargo does not find a target under a subdirectory on its own, hence the explicit `path`.
 [[test]]
+name = "cli_e2e_talk"
+path = "tests/e2e/talk.rs"
+required-features = ["e2e"]
+
+[[test]]
 name = "cli_e2e_task"
 path = "tests/e2e/task.rs"
 required-features = ["e2e"]

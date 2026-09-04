@@ -36,6 +36,7 @@ export type IconName =
   | "chevronDown"
   | "plus"
   | "menu"
+  | "more"
   | "refresh"
   | "arrowUp"
   | "arrowDown"
@@ -66,7 +67,46 @@ export type IconName =
   | "star"
   | "person"
   | "robot"
-  | "dot";
+  | "dot"
+  | "pause"
+  | "stop"
+  | "newWindow"
+  | "paneAcross"
+  | "paneDown";
+
+/**
+ * The icons a call site outside React has to draw, as geometry rather than as elements.
+ *
+ * The pane's nameplate is built with the DOM directly — it is redrawn on every store write and only
+ * its words change, so it is made once and never re-rendered (`../talk/nameplate`). It still has
+ * marks in it, and a mark drawn there has to be the same mark as everywhere else. So the shapes of
+ * those few live here, once, and both `ART` below and `iconSvg` are made out of them: a second
+ * drawing kept in step by hand is a drawing that drifts.
+ *
+ * Each entry is the `d` of one path. Nothing here needs a rect or a circle, and the day one does is
+ * the day to widen this — not the day to draw it twice.
+ */
+const DRAWN = {
+  // Two upright bars — the agent has handed the turn over and is waiting on a person. It is the
+  // transport mark on purpose: what it says is that something running has stopped for you.
+  pause: ["M9.4 5.6v12.8", "M14.6 5.6v12.8"],
+  // A square — the work in this pane has stopped. Not the pause: a pause is somebody's turn, and a
+  // stop is a fact the ledger holds about the task, with nobody being asked for anything.
+  stop: ["M5.6 5.6h12.8v12.8H5.6z"],
+  // A warning triangle — grounds that are not settled.
+  warning: [
+    "M12.9 4.3l8.6 14.9a1 1 0 0 1-.9 1.5H3.4a1 1 0 0 1-.9-1.5l8.6-14.9a1 1 0 0 1 1.8 0z",
+    "M12 9.8v4.4M12 17.4v.1",
+  ],
+} as const satisfies Partial<Record<IconName, readonly string[]>>;
+
+/** An icon a call site outside React can ask for. The others are elements and nothing else. */
+export type DrawnIcon = keyof typeof DRAWN;
+
+/** The paths of a drawn icon as elements, so `ART` and `iconSvg` cannot fall out of step. */
+function drawn(name: DrawnIcon): ReactNode {
+  return <>{DRAWN[name].map((d) => <path key={d} d={d} />)}</>;
+}
 
 const ART: Record<IconName, ReactNode> = {
   // An envelope — the inbox smart view.
@@ -142,13 +182,7 @@ const ART: Record<IconName, ReactNode> = {
       <path d="M6.6 12h10.8" />
     </>
   ),
-  // A warning triangle — grounds that are not settled.
-  warning: (
-    <>
-      <path d="M12.9 4.3l8.6 14.9a1 1 0 0 1-.9 1.5H3.4a1 1 0 0 1-.9-1.5l8.6-14.9a1 1 0 0 1 1.8 0z" />
-      <path d="M12 9.8v4.4M12 17.4v.1" />
-    </>
-  ),
+  warning: drawn("warning"),
   // An hourglass — a start day that has not come.
   hourglass: (
     <>
@@ -236,6 +270,16 @@ const ART: Record<IconName, ReactNode> = {
   // ----- the marks on the frame of a screen, which point at a move rather than at a record -----
   // Three rules — the sidebar, folded away and brought back.
   menu: <path d="M3.6 6.8h16.8M3.6 12h16.8M3.6 17.2h16.8" />,
+  // Three dots in a row — the menu a row carries, as against the three lines above, which open the
+  // rail. Two menus that looked the same would be two presses a reader has to tell apart by where
+  // they are.
+  more: (
+    <>
+      <circle cx="5.6" cy="12" r="1.15" />
+      <circle cx="12" cy="12" r="1.15" />
+      <circle cx="18.4" cy="12" r="1.15" />
+    </>
+  ),
   // An arrow come full circle — read this screen again from the store.
   refresh: (
     <>
@@ -345,7 +389,58 @@ const ART: Record<IconName, ReactNode> = {
   // It is the one entry that is filled rather than stroked, so `.icon[data-icon="dot"]`
   // (`components.css`) turns the convention round for it.
   dot: <circle cx="12" cy="12" r="5.4" />,
+  pause: drawn("pause"),
+  stop: drawn("stop"),
+  // Two panes, one lifted off the other — the terminal put into a window of its own. It is drawn as
+  // the same thing twice because that is what the press does: the face is still here, and one of it
+  // is now somewhere else.
+  newWindow: (
+    <>
+      <path d="M7.4 16.6H4.6a1.4 1.4 0 0 1-1.4-1.4V4.6a1.4 1.4 0 0 1 1.4-1.4h10.6a1.4 1.4 0 0 1 1.4 1.4v2.8" />
+      <rect x="7.4" y="7.4" width="13.4" height="13.4" rx="1.6" />
+    </>
+  ),
+  // The page with two panes side by side, and the same page with one above the other. They are the
+  // grid itself rather than an arrow at it: what the press chooses is a shape, and the pair read as
+  // the choice they are only while they are drawn as the same box divided two ways.
+  paneAcross: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="1.6" />
+      <path d="M12 4.5v15" />
+    </>
+  ),
+  paneDown: (
+    <>
+      <rect x="3" y="4.5" width="18" height="15" rx="1.6" />
+      <path d="M3 12h18" />
+    </>
+  ),
 };
+
+/**
+ * The same icon, built with the DOM, for the one place that has no React around it
+ * (`../talk/nameplate`). It carries the same class, the same `data-icon` and the same box, so the
+ * stylesheet and anything reading the markup cannot tell the two apart — which is the point.
+ *
+ * Only the icons in `DRAWN` can be had this way, and the type says which — a mark this cannot draw is
+ * a mistake the compiler catches rather than an empty box nobody would notice on the screen.
+ */
+export function iconSvg(name: DrawnIcon, size: IconSize = "sm"): SVGSVGElement {
+  const paths = DRAWN[name];
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("class", `icon icon--${size}`);
+  svg.setAttribute("data-icon", name);
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  for (const d of paths) {
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+  return svg;
+}
 
 /**
  * One icon. `label` is for the rare icon that stands alone and has to say what it is; an

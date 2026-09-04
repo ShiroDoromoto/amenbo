@@ -217,8 +217,37 @@ export const CORE_ERROR_CODES = [
  * the store (`migrate::gate()` — mid-migration the format is half-moved, and after a failure it is still old);
  * and the consent guard in `plugin_catalog_add_source`, where registering a catalog crosses a process
  * boundary between showing a fingerprint and agreeing to it, so the pin that is written has to be the one
- * that was on screen (`AMB-D-389`). */
+ * that was on screen (`AMB-D-389`); and the two the terminal in a pane answers with, which are the
+ * operating system refusing to open one (`pty_failed`) and a session whose terminal has already
+ * closed (`pty_gone`); the two a window refuses with, which is the terminal being split out into a
+ * window of its own and the platform not building it (`window_failed`) or the window it built never
+ * drawing anything (`talk_blank`); and the ones settling which
+ * agent a folder opens with (`crate::wake`) — a folder that cannot be read (`wake_no_folder`), an
+ * install that cannot find its own config (`wake_no_config`), a choice that could not be written down
+ * (`wake_not_kept`), an agent id that names neither a catalog row nor one of this device's own
+ * registrations (`wake_unknown_agent`), refused the same way wherever it arrives, and a registration
+ * with a half missing (`wake_not_registered`); the four the file panel meets when it writes a
+ * name into a folder (`crate::folder_write`) — the name is taken (`folder_taken`), the machine will
+ * not hold it (`folder_name`), or the machine refused the making or the renaming itself for a reason
+ * of its own (`folder_make`, `folder_rename`); and the three it answers a save with
+ * (`crate::folder_save`) — a character the file's encoding has no room for
+ * (`folder_unwritable_character` — a `✓` typed into a Shift_JIS file, named rather than mangled into
+ * it), the file having moved between the read and the save
+ * (`folder_changed_underneath` — an agent in the pane wrote to it while the editor held what was
+ * there before), and everything else the filesystem said (`folder_not_saved`); and the one a read is
+ * turned away with when the name is a link (`folder_link` — `AMB-D-782` refuses it on purpose, and
+ * answering that with the same "not there" every other rule uses told the reader their file was
+ * broken). */
 export const TAURI_ERROR_CODES = [
+  "clip_refused",
+  "folder_changed_underneath",
+  "folder_link",
+  "folder_make",
+  "folder_name",
+  "folder_not_saved",
+  "folder_rename",
+  "folder_taken",
+  "folder_unwritable_character",
   "init_ambiguous_owners",
   "init_pointer_exists",
   "binding_nested_tree",
@@ -226,6 +255,15 @@ export const TAURI_ERROR_CODES = [
   "migration_running",
   "plugin_catalog_consent_required",
   "plugin_catalog_key_changed",
+  "pty_failed",
+  "pty_gone",
+  "talk_blank",
+  "wake_no_config",
+  "wake_no_folder",
+  "wake_not_kept",
+  "wake_not_registered",
+  "wake_unknown_agent",
+  "window_failed",
 ] as const;
 
 /** Every code a webview can receive — the contract that i18n and code-based branching may refer to. */

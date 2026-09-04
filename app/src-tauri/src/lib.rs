@@ -7,12 +7,66 @@
 /// that writes or removes it (`AMB-D-541`).
 mod autostart;
 mod blobproto;
+/// The machine's own clipboard, holding files rather than words — what `⌘C` and `⌘V` mean in the
+/// file panel (`AMB-D-796`).
+mod clipboard;
 mod commands;
 mod diag;
 mod dto;
+/// Whether a drop was a copy or a move: the keys held as it landed, read off the keyboard because no
+/// operating system puts them on the drag event (`AMB-T-3740`).
+mod dropped;
+/// What a file's bytes say, and how to say it back the same way: the encoding a file is really in,
+/// read off a mark, the standard library, or a guess — because reading everything as UTF-8 wrote a
+/// `?` over every byte it could not read (`AMB-D-773`).
+mod encoding;
 mod error;
+/// The custom protocol that hands the webview a file by its path, and the fence that keeps that from
+/// meaning any path: a project, one of the folders it is bound to, and then a path inside that
+/// folder.
+mod fileproto;
+/// What a folder holds, which the door above refuses to say: the names inside it, what changed in it
+/// lately, and what one file has to show. Rooted at a folder the project is bound to (`AMB-T-3602`).
+/// The three questions behind that are a module each — the fence, the walk and the bytes.
+mod folder;
+/// What one file has to show, read off its bytes rather than its name: the text it holds, the
+/// picture it is, or the reason it is neither (`AMB-T-3547`).
+mod folder_bytes;
+/// How far a name may reach: the folders a project is bound to, and the one path under them a
+/// caller's segments are allowed to mean (`AMB-D-782`).
+mod folder_fence;
+/// What is in a folder, read by walking it: the names directly inside one, and the folders under it
+/// a reader would call theirs rather than a build's (`AMB-D-786`).
+mod folder_walk;
+/// What git says about that folder, for the colour of a tree row and for nothing else: one status
+/// per bound folder, and the front git puts on every path taken back off (`AMB-D-774`).
+mod folder_git;
+/// Being told what changed in that folder instead of going to look: one watch where the OS covers a
+/// tree with one and a watch per pruned folder where it does not (`AMB-D-779`), and a scan to say
+/// what actually moved (`AMB-T-3604`).
+mod folder_watch;
+/// Changing what that folder holds — making a name, renaming one, moving and copying — behind the
+/// same fence the reading doors are behind, and answering a carry that stopped part way with where
+/// it got to (`AMB-D-782`).
+mod folder_save;
+mod folder_write;
+/// The talk window's face while the app is up — where its panes are and what they are called.
+mod frames;
+/// The third door onto a file in that folder: opening it with an application the reader picks. Two
+/// operating systems have a chooser of their own and one has none, so it is three implementations
+/// rather than one behind a `cfg` (`AMB-T-3642`).
+mod open_with;
+/// Giving an agent its opening instruction after its pane is already open — pasted, watched for on
+/// the screen, and submitted only once it is there. The route for a launch line with nowhere to put
+/// an argument in (`AMB-D-793`).
+mod handover;
+/// What a terminal is started as on each operating system — the shell the user signed in with, and
+/// what a terminal owes the program in it. Detecting a tool and starting it go through here
+/// together, so a probe cannot find what the pane could not have started (`AMB-D-747`).
+mod launch;
 #[cfg(target_os = "macos")]
 mod macos_notify;
+mod notify;
 mod menu;
 /// Migration at startup. It runs through the same execution site as the CLI, ahead of anything that
 /// opens the store: neither the watcher nor a command may read a store caught mid-version, and if
@@ -26,10 +80,16 @@ mod perf;
 /// mutating command, over the store's own cursor (`AMB-D-380`), and the one this app makes as it comes up
 /// for what a previous run left half delivered (`AMB-D-399`).
 mod plugin_dispatch;
+/// The pseudo-terminal a pane of the talk window is filled with: opening one, carrying its bytes
+/// both ways, and telling it how large the pane on screen is (`AMB-D-747`).
+mod pty;
 /// One process per store: what turns a second launch into the window that is already open, coming to
 /// the front. Desktop-only, because the claim it holds is an OS primitive with no shape elsewhere.
 #[cfg(desktop)]
 mod single_instance;
+/// Which agent a folder's pane is opened with: the folder's trace times what this machine can
+/// start (`AMB-T-3591`).
+mod wake;
 /// OS-specific file watching — the half that wakes `commands::watch_store`. It does not depend on
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
 /// operating systems.
@@ -37,6 +97,16 @@ pub mod store_watch;
 /// The hourly tick's startup pass: what this device answered about being woken, settled against what
 /// its scheduler holds (`AMB-D-707`).
 mod tick;
+/// Taking a row out of that folder: into the machine's own bin and never past it, and back out again
+/// on the pair of paths each OS's bin hands over (`AMB-D-777`).
+mod trash;
+/// What every custom-protocol answer owes, whatever door it came out of — the served type's allowlist,
+/// the headers that keep it from being read back as a document, and `Range`.
+mod webproto;
+/// The labels of the windows this app can open (the board, and the talk window someone splits the
+/// terminal out into), which of them anything raising a window from outside the webview means, and
+/// the door that second window is opened and closed through (`AMB-D-753`).
+mod windows;
 #[cfg(target_os = "windows")]
 mod windows_notify;
 
@@ -45,6 +115,11 @@ mod windows_notify;
 /// serves the bytes out of the blob store with Range support. The frontend hands the URL that
 /// [`blobproto`] builds to the src of an img, audio, video or iframe element.
 const BLOB_SCHEME: &str = "amenboblob";
+
+/// Name of the custom protocol that streams a file out of a session's folder. Unlike [`BLOB_SCHEME`] it is
+/// addressed by path, so `<scheme>://localhost/<session>/<path>` is the whole of what may be named: the
+/// session says which folder, and [`fileproto`] refuses everything that is not inside it.
+const FILE_SCHEME: &str = "amenbofile";
 
 /// Emitted to the webview when the user picks "check for updates" from the app menu
 /// (`menu::CHECK_UPDATES_ID`). The front end runs a fresh check and shows the update banner, or an
@@ -158,6 +233,20 @@ pub fn run() {
     builder = builder.plugin(single_instance::init(&context.config().identifier));
   }
   builder
+    // The open terminals, held for the life of the app rather than of any command that touches one:
+    // what a pane types into and what drains its output both reach for the same session, from
+    // different threads and long after the call that opened it returned (`pty`).
+    .manage(pty::Terminals::default())
+    .manage(folder_watch::FolderWatches::default())
+    // What this run of the app has put in the machine's bin, held for the life of the app rather
+    // than of the command that binned it: undo is a later press, and what it needs is the pair of
+    // paths the bin handed back at the time (`trash`).
+    .manage(trash::Bin::default())
+    // The face of the talk window, held for the life of the app rather than of either window: the
+    // two windows hand the arrangement between themselves through it, and none of it is kept
+    // (`frames`).
+    .manage(frames::TalkFace::default())
+    .manage(windows::TalkDrawn::default())
     .menu(menu::build)
     .on_menu_event(|app, event| {
       if event.id() == menu::CHECK_UPDATES_ID {
@@ -169,15 +258,46 @@ pub fn run() {
       // Keep the file IO (the Range read) off the webview and main threads.
       std::thread::spawn(move || responder.respond(blobproto::serve(&request)));
     })
+    .register_asynchronous_uri_scheme_protocol(FILE_SCHEME, |_ctx, request, responder| {
+      // Same reason as above, and one more: the fence reads the store and resolves the path on the real
+      // filesystem, which on a cold cache is the slowest part of answering.
+      std::thread::spawn(move || responder.respond(fileproto::serve(&request)));
+    })
     .setup(|app| {
       let config = amenbo_core::config::Paths::resolve()
         .map(|p| amenbo_core::config::Config::load(&p.config_file))
         .unwrap_or_default();
       perf::install(&config);
+      // What an earlier run left in the temporary directory when it ended without closing its terminals.
+      // Off the launch path: it is a scan of a directory, and nothing here waits on it.
+      std::thread::spawn(pty::sweep);
+      // And what an earlier run left in the volatile area (`AMB-D-758`). Emptying all of it is right at
+      // exactly this moment and at no other: no session of this process is running yet, so every row in
+      // there was written by a window that has closed.
+      //
+      // On the launch path rather than off it, unlike the sweep above: it is one small directory to
+      // remove, and a pane cannot open until the webview is up. Left to a thread, the emptying could
+      // land after the first pane had written its first row and take that row with it.
+      if let Ok(paths) = amenbo_core::config::Paths::resolve() {
+        amenbo_core::session_work::clear(&paths.sessions_dir);
+      }
       // The diagnostic log (`AMB-D-382`), in every build — see the `diag` module for what it may hold and why
       // its size is bounded. A logger that cannot start is not a reason to refuse to start the app, so
       // the error is dropped rather than raised: there is nowhere left to report it to anyway.
       let _ = app.handle().plugin(diag::logger().build());
+      // Where git is on this machine, settled now rather than under the first thing that wants it
+      // (`AMB-D-774`). `sys::git` keeps its answer for the life of the process, so this is the one call
+      // that pays for it — and what it can cost is a login shell (~40ms measured), which is why it is on
+      // a thread and not on the path the window is waiting on. A machine with no git is remembered as
+      // having none and never spawns one; the callers all have a "git said nothing" path already.
+      //
+      // Started after the logger so the answer is written down: on macOS this is the one line that says
+      // which git a `.app` found, and the two cases it decides between are a dialog on the user's screen
+      // and silence (`amenbo_core::sys::git`).
+      std::thread::spawn(|| match amenbo_core::sys::git() {
+        Some(git) => log::info!("git: {}", git.get_program().to_string_lossy()),
+        None => log::info!("git: none on this machine — nothing will ask it anything"),
+      });
       // The folder picker ("open a folder" = bind to an existing store).
       app.handle().plugin(tauri_plugin_dialog::init())?;
       app.handle().plugin(tauri_plugin_notification::init())?;
@@ -346,7 +466,6 @@ pub fn run() {
       commands::migration_retry,
       commands::attachments_for,
       commands::attachment_add,
-      commands::attachment_add_bytes,
       commands::attachment_open,
       commands::attachment_save,
       commands::attachment_remove,
@@ -358,6 +477,7 @@ pub fn run() {
       commands::project_bound_folders,
       commands::project_bind_folder,
       commands::project_unbind_folder,
+      commands::folder_open,
       commands::stale_managed_blocks,
       commands::resync_managed_blocks,
       commands::orphan_bindings,
@@ -398,6 +518,60 @@ pub fn run() {
       commands::plugin_updates,
       commands::plugin_update_apply,
       commands::plugin_update_apply_all,
+      wake::wake_probe,
+      wake::wake_remember,
+      wake::wake_chose,
+      wake::wake_forget,
+      wake::wake_choices,
+      wake::wake_rescan,
+      wake::wake_register,
+      wake::wake_amend,
+      wake::wake_unregister,
+      commands::session_work,
+      frames::panes_drawn,
+      frames::task_pane,
+      frames::frame_names,
+      frames::name_frame,
+      commands::project_memo,
+      commands::set_project_memo,
+      frames::talk_layout,
+      frames::save_talk_layout,
+      launch::elevated,
+      windows::show_ref,
+      windows::show_pane,
+      folder::folder_entries,
+      folder_git::folder_git_status,
+      folder_bytes::folder_read,
+      folder_bytes::folder_encodings,
+      folder::folder_open_file,
+      folder::folder_reveal_file,
+      dropped::drop_effect,
+      open_with::folder_open_with,
+      open_with::folder_open_file_with,
+      folder_watch::folder_watch,
+      folder_watch::folder_unwatch,
+      folder_save::folder_save,
+      folder_write::folder_make,
+      folder_write::folder_rename,
+      folder_write::folder_move,
+      folder_write::folder_copy,
+      trash::folder_trash,
+      trash::folder_untrash,
+      folder_write::folder_import,
+      folder_write::folder_clip_copy,
+      folder_write::folder_clip_paste,
+      clipboard::clip_files,
+      pty::pty_open,
+      pty::pty_sessions,
+      pty::pty_close,
+      pty::pty_attach,
+      pty::pty_write,
+      pty::pty_brief,
+      pty::pty_resize,
+      windows::talk_open,
+      windows::talk_close,
+      windows::talk_ready,
+      windows::talk_raise,
     ])
     .run(context)
     .expect("error while running tauri application");

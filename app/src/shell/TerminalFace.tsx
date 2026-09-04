@@ -1,0 +1,1159 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import { EmptySlot } from "./EmptySlot";
+import { FolderChoice } from "./FolderChoice";
+import { TerminalPane } from "./TerminalPane";
+import { FolderRail } from "./FolderRail";
+import { ProjectTabs } from "./ProjectTabs";
+import {
+  frameNames, keepLayout, nameFrame, paneLabels, savedLayout, type FrameNames, type NamedBy,
+} from "../talk/frames";
+import {
+  addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, frameOfSession, goPage, goProject,
+  laidOut, movedTo, openedFrame, openedIn, ORIENTS, orientable, pageCount, pageOfFrame, pageShape,
+  paneIn, panesOf, restored, roomOnPage, setCount, setOrient, slotsOf, type Count, type Layout,
+} from "../talk/layout";
+import {
+  clampRailWidth, clampSideNarrow, clampSideWide, getRailShown, getRailWidth, getSideNarrow,
+  getSideShown, getSideTab, getSideWide, getTabsCompact, setRailShown, setRailWidth, setSideNarrow,
+  setSideShown, setSideTab, setSideWide, setTabsCompact, tabsWidth,
+  type SideTab,
+} from "../talk/columns";
+import { FilesPanel, openKey, type OpenFile } from "../files/FilesPanel";
+import { FolderTree } from "../files/FolderTree";
+import { fileUnderAny } from "../files/fileUnder";
+import { isBlankSpaceClose } from "./outsideClose";
+import { useHandDrag } from "../files/handDrag";
+import { Icon } from "../components/Icon";
+import { useBoundFolders } from "../core/boundFolders";
+import { chooseFolderFor, fetchBoundFolders } from "../core/mutations";
+import { dataAdapter } from "../mock/adapter";
+import { invoke } from "../core/ipc";
+import type { PaneDrawnDto, PtySessionDto } from "../bindings/bindings";
+import { inTauri } from "../core/snapshot";
+import { errText, t, tf, tn } from "../core/i18n";
+import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
+
+/**
+ * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
+ *
+ * **It is not an editor and it does not pick anybody's AI.** What it holds is where the work happens
+ * and which project that is: projects, panes, pages, and the arrangement of them. Editing a file,
+ * reading a diff, choosing a model, offering somewhere to type a prompt — none of it is here, and the
+ * absence is the design rather than a gap: what an agent's own interface does well it does inside the
+ * pane, weekly, and anything drawn out here would be a worse copy of it that has to be kept up
+ * (`AMB-D-747`). What this face adds is the thing no agent can add for itself — several of them at
+ * once, each answering for a folder, with a ledger on the other side of one switch.
+ *
+ * **The project is chosen first and the pane after it.** The tabs down the edge name the projects;
+ * the one picked there owns the whole screen, and a pane opened on it works in one of *that
+ * project's* folders (`./FolderChoice`). There is no way to point a pane anywhere else, which is what makes the division
+ * a division rather than a label.
+ *
+ * It is put up once and then left alone. Switching back to the ledger hides it with CSS rather than
+ * taking it down, which is the one thing this component exists to guarantee: unmounting would take
+ * the emulator with it, and a terminal whose pane went away is an agent nobody can get back to. The
+ * caller therefore keeps this rendered for as long as the window is the terminal's home, and hides
+ * it by hiding its own container.
+ *
+ * What it holds is the arrangement — which panes there are, whose project each is, which page is up,
+ * how many it shows (`../talk/layout`) — because that is the one thing no pane can know: a pane is a
+ * drawing of a session, and the places the drawings go are the face's. Turning a page takes panes down
+ * and leaves the terminals in them running, which is the same thing splitting a window out does.
+ *
+ * When the window *stops* being the terminal's home — the user splits it out, or a language change
+ * rebuilds the interface — this does come down, and the sessions do not: the panes detach, and this
+ * face takes them up again when it comes back (see the adoption below).
+ *
+ * **It is the same face in either window.** Splitting the terminal out puts this component up in a
+ * window of its own (`../talk.tsx`) rather than one pane of it: the rail, the pages, the split and
+ * the files beside them all go, because a face that arrived on the second display with only a pane
+ * left would be a person carrying one terminal out rather than moving where they work
+ * (`AMB-D-753`). `ownWindow` is the whole of the difference, and it comes to two things.
+ *
+ * What runs in a pane is not settled here either. The frame put up inside each slot asks the host
+ * which agent that folder starts with, and draws the offer or the install notice where that has no
+ * single answer (`../talk/agent.ts`) — which is also where a refusal to start one is shown, so
+ * nothing here holds a failure of its own.
+ *
+ * `note` is what the shell has to say about this face that the pane cannot — a window that could not
+ * be split out, which is the press of the button here having come to nothing.
+ *
+ * `onWaiting` is the one thing this face says back to the shell: whether **any** pane on it is
+ * waiting on a person. Behind the other face no label above a pane can be seen at all, so the shell
+ * puts a badge on the face switch instead (`./terminalBadge`) — and it is told the fact, not what to
+ * do about it. Which pane it was is the rail's to show, and a badge that counted would be a number a
+ * reader has to go and check.
+ *
+ * `openIn` is the ledger asking for a folder to be worked in — the first loop's one button
+ * (`app/src/components/FirstLoop.tsx`). It is where to work and whose project that is, and not what
+ * to do about it: whether a pane is made or an open one reached for is this face's own
+ * (`../talk/layout`).
+ *
+ * **The tabs are the one column that stays.** They are drawn at the edge of everything else because a
+ * project holds everything else, and they cannot be closed: a turn standing in a project nobody is
+ * looking at is knocked about there, and a way to close them would be a way to stop being told
+ * (`./ProjectTabs`, `AMB-D-838`). What folds is the width their names take, and that is kept.
+ *
+ * **Both columns beside the panes can be put away, and each carries the way back.** The rail's is on
+ * the top row and the file face's is on the panel itself, opened again from the same row; either can
+ * be dragged wider, as far as leaves the middle a pane's worth of room (`../talk/columns`). What is
+ * remembered is the wish, the width and which half of the file face was up — all three being the
+ * person's.
+ *
+ * Beside the page is the file face (`app/src/files/FilesPanel.tsx`), rooted at the project this face
+ * is on — the one picked on the rail, not the one selected on the ledger. `projectId` is only where
+ * the face **starts**: a person who came to the terminal from a project is looking at that project,
+ * and after that the rail is what moves it.
+ */
+export function TerminalFace({
+  onWindow,
+  ownWindow,
+  note,
+  onWaiting,
+  projectId,
+  onOpenLedger,
+  openIn,
+  goPane,
+}: {
+  /** The one button that changes how many windows the app is: on the board it takes the terminal
+   *  into a window of its own, and in that window it folds the app back. It is handed nothing,
+   *  because there is nothing about the arrangement the other side has to be told — what is kept
+   *  is what the window that comes up reads (`../talk/layout`). */
+  onWindow: () => void;
+  /**
+   * Whether this face has a window to itself — the one the terminal was split out into, rather than
+   * the board's (`AMB-D-753`).
+   *
+   * It says two things and no more. The button above reads "fold back" instead of "split out", and
+   * the arrangement is come back to where the person left it: which pane they were working in is
+   * kept with the shape, and this is the window that has nobody to have asked. Everything else on
+   * the face is the same in both windows, which is the whole point of splitting one out.
+   */
+  ownWindow?: boolean;
+  note: string | null;
+  onWaiting: (waiting: boolean) => void;
+  /** The project the face opens on, where the window has one to say. The window the terminal was
+   *  split out into has no ledger to have been on, so it says nothing and the arrangement answers. */
+  projectId?: number | null;
+  /** Go to the ledger, for a record clicked in a file or on an empty frame. Nothing in the window
+   *  the terminal was split out into: the ledger is the other window there, and raising it is the
+   *  host's (`crate::windows::show_ref`, `../core/refNav`). */
+  onOpenLedger?: () => void;
+  /**
+   * A folder the ledger asked this face to work in, whose project it is, and a count of the asking —
+   * the same shape the file face's `show` takes, and for the same reason: pressing the button twice
+   * is a reader saying it again, not a state that has not moved.
+   *
+   * **The project is named, never absent.** A pane belongs to a project and cannot be moved to
+   * another one afterwards, so an ask that did not say which project it is about is one this face
+   * would have to guess at — and a guess here is a pane put under the wrong project for good
+   * (`AMB-T-3708`).
+   */
+  openIn?: { project: number; dir: string; nth: number } | null;
+  /**
+   * A pane the ledger asked to be taken to — the session running in it, and a count of the asking, the
+   * same shape `openIn` takes and for the same reason.
+   *
+   * It is the session rather than the place, because the ledger has no places: what the task on the
+   * board knows is which session is holding it (`AMB-D-758`), and where that session is drawn is this
+   * face's own answer. A session no frame here is drawing is one that has ended, or one the other
+   * window has — either way there is nothing to go to, and nothing is what happens.
+   */
+  goPane?: { session: string; nth: number } | null;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  // The reading column itself, so a press can be told apart from one inside it (`isBlankSpaceClose`).
+  const sideRef = useRef<HTMLDivElement>(null);
+  // Nothing is open until somebody opens something: a pane is made by opening one (`../talk/layout`),
+  // so the face comes up with the way in and no boxes.
+  const [layout, setLayout] = useState<Layout>(EMPTY_LAYOUT);
+  const [names, setNames] = useState<FrameNames>(new Map());
+  // Whether the arrangement has been answered for. Nothing is drawn into the page before it has: a
+  // pane put up first and replaced afterwards would start a terminal in a frame the answer was about
+  // to take away. Outside Tauri there is no host to read one from, so there is nothing to wait for.
+  const [settled, setSettled] = useState(!inTauri());
+  // The file a path clicked in a pane asked for, and a count that makes asking twice two answers:
+  // the same file clicked again is a reader saying "open it" again, not a state that has not moved.
+  const [show, setShow] = useState<{ target: string; cwd: string | null; nth: number } | null>(null);
+  const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
+  // The columns beside the panes: whether each was asked for, and how wide the person has made it.
+  // Both are kept between runs, the wish for the device and the width for the project it was dragged
+  // in (`../talk/columns`). A column asked for is a column drawn — there is always room for one,
+  // which is what its ceiling is for (`AMB-D-816`). The widths start at the defaults because the face
+  // has no project until it is told which one it is on; the read below is what brings that project's
+  // own answers in. What the file face is drawn at is its narrow width — the wide one is `AMB-T-4253`.
+  const [railShown, setRailShownState] = useState(getRailShown);
+  // Whether the project tabs are drawn compact. The column itself is neither closed nor dragged
+  // (`./ProjectTabs`), so this is the whole of what the face keeps about it, and it is kept for the
+  // device the way the wishes above it are (`../talk/columns`).
+  const [tabsCompact, setTabsCompactState] = useState(getTabsCompact);
+  const [sideShown, setSideShownState] = useState(getSideShown);
+  const [railWidth, setRailWidthState] = useState(() => getRailWidth(null));
+  const [narrowWidth, setNarrowWidthState] = useState(() => getSideNarrow(null));
+  const [wideWidth, setWideWidthState] = useState(() => getSideWide(null));
+  // Which of the two widths the column is drawn at. It is not kept: a width is how much room this
+  // project's reading wants, where the step is what the reader is doing this minute — opening a file
+  // asks for the wide one, and the next thing they press puts it back (`AMB-D-835`).
+  const [wide, setWideState] = useState(false);
+  // What the column is actually drawn at, which is the one the face hands the stylesheet.
+  const sideWidth = wide ? wideWidth : narrowWidth;
+  // Which of the file face's two the panel shows. It is held here rather than there because the row
+  // that switches between them is here: the panel is only on the screen while it is open, so a
+  // switch living inside it could not be the one that opens it (`../files/FilesPanel`). What it
+  // starts as is this device's own answer, kept between runs (`../talk/columns`).
+  const [tab, setTabState] = useState<SideTab>(getSideTab);
+  // The files the reading column is holding, in the order they were opened, and which of them is on
+  // top. They are held here rather than in either column because both answer to them: the tree in
+  // the rail marks the row the file on top was opened from, and the column on the other side of the
+  // panes draws it (`AMB-D-835`).
+  //
+  // **A file opened is added, never swapped in.** Reading one thing while another stays open is what
+  // a reader does: a reference followed is a second file to hold, not a first one to give up.
+  const [open, setOpen] = useState<OpenFile[]>([]);
+  const [showing, setShowing] = useState<string | null>(null);
+  // The one on top: whichever is named, and the first one where nothing is — a column holding files
+  // with none of them drawn would be a row of tabs over an empty page.
+  const reading = open.find((one) => openKey(one) === showing) ?? open[0] ?? null;
+  // The question about where the pane being opened works, while it is up. It is not a frame: a place
+  // is made by opening one, and one nobody finished opening is a box that says nothing
+  // (`../talk/layout`). `note` on it is a binding the host refused.
+  const [asking, setAsking] = useState<{ note: string | null; agent: string | null } | null>(null);
+  // A press on the empty frame that arrived before the read of this project's folders did. It is state
+  // rather than a ref because carrying it out is what the read landing does, and an effect has to be
+  // told there is one to carry out (`../core/boundFolders`).
+  const [held, setHeld] = useState<{ project: number; agent: string | null } | null>(null);
+
+  const projects = dataAdapter.listProjects();
+  const bound = useBoundFolders(layout.project);
+
+  // The frames a person has just asked for a terminal in. It is a ref rather than state because it is
+  // read at the moment a pane is put up and never drawn: a frame that has had its terminal started is
+  // off the list, so coming back to a pane whose program exited offers the way to open one again
+  // instead of quietly starting a second shell.
+  const startNow = useRef(new Set<string>());
+  // What each of those panes is to be opened with — the agent chosen on the empty frame it was
+  // pressed on (`./EmptySlot`). A ref rather than state for the same reason `startNow` is one: it
+  // is read where the pane is built and never drawn, and it is this pane's alone, so nothing about
+  // it belongs in the arrangement that is kept (`../talk/layout`).
+  const startWith = useRef(new Map<string, string>());
+
+  // Which panes have a turn standing in them — the agent said so, or the ledger says a task the pane
+  // is holding is no longer ready (`../talk/plate`). It is state rather than a ref because it is
+  // drawn: the page a pane is on wears a dot for it, and so does a project that is not the one being
+  // shown, which is how a turn nobody is looking at is knocked about at all (`AMB-T-3610`). The shell
+  // above is told the one fact it draws — that somebody's turn has come somewhere behind this face.
+  const [needy, setNeedy] = useState<ReadonlySet<string>>(new Set());
+  // Read through a ref for the same reason the panes' callbacks are: the face is mounted once and
+  // must not come down to be handed a fresh one.
+  const tell = useRef(onWaiting);
+  tell.current = onWaiting;
+
+  const paneWaiting = useCallback((frame: string, is: boolean) => {
+    setNeedy((was) => {
+      if (was.has(frame) === is) return was;
+      const next = new Set(was);
+      if (is) next.add(frame);
+      else next.delete(frame);
+      // The shell is told the answer for the face as a whole, and only when it turns over: a second
+      // pane joining the first does not knock again.
+      if ((next.size > 0) !== (was.size > 0)) tell.current(next.size > 0);
+      return next;
+    });
+  }, []);
+
+  /**
+   * The pages of this project a turn is standing on, minus the one being shown.
+   *
+   * The page in front of the reader needs no dot: the panes on it are drawn, and each says for
+   * itself whose turn it is (`../talk/nameplate`). A dot there would be the face telling somebody
+   * about what they are looking at. A turn in **another project** is the rail's to show, for the same
+   * reason: the digits are this project's pages and nothing else's.
+   */
+  const needyPages = useMemo(() => {
+    const pages = new Map<number, number>();
+    for (const frame of needy) {
+      if (layout.frames.find((one) => one.id === frame)?.project !== layout.project) continue;
+      const page = pageOfFrame(layout, frame);
+      if (page !== null && page !== layout.page) pages.set(page, (pages.get(page) ?? 0) + 1);
+    }
+    return pages;
+  }, [needy, layout]);
+
+  useEffect(() => {
+    let alive = true;
+    void frameNames().then((known) => { if (alive) setNames(known); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  // Which project the face opens on. It is taken once: after that the rail is what moves it, and a
+  // face that followed the ledger's selection would take a person off the panes they were watching
+  // every time they looked something up.
+  const opensOn = projectId ?? projects[0]?.id ?? null;
+  useEffect(() => {
+    if (opensOn === null) return;
+    setLayout((was) => (was.project === null ? { ...was, project: opensOn } : was));
+  }, [opensOn]);
+
+  // The arrangement, read once as the face comes up, and the terminals that are still running taken
+  // up again. What comes back is places and folders and no sessions, so a pane that came with it is
+  // an offer to open a terminal — the person presses for the ones they want, and a window that
+  // started them all would be starting work nobody asked for.
+  //
+  // **It comes with places only inside a run** (`AMB-T-3687`): the arrangement is what the two
+  // windows share the face with, so the window this terminal is split out into gets the panes as they
+  // stand, and the first window of a run gets the split and the project alone.
+  //
+  // **What is running is a different question, and it is answered here.** A session with no pane
+  // drawing it is one the other window was drawing a moment ago — the face moving between the two
+  // windows is what leaves them loose (`AMB-D-753`). It is put in the pane whose folder it is running
+  // in where there is one, and in a new pane on the project being shown where there is not: a
+  // terminal nobody can see is a terminal nobody can end.
+  //
+  // The folder is all there is to go on, and two panes may share one — so the sessions are taken in
+  // the order they were started and the places in the order they were opened, which pairs them the
+  // way they were paired. The host answers oldest-first for exactly this (`crate::pty::pty_sessions`);
+  // paired any other way the two panes trade contents, and each is then drawn under the other's
+  // name, because a name belongs to the place rather than to what is running in it (`../talk/frames`).
+  const restoring = useRef(false);
+  useEffect(() => {
+    // Waiting on the project, where there is one to wait for: it answers for the panes an older
+    // build kept without one (`../talk/layout`).
+    if (restoring.current || (layout.project === null && projects.length > 0)) return;
+    restoring.current = true;
+    const onto = layout.project;
+    let alive = true;
+    void Promise.all([
+      savedLayout().catch(() => null),
+      inTauri()
+        ? invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[])
+        : Promise.resolve([] as PtySessionDto[]),
+    ])
+      .then(([saved, running]) => {
+        if (!alive) return;
+        setLayout((was) => {
+          let next = saved === null ? was : restored(saved, onto);
+          // The project the board was on, for the window that has no ledger to have taken one from.
+          // It answers only where nothing came back to say it: an arrangement with panes in it names
+          // the project of every one of them, and this is the machine that has never had any.
+          if (ownWindow && next.frames.length === 0 && saved?.project != null) {
+            next = { ...next, project: saved.project };
+          }
+          for (const session of running) {
+            const free = next.frames.find(
+              (frame) => frame.session === null && frame.folder === session.folder,
+            );
+            const frame = free ?? (next.project === null
+              ? null
+              : (() => {
+                const made = openedFrame(next, next.project, session.folder);
+                next = made.layout;
+                return made.frame;
+              })());
+            if (!frame) continue;
+            next = openedIn(next, frame.id, session.session, session.folder);
+          }
+          // And the pane that was being worked in when the arrangement was last written, which is
+          // the pane the person split the terminal out of (`../talk/layout`). It carries the page
+          // and the project with it, so the window comes up where they left rather than on the first
+          // place of the first project. The board never reads it back: which pane is being worked in
+          // *now* is its own state, and an older write must not move a reader's place.
+          if (ownWindow && saved?.splitOut != null) next = focusOn(next, saved.splitOut);
+          return next;
+        });
+      })
+      .finally(() => { if (alive) setSettled(true); });
+    return () => { alive = false; };
+  }, [layout.project, projects.length, ownWindow]);
+
+  // And written down as it changes, for the other window to read. Only the shape goes, so a session
+  // opening or closing is not a write — what is written is where the panes are, not what is in
+  // them.
+  const shape = JSON.stringify(laidOut(layout));
+  useEffect(() => {
+    // Before the restore has been answered for, what is here is the face's own opening arrangement:
+    // writing that would overwrite the one being read with a blank one — which, in the window the
+    // terminal was split out into, is the face it was split out of.
+    if (!settled || !inTauri()) return;
+    void keepLayout(JSON.parse(shape) as ReturnType<typeof laidOut>).catch(() => {});
+  }, [settled, shape]);
+
+  // And which place each running terminal is drawn in, told to the host as it changes — the half of
+  // the way back from the ledger that only the face can supply (`crate::frames::panes_drawn`). The
+  // arrangement above deliberately carries no sessions: what is written there is a shape for the
+  // other window to draw from, and this is a fact about what is running right now.
+  //
+  // The label goes with it rather than the place, because what a pane is called is worked out from
+  // the panes around it (`../talk/frames`) — the board has neither the arrangement nor the names, and
+  // a second copy of the rules over there would be free to go stale against this one.
+  const drawn = useMemo(() => {
+    const shown: PaneDrawnDto[] = [];
+    for (const project of new Set(layout.frames.map((frame) => frame.project))) {
+      const panes = panesOf(layout, project);
+      const labels = paneLabels(panes, names, layout.count);
+      for (const pane of panes) {
+        if (pane.session === null) continue;
+        shown.push({ session: pane.session, frame: pane.id, label: labels.get(pane.id) ?? pane.id });
+      }
+    }
+    return shown;
+  }, [layout, names]);
+  const drawnKey = JSON.stringify(drawn);
+  useEffect(() => {
+    if (!inTauri()) return;
+    void invoke("panes_drawn", { panes: JSON.parse(drawnKey) as PaneDrawnDto[] }).catch(() => {});
+  }, [drawnKey]);
+
+  // The ledger asking to be taken to the pane a task is being worked in. Where that session is drawn
+  // is looked up here and nowhere else, and a session no frame is drawing is one there is nothing to
+  // do about: it ended, or it is in the window this face is not.
+  //
+  // **It waits for the arrangement to be answered for.** The ask can arrive on the very render that
+  // puts this face up — pressing on the ledger is one of the ways the terminal is first asked for
+  // (`../shell/AppShell`) — and until the restore has landed there are no places to find the session
+  // among. Asked before then, every ask would be one this face had nothing to say about.
+  useEffect(() => {
+    if (!goPane || !settled) return;
+    const session = goPane.session;
+    setLayout((was) => {
+      const frame = frameOfSession(was, session);
+      return frame === null ? was : focusOn(was, frame.id);
+    });
+  }, [goPane, settled]);
+
+  // How wide the face actually is, which is half of whether the columns beside the panes are columns.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(() => {
+      // A hidden face measures zero, and zero is not a narrow window — it is the other face being up.
+      if (root.clientWidth > 0) setWidth(root.clientWidth);
+    });
+    watch.observe(root);
+    return () => watch.disconnect();
+  }, []);
+
+  const named = useCallback((frame: string, name: string, by: NamedBy) => {
+    // What comes back is the whole set rather than an acknowledgement: a naming can be refused, and
+    // drawing what was asked for would show a name that is not the frame's (`../talk/frames`).
+    void nameFrame(frame, name, by).then(setNames).catch(() => {});
+  }, []);
+
+  /**
+   * A path drawn in a pane was clicked, as it was drawn.
+   *
+   * It travels with the folder **that pane** is in, because that is what a relative one is read
+   * against and the pane is the only thing that knows it. Whether it lands inside the folder the
+   * file face is rooted at is the face's own question, and it is asked there (`../files/FilesPanel`).
+   */
+  const pathClicked = useCallback((frame: string, target: string) => {
+    setLayout((was) => {
+      const cwd = was.frames.find((one) => one.id === frame)?.folder ?? null;
+      setShow((asked) => ({ target, cwd, nth: (asked?.nth ?? 0) + 1 }));
+      return was;
+    });
+  }, []);
+
+  /** What is running in one frame, or nothing — which is also the whole of whether that pane can be
+   *  handed a path. */
+  const sessionIn = (frame: string | null) =>
+    layout.frames.find((one) => one.id === frame)?.session ?? null;
+
+  /** Put paths in front of what is running in one session, each written the way a shell reads as one
+   *  thing and a space between them (`AMB-D-801`). A write that cannot land is nothing to say: the
+   *  terminal ended between the hand-over and this, and the pane already draws what one ends with. */
+  const pasteInto = useCallback((session: string, wholes: string[]) => {
+    if (wholes.length === 0) return;
+    void pasteIntoTerminal(session, quotedPaths(wholes)).catch(() => {});
+  }, []);
+
+  /**
+   * Hand a file the panel is showing to the pane the reader is working in — the reverse of
+   * `pathClicked`, and the same pair of doors read the other way round.
+   *
+   * **The pane is the one with the focus**, which is what "this pane" means anywhere else on this
+   * face: the panel is one thing beside as many panes as the page holds, and a reader who has just
+   * been typing in one has already said which. A face with nothing running in the focused pane
+   * hands nothing down, and the row's menu then draws no item for it (`../files/FilesPanel`).
+   *
+   * The file is already inside a folder the project is bound to — it is a row of this panel — so
+   * there is nothing to carry: what a pane's own drop has to do first (`./TerminalPane`) is done
+   * here by the file being where it is. The paths are pasted and no newline is sent.
+   *
+   * **However many rows the reader picked out** (`AMB-T-4242`): the panel says which rows its door
+   * was about, and five paths reach a shell the way five dropped files do — quoted one by one, a
+   * space between them.
+   *
+   * The paths are quoted, the same way a pane's own drop quotes them (`./TerminalPane`,
+   * `AMB-D-801`): this is the same handover read the other way round, and a shell splits a name with
+   * a space in it whichever door the path came through.
+   */
+  const handOver = useMemo(() => {
+    const session = sessionIn(layout.focus);
+    if (session === null) return undefined;
+    return (wholes: string[]) => { pasteInto(session, wholes); };
+  }, [layout.focus, layout.frames]);
+
+  /**
+   * The other way a row of the panel reaches a pane: carried there, and let go on the one it is
+   * meant for (`../files/handDrag`).
+   *
+   * **What is handed over is the same thing the menu hands over** — the paths, quoted, unsent — and
+   * what differs is only which pane says so: the pointer's rather than the focus's. Which is why the
+   * two land in the same place afterwards as a drop from the desktop does (`./TerminalPane`): a
+   * person who carried a path into a pane has said which pane they mean, so it becomes the one being
+   * worked in and the keyboard follows the path into it.
+   *
+   * A pane whose program has ended takes nothing, and does not offer to: there is nothing there to
+   * hand a path to.
+   */
+  const { overFrame, press: carry } = useHandDrag(
+    (frame, wholes) => {
+      const session = sessionIn(frame);
+      if (session === null) return;
+      pasteInto(session, wholes);
+      setLayout((was) => focusOn(was, frame));
+      focusTerminal(document.querySelector<HTMLElement>(`[data-hand="${frame}"]`));
+    },
+    (frame) => sessionIn(frame) !== null,
+  );
+
+  const opened = useCallback((frame: string, session: string, folder: string | null) => {
+    startNow.current.delete(frame);
+    setLayout((was) => openedIn(was, frame, session, folder));
+  }, []);
+
+  /**
+   * Make the pane, now that where it works has been answered.
+   *
+   * `agent` is what the empty frame was set to when it was pressed (`./EmptySlot`). It rides beside
+   * the frame rather than on it: what a pane opens with is that pane's, so it is not part of the
+   * arrangement the windows hand between themselves (`../talk/layout`), and the project's own answer
+   * is kept where answers are kept (`../talk/agent`).
+   */
+  const openPane = useCallback((project: number, folder: string, agent: string | null) => {
+    setAsking(null);
+    setLayout((was) => {
+      const made = openedFrame(was, project, folder);
+      startNow.current.add(made.frame.id);
+      if (agent !== null) startWith.current.set(made.frame.id, agent);
+      return made.layout;
+    });
+  }, []);
+
+  /** This project's first folder: chosen from outside the list because there is no list yet, and
+   *  bound to this project rather than to one named after it (`../core/mutations`). */
+  const bindFirstFolder = useCallback((project: number, agent: string | null) => {
+    void chooseFolderFor(project)
+      .then((chosen) => {
+        // Cancelling is not a refusal and not an answer: nothing was opened, and nothing is left on
+        // the screen to say it was.
+        if (chosen === null) setAsking(null);
+        else openPane(project, chosen, agent);
+      })
+      // The refusal has to be put somewhere, and where the reader was is where they still are: with
+      // a folder to choose for this project.
+      .catch((e: unknown) => setAsking({ note: errText(e), agent }));
+  }, [openPane]);
+
+  /**
+   * Where a press lands, now that what the project is bound to is known.
+   *
+   * Where the project is bound to one folder there is nothing to ask and the pane opens there — the
+   * whole difference between the second pane in a project and the first is that the first had a
+   * folder to settle. Where it is bound to several, or to none, the question goes up and no frame is
+   * made until it is answered (`./FolderChoice`).
+   */
+  const openOrAsk = useCallback((project: number, agent: string | null) => {
+    if (bound.live.length === 1) openPane(project, bound.live[0]!.path, agent);
+    // A project bound to nothing has no list to choose from, so the press goes straight to the
+    // picker: what is being answered is where this project *is*, and it is one press either way.
+    else if (bound.live.length === 0) bindFirstFolder(project, agent);
+    else setAsking({ note: null, agent });
+  }, [bound.live, openPane, bindFirstFolder]);
+
+  /**
+   * Somebody asked for another pane in this project.
+   *
+   * **A read that has not come back is not an answer of none.** The folders are read again every time
+   * the face lands on a project, and `live` is empty for as long as that read is out — so a press
+   * answered from it puts the folder picker up on a project that is already bound, which reads as a
+   * binding that has come undone (`AMB-T-3700`). The press is held instead and carried out below, so
+   * that it is still one press and still opens where the project actually is.
+   */
+  const askToOpen = useCallback((project: number, agent: string | null) => {
+    if (bound.answered) openOrAsk(project, agent);
+    else setHeld({ project, agent });
+  }, [bound.answered, openOrAsk]);
+
+  // The held press, once the read has come back. A press held while the face was on another project is
+  // dropped rather than carried over: it was pressed on that project's frame, and opening a pane in a
+  // project nobody is looking at is not what was asked for.
+  useEffect(() => {
+    if (held === null) return;
+    if (held.project !== layout.project) { setHeld(null); return; }
+    if (!bound.answered) return;
+    setHeld(null);
+    openOrAsk(held.project, held.agent);
+  }, [held, bound.answered, layout.project, openOrAsk]);
+
+  /**
+   * Somebody asked for another pane, from the strip beside the panes.
+   *
+   * **It does not open one.** What it does is go to where one would go — the page with a gap in it, or
+   * a page brought into being where every one of them is full — and the empty frame there is what the
+   * next press lands on (`../talk/layout`). The asking and the opening are two presses because the
+   * empty frame is where what to open with is chosen, and a press that skipped it would be choosing
+   * for the person.
+   */
+  const askForRoom = useCallback(() => {
+    setAsking(null);
+    setLayout(addPane);
+  }, []);
+
+  // A folder the ledger handed in, and the project it named. Nothing is done with it before the
+  // restore has been answered for: the panes that come back are what an already-open one is found
+  // among, and seeding one first would put a terminal in a frame the restore was about to take away.
+  //
+  // **The pair is checked before a pane is made, and nothing here fills a gap in it.** A pane belongs
+  // to a project and can never be moved to another, so a folder opened under a project it is not
+  // bound to is a mistake nobody can undo from the screen — the pane has to be closed and opened
+  // again. Falling back on the project the face happened to be showing is what put one there: the
+  // ask carried a folder from a project nobody was looking at (`AMB-T-3708`).
+  //
+  // A read that does not come back is not a pairing either. Nothing opens on it, for the same reason
+  // nothing is drawn from an unanswered one (`../core/boundFolders`).
+  //
+  // The press is honoured once. `nth` is what says a second press is a second answer, so pressing the
+  // button again on a folder already open goes to that pane rather than opening a second terminal in
+  // it.
+  useEffect(() => {
+    if (!settled || !openIn) return;
+    const { project, dir } = openIn;
+    let alive = true;
+    void fetchBoundFolders(project)
+      .then((folders) => {
+        if (!alive || !folders.some((one) => one.path === dir)) return;
+        setLayout((was) => {
+          const open = paneIn(was, project, dir);
+          if (open) return focusOn(was, open.id);
+          const made = openedFrame(was, project, dir);
+          // The same mark a press on the empty frame leaves (`openPane`): this frame is one a person
+          // pressed for, so the pane opens rather than offering to.
+          startNow.current.add(made.frame.id);
+          return made.layout;
+        });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+    // `nth` is what makes the same folder asked for twice two answers.
+  }, [openIn?.nth, settled]);
+
+  /** Ask for a half. The answer is kept: which of the two a person is on is theirs, not the run's. */
+  const takeTab = useCallback((which: SideTab) => {
+    setTabState(setSideTab(which));
+  }, []);
+
+  /** Ask for a side, or put it away. The wish is kept either way — a person who closed the rail has
+   *  closed it, and it stays closed across runs until they ask for it again. */
+  const wantRail = useCallback((want: boolean) => {
+    setRailShownState(setRailShown(want));
+  }, []);
+
+  const wantSide = useCallback((want: boolean) => {
+    setSideShownState(setSideShown(want));
+  }, []);
+
+  /** Fold the project names away, or bring them back. Kept the same way the wishes above are. */
+  const wantCompact = useCallback((want: boolean) => {
+    setTabsCompactState(setTabsCompact(want));
+  }, []);
+
+  /** Go to a project. It is the one move two places on this face make — the tabs at the edge and the
+   *  rail's list of projects — and what it does is the same from either: the question about where a
+   *  pane works goes with the project it was asked about (`./EmptySlot`). */
+  const takeProject = useCallback((project: number) => {
+    setAsking(null);
+    setLayout((was) => goProject(was, project));
+  }, []);
+
+  // Dragging the edge between a column and the panes. The width follows the pointer while it moves
+  // and is kept when it stops, the way the board's own columns are dragged (`../shell/AppShell`).
+  const dragging = useCallback(
+    (measure: (at: number) => number, take: (px: number) => void, keep: (px: number) => number) =>
+      (e: ReactPointerEvent) => {
+        e.preventDefault();
+        const onMove = (ev: PointerEvent) => take(measure(ev.clientX));
+        const onUp = (ev: PointerEvent) => {
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onUp);
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+          take(keep(measure(ev.clientX)));
+        };
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+      },
+    [],
+  );
+
+  const dragRail = useMemo(
+    () => dragging(
+      // The rail's edge is its right one, and what is to its left is the tab column: the width is
+      // how far the pointer is from the face's left, less what the tabs are taking.
+      (at) => clampRailWidth(
+        at - (rootRef.current?.getBoundingClientRect().left ?? 0) - tabsWidth(tabsCompact),
+        sideShown ? narrowWidth : 0,
+      ),
+      setRailWidthState,
+      (px) => setRailWidth(layout.project, px, sideShown ? narrowWidth : 0),
+    ),
+    // The narrow width and not the drawn one: the wide column lies over the panes rather than
+    // pushing them aside, so it takes nothing the rail could have had (`AMB-D-835`).
+    [dragging, layout.project, sideShown, narrowWidth, tabsCompact],
+  );
+
+  // The edge of whichever width the column is standing on. Dragging the wide one leaves the narrow
+  // one where it was, and the other way about: the two answer different questions — how much room
+  // reading may take while the work is still in view, and how much it may take while it is being
+  // read (`../talk/columns`).
+  const dragSide = useMemo(
+    () => dragging(
+      // The file face's edge is its left one, so the width is how far the pointer is from the right.
+      (at) => {
+        const px = (rootRef.current?.getBoundingClientRect().right ?? 0) - at;
+        const floor = railShown ? railWidth : 0;
+        return wide ? clampSideWide(px, floor) : clampSideNarrow(px, floor);
+      },
+      wide ? setWideWidthState : setNarrowWidthState,
+      (px) => (wide
+        ? setSideWide(layout.project, px, railShown ? railWidth : 0)
+        : setSideNarrow(layout.project, px, railShown ? railWidth : 0)),
+    ),
+    [dragging, layout.project, railShown, railWidth, wide],
+  );
+
+  // The widths this project was left at, read again whenever the rail moves to another project: they
+  // are kept per project, because what one project wants beside its panes is not what the next does
+  // (`AMB-D-835`, `../talk/columns`). A project nothing has been kept for is drawn at the defaults.
+  useEffect(() => {
+    setRailWidthState(getRailWidth(layout.project));
+    setNarrowWidthState(getSideNarrow(layout.project));
+    setWideWidthState(getSideWide(layout.project));
+    // And standing on the narrow step, which is where a project is arrived at: the wide one is
+    // asked for by opening a file, and no file is open on a project just moved to.
+    setWideState(false);
+    // And nothing is being read: the file goes with the project it was opened from, since a path is
+    // read against one project's folders and the tree beside the next one has no row for it.
+    setOpen([]);
+    setShowing(null);
+  }, [layout.project]);
+
+  // A window that has shrunk cannot leave a column with the middle's room in it. Each is measured
+  // against the other side's floor rather than its drawn width: clamping one narrows it, which would
+  // widen what the other is allowed, and two rules chasing each other settle nowhere. The kept width
+  // is left alone — what was asked for on a wide screen is what comes back on one.
+  useEffect(() => {
+    setRailWidthState((px) => clampRailWidth(px));
+    setNarrowWidthState((px) => clampSideNarrow(px));
+    setWideWidthState((px) => clampSideWide(px));
+    // The tabs are in it because unfolding them takes room off the middle exactly as a window
+    // dragged narrower does: the width they take comes out before anything else is measured
+    // (`../talk/columns`).
+  }, [width, tabsCompact]);
+  // The paths alone, and a stable one per set of them: the empty frame reads what the agents are
+  // traced across off this, and a fresh array every render would send it back to the host on every
+  // keystroke elsewhere on the page (`./EmptySlot`).
+  const boundPaths = useMemo(() => bound.live.map((one) => one.path), [bound.live]);
+  const page = layout.page;
+  const slots = slotsOf(layout, page);
+  const pages = pageCount(layout);
+  // The one empty frame this page draws, where it has a gap to draw it in (`../talk/layout`). The
+  // question about where a pane works stands in its place while it is up, because that is where the
+  // answer appears: a question drawn anywhere else is one the reader has to go and find.
+  const room = roomOnPage(layout, page);
+
+  /**
+   * Open a file in the reading column, or bring it up where it is already open.
+   *
+   * The column comes up on the files half wherever it stood and at its wide width: a row pressed for
+   * its file is a reader asking to see it, and the next press outside puts the width back
+   * (`AMB-D-835`).
+   */
+  const openFile = useCallback((at: OpenFile) => {
+    setOpen((was) => (was.some((one) => openKey(one) === openKey(at)) ? was : [...was, at]));
+    setShowing(openKey(at));
+    takeTab("files");
+    wantSide(true);
+    setWideState(true);
+  }, [takeTab, wantSide]);
+
+  /**
+   * Let one file go, leaving the rest.
+   *
+   * What comes up in its place is the tab beside it — the one to its right, or its left where it was
+   * the last: a reader who closed the file they were reading is left where they were, not at the
+   * far end of the row.
+   */
+  const closeFile = useCallback((at: OpenFile) => {
+    const key = openKey(at);
+    const was = open.findIndex((one) => openKey(one) === key);
+    if (was < 0) return;
+    const left = open.filter((one) => openKey(one) !== key);
+    setOpen(left);
+    if (showing !== key) return;
+    const next = left[was] ?? left[was - 1] ?? null;
+    setShowing(next === null ? null : openKey(next));
+  }, [open, showing]);
+
+  /** The files that have gone to the bin, let go of: a file that is not there is not one to hold. */
+  const goneFiles = useCallback((root: string, went: string[]) => {
+    const dead = new Set(went.map((one) => `${root} ${one}`));
+    setOpen((was) => was.filter((one) => !dead.has(openKey(one))));
+    setShowing((now) => (now !== null && dead.has(now) ? null : now));
+  }, []);
+
+  // Back to the narrow width on the next press outside the column, wherever it lands: a press on a
+  // pane is a reader going back to the work, and a press on the rail is one going back to the list.
+  // **Narrow and not closed** — what they pressed says where they are looking, not that they are
+  // finished with the file (`AMB-D-835`).
+  useEffect(() => {
+    if (!wide) return;
+    const onDown = (e: PointerEvent) => {
+      if (isBlankSpaceClose(e.target as Node, sideRef.current)) setWideState(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [wide]);
+
+  // A path clicked in a pane. It opens only where it lands inside one of the folders this project is
+  // bound to — the same fence the host applies. One that lands outside opens nothing: the pane keeps
+  // the characters it drew, and no reader is shown a file from somewhere this face cannot answer for
+  // (`AMB-D-747`).
+  //
+  // **The rail is left where it was.** The file is drawn on the other side of the panes, so a reader
+  // following a path out of a pane is shown it without the lists going out from under them
+  // (`AMB-D-835`).
+  const roots = boundPaths.join("\0");
+  useEffect(() => {
+    if (show === null) return;
+    const found = fileUnderAny(boundPaths, show.cwd, show.target);
+    if (!found) return;
+    openFile(found);
+    // `nth` is what makes the same file asked for twice two answers, and the folders are joined
+    // because the array itself is rebuilt on every render.
+  }, [show?.nth, roots]);
+
+  const rail = (
+    <FolderRail
+      project={projects.find((one) => one.id === layout.project) ?? null}
+      folders={
+        <FolderTree
+          projectId={layout.project}
+          reading={reading}
+          onRead={openFile}
+          onGone={goneFiles}
+          onHandOver={handOver}
+          onCarry={carry}
+        />
+      }
+    />
+  );
+
+  return (
+    <div
+      className="termface"
+      ref={rootRef}
+      style={{
+        "--tabs-w": `${tabsWidth(tabsCompact)}px`,
+        "--rail-w": `${railWidth}px`,
+        "--side-w": `${sideWidth}px`,
+      } as CSSProperties}
+    >
+      <div className="termface__bar">
+        {/* Two windows or one, from whichever of them the reader is in. The press says nothing about
+            the arrangement: what goes with the terminal is the face whole, and the face is drawn
+            from what this device keeps (`../talk/layout`). The mark is the same either way, because
+            what it draws is the arrangement the control is about and not the direction of this
+            press — which is what the words beside it say. */}
+        <button className="termface__action" onClick={() => onWindow()}>
+          <Icon name="newWindow" /> {t(ownWindow ? "face.merge" : "face.splitOut")}
+        </button>
+        {/* The folder panel's way in, and its way out. It is here whether the panel is a column or a
+            drawer: a column nobody can close goes on taking width from the panes on a small screen,
+            and one closed with no way back is worse than one that never closed. **It is not the way
+            to fold the project tabs** — those are at the edge and carry their own control, and one
+            press doing both would take away the pair a reader is most likely to want: the tabs
+            compact with the folders open (`AMB-D-838`). */}
+        <button
+          className={`termface__action${railShown ? " termface__action--on" : ""}`}
+          onClick={() => wantRail(!railShown)}
+          aria-expanded={railShown}
+          // The panel is what it opens, and the folders are what it is called: what the column holds
+          // now is the tree, and nothing else on this row says so.
+          aria-label={t("face.railFolders")}
+          title={t("face.railFolders")}
+        >
+          <Icon name="menu" />
+        </button>
+        {/* How many panes the page shows. Three steps, always all three shown: which one is on is
+            what a person is choosing between, and a control that only says the next step makes them
+            press it to find out. It is the most a page draws and not a number of boxes to fill —
+            what is open is what is on the screen (`../talk/layout`).
+            **It says what the number counts**, because the row of pages beside it is digits too: two
+            rows of bare digits is a reader pressing one to find out which is which. */}
+        <div className="termface__counts" role="radiogroup" aria-label={t("face.paneCount")}>
+          {COUNTS.map((count) => (
+            <button
+              key={count}
+              className={`termface__count${layout.count === count ? " termface__count--on" : ""}`}
+              // One of three, and exactly one: a toggle each would say three independent things can
+              // be on, which is not what the control does.
+              role="radio"
+              aria-checked={layout.count === count}
+              // The question about where a pane works goes with it, the same way it goes when a page
+              // or a pane is reached for: asking for a different split is a person doing something
+              // else, and a question left up would be drawn on whatever page the split lands on.
+              onClick={() => {
+                setAsking(null);
+                setLayout((was) => setCount(was, count as Count));
+              }}
+            >
+              {tn("face.panes", count)}
+            </button>
+          ))}
+        </div>
+        {/* Which way the two of them sit, and only where there are two: at every other count the rows
+            are already spent, so there is nothing to choose between (`../talk/layout`). It is drawn
+            as the two grids rather than named, because what the press picks is a shape — and it sits
+            beside the count for the same reason, being the rest of the same answer. */}
+        {orientable(layout.count) && (
+          <div className="termface__counts" role="radiogroup" aria-label={t("face.paneOrient")}>
+            {ORIENTS.map((orient) => (
+              <button
+                key={orient}
+                className={`termface__count termface__count--glyph${
+                  layout.orient === orient ? " termface__count--on" : ""}`}
+                role="radio"
+                aria-checked={layout.orient === orient}
+                // The icon is the whole of what is drawn, so the words that say which shape it is go
+                // where a reader can reach them rather than being left off.
+                aria-label={t(orient === "across" ? "face.paneAcross" : "face.paneDown")}
+                title={t(orient === "across" ? "face.paneAcross" : "face.paneDown")}
+                // A page asked for is the count's question, not this one: the grid changes under the
+                // same panes on the same pages, so nothing a reader was pressing towards goes away.
+                onClick={() => setLayout((was) => setOrient(was, orient))}
+              >
+                <Icon name={orient === "across" ? "paneAcross" : "paneDown"} />
+              </button>
+            ))}
+          </div>
+        )}
+        {/* The pages of this project, as a row of the digits that reach them. **A project with one
+            page draws none of it**: a single page nobody can go anywhere from is a control that says
+            only where the reader already is. */}
+        {pages > 1 && (
+          <nav className="termface__pages" aria-label={t("face.pages")}>
+            {Array.from({ length: pages }, (_, i) => i + 1).map((one) => (
+              <button
+                key={one}
+                className={`termface__page${page === one ? " termface__page--on" : ""}${
+                  needyPages.has(one) ? " termface__page--needs" : ""}`}
+                // Going to a page, not turning something on: the one showing is the current page.
+                aria-current={page === one ? "page" : undefined}
+                title={needyPages.has(one) ? t("face.needsYou") : tf("face.page", { n: one })}
+                onClick={() => { setAsking(null); setLayout((was) => goPage(was, one)); }}
+              >
+                {one}
+                {/* How many turns are standing on that page, and nothing at all where none are. It
+                    counts because a page is somewhere to go: what the number buys is knowing whether
+                    going there answers one thing or four, which the badge on the face switch cannot
+                    say and must not try to (`./terminalBadge`). A pane that finished wears nothing:
+                    what is over is not something a person is needed for (`AMB-T-3610`). */}
+                {needyPages.has(one) && (
+                  <span className="termface__needs">{needyPages.get(one)}</span>
+                )}
+              </button>
+            ))}
+          </nav>
+        )}
+        {note !== null && <span className="termface__note">{note}</span>}
+        {/* The way to the reading column, at the far end because it is about the other side of the
+            screen. It opens the column and closes it again, and what comes up is the half the
+            reader left up.
+
+            **Which half is not asked here any more.** The column holds the draft page and the open
+            files on one row of tabs, and that row is the switch: it is the only one of the two that
+            can also say which files are open, and a second control saying half of the same thing
+            leaves a reader looking for the right one (`../files/FilesPanel`). What was here said
+            "folder" in one language after the folder had moved to the rail, which is what a control
+            drifts into when the thing it opens has changed under it. */}
+        <div className="termface__sides">
+          <button
+            className={`termface__action${sideShown ? " termface__action--on" : ""}`}
+            onClick={() => wantSide(!sideShown)}
+            aria-expanded={sideShown}
+          >
+            <Icon name="document" />
+            {t("files.side")}
+          </button>
+        </div>
+      </div>
+      <div className="termface__body">
+        {/* The projects, at the edge of everything else because that is what they hold (`AMB-D-838`).
+            It is drawn whatever the columns beside the panes are doing: it is the one column here
+            that cannot be put away. */}
+        <ProjectTabs
+          layout={layout}
+          projects={projects}
+          needy={needy}
+          compact={tabsCompact}
+          onCompact={wantCompact}
+          onProject={takeProject}
+        />
+        {/* The rail, with the panes beside it. The edge between the column and them is where its
+            width is dragged. */}
+        {railShown && (
+          <div className="termface__column termface__column--rail">
+            {rail}
+            <div
+              className="termface__grip termface__grip--rail"
+              role="separator"
+              aria-orientation="vertical"
+              title={t("pane.resize")}
+              onPointerDown={dragRail}
+            />
+          </div>
+        )}
+        {/* The page is the split that was asked for, whether or not there are panes to fill it: the
+            count is the most a page draws, and a grid that shrank to what is open would make the
+            split a thing a reader cannot see the effect of (`../talk/layout`). */}
+        <div
+          className={`termface__page-grid termface__page-grid--${pageShape(layout.count, layout.orient)}${
+            room ? "" : " termface__page-grid--add"}`}
+        >
+          {!settled || layout.project === null
+            ? null
+            : (
+              <>
+                {slots.map((frame) => (
+                  <TerminalPane
+                    key={frame.id}
+                    frame={frame.id}
+                    project={frame.project}
+                    names={names}
+                    start={{
+                      session: frame.session,
+                      // Nothing on this face takes up a terminal it was not given: which session
+                      // belongs where is answered once, as the face comes up, and a pane left to
+                      // guess would take the one running terminal off whichever pane had it.
+                      adopt: false,
+                      cwd: frame.folder,
+                      agent: startWith.current.get(frame.id) ?? null,
+                    }}
+                    autoStart={frame.session !== null || startNow.current.has(frame.id)}
+                    focused={layout.focus === frame.id}
+                    offered={overFrame === frame.id}
+                    onOpened={opened}
+                    onPath={pathClicked}
+                    onSaid={(statement) => {
+                      if (statement.cwd) {
+                        setLayout((was) => movedTo(was, statement.session, statement.cwd!));
+                      }
+                    }}
+                    onClosed={(session) => {
+                      setLayout((was) => closedIn(was, session));
+                      // A session that has ended is not a turn anybody can take: what is over is not
+                      // something a person is needed for (`AMB-T-3610`).
+                      paneWaiting(frame.id, false);
+                    }}
+                    onDrop={(id) => {
+                      setLayout((was) => closedFrame(was, id));
+                      // Nothing is owed to a place that has gone — a turn standing in it was standing
+                      // on the page it was on, and the badge above must stop counting it.
+                      paneWaiting(id, false);
+                      startNow.current.delete(id);
+                      startWith.current.delete(id);
+                    }}
+                    onName={named}
+                    onFocus={(id) => setLayout((was) => focusOn(was, id))}
+                    onWaiting={paneWaiting}
+                  />
+                ))}
+                {asking !== null && (
+                  <FolderChoice
+                    folders={bound.live}
+                    onPick={(folder) => openPane(layout.project!, folder, asking.agent)}
+                    onBind={() => bindFirstFolder(layout.project!, asking.agent)}
+                    note={asking.note}
+                  />
+                )}
+                {/* One empty frame, at the first gap on the page, and none at all on a full one: it
+                    is this page saying it has room (`./EmptySlot`). */}
+                {asking === null && room && (
+                  <EmptySlot
+                    folders={boundPaths}
+                    project={layout.project}
+                    onOpen={(agent) => askToOpen(layout.project!, agent)}
+                  />
+                )}
+                {/* A full page draws no empty frame — there is no gap to draw — so the way in is put
+                    beside the panes instead, as a strip too thin to cost one of them its place. It
+                    is the only way in a full page has, and it is on the face the page filled up on:
+                    it goes to where the room is, bringing a page into being where every one of them
+                    is full (`../talk/layout`). */}
+                {asking === null && !room && (
+                  <button
+                    className="termface__addstrip"
+                    title={t("face.openHere")}
+                    aria-label={t("face.openHere")}
+                    onClick={askForRoom}
+                  >
+                    <Icon name="plus" />
+                  </button>
+                )}
+              </>
+            )}
+        </div>
+        {/* The file face, a column on the other side of the panes. It is closed from its own cross
+            and opened again from the top row: whichever way it went away, the way back is in front
+            of the reader (`../files/FilesPanel`). */}
+        {sideShown && (
+          <div
+            className={`termface__column termface__column--side${
+              wide ? " termface__column--wide" : ""}`}
+            ref={sideRef}
+          >
+            <div
+              className="termface__grip termface__grip--side"
+              role="separator"
+              aria-orientation="vertical"
+              title={t("pane.resize")}
+              onPointerDown={dragSide}
+            />
+            <FilesPanel
+              projectId={layout.project}
+              onOpenLedger={onOpenLedger}
+              tab={tab}
+              onTab={takeTab}
+              open={open}
+              reading={reading}
+              onPick={(at) => setShowing(openKey(at))}
+              onCloseTab={closeFile}
+              onBack={() => { if (reading !== null) closeFile(reading); }}
+              // A file binned from the reading column is one the tree in the rail is about to stop
+              // drawing too, and the column has to let go of it either way.
+              onGone={goneFiles}
+              onClose={() => wantSide(false)}
+              wide={wide}
+              onWide={setWideState}
+              onHandOver={handOver}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

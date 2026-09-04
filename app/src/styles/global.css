@@ -84,6 +84,13 @@ input[type="color"] {
 .shell > .topbar { grid-row: 1; }
 .shell > .shell__banners { grid-row: 2; }
 .shell > .shell__body { grid-row: 3; }
+/* The terminal face shares the body's row: the two are the same window showing one thing or the
+   other (`AMB-D-753`). `hidden` is spelled out because `display: grid` / `display: flex` below is an
+   author rule and would otherwise beat the user agent's `[hidden]`, leaving both faces drawn on top
+   of each other. Hiding — rather than not rendering — is the whole of "the switch does not kill the
+   terminal": the emulator stays, and the PTY keeps flowing behind it. */
+.shell > .shell__terminal { grid-row: 3; }
+.shell__body[hidden], .shell__terminal[hidden] { display: none; }
 /* One band under the last, in the order they are written. */
 .shell__banners { display: flex; flex-direction: column; min-width: 0; }
 /* 2 rows x 3 columns. The header row (the project header) spans the full width of main
@@ -113,6 +120,1061 @@ input[type="color"] {
 .shell__body--sidebar-collapsed .sidebar-wrap { display: none; }
 /* The project header (the board's toolbar) is portalled in here; BoardScreen renders it. */
 .shell__header { grid-area: header; min-width: 0; }
+
+/* ---------- the terminal face ---------- */
+/* The terminal as the board's window draws it: a bar with the way out to a window of its own and the
+   controls for what is on screen, then the rail of panes and the page of slots beside it
+   (../talk/layout.ts). The window a terminal is split out into draws the same face, so these rules
+   are the ones it is drawn with there too (styles/talk.css). */
+.shell__terminal { min-height: 0; }
+.termface {
+  height: 100%; min-height: 0;
+  display: flex; flex-direction: column;
+}
+/* The band over the face, and the same one the ledger's own band is: `--c-surface` with a rule
+   under it, drawn to the edges of what it is over (`.board__toolbar`). The face has no padding of its
+   own for that reason — a ground inset from the window reads as a card lying on the window, and the
+   two faces are one window showing one thing or the other (`AMB-D-753`), so a reader must not be able
+   to tell which is up by the colour under the same control. What sits inside the band keeps the gap
+   the band's own padding gives it. */
+.termface__bar {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-3) var(--s-5);
+  background: var(--c-surface); border-bottom: 1px solid var(--c-rule);
+}
+.termface__action {
+  position: relative;
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  background: var(--c-sunken); border: 1px solid var(--c-edge);
+  border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
+}
+.termface__action:hover { color: var(--c-text); }
+/* A toggle whose side is on the screen. It is the same button either way — what it says is whether
+   pressing it opens something or puts it away. */
+.termface__action--on { color: var(--c-text); border-color: var(--c-edge); }
+/* The file face's two halves, at the far end of the row: they are about the other side of the
+   screen, and the controls for what is in the middle sit between them and the way out. */
+.termface__sides { display: flex; gap: var(--s-2); margin-left: auto; }
+/* The program in the terminal having exited. What is on the screen stays as it was — that is what a
+   terminal ends with — and this is the part of it the screen cannot show for itself. */
+.termface__note { color: var(--c-text-muted); font-size: var(--fs-md); }
+/* What the face holds: the frame the agent question is put in, and the pane once one is running
+   (`app/src/talk/agent.ts`). It takes the room the bar above it leaves. */
+.termface__face { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+
+/* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
+   many columns and rows the program inside is told it has.
+   The ground inside is `--c-pane-bg` and stays dark whichever theme is up (`styles/tokens.css`), so on
+   the light one this is a dark rectangle inside a light face — which is the point, not a slip. The
+   edge is the face's still: what is fixed is what the pane holds, and the border is where it stops.
+   `color-scheme` goes with the ground, or the scrollbar the emulator's viewport puts up is drawn for
+   a light one over a dark pane. */
+.termface__pane {
+  flex: 1; min-height: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--c-rule);
+  border-radius: var(--r-md);
+  background: var(--c-pane-bg);
+  color-scheme: dark;
+  overflow: hidden;
+}
+/* The controls that pick what is on screen: how many panes, and which page. Both are rows of every
+   choice with the one in force marked, rather than a control that says the next step — which of them
+   is on is the thing being chosen between, and a reader should not have to press to find out.
+   They are drawn as two different kinds of thing on purpose. **The count is words**: no box around
+   it, the number said with what it counts, and the one in force simply the one that is not dimmed.
+   **A page is a place to go**, so it is a bordered button with a number in it. Side by side as two
+   rows of bare digits they were one control wearing two hats, and a reader who cannot tell which row
+   is which presses one to find out. */
+.termface__counts {
+  display: flex; margin-left: var(--s-2);
+  padding: 2px;
+  background: var(--c-sunken);
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+}
+.termface__count {
+  background: transparent; border: 0;
+  padding: 2px var(--s-2); border-radius: var(--r-sm);
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
+}
+.termface__count:hover { color: var(--c-text); }
+/* The one that holds a drawing instead of words. The count says a number and the orientation says a
+   shape, so one of the two cannot be words — and a box of a fixed height keeps the pair the same
+   height whichever is in it. */
+.termface__count--glyph { display: flex; align-items: center; padding: 3px var(--s-2); }
+/* The one in force is the one lifted out of the well: a raised face on a sunken ground says which of
+   a fixed few is on without a second colour, and the group says the three are one choice. */
+.termface__count--on {
+  background: var(--c-surface); color: var(--c-text); font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.termface__pages {
+  display: flex; gap: var(--s-1);
+  padding-left: var(--s-3); border-left: 1px solid var(--c-rule);
+}
+.termface__page {
+  min-width: 29px; height: 25px;
+  background: var(--c-surface); border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
+}
+.termface__page--on {
+  background: var(--c-accent); border-color: var(--c-accent); color: #fff; font-weight: 600;
+}
+/* The turns standing on a page that is not the one showing, counted. `--c-heed` is the step that
+   means "it moves, know this while it does" (`styles/tokens.css`) — which is exactly what it says:
+   somebody is needed there, not that anything is wrong. It sits on the corner of the number and
+   carries a ring of the band's own ground, so it reads as put on the button rather than part of it.
+   A page whose panes have finished wears nothing at all: what is over is not something a person is
+   needed for (`AMB-T-3610`). */
+.termface__page { position: relative; }
+.termface__needs {
+  position: absolute; top: -5px; right: -5px;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px;
+  background: var(--c-heed); color: #fff;
+  font-size: var(--fs-xs); font-weight: 700; line-height: 1;
+  box-shadow: 0 0 0 2px var(--c-surface);
+}
+
+/* The rail and the panes, side by side. A column keeps the width the person gave it and the panes
+   take what is left: the panes are what the face is for, and a list of them that grew with their
+   names would take the room from the thing it is a list of (`app/src/talk/columns.ts`). */
+.termface__body { position: relative; flex: 1; min-height: 0; display: flex; }
+
+/* One of the columns beside the panes. It holds the column itself and the grip on the edge it shares
+   with them, which is why it is a box of its own: the grip is drawn on the edge rather than in the
+   flow, so it needs something to be positioned against. */
+.termface__column { position: relative; flex: 0 0 auto; min-height: 0; display: flex; }
+.termface__column--rail { width: var(--rail-w, 160px); }
+.termface__column--side { width: var(--side-w, 16rem); }
+/* The wide width lies over the panes rather than pushing them aside: a page that had to make room
+   would move the pane a reader is about to paste into, and reading is a thing they came back from
+   (`AMB-D-835`). The rail is never covered — how wide this may go is bounded by it
+   (`app/src/talk/columns.ts`). */
+.termface__column--wide {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  z-index: 4;
+  box-shadow: var(--shadow-md);
+}
+/* The edge itself. It is wider than the line it sits on — a border is a pixel and a pointer is not —
+   so it straddles that line rather than sitting to one side of it. */
+.termface__grip {
+  position: absolute; top: 0; bottom: 0; width: 9px; z-index: 3;
+  cursor: col-resize;
+}
+.termface__grip--rail { right: -4px; }
+.termface__grip--side { left: -4px; }
+.termface__grip:hover { background: var(--c-edge); }
+
+/* The page: the slots of it, laid out one across, two across, two down, or two rows of two, three or
+   four. The grid is written per count rather than flowing, because a slot is a fixed place — panes
+   that reflowed as one closed would move the pane a reader was watching, and a count that laid itself
+   out from however many are open would answer a press with the shape it already had.
+
+   **Never a third row.** A terminal runs out of columns before it runs out of lines, so what a wider
+   screen buys is spent going across (`app/src/talk/layout.ts`, where the same numbers decide how much
+   width the columns beside the panes are measured against).
+
+   **Two is the one count with two grids**, because it is the one where spending width first stops
+   paying: half a window is under the eighty columns a TUI wants, and two down keeps them whole at the
+   cost of the lines. Which of the two a page gets is a person's answer and not a measurement
+   (`Orient` in the same file). */
+.termface__page-grid {
+  flex: 1; min-width: 0; min-height: 0;
+  display: grid; gap: var(--s-2);
+  padding: var(--s-3);
+}
+/* A full page has no gap to draw an empty frame in, so the way in goes beside the panes instead —
+   a strip the width of the mark it holds, which costs the page no place. The grid gives up the room
+   for it rather than the strip lying over a pane. */
+.termface__page-grid--add { position: relative; padding-right: calc(var(--s-3) + 26px + var(--s-2)); }
+.termface__addstrip {
+  position: absolute; top: var(--s-3); right: var(--s-3); bottom: var(--s-3);
+  width: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px dashed var(--c-edge); border-radius: var(--r-lg);
+  background: transparent; color: var(--c-text-faint);
+}
+.termface__addstrip:hover {
+  border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text);
+}
+.termface__page-grid--1 { grid-template: 1fr / 1fr; }
+.termface__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
+.termface__page-grid--2-down { grid-template: 1fr 1fr / 1fr; }
+.termface__page-grid--4 { grid-template: 1fr 1fr / 1fr 1fr; }
+.termface__page-grid--6 { grid-template: 1fr 1fr / 1fr 1fr 1fr; }
+.termface__page-grid--8 { grid-template: 1fr 1fr / 1fr 1fr 1fr 1fr; }
+
+/* One slot. It holds the label row and the pane under it. There is one per pane and no more — what is
+   not open is not a box on the screen (`../talk/layout`). */
+.slot { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+/* The surface a file is handed to the pane on, drawn over the whole slot while a drag hangs on it
+   (`../shell/TerminalPane`). It takes no pointer events: the host resolves the point it was given
+   against whatever is under it, and a surface that answered would hide the pane from its own
+   highlight. */
+.slot__handing {
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--s-3); text-align: center;
+  border: 1.5px dashed var(--c-accent); border-radius: var(--r-lg);
+  background: var(--c-accent-weak); color: var(--c-accent-text);
+  font-size: var(--fs-md); font-weight: var(--fw-bold);
+}
+/* What is said about this terminal, and the one control a running pane has. One row, because ending
+   it is the last thing there is to say about it. */
+.slot__bar { display: flex; align-items: center; gap: var(--s-2); }
+/* The row above the pane is asked how much room it has, so it can give its places up one at a time as
+   the pane narrows (see `.plate` below). The question is asked of this box rather than of the window:
+   what decides whether the words are readable is the pane, and the same row is drawn in the split-out
+   window, where the window's own width is the pane's. */
+.slot__plate { flex: 1; min-width: 0; container-type: inline-size; }
+/* The line while a name is being typed in its place. Out of sight and still on the page: what
+   draws the row is mounted once and keeps drawing into this box, so taking it away would be taking
+   the label down to type a name (`../talk/plate`). */
+.slot__plate--behind { display: none; }
+/* Where a pane's name is typed (`../shell/TerminalPane`). It takes the line's own place and the
+   line's own width, so the row does not change height or shuffle the two controls along while it is
+   up. */
+.slot__rename {
+  flex: 1; min-width: 0;
+  /* The line it stands in for is held off the pane by that much (`.plate`), and a box that sat
+     against it would move the terminal down every time somebody named a pane. */
+  margin-bottom: var(--s-2);
+  padding: 0 var(--s-1); border-radius: var(--r-sm);
+  border: 1px solid var(--c-accent); background: var(--c-surface);
+  color: var(--c-text); font-size: var(--fs-md);
+}
+/* The box is drawn only while it holds the keyboard — it goes as soon as it is left — so the accent
+   border around it is already the whole of "this is where you are typing", and the machine's own ring
+   over it would be a second one saying the same thing. */
+.slot__rename:focus-visible { outline: none; }
+/* The one control the place has: it removes the frame, terminal and all (`../shell/TerminalPane`). It
+   is drawn quietly and sits at the end of the row — nothing else on this face takes anything away, so
+   a control that looked urgent would be pressed by mistake more often than on purpose. What stops the
+   mistake being final is that it asks first, not that it is loud. */
+.slot__end {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
+}
+.slot__end:hover { color: var(--c-text); }
+/* The row's menu, which holds what the pane can be handed rather than what it can be rid of. It is
+   drawn the same quiet way as the control beside it: a face split four ways draws this row four
+   times, and two loud buttons in each would be eight things competing with the terminals. */
+.slot__more {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
+}
+.slot__more:hover { color: var(--c-text); }
+
+/* The question that control asks when the session in the pane is still holding something
+   (`../shell/PaneDropAsk`). Its own block rather than a share of the modals in `components.css`: this
+   one belongs to the terminal face, and a modal borrowing another feature's class names cannot be
+   restyled without touching that feature. The backdrop is the one exception — it is `.modal__overlay`
+   for every modal in the app, which is what `outsideClose` reads. */
+.panedrop__modal { width: min(460px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
+.panedrop__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-3); }
+.panedrop__holding { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
+/* The refs, one to a line. What is at stake is read one item at a time, and a run-on list of them is
+   the shape a reader skips. */
+.panedrop__refs { margin: 0 0 var(--s-4); padding-left: var(--s-5); font-variant-numeric: tabular-nums; }
+.panedrop__failed { color: var(--c-stop); font-size: var(--fs-xs); margin: 0 0 var(--s-3); }
+.panedrop__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.panedrop__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
+/* Handing the work back is the one of the three that loses nothing, so it is the one drawn as the
+   answer. The other two are not talked out of — leaving a reservation standing is a thing a person
+   has reasons for. */
+.panedrop__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
+.panedrop__action:disabled { opacity: 0.5; cursor: default; }
+.slot--focused .termface__pane { border-color: var(--c-accent); }
+/* The empty frame: the dashed place a terminal is opened in, holding what it will be opened with
+   and the one press that does it (`../shell/EmptySlot`). The box is the frame; the row and the
+   button inside it are what is said in the room. */
+.slot--empty {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--s-3); padding: var(--s-3);
+  border: 1.5px dashed var(--c-edge); border-radius: var(--r-lg);
+}
+/* The press, and the one a pane whose program ended offers again. It is the only thing to do in the
+   frame it stands in, so it is drawn as the one thing to do: filled, and the accent. What is chosen
+   above it is chosen among a few; this is the press that acts on the choice. */
+.slot__open {
+  flex: 0 0 auto;
+  padding: var(--s-2) var(--s-5);
+  border: 1px solid var(--c-accent); border-radius: var(--r-md);
+  background: var(--c-accent); color: #fff;
+  font-size: var(--fs-md); font-weight: 600;
+}
+.slot__open:hover { filter: brightness(1.08); }
+/* The same press before anybody has chosen, which is the first run and only it. It steps back to an
+   outline so the row above is the one lit thing in the frame — what the reader has to do is choose,
+   and the button says so in words rather than waiting to refuse a press (`../shell/EmptySlot`). */
+.slot__open:disabled {
+  background: transparent; border-color: var(--c-edge); color: var(--c-text-faint);
+  cursor: default;
+}
+.slot__open:disabled:hover { filter: none; }
+
+/* The question and the row under it, kept together: the words are what say the pills are an offer, so
+   they sit closer to the row than the row sits to the press that acts on it. */
+.slot__pick {
+  /* It gives way, and the press below it never does: the row can run to eight pills and more, and a
+     frame whose one button had been pushed off the bottom is a frame with no way in
+     (`../shell/EmptySlot`). What runs out of room is the row, which scrolls. */
+  flex: 0 1 auto; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
+  /* The grid below fills this box, so this is what decides how wide the row of pills gets. It takes
+     the frame and then stops: across a wide pane a single row stretched end to end reads as a band
+     rather than as things to press. */
+  width: 100%; max-width: 34rem;
+}
+/* The words over the row. Quiet and small — it is a question about the pills, not a heading over the
+   frame, and one that shouts would take the eye before the thing it is asking about. */
+.slot__ask {
+  margin: 0;
+  color: var(--c-text-muted); font-size: var(--fs-md); text-align: center;
+}
+
+/* What the terminal is opened with: one pill each, and the one in force filled with the accent. They
+   are pressable and a reader has to see that they are — words alone read as a caption, and a caption
+   is not something anybody tries. Each pill holds its name on one line: a name broken across two
+   lines stops looking like one thing to press. It is not drawn at all where the whole row is one
+   thing: a row of one says nothing a reader can act on.
+
+   Even cells, because a pill's width is its name — "Plain shell" and "GitHub Copilot CLI" differ by
+   more than double. Wrapping ragged pills and centring the rows leaves no edge lined up and strands
+   the remainder in the middle, and the split changes with every width the pane takes. On even cells
+   as many go across as fit, and what does not fit starts another row. */
+.slot__starts {
+  display: grid; gap: var(--s-2); width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  /* The one part of the frame that scrolls. The cap keeps a tall pane from giving the row half the
+     room in the frame, and `min-height` is what lets it shrink further in a short one — a grid that
+     cannot shrink pushes the press out of the frame instead of scrolling. */
+  max-height: 22rem; min-height: 0; overflow-y: auto;
+}
+/* A name too long for its cell is cut with an ellipsis rather than widening the cell, which would
+   take the evenness back. That is why the pill lays its content out as a line of text and not as a
+   flex row: the cut belongs to text, and a bare name inside a flex box is not text the rule reaches.
+   The mark takes its step from a margin for the same reason — there is no `gap` in a line. */
+.slot__start {
+  display: block;
+  padding: var(--s-1) var(--s-3);
+  border: 1px solid var(--c-edge); border-radius: 999px;
+  background: var(--c-surface); color: var(--c-text-muted);
+  font-size: var(--fs-md); line-height: 1.6; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.slot__start .icon { margin-right: var(--s-1); }
+.slot__start:hover { color: var(--c-text); border-color: var(--c-edge); }
+.slot__start--on {
+  background: var(--c-accent-weak); border-color: var(--c-accent);
+  color: var(--c-accent-text); font-weight: 600;
+}
+/* One this machine has not got (`AMB-D-792`). Drawn faint and left in place: it is on the row to say
+   that installing it would make it a choice, so it has to read as a choice that is not here yet
+   rather than as one that failed. Nothing lifts on hover, because nothing happens on a press. */
+.slot__start--missing {
+  border-style: dashed; color: var(--c-text-faint); cursor: default;
+}
+.slot__start--missing:hover { color: var(--c-text-faint); border-color: var(--c-edge); }
+/* The row's place while the machine is still being asked. Two empty pills and nothing written in
+   them: what is not known yet is which of these can be started, so a name here would have to be
+   drawn as usable or as missing and both would be a guess (`AMB-D-792`). They are out of the tree a
+   screen reader walks — the sentence under them is what says what is happening. */
+.slot__starts--waiting { grid-template-columns: repeat(2, minmax(9.5rem, 1fr)); }
+.slot__start--waiting {
+  min-height: 2.2rem;
+  border-style: dashed; background: var(--c-sunken);
+}
+/* What the frame has to say about the row rather than on it: that the machine is still being asked,
+   or that it could not be. Quiet like the question above it, and never in place of a pill — the row
+   says what the choices are, and this says what is known about them. */
+.slot__note {
+  margin: 0;
+  color: var(--c-text-muted); font-size: var(--fs-xs); text-align: center;
+}
+
+/* The press that unfolds them. It is quiet — the row above it is what the frame is about — and it is
+   not one of the pills: what it does is show more of the row, not choose anything. */
+.slot__more {
+  flex: 0 0 auto;
+  padding: 0; border: 0; background: none;
+  color: var(--c-text-muted); font-size: var(--fs-xs); text-decoration: underline;
+}
+.slot__more:hover { color: var(--c-text); }
+
+/* The reader's own commands, under the choices (`AMB-D-794`). It is a quiet block: what the frame is
+   for is opening a terminal, and registering one is the rarer errand of somebody whose tool the
+   catalog does not name. It takes the width the row takes, so the lines below line up with the pills
+   above them. */
+.slot__own {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-1);
+  width: 100%;
+}
+.slot__ownlist {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: var(--s-1);
+  width: 100%;
+}
+/* Name, line, and the two presses on one row. The line takes what is left and is cut rather than
+   wrapped: what a reader checks at a glance is which line it is, and the whole of it is in the form
+   the moment they press to correct it. */
+.slot__ownrow {
+  display: flex; align-items: baseline; gap: var(--s-2);
+  min-width: 0;
+  font-size: var(--fs-xs);
+}
+.slot__ownname { flex: 0 0 auto; color: var(--c-text); }
+.slot__ownline {
+  flex: 1 1 auto; min-width: 0;
+  color: var(--c-text-muted); font-family: var(--font-mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* The two fields. Stacked rather than side by side: a command line is long and a name is short, and
+   a row that gave them the same width would leave the line reading in a box it does not fit. */
+.slot__form {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  width: 100%;
+}
+.slot__field { display: flex; flex-direction: column; gap: var(--s-1); }
+.slot__field > span { color: var(--c-text-muted); font-size: var(--fs-xs); }
+.slot__field > input {
+  padding: var(--s-1) var(--s-2);
+  border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  background: var(--c-surface); color: var(--c-text);
+  font-size: var(--fs-md);
+}
+.slot__field > input:focus-visible { border-color: var(--c-accent); outline: none; }
+/* What will run, said before it is saved. Monospaced because it is a command and not prose, and it
+   wraps rather than being cut: this is the one place the whole of it has to be readable. */
+.slot__runs {
+  margin: 0;
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+}
+.slot__runs > code { font-family: var(--font-mono); color: var(--c-text); overflow-wrap: anywhere; }
+.slot__failed { margin: 0; color: var(--c-stop); font-size: var(--fs-xs); }
+.slot__formrow { display: flex; align-items: center; gap: var(--s-3); }
+/* Smaller than the press that opens a terminal, and outlined rather than filled: saving a line is
+   not what the frame is for, and two filled buttons in one frame read as two ways in. */
+.slot__save {
+  padding: var(--s-1) var(--s-3);
+  border: 1px solid var(--c-accent); border-radius: var(--r-md);
+  background: transparent; color: var(--c-accent-text);
+  font-size: var(--fs-xs); font-weight: 600;
+}
+.slot__save:disabled { border-color: var(--c-edge); color: var(--c-text-faint); cursor: default; }
+
+/* Where the pane being opened will work, asked in the place the pane is about to take (`./FolderChoice`).
+   It is the same dashed box the way in is, because it is the same place one step further on. */
+.slot--asking {
+  flex: 1; min-height: 0;
+  padding: var(--s-3);
+  border: 1.5px dashed var(--c-edge); border-radius: var(--r-lg);
+  overflow-y: auto;
+}
+
+/* ---------- the project tabs ---------- */
+/* The projects, down the edge of the face (`app/src/shell/ProjectTabs.tsx`, `AMB-D-838`). It stands on
+   the sidebar's ground the way the rail beside it does, with a rule down its edge: the two are one
+   band of chrome at the side of the window, and a column of a different colour between the window's
+   edge and the rail would read as a thing lying on the face rather than as part of it.
+
+   Its width is the face's `--tabs-w`, which is one of two fixed numbers rather than anything a person
+   drags (`app/src/talk/columns.ts`). The list scrolls and the fold does not — a machine with many
+   projects must not push the way back to the names off the bottom. */
+.ptabs {
+  flex: 0 0 auto; width: var(--tabs-w, 160px); min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-rule);
+}
+.ptabs__list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--s-2);
+}
+/* One project. It is the row the rail's projects are, because it is the same choice — what is picked
+   here is what the whole face shows — and it is marked the same way when it is the one on the screen.
+   Positioned, because compact the dot has nowhere in the row to sit and goes to the corner. */
+.ptabs__tab {
+  position: relative; flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-1); border-radius: var(--r-md);
+  background: transparent; border: 1px solid transparent;
+  color: var(--c-text); font-size: var(--fs-md); text-align: left;
+}
+.ptabs__tab:hover { background: var(--c-surface); }
+.ptabs__tab--on {
+  background: var(--c-surface); border-color: var(--c-edge);
+  font-weight: 600; box-shadow: var(--shadow-sm);
+}
+/* The project's colour with the first character of its name on it, or the image it was given instead
+   (`AMB-D-838`). It is drawn whether or not the names are, so folding takes a width away and never a
+   way of telling one project from another. The ground is the colour the person gave the project and
+   the ink is worked out from it (`app/src/shell/projectMark.ts`); a colour that could not be read
+   leaves the surface underneath and the face's own text colour. `uppercase` is the stylesheet's rather
+   than the character's: what is in the mark is the name's own first character, cased here for the same
+   reason a heading is. */
+.ptabs__mark {
+  flex: 0 0 auto;
+  width: 24px; height: 24px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--c-sunken);
+  font-size: var(--fs-md); font-weight: 700; line-height: 1;
+  text-transform: uppercase;
+  overflow: hidden;
+}
+/* The image fills the mark and is cut to its corners. It is baked square before it is ever stored
+   (`app/src/core/mutations.ts`), so `cover` is not cropping anything a person would miss — it is what
+   keeps a stored image from an older bake, or one that arrived some other way, from stretching. */
+.ptabs__icon { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ptabs__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A turn standing in a project that is not the one being shown. It is the colour the pages wear and
+   for the same reason: somebody is needed there, and the panes that would say so are off the screen.
+   A dot and not a count — what a reader does about a project they are not in is go to it, and how
+   many turns are waiting there does not change that (`AMB-T-3610`). */
+.ptabs__needs {
+  flex: 0 0 auto;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c-heed);
+}
+/* Compact: the mark alone, centred, and the dot moved onto its corner. Over the mark rather than
+   beside it, because there is no beside left — and it keeps the tab the width it is, so folding the
+   names away does not make a project with somebody waiting in it wider than its neighbours. */
+.ptabs--compact .ptabs__tab { justify-content: center; }
+.ptabs--compact .ptabs__needs {
+  position: absolute; top: 0; right: 0;
+  box-shadow: 0 0 0 2px var(--c-surface);
+}
+/* The way between the two widths. Quiet and small: it is pressed once and left, where the tabs above
+   it are pressed all day (`AMB-D-838`). */
+.ptabs__fold {
+  flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 var(--s-2) var(--s-2); padding: var(--s-1);
+  background: transparent; border: 1px solid transparent; border-radius: var(--r-sm);
+  color: var(--c-text-faint);
+}
+.ptabs__fold:hover { background: var(--c-surface); color: var(--c-text); }
+
+/* The rail: the folders of the project being shown, under its name (`app/src/shell/FolderRail.tsx`,
+   `AMB-D-838`).
+
+   It is the ledger's sidebar in the other face's place, so it is the sidebar's ground: `--c-surface`
+   with a rule down its edge, full height. Left with no ground of its own it fell through to `--c-bg`
+   and the face came out inside out — the edges sunk below the middle, where every other face of this
+   window has them above it. Its width is the column's around it (`.termface__column--rail`), which is
+   what a person drags.
+
+   The rail itself does not scroll — the tree inside it does. The padding is the header's and the
+   tree's rather than the rail's, for the same reason: a tree that scrolled inside its own padding
+   would slide its rows out from under the name they belong to. */
+.rail {
+  flex: 1 1 auto; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--c-surface);
+  border-right: 1px solid var(--c-rule);
+}
+/* Whose folders these are. It is a name and not the caption of a list, so it is drawn as one — the
+   face's own text at the face's own size, where the headings it replaced were small, spaced and
+   faint. */
+.rail__head {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-3) var(--s-3) var(--s-2);
+}
+.rail__title {
+  flex: 1; min-width: 0; margin: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--c-text); font-size: var(--fs-md); font-weight: 600;
+}
+
+/* ---------- the file face ---------- */
+/* The right side of the terminal face: what changed in the project's folder lately, and the folder
+   itself, folded (`app/src/files/FilesPanel.tsx`). It is a column of the window and not a card lying
+   on one, so it is drawn as the ledger's right pane is (`.rightpane`): `--c-surface` to the edges,
+   held off the page by a rule rather than by a border round a rounded box. */
+/* The tree, drawn in the rail rather than in a column of its own. It gives up the edge it drew as a
+   column — the rail already has one — and stands on the rail's ground. */
+.rail .files {
+  border-left: 0;
+  background: transparent;
+}
+
+.files {
+  flex: 1 1 auto; min-width: 0;
+  min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--s-3);
+  padding: var(--s-3);
+  border-left: 1px solid var(--c-rule);
+  background: var(--c-surface);
+  font-size: var(--fs-md);
+}
+.files--empty { color: var(--c-text-muted); }
+/* One bound folder and everything drawn about it. A project can be bound to several and each gets
+   one of these, so the box is what makes two folders read as two rather than as one long list. */
+.files__folder { min-width: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+/* The folder's name, drawn only where there is more than one to tell apart. The rule above it is
+   what separates the stacks; the name itself never wraps, since a long path would otherwise push
+   the rows it belongs to down the panel. */
+.files__foldername {
+  margin: 0; padding: var(--s-2) 0 0;
+  border-top: 1px solid var(--c-rule);
+  color: var(--c-text); font-size: var(--fs-md); font-weight: 700; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.files__row { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.files__head {
+  margin: 0; padding: 0;
+  color: var(--c-text-muted); font-size: var(--fs-md); font-weight: 600;
+  text-align: left; background: none; border: 0;
+}
+/* The mark is drawn rather than typed (`AMB-D-686`), and it sits in the same fixed box the rows
+   carry theirs in — so the heading and the first row under it open and shut with one shape at one
+   size. A row is laid out the same way, which is what puts the two marks in a column. */
+.files__head--button { cursor: pointer; display: flex; align-items: center; gap: var(--s-2); }
+.files__none { margin: 0; color: var(--c-text-muted); }
+.files__list { list-style: none; margin: 0; padding: 0; }
+.files__list--tree { padding-left: var(--s-3); }
+/* One row of the tree, however far down it is: the rows of every open folder are lines of the one
+   list, so how deep a row stands is a number on the row and the step is taken here rather than by a
+   list inside a list (`app/src/files/FilesPanel.tsx`). The margin and not padding, so that the row's
+   own box — its ground under the pointer, the ring around it — begins where its name does. */
+.files__list--tree > li {
+  position: relative;
+  margin-left: calc(var(--depth, 0) * var(--s-3));
+}
+.files__item { cursor: pointer; }
+/* The row that follows the pointer while it is being carried to a pane. It is the row's own node,
+   copied, for the reason a card's ghost is (`app/src/components/components.css`) — and it is taken
+   out of the list it was indented in, so the copy carries the indent's margin with it and is placed
+   from its own left edge instead (`app/src/files/handDrag.ts`). */
+.files__ghost {
+  position: fixed; top: 0; left: 0; z-index: 1000; margin: 0;
+  pointer-events: none; opacity: 0.9; cursor: grabbing;
+  background: var(--c-surface); border-radius: var(--r-sm);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+}
+/* One line for each folder a row stands inside, drawn in the space the indent left in front of it:
+   the band runs from the tree's own edge to the row's, and a line falls every step, so the last of
+   them is at the left edge of the folder holding the row.
+
+   **A step of 8px is too small to read a depth off**, and a row is often the only thing on the
+   screen — a folder of sixty names fills a panel, and then nothing in view says how deep it is. The
+   lines say it at a glance: one per level, counted rather than measured.
+
+   **Only while the pointer is on the tree**, which is what VS Code does by default and for the same
+   reason: four or five permanent verticals in a column 256px wide compete with the names. And it is
+   the pointer, so nothing is drawn for a reader who is not looking for it. */
+.files__item::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: calc(-1 * var(--depth, 0) * var(--s-3));
+  width: calc(var(--depth, 0) * var(--s-3));
+  background: repeating-linear-gradient(
+    to right, var(--c-rule) 0 1px, transparent 1px var(--s-3)
+  );
+  opacity: 0;
+  pointer-events: none;
+}
+.files__list--tree:hover .files__item::before { opacity: 1; }
+/* And no ring of its own. What is drawn for the focus is the line inside it (below); left to the
+   browser's default, the item would draw a second ring outside the one the line already carries. */
+.files__item:focus, .files__item:focus-visible { outline: none; }
+/* A row is one line and never wraps: the name is what is read, and a path that folded would push
+   the next row off the panel. Centred rather than on the baseline, because the first thing on the
+   line is a fixed box and not a letter — an empty one has no baseline to sit a name against.
+   **22px, and set as a height rather than won with padding.** The line box is `--fs-sm` × `--lh`
+   = 19.5px, and the 2.5px left over does not divide into two whole pixels; a height lands on the
+   figure itself and leaves the centring to say where the text goes. 22px is also what the mark at
+   the head of the row asks for — `--icon-sm` is 16px, which sits with 3px above and below. */
+.files__file, .files__dir {
+  display: flex; align-items: center; gap: var(--s-2);
+  width: 100%; min-height: 22px; padding: 0 var(--s-1); border: 0; background: none;
+  border-radius: var(--r-sm);
+  color: var(--c-text); text-align: left;
+}
+/* **The four answers a row gives, told apart by the ground under it.** A band and not a colour on
+   the name: a mark made of the name's own letters is as wide as the name happens to be, so two rows
+   in the same tree say the same thing at two sizes, and a short name says it faintly.
+
+   Two of the four are the reader's own doing and take the accent; the other two — the tab stop and
+   the pointer, below — are only where their hand is at this instant, and take a shade of the
+   ground. `:not` and not the order they are written in: those two selectors reach the row through
+   the item holding it and these do not, so nothing but saying so would keep them. */
+/* The rows a reader picked out, which is what an act on "the files" is about
+   (`app/src/files/FilesPanel.tsx`). */
+.files__file--picked, .files__dir--picked { background: var(--c-accent-faint); }
+/* The row whose file is being read (`AMB-D-815`), on the stronger of the accent's two grounds.
+   Written under the one above so that a row which is both — clicking a file picks it out and reads
+   it — is drawn as the one being read: of the two, that is the one there can only ever be one of. */
+.files__file--chosen, .files__dir--chosen {
+  background: var(--c-accent-weak); color: var(--c-accent-text);
+}
+/* Where the tab stop is says which row a reader is on, so it is drawn on the line and not on the
+   item holding it: the line is what carries the row's ground, and a ring around the item would
+   stand outside it.
+   The ring is drawn inside the row rather than 2px outside it — held off the edge, at the height
+   these rows are, it all but touches the names above and below. */
+.files__item:focus-visible > .files__file, .files__item:focus > .files__file,
+.files__item:focus-visible > .files__dir, .files__item:focus > .files__dir {
+  outline: 1px solid var(--c-accent); outline-offset: -1px;
+}
+.files__item:focus-visible > .files__file:not(.files__file--chosen, .files__file--picked),
+.files__item:focus > .files__file:not(.files__file--chosen, .files__file--picked),
+.files__item:focus-visible > .files__dir:not(.files__dir--chosen, .files__dir--picked),
+.files__item:focus > .files__dir:not(.files__dir--chosen, .files__dir--picked) {
+  background: var(--c-sunken);
+}
+/* The row under the pointer. One row is inside no other — they are all lines of one list — so the
+   pointer is in exactly the row it is pointing at.
+   The name still moves colour on the row being read, where the ground cannot: a row that answered
+   the pointer with nothing reads as a row that cannot be pressed. */
+.files__item:hover > .files__file,
+.files__item:hover > .files__dir { color: var(--c-accent); }
+.files__item:hover > .files__file:not(.files__file--chosen, .files__file--picked),
+.files__item:hover > .files__dir:not(.files__dir--chosen, .files__dir--picked) {
+  background: var(--c-sunken);
+}
+/* A name the repository's ignore rules cover. It is on the list because what git does not record is
+   still something somebody wrote, and it is faint because that is the whole of what the mark says
+   (`AMB-D-786`). Faint over the whole row rather than a colour on the name, because the name's
+   colour is already spoken for by what git says about the row (below). */
+.files__file--ignored, .files__dir--ignored { opacity: 0.55; }
+/* The folder a file dragged in from the desktop would land in. The host says where the pointer is
+   and nothing more, so this highlight is the panel's own answer, redrawn on every move it is told
+   about (`app/src/core/hostDrop.ts`).
+   **The folder's own row, and not the rows under it.** The rows are siblings, each one inside the
+   folder above it standing a step further in, so a box drawn around a whole run of them is a
+   staircase. What the highlight has to say is which folder is about to receive the files, and the
+   row carrying that folder's name is where that is read. */
+.files__into, .files__row--into {
+  outline: 1px solid var(--c-accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+/* A name being typed, in the row it will become. It is a line of the list rather than a box over it:
+   what is being named sits among names, and the ones already there are what a person is choosing
+   against (`app/src/files/FilesPanel.tsx`). */
+.files__namebox {
+  width: 100%; min-height: 22px; padding: 0 var(--s-1); border: 0; background: none;
+  color: var(--c-text); font: inherit;
+}
+.files__namebox:focus-visible, .files__namebox:focus {
+  outline: 1px solid var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
+}
+/* The box the open/shut mark is drawn in, at the head of every row of the tree — a folder's holds
+   the chevron and a file's is empty. It is a fixed width on both so that the names line up: a file
+   with nothing in front of it starts a whole box further left than the folder above it, which is a
+   larger step than one level of indent (8px) and so reads as a level rather than as a file
+   (`app/src/files/FilesPanel.tsx`). Muted, and kept muted under the pointer, because the row's own
+   colours — hover, git — are about the name. */
+.files__twisty {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--icon-sm); height: var(--icon-sm); flex: none;
+  color: var(--c-text-muted);
+}
+/* What kind of thing the row is — a folder or a file — said as a drawing, so that it is read
+   before the name rather than out of it. Muted with the mark beside it: the head of the row is one
+   weight of grey and the name is what carries the row's colours (hover, git, the file being read),
+   so a row is scanned as a shape and then read as a word. */
+.files__kind { display: inline-flex; flex: none; color: var(--c-text-muted); }
+.files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* What git says about the row (`AMB-D-785`). The colour is the whole mark — no letter beside the
+   name — because the row is one line and the name is what is read on it; a badge would take the
+   width the name needs, on every row, to say what three hues already say. */
+.files__file--git .files__name, .files__dir--git { color: var(--git); }
+.files__file--git-modified, .files__dir--git-modified { --git: var(--c-git-modified); }
+.files__file--git-added, .files__dir--git-added { --git: var(--c-git-added); }
+.files__file--git-untracked, .files__dir--git-untracked { --git: var(--c-git-untracked); }
+/* The pointer still wins, said again here because these rules come after the hover above and a
+   row whose colour did not move under the pointer reads as a row that cannot be pressed. */
+.files__item:hover > .files__file--git .files__name,
+.files__item:hover > .files__dir--git { color: var(--c-accent); }
+/* Reading one file: the way back, the name, and whatever the file turned out to be.
+   It lies over the tree instead of replacing it (`AMB-D-815`), drawn the way the columns' own
+   drawers are — right against the edge, full height, on `--c-surface` under `--shadow-md` — so
+   that what a panel over the page looks like is one thing and not two.
+   The box it is measured against is the column (or, in a narrow window, the drawer holding it):
+   both are positioned and the tree between them is not, so the panel keeps its place while the
+   tree scrolls under it.
+   **The band is what is left showing.** 24px is a little under three levels of indent, so what
+   stays on the screen is the shape of the tree and the first letters of the names at its top
+   level. It is a fixed width rather than a share of the column because the column has a floor of
+   its own (`SIDE_MIN`, `app/src/talk/columns.ts`): 200px less this band is 176px, which is where
+   the panel is narrowest, and a share would go on eating into that as the column shrank. */
+/* The file, under the row of tabs that says which one it is. It fills what is left of the column
+   and lies over nothing — the tree it would have covered is in the rail (`AMB-D-835`) — so the
+   padding and the edge are the column's own and this adds neither. */
+.files--reading {
+  gap: var(--s-2);
+  padding: 0;
+  border-left: 0;
+}
+/* The name's own row — the way off this file at its head, the bin at its end, and nothing between.
+   Every control on this bar is as wide as its own words, so the name was the only thing that could
+   give way when they shared a row, and on a panel of ordinary width it gave way to almost nothing:
+   `run.sh` came up as `r...`. What acts on the file stands under it instead (`.files__tools`).
+
+   Centred rather than hung from the text's baseline: the bin is a mark and not a word, and a mark
+   on a baseline sits low by however much of it is drawn under one (`AMB-T-4271`). */
+.files__bar { display: flex; align-items: center; gap: var(--s-2); }
+.files__back {
+  flex: none; padding: 0; border: 0; background: none;
+  color: var(--c-text-muted); cursor: pointer;
+}
+.files__back:hover { color: var(--c-text); }
+/* The switch between reading a Markdown file and editing the text it is written in. It sits beside
+   the name and is drawn the way the way back is: both change what is on the screen rather than what
+   is in the file (`app/src/files/FilesPanel.tsx`). */
+.files__view {
+  flex: none; padding: 0; border: 0; background: none;
+  color: var(--c-text-muted); cursor: pointer;
+}
+.files__view:hover { color: var(--c-text); }
+/* What the bytes were read as, and how the lines end. Muted: it is the answer to a question almost
+   nobody asks, put where the one reader who does asks it (`AMB-D-773`). */
+.files__encoding {
+  flex: none; padding: 0; border: 0; background: none;
+  color: var(--c-text-muted); font-size: var(--fs-xs); white-space: nowrap; cursor: pointer;
+}
+.files__encoding:hover { color: var(--c-text); }
+/* The row under the name: what can be done with the file, as against the frame's own way in and out
+   above it. It wraps rather than squeezing, because everything on it is a word and a word that has
+   been squeezed is a word nobody can read — and it is drawn only where something would be on it, so
+   a picture costs no line here at all (`../files/FilesPanel`). */
+.files__tools {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-2);
+  min-width: 0;
+}
+/* Saving what was typed. It sits at the far end of its row because it is the one control there that
+   changes the file rather than the view of it (`../files/FilesPanel`). */
+.files__keep {
+  flex: none; margin-left: auto; padding: 0; border: 0; background: none;
+  color: var(--c-accent-text); cursor: pointer;
+}
+.files__keep:hover:not(:disabled) { text-decoration: underline; }
+.files__keep:disabled { color: var(--c-text-muted); cursor: default; }
+/* Which newline a file that has both is saved with. It sits under the sentence that explains it
+   rather than in the bar, which is only as wide as the panel (`AMB-D-773`). */
+.files__newlines { display: flex; flex-direction: column; gap: var(--s-1); }
+.files__newline {
+  align-self: start; max-width: 100%;
+  color: var(--c-text); font-size: var(--fs-xs);
+  background: none; border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+}
+/* The file having moved under a reader who has typed in it, and the one thing the panel can do
+   about it. Drawn as a sentence with its own next step under it, the same shape the refused picture
+   takes — it is news to read and act on, not a state the face is in (`AMB-D-784`). */
+.files__changed { display: flex; flex-direction: column; gap: var(--s-1); }
+.files__reread {
+  align-self: start; padding: 0; border: 0; background: none;
+  color: var(--c-accent-text); cursor: pointer;
+}
+.files__reread:hover { text-decoration: underline; }
+.files__body { min-height: 0; overflow-y: auto; }
+.files__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; }
+/* The editor a file's text is drawn in (`../files/FileEditor`). It brings its own type and colours
+   from the tokens around it; what is left here is the room it draws into — the panel scrolls, so
+   the editor grows to its text rather than scrolling inside a box of its own. */
+.files__editor { font-size: var(--fs-xs); }
+.files__editor .cm-editor { height: auto; }
+.files__image { max-width: 100%; height: auto; }
+/* The way out of a picture the panel would not draw: a word under the refusal, not a control in a
+   row, because it is the sentence's own next step. */
+.files__hand {
+  padding: 0; border: 0; background: none;
+  color: var(--c-accent-text); cursor: pointer;
+}
+.files__hand:hover { text-decoration: underline; }
+/* The same road out of the file being read, where there is no row under the pointer to open the
+   menu on. Quiet, like the control beside it: what makes it safe to sit there is that it asks
+   (`../files/TrashAsk`) and that the bin gives it back. */
+.files__trash {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
+  cursor: pointer;
+}
+.files__trash:hover { color: var(--c-text); }
+/* On the reading bar the name takes what the way out and the bin leave, which is the rest of the
+   row. A name longer than that is still cut — there is no width that fits every name — but what it
+   is cut to is now a name somebody can read. */
+.files--reading .files__bar .files__name { flex: 1; }
+/* What the machine said about a row that would not go to the bin, or would not come back out of it.
+   It stands in the panel rather than beside the row, because by then the row is either gone from the
+   list or was never on it. */
+.files__stopped { margin: 0; color: var(--c-stop); font-size: var(--fs-xs); }
+
+/* The question before a row goes to the bin (`../files/TrashAsk`). Its own block rather than a share
+   of another feature's modal, for the reason the terminal face's is its own: a modal borrowing
+   another's class names cannot be restyled without touching that feature. The backdrop is the
+   exception — `.modal__overlay` is every modal's in this app. */
+.trashask {
+  width: min(420px, 100%);
+  padding: var(--s-5);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
+  border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+.trashask__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-2); overflow-wrap: anywhere; }
+.trashask__undoable { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-4); }
+.trashask__quiet { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-md); margin-bottom: var(--s-4); cursor: pointer; }
+.trashask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.trashask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
+/* The answer the question was opened to get. It is drawn as the answer rather than argued against,
+   because the bin is where it sends the row and undo brings it back. */
+.trashask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
+
+/* ---------- the two halves of the panel ---------- */
+/* The row above whichever half is up. It holds the way out and nothing else: the switch between
+   files and the page written on is the terminal face's top row, which is where it can be reached
+   from whether the panel is open or closed (`app/src/files/FilesPanel.tsx`). */
+.files__top { display: flex; }
+/* The two rows at the head of the column stand the same height, whichever half is up. Left to their
+   own contents one is two icons tall and the other a line of names, so a reader crossing between the
+   draft page and a file saw everything under them move by the difference. The height is a tab's own
+   — a name at `--fs-sm` over 1.6 lines, with its 2px above and below and the tab's edge around that
+   — rounded up (`AMB-T-4271`). */
+.files__top, .files__tabs { min-height: 27px; }
+/* The files the column is holding. The row scrolls sideways and never wraps: a second line of tabs
+   would take the room the file is read in, and it is the file a reader came for (`AMB-D-835`). */
+.files__tabs { flex: 0 0 auto; min-width: 0; display: flex; align-items: center; gap: var(--s-1); }
+/* No scrollbar drawn under it. A bar 190px wide would be most of a tab, and what says there is more
+   is the control at the end — which lists them by name rather than by where they sit. */
+.files__strip {
+  flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden;
+  display: flex; gap: 2px;
+  scrollbar-width: none;
+}
+.files__strip::-webkit-scrollbar { display: none; }
+/* One tab, drawn as one whether or not it is the one being read. The row marked only the tab that
+   was on and left the rest as bare words, which is a row of links rather than a row of tabs — and a
+   reader who cannot see where one ends cannot see that the ✕ beside it belongs to that one
+   (`AMB-T-4272`). The edge is the whole of the shape: a fill on every tab would leave the one that
+   is on with nowhere left to go. */
+.files__tab {
+  flex: 0 0 auto; display: inline-flex; align-items: center;
+  padding: 0 1px;
+  border: 1px solid var(--c-edge); border-radius: var(--r-sm);
+  color: var(--c-text-muted);
+}
+/* The one being read, lifted out of the row the way the pane counts are: one of a fixed few is on,
+   and a colour alone reads as a row of links. */
+.files__tab--on {
+  background: var(--c-sunken); border-color: var(--c-edge);
+  color: var(--c-text); font-weight: 600;
+}
+.files__tabname {
+  max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 2px var(--s-1);
+  border: 0; background: transparent; color: inherit;
+  font-size: var(--fs-md); line-height: 1.6;
+}
+/* Letting a file go, and the list of everything open. Both are marks rather than words, so what says
+   they can be pressed is the room around them: at the width they were drawn before, the only thing
+   telling a reader the ✕ was a control was the colour it took under the pointer, which is an answer
+   that arrives after the question (`AMB-T-4272`). The ground under the pointer says it in advance,
+   and it is drawn in the edge's own colour so it reads on the tab that is on as well as beside it. */
+.files__tabclose, .files__more {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px;
+  padding: 0;
+  border: 0; border-radius: var(--r-sm); background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-xs); line-height: 1;
+}
+.files__tabclose:hover, .files__more:hover { color: var(--c-text); background: var(--c-hover); }
+
+/* Wider or narrower, and the way out beside it, both pushed to the far end of the row they have to
+   themselves: the two are the column's own, where every other control the panel draws is about a
+   file. Quiet, like the control that ends a pane — what stops either being pressed by mistake is
+   that nothing is lost when it is: the terminal face's top row opens the column again, on the half
+   it was showing (`app/src/files/FilesPanel.tsx`). */
+.files__width {
+  margin-left: auto; flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
+}
+.files__width:hover { color: var(--c-text); }
+.files__close {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1;
+}
+.files__close:hover { color: var(--c-text); }
+
+/* The draft page. It takes the room the panel has, because writing is what it is for
+   (`app/src/files/MemoPage.tsx`). */
+.memo { flex: 1; min-height: 0; }
+/* One thing on it: how the writing stands. The name of the page is on its tab (`app/src/files/FilesPanel.tsx`). */
+.memo__bar { display: flex; align-items: baseline; justify-content: flex-end; gap: var(--s-2); }
+.memo__field {
+  flex: 1; min-height: 0; width: 100%; resize: none;
+  padding: var(--s-2);
+  background: var(--c-sunken); border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  color: var(--c-text); font-family: var(--font-mono); font-size: var(--fs-md); line-height: 1.6;
+}
+
+/* Nothing is pressed to keep what is written here, so the page shows the keeping instead of saying
+   it in words (`AMB-T-3684`). The ring is the settle drawn at its own length — it fills while the
+   typing is in hand and closes on the write — and the word beside it carries the state the ring has
+   stopped moving to say. Neither is taken away once written: the quiet after typing is exactly when
+   a person looks to see whether anything was kept. */
+.memo__keep {
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  margin-left: auto;
+  opacity: 0; transition: opacity 450ms ease;
+}
+.memo__keep--on { opacity: 1; }
+.memo__word { color: var(--c-text-muted); font-size: var(--fs-xs); white-space: nowrap; }
+.memo__keep--kept .memo__word { color: var(--c-accent); }
+/* The middle is cut out of the disc rather than painted over it: the two faces sit on different
+   grounds, and a middle painted in one of them would read as a spot on the other. */
+.memo__ring {
+  flex: 0 0 auto; width: 0.75rem; height: 0.75rem; border-radius: 50%;
+  background: conic-gradient(var(--c-accent) 0turn, transparent 0turn);
+  -webkit-mask: radial-gradient(closest-side, transparent 58%, #000 59%);
+  mask: radial-gradient(closest-side, transparent 58%, #000 59%);
+}
+.memo__keep--typing .memo__ring { animation: memo-fill var(--memo-settle, 600ms) linear forwards; }
+.memo__keep--kept .memo__ring {
+  background: conic-gradient(var(--c-accent) 1turn, transparent 1turn);
+  animation: memo-close 500ms ease forwards;
+}
+/* Only the turn moves between the two ends. Both stops are the same colour at both ends, which is
+   what lets the gradient be interpolated at all rather than swapped at the halfway point. */
+@keyframes memo-fill {
+  from { background: conic-gradient(var(--c-accent) 0turn, transparent 0turn); }
+  to { background: conic-gradient(var(--c-accent) 1turn, transparent 1turn); }
+}
+@keyframes memo-close {
+  0% { opacity: 1; transform: scale(1.18); }
+  60% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.55; transform: scale(1); }
+}
+/* Motion turned down: the ring keeps its two ends and drops the travel between them. Empty against
+   full still tells the states apart, and the word says which in either case. */
+@media (prefers-reduced-motion: reduce) {
+  .memo__keep--typing .memo__ring,
+  .memo__keep--kept .memo__ring { animation: none; }
+}
 
 /* ---------- the band across the top of the app ---------- */
 /* One band, the app's news drawn in it — the integrity check, an update waiting, a folder that has
@@ -266,6 +1328,31 @@ input[type="color"] {
   white-space: nowrap;
 }
 .topbar__spacer { flex: 1; }
+/* The two faces of the window, as one segmented control in the middle of the bar (`AMB-D-753`). It
+   is the same control in both shapes — with the terminal split out, its segment raises that window
+   rather than switching this one — so there is one place to look for the terminal however the app is
+   arranged. */
+.topbar__faces {
+  display: inline-flex;
+  background: var(--c-sunken);
+  border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  padding: 2px;
+}
+.topbar__face {
+  background: none; border: 0; border-radius: calc(var(--r-md) - 2px);
+  padding: var(--s-1) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-md); line-height: 1.6;
+}
+.topbar__face:hover { color: var(--c-text); }
+.topbar__face--on { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
+/* A turn standing behind the other face (`shell/terminalBadge.ts`). It is the accent dot the inbox
+   badge wears, in the one place that can be seen from the face the person is on — inline after the
+   label rather than pinned to a corner, so the segment simply grows by a dot and nothing shifts
+   under the pointer. */
+.topbar__face-badge {
+  display: inline-block; width: 6px; height: 6px; margin-left: var(--s-1);
+  border-radius: 50%; background: var(--c-accent); vertical-align: middle;
+}
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--c-sunken); border: 1px solid var(--c-edge);
@@ -325,8 +1412,12 @@ input[type="color"] {
 .navitem__dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 /* Drag-and-drop reordering of projects. The row being held fades, and the drop target
    takes an accent line above or below its midline. */
-.navitem[draggable="true"] { cursor: grab; }
+.navitem--reorderable { cursor: grab; }
+.navitem--dragging { cursor: grabbing; }
 .navitem--dragging { opacity: 0.4; }
+/* Worn by the body while a row is being dragged, because a selection begun on a row runs on across everything under
+   it — and dragging across rows selects their text on macOS and Linux (`AMB-T-3755`). */
+body.dragging-row { user-select: none; }
 .navitem--drop-before { box-shadow: inset 0 2px 0 0 var(--c-accent); }
 .navitem--drop-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
 .navitem__count {
@@ -377,4 +1468,316 @@ input[type="color"] {
 .rightpane__empty {
   flex: 1; display: flex; align-items: center; justify-content: center;
   color: var(--c-text-muted); font-size: var(--fs-md); padding: var(--s-5); text-align: center;
+}
+
+/* Which agent a pane starts as (`app/src/talk/agent.ts`). The classes are here rather than beside
+   either face's own because both faces draw this frame, and only one of them loads `talk.css`. The
+   pane's own box is not here for the same reason in reverse: each face styles its terminal itself,
+   and hands this frame the class to draw it with. */
+.agent__frame {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-height: 0;
+}
+
+/* What the frame says while it is working out what this folder starts with. */
+.agent__looking {
+  padding: var(--s-4);
+  color: var(--c-text-muted);
+  font-size: var(--fs-md);
+}
+
+/* The invitation to choose a folder, the offer of an agent and the install notice share a box: each is
+   a sentence and then something to press. */
+.agent__ask {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border: 1px solid var(--c-rule);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+}
+
+.agent__askTitle { font-size: var(--fs-md); font-weight: 600; }
+
+/* What was looked for, and what to do about it. Prose rather than monospace: the command names sit
+   inside a sentence, and a whole sentence set in the terminal's face reads as output. */
+.agent__hint {
+  max-width: 60ch;
+  color: var(--c-text-muted);
+  font-size: var(--fs-md);
+  line-height: 1.6;
+}
+
+.agent__choice {
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--c-edge);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.agent__choice:hover { border-color: var(--c-accent); }
+
+/* One the machine has not got. Drawn faint and dashed, and dead to a press: it is on the offer to
+   say that installing it would put it among the choices, so it has to read as a choice that is not
+   here yet rather than as one that failed (`../talk/agent`). */
+.agent__choice--missing {
+  border-style: dashed;
+  color: var(--c-text-faint);
+  cursor: default;
+}
+.agent__choice--missing:hover { border-color: var(--c-edge); }
+
+/* The press that unfolds them, and the rows it unfolds. Quiet: what the offer is about is what can
+   be started here, and this is the line under it. */
+.agent__more {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--c-text-muted);
+  font: inherit;
+  font-size: var(--fs-xs);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.agent__more:hover { color: var(--c-text); }
+.agent__missing { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); }
+.agent__missing[hidden] { display: none; }
+
+/* A refusal kept under the invitation rather than drawn in place of it — the folder could not be
+   bound, and the reader is left where they were, which is with a folder still to choose. Inside the
+   box it is one more thing said, so it takes the room of a line instead of the room of a face. */
+.agent__ask .agent__failed { flex: 0 0 auto; padding: 0; }
+
+/* The closed frame's row. It exists only once the program has ended — while one is running there is
+   nothing here to press, which is what "the agent cannot be changed mid-run" looks like on screen. */
+.agent__row {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--c-rule);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+}
+
+.agent__pick { display: flex; align-items: center; gap: var(--s-1); font-size: var(--fs-md); }
+
+/* What is shown instead when a terminal could not be started, or the question could not be put. */
+.agent__failed {
+  flex: 1;
+  padding: var(--s-4);
+  color: var(--c-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  white-space: pre-wrap;
+}
+
+/* The one line above a pane: what it is called, what its session is on, and the one thing worth saying
+   about it. One line and no more — a row that can grow is a row that pushes the terminal about every
+   time an agent says something long. */
+.plate {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: 0 var(--s-2) var(--s-2);
+  font-size: var(--fs-md);
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+/* Spelled out for the same reason the two faces are (see the top of this file): `display: flex` above
+   is an author rule and beats the user agent's `[hidden]`, so a row with nothing to say would be
+   hidden in the markup and drawn on the screen. It showed as an empty line until the mark went in
+   front of the words, and then as a dot on a pane that had not started. */
+.plate[hidden] { display: none; }
+
+/* The lamp the pane is known by, on one of three faces (see ../talk/nameplate.ts).
+
+   **Hue says which pane; the face says what is happening in it.** Two readings on one mark only work
+   while they cannot be mistaken for each other, so the colour never changes with what is happening —
+   with the one exception that proves it, the calling face, which drops the pane's hue for the warning
+   colour precisely because it has stopped saying which pane this is and started saying come here.
+
+   **Out is not away.** A pane that has quietened keeps its lamp at the resting step: it is still that
+   pane, and a mark that vanished would read as the pane having gone.
+
+   The lamp is built of two layers, and the glow goes **over** the core rather than behind it: put
+   behind, it is covered by the parent's ground and nothing is seen at all. */
+.plate__dot {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+  width: 8px; height: 8px;
+  color: hsl(var(--dot-hue, 199) 55% var(--dot-light, 42%));
+}
+/* The core. */
+.plate__dot::before {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+/* The glow, laid over the core: the same colour blurred out past the edge, which brightens the middle
+   and reads as light coming off it. Off on every face but the two that are lit. */
+.plate__dot::after {
+  content: "";
+  position: absolute; inset: -4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  filter: blur(3px);
+  pointer-events: none;
+}
+/* Lifted off a dark ground: the same hue at the light side's lightness reads as a smudge on it, and
+   the resting step is the dimmest thing on the row to begin with. */
+[data-theme="dark"] .plate__dot { --dot-light: 62%; }
+
+/* Lit — output is arriving. The glow is simply on, and stays on: what it reports is a state that
+   lasts, and a mark that moved for it would leave every pane on the screen moving all day. */
+.plate__dot[data-face="lit"]::after { opacity: 0.7; }
+
+/* Out — nothing is arriving and nobody is being called. Sunk in place, in the pane's own hue. */
+.plate__dot[data-face="out"] { opacity: 0.3; }
+
+/* Calling — a person's turn is standing here. The one face that moves, because it is the one that is
+   rare and the one that is actually asking for somebody.
+
+   The colour is the warning colour, the same one the page's badge and an off-screen project's dot
+   wear: the same thing is said three times as the reader gets closer, and it is said in one colour.
+
+   **What moves is the opacity and nothing else.** Anything that shifted the lamp would push the words
+   beside it about; and a colour carried across a blur cannot be interpolated, so a fade written as a
+   change of colour comes out as a jump between two of them.
+
+   The beat and the phase are both the row's — `BLINK_MS` and `phaseDelay` (../talk/moving.ts) — so
+   that this and the mark at the other end of the row fall together rather than reading as two things
+   being asked. */
+.plate__dot[data-face="calling"] {
+  color: var(--c-heed);
+  animation: plate-blink var(--blink) infinite;
+  animation-delay: var(--phase, 0s);
+}
+.plate__dot[data-face="calling"]::after {
+  opacity: 0.7;
+  animation: plate-blink-glow var(--blink) infinite;
+  animation-delay: var(--phase, 0s);
+}
+@keyframes plate-blink { 50% { opacity: 0.25; } }
+@keyframes plate-blink-glow { 50% { opacity: 0.12; } }
+
+/* Motion turned down: the calling face held at its brightest. What the blink carried was "come here",
+   and the warning colour on a lamp that is otherwise the pane's own carries it without the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .plate__dot[data-face="calling"],
+  .plate__dot[data-face="calling"]::after,
+  .plate[data-say="waiting"] .plate__mark--say,
+  .plate[data-say="premise"] .plate__mark--say,
+  .plate[data-say="unsent"] .plate__mark--say {
+    animation: none;
+  }
+}
+
+/* The pane's name. It belongs to the frame, so it is the one part of the row that does not move when
+   the process in it does.
+
+   **It is given a share of the row and not the room it asks for.** A name is bounded before it is
+   kept (`amenbo_core::frames`), and a bounded one is still long enough to push what the pane is doing
+   off the end — so what does not fit here is elided rather than taken out of the two places beside
+   it. `min-width: 0` is what lets a flex item shrink below its text at all. */
+.plate__name {
+  font-weight: 600;
+  color: var(--c-text);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* What the session is on. It takes the room that is left, and gives it up to what is said on the right
+   rather than pushing that off the end. */
+.plate__now {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The one thing said, on the right. The sentence itself is bounded at the door it comes in by
+   (`amenbo_core::session::WAITING_LIMIT`), so what is left for the row is the difference between a
+   label's line and this pane's share of it. */
+.plate__say {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The pause, the warning, the stop — each sits in front of the part it belongs to, and an empty one
+   takes no room. The mark is an icon and not a character (`../components/Icon.tsx`), so the place it
+   sits in is a box the size of the drawing rather than a slot of text: `:empty` is what folds it
+   away, and the drawing is the element's only child for exactly that reason.
+
+   **It is centred against the row rather than left on its baseline.** The row aligns on the baseline,
+   and a box is sat on that line by its bottom edge — so a drawing left to it rides up by the whole of
+   the descender space beneath the words it stands in front of. The lamp at the other end of the row is
+   taken off the baseline for the same reason. */
+.plate__mark {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex; align-items: center;
+}
+.plate__mark:empty {
+  display: none;
+}
+
+/* A person's turn has come. Nothing else on the row is asking for anything, so nothing else is drawn
+   to be noticed (`AMB-D-748`). */
+.plate[data-say="waiting"] .plate__say,
+.plate[data-say="premise"] .plate__say,
+.plate[data-say="unsent"] .plate__say {
+  color: var(--c-text);
+}
+/* The mark in front of those words blinks, to the same beat and the same faintness as the lamp at the
+   far end of the row — the two are one signal drawn twice, and drawn to two rhythms they would read as
+   two. It is the mark and not the words: where the pane is narrow the words are not drawn at all, and
+   what is left has to go on saying that somebody is needed (`../talk/nameplate.ts`). */
+.plate[data-say="waiting"] .plate__mark--say,
+.plate[data-say="premise"] .plate__mark--say,
+.plate[data-say="unsent"] .plate__mark--say {
+  animation: plate-blink var(--blink) infinite;
+  animation-delay: var(--phase, 0s);
+}
+
+/* A pane too narrow for three things drops them from the right, and the name and the ⏸ are what is
+   left (`AMB-T-3673`).
+
+   **Three things all cut short is a row none of which can be read.** Above this width each place
+   still says something after the ellipsis; below it the middle has room for a ref and no title, and
+   what is said has room for nothing at all — so rather than share the little there is, the row gives
+   it to the two that carry on meaning something: which pane this is, and whether a person is needed
+   in it. The words that went are one hover away, on the mark that stayed (`../talk/nameplate.ts`).
+
+   The width is what is asked rather than the count, because a count does not name a width: two
+   across and four across are the same width in this grid (`.termface__page-grid--*` above), six and
+   eight are narrower again, and the split-out window is one pane at whatever size its window is. What a reason has to be short enough
+   for is settled at the other end — `talk waiting` refuses one past the length of a label
+   (`amenbo_core::session::WAITING_LIMIT`), so this is the row's last resort rather than its plan. */
+@container (max-width: 360px) {
+  .plate__now,
+  .plate__mark--now,
+  .plate__say {
+    display: none;
+  }
 }

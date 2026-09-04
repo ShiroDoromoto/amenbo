@@ -1,0 +1,135 @@
+# The newline Amenbo withholds, and the reader it is withheld for.
+#
+# A pane whose launch line Amenbo did not compose is owed its opening sentence afterwards, and the
+# sentence is put into it and then submitted. **The submitting is conditional and the whole of this
+# road is that condition.** What a fresh folder draws first is not always an input box: one agent
+# opens on an update notice whose first choice runs a script off the network, and others open on a
+# choice of their own. A newline sent before the pane is holding the sentence is a newline answering
+# whatever *is* being asked — with the reader's hand nowhere near it.
+#
+# So the sentence goes in, and the newline waits for the pane to draw the sentence back — or, where a
+# program acknowledges a paste without ever showing it, to answer for it on the look after it landed.
+# Where the pane does neither, Amenbo gives up after a minute and leaves the sentence sitting in the
+# input box, one keypress from being sent by the person whose terminal it is. Nothing is taken away
+# and nothing is written into the pane: what is there is what the reader would have typed themselves.
+#
+# ── And the reader is told ───────────────────────────────────────────────────────────────────────
+# A sentence left in an input box is invisible on a screen that never drew it, so the pane at the end
+# of this road looks exactly like a pane that was handed its sentence properly. What tells the two
+# apart is the row above it, which says the sentence has not been sent and that one keypress sends
+# it. That is the second half of the road, and the half a build drops quietly: withholding the
+# newline correctly and saying nothing about it leaves a reader with a terminal waiting on them and
+# no way to know it.
+#
+# ── Why the line is this line ────────────────────────────────────────────────────────────────────
+# It has to show nothing, answer nothing, and hand back everything. Turning the terminal's own echo
+# off is what makes the pane silent about what was written into it — which is the state a program
+# drawing its own interface is in, reproduced on a machine where no such program need be installed.
+# Saying nothing at the moment the paste lands is what line buffering gives for free: `sed` writes
+# when a newline arrives and no newline does, so the pane is as still after the paste as before it,
+# which is the reading that says the paste was not answered. Handing back
+# every line it is given is what turns the absence into something readable: a marked line on that
+# pane could only have come from a newline, and a newline could only have come from Amenbo. Without
+# the second half the road would be reading a blank screen and calling it a guard.
+#
+# The command still prints once as it starts, because a pane nothing has written to is not pasted
+# into at all — the sentence would never be attempted, and a road that skipped the attempt would pass
+# on a build with no hand-over in it whatsoever.
+#
+# ── Why the machine is stood up first ────────────────────────────────────────────────────────────
+# So the frame draws the row a command is registered under: where a machine can start one thing there
+# is no row to write anything under, and where it can start none there is none either.
+id: not-have-your-agents-first-question-answered-for-you
+title: A pane that neither shows the opening sentence nor answers for it is never sent a newline, and the row above it says the sentence is waiting on the reader
+description: >
+  Amenbo tells whatever runs in a pane to read `amenbo agent --json` first, and where the launch line
+  is the reader's own the sentence follows the command into the pane rather than riding in as an
+  argument. It is submitted on one condition — that the pane has drawn it back, or answered the paste
+  the moment it landed — because a program that opens by asking something would read a newline as the
+  answer. The road registers a command that shows nothing of what it is written and says nothing when
+  it arrives, but hands back every line it is given, waits out the minute Amenbo spends trying, reads
+  that nothing was ever sent, and reads the row above the pane telling the reader so.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Nightwatch
+    as: nightwatch
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: watchhouse
+      project: nightwatch
+
+  # Two, so there is a row to register under: with one thing to start there is no choice to draw, and
+  # with none there is no row.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Nightwatch
+
+  # Shows nothing, hands back everything, and prints once so that there is a pane worth pasting into
+  # at all. Each of the three does a job — see the head of the file.
+  - type: action
+    domain: terminal
+    op: register-start
+    with:
+      name: Silent log
+      line: stty -echo; printf 'SCENARIO the pane is ready\n'; sed 's/^/SCENARIO back> /'
+
+  - type: action
+    domain: terminal
+    op: open-registered
+    with:
+      name: Silent log
+
+  # The program is up and has drawn, which is what makes the pane one Amenbo will write into. Without
+  # this the road could pass on a build that never tried.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane is ready
+
+  # And nothing was sent, through the whole minute Amenbo spends trying. The marked line is what may
+  # not appear: this program hands back every line it is given, so one would be a newline that went
+  # into a pane which had shown Amenbo nothing.
+  - type: assert
+    domain: terminal
+    op: handed-over
+    with:
+      given-back: SCENARIO back>
+      present: false
+
+  # And the reader is told. The pane is silent about the sentence by construction — that is what the
+  # registered line is for — so without this step the road would prove the newline was withheld and
+  # leave the reader of that pane with nothing to go on.
+  - type: assert
+    domain: terminal
+    op: unsent
+
+  # The lamp says the same thing at the other end of the row, and it is read on its own because it is
+  # what carries across a screen of panes: a reader with eight of these is not reading eight rows.
+  - type: assert
+    domain: terminal
+    op: dot
+    with:
+      face: calling

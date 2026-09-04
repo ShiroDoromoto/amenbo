@@ -108,6 +108,10 @@ pub enum Step {
         /// wrong reason is not the guard under test.
         #[serde(default)]
         with: Args,
+        /// Which of the app's windows this step is carried out in, named by the title drawn in its
+        /// bar. See [`Step::window`].
+        #[serde(default)]
+        window: Option<String>,
         /// Optional binding name so later steps can refer to what this produced.
         #[serde(default, rename = "as")]
         bind: Option<String>,
@@ -118,6 +122,9 @@ pub enum Step {
         op: String,
         #[serde(default)]
         with: Args,
+        /// Which of the app's windows this step is read against. See [`Step::window`].
+        #[serde(default)]
+        window: Option<String>,
     },
 }
 
@@ -141,6 +148,23 @@ impl Step {
     fn with(&self) -> &Args {
         match self {
             Step::Action { with, .. } | Step::Assert { with, .. } => with,
+        }
+    }
+
+    /// Which of the app's windows this step happens in, named by the title drawn in its bar — or
+    /// `None` for the app's one window, which is what a road says by saying nothing.
+    ///
+    /// A screen driver's business alone: the CLI has no windows, and a road written for it carries
+    /// none. It sits beside `with` rather than inside it because it is not an argument of the op —
+    /// the same op, in either window, is the same operation on the same store; what differs is which
+    /// screen it is done on, and which screen the answer is read off.
+    ///
+    /// Saying nothing is the honest default while an app draws one window, and it stops being a
+    /// default the moment it draws two: the tool behind a screen driver refuses to guess, so a road
+    /// that has not said which window fails loudly rather than reading whichever one was in front.
+    pub fn window(&self) -> Option<&str> {
+        match self {
+            Step::Action { window, .. } | Step::Assert { window, .. } => window.as_deref(),
         }
     }
 }
@@ -233,6 +257,23 @@ pub enum Domain {
     /// what comes of it leaves through the outbox — while the screen's half decides nothing but
     /// whether that wake is registered at all.
     Tick,
+    /// The terminal face: the pane an agent is run in, and whether it is a face of the app's one
+    /// window or a window of its own. A domain of its own because none of it is a record — a session
+    /// is a process, and which window is drawing it is this machine's arrangement of one screen. The
+    /// screen's alone, bar one premise: a terminal is what a reader is already typing in, so the
+    /// moves here are the operator's and the CLI driver walks none of them. What it does stand up is
+    /// the machine underneath — which agents a pane could be opened with (`can-start`) — because that
+    /// is settled before the app comes up and is no more a screen than a project already on the board
+    /// is.
+    Terminal,
+    /// The file face: the folder a project is bound to, read from inside Amenbo — what has changed
+    /// in it lately, and the tree folded down it. A domain of its own rather than part of
+    /// `Terminal`, because none of it is about the pane it is drawn beside: both of its sections
+    /// belong to the **project**, and what they say does not change when the pane beside them does.
+    ///
+    /// The screen's alone. Reading a file at a shell is `cat`, and there is nothing about that
+    /// Amenbo is the subject of.
+    Files,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -375,6 +416,14 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A terminal has no standing selection to press — it writes the selection out
     // as a `--filter` each time it asks, which is what `listed` walks.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-view", required: &["view"], refs: &[], strings: &["view"], binds: false },
+    // Going from a task to the pane its work is happening in — the road out of the ledger, and the one
+    // the ledger has. The pane is named rather than pointed at: the row carries the
+    // pane's own name, so an operator pressing it can see it is the pane the road meant before the
+    // press moves the screen. What the press does after that is nowhere in the step: which window
+    // holds the terminal face is the run's, and the road reads where it landed with `terminal pane`.
+    //
+    // A screen road alone. A terminal has no pane to go to and no face to switch.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "go-to-pane", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
     // A card carried into one of the columns a cut board draws, which is the board's own way of filing
     // work: what it lands under is the value on the column's heading, so the move names the axis and
     // that value rather than anywhere on a screen. The card is named by `target`, the way every step
@@ -522,6 +571,12 @@ const REGISTRY: &[OpSpec] = &[
     // required axis is answered before the acceptance reads it, since a decision has no second stage
     // for its writer to be turned away at.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &["project"], strings: &["title", "dimension", "value"], binds: true },
+    // Onto the face a project's decisions are read on, which sits beside the views its tasks are read
+    // on rather than under them: a decision is not a task drawn another way. A road that wants to read
+    // a row of that list has to press it, and pressing it is the only way there.
+    //
+    // A screen road alone. A terminal asks for decisions by naming them, and never has to be anywhere.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "open-face", required: &[], refs: &[], strings: &[], binds: false },
     // A decision's own life: the body is edited while it is still proposed, accepting freezes it,
     // and the link is what makes it a task's premise.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "edit", required: &["target", "body"], refs: &["target"], strings: &["body"], binds: false },
@@ -633,6 +688,27 @@ const REGISTRY: &[OpSpec] = &[
     // registers this machine's login with the OS, which is the one piece of state no throwaway store
     // can hold and no run can hand back — that half is walked on real machines instead.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "nudge-answer", required: &["nudge", "answer"], refs: &[], strings: &["nudge", "answer"], binds: false },
+    // The app ended and opened again on the same store. It is not a move on a screen at all: it is a
+    // run of Amenbo going out and another coming up, which is the one gap a road cannot otherwise
+    // reach and the only place several promises are kept. What a person set and comes back to is
+    // settled here, against everything that was this run's own and goes with it — the places a
+    // terminal was drawn in, the names on them — which the app keeps for a run and no longer.
+    //
+    // **It is the harness's own step, and the only one that is.** The run owns the app it shoots —
+    // the store it is pointed at is the run's, and the pid is how a shot names this window rather
+    // than whatever else of the same build is open — so an operator who quit Amenbo and opened it
+    // again from their machine would bring up a second app, on their own backlog, that the run
+    // cannot shoot. The instruction handed over says so: there is nothing to press, and what is read
+    // is the window that came back.
+    //
+    // The app is ended rather than asked to leave, for the reason a run takes it down at the end:
+    // asking goes through the app's name, and a name cannot pick out one instance. It is the harder
+    // half of what is under test besides — what outlives a run is written as it is changed rather
+    // than on the way out, so a build that only wrote at the door would go red here and be right to.
+    //
+    // A screen road alone. A CLI command is a run of its own that ends when it has printed, so a
+    // terminal carries nothing across and there is no gap here for this op to be.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "run-again", required: &[], refs: &[], strings: &[], binds: false },
     // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
     // the driver places somewhere of its own, since a pointer is answered by where a folder sits.
     // `init` raises a project of its own and binds it (hence the binding), `bind` points a folder at
@@ -704,8 +780,36 @@ const REGISTRY: &[OpSpec] = &[
     // contents, so a world where a bound folder already carries a provider's settings is only
     // reachable by writing inside it. Left out, the file lands in the run's own folder.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path", "dir"], binds: false },
+    // The clipboard filled from outside Amenbo, which is the only way a road can put a real one in
+    // front of the panel. It is not stood up in a premise: what is under test is the machine's own
+    // clipboard, and a premise that filled it with something other than a file manager would be
+    // testing a road nobody walks.
+    //
+    // They are the operator's own hands on their own file manager, so what is named is the file and
+    // the folder as the road calls them, never a path or an application.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-outside", required: &["path"], refs: &[], strings: &["path", "dir"], binds: false },
+    // `path` is the folder inside the bound one to paste into, and it is not optional: pasting into
+    // the folder the file was copied from makes the file manager rename what it writes, and what it
+    // renames it to is that machine's own word in its own language. A road reading that name back
+    // would be reading the file manager rather than Amenbo.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "paste-outside", required: &["path"], refs: &[], strings: &["path", "dir"], binds: false },
+    // And a name in that folder that is a link rather than a file. `path` is the name, `to` is what
+    // it points at, read in the run's own folder — which is outside every folder a `folder` step
+    // binds, so the link a road makes is the one people really make: a file kept in one place and
+    // pointed at from a project. A link is what its own name is, not what it leads to, so nothing
+    // has to be lying at `to` for the road to walk.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "symlink", required: &["path", "to"], refs: &[], strings: &["path", "to", "dir"], binds: false },
+    // `git-init` takes the same `dir`, and for a reason of its own: what git says about a folder is
+    // drawn on the file face of the folder a project is *bound* to, so a road reading those colours
+    // needs the repository to be that folder and not the one the run stands in.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &["dir"], binds: false },
+    // Everything lying in the folder, recorded. It exists for one state no road could otherwise
+    // reach: git naming a file while saying nothing about the folder holding it. A repository that
+    // has only ever been `init`-ed has nothing tracked in it, so git names the top folder and stops
+    // — and the tree's rollup, which is about a folder git did **not** name, is never walked.
+    // `dir` follows `git-init`'s rule and for its reason.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-commit", required: &[], refs: &[], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], strings: &[], binds: false },
     // The paste that starts this folder's AI on Amenbo at every session, put where the build says it
@@ -1198,6 +1302,18 @@ const REGISTRY: &[OpSpec] = &[
     // its folders). `dir` names the folder the way every `folder` step does; `present: false` is the
     // other half and needs no name, since a task holding none has nothing to name.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "worked-in", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
+    // Whether the task names a pane its work is happening in, and which one. `shows` is the pane's own
+    // name — the line a road typed into it — because that is what the row carries and what tells one
+    // pane from another.
+    //
+    // **`present: false` is the half this exists for.** The row is drawn only where a session is
+    // holding the task *and* a pane is drawing that session, so it is absent for a reservation made in
+    // somebody's own terminal and absent again once the pane has closed — while the reservation itself
+    // stands. A road pairs the absent half with a reading of the status, which is what
+    // says the ledger is answering "no pane here" rather than "nobody".
+    //
+    // A screen road alone. The row is a way to press, and a terminal has nowhere to press it to.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "pane", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
     // Which of a task's own controls the face draws, and which it does not. `opened` asks
     // *whose* record is standing there and answers it with a phrase off the record's face; this asks
     // what that face **offers to press**, which no phrase witnesses — a control that was taken away
@@ -1626,12 +1742,14 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "none-linked", required: &["absent"], refs: &[], strings: &["absent"], binds: false },
     // What a project with no work in it yet hands its reader: the loop that joins the two ends — the
     // reader asks their AI, the AI writes to Amenbo, and what it wrote lands on the board. Every move
-    // the interface can make on their behalf it makes, so what the screen carries is a terminal
-    // already inside the linked folder and a request finished enough to paste.
+    // the interface can make on their behalf it makes, so the whole of it is one press: a terminal
+    // opens inside the linked folder and the agent in it is handed the request before it starts.
     //
     // `hands_over` is the words that request has to carry, and what they name is the command the AI is
     // sent to run before it does anything else. It is the one part of the card that is the same in
-    // whatever language the app is in, so it is the part a reading can be held to.
+    // whatever language the app is in, so it is the part a reading can be held to — and it is read off
+    // the way out to the reader's own terminal, which is where the request is written down now that
+    // nobody on the one press has to paste it.
     //
     // GUI only, and not by omission: none of this reaches the store. A request that lost the command,
     // and a terminal opened somewhere other than the linked folder, leave exactly the rows behind
@@ -1642,6 +1760,16 @@ const REGISTRY: &[OpSpec] = &[
     // a `Review` — and is written down for exactly that reason: an arrangement is what a build
     // reorders without a single assert going red.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "first-loop-order", required: &["order"], refs: &[], strings: &["order"], binds: false },
+    // The press itself — the one move the loop offers, taken rather than read. It goes to the
+    // terminal face with a pane already open in the linked folder, which is the whole of what the
+    // loop promises and the one part of it no reading of the card reaches.
+    //
+    // It carries nothing. Which folder the pane works in and which project it belongs to are both
+    // the card's own to know — the card is a project's, and the folder is the one it names above the
+    // press — so a step that named either would be handing the screen an answer it is under test for
+    // having. What the pane landed under is read afterwards, off the face itself, by the roads that
+    // read any other pane (`terminal go-project`, `terminal pane`).
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "start-terminal", required: &[], refs: &[], strings: &[], binds: false },
     // The ways in a reader is offered before there is a folder to work in: raise a project, or open
     // one this device already holds. Both are the interface's own to carry out, and what says so is
     // that neither hands over anything to type — `absent` names the words a card pointing at a
@@ -2012,6 +2140,851 @@ const REGISTRY: &[OpSpec] = &[
     // running) or `yesterday` (pressed a day ago, the quiet spent); the band returns after one day,
     // so anything further back is the same world as `yesterday`.
     OpSpec { kind: Kind::Action, domain: Domain::Tick, op: "deferred", required: &["when"], refs: &[], strings: &["when"], binds: false },
+    // ── the terminal face ─────────────────────────────────────────────────────────────────────────
+    // Amenbo is one window with two faces and, for whoever wants them side by side, two windows.
+    // Every op below is the screen's, bar the one premise that opens the block: what they are about
+    // is where a running terminal is drawn, and a terminal is the one surface a reader is already
+    // typing in — there is nothing for the CLI driver to walk, and no gap in it.
+    //
+    // The exception, and the reason it is one. What a pane can be opened *with* is not a record and
+    // not a screen either: it is which agents this machine has installed, which the build asks by
+    // running the pane's own login shell over the operator's `PATH`. So a road that means to read the
+    // row of them has to be told what is on the machine before the app comes up, and this is the step
+    // that says so. It stands programs up in a directory the app is launched with in front of its
+    // `PATH` (`amenbo_verify_cli::domain::terminal`), which is a premise like any other — the world
+    // standing before the road is walked — and is the screen's own moves' opposite.
+    //
+    // `count` is a **floor and never a ceiling**: nothing the harness hands the app can take an
+    // install away from the operator's machine, so a road may ask for a row with more than one thing
+    // on it and may not ask for one with less. That is the one shape worth standing up in any case:
+    // where several can be started and nobody has chosen, the frame comes up asking, and that is a
+    // state no machine's own `PATH` can be relied on to be in.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "can-start", required: &["count"], refs: &[], strings: &[], binds: false },
+    // Which face the one window is showing. Pressed rather than arrived at: the segments are the only
+    // way between the two, and a road that could not name which it pressed could not say which face
+    // the assert after it read.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "show-face", required: &["face"], refs: &[], strings: &["face"], binds: false },
+    // The way in. A face with no folder yet has one control on it, and pressing it is the whole of the
+    // first run: the folder chosen is the one the AI is shown, it becomes a project's, and the pane
+    // opens in it. It is an action rather than a premise because it is the road every other terminal
+    // step stands on — a pane exists because somebody chose where it runs. `dir` is a name and not a
+    // path, the way `folder bind`'s is: which folder the run works in is the run's to decide, and what
+    // a road writes down is what to call the one it picked.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // Getting the pane to a plain shell — a terminal with no agent started in it. A folder with an
+    // agent on it opens on one, which is what a reader wants and what a road cannot speak in: what an
+    // agent does with a line typed at it is the agent's own, so a gate resting on one carrying out a
+    // command rests on a promise nothing holds it to. Every road that says something *in* a pane
+    // takes this step first, and what it says afterwards is said to a shell. One op rather than
+    // three, because the shell is reachable from every shape the face can come up in — which is the
+    // whole of what lets these roads be walked on any machine.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-shell", required: &[], refs: &[], strings: &[], binds: false },
+    // A command of the reader's own, written down on the frame. The catalog is a
+    // shortcut and not a census, so what a pane can be opened with is not only what Amenbo lists —
+    // and this is the road that says so.
+    //
+    // **It is the one terminal op that may name a program**, and the reason is that the program is
+    // the road's own. Every other reading here is written around not naming one (`opens-with`): which
+    // agents are on the row is a probe of the run machine's `PATH`, so a road that asked for Claude
+    // Code would run on the machines that happen to have it and nowhere else. A registered `line` is
+    // not that — it is text the road wrote, judged by its first word alone, so a road may name
+    // something every machine has and get the same answer on all of them.
+    //
+    // `line` is written with an argument in it or the road proves nothing. What is under test is that
+    // the whole line reaches the shell as it stands: a line of one bare word would read alike whether
+    // Amenbo handed it over or rebuilt it from the first word, which is the fault this exists to
+    // catch.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "register-start", required: &["name", "line"], refs: &[], strings: &["name", "line"], binds: false },
+    // Opening a pane on one of those. It names the row by the `name` it was registered under and
+    // never by a line, because a name is what the row is drawn by and the line is what it runs — the
+    // two are separate on purpose, and a road that pressed by the line would be reading the one place
+    // the screen does not put it.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-registered", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // A line typed into the pane and sent. `text` is the reader's own words rather than the
+    // interface's, which is what makes it worth reading back: it is on the screen because a person
+    // put it there, in whatever language the app is in, so a road can follow it from one window to
+    // the other. It also names the pane's frame — the first line sent into a frame is what it is
+    // called — which is how a road says *which* window it means once there are two.
+    //
+    // `shows` is which pane, named the way `remove-pane` names one: by the words a road typed into it
+    // earlier. A pane just opened needs none — it is the only one on the page with nothing on it, and
+    // the step before this one made it — but a road that comes *back* to a pane it left does, because
+    // by then every box on the page has a terminal in it and "the pane" names three of them.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
+    // A file dragged in from outside and let go over a pane. It is the file face's `drop-in` aimed at
+    // the other half of the screen, and it answers a different question: there the reader chose a
+    // folder for it to land in, and here nothing lands anywhere — the file stays where it is and the
+    // path it is at goes where the reader types.
+    //
+    // `brings` is a name rather than a path, for the reason the file face's is: a drop reads the disk
+    // the operator is sitting at, and nothing a run lays down is anywhere a hand can reach from
+    // there. Which pane is not named — a road drops on the one it just opened, and a road with two
+    // says which by what it typed into them.
+    //
+    // `beside` is a second name carried in the same hand, and it is one arg rather than a second step
+    // because what it is about is the gesture: several things picked up together and let go once put
+    // every path on the line side by side, and two drops one after the other are two gestures that
+    // happen to end in the same place. Only the first can say what a hand full of files does.
+    //
+    // `onto` is which pane, once saying so is the point: a drop lands where the pointer is, and on a
+    // page with two panes that is a thing to prove rather than a thing to assume. Left out, it is
+    // the page's one pane, which is what every road walked before there was a second one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drop-in", required: &["brings"], refs: &[], strings: &["beside", "brings", "onto"], binds: false },
+    // What is on the machine's clipboard put into a pane's input line. It is the drop above made
+    // with the keys instead of the hand, and it answers the half the drop cannot: a drop carries
+    // files the operator picked up on their own machine, and a paste carries whatever the last copy
+    // left — which is how a road follows one copy from the file face through to the pane.
+    //
+    // Nothing is sent. The line is left standing for `in-the-box` to read, for the reason
+    // `hand-to-pane` leaves it standing: a path put in front of an agent is a path the person has
+    // still to send.
+    //
+    // `onto` is which pane, named the way `drop-in` names one. Left out, it is the page's one pane.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste", required: &[], refs: &[], strings: &["onto"], binds: false },
+    // What is standing in the pane's input line, **unsent**. It is not `pane` with a different
+    // sentence: that one reads what a program printed, and this reads what nothing has run yet.
+    //
+    // The difference is the whole of what a hand-over owes. A path put in front of an agent is a path
+    // the person still has to send, and a build that sent the newline for them would have answered
+    // whatever the screen was asking at that moment — which on a first run is a question one of the
+    // real answers to ran a script off the network. A reading that could not tell the
+    // two apart would go green over exactly that.
+    //
+    // `on` is which pane's line is being read, named by the words a road typed into it. Left out, it
+    // is the page's one pane — a road with two says which, the same way it says which one to type
+    // into.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "in-the-box", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
+    // A command run in the pane, and waited on until what it printed is drawn. It is not `type-line`
+    // with a longer word in it: that step's line is the reader's own and is written to be *left* on
+    // the screen — the shell is not meant to know it — and this is a program being asked for output
+    // the steps after it read. The pane is cleared first, and that is part of the op rather than a
+    // nicety: a road that pressed "the ref" on a pane still holding two earlier runs would be naming
+    // one of three places on the screen, and only the operator would ever know which they took.
+    //
+    // `target` is there because a road cannot spell a number the run will mint. Where a command needs
+    // a record's own ref, it carries `<ref>` and names the record beside it — the operator puts the
+    // ref in, reading it off the same pane a step above had it on.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "run", required: &["command"], refs: &["target"], strings: &["command"], binds: false },
+    // Pressing a ref where a program drew it in the pane. The record is named rather than spelled out,
+    // for the reason every `target` is: what is on the screen is the run's own numbering.
+    //
+    // `folded: true` asks for that press on a ref the pane broke across two rows, which is the one
+    // place the two ways of finding a ref part company. What Amenbo's own output says of itself
+    // travels beside the characters and a fold cannot touch it; what is read back off the drawn
+    // screen has to be joined across the fold before it can be found at all. A road that only ever
+    // pressed refs sitting whole on one row would leave that joining unwalked, and nothing else
+    // reaches it — a pane is narrow, a ref near the end of a line is ordinary, and the miss it would
+    // hide looks exactly like characters that were never a link.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-ref", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // Something set running in the pane and left running, which is the one thing this face has no
+    // other way to reach. The line `type-line` types is a command no shell knows, on purpose, so what
+    // it puts on the screen arrives once and is over — and a pane that printed once has already gone
+    // still by the time a road can look at it. `text` is the line printed last, and it is the road's
+    // own words for the reason `type-line`'s are: what says the run is over has to be something the
+    // interface would never write by itself.
+    //
+    // It is not `run` with a longer command in it. That one is waited on — the step is over when
+    // the prompt is back — and this one is walked away from while the output is still arriving,
+    // which is the whole of the difference and the whole of what the mark it feeds needs.
+    //
+    // It runs out on its own rather than being stopped, and that is the whole of how the `out` face of
+    // `dot` is reached on a pane that was lit a moment before. Every control a pane has is on the pane
+    // — ending it, typing at it — so a road that cut the output short by hand would be pressing on the
+    // very pane it is about, and what it read afterwards would be a lamp gone out because the road put
+    // it out. Left alone, the same pane crosses from lit to out untouched.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "keep-printing", required: &["text"], refs: &[], strings: &["text"], binds: false },
+    // Splitting the terminal out into a window of its own, and folding it back. Two ops rather than
+    // one with a direction, because they are pressed in different windows: the way out is on the
+    // face, and the way back is in the window it made.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "split-out", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "fold-back", required: &[], refs: &[], strings: &[], binds: false },
+    // What the pane is showing. `shows` is words a road put there itself with `type-line`, so the
+    // reading finds them on the pane drawing that session and nowhere else — which is the whole of
+    // how a road tells "the same terminal, moved" from "another terminal, started". The absent half
+    // is what a road reads while the other face is up.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // Which pane of the page is the one being worked in, named the way every other pane step names
+    // one. Two things are read at once because they are one fact to a reader: the frame drawn picked
+    // out from the others, and the keyboard being in that pane rather than in the one they came from.
+    //
+    // The second half is read off the cursor and not by typing. A path handed to a pane is standing
+    // in its input line unsent, so a character typed to find out where the keyboard is would be a
+    // character added to the path — the road would be editing the very thing the step before it read.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "worked-in", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // Ending the terminal in the pane. It is the only way out — a pane going away is a pane moving,
+    // and the session outlives it — so it is also the only way a road reaches the state that follows
+    // one: what a pane says once nothing is running in it any more.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "end-pane", required: &[], refs: &[], strings: &[], binds: false },
+    // Getting rid of the place itself, which is the other control and the other outcome: the terminal
+    // in it ends, the frame goes, the page closes up behind it, and the next run does not bring it
+    // back. **It is the one move on this face nothing undoes**, which is why it asks before it is
+    // carried out and why a road walks it at all — what a person has to be able to trust is that the
+    // question stands between the press and the loss.
+    //
+    // `shows` names which pane by the words a road typed into it, the way the `pane` assert does. A
+    // page has several and they carry nothing else a road put there, so a step that only said "the
+    // pane" would leave the operator to choose one — and the whole of what follows is which one went.
+    //
+    // `answer` is which way the question is answered, and it is left out where there is nothing to
+    // choose between: a pane whose session is holding nothing is asked the plain thing it has always
+    // been asked, and answering that is saying yes. Where the session made a reservation from inside
+    // the pane, the question names it and offers three, which are three different things to want
+    // (`app/src/shell/PaneDropAsk.tsx`): `hand-back` puts the work back to `todo` and then goes,
+    // `leave` goes and leaves the reservation standing, `cancel` stays. The middle one is not a
+    // mistake — somebody stepping away for the night has every reason to leave a reservation where it
+    // is — so a road that only ever walked the first would be proving two thirds of the question.
+    //
+    // `target` is the task the question has to name, and it is what makes this step self-judging: the
+    // whole of what the three-answer question is for is naming what stands to be lost, and a question
+    // that named the wrong pane's work — or nothing at all — is the failure it exists to prevent. It
+    // is named beside `answer` and not on its own, a pane holding nothing having nothing to name.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "remove-pane", required: &["shows"], refs: &["target"], strings: &["shows", "answer"], binds: false },
+    // Something the agent in the pane said about its own session — the surface layer, said with the
+    // CLI from inside the terminal it is about. `verb` is which of the layer's words was used and
+    // `text` is what was said in it; both travel as values because the layer is one seam with several
+    // words, and an op per word would be the same instruction written four times.
+    //
+    // It is walked by a hand rather than by a driver on purpose. The layer exists only inside a pane
+    // — said anywhere else it is refused — so there is no way to reach it except the one an agent
+    // reaches it by, and a road that stood it up some other way would prove a path nobody walks.
+    //
+    // `away` is for the one thing that has to be said from behind the face that reads it: what the
+    // segment wears is raised only by a turn arriving while the ledger is up, and the layer is only
+    // ever spoken inside a pane, which is on the other face. With it the word is armed and the
+    // operator crosses over before it lands, so the step ends on the ledger. How long they have is
+    // the driver's to say and not the road's.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text"], binds: false },
+    // A name the person gives a pane, typed on that same row. The words the row carries are otherwise
+    // the session's own, said from inside the terminal, and this is the other hand on them: the last
+    // word on a frame is the person's, so a name typed here stands over whatever the session called
+    // itself (`app/src/talk/frames.ts`).
+    //
+    // **The way in is the row's menu, and that menu is drawn only while a terminal is running**
+    // (`app/src/shell/TerminalPane.tsx`). A frame nobody has opened anything in is a place there is
+    // nothing to call, so a road that named one would be pressing something that is not on the screen.
+    //
+    // `shows` names which pane, the way `press-pane` and `paste` name one: by the words a road typed
+    // into it earlier. Left out, it is the page's one pane.
+    //
+    // There is no way to spell an empty name, and that is the door being closed rather than an
+    // omission: an empty box takes nothing, so a road that asked for one would be asking for a step
+    // that does nothing and reads as though it had.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "name-pane", required: &["name"], refs: &[], strings: &["name", "shows"], binds: false },
+    // And what the pane's label carries afterwards. This is the whole of what the surface layer is
+    // for: a word said in a terminal that nothing outside it can find out, arriving where a person
+    // reads it. The words are the agent's own, so a reading finds them on the label and nowhere in
+    // the interface around it. It reads a name a person typed (`name-pane`) the same way and for the
+    // same reason — those words are the operator's own too, and are drawn on the row and nowhere else.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "label", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // The mark the terminal's own segment wears while a turn is standing behind it. It is the whole
+    // of what crosses the switch — a dot, with no number and no words — so there is nothing to name
+    // in it and nothing to read out: what a road says here is that it is there, or that it is not.
+    //
+    // The absent half is half the goal. Being on the terminal face is being told, so the mark is
+    // spent by crossing to it: a badge still up after the person has looked would be a light saying
+    // "something is standing" rather than a knock saying "something came up while you were away".
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "face-badge", required: &[], refs: &[], strings: &[], binds: false },
+    // Which project's panes the face is drawing. The tabs down the edge of the face are not a
+    // grouping laid over a list of panes: a pane belongs to a project and can work in no folder
+    // outside it, so pressing a project is the division itself being moved. What is beside the panes
+    // afterwards is that project's, and every other project's pane is off the screen — which is why a
+    // road walks this at all, a pane carried off by it being a running terminal like any other.
+    // `project` is the name the tab carries, which is the ledger's own word for it.
+    //
+    // It is pressed rather than arrived at, for the reason `show-face` is. Which project the face
+    // opens on is the run's business — whatever the ledger had selected, or the first project where
+    // it had none — so a road that named a project without pressing for it would be reading a screen
+    // it had not put itself on.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "go-project", required: &["project"], refs: &[], strings: &["project"], binds: false },
+    // What one of those tabs is drawn with. A project wears the image it was registered for, or —
+    // registered with none, which is nearly every project — its colour with the first letter of its
+    // name on it. `present` says which of the two, the way `project icon` does on the settings:
+    // neither side is an absence, so a step that asked for one of them to be missing would be asking
+    // an eye to find nothing in a square that is never empty.
+    //
+    // It is read on the tab of a project without going to it, `project` naming the tab as
+    // `go-project`'s does. That is the reading: every tab is drawn from the one picture the face is
+    // handed, so an image that arrived on the settings and not here would be an image the tabs never
+    // heard about.
+    //
+    // A screen road alone, for `project icon`'s reason — `project update` is the terminal's whole
+    // door onto these fields and there is nowhere on it to hand over an image — and one more: a
+    // terminal has no face to draw tabs down.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "tab-icon", required: &["project"], refs: &[], strings: &["project"], binds: false },
+    // Opening a pane. A pane belongs to a project and works in a folder that project is bound to, so
+    // where it is bound to one nothing is asked at all. `from` is which of the two controls is
+    // pressed, and they are not the same place: `face` is the empty frame on a page with room in it,
+    // and `strip` is the thin control a full page draws beside the panes. Neither names a page —
+    // where a pane lands is the project's arithmetic, not the road's.
+    //
+    // `asks: true` is the other half of the folder. Where the project is bound to several, the press
+    // opens nothing: what comes up where the pane would have been is the question of which of them it
+    // works in, and `pick-folder` answers it. A road that walked that path without saying so would
+    // tell an operator nothing was asked while the question stood on the screen in front of them.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-pane", required: &["from"], refs: &[], strings: &["from"], binds: false },
+    // Which of this project's folders the pane about to be opened works in. It is only ever reached
+    // from an `open-pane` that said `asks: true`: bound to one folder the face does not ask, and
+    // bound to none it has no list to offer — that press goes to a picker, which is `open-folder`.
+    //
+    // The answer is given before the frame is made, which is what lets a reader walk away from the
+    // question without leaving a half-opened box behind. `dir` is a name and not a path, the way
+    // `open-folder`'s is: where a run keeps its folders is the run's to decide, and what a road
+    // writes down is what to call the one it means. What the question *offers* is the whole of the
+    // goal — this project's folders, and no way to anywhere outside them — so the list is part of
+    // what the step puts in front of the operator rather than something read in a step of its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // Walking away from that question without answering it. A frame is made when the question is
+    // answered and not when it is asked, so this is the one move that reaches the state after a
+    // question nobody answered: what a face draws when somebody changed their mind. It is an op of
+    // its own rather than a value on `open-pane`, because it is pressed after that step and not
+    // instead of it — the question has to be standing before there is anything to leave.
+    //
+    // *How* it is left is the driver's to say and not the road's. The question comes down on a press
+    // anywhere else on the face, and which of those places is nearest is the run machine's business;
+    // a road that named one would be walking that control's own road instead of this one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "leave-question", required: &[], refs: &[], strings: &[], binds: false },
+    // Whether that question is standing, read by a folder it offers. `dir` is the road's own name for
+    // one of the project's folders, the way `open-folder`'s is — so what a reading finds is a word the
+    // road put in the world itself, and not one of the interface's, which is what lets both halves be
+    // read on a screen in any language.
+    //
+    // The absent half is what the walking-away is proved by, and it says more than "the question is
+    // gone": the question *is* the box, drawn where a pane would be, so a screen with neither on it is
+    // a question that left nothing behind.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "asking-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // What the empty frame will open a pane with, read on the row above the press that opens one.
+    // The row is every agent this machine can start with the plain shell beside them, and exactly one
+    // of them is on. A road reads it to say that a choice made once is still the answer afterwards,
+    // which is the whole of what the row is for and the half no press can show while it is being
+    // made: what is on at the moment of choosing is what the hand just put there.
+    //
+    // `start` is `shell`, and only that. Which agents are on the row is a probe of the run machine's
+    // own `PATH`, so a road that named one would be a road that runs on the machines that happen to
+    // have that tool and nowhere else. The plain shell is on every row by construction — it is the
+    // absence of an agent rather than one of them — which is what makes it the one thing a road can
+    // name here, for the reason `open-shell` names it.
+    //
+    // Where the machine can start nothing at all, no row is drawn: one thing to open with is not a
+    // question. The reading is the same on that machine — what the next pane starts with is the plain
+    // shell — with less on the screen to read it off.
+    //
+    // `start: none` is the other reading, and it names no program: it is **nobody having said yet**.
+    // The first run on a machine with more than one thing to start comes up with nothing on the row
+    // and a press that asks to be told rather than opening on a guess, and that is one state and not
+    // two — a build that lit a name it had never been given, and a build that opened on one, are the
+    // same fault read from either end. It is the one reading here that cannot be taken on whatever
+    // machine the run is on: where a single agent was found that one is on, and where none were there
+    // is no row. So a road that asks for it stands the machine up first (`can-start`), and reads this
+    // before anything on the frame has been pressed — a choice made anywhere in the run ends the
+    // state for good, this person's answer being kept and outliving the press that made it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "opens-with", required: &["start"], refs: &[], strings: &["start"], binds: false },
+    // A registered command as the frame draws it: the `name` on the row, and the `line` written out
+    // beside it.
+    //
+    // **Both halves are read, and the line is the half that matters.** What is registered runs in a
+    // terminal exactly as it was written — Amenbo composes none of it — so the promise the screen
+    // makes is that a reader can see what a press would start before they press it. A frame that drew
+    // the name alone would keep that promise for nobody, and one that drew a line it had tidied up
+    // would keep it falsely.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "registered", required: &["name", "line"], refs: &[], strings: &["name", "line"], binds: false },
+    // The opening instruction, arrived in a pane Amenbo did not compose the launch line of, and sent
+    // rather than left waiting.
+    //
+    // Every pane gets that sentence, and a row off the catalog takes it as an argument before its
+    // program starts — nothing to read afterwards. A line the reader registered has nowhere to put an
+    // argument, so the sentence follows it into the pane instead: pasted once the pane has drawn
+    // something, and submitted only once the pane draws the sentence back. **That second half is what
+    // this reads.** A build that pasted and never sent leaves the reader a sentence sitting in an
+    // input box; a build that sent blind would answer whatever the program asked first.
+    //
+    // `given-back` is the mark the road's own registered line puts in front of what it is handed, and
+    // it is the road's word rather than the screen's for the reason every quoted word here is. It is
+    // also what makes the reading a reading at all: a pane echoes what is put into it, so the sentence
+    // is on the screen either way, and only a line the program gave back says it was ever sent.
+    //
+    // **The sentence itself is named in the instruction, and it is the one text here that may be.**
+    // What a screen draws is in the run machine's language, and no road quotes it; this is not that.
+    // It is the fixed English Amenbo hands an agent, the same on a machine set to any language, and
+    // what the operator is given to look for stops before the command name in it — so the reading
+    // holds on a dev-channel build as well as on the shipped one.
+    //
+    // **The absent half is the dangerous half, and it is the half a build gets wrong quietly.** The
+    // sentence is put in whatever the program does, so a pane that never showed it is a pane the
+    // newline was withheld from — the sentence is left in the input box for the person, and nothing
+    // was answered on their behalf. A road reads that with a line the program cannot have been sent:
+    // it registers a command that swallows what it is shown but still hands back any line it is
+    // given, so the marked line appearing at all is a newline that went in blind. Where such a build
+    // would have answered the first thing the program asked, this reading is the whole of the guard.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "handed-over", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
+    // And what the row above that pane says about it afterwards. It is the other half of the ending
+    // `handed-over`'s absent side reads: the sentence was left in the input box, and the reader is
+    // told so rather than left with a screen that looks exactly like one which was handed its
+    // sentence properly.
+    //
+    // **Nothing is quoted, because the words are the interface's own.** What the row says is drawn in
+    // whatever language the machine is set to, so a road naming it would hold on one machine — the
+    // rule every reading here is written around. The sentence is described in the instruction instead
+    // and left to an eye, the way the lamp's faces are (`dot`).
+    //
+    // It takes no argument for the reason `face-badge` takes none: there is one row above one pane,
+    // and the whole of what is being read is whether it is saying this.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "unsent", required: &[], refs: &[], strings: &[], binds: false },
+    // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
+    // ceiling on how many a page may hold, and this is how many are actually standing there. The two
+    // part company on exactly the thing worth defending — a face that filled the ceiling with empty
+    // boxes would be asking the same question four times over, and a count of the ceiling could never
+    // tell that from a face with one pane on it.
+    //
+    // `empty` is how many of the boxes beside them are the way in — 0 or 1, since the page draws one
+    // at its first gap and never a second. Left out, the reading is that there is at most one, which
+    // is all a road needs while the page has room. It is worth saying exactly where the panes fill
+    // the count: room the page has not got must not be offered, and "at most one" cannot tell a full
+    // page from a page still offering.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "frames", required: &["count"], refs: &[], strings: &[], binds: false },
+    // How many panes a page draws: 1, 2 or 4, and no other number. It is not a change of look. The
+    // frames are one list cut into pages, so a new count re-pages every pane this device has — which
+    // is why a road walks it at all: what has to survive the cut is the terminals running inside them.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "set-panes", required: &["count"], refs: &[], strings: &[], binds: false },
+    // Which way the two panes of a two-pane page sit: `across` side by side, `down` one above the
+    // other. It is asked at two and at no other count — everywhere else the rows are already spent
+    // and there is nothing left to arrange (`app/src/talk/layout.ts`) — so a road walks it with two
+    // panes standing, and never as a shape a page of any other count could be put into.
+    //
+    // **It is an op of its own rather than an argument on the count**, for the reason `split-out` and
+    // `fold-back` are two: the presses are two controls, and what they do differs on exactly the
+    // thing worth defending. A new count re-pages every frame this device has; a new orientation
+    // moves no pane anywhere and turns no page. A road that said both in one step would be asking for
+    // a re-cut it did not want, and could not tell which of the two had done what came out.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "set-orient", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
+    // And the shape the page came out in, read off the panes themselves. It is the whole of what the
+    // press is for: `down` is asked for so that each pane keeps the window's whole width, and a build
+    // that lit the control without re-laying the grid under it would draw exactly the screen the
+    // reader pressed away from.
+    //
+    // Both shapes are walked, never the asked-for one alone. A page read only after the press has
+    // nothing to say about what it was before, so a face stuck in one arrangement — the one a road
+    // happened to ask for last — would come out green from end to end.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "panes-sit", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
+    // Which page is being shown, counted from 1. Paging is one of the two ways to a pane that is not
+    // on the screen and by far the commoner, so it is the move a terminal has to be able to outlive:
+    // a page is drawn rather than held, and the panes it took away are still running behind it.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "go-page", required: &["page"], refs: &[], strings: &[], binds: false },
+    // The columns beside the panes, put away and brought back. `side` says which of the two: the rail
+    // that lists the panes, and the file face on the other edge.
+    //
+    // **Which control does it is the whole reason both halves are here.** A column is folded by a
+    // control of its own — the rail from the row above the panes, the file face from a cross on the
+    // panel itself — and both are opened again from that same row. A road that only folded one of
+    // them would leave the pairing untested on the other, and a column with no way back is the one
+    // failure this face cannot recover from: nothing else on the screen says the thing is still
+    // there to be asked for.
+    //
+    // They are two ops rather than one carrying a direction, for the reason `split-out` and
+    // `fold-back` are two: the press that puts a column away and the press that brings it back are
+    // in different places, and a road that named the wrong one would be pressing something else.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "hide-side", required: &["side"], refs: &[], strings: &["side"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "show-side", required: &["side"], refs: &[], strings: &["side"], binds: false },
+    // The edge a column shares with the panes, dragged. `toward` is which way — `wider` takes room
+    // from the panes, `narrower` gives it back — and both halves are walked, because a width that
+    // only ever grows is half a control and the half a reader is left with is the one that took
+    // their pane's room.
+    //
+    // `broad` is the third, and it is a place rather than a distance: drag until the column is about
+    // as wide as the panes. It is here for the width a road has to be able to *recognise* later
+    // (`side-span`), which the other two cannot hand it — a finger's width either way is a difference
+    // between two shots, and nothing an eye can name on one.
+    //
+    // `cover` is the fourth, and a place as well: drag the wide width on until the panes are gone
+    // behind it. It is separate from `broad` because the two stop in different places — the narrow
+    // width stops where the panes would be squeezed away, the wide one goes on to the rail — and an
+    // operator handed the wrong sentence would let go somewhere neither reading can name. What it is
+    // for is `side-cover`, the way `broad` is for `side-span`.
+    //
+    // **It is the one step on these roads aimed at a line.** The edge carries no name, so nothing
+    // reaches it the way a button is reached — the screen tool drags between two points, and working
+    // those out of the screen is an operator's. So the instruction says where to put the pointer and
+    // what to watch follow it, and the shot after it is what an eye closes.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drag-side", required: &["side", "toward"], refs: &[], strings: &["side", "toward"], binds: false },
+    // A press on a pane, meaning nothing but the press. It is what puts the reading column back to
+    // its narrow width: the next press outside that column says where the reader is looking, and a
+    // pane is the answer that says they have gone back to the work. So what it proves is on the
+    // other side of the panes from what it touches.
+    //
+    // **It is not `type-line` with the typing left out.** That step's press is a way to reach the
+    // input line and what it is about is the line; this one leaves the pane as it found it, and a
+    // road that typed to get here would be reading a column beside a pane that had changed under it.
+    //
+    // `shows` is which pane, named the way `type-line` and `paste` name one: by the words a road
+    // typed into it earlier. Left out, it is the page's one pane.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-pane", required: &[], refs: &[], strings: &["shows"], binds: false },
+    // Whether a column is beside the panes at all. `present: false` is the half the folding is proved
+    // by, and it is the half worth having: a column that went away is what gives the panes the width,
+    // and a face that drew it anyway would look exactly like one that had honoured the press until
+    // somebody measured. It is not required, the way it is on no assert this face has: absence is
+    // said out loud and presence is what a step means when it says nothing.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side", required: &["side"], refs: &[], strings: &["side"], binds: false },
+    // And how wide it is, after a drag. `wider` says which way it should have gone, against where it
+    // stood on the shot before — the two pictures side by side are the reading, which is why this one
+    // is left to an eye rather than to a search for words.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-width", required: &["side", "wider"], refs: &[], strings: &["side"], binds: false },
+    // And how wide it stands, on one picture. The neighbour above answers against the shot before it,
+    // which is an answer a road loses the moment the whole face changes underneath: crossing to
+    // another project redraws every column on it, and "wider than it was" is then about two faces
+    // rather than about one width. So this one is read against what is beside the column on its own
+    // shot — the panes, whose width is whatever the column left them.
+    //
+    // `span` is `thin` for a column the panes are plainly wider than, `broad` for one that has taken
+    // about their width or more. Two answers rather than a number, because what closes it is an eye
+    // at a picture and a person at the screen has no ruler. Which is also why `broad` is reached by
+    // `drag-side toward: broad` and not by the finger's width the other direction moves: a difference
+    // an eye is to swear to has to be a difference an eye can see.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-span", required: &["side", "span"], refs: &[], strings: &["side", "span"], binds: false },
+    // And how much of the panes is left beside the reading column at its wide width, which is the one
+    // question the neighbour above cannot answer for that width. `span` divides the width between the
+    // column and the panes, and the wide width the column ships with takes about half of it — so a
+    // wide width somebody dragged out and the one nobody touched are the same answer on `span`
+    // whenever the window is the size the application opens at, and on a window dragged wider the
+    // shipped one turns `thin` while the build is perfectly correct. A reading resting on the size of
+    // the window is a reading a road cannot carry.
+    //
+    // What does not rest on it is whether any of the panes is showing. The wide width lies over the
+    // panes rather than beside them, and it stops at the rail: the one it ships with leaves a strip of
+    // the work in view on the narrowest window the application opens, and one dragged to the stop
+    // leaves none on the widest. So `cover` is `part` for a column with some of the panes still
+    // showing beside it, `all` for one with none — a presence rather than a proportion, which is why
+    // it stands as an op of its own instead of a third answer on `span`.
+    //
+    // `side` is here for the shape of the family and is `files`: the rail has one width and is never
+    // drawn over anything, so there is nothing for this reading to be about on that side.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-cover", required: &["side", "cover"], refs: &[], strings: &["side", "cover"], binds: false },
+    // Which face the lamp on a pane's label is showing. It is the one reading that says a pane is
+    // *alive* rather than drawn: a terminal that ended leaves its last output where it was, so words
+    // on a pane outlive the process that wrote them and a road reading only those cannot tell a
+    // session that came back from the picture of one. `face` says which of the three is being read —
+    // `lit` for output arriving, `calling` for a turn standing, `out` for neither. The lamp's hue is
+    // not this op's and must not be read as its neighbour: hue says which pane, and the face says what
+    // is happening in it — except on `calling`, which drops the hue for the warning colour because it
+    // has stopped saying which pane this is and started saying come here.
+    //
+    // **Only the calling face moves**, and that is what decides how a road may read each of them. The
+    // two still ones are a picture and can be shot; `calling` is a blink, so it is watched — at either
+    // end of its turn it rests at a step a shot cannot tell from the others, and a road that judged it
+    // off a picture would go red on the frame it happened to catch.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "dot", required: &["face"], refs: &[], strings: &["face"], binds: false },
+
+    // ── the file face ─────────────────────────────────────────────────────────────────────────────
+    // The folder a project is bound to, read from inside Amenbo: the folder itself, folded down, with
+    // what git says about each row drawn as a colour on it. Every op is the screen's —
+    // `cat` is not Amenbo doing anything — and `section` says which part of the column a row is being
+    // looked for in. There is one part to name today; the arg is kept because the panel is not
+    // finished growing, and a road that named none of them would have to be rewritten when it does.
+    //
+    // Unfolding the folder. It is a value and not two ops because it is one control that opens and
+    // shuts, unlike the two windows' way out and way back, which are pressed in different places.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "tree", required: &["open"], refs: &[], strings: &[], binds: false },
+    // One folder opened a level, or shut again with `open: false`. Folders are opened one at a time
+    // on purpose — the level below is fetched when it is asked for — so a road reaching something
+    // deep names each step of the way.
+    //
+    // The two halves are a value rather than two ops, the way the whole tree's are: what opens a
+    // folder is the press that shuts it. Shutting one is how a road keeps a name on the screen once,
+    // which is what a road pasting copies anywhere needs — a copy carries the name it came from.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "enter", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // A file opened, from whichever section it is being pressed in. The row is named by the words it
+    // draws, which is the file's own name.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "open", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    // And back out of it, by the way drawn on the screen. It is one of two — the other is the key
+    // below — and this is the one a reader finds without knowing it is there.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "back", required: &[], refs: &[], strings: &[], binds: false },
+    // A key pressed on the file face. The vocabulary is closed at the driver rather than here: what
+    // a key does is the face's, and a road naming one the face has no answer for is a road nobody
+    // can walk.
+    //
+    // It is an op of its own and not an argument on the ops above, because what a key reaches is
+    // decided by where the reader is standing rather than by what is being asked for: the key that
+    // leaves takes one layer per press, so the same step means the file on one press and the panel
+    // on the next.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "press", required: &["key"], refs: &[], strings: &["key"], binds: false },
+    // Which of its two forms a Markdown file is drawn in — what the text says (`rendered`), or the
+    // text itself, hashes and all (`source`). Markdown is the only file with two, and the control is
+    // drawn for it and for nothing else.
+    //
+    // The step names the form to end in rather than the press, because the one control is a toggle:
+    // a road saying "press it" would mean the other form on a face that had already been switched,
+    // and what a road is about is where the screen ends up.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "show-as", required: &["form"], refs: &[], strings: &["form"], binds: false },
+    // The open file read again as the encoding the reader names, chosen from the control on its own
+    // row that says what it was read as. The guess reports no confidence and breaks nothing visible
+    // when it is wrong, so this door is the only thing standing between a reader and a file that
+    // quietly says something else — and a door nobody walks is a door nobody knows is shut.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "reopen-with", required: &["encoding"], refs: &[], strings: &["encoding"], binds: false },
+    // Whether a row is standing in a section. `present: false` is the half several of these roads are
+    // about — a file the folder holds but the face must not offer, because it is ignored.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "listed", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    // What git says about a row, drawn on it as a colour. `mark` names which of the three
+    // the row is wearing — `untracked`, `added`, `modified` — rather than the colour itself: what each
+    // one is drawn in is a theme's to choose, and a road naming a colour would go red the day one moved.
+    //
+    // It is a `Review` on the screen, and the only assert on this face that could never be anything
+    // else. A shot is read for words, and a colour is not one — the row says the same letters wearing
+    // it as it does bare. `present: false` is the half an ignored row is read by: git records nothing
+    // about it, so it wears no colour while standing on the tree like any other.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "row-mark", required: &["name", "section", "mark"], refs: &[], strings: &["name", "section", "mark"], binds: false },
+    // What the open file says it was read as. The name is the one the build itself offers — a road
+    // that spelt an encoding its own way would be asking for a label nothing draws — and what it
+    // proves is that the row follows the reader rather than the guess.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "read-as", required: &["encoding"], refs: &[], strings: &["encoding"], binds: false },
+    // What the column has open draws — a file, or the draft page that sits on the first of its tabs.
+    // `shows` is words the road itself put there, so a reading finds them because what was written
+    // reached the screen and for no other reason.
+    //
+    // `as` says what the words are standing in. Two of its three answers are a Markdown file's forms,
+    // and asking for either hands the whole step to an eye: they carry the same words — that is what
+    // makes them the same file — and what tells them apart is punctuation a reading throws away and a
+    // size no reading reports, so a step judged on the words alone would pass on the very form it was
+    // written to catch. The third is `picture`, and it is the opposite: the words are drawn inside the
+    // file, so reading them off a shot is the whole of the question.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "reading", required: &["shows"], refs: &[], strings: &["shows", "as"], binds: false },
+    // One of the face's standing lines, named by what it says rather than by its wording: the words are
+    // the interface's own, and which language the run's machine is in is not a road's to know.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
+
+    // ── the files the column is holding ───────────────────────────────────────────────────────────
+    // The reading column holds several files at once, as a row of tabs above the one on top
+    // (`app/src/files/FilesPanel.tsx`), and these are the three ways a road walks that row.
+    //
+    // One tab pressed, bringing its file up. `name` is the file's, which is what the tab is drawn
+    // with; left out, it is the draft page, the one tab with no name a road could type — its words
+    // are the interface's own, and it is the only tab that is always there. The two are one op
+    // because they are one row, the way `menu-on-folder`'s two are one menu.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "tab", required: &[], refs: &[], strings: &["name"], binds: false },
+    // The same file reached from the control at the end of that row instead. It is a second door and
+    // not a convenience: the row scrolls sideways and never wraps, so a tab far enough along it is
+    // off the end, and this is the only way to one that is. It names a file and never the draft
+    // page — what the control lists is what a reader opened.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "more-tabs", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // And the row read back: which files it holds, in the order they were opened. `names` is all of
+    // them, so a road reads what is **not** there as well — a file opened twice is one tab, and a
+    // tab closed leaves the rest standing.
+    //
+    // A `Review`, though every word on it is the road's own. What is being asked is an order and a
+    // whole: a reading finds each name wherever it stands, and finds them all with a fourth tab
+    // beside them. Both are what this exists to catch.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "tabs", required: &["names"], refs: &[], strings: &[], binds: false },
+
+    // ── changing what is in a file ────────────────────────────────────────────────────────────────
+    // The words typed into the editor an opened file draws. They go on the end and on a line of their
+    // own, which is what lets a road read the file afterwards for **both** what it already held and
+    // what was added: a save that wrote only the typing would pass a reading of the new words and
+    // have thrown the file away.
+    //
+    // It is one op and not two — the caret put where it goes, and then the typing — because on this
+    // face they are one move, the same reasoning `name` is one op for.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "edit", required: &["types"], refs: &[], strings: &["types"], binds: false },
+    // The same box filled from the clipboard instead of from the keyboard. It is a separate op and
+    // not `edit` with the words left out, because a road cannot spell what goes in: what arrives is
+    // whatever the last copy put there, and on the road this exists for that is a path the run
+    // minted and nobody can write down beforehand.
+    //
+    // **It is an ordinary text box, and that is the whole of why it is here.** A path pasted into a
+    // pane comes with the quoting a shell needs, so a road that read only the pane could not tell a
+    // plain path on the clipboard from a quoted one. This is where the plain half is read, with
+    // `files reading`.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "paste-into-editor", required: &[], refs: &[], strings: &[], binds: false },
+    // And the typing kept. It takes no args: what is saved is the file that is open, and where the
+    // bytes go is not a road's to say.
+    //
+    // **Nothing is asserted here**, and that is deliberate. What the panel draws once a save is
+    // through is that there is nothing left to save, which is a reading of the control rather than of
+    // the file — a face that drew it having written nothing would read exactly the same. So a road
+    // that means to prove the bytes landed leaves the file and opens it again, which is the app
+    // reading the disk, and the only reading that could not have come from what was on the screen.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "save", required: &[], refs: &[], strings: &[], binds: false },
+    // The offer beside the line about the file having moved: take what is on the disk now, and lose
+    // what was typed. It is the panel's whole answer to a file written under a reader — lining two
+    // texts up is the pane's agent's work and not this face's — so it is one press and takes no args.
+    //
+    // **What it proves is the disk.** The editor holds what somebody typed until this is pressed, so
+    // a reading taken after it is a reading of the bytes, and it is how a road tells a save that was
+    // refused from one that went through without leaving the file and opening it again.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "read-again", required: &[], refs: &[], strings: &[], binds: false },
+
+    // ── putting a row in the bin, and taking it back ──────────────────────────────────────────────
+    // Where the file face's own settings row stands: whether the panel asks before it bins a row.
+    // The face has one setting, so the row is not named — the way the tick's is not.
+    //
+    // **This is what lets the question be walked at all.** Whether it is asked is a habit of the
+    // machine the run is on, and the checkbox that turns it off is drawn inside the question it
+    // silences — so the settings row is the only thing that puts the question back. A road that can
+    // move it can put the machine where it needs it and then walk the question, instead of pressing
+    // the bin and covering both endings.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "setting", required: &["position"], refs: &[], strings: &["position"], binds: false },
+    // And moving it. `asks` puts the question back, `quiet` takes it away. The positions are named by
+    // what each does rather than by the word drawn on the row, since the words are the interface's own
+    // and the run's language is whatever the machine is set to.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "set", required: &["position"], refs: &[], strings: &["position"], binds: false },
+    // The bin pressed on the file that is open. It takes no args for the reason `save` does: what goes
+    // is the file on the screen, and where the machine keeps what it deleted is not a road's to say.
+    //
+    // **The press is the whole of this step, and the question is the next one.** Where a road put the
+    // row in `asks`, the panel puts a question here and this step leaves it standing; `answer` is what
+    // decides it. Where the row is in `quiet` there is no question and the row goes on the press. Both
+    // are the same press, which is why they are the same op — what differs is whether a road wrote a
+    // step after it.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "trash", required: &[], refs: &[], strings: &[], binds: false },
+    // The question the bin put, answered. `yes` bins the file and `no` leaves it where it is — and
+    // both are a road's to walk, since what the question is for is the second one.
+    //
+    // **The checkbox in it is not this op's.** Ticking it would turn the question off for every run
+    // walked on this machine afterwards, which is the state this pair exists to stop being permanent;
+    // a road that wants the panel quiet says so with `set`.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "answer", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
+    // And taking it back, which on this face means the last press of the bin and nothing else. What
+    // does it is the key the machine already undoes with rather than a control Amenbo drew, so the
+    // line says the key — and says where to be standing, because the column beside this one hears the
+    // same key as its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "undo", required: &[], refs: &[], strings: &[], binds: false },
+
+    // ── picking rows out ──────────────────────────────────────────────────────────────────────────
+    // Which rows the next act is about, said by pressing them rather than by naming them on the act
+    // itself. What a key or a menu item does to "the files" is the question these roads ask, and a
+    // step that named the rows on the act would be asking a different one — whether the face can be
+    // told, one row at a time, which ones are meant.
+    //
+    // Two ops because the gestures are two questions. One row is the machine's own adding key, which
+    // is also the way a row leaves a selection; a run of them is Shift, measured from wherever the
+    // last press without it landed. Both name their row the way every row-addressed op here does.
+    //
+    // A screen road alone. What the binary is handed is the paths themselves, so there is nothing on
+    // that side to pick out.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "pick", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "pick-to", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+
+    // ── the machine's own copy and paste ──────────────────────────────────────────────────────────
+    // What `⌘C` and `⌘V` mean on this face is what they mean everywhere else on the machine, so the
+    // clipboard they go through is the machine's and not a pocket of Amenbo's. Where a paste lands is
+    // worked out from the row the keyboard is on, the way a drop's landing is.
+    //
+    // Each names its row the way every other row-addressed op here does: a key reaches the row the
+    // keyboard is standing on, and which row that is cannot be read off the screen afterwards — so a
+    // step that left it unsaid would be handing the operator a choice the road meant to make.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "copy", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "paste", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+
+    // ── bringing a file in from the machine ───────────────────────────────────────────────────────
+    // A file dragged in from outside and let go over a row, which is the one way anything reaches this
+    // folder that does not go through the folder itself. What is under test is the landing rather than
+    // the carrying: the drop is caught by the application and not by the face, and what the face
+    // decides is which folder was under the pointer when the hand opened.
+    //
+    // So the row is named the way every other row here is, and it is a folder's — a file's row opens a
+    // file and has nothing to put anything in. The section is named beside it for the reason `open` and
+    // `menu` name theirs.
+    //
+    // `brings` is a name rather than a path, and the operator brings the row it stands for. That is the
+    // same fact `task attach` runs into on this face and for the same reason: a drop reads the disk the
+    // operator is sitting at, and nothing a run lays down is anywhere a hand can reach from there. What
+    // it holds is nothing this op reads — it is looked for by its name once it has landed.
+    //
+    // `as` says which of the two is being dragged, because the operator has to bring the right one and
+    // the two prove different things: a file lands as itself, and a folder lands with everything in it,
+    // which is a reading only a road that opens it can make.
+    //
+    // That reading is what `holding` is for, and it is the folder's alone: a road that opened the
+    // folder and looked for a name would be looking for a name only the operator knows, having brought
+    // the folder themselves. Named here, it is asked for at the hand-over instead — bring one with
+    // *this* in it — and the row inside becomes something a shot can answer for.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "drop-in", required: &["as", "brings", "name", "section"], refs: &[], strings: &["as", "brings", "holding", "name", "section"], binds: false },
+
+    // ── naming what is in the folder ──────────────────────────────────────────────────────────────
+    // The menu again, over what a file's menu cannot be opened on. A folder's row carries no way out
+    // to the machine and offers a name to make instead, and so does the heading at the top of the
+    // tree — which is the folder itself, and the only way to make a name at the top level, there
+    // being no row up there to point at.
+    //
+    // The two are one op because they are one menu, and which of them is meant travels as `name`
+    // being there or not: a row is named the way every other row here is, and the heading is named by
+    // nothing, having no name of its own to be told apart by. `section` is asked for either way, and
+    // on the heading it is the whole of the answer — a project answering for several folders draws a
+    // heading each.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu-on-folder", required: &["section"], refs: &[], strings: &["name", "section"], binds: false },
+    // One name made, from the item on that menu through to the name being asked for. It is one op and
+    // not two because the press and the typing are one move on this face: the item puts a box where a
+    // row would be, and a box nobody typed into is a name nobody asked for — there is nothing in
+    // between worth a road's while. `as` says which of the two items, by what it makes rather than by
+    // the item's words.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "name", required: &["as", "name"], refs: &[], strings: &["as", "name"], binds: false },
+    // And the same box over a name that is already there, from the item that opens it. What is typed
+    // is the whole new name and not a change to the old one: the box opens holding what the row is
+    // called, and what a step names is what the box is to be left holding — not the letters typed to
+    // get there. The two differ, because the box picks out the part before the last dot rather than
+    // the whole name, and the driver's line is what says so.
+    //
+    // **A name changed only in its letters' case is not a rename a road can read.** Every reading on
+    // a screen road is folded to one case before the shot and the expectation meet, so a row that was
+    // never renamed draws the same answer as one that was. It is the rename most worth walking — a
+    // machine that reads two such names as one is the machine that would refuse it — which is why it
+    // is said here: a road that named one would go green over a face that had done nothing.
+    //
+    // `by` says which door the box was opened by — the menu (left out, and the usual one) or the key
+    // (`by: key`, where `press` with `f2` opened it a step earlier). Only the words differ: a step
+    // that named the menu after a key had opened the box would send an operator hunting for a menu
+    // nothing put on the screen.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "rename", required: &["name"], refs: &[], strings: &["name", "by"], binds: false },
+
+    // ── handing a file to the machine ─────────────────────────────────────────────────────────────
+    // The three ways out of this face that are not reading the file here, and all three are the
+    // machine's own: the application it already opens that kind of file with, one the reader picks
+    // for this file alone, and the file manager they keep their folders in. Amenbo chooses none of
+    // them and remembers none of them, so the road stops at the hand-over and never follows what came
+    // forward — where the file ended up is the machine's answer, not this face's.
+    //
+    // On a row the menu is a right-click. A folder's row opens one too, but it holds none of the
+    // three: what a folder can be handed to is nothing, and what it is offered instead is a name to
+    // make or to write over, which `menu-on-folder` above reaches. So this op names a file, the way
+    // every other row here is named — by its name, and by the section it is standing in.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    // The same menu, reached from the file that is open rather than from a row. It is a second door and not a
+    // convenience: a file the face refuses to draw offers a way on to something built to open it, and there is no
+    // row under the pointer to right-click by then — the column has been replaced by what the file turned out to
+    // be. It takes no args for the same reason: one file is open, and it is the one the menu is about.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu-on-file", required: &[], refs: &[], strings: &[], binds: false },
+    // One item on that menu pressed. `door` names which of the three rather than the words on the
+    // item, for the reason `note` and `section` are named that way: the wording is the interface's
+    // own, and which language the run's machine is in is not a road's to know.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "hand-over", required: &["door"], refs: &[], strings: &["door"], binds: false },
+    // The one item on that menu that goes to something inside Amenbo rather than out to the machine:
+    // what is running in the pane the reader is working in. It takes no args because there is nothing
+    // to name — what is named is the row the menu was opened on, a folder as readily as a file, and
+    // which pane is the face's own answer rather than a road's.
+    //
+    // It is its own op and not a fourth `door` for the reason the three above are one: those three
+    // end off Amenbo's window and stop at the hand-over, and this one ends **on** it, in the pane,
+    // where a shot can settle what happened. `terminal in-the-box` is what reads it.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "hand-to-pane", required: &[], refs: &[], strings: &[], binds: false },
+    // The item that puts the row on the machine's own clipboard — the file itself and its plain path
+    // together. It takes no args for the reason the one above it does: what is copied is the row the
+    // menu was opened on, a folder as readily as a file.
+    //
+    // **Nothing here can be read.** A clipboard is off every window a run shoots, so this op ends in
+    // the press and says so, and what settles it is the paste after it — into a pane, into the
+    // editor an opened file draws, or back into the tree. It is the one step on this menu whose
+    // whole meaning is in the step that follows.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "copy-path", required: &[], refs: &[], strings: &[], binds: false },
+    // The same hand-over made by hand: the row taken hold of and carried onto a pane, rather than
+    // named to the one the reader is already in. It is a separate op from the menu item because the
+    // difference is the whole of what it proves — the menu's pane is the face's answer and this one
+    // is the reader's, and a road that walked only the menu would leave the gesture untested.
+    //
+    // `onto` names which pane, by the words a road typed into it, the way `type-line` and
+    // `remove-pane` name one. It is what the road is about — a page with one pane cannot tell "where
+    // it landed" from "where the reader was" — so unlike those two it is not optional.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "carry-to-pane", required: &["name", "section", "onto"], refs: &[], strings: &["name", "onto", "section"], binds: false },
+    // And what the press left. No shot settles it, and that is the point rather than a gap: what a
+    // hand-over ends in is off Amenbo's own window — an application that came forward, or an
+    // operating system's chooser drawn by the system — and the run shoots the window under test. The
+    // eye that closes it is the one that was standing at the screen when the item was pressed.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "handed-over", required: &["door"], refs: &[], strings: &["door"], binds: false },
 
 ];
 
@@ -2100,6 +3073,21 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // road cannot make a file at all — every move it has is a move on a record — so a road that needs
     // one lying on the disk has no other way to arrive at it.
     (Domain::Repo, "copy-fixture"),
+    // And one of those names being a link instead of a file. Amenbo makes no link and has no command
+    // that would — a face that refuses to follow one is all it ever does about them — so the world a
+    // road about that refusal opens on is one no face reaches.
+    (Domain::Repo, "symlink"),
+    // And the folder being a git repository, which is the world every road about what git says has to
+    // open on. Amenbo makes no repository and has no command that would — it only ever reads one — so
+    // no road reaches this state whichever face is walking it. It is a step as well, on the roads where
+    // making one is what is being walked: the hook slots are written into a repository, and getting
+    // there is those roads' own work rather than the ground they start from.
+    (Domain::Repo, "git-init"),
+    // And what was lying there being recorded in it. Same reason one line up, and one state further:
+    // Amenbo makes no commit either, so a folder git is quiet about while a file inside it is new is
+    // a world no face can reach. It is a premise and only that — a road that recorded something
+    // mid-walk would be walking git rather than Amenbo.
+    (Domain::Repo, "git-commit"),
     // And a folder already wired, which is the same kind of world one step further on. The wiring is a
     // file and not a record, so nothing in the store reaches it — and writing the settings out by hand
     // would put the launch command's own name in the scenario, which is the one thing the build under
@@ -2153,6 +3141,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // and the judgement it gates can never be in the same run. The same kind of reach as
     // `store worn-in`, one key further in.
     (Domain::Tick, "deferred"),
+    // Which agents this machine can start. It is a premise and can be nothing else: the build asks
+    // the question once, as it draws the frame, by running a login shell over the `PATH` it was
+    // launched with — so the answer is fixed before there is a screen to press anything on. What it
+    // arranges is the machine and never the app: programs in a directory of the run's own, handed to
+    // the launch and to nothing else.
+    (Domain::Terminal, "can-start"),
 ];
 
 /// Whether this op may stand a world up (see [`PREMISE_OPS`]).
@@ -2464,6 +3458,23 @@ impl Scenario {
                 ));
                 continue;
             }
+            // Which window a step happens in is a screen's question. On the premise it names a
+            // window nothing has drawn yet, and on the CLI's road it names one that never exists —
+            // both read as a road written for the screen and filed under the wrong key, which is
+            // exactly the mistake a silently ignored field would leave standing.
+            if let Some(window) = step.window() {
+                if driver != Some(Driver::Gui) {
+                    let where_ = match driver {
+                        None => "a premise stands a world up before any window is drawn",
+                        _ => "the CLI has no windows",
+                    };
+                    errs.push(at(i, format!(
+                        "`window: {window}` says which screen this happens on, and {where_} — it belongs on `steps_gui`"
+                    )));
+                } else if window.trim().is_empty() {
+                    errs.push(at(i, "`window` names a window by the title drawn in its bar, so it cannot be empty".to_string()));
+                }
+            }
             let spec = match lookup(step.kind(), step.domain(), step.op()) {
                 Some(s) => s,
                 None => {
@@ -2519,8 +3530,11 @@ impl Scenario {
             // The yes/no args are booleans wherever they appear: `present` asks whether something is
             // there, `ok` what verdict a check is expected to come back with, `running` whether
             // anything is working a queue, `required` whether a declared setting is one its plugin
-            // cannot work without, the two key questions whether a catalog serves a signing key
-            // and whether one of its is pinned, and `first` whether a hit stands at the top of the
+            // cannot work without, `away` whether a word said in a pane is armed and left behind,
+            // `folded` whether the ref being pressed in a pane is one the fold broke across two
+            // rows, `asks` whether the press that opens a pane meets the question of which folder
+            // rather than a pane, the two key questions whether a catalog serves a signing key and
+            // whether one of its is pinned, and `first` whether a hit stands at the top of the
             // answer rather than merely somewhere in it.
             // The query, in whichever of its two spellings — one of them, never both and never
             // neither. `spelled` belongs to the number alone: a word is typed as it is written, so a
@@ -2555,7 +3569,18 @@ impl Scenario {
                 errs.push(at(i, "`mentions` writes a number into text, so it needs a `notes` or a `title` to write it into".to_string()));
             }
 
-            for key in ["present", "ok", "running", "required", "publishes_key", "pinned_key", "first"] {
+            for key in [
+                "present",
+                "ok",
+                "running",
+                "required",
+                "away",
+                "folded",
+                "asks",
+                "publishes_key",
+                "pinned_key",
+                "first",
+            ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));
@@ -2567,13 +3592,19 @@ impl Scenario {
             // because an axis has three answers to give — and the reading has two, `both` being a
             // state an axis is in and not a side anything is offered on — so the set is checked
             // against the kind of step rather than once for the key.
-            if let Some(v) = step.with().get("side") {
-                let (ok, takes) = match step.kind() {
-                    Kind::Action => (matches!(v.as_str(), Some("task" | "decision" | "both")), "`task`, `decision` or `both`"),
-                    Kind::Assert => (matches!(v.as_str(), Some("task" | "decision")), "`task` or `decision`"),
-                };
-                if !ok {
-                    errs.push(at(i, format!("`side` must be {takes}")));
+            //
+            // Only where the word means that. `side` is also the terminal's word for which of its
+            // panels is up (`files`, `memo`, `rail`), which is a different vocabulary under the same
+            // key — so the domain is part of the question, not just the kind.
+            if step.domain() == Domain::Dimension {
+                if let Some(v) = step.with().get("side") {
+                    let (ok, takes) = match step.kind() {
+                        Kind::Action => (matches!(v.as_str(), Some("task" | "decision" | "both")), "`task`, `decision` or `both`"),
+                        Kind::Assert => (matches!(v.as_str(), Some("task" | "decision")), "`task` or `decision`"),
+                    };
+                    if !ok {
+                        errs.push(at(i, format!("`side` must be {takes}")));
+                    }
                 }
             }
 
@@ -2633,12 +3664,68 @@ impl Scenario {
     }
 }
 
+/// Where the files a road copies into its world are kept, resolved against this crate so it is the
+/// same folder whatever the CWD.
+///
+/// It is answered here rather than beside the driver that reads from it, because the lint below has
+/// to look in the very folder the run will: two answers to "where are the fixtures" is how a road
+/// comes to name one that is not there and nothing says so until release day.
+pub fn fixtures_dir() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent() // verification/
+        .map(|p| p.join("fixtures"))
+        .unwrap_or_else(|| std::path::PathBuf::from("fixtures"))
+}
+
+/// Every fixture this scenario names that is not in [`fixtures_dir`].
+///
+/// **The one check in the lint that touches the disk**, and the reason it is not in
+/// [`Scenario::validate`] with the rest: validate answers about the text of a road, and this asks
+/// the filesystem. It is worth the exception because nothing else asks — `cargo test` and `--print`
+/// both read a road without ever fetching what it copies, so a `from:` naming nothing is green
+/// everywhere until the pre-distribution run walks it for real and stops.
+fn missing_fixtures(scenario: &Scenario) -> Vec<ValidationError> {
+    let dir = fixtures_dir();
+    let mut errs = Vec::new();
+    let mut look = |driver: Option<Driver>, steps: &[Step]| {
+        for (i, step) in steps.iter().enumerate() {
+            if step.domain() != Domain::Repo || step.op() != "copy-fixture" {
+                continue;
+            }
+            let Some(from) = step.with().get("from").and_then(|v| v.as_str()) else { continue };
+            if dir.join(from).is_file() {
+                continue;
+            }
+            errs.push(ValidationError {
+                driver,
+                step: Some(i),
+                message: format!(
+                    "there is no fixture at `{from}` — the path is read from {}",
+                    dir.display()
+                ),
+            });
+        }
+    };
+    look(None, &scenario.given);
+    for driver in Driver::ALL {
+        look(Some(driver), scenario.steps(driver));
+    }
+    errs
+}
+
 /// Load and validate in one call — the check a `lint` run performs on each file.
 pub fn lint_file(path: impl AsRef<Path>) -> Result<Scenario, Vec<String>> {
     let scenario = load_file(path).map_err(|e| vec![e.to_string()])?;
-    match scenario.validate() {
-        Ok(()) => Ok(scenario),
-        Err(errs) => Err(errs.into_iter().map(|e| e.to_string()).collect()),
+    let mut errs = scenario.validate().err().unwrap_or_default();
+    // Only once the road itself reads: a `copy-fixture` whose op or args are wrong has already been
+    // named, and a second line about the file it points at would be noise on top of the real fault.
+    if errs.is_empty() {
+        errs = missing_fixtures(&scenario);
+    }
+    if errs.is_empty() {
+        Ok(scenario)
+    } else {
+        Err(errs.into_iter().map(|e| e.to_string()).collect())
     }
 }
 
@@ -2670,6 +3757,60 @@ steps_cli:
         let s = load_str(GOOD).expect("parses");
         s.validate().expect("valid");
         assert_eq!(s.steps(Driver::Cli).len(), 3);
+    }
+
+    /// A road that says which window it is walked in — the one thing a screen driver needs once an
+    /// app draws more than one, and the one thing the other drivers have no use for.
+    #[test]
+    fn a_screen_road_may_say_which_window_a_step_is_walked_in() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: task
+    op: narrowing-shut
+    window: "Amenbo — Terminal"
+"#;
+        let s = load_str(yaml).expect("parses");
+        s.validate().expect("valid");
+        assert_eq!(s.steps(Driver::Gui)[0].window(), Some("Amenbo — Terminal"));
+    }
+
+    /// Written on the wrong road it is a road filed under the wrong key, and the loader says so
+    /// rather than reading past it: a terminal has no windows to stand in front of, and a premise
+    /// stands its world up before anything is drawn at all.
+    #[test]
+    fn a_window_off_the_screen_road_is_rejected() {
+        for (key, step) in [
+            ("steps_cli", "  - type: assert\n    domain: task\n    op: narrowing-shut\n    window: \"Amenbo\"\n"),
+            ("given", "  - type: action\n    domain: project\n    op: create\n    with: { name: P }\n    window: \"Amenbo\"\n"),
+        ] {
+            let yaml = format!("id: x\ntitle: y\nsteps_gui:\n  - type: assert\n    domain: task\n    op: narrowing-shut\n{key}:\n{step}");
+            let s = load_str(&yaml).expect("parses");
+            let errs = s.validate().expect_err("the window is refused");
+            assert!(
+                errs.iter().any(|e| e.message.contains("belongs on `steps_gui`")),
+                "{key}: {errs:?}"
+            );
+        }
+    }
+
+    /// A window is named by the title drawn in its bar, and no window is called nothing.
+    #[test]
+    fn an_empty_window_name_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: task
+    op: narrowing-shut
+    window: "  "
+"#;
+        let s = load_str(yaml).expect("parses");
+        let errs = s.validate().expect_err("an empty title is refused");
+        assert!(errs.iter().any(|e| e.message.contains("cannot be empty")), "{errs:?}");
     }
 
     #[test]

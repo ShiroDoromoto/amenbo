@@ -1,0 +1,349 @@
+# Several rows picked out in the file panel, and the acts that then reach every one of them.
+#
+# A panel that can only act on the row under the pointer makes a reader do one file at a time, which
+# is what every file manager stopped asking for decades ago. What is under test is not the picking on
+# its own — a band drawn on three rows proves nothing — but that what a reader reaches for afterwards
+# is about the rows they picked: the path copied out of the row menu, and the bin.
+#
+# ── Why the two gestures are read differently ────────────────────────────────────────────────────
+# They answer different questions, so the road asks each the way only it can be asked. The adding key
+# is read on two rows that are **not** neighbours, so that a press which had quietly taken everything
+# between them fails; Shift is read on a run of three, so that a press which had done nothing but move
+# to the row it was on leaves a different answer than a press which reached.
+#
+# ── Why a row is pressed to take it back out ─────────────────────────────────────────────────────
+# Opening a file starts with a press on its row like any other — it takes two, and the first of them
+# picks the row out — so the file the paths are read in is picked out by the very step that opens it,
+# and it would go on the clipboard with the rest if the road left it there. Pressing it again with the adding key is how a reader takes one back out, which is the half
+# of that key an adding-only press would pass.
+#
+# ── Why the paths are read in another file's text ────────────────────────────────────────────────
+# A clipboard is off every window a run can shoot, so what a copy left is read where it is put down.
+# The box is a file the road never copied, for the reason the single-row road uses one: a reading
+# taken on the copied file's own text could not tell a paste that landed from a header drawing its
+# name.
+#
+# ── Why the folder is shut again before anything is read ────────────────────────────────────────
+# A copy carries the name it came from, so the moment the rows are pasted the tree draws each of
+# those names twice — once where it was copied from and once in the folder it landed in, which the
+# paste leaves standing open. Every step after that would be asking the operator to choose which of
+# the two rows it meant. Shutting the folder puts the copies away until the rows they came from have
+# gone to the bin; opened again at the end, the names it holds can be the copies and nothing else.
+#
+# ── Why the bin comes after the paste and not before ─────────────────────────────────────────────
+# What a copy puts on the machine's clipboard is the files themselves, and a file in the bin is not
+# somewhere a paste can reach. So the order is the reader's own — copy, put down, then clear away —
+# rather than the order the three acts are listed in.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. A selection is a thing on a screen: what the binary is handed is the paths
+# themselves, and every command there names the files it is about.
+id: pick-several-rows-and-act-on-all-of-them
+title: The rows picked out in the panel are the rows the row menu and the bin act on
+description: >
+  Open the terminal face on a project whose folder holds four files and a folder. Pick two rows that
+  are not neighbours with the key this machine adds to a selection with, and copy their paths from
+  the row menu: both come out, and the row between them does not. Pick two again, copy them with the
+  key and paste them into the folder. Then reach back with Shift and press the bin: the three rows go
+  together, the file below the run stays, and the folder holds the two that were copied into it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # The three rows the road picks out. They sort together and above the file the paths are read in,
+  # which is what makes a range across them a range of exactly these three.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: alpha.md
+      content: SCENARIO the first of the three
+
+  # The one in the middle. It is never pressed: what reaches it is Shift, and what must not is the
+  # adding key.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: bravo.md
+      content: SCENARIO the second of the three
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: charlie.md
+      content: SCENARIO the third of the three
+
+  # The text box the copied paths are read in, and the row that says the bin took the run and not the
+  # tree. It sorts below the three, so it is outside the range and on the screen after it.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: keep.md
+      content: SCENARIO this file was here before anything was pasted into it
+
+  # The folder the rows are copied into. It holds a file of its own, so that what is read inside it
+  # at the end is told apart from a folder that came back empty.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/already.md
+      content: SCENARIO this file was in the folder from the start
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: tree
+
+  # ── two rows picked out, and the menu acting on both ──────────────────────────────────────────
+  # Not neighbours, which is what the adding key is for: a press that had reached everything between
+  # them would take bravo.md with it, and the reading below is what notices.
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: alpha.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: charlie.md
+      section: tree
+
+  # Opened on one of the two rows already picked out, which is the press a reader makes to act on
+  # what they gathered — and what they gathered has to survive it.
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: alpha.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: copy-path
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: keep.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: paste-into-editor
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: alpha.md
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: charlie.md
+
+  # And the row standing between them is not on the clipboard: what came out is the two rows picked,
+  # not the run they stand at either end of.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: bravo.md
+      present: false
+
+  - type: action
+    domain: files
+    op: back
+
+  # ── two rows copied with the key, and put down in the folder ──────────────────────────────────
+  # keep.md was picked out by the press that opened it, so it is pressed again to take it back out —
+  # otherwise it would be on the clipboard with the two rows this leg is about. That is the other
+  # half of what the adding key does, and the copy below is what would notice it missing.
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: keep.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: alpha.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: bravo.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: copy
+
+  # Onto the folder's own row, which is where a paste lands. The press that puts the keyboard there
+  # opens the folder, and puts the picking back to that one row.
+  - type: action
+    domain: files
+    op: paste
+    with:
+      name: notes
+      section: tree
+
+  # Shut again before anything else is named: the copies carry the names they came from, and the two
+  # rows of each name would leave every step below asking the operator which one it meant.
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+      open: false
+
+  # ── the run reached with Shift, and the bin taking all of it ──────────────────────────────────
+  # A press of its own first, because the paste above left the picking on the folder's row. From
+  # charlie.md, reaching back to alpha.md takes bravo.md with it — and what proves the reach is that
+  # bravo.md goes to the bin with them.
+  - type: action
+    domain: files
+    op: pick
+    with:
+      name: charlie.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: pick-to
+    with:
+      name: alpha.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: press
+    with:
+      key: delete
+
+  - type: action
+    domain: files
+    op: answer
+    with:
+      answer: "yes"
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: tree
+      present: false
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: bravo.md
+      section: tree
+      present: false
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: tree
+      present: false
+
+  # And the file below the run is still there: what went was the rows picked out, not everything the
+  # tree was drawing.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: keep.md
+      section: tree
+
+  # ── what the paste left ───────────────────────────────────────────────────────────────────────
+  # Opened only now. The rows these were copied from have gone to the bin, so a row called alpha.md
+  # is the copy and can be nothing else.
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: alpha.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: bravo.md
+      section: tree
+
+  # And charlie.md is nowhere. It was in the selection the paths were copied from and in the one the
+  # bin took, and in neither of the two the files themselves were copied from — so the folder holding
+  # the copies is where the difference between those selections can be read.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: charlie.md
+      section: tree
+      present: false

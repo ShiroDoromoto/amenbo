@@ -1,5 +1,5 @@
 // screen — drive a mac screen from the outside and read what is on it: bring an app to the front,
-// click, carry a thing across it, type, send a key, shoot its window, and read the text off a shot.
+// click, drag, type, send a key, shoot its window, and read the text off a shot.
 //
 // One tool rather than one per caller. What a caller needs of a screen is the moves, a shot and the
 // words on it — never a window id or its bounds, which is why neither leaves here: the tool shoots
@@ -19,16 +19,25 @@
 //   swift screen.swift click-named <pid> <name>  left-click what that name names (fronts the app first)
 //   swift screen.swift click <x> <y>             left-click at a screen point
 //   swift screen.swift dblclick <x> <y>          double-click at a screen point (what opens a dialog's row)
-//   swift screen.swift drag-named <pid> <from> <to>
-//                                                carry what one name names onto what another names and
-//                                                let it go there (fronts the app first)
+//   swift screen.swift drag <pid> <x1> <y1> <x2> <y2> [steps]   press at the first point, move to the second, let go
 //   swift screen.swift type "text"               type into the focused element (Unicode direct, so no IME)
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 51=Backspace / 121=Page Down)
 //   swift screen.swift scroll <pid> <dx> <dy>    turn a wheel over that app's window (+dy is back toward the top)
+//   swift screen.swift right-click <x> <y>       right-click at a screen point
+//   swift screen.swift right-click-named <pid> <name>  right-click what that name names
 //   swift screen.swift set-date <pid> <name> <yyyy-mm-dd> [--near <name>]
 //                                                put a day into the date field of that name, on the
 //                                                row that --near names when the name reaches several
 //   swift screen.swift trusted                   whether the accessibility permission is granted (prompts if not)
+//
+// Anything aimed at a pid also takes `--window <title>`, anywhere in the line. An app draws one
+// screen per window, so a pid alone stops naming a screen the moment it has two: `front` raises the
+// window named, `shot` shoots it, and `find` / `click-named` / `drag` / `scroll` / `set-date` read,
+// press, turn and write inside it and nowhere else. Left out, it means the app's one window — and an app with two is
+// told to say which rather than answered with whichever the list held first. That silence is the failure worth refusing: a
+// road reading the wrong window finds nothing it expected and comes out red for a reason nobody can
+// see, or finds a name both windows carry and comes out green without having looked at the screen
+// under test.
 //
 // Reach for `click-named` over a point. A point costs two conversions a name costs neither of: a
 // shot's pixels are the window's points times the scale of *that* display, which is 2 on a built-in
@@ -57,19 +66,65 @@ func fail(_ msg: String) -> Never {
 }
 
 // ---------------------------------------------------------------------------
-// The window: found here, shot here, and never handed out
+// The window: named here, found here, shot here, and never handed out
 // ---------------------------------------------------------------------------
 
-/// window answers with the substantial window of the given pid — the real one, not a title bar or
-/// a shadow — as the id `screencapture` is aimed with and the frame a pointer is aimed into. A window
+/// The one of `all` that `wanted` names — exact first and then by part, the same rule a name reaches
+/// an element with (`named`), and for the same reason: one window's title is often the start of
+/// another's ("Amenbo", over "Amenbo — Talk"), so a whole title has to be able to name the shorter.
+///
+/// Nothing is guessed at either end. A name that reaches none is a caller naming a window this app
+/// does not have; a name that reaches two, and no name at all when two are up, is a caller who has
+/// not said which. Both are answered with the titles that are up, because the caller can then write
+/// one down — where picking whichever the list held first would be a screen chosen by an ordering
+/// nobody controls, reported as the screen that was asked for.
+func theWindow<W>(_ wanted: String?, among all: [W], titled title: (W) -> String, of pid: Int) -> W {
+    func listing(_ ws: [W]) -> String { ws.map { "\"\(oneLine(title($0)))\"" }.joined(separator: " / ") }
+    if all.isEmpty { fail("no window for pid \(pid) — is the app running, on screen and in front?") }
+    guard let wanted else {
+        if all.count == 1 { return all[0] }
+        fail("pid \(pid) has \(all.count) windows on screen — \(listing(all)); say which with --window <title>")
+    }
+    let exact = all.filter { title($0) == wanted }
+    let found = exact.isEmpty ? all.filter { title($0).contains(wanted) } : exact
+    if found.isEmpty { fail("no window of pid \(pid) is called \(wanted) — it has \(listing(all))") }
+    if found.count > 1 {
+        fail("\(found.count) windows of pid \(pid) hold \(wanted) — \(listing(found)); name one of them in full")
+    }
+    return found[0]
+}
+
+/// The title drawn in a window's bar. It is the only name a window carries out of the app: the label
+/// the app knows its own windows by does not reach the accessibility tree at all, and the address
+/// behind a webview is not something a person reads off the screen and could write in a road.
+func windowTitle(_ w: AXUIElement) -> String {
+    axString(w, kAXTitleAttribute as String) ?? ""
+}
+
+/// The windows of an app that a person would say are windows.
+///
+/// A webview app keeps panels beside its real ones — a shadow, a drag surface — and they arrive in
+/// the same list, untitled and filed under `AXUnknown`. Counting them would make an app with a single
+/// window look ambiguous, and then every call would have to name a window that has no name.
+func standardWindows(of app: AXUIElement) -> [AXUIElement] {
+    let all = axAttribute(app, kAXWindowsAttribute as String) as? [AXUIElement] ?? []
+    return all.filter { axString($0, kAXSubroleAttribute as String) == (kAXStandardWindowSubrole as String) }
+}
+
+/// The window the caller named, as the two things anything here does to one: the id
+/// `screencapture -l` takes, and the frame a pointer is aimed into. Both are spent by the callers in
+/// this file and neither leaves it — a caller names a window by its title and nothing else. A window
 /// behind another Space is not counted as on-screen, so an app that has not been fronted comes back
 /// empty.
 ///
-/// Both are spent in this file and neither leaves it: a caller names an app by its pid alone.
-func window(pid: Int) -> (id: Int, frame: CGRect) {
+/// The titles come off the window list, which serves them only to a process granted Screen Recording
+/// — the same permission shooting needs, so a run that can take the picture can also say which window
+/// it took.
+func windowOf(pid: Int, named wanted: String?) -> (id: Int, frame: CGRect) {
     guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
         fail("could not read the window list")
     }
+    var windows: [(id: Int, title: String, frame: CGRect)] = []
     for w in list {
         guard let owner = w[kCGWindowOwnerPID as String] as? Int, owner == pid,
               let id = w[kCGWindowNumber as String] as? Int,
@@ -82,15 +137,21 @@ func window(pid: Int) -> (id: Int, frame: CGRect) {
         else { continue }
         // Bounds come back in the same top-left space a mouse event is posted into, so the frame is
         // aimable as it stands.
-        return (id, CGRect(x: x, y: y, width: width, height: height))
+        windows.append((id, w[kCGWindowName as String] as? String ?? "",
+                        CGRect(x: x, y: y, width: width, height: height)))
     }
-    fail("no window for pid \(pid) — is the app running, on screen and in front?")
+    let found = theWindow(wanted, among: windows, titled: { $0.title }, of: pid)
+    return (found.id, found.frame)
 }
 
-/// Bring the app owning that pid to the front, so its window counts as on-screen. By pid and not by
-/// name: two builds of one app carry the same name, and the pid is what every other subcommand here
-/// is aimed with.
-func front(pid: Int) {
+/// Bring the app owning that pid to the front, so its windows count as on-screen, and — when one is
+/// named — raise that one within the app. By pid and not by name: two builds of one app carry the
+/// same name, and the pid is what every other subcommand here is aimed with.
+///
+/// Without a name this is the app's move and nothing more, which is unambiguous however many windows
+/// it has: what an app being frontmost decides is that its windows are shootable at all. Which of
+/// them is in front is a second question, and it is asked only when the caller asks it.
+func front(pid: Int, window wanted: String?) {
     guard let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {
         fail("no running application with pid \(pid)")
     }
@@ -100,12 +161,14 @@ func front(pid: Int) {
         app.activate(options: [.activateIgnoringOtherApps])
     }
     usleep(400_000) // the window arrives in front after the call returns, not with it
+    guard wanted != nil else { return }
+    AXUIElementPerformAction(appWindow(pid: pid, named: wanted), kAXRaiseAction as CFString)
+    usleep(200_000) // the raise lands after the call returns, as the activation does
 }
 
-/// Shoot the app's window into `path`. The id `screencapture -l` takes is resolved and spent here,
-/// so a caller shoots by pid and holds no window of its own.
-func shot(pid: Int, path: String) {
-    let id = window(pid: pid).id
+/// Shoot the window into `path`.
+func shot(pid: Int, window: String?, path: String) {
+    let id = windowOf(pid: pid, named: window).id
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
     // -x is silent, -l shoots the one window rather than a display (a window on a second monitor is
@@ -289,8 +352,7 @@ func contentsArrived(_ el: AXUIElement, depth: Int = 0) -> Bool {
     return children.contains { contentsArrived($0, depth: depth + 1) }
 }
 
-/// The elements of one app, menu bar left out: it belongs to whichever app is frontmost rather than
-/// to the window under test, and its items carry names that collide with the screen's own.
+/// The app's window the caller named, waited for until what is drawn in it has arrived.
 ///
 /// The contents are *waited for*, not slept on. A fixed pause was enough on the machine this was
 /// written on and not in the verification VM, where the first command after a launch found the
@@ -299,24 +361,39 @@ func contentsArrived(_ el: AXUIElement, depth: Int = 0) -> Bool {
 /// guest). One silent miss per launch is the worst shape that failure has: a road is walked once,
 /// and it does not press the button a second time to see whether it was true.
 ///
+/// The wait is on *that* window, not on any of them. A second window fills at its own pace, so a
+/// wait satisfied by whichever filled first would hand back the named one still empty — the same
+/// silent miss, arriving now on the runs where two windows are up.
+///
 /// A window that never grows a web area — a native panel — costs the whole budget and is then
 /// answered with what it has. That is the right way round: this drives a webview app, so waiting on
 /// contents that are coming is what happens on every run, and the wait for ones that never come is
 /// paid by the exception.
-func appElements(pid: Int) -> [Element] {
+func appWindow(pid: Int, named wanted: String?) -> AXUIElement {
     let app = AXUIElementCreateApplication(pid_t(pid))
     openTree(app)
     let deadline = Date().addingTimeInterval(5)
     var windows: [AXUIElement] = []
-    var sawWindow = false
     repeat {
-        windows = axAttribute(app, kAXWindowsAttribute as String) as? [AXUIElement] ?? []
-        sawWindow = sawWindow || !windows.isEmpty
-        if windows.contains(where: { contentsArrived($0) }) { break }
+        windows = standardWindows(of: app)
+        // Resolved on each pass rather than once at the end: until the named window is both there
+        // and filled, there is nothing to wait on and nothing to hand back.
+        if windows.count == 1 || wanted != nil {
+            let named = wanted.map { w in windows.filter { windowTitle($0).contains(w) } } ?? windows
+            if named.count == 1, contentsArrived(named[0]) { break }
+        }
         usleep(100_000)
     } while Date() < deadline
-    if !sawWindow { fail("no window for pid \(pid) — is the app running and on screen?") }
-    return windows.flatMap { elements(under: $0) }
+    return theWindow(wanted, among: windows, titled: windowTitle, of: pid)
+}
+
+/// The elements of one window of one app — the menu bar left out, since it belongs to whichever app
+/// is frontmost rather than to the window under test and its items carry names that collide with the
+/// screen's own, and the app's other windows left out too. Two windows of one app draw two screens,
+/// and a name read off the wrong one is a road that passed without looking at the screen it was
+/// written for.
+func windowElements(pid: Int, window wanted: String?) -> [Element] {
+    elements(under: appWindow(pid: pid, named: wanted))
 }
 
 /// The elements `wanted` names: the ones called exactly that, or — when the screen carries no such
@@ -362,8 +439,8 @@ func oneLine(_ s: String) -> String {
     s.replacingOccurrences(of: "\n", with: "\\n")
 }
 
-func find(pid: Int, name: String?) {
-    let all = appElements(pid: pid)
+func find(pid: Int, name: String?, window: String?) {
+    let all = windowElements(pid: pid, window: window)
     let found = name.map { named($0, among: all) } ?? all
     for e in found {
         print("\(e.role)\t\(e.name)\t\(Int(e.frame.minX)) \(Int(e.frame.minY)) \(Int(e.frame.width)) \(Int(e.frame.height))")
@@ -371,7 +448,30 @@ func find(pid: Int, name: String?) {
     if found.isEmpty { fail("nothing on screen is called \(name ?? "anything")") }
 }
 
-/// The point on screen a name aims at.
+/// Click where that name is on screen.
+///
+/// The click is a real one, at where the element stands now: what the name saves is the arithmetic,
+/// not the input path, and a press delivered through the accessibility API would go through whether
+/// or not anything was covering the element.
+///
+/// Which is also why the app is brought to the front first, rather than left to the caller: a real
+/// press lands on whatever is frontmost at that point, so anything that took the front — a sleeping
+/// display, a permission dialog — swallows the click and the run still exits 0. A shot says so by
+/// failing; a click cannot, so it is not asked to.
+func clickNamed(pid: Int, name: String, window: String?) {
+    let p = pointOf(pid: pid, name: name, window: window)
+    click(x: p.x, y: p.y)
+}
+
+/// The same, with the other button: what a row's own menu is opened by, and the only way to reach one
+/// from here. A menu drawn where the pointer is has no name to aim at until it is up.
+func rightClickNamed(pid: Int, name: String, window: String?) {
+    let p = pointOf(pid: pid, name: name, window: window)
+    rightClick(x: p.x, y: p.y)
+}
+
+/// Where a name stands, with the app brought to the front — the arithmetic both named presses share,
+/// and the refusals they share with it.
 ///
 /// A name is often on more than one element without being ambiguous: a link and the text inside it
 /// both answer to it, and they sit one on top of the other, so a press anywhere they overlap reaches
@@ -385,42 +485,24 @@ func find(pid: Int, name: String?) {
 /// names it reached are printed and nothing is pressed — pressing the first would be a press on
 /// whatever the tree happened to hold first, reported as success.
 ///
-/// The elements are handed in rather than listed here, so that a caller naming two ends of one move
-/// reads them off one screen: listed twice, the second listing is of a screen the first end may
-/// already have moved.
-func spot(named wanted: String, among all: [Element]) -> CGPoint {
-    let found = named(wanted, among: all)
-    guard let first = found.first else { fail("nothing on screen is called \(wanted)") }
+func pointOf(pid: Int, name: String, window: String?) -> CGPoint {
+    front(pid: pid, window: window)
+    let found = named(name, among: windowElements(pid: pid, window: window))
+    guard let first = found.first else { fail("nothing on screen is called \(name)") }
 
     var reached: [String] = []
     for e in found where !reached.contains(e.name) { reached.append(e.name) }
     if reached.count > 1 {
         let names = reached.map(oneLine).joined(separator: " / ")
-        fail("\(reached.count) names on screen hold \(wanted) — \(names); name one of them, or more of the one meant")
+        fail("\(reached.count) names on screen hold \(name) — \(names); name one of them, or more of the one meant")
     }
 
     let overlap = found.dropFirst().reduce(first.frame) { $0.intersection($1.frame) }
     if overlap.isNull || overlap.isEmpty {
         let places = found.map { "\(Int($0.frame.minX)),\(Int($0.frame.minY))" }.joined(separator: " ")
-        fail("\(found.count) elements are called \(oneLine(first.name)), in different places — at \(places); aim at a point instead")
+        fail("\(found.count) elements are called \(oneLine(first.name)), in different places — at \(places); click a point instead")
     }
     return CGPoint(x: overlap.midX, y: overlap.midY)
-}
-
-/// Click where that name is on screen.
-///
-/// The click is a real one, at where the element stands now: what the name saves is the arithmetic,
-/// not the input path, and a press delivered through the accessibility API would go through whether
-/// or not anything was covering the element.
-///
-/// Which is also why the app is brought to the front first, rather than left to the caller: a real
-/// press lands on whatever is frontmost at that point, so anything that took the front — a sleeping
-/// display, a permission dialog — swallows the click and the run still exits 0. A shot says so by
-/// failing; a click cannot, so it is not asked to.
-func clickNamed(pid: Int, name: String) {
-    front(pid: pid)
-    let p = spot(named: name, among: appElements(pid: pid))
-    click(x: p.x, y: p.y)
 }
 
 /// Move onto the point before pressing, so an element that expects a hover first (a button's hover
@@ -431,18 +513,17 @@ func hover(_ p: CGPoint) {
     usleep(120_000)
 }
 
-/// One mouse event at a point — a button going down, a pointer moving with it held, or the button
-/// coming up. Every one of them carries which press of a run it belongs to, since that number is the
-/// whole difference between two clicks and a double click.
-func mouse(_ phase: CGEventType, at p: CGPoint, clickState: Int64) {
-    let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: .left)
+/// One left-button event at a point, saying which press of a run it is. That number is the whole
+/// difference between two clicks and a double click: the events are otherwise identical, and what is
+/// listening reads the count off the field rather than timing the pair itself. A drag's events carry
+/// it too — a webview handed a `pointerdown` whose count is zero has been handed a press nobody made.
+func mouse(_ phase: CGEventType, at p: CGPoint, clickState: Int64 = 1, button: CGMouseButton = .left) {
+    let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: button)
     e?.setIntegerValueField(.mouseEventClickState, value: clickState)
     e?.post(tap: .cghidEventTap)
 }
 
-/// One down/up at a point, saying which press of a run it is: the events of a click and of the
-/// second half of a double click are otherwise identical, and what is listening reads the count off
-/// the field rather than timing the pair itself.
+/// One down/up at a point.
 func press(at p: CGPoint, clickState: Int64) {
     for phase in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
         mouse(phase, at: p, clickState: clickState)
@@ -456,6 +537,22 @@ func click(x: Double, y: Double) {
     press(at: p, clickState: 1)
 }
 
+/// The press a row's own menu comes up on. The button is the whole difference — the same move, the
+/// same hover before it — and it is sent as a press rather than through the accessibility API for the
+/// reason every other press here is: what comes up has to come up the way it does for a person.
+///
+/// **A control-click is not this.** macOS raises the same menu for one, and a webview is handed a
+/// `contextmenu` either way, but the modifier stays down for whatever is sent next unless it is let
+/// go of — and a run that failed between the two would leave the machine holding a key nobody pressed.
+func rightClick(x: Double, y: Double) {
+    let p = CGPoint(x: x, y: y)
+    hover(p)
+    for phase in [CGEventType.rightMouseDown, CGEventType.rightMouseUp] {
+        mouse(phase, at: p, button: .right)
+        usleep(60_000)
+    }
+}
+
 /// A native open/save dialog opens the row you are pointing at on a double click and on nothing else
 /// — a single click only selects it, and Return does not reach that dialog from here at all. So
 /// picking a file out of one needs this.
@@ -466,42 +563,33 @@ func doubleClick(x: Double, y: Double) {
     press(at: p, clickState: 2)
 }
 
-/// Carry what one name names onto what another names, and let it go there.
+/// Press at one point, cross to another with the button held, and let go there.
 ///
-/// A press is one event and a carry is a run of them: what the screen is watching for is the run,
-/// and a down and an up at two points is a click at the second one. So the pointer is walked from
-/// one end to the other with the button held — far enough apart that a step is a step, close enough
-/// that none of them jumps over the thing being crossed.
+/// A point at each end rather than a name, unlike everything else that can be aimed by one: where a
+/// drag lands is decided by which side of a row's middle it is let go on, and both sides of that line
+/// are the same row. A name says which row and cannot say which side of it, so the two ends are the
+/// caller's arithmetic — `find`'s rectangle is what the start is built from.
 ///
-/// Both ends are read off one listing of the screen. Card and column stand on the same screen at the
-/// moment the carry begins, and a second listing would be of a screen the grab had already moved.
+/// The crossing is sent as `steps` moves rather than as one, because moves are what the screen under
+/// it is listening to: a webview being reordered works out where the pointer is on every move it is
+/// given, and a jump straight to the far end gives it exactly one — after which the drop is right but
+/// nothing that was meant to follow the pointer ever moved. 24 crossed a sidebar's list.
 ///
-/// The pauses are not padding. A drag on this screen is the web's own, so the press has to be seen
-/// as a grab before anything moves (the app draws the card as lifted), and the column has to be told
-/// the pointer is over it before the button comes up — a release in the same instant as the last
-/// move is a release nothing has been told about, and the card goes back where it came from.
-func dragNamed(pid: Int, from: String, to: String) {
-    front(pid: pid)
-    let all = appElements(pid: pid)
-    let start = spot(named: from, among: all)
-    let end = spot(named: to, among: all)
-
-    hover(start)
-    mouse(.leftMouseDown, at: start, clickState: 1)
-    usleep(200_000)
-
-    // About one step per 20 points, and never fewer than ten: a short carry still has to look like a
-    // carry, and the first steps are what take the press past the distance a drag begins at.
-    let steps = max(10, Int((hypot(end.x - start.x, end.y - start.y) / 20).rounded(.up)))
-    for i in 1...steps {
+/// It is also the only way to photograph a drag in progress. Ask for a few hundred steps and the
+/// crossing takes seconds, which is long enough for another process to run `screen shot` while the
+/// button is still down — the drop line and the faded row it left are on screen for that long and
+/// nowhere else.
+func drag(pid: Int, window: String?, from a: CGPoint, to b: CGPoint, steps: Int) {
+    front(pid: pid, window: window)
+    hover(a)
+    mouse(.leftMouseDown, at: a)
+    usleep(80_000) // long enough that what is under the pointer has taken the press before it moves
+    for i in 1 ... steps {
         let t = Double(i) / Double(steps)
-        let at = CGPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)
-        mouse(.leftMouseDragged, at: at, clickState: 1)
-        usleep(30_000)
+        mouse(.leftMouseDragged, at: CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t))
+        usleep(20_000)
     }
-
-    usleep(200_000)
-    mouse(.leftMouseUp, at: end, clickState: 1)
+    mouse(.leftMouseUp, at: b)
 }
 
 /// type sends the string itself rather than keycodes. It bypasses the IME, so any script goes in as-is.
@@ -528,6 +616,28 @@ func key(_ code: CGKeyCode) {
     CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false)?.post(tap: .cghidEventTap)
 }
 
+/// Pull `--window <title>` out of the line, wherever in it the caller wrote it, and hand back what is
+/// left as the positional arguments each subcommand already reads. Which window is a qualifier on the
+/// aim rather than another thing to name, so it is not given a place in any subcommand's order — a
+/// `find <pid> [name]` whose optional name and optional window sat side by side would read a one-word
+/// call either way round.
+func takeWindow(_ argv: [String]) -> (window: String?, rest: [String]) {
+    var window: String?
+    var rest: [String] = []
+    var i = 0
+    while i < argv.count {
+        if argv[i] == "--window" {
+            guard i + 1 < argv.count else { fail("--window needs the title of a window") }
+            window = argv[i + 1]
+            i += 2
+            continue
+        }
+        rest.append(argv[i])
+        i += 1
+    }
+    return (window, rest)
+}
+
 /// Turn a wheel over the app's window.
 ///
 /// This is the way back up a page. Page Down is the one scrolling key that reaches the webview, so a
@@ -543,14 +653,14 @@ func key(_ code: CGKeyCode) {
 /// across. The amount is in points, and it is delivered as a run of short turns rather than one
 /// jump — a webview animates each turn, and a single large delta arrives mid-animation and is
 /// swallowed. Rounding is carried along the run, so what is asked for is what is delivered.
-func scroll(pid: Int, dx: Double, dy: Double) {
+func scroll(pid: Int, window: String?, dx: Double, dy: Double) {
     // Refused rather than trusted: an amount no screen is that tall would run the turns below for as
     // long as it took to overflow, which is a hang where a sentence belongs.
     guard dx.isFinite, dy.isFinite, abs(dx) <= 100_000, abs(dy) <= 100_000 else {
         fail("scroll takes an amount in points, and \(dx),\(dy) is longer than any screen")
     }
-    front(pid: pid)
-    let frame = window(pid: pid).frame
+    front(pid: pid, window: window)
+    let frame = windowOf(pid: pid, named: window).frame
     hover(CGPoint(x: frame.midX, y: frame.midY))
 
     let perTurn = 60.0 // about what one notch of a wheel moves
@@ -570,7 +680,7 @@ func scroll(pid: Int, dx: Double, dy: Double) {
 
 /// The date element in this app whose day can be written — the picker panel's, once it is open.
 ///
-/// Walked off the raw tree rather than through [`appElements`], which keeps only the elements that
+/// Walked off the raw tree rather than through [`windowElements`], which keeps only the elements that
 /// answer to a name: the panel carries none, being drawn as the field's own pop-up rather than as a
 /// control of its own, so a listing of the screen never holds it. It is the one element here that is
 /// looked up by what it can do instead of by what it is called.
@@ -620,15 +730,15 @@ func writableDay(pid: Int) -> AXUIElement? {
 /// ones: a caller saying which row it means has said where the field is, and a single field standing
 /// somewhere else is a screen that is not where the caller thinks it is — which is worth failing on
 /// rather than writing into.
-func setDate(pid: Int, name: String, day: String, near: String?) {
+func setDate(pid: Int, name: String, day: String, window: String?, near: String?) {
     let stamp = DateFormatter()
     stamp.locale = Locale(identifier: "en_US_POSIX")
     stamp.timeZone = TimeZone(identifier: "UTC")
     stamp.dateFormat = "yyyy-MM-dd"
     guard let wanted = stamp.date(from: day) else { fail("\(day) is not a day — write it as yyyy-mm-dd") }
 
-    front(pid: pid)
-    let all = appElements(pid: pid)
+    front(pid: pid, window: window)
+    let all = windowElements(pid: pid, window: window)
     var fields = named(name, among: all.filter { $0.role == "AXDateTimeArea" })
     if fields.isEmpty { fail("no date field on screen is called \(name)") }
     if let near {
@@ -681,36 +791,48 @@ func setDate(pid: Int, name: String, day: String, near: String?) {
     if got != day { fail("\(oneLine(field.name)) holds \(got), not \(day)") }
 }
 
-let args = CommandLine.arguments
+let (window, args) = takeWindow(CommandLine.arguments)
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|drag-named|type|key|scroll|set-date|trusted> …")
+    fail("usage: screen <front|shot|read|find|click-named|right-click-named|click|right-click|dblclick|drag|type|key|scroll|set-date|trusted> … [--window <title>]")
 }
 
 switch args[1] {
 case "front":
-    guard args.count == 3, let pid = Int(args[2]) else { fail("usage: screen front <pid>") }
-    front(pid: pid)
+    guard args.count == 3, let pid = Int(args[2]) else { fail("usage: screen front <pid> [--window <title>]") }
+    front(pid: pid, window: window)
 case "shot":
-    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen shot <pid> <out.png>") }
-    shot(pid: pid, path: args[3])
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen shot <pid> <out.png> [--window <title>]") }
+    shot(pid: pid, window: window, path: args[3])
 case "read":
     guard args.count == 3 else { fail("usage: screen read <image.png>") }
     readText(path: args[2])
 case "find":
-    guard args.count == 3 || args.count == 4, let pid = Int(args[2]) else { fail("usage: screen find <pid> [name]") }
-    find(pid: pid, name: args.count == 4 ? args[3] : nil)
+    guard args.count == 3 || args.count == 4, let pid = Int(args[2]) else { fail("usage: screen find <pid> [name] [--window <title>]") }
+    find(pid: pid, name: args.count == 4 ? args[3] : nil, window: window)
 case "click-named":
-    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen click-named <pid> <name>") }
-    clickNamed(pid: pid, name: args[3])
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen click-named <pid> <name> [--window <title>]") }
+    clickNamed(pid: pid, name: args[3], window: window)
+case "right-click-named":
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen right-click-named <pid> <name> [--window <title>]") }
+    rightClickNamed(pid: pid, name: args[3], window: window)
 case "click":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen click <x> <y>") }
     click(x: x, y: y)
+case "right-click":
+    guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen right-click <x> <y>") }
+    rightClick(x: x, y: y)
 case "dblclick":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen dblclick <x> <y>") }
     doubleClick(x: x, y: y)
-case "drag-named":
-    guard args.count == 5, let pid = Int(args[2]) else { fail("usage: screen drag-named <pid> <from> <to>") }
-    dragNamed(pid: pid, from: args[3], to: args[4])
+case "drag":
+    let dragUsage = "usage: screen drag <pid> <x1> <y1> <x2> <y2> [steps] [--window <title>]"
+    guard args.count == 7 || args.count == 8, let pid = Int(args[2]),
+        let x1 = Double(args[3]), let y1 = Double(args[4]),
+        let x2 = Double(args[5]), let y2 = Double(args[6])
+    else { fail(dragUsage) }
+    let steps = args.count == 8 ? Int(args[7]) : 24
+    guard let steps, steps > 0 else { fail(dragUsage) }
+    drag(pid: pid, window: window, from: CGPoint(x: x1, y: y1), to: CGPoint(x: x2, y: y2), steps: steps)
 case "type":
     guard args.count == 3 else { fail("usage: screen type <text>") }
     type(args[2])
@@ -719,14 +841,14 @@ case "key":
     key(CGKeyCode(code))
 case "scroll":
     guard args.count == 5, let pid = Int(args[2]), let dx = Double(args[3]), let dy = Double(args[4]) else {
-        fail("usage: screen scroll <pid> <dx> <dy>")
+        fail("usage: screen scroll <pid> <dx> <dy> [--window <title>]")
     }
-    scroll(pid: pid, dx: dx, dy: dy)
+    scroll(pid: pid, window: window, dx: dx, dy: dy)
 case "set-date":
     guard args.count == 5 || (args.count == 7 && args[5] == "--near"), let pid = Int(args[2]) else {
-        fail("usage: screen set-date <pid> <name> <yyyy-mm-dd> [--near <name>]")
+        fail("usage: screen set-date <pid> <name> <yyyy-mm-dd> [--near <name>] [--window <title>]")
     }
-    setDate(pid: pid, name: args[3], day: args[4], near: args.count == 7 ? args[6] : nil)
+    setDate(pid: pid, name: args[3], day: args[4], window: window, near: args.count == 7 ? args[6] : nil)
 case "trusted":
     // Without the permission, raise the dialog that leads to System Settings. Granting it does not
     // require restarting the parent app.

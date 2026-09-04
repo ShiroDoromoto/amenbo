@@ -384,6 +384,19 @@ export type DoctorIssueDto = { kind: string, severity: string, target: string, p
 export type DoctorReportDto = { ok: boolean, errors: number, warnings: number, issues: Array<DoctorIssueDto>, };
 
 /**
+ * What a drop asked for, as the keys held at the moment it landed say it (`crate::dropped`).
+ *
+ * It crosses on its own, out of a command of its own, because **no operating system puts the
+ * modifier keys on the drag event** (`AMB-T-3740`). The keyboard is read where it can be read — the
+ * host, at the instant of the drop — and the answer is this and nothing else.
+ *
+ * `default` is neither key: what a plain drop means belongs to the face receiving it, not here. It
+ * travels back the other way too — the face hands it to [`crate::folder_write::folder_import`] as
+ * the whole of what the reader asked of the drop.
+ */
+export type DropEffectDto = "copy" | "move" | "default";
+
+/**
  * A system event as the GUI needs it: the kind names the sentence template, and the rest are the
  * values that go into it. No prose — the wording lives in the GUI's dictionary, in the reader's
  * language, and the target's own name comes from [`ActivityTargetDto::title`] beside this.
@@ -426,6 +439,314 @@ attachments: number,
 missing: number, };
 
 /**
+ * One application a file could be opened with, as the file face draws a row of the chooser it has
+ * to draw itself (`crate::open_with`).
+ *
+ * It exists only where the operating system has no chooser of its own — macOS. The path is what
+ * names the application when one is picked, and it is checked against this same list on the way
+ * back: what the face was offered is the whole of what it may ask for.
+ */
+export type FolderAppDto = { 
+/**
+ * What the machine calls it — the localised name, spelled the way a file manager spells it.
+ */
+name: string, 
+/**
+ * The application bundle itself, which is what opening with it names.
+ */
+path: string, 
+/**
+ * Whether this is the one the file would have opened with anyway, which is why it is first.
+ */
+usual: boolean, };
+
+/**
+ * What a move or a copy got through, and what it stopped on (`crate::folder_write`).
+ *
+ * A carry of several rows is not one act: it is that many, taken in order, and the first failure
+ * ends it. So the answer is not a yes or a no but a line through the list — these arrived, this one
+ * did not and here is what the machine said, and the rest were never touched. A refusal instead
+ * would say the same word for "none of them moved" and "two of the three did", which is the word a
+ * reader most needs not to hear (`AMB-D-782`).
+ */
+export type FolderCarriedDto = { 
+/**
+ * The names that are now in the folder they were carried into, in the order they got there.
+ */
+arrived: Array<string>, 
+/**
+ * The one it stopped on. Absent when the whole list arrived.
+ */
+stopped: FolderStoppedDto | null, };
+
+/**
+ * The word that one watched folder moved, and the two things about the watch itself that the face
+ * cannot see for itself (`crate::folder_watch`).
+ *
+ * **It carries nothing about what moved.** The face goes and asks — the tree for the names, git
+ * for the colour beside them (`AMB-D-785`) — and what arrives here is the moment to ask, not the
+ * answer. A list carried along would be a second copy of the truth to keep in step with the disk's.
+ *
+ * `capped`, `unwatched` and `gone` are what is left, and none can be worked out from asking. Where
+ * every folder needs a watch of its own the kernel's limit is per user, so some may be refused
+ * while the rest work; drawn as a whole watch, that reads as "nothing has changed" in the half
+ * nobody is watching. And a folder that was removed answers the same as one nobody has written in,
+ * which is the one of the two worth telling a reader about.
+ *
+ * **The two unwatched halves are separate answers, not one flag with two causes** (`AMB-D-778`).
+ * A folder too big to walk to the end of and a machine whose watches have run out are different
+ * things to have happened, and what a reader can do about them is different too — folded into one
+ * sentence, neither of them can be acted on.
+ */
+export type FolderChangesDto = { 
+/**
+ * Which folder this is about, spelled the way the caller asked for it.
+ *
+ * A project can be bound to several folders and each is watched on its own, so an answer that
+ * did not name one would leave a face with several of them unable to say which of its
+ * sections had moved. It is the caller's own spelling rather than the canonical one because
+ * the caller is what has to match it against a folder it is already drawing.
+ */
+root: string, 
+/**
+ * Whether the walk stopped at its cap before it reached the end of the folder
+ * ([`crate::folder_walk::Scan::capped`]). What was never walked is not watched either, and it is
+ * the size of the folder that decided which part that is.
+ */
+capped: boolean, 
+/**
+ * Whether the kernel refused a watch this folder needs — its per-user limit, which the
+ * reader's editor is drawing on at the same time.
+ *
+ * Which folders went unwatched is deliberately not carried: they are whichever ones the walk
+ * happened to reach last, so a reader told the names would be told nothing about their own
+ * project (`AMB-T-3753`).
+ */
+unwatched: boolean, 
+/**
+ * Whether the folder itself is no longer there. It can come back: a folder made again where
+ * this one was is watched again, and this goes back to false.
+ */
+gone: boolean, };
+
+/**
+ * One name inside a folder, as the file face draws a row of its tree (`crate::folder`).
+ *
+ * It says what the row is and nothing about what is under it: a folder answers for its own
+ * children only when it is opened, so a tree that is still folded costs one directory read.
+ */
+export type FolderEntryDto = { 
+/**
+ * The name on its own — one segment, never a path.
+ */
+name: string, 
+/**
+ * Whether opening it lists more names.
+ */
+isDir: boolean, 
+/**
+ * Whether the repository's own ignore rules cover it. The row is drawn either way and drawn
+ * faintly for this, since what git does not record is still something somebody wrote
+ * (`AMB-D-786`) — it is the watch, and the search, that leave these out.
+ */
+ignored: boolean, };
+
+/**
+ * What a file has to show for itself, as far as a panel can show it (`crate::folder`).
+ *
+ * At most one of `text`, `image` and `oversize` is filled, and all three are empty for a file that
+ * is none of them — what a reader is then told is that it cannot be read here, which is the honest
+ * answer for a binary. Text is cut at a cap, because a panel is not a pager and a very long file
+ * would be paid for in full to draw a screen of it.
+ */
+export type FolderFileDto = { 
+/**
+ * The text, where the head of the file holds no NUL byte.
+ */
+text?: string, 
+/**
+ * True when `text` stops short of the file's end.
+ */
+truncated: boolean, 
+/**
+ * The picture, where the bytes say they are one and there are few enough of them to draw.
+ */
+image?: FolderImageDto, 
+/**
+ * The picture that was refused, where it is one and there are too many of it to carry.
+ */
+oversize?: FolderOversizeDto, 
+/**
+ * What the bytes were read as (`UTF-8`, `Shift_JIS`, …), for a file that is text. It travels
+ * because a file is written back in what it was read in, and because a guess that went wrong is
+ * only visible to the reader — who cannot be asked about an encoding nobody named to them
+ * (`AMB-D-773`).
+ */
+encoding?: string, 
+/**
+ * Whether the file began with a byte order mark. Encoding text does not put one back, so
+ * nothing but this remembers that 178 files in a real folder have one.
+ */
+bom: boolean, 
+/**
+ * How its lines end.
+ */
+lineEnding: FolderLineEndingDto, 
+/**
+ * Whether writing this text back would produce the bytes that were read. A file that is not
+ * clean — cut at the cap, not wholly decodable, or in an encoding nothing here writes — is one
+ * to read and not to save.
+ */
+clean: boolean, 
+/**
+ * The short mark of the bytes this was read from, for a file the panel draws
+ * (`crate::folder_bytes::digest`).
+ *
+ * **It is what the panel knows the file by while it has it open** (`AMB-D-784`). The folder
+ * says it moved and the panel reads again: a mark that came back the same is this file
+ * standing still, and one that came back different is somebody having written to it. The same
+ * mark travels back into the save, which refuses to write over a file that moved since — this
+ * side remembers nothing between the two calls, so what remembers is the panel.
+ *
+ * **A picture is marked too, over the whole of it** (`AMB-D-797`). Its bytes are not carried
+ * here, so the mark is also what makes the redraw happen: it rides on the door's URL, and an
+ * `<img>` whose address never changes is never fetched again however the file moved.
+ *
+ * Absent where there is nothing drawn to mark, or where marking it would mean reading a file
+ * with no cap on it: a picture too large to draw, and a binary, both come back without one.
+ */
+digest?: string, };
+
+/**
+ * A picture out of a folder, named rather than carried: the webview asks [`crate::fileproto`] for
+ * the bytes at the path it already has in hand (`AMB-D-783`).
+ *
+ * **The bytes used to come over this seam base64-encoded**, which cost a third again in size, put
+ * the whole picture in one message, and held every byte of it in both processes before a single
+ * pixel was drawn. The door that hands out a file by its path is fenced by the project's folders,
+ * the same fence this answer was resolved through, so there is nothing left for the seam to carry.
+ * A reader is meant to see the picture arrive top to bottom rather than all at once.
+ */
+export type FolderImageDto = { 
+/**
+ * The type the bytes themselves say they are — read off the first of them, never off the name.
+ *
+ * It travels because the door is told what to serve as: the sniff happened here, and asking the
+ * webview to name the type of a file it has not read would be asking it to guess from the name.
+ */
+mime: string, };
+
+/**
+ * How a file's lines end — the wire form of [`crate::encoding::LineEnding`].
+ *
+ * `mixed` is a value of its own rather than the commoner of the two rounded up, because an editor
+ * hands back one kind of newline for both and nothing could tell them apart again: a file written
+ * back in the commoner kind comes out changed on every line that was the other kind. What to do
+ * about one is the reader's to say (`AMB-D-773`).
+ *
+ * It is the one folder answer that travels **both** ways: a file is written back in the newline it
+ * was read in, and this side remembers nothing between the two calls, so what the read handed the
+ * panel is what the save takes back (`crate::folder_save`).
+ */
+export type FolderLineEndingDto = "lf" | "crlf" | "mixed";
+
+/**
+ * A picture the panel would not carry, and what it was measured against (`AMB-D-783`).
+ *
+ * **The numbers travel because silence reads as a broken file.** A reader shown nothing where a
+ * picture was concludes the file is damaged; one shown how large it is concludes it is large, and
+ * goes on to open it in something built for that.
+ *
+ * Two of them, because two caps are being kept and they guard different things: the bytes stand
+ * for what the host would hold, the pixels for what the webview would decode. The pixels are
+ * absent where the front of the file did not say — a picture whose size could not be read is let
+ * through on the bytes alone, so a refusal with no size in it is always a refusal about bytes.
+ */
+export type FolderOversizeDto = { 
+/**
+ * The whole file, in bytes.
+ */
+bytes: number, 
+/**
+ * How wide the picture says it is, where the front of the file said.
+ */
+width?: number, 
+/**
+ * How tall it says it is, on the same terms as `width` — the two are always both there or both
+ * absent.
+ */
+height?: number, };
+
+/**
+ * What came back out of the bin, and what it stopped on (`crate::trash`).
+ *
+ * The names are in the order they were put back, which is the reverse of the order they went in:
+ * undoing a press retraces it rather than replaying it, so a folder is back before what was inside
+ * it.
+ */
+export type FolderRestoredDto = { 
+/**
+ * The names that are where they were again.
+ */
+back: Array<string>, 
+/**
+ * The one it stopped on. What is still in the bin stays undoable, so pressing undo again
+ * carries on from here.
+ */
+stopped: FolderStoppedDto | null, };
+
+/**
+ * Why a run stopped, where it was Amenbo that stopped it (`crate::folder_write`, `crate::trash`).
+ *
+ * **Only Amenbo's own refusals are named.** They are decided before anything is written and they
+ * are the same few every time, so a screen can put them in the reader's language — which the
+ * machine's own sentences cannot be, and are not asked to be. Each of these was Amenbo's English
+ * standing on a Japanese screen until it had a name.
+ */
+export type FolderStopDto = "taken" | "inside" | "nameless" | "nobin" | "emptied";
+
+/**
+ * The row a run over several of them stopped on, and what stopped it (`crate::folder_write`,
+ * `crate::trash`).
+ */
+export type FolderStoppedDto = { 
+/**
+ * The name the run was on when it stopped.
+ */
+name: string, 
+/**
+ * What stopped it, where what stopped it was Amenbo. Absent where the machine did, and then
+ * `why` is the whole of the answer.
+ */
+code: FolderStopDto | null, 
+/**
+ * What the machine said, in the machine's own words. It is not a code with a template behind
+ * it: what a disk that filled up or a permission that was not there has to say is its own, and
+ * a sentence written here would be a guess at which of them it was.
+ *
+ * Amenbo's own refusals fill it too, in English, and a face that knows the `code` draws from
+ * its own words instead. Keeping the sentence here is what leaves a face that does not know a
+ * code something to say rather than nothing.
+ */
+why: string, };
+
+/**
+ * What went to the machine's bin, and what it stopped on (`crate::trash`).
+ *
+ * The same line through the list a carry answers with, for the same reason: the rows go one at a
+ * time, and once one of them is in the bin no single word covers the press.
+ */
+export type FolderTrashedDto = { 
+/**
+ * The names that are in the bin now, in the order they went there.
+ */
+gone: Array<string>, 
+/**
+ * The one it stopped on. Absent when the whole list went.
+ */
+stopped: FolderStoppedDto | null, };
+
+/**
  * That folder's `.amenbo` was written by a build of another channel
  * ([`amenbo_core::binding::DirBinding::mismatched_store`]) — production against `amenbo-dev`, or a
  * throwaway `amenbo-dev-<task>`. The CLI refuses outright there (`pointer_other_store`); the GUI,
@@ -443,6 +764,45 @@ recorded: string,
  * The store name of the build that is listing it.
  */
 running: string, };
+
+/**
+ * What one frame of the talk window is called, and who called it that — which is what says whether
+ * the next naming may replace it ([`amenbo_core::frames`]). It is this run's: a name is about a
+ * place, and the places go when the app does (`crate::frames`).
+ */
+export type FrameNameDto = { 
+/**
+ * The frame it is the name of. Names belong to frames, never to the session running in one.
+ */
+frame: string, name: string, by: "typed" | "session" | "person", };
+
+/**
+ * One path git named inside the folder the file face is showing (`crate::folder_git`).
+ *
+ * The two letters are git's own and are carried across as they came: the first is what the index
+ * says about the path, the second what the working tree says, and a space in either is git saying
+ * nothing about that half. Turning them into a word here would be deciding what a colour means,
+ * which is the face's to decide and not the same question on every road.
+ */
+export type GitEntryDto = { 
+/**
+ * Where it is, as segments from the bound folder — the spelling a tree row is built from, with
+ * the repository's own front already taken off.
+ */
+path: Array<string>, 
+/**
+ * What the index says: git's `X`, one character.
+ */
+index: string, 
+/**
+ * What the working tree says: git's `Y`, read the same way.
+ */
+worktree: string, 
+/**
+ * Whether git named a folder as a whole rather than what is inside it, which is what it does
+ * with an untracked one. A folded folder is somewhere a colour still has to appear.
+ */
+isDir: boolean, };
 
 /**
  * One bound repository the banner has something to say about — the raw material for its wording, never
@@ -704,6 +1064,42 @@ report: MigrationDoneDto | null,
  * screen localises it exactly like any other (`errLabel`).
  */
 error: { code: string; message_en: string; fields: Record<string, unknown> | null } | null, };
+
+/**
+ * Which way the two panes of a two-pane page sit ([`amenbo_core::frames::Orient`]).
+ *
+ * It crosses because it is the person's answer rather than a measurement: what a page is laid out
+ * by is chosen on the face and kept in the store, and the two windows hand it between themselves the
+ * way they hand the split.
+ */
+export type OrientDto = "across" | "down";
+
+/**
+ * One session, and the place the talk window's face is drawing it in — as the face says it
+ * ([`crate::frames::panes_drawn`]).
+ *
+ * **The face is the only thing that knows this pairing.** A session belongs to the process
+ * (`crate::pty`) and a place belongs to the arrangement, which lives in whichever window is drawing
+ * the face — so the host is told rather than working it out. It is held for the length of the run and
+ * no longer: what it pairs are two things that both go when the app does (`crate::frames`).
+ *
+ * `label` is what that pane is called on the screen, worked out where the naming rules are
+ * (`app/src/talk/frames.ts`) rather than rebuilt here — so a pane reads the same on the rail, above
+ * its own terminal, and on the task it is holding.
+ */
+export type PaneDrawnDto = { 
+/**
+ * The terminal running in it — the id it was opened under.
+ */
+session: string, 
+/**
+ * The place it is drawn in (`FrameNameDto`).
+ */
+frame: string, 
+/**
+ * What that place is called on the screen.
+ */
+label: string, };
 
 /**
  * Where one task sits (project only — classification lives on the dimension axes). The real data
@@ -1618,7 +2014,16 @@ name: string | null, ref?: string,
  */
 supersededBy?: string, };
 
-export type ProjectDto = { id: number, name: string, color: string, view: "list" | "board" | "calendar" | "timeline", 
+export type ProjectDto = { id: number, name: string, color: string, 
+/**
+ * The image the project shows for itself, as the `data:image/…` URL of the small square that was
+ * baked when it was registered, or `null` where there is none (`AMB-D-839`). The tabs down the
+ * edge of the face draw it in place of the colour and the first character (`AMB-D-838`), and they
+ * draw every project — so it rides here rather than being fetched a project at a time. Only the
+ * display version: the file it was baked from stays in the blob store and never comes out to the
+ * webview.
+ */
+icon: string | null, view: "list" | "board" | "calendar" | "timeline", 
 /**
  * Open task count (todo/in_progress/blocked — anything but done, live only). The sidebar's
  * count badge.
@@ -1656,8 +2061,61 @@ export type ProjectSettingsDto = { id: number, name: string, notes: string, colo
 icon: string | null, view: "list" | "board" | "calendar" | "timeline", archived: boolean, };
 
 /**
- * What a reference in a body resolves to (`kind` — task or decision — and the entity's id). The GUI
- * branches on it to decide which detail pane a body link opens.
+ * One chunk of a terminal's output, on its way to the pane drawing it (the payload of the talk
+ * window's `pty://output` event).
+ *
+ * The bytes travel base64-encoded because they are not text: an escape sequence is split wherever
+ * the read ended, and a multi-byte character with it, and only the emulator that reassembles them
+ * may decode. Anything that turned them into a string here would corrupt exactly the chunks that
+ * crossed a boundary.
+ */
+export type PtyChunkDto = { 
+/**
+ * The session whose terminal this came out of.
+ */
+session: string, 
+/**
+ * The chunk, base64-encoded.
+ */
+base64: string, };
+
+/**
+ * A terminal this process has open, as a pane putting itself up is told about it.
+ *
+ * It answers both of the pane's ways in: the terminal it just started, and the one it found already
+ * running and adopted (`crate::pty::pty_sessions`). `started_at` is here because a pane cannot work
+ * it out — a session that changed windows started when it started, and the moment the pane went up
+ * says nothing about it.
+ */
+export type PtySessionDto = { 
+/**
+ * The id the terminal was opened under.
+ */
+session: string, 
+/**
+ * When the terminal was started (RFC3339 UTC).
+ */
+startedAt: string, 
+/**
+ * The folder the terminal is running in, as the filesystem spells it — `None` for one opened
+ * without any.
+ *
+ * It is here for the pane that **adopts** this session: where a terminal runs was settled when it
+ * started, and a frame that took one over rather than starting it has no other way to learn it. A
+ * frame that does not know would have to ask the person for the folder again the next time it has
+ * a terminal to start, which is the one flow the face has asked for twice.
+ */
+folder: string | null, };
+
+/**
+ * What a reference resolves to (`kind` — task or decision — and the entity's id). The GUI branches
+ * on it to decide which detail pane a link opens.
+ *
+ * It is the answer to `resolve_ref` and the payload of the board's `ref-activated` event, which are
+ * the two ways a ref becomes a destination: one clicked in a body, and one clicked in a pane of the
+ * talk window (`crate::windows::show_ref`). The same shape for both on purpose — a ref that came
+ * from the other window is not a second kind of destination, and giving it one would be an invitation
+ * for the two to drift over what a click opens.
  */
 export type RefTargetDto = { kind: "task" | "decision", 
 /**
@@ -1790,6 +2248,52 @@ priority?: string,
 labels: Array<SearchLabelDto>, };
 
 /**
+ * One thing an AI said about the session it is running in, on its way to the pane drawing it.
+ *
+ * It is the surface layer's record ([`amenbo_core::session::Said`]) in the shape the webview reads.
+ * Every spoken verb carries one line, which is `text`; `briefed` is not spoken and carries none
+ * (`AMB-D-805`).
+ */
+export type SessionSaidDto = { 
+/**
+ * The pane it was said in — the same id the terminal was opened under.
+ */
+session: string, verb: "name" | "note" | "waiting" | "finished" | "briefed", 
+/**
+ * When it was said (RFC3339 UTC).
+ */
+at: string, 
+/**
+ * The folder the agent was in when it said it. It starts as the one the terminal was opened in
+ * and moves with every `cd`, so it is the agent's own rather than the pane's.
+ */
+cwd?: string, 
+/**
+ * The line said.
+ */
+text?: string, };
+
+/**
+ * What the volatile area says the session in one pane has been doing — the reservations it is on, and
+ * how many it has ended ([`amenbo_core::session_work`]).
+ *
+ * The tasks come back as ids rather than rows: the pane draws one of them at most, and the same
+ * [`crate::commands::tasks_by_ids`] every other screen hydrates with can say the rest. What is being
+ * answered here is *whose* they are, which nothing but that area knows.
+ */
+export type SessionWorkDto = { 
+/**
+ * Reserved and not ended, newest reservation first. One it has stopped on (`blocked`) is still
+ * among them — the reservation stands.
+ */
+holding: Array<number>, 
+/**
+ * How many it has ended, carried out or decided against. A count, because that is the whole of
+ * what the label says about them.
+ */
+finished: number, };
+
+/**
  * The slug in `.amenbo` disagrees with what the store actually holds
  * ([`amenbo_core::binding::SlugMismatch`]). The CLI prints an English warning in its location
  * header; the GUI hands over the raw material only and lets i18n compose the wording (same verdict,
@@ -1919,6 +2423,67 @@ export type StoreLocationsDto = {
  */
 root: string, };
 
+/**
+ * One frame of the arrangement: where it sits, and what it is working on.
+ */
+export type TalkFrameDto = { 
+/**
+ * The id its name is held against (`FrameNameDto`).
+ */
+id: string, 
+/**
+ * The project this pane is one of. Absent in an arrangement written before panes belonged to a
+ * project, which the window answers for (`app/src/talk/layout.ts`).
+ */
+project?: number, 
+/**
+ * The folder its terminal was working in, where it had one.
+ */
+folder?: string, };
+
+/**
+ * The talk window's arrangement, as the window drawing the face has it (`crate::frames`).
+ *
+ * The shape only: how many panes to a page, the frames in slot order, and the folder each was
+ * working in. **What was running is not here** — a session is a process, and a pane drawn as though
+ * one were still in it would be the window saying something untrue (`AMB-T-3607`).
+ *
+ * It is what the two windows hand the face between themselves with, and it lives as long as the app
+ * does. Only `count` and `project` outlive that (`amenbo_core::frames::SavedLayout`), so an
+ * arrangement read at the start of a run has no frames in it (`AMB-T-3687`).
+ */
+export type TalkLayoutDto = { 
+/**
+ * How many panes to a page.
+ */
+count: number, 
+/**
+ * Which way a two-pane page sits, absent where it sits the way every other count does
+ * ([`amenbo_core::frames::Orient`]).
+ */
+orient?: OrientDto, 
+/**
+ * The next frame id to hand out — ids are never reused within a run, so a name stays on its own
+ * frame. It is not kept: a run starts its ids at the first (`crate::frames`).
+ */
+nextId: number, 
+/**
+ * The project whose panes the face was showing. It is what the window the terminal is split out
+ * into opens as, where the arrangement came with no panes to name one — which is every window
+ * that comes up after a run (`app/src/shell/TerminalFace.tsx`); absent where nothing has told
+ * the face of a project yet.
+ */
+project?: number, 
+/**
+ * The frames, in slot order.
+ */
+frames: Array<TalkFrameDto>, 
+/**
+ * The pane being worked in when the arrangement was last written — the one the window split out
+ * of the board comes up on (`AMB-D-753`). Absent where nobody has worked in a pane in this run.
+ */
+splitOut?: string, };
+
 export type TaskCardDto = { id: number, title: string, 
 /**
  * The name it goes by on screen, `#<n>` (the display form of `id`).
@@ -2033,6 +2598,25 @@ offset: number,
 limit: number | null, };
 
 /**
+ * The pane a task is being worked in, for the row on the task that goes there
+ * ([`crate::frames::task_pane`]).
+ *
+ * It is two answers joined: the volatile area says which session holds the task
+ * ([`amenbo_core::session_work::holder`]), and the face says where that session is drawn
+ * ([`PaneDrawnDto`]). **Absent unless both speak** — a task held by a session no pane is drawing is a
+ * task with nowhere to send the reader, and a row that led nowhere would be worse than no row.
+ */
+export type TaskPaneDto = { 
+/**
+ * The session holding the task — what [`crate::windows::show_pane`] is asked for.
+ */
+session: string, 
+/**
+ * What the pane is called on the screen.
+ */
+label: string, };
+
+/**
  * A reference to a task (id + title). The id is an integer key.
  */
 export type TaskRefDto = { id: number, name: string, };
@@ -2056,3 +2640,99 @@ updateAvailable: boolean,
  * The version being offered (for display; the first one found). `None` means no update.
  */
 newerVersion: string | null, };
+
+/**
+ * One agent a folder's pane could be opened with, and what the folder and this machine say about
+ * it (`crate::wake`).
+ */
+export type WakeCandidateDto = { 
+/**
+ * The id, which is what a face hands back when the reader picks this one — a catalog row's, or
+ * one of this device's own registrations.
+ */
+id: string, 
+/**
+ * The product's own name for itself, or what the reader called their own row.
+ */
+label: string, 
+/**
+ * What it is started as — shown where it is missing, because that is the word to install. For a
+ * registered row it is the first word of `line`, which is the whole of what can be looked for.
+ */
+command: string, 
+/**
+ * The command line as the reader wrote it — present **exactly** for a row they registered
+ * themselves (`AMB-D-794`), and absent for a catalogued one.
+ *
+ * Its presence is what tells a face which rows it may correct and delete, and its text is what
+ * the face shows before the row is pressed: a registered line runs in a terminal, so somebody
+ * choosing it should be able to read what that starts.
+ */
+line?: string, 
+/**
+ * Whether this folder shows a trace of the provider being used here. Always false for a
+ * registered row: a trace is left against a wiring catalog row, and a registration has none.
+ */
+traced: boolean, 
+/**
+ * Whether this machine can start it. Never more than that: see `amenbo_core::wake`.
+ */
+installed: boolean, };
+
+/**
+ * Which agent a folder's pane opens with, and what to put to the reader when that is not settled.
+ */
+export type WakeDto = { 
+/**
+ * The folder this answers for, canonical — what the face opens the pane in, so that the pane
+ * and the answer are about the same folder.
+ *
+ * Absent where the question was asked about a project rather than about one folder
+ * (`crate::wake::wake_choices`): a project's folders are several, and none of them is the
+ * one a pane that has not been opened yet will run in.
+ */
+folder?: string, 
+/**
+ * Every catalogued agent, in catalog order. The install notice is drawn from this, which is why
+ * the ones this machine does not have are here too.
+ */
+candidates: Array<WakeCandidateDto>, 
+/**
+ * The ids the row is drawn from, in catalog order — every catalogued agent (`AMB-D-792`).
+ *
+ * **Not the ids a press may open.** Which of them this machine can start is each row's own
+ * `installed`, and a face that opened one without reading it puts a pane on `command not
+ * found`. It is the whole catalog because a provider left off the row is one the reader cannot
+ * install their way onto.
+ */
+offered: Array<string>, 
+/**
+ * The id to open with, when nothing needs asking. `None` is the question — put to a person as a
+ * row with nothing on it, whether or not anything on that row can be pressed.
+ */
+settled?: string, 
+/**
+ * What this project has settled on **as written** ([`amenbo_core::config::Config::agent_for`]),
+ * rather than what the rank arrives at.
+ *
+ * The two come apart on a machine with one agent installed, where `settled` names it and
+ * nothing was ever kept. A face asking the reader to change the answer draws this: "nothing
+ * kept" and "kept the only one there is" read the same off `settled` and are different answers
+ * to the question being put.
+ */
+kept?: string, 
+/**
+ * Whether this machine was reached at all, which is what every row's `installed` stands or
+ * falls on ([`WakeReachDto`]).
+ */
+reach: WakeReachDto, };
+
+/**
+ * Whether what a row says about being installed was got from this machine at all (`AMB-D-792`).
+ *
+ * **It is not `candidates` being empty, and it cannot be read off one.** The row is the whole
+ * catalog whatever this machine has on it, so nothing in the list moves when the probe fails —
+ * every row simply says `installed: false`, which is the same shape as a machine that really has
+ * none. Drawn as that, a machine with four agents on it tells its owner they installed nothing.
+ */
+export type WakeReachDto = "answered" | "unreachable";

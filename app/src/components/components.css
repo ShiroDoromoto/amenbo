@@ -193,6 +193,20 @@
 .column--dragover { background: var(--c-hover); outline: 2px dashed var(--c-accent); outline-offset: 4px; }
 .card--draggable { cursor: grab; }
 .card--dragging { opacity: 0.45; cursor: grabbing; }
+/* The card that follows the pointer. It is the card's own node, copied — the browser used to draw
+   this for us out of the same pixels, and copying keeps that rather than drawing a second thing that
+   has to be kept looking like a card (`app/src/screens/boardDrag.ts`).
+   It takes no pointer events of its own: what is under the pointer is asked of the document on every
+   frame, and a copy that answered would name itself every time. */
+.card--ghost {
+  position: fixed; top: 0; left: 0; z-index: 1000;
+  pointer-events: none; opacity: 0.9; cursor: grabbing;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+}
+/* 🚨 From the moment a card is pressed. Without this, dragging down a column selects the text it
+   passes over on macOS and Linux — 19 and 57 characters, measured (`AMB-T-3755`) — and raising it
+   only once the press has become a drag is already too late (`app/src/screens/boardDrag.ts`). */
+body.is-dragging { user-select: none; }
 
 /* ---------- toast (a transient warning: a failed write and the like) ---------- */
 .toast {
@@ -536,6 +550,10 @@
    its own bell mark. Like --block it carries the shape alone and takes its step where it is drawn:
    the heed one, the work in hand still moving and the news being that the ground under it shifted. */
 .chip--premise { white-space: nowrap; cursor: default; }
+/* The row nothing is working on. Muted rather than stepped: what it marks is the absence of movement,
+   which the row has been sitting in — and every reservation a pane ever made carries it from the moment
+   the app comes up, so a coloured one would be an alarm ringing over a standing inventory
+   (`components/atoms.tsx`). */
 /* The mark-only form of the same block, for dense surfaces (a calendar chip, a timeline's
    row label). It shares a line with the title, so it drops the chip background and the
    count and stands on the icon's own width. */
@@ -562,6 +580,14 @@
    of them is the six-character Japanese word for project, the longest label this pane puts here. A
    language whose word runs longer wraps, which it already did at the 64px this replaces. */
 .detail__flabel { width: 6em; flex: none; color: var(--c-text-muted); font-size: var(--fs-md); }
+/* The pane a task is being worked in: the way back from the ledger to the terminal, drawn as a link
+   rather than a control because what it does is go somewhere. */
+.detail__pane {
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--c-accent-text); font-size: inherit; text-align: left;
+}
+.detail__pane:hover { text-decoration: underline; }
 .detail__sep { height: 1px; background: var(--c-rule); }
 .detail__section-h { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--c-text-muted); }
 
@@ -814,6 +840,11 @@ button.feed__target:hover { color: var(--c-accent); }
   background: var(--c-sunken); font-size: var(--fs-md); line-height: 1.6;
 }
 .firstloop .btn { align-self: flex-start; }
+/* The way out to the reader's own terminal: closed it is one line, open it is that line with the
+   request under it. It keeps its own column so the two never sit side by side — what is inside
+   belongs to the line that opened it, not to the loop's own list. */
+.firstloop__outside { display: flex; flex-direction: column; gap: var(--s-2); }
+.firstloop__end { display: flex; flex-direction: column; gap: 2px; }
 .firstloop__fallback { display: flex; flex-direction: column; gap: var(--s-2); }
 .firstloop__path {
   margin: 0; padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
@@ -1193,3 +1224,27 @@ button.feed__target:hover { color: var(--c-accent); }
 .migrate__bar { height: 6px; background: var(--c-sunken); border-radius: 3px; overflow: hidden; }
 .migrate__bar-fill { height: 100%; background: var(--c-accent); }
 .migrate__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+
+/* The menu opened at a point (Menu). Placed where the pointer was, and above everything, because it
+   is about the row it was opened on and nothing else. */
+.menu {
+  position: fixed; z-index: 20;
+  display: flex; flex-direction: column;
+  padding: var(--s-1) 0;
+  background: var(--c-surface); border: 1px solid var(--c-rule);
+  border-radius: var(--r-md); box-shadow: var(--shadow-md);
+  /* What the caps in `Menu.tsx` do when a list is longer than the window it is drawn in. Without
+     it the box would be cut at the cap and the items past it unreachable, which is the same dead
+     end as running off the edge. */
+  overflow: auto;
+}
+.menu__item {
+  padding: var(--s-1) var(--s-3);
+  background: none; border: 0;
+  color: var(--c-text); font-size: var(--fs-md); text-align: left; white-space: nowrap;
+  cursor: pointer;
+}
+.menu__item:hover { background: var(--c-hover); }
+/* The item that is not the kind of the ones above it, held off from them. The gap is the whole of
+   the separation: a rule would draw a heading over a group of one. */
+.menu__item--apart { margin-top: var(--s-1); border-top: 1px solid var(--c-rule); padding-top: var(--s-2); }

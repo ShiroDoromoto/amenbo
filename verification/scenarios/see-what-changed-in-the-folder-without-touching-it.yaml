@@ -1,0 +1,171 @@
+# The folder moving under the app, and the app noticing on its own.
+#
+# A person working with an AI in a folder is not the only one writing in it — the agent is, and so is
+# whatever it runs. What the file face is for at that moment is the one question a person cannot ask
+# a static listing: what moved. So the tree is laid over a watch, and this road is the difference:
+# the screen changes with **nothing on it pressed**.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here and no gap in one. A terminal watching a folder is `ls` run twice, and
+# Amenbo is the subject of neither.
+#
+# ── Why the file is written from outside ─────────────────────────────────────────────────────────
+# Every other road on the screen presses something and reads what the press did. This one presses
+# nothing: the operator is sent out of the app to write a file, and what is under test is the app
+# having moved by the time they look back. A step that wrote the file through Amenbo would be proving
+# that Amenbo can redraw what Amenbo just did, which nobody doubted.
+#
+# ── The ignored folder, and why it is on the tree ────────────────────────────────────────────────
+# `.gitignore` says what git does not record, not what a reader may not look at — the files a person
+# goes to after an agent has been at work, `.env` and `.amenbo`, are ignored in most repositories.
+# So the road writes a second file that the folder has said to ignore, and reads that it is on the
+# tree like any other.
+#
+# The world writes the `.gitignore` before anything else, because what is left out of the **watch**
+# is decided as the walk runs and a rule that arrived later would be a rule for the next walk.
+#
+# ── The colour each row wears ────────────────────────────────────────────────────────────────────
+# What git says about a row is drawn on the row as a colour, and that is the other half of the same
+# face. The bound folder is made a repository with nothing recorded in it, so what git reports on is
+# new to it — and the row that arrived while nothing was pressed is read for its colour as well as for
+# being there. The ignored one is read for the other half of the same answer: git reports nothing about
+# it, so it wears nothing. The reading is an eye's either way — a row wearing a colour says the same
+# letters as one that wears none, and words are all a shot gives back.
+id: see-what-changed-in-the-folder-without-touching-it
+title: A file written outside Amenbo shows up in the tree, the folder's own ignore rules included
+description: >
+  Open the terminal face on a project whose folder is being watched and unfold the folder's tree,
+  then leave Amenbo and put a file in that folder from outside. Come back to a screen nothing was
+  pressed on: the new folder is on the tree, wearing the colour git's answer gives it. Write a second
+  file the folder's own ignore rules cover, and it is on the tree too — what git does not record is
+  still something somebody wrote.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # The folder the colours are about. It is the bound one and not the run's own, because what git says
+  # is drawn on the face of the folder the project is bound to. Nothing is recorded in it, so what git
+  # reports below is reported as new.
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: greenhouse
+
+  # Written first: what the watch is laid over is decided as the walk runs, so a rule that arrived
+  # after one would be a rule for the next.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: .gitignore
+      content: compost/
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The panel beside the panes opens on the page a person writes on rather than on the folder: a
+  # person goes to the files when they want them, and what an agent points at calls from the switch
+  # itself. So the road asks for the half it is about before reading anything in it.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # The first level is drawn from the start — the names of the bound folder are what the half is
+  # opened for — so this says where the screen has to stand rather than working a control.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # What the folder already held. It is read before anything is written, which is what makes the
+  # next step's arrival readable as an arrival rather than as the first thing anybody looked at.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: notes
+      section: tree
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: orchard/pruning.md
+      content: SCENARIO cut back the old wood before the sap rises
+
+  # Nothing was pressed. The screen moved because the folder did.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: orchard
+      section: tree
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: compost/heap.md
+      content: SCENARIO turned twice a week
+
+  # And this one the folder said to ignore. It is on the tree all the same: being ignored by git is
+  # not being hidden from a reader, and it is the watch and the search that leave these out.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: compost
+      section: tree
+
+  # What git says about the row that arrived. Nothing has been recorded in this repository, so the
+  # folder written from outside is new to git, and the row is drawn in the colour that says so.
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: orchard
+      section: tree
+      mark: untracked
+
+  # And the ignored one, which git records nothing about at all. It stands on the tree bare: being
+  # left out of what git tracks is not the same as being new to it, and the face says so by drawing
+  # no colour rather than by leaving the row off.
+  - type: assert
+    domain: files
+    op: row-mark
+    with:
+      name: compost
+      section: tree
+      mark: untracked
+      present: false

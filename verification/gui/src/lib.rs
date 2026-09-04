@@ -3,8 +3,12 @@
 //! The same scenario the CLI driver black-box-drives, this harness reads as a **screen
 //! checklist**. It bakes in no command line and no pixel: each step becomes a plain-language
 //! instruction of what to do or confirm on screen, and every step is shot into an evidence
-//! directory by the screen tool (`scripts/screen.swift`), which is named the app's pid and hands
-//! back a file — which window it shot, and the id it shot by, never leave it. The pid it is named
+//! directory by the screen tool (`scripts/screen.swift`), which is named the app's pid — and, where
+//! a road says so, the title of the window within it — and hands back a file: the id it shot by
+//! never leaves the tool. A window is named by a road only when the app draws more than one, and
+//! then it has to be: the tool refuses to pick between two windows, because a shot of the wrong one
+//! is evidence of a screen nobody stood at and reads on the manifest exactly like the right one.
+//! The pid it is named
 //! is the harness's own: the app under test is started here, against a throwaway store
 //! ([`launch`], [`scratch`]), and goes down with the run. The world that store holds when the app
 //! opens it is the scenario's `given`, stood up beforehand with the CLI the bundle ships
@@ -20,12 +24,18 @@
 //! the one scenario source to its own world.
 //!
 //! The screen tool is the input primitive too, called by whoever drives the screen between steps:
-//! its `find` / `click-named` / `click` / `dblclick` / `type` / `key` / `scroll` carry out the action
-//! steps the checklist names.
+//! its `find` / `click-named` / `right-click-named` / `click` / `right-click` / `dblclick` / `drag` /
+//! `type` / `key` / `scroll` carry out the action steps the checklist names.
+//!
+//! One step is nobody's to carry out at the screen: `store run-again` ends this run of the app and
+//! brings another up on the same store ([`launch::Gui::run_again`]), which is how a road reads what
+//! Amenbo keeps of a run against what goes out with one. It is the harness's because the app is —
+//! the store it is pointed at and the pid it is shot by are both the run's own.
 //!
 //! The pure part — turning a step into an instruction and an expectation, and walking a scenario
-//! into per-step evidence with a verdict — is separated from the side effects (running the tool)
-//! so the walk is testable with injected capture, reading and step-boundary wait.
+//! into per-step evidence with a verdict — is separated from the side effects (running the tool,
+//! starting the app again) so the walk is testable with injected capture, reading, step-boundary
+//! wait and restart.
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
@@ -89,12 +99,16 @@ pub struct Reading {
     pub raw: String,
 }
 
-/// Run one of the tool's subcommands and hand back its stdout.
-fn tool(screen: &Path, cmd: &str, args: &[&OsStr]) -> Result<Vec<u8>, String> {
-    let out = Command::new("swift")
-        .arg(screen)
-        .arg(cmd)
-        .args(args)
+/// Run one of the tool's subcommands and hand back its stdout. A window named by the step is passed
+/// on as the tool's own qualifier on the aim — one more thing said about *where*, never an argument
+/// of the subcommand.
+fn tool(screen: &Path, cmd: &str, args: &[&OsStr], window: Option<&str>) -> Result<Vec<u8>, String> {
+    let mut command = Command::new("swift");
+    command.arg(screen).arg(cmd).args(args);
+    if let Some(window) = window {
+        command.arg("--window").arg(window);
+    }
+    let out = command
         .output()
         .map_err(|e| format!("could not run `swift {} {cmd}`: {e}", screen.display()))?;
     if !out.status.success() {
@@ -107,22 +121,29 @@ fn tool(screen: &Path, cmd: &str, args: &[&OsStr]) -> Result<Vec<u8>, String> {
 }
 
 /// Bring the app under test to the front, so the window the tool goes looking for counts as
-/// on-screen (one behind another Space does not).
+/// on-screen (one behind another Space does not). The app and not one of its windows: what being
+/// frontmost decides is whether any of them can be shot at all.
 pub fn front(pid: i64, screen: &Path) -> Result<(), String> {
-    tool(screen, "front", &[OsStr::new(&pid.to_string())]).map(|_| ())
+    tool(screen, "front", &[OsStr::new(&pid.to_string())], None).map(|_| ())
 }
 
-/// Shoot the app's window into `path`. The harness names the app by pid and receives a file: which
-/// of its windows was shot, and the id the shot was taken by, are the tool's and stay there.
-pub fn shoot(pid: i64, path: &Path, screen: &Path) -> Result<(), String> {
-    tool(screen, "shot", &[OsStr::new(&pid.to_string()), path.as_os_str()]).map(|_| ())
+/// Shoot the window `window` names into `path` — or the app's one window, when a road named none.
+/// The harness names the app by pid and the window by its title, and receives a file: the id the
+/// shot was taken by is the tool's and stays there.
+///
+/// A road that names no window against an app drawing two is refused by the tool rather than
+/// answered with whichever was in front. That refusal is the point of naming: a shot of the wrong
+/// window is evidence of a screen nobody was standing at, and it reads on the manifest exactly like
+/// evidence of the right one.
+pub fn shoot(pid: i64, window: Option<&str>, path: &Path, screen: &Path) -> Result<(), String> {
+    tool(screen, "shot", &[OsStr::new(&pid.to_string()), path.as_os_str()], window).map(|_| ())
 }
 
 /// Read the words off a shot. An error is an execution failure, not a miss: a shot the reader found
 /// no text in comes back as an empty [`Reading`], which is the honest answer for an assert that
 /// expected words there.
 pub fn read_shot(image: &Path, screen: &Path) -> Result<Reading, String> {
-    let out = tool(screen, "read", &[image.as_os_str()])?;
+    let out = tool(screen, "read", &[image.as_os_str()], None)?;
     let v: serde_json::Value = serde_json::from_slice(&out)
         .map_err(|e| format!("could not read `screen read {}` as JSON: {e}", image.display()))?;
     let field = |k: &str| {
@@ -326,7 +347,7 @@ impl Instructor {
     /// ops that never reach the screen, and this harness maps the screen's.
     fn learn(&mut self, steps: &[Step]) {
         for step in steps {
-            if let Step::Action { domain, op, with, bind } = step {
+            if let Step::Action { domain, op, with, bind, .. } = step {
                 if let Some(name) = bind {
                     if let Some(label) = label(with) {
                         self.labels.insert(name.clone(), label.to_string());
@@ -348,6 +369,7 @@ impl Instructor {
     /// and a screen road can end nothing at all, since this harness maps no op that would. It is
     /// walked on the road as well anyway — the rule is that an action noted is an action walked, so
     /// mapping one of them later needs nothing remembered here.
+    ///
     fn note_end(&mut self, domain: Domain, op: &str, with: &Args) {
         if domain != Domain::Task {
             return;
@@ -439,9 +461,23 @@ impl Instructor {
     /// One step → one instruction. Fails closed on a registry op this harness has not mapped yet
     /// — the same contract the CLI driver keeps, so a new op surfaces loudly here too rather than
     /// walking past with a blank instruction. An action also records the label later steps read by.
+    ///
+    /// A window the road named is written into the sentence rather than kept beside it, so it
+    /// reaches everywhere the sentence does — what `--print` shows while a road is being written,
+    /// what the operator is handed mid-run, and what the manifest keeps afterwards — and so an
+    /// operator is told which screen to stand at *before* being told what to do there.
     fn render(&mut self, step: &Step) -> Result<String, String> {
+        let sentence = self.sentence(step)?;
+        Ok(match step.window() {
+            Some(window) => format!("In the window called \"{window}\": {sentence}"),
+            None => sentence,
+        })
+    }
+
+    /// The step itself, said without reference to which window it is said of.
+    fn sentence(&mut self, step: &Step) -> Result<String, String> {
         match step {
-            Step::Action { domain, op, with, bind } => {
+            Step::Action { domain, op, with, bind, .. } => {
                 let mut text = self.action(*domain, op, with)?;
                 // A step that says the screen will turn it away. The code `refused:` names is what a
                 // driver reading an exit status compares against, and there is no exit status here — so
@@ -464,7 +500,7 @@ impl Instructor {
                 self.note_end(*domain, op, with);
                 Ok(text)
             }
-            Step::Assert { domain, op, with } => self.assert(*domain, op, with),
+            Step::Assert { domain, op, with, .. } => self.assert(*domain, op, with),
         }
     }
 
@@ -662,6 +698,59 @@ impl Instructor {
     /// row can stand in are drawn as words of the interface, and which of them is standing is not
     /// something the presence of text can settle.
     ///
+    /// `terminal dot` is a `Review`, and one that is not about words at all. What it reads is a mark
+    /// with no text on it, and what tells its three faces apart is a glow, a colour and a blink. The
+    /// blink is the one that settles it: at either end of its turn it rests where a still lamp holds,
+    /// so a picture of the two can be the same picture. The eye that closes it is therefore watching
+    /// the screen rather than the shot, and the instruction says so and says for how long. The shot is
+    /// still kept, for the half of the row a picture does carry — which pane the mark belongs to.
+    ///
+    /// `files row-mark` is a `Review`, and the plainest one here: what it reads is a colour, and a
+    /// reading answers with words. The row wearing one says the same letters as the row beside it that
+    /// wears none, so no folding of the two sides can tell them apart. The instruction therefore names
+    /// the state git is in rather than the colour it is drawn in — which colour that is belongs to the
+    /// theme, and an eye at the screen can see that two rows differ without being told what to expect.
+    ///
+    /// `files handed-over` is a `Review` on all three of its doors, and further out than most: what
+    /// settles it is not on Amenbo's window at all. A file handed to the machine leaves through an
+    /// application that came forward, or an operating system's own chooser drawn by the system, and
+    /// the run shoots the window under test. The eye that closes it is the operator's at the moment
+    /// they pressed the item, which is why each of the three lines asks them to say what they saw.
+    ///
+    /// `terminal frames` is a `Review` for a reason close to the dot's: what it reads is a count of
+    /// boxes, and a box on this face is a box whether it holds a terminal or a question. Nothing on
+    /// it is the road's own words — the panes have not been typed into yet, and the empty ones this
+    /// step exists to rule out would carry the interface's — so there is nothing for a reading to
+    /// look for, and its absence would settle nothing either way. Its neighbour `asking-folder` is
+    /// read, and the two are worth having side by side: one says what is standing, and the other
+    /// says how many.
+    ///
+    /// `terminal side` and `terminal side-width` are `Review`s, and for the reason `frames` is: what
+    /// they read is a region of the screen rather than anything written in one. Every word a column
+    /// carries is drawn elsewhere on the same face — a pane's name is on the row above the pane as
+    /// well as on the list, and the file panel's two halves are named on the top row whether the
+    /// panel is up or not — so a reading finds those words on the shot either way and settles
+    /// nothing. `side-width` is further out still: what it asks is where an edge stands compared with
+    /// the shot before it, which is two pictures rather than one.
+    ///
+    /// `terminal side-span` is a `Review` beside them, and it is the one that comes back to a single
+    /// picture: what it asks is how the column and the panes divide the width between them, which is
+    /// on the shot and on no other. It reads no words for the reason its neighbours read none, and
+    /// its answers are coarse for the reason it has an eye at all — a person at the screen can say
+    /// which of two regions is the wider, and cannot say by how many pixels.
+    ///
+    /// `terminal side-cover` is a `Review` for the reason `side-span` is, and its answers are coarse
+    /// for a plainer reason still: what it asks is whether any of the panes is showing beside the
+    /// column, which is a thing an eye either sees or does not. It is the reading the wide width is
+    /// told apart by — its neighbour divides the width, and the wide width the column ships with
+    /// divides it about the way a dragged one does on the window the application opens.
+    ///
+    /// `terminal panes-sit` is a `Review` beside them, and for the same reason once more: what it
+    /// reads is where two regions of the screen are in relation to one another, and the panes carry
+    /// the road's own lines whichever way round they sit. A reading would find those words on the
+    /// shot in both shapes and settle nothing, so the picture goes to an eye — which is all one is
+    /// needed for, two boxes side by side and two stacked being as far apart as pictures get.
+    ///
     /// `dimension key` is read, and it is the cleanest reading on these roads. A key is neither a word
     /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
     /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
@@ -681,13 +770,17 @@ impl Instructor {
     ///
     /// `project icon` is a `Review` further out than any of those, and on both of its states: what it
     /// reads is a picture. A reading answers which words are on a shot, and neither the image a project
+    /// was given nor the colour it falls back to puts one there. `terminal tab-icon` is the same
+    /// reading on the other surface that draws either, and a `Review` for the same reason — the one
+    /// letter a tab falls back to is a letter of the project's name, which the tab beside it is
+    /// spelling out in full.
     /// was given nor the colour it falls back to puts one there.
     ///
     /// `store avatar` is the same reading one face further in, and a `Review` for the same reason: a
     /// registered image and the pattern drawn in its place are both pictures, and a slot holding either
     /// puts no word on a shot.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
-        let Step::Assert { domain, op, with } = step else { return None };
+        let Step::Assert { domain, op, with, .. } = step else { return None };
         match (*domain, op.as_str()) {
             // The two that read a task's own title off a card or a row, where a title that has ended
             // is drawn through. Nothing derived from it can be matched, in either direction: a reading
@@ -713,6 +806,12 @@ impl Instructor {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
             (Domain::Task, "opened") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
+            // The pane's own name, on the row the task draws for it. It is the line a road typed into
+            // that pane, so it is the road's own words and no part of the interface — which is what
+            // lets the absent half be read: a task with no such row has those words nowhere on it.
+            (Domain::Task, "pane") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
             // The category's own name, which is what its control on the pane is labelled with. The
@@ -805,6 +904,46 @@ impl Instructor {
             // holding a key nothing was saved under, so what says the guard bit is the old key standing.
             (Domain::Dimension, "key") => {
                 Some(Expectation { text: arg_str(with, "equals")?.to_string(), present: true })
+            }
+            // The line a road typed into a terminal, followed from one window to the other. It is the
+            // reader's own words and no part of the interface, so a reading finds it on the pane
+            // drawing that session and on no other screen — which is what lets the absent half be
+            // read as well: with the ledger up, the pane is hidden, and words that are hidden are
+            // words that are not on the shot.
+            (Domain::Terminal, "pane")
+            | (Domain::Terminal, "label")
+            // What is standing in the input line is on the same screen as what a program printed:
+            // one shot, one reading, and the sentence is where the difference between them lives.
+            | (Domain::Terminal, "in-the-box") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
+            // The folder the question offers, read by the name the road gave it. The buttons carry the
+            // folders' own paths, and the last part of one is the word the world was told to make it
+            // under — so a reading finds it on the question and nowhere else on this face, and finds
+            // it gone once the question has been left.
+            (Domain::Terminal, "asking-folder") => {
+                Some(Expectation { text: arg_str(with, "dir")?.to_string(), present: present(with) })
+            }
+            // A row on the file face, and the words an opened file draws. Both are read off the shot
+            // as the road wrote them: a file's name is a name the road gave it, and what is inside is
+            // what the road put there.
+            (Domain::Files, "listed") => {
+                Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
+            }
+            // The encoding the row names. It is drawn as words and read as words, and the fold takes
+            // the punctuation with it — `Shift_JIS` and `UTF-8` come back as their letters and digits
+            // either way, which is the whole of what is being compared.
+            (Domain::Files, "read-as") => {
+                Some(Expectation { text: arg_str(with, "encoding")?.to_string(), present: present(with) })
+            }
+            // A form named takes this away from the reading: both forms carry the same words, and
+            // what separates them is punctuation the fold throws away and a size no reading reports.
+            (Domain::Files, "reading") if picture(with) => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
+            (Domain::Files, "reading") if with.contains_key("as") => None,
+            (Domain::Files, "reading") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
             // The axis's own name, which is what its button in that row is drawn with. Nothing else on
             // a board opened plain carries it — a card draws values and not the axis they are on, and
@@ -1060,6 +1199,20 @@ impl Instructor {
                 "In that card, choose \"{}\" among the projects this device holds.",
                 req(with, "project")?
             ),
+            // The first loop's one press. It is named by what it does rather than by what is written
+            // on it, the way every other control on these roads is, and the folder it opens in is
+            // deliberately not said: the card names that folder above the press, so an operator told
+            // which one to expect could not tell a card that named the wrong one from a card that
+            // named the right one.
+            //
+            // What follows the press is said, because it is the press landing: the screen goes to the
+            // terminal by itself and a pane is already open there. An operator left to find the
+            // terminal for themselves would walk a road that passed whether or not the press did
+            // anything at all.
+            (Domain::Folder, "start-terminal") => {
+                "In the first loop, press the one move it offers — the one that starts a terminal in the folder the card names above it. The screen goes to the terminal face on its own, with a pane already open there and nothing asked."
+                    .to_string()
+            }
             // Two ops the CLI drives as one command apiece, and the screen as one form apiece. They
             // are the domain's own ops and not moves invented for the screen: what a road on screen
             // needs of its own is a card to open, never a project to raise.
@@ -1095,6 +1248,10 @@ impl Instructor {
             ),
             // Back onto the board, and it says "again" because that is what is under test: what a screen
             // draws on arrival is not what it was holding before the road walked away from it.
+            (Domain::Decision, "open-face") => {
+                "Press the control that opens this project's decision records, beside the views its tasks are read on."
+                    .to_string()
+            }
             (Domain::Project, "open") => format!(
                 "Open the project \"{}\" again, from the list of projects.",
                 req(with, "project")?
@@ -1301,6 +1458,15 @@ impl Instructor {
                 "In Amenbo's own settings, set the view a newly created project opens in to the one stored as \"{}\", then return to the screen the road was on.",
                 req(with, "view")?
             ),
+            // The run of the app ending and another coming up. The only step nobody at the screen
+            // carries out: the run owns the app it shoots, so ending this one and starting the next
+            // on the same store is the harness's, done in the walk itself, and it is already over by
+            // the time the step is handed over. What the operator is asked for is what they alone
+            // can say — that the window in front of them is a new one, drawn by an app that came up
+            // on its own, rather than the one they had been working in all along.
+            (Domain::Store, "run-again") =>
+                "Nothing to press: the run has ended Amenbo and started it again on the same store, and the window on the screen is the one the new run drew. Confirm the app you were working in has gone and this one came up in its place — it opens where a fresh launch opens, with nothing of the last run's doing carried out again in front of you — and bring it forward if anything else is standing over it."
+                    .to_string(),
             // The screen the two faces are made on, opened. It is a step of its own rather than a
             // clause on the ones below because the road walks it twice, and the second walk is what
             // the road is for: a slot redrawn under the operator's eye says the screen heard, and only
@@ -1537,6 +1703,873 @@ impl Instructor {
                     return Err(format!("action `set` does not know the position `{other}`"))
                 }
             },
+            // ── the terminal face ─────────────────────────────────────────────────────────────
+            // Which face the one window is showing. The segments are named by what each shows rather
+            // than by the word drawn on them, since those words are the interface's own and the run's
+            // language is whatever the machine is set to.
+            // The press that goes from a task to the pane its work is happening in. What it lands on
+            // is deliberately not promised here: the terminal face may be behind the other segment of
+            // this window or in a window of its own, and which of those is the run's business. So the
+            // step is the press and the reading of the row before it, and where it landed is read by
+            // the step after (`terminal pane`).
+            (Domain::Task, "go-to-pane") => format!(
+                "On the task \"{}\" standing open, press the row saying where the work is happening — the one carrying the pane's name \"{}\". The screen goes to the terminal, on the page that pane is on, with that pane the one being worked in. Nothing is typed into it: it is somebody's terminal, and being sent to it is not being given it.",
+                self.target_label(with),
+                req(with, "shows")?
+            ),
+            (Domain::Terminal, "show-face") => match req(with, "face")? {
+                "tasks" => "In the pair of segments at the top of the window, press the one that shows the ledger — the tasks, the projects and the board."
+                    .to_string(),
+                "terminal" => "In the pair of segments at the top of the window, press the one that shows the terminal — the pane a terminal runs in."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `show-face` does not know the face `{other}`"))
+                }
+            },
+            // The way in, and the one control a face with no folder yet has on it. The step says what
+            // choosing does rather than what the button reads, for the reason `show-face`'s does: the
+            // words are the interface's own and the run's language is whatever the machine is set to.
+            // What is worth confirming while walking it is that nothing else is asked — no name, no
+            // submit — since the whole of this road is one press and a folder.
+            (Domain::Terminal, "open-folder") => format!(
+                "On the terminal face, press the one control it offers — the way in in the middle — and in the picker that opens choose a folder the road calls \"{}\". The folder is bound to the project the face is on, and the face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none — and nothing is named and nothing is submitted.",
+                req(with, "dir")?
+            ),
+            // Getting to a plain shell, which is what a road that speaks in a pane speaks to. It is
+            // written for the three shapes the face can be in rather than for one press, because
+            // which of them is on screen is the run's machine's business and not the road's — an
+            // operator told only "choose the plain shell" would be hunting for a control that is not
+            // on theirs.
+            (Domain::Terminal, "open-shell") =>
+                "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first (run: exit): the row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. On an empty frame the same list is on the frame itself, above the press that opens it: choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane."
+                    .to_string(),
+            // Writing a command of the reader's own down on the frame. Two fields and a
+            // press, and the reading that matters is taken before the press: what is registered runs
+            // in a terminal exactly as it stands, so the frame has to say so while there is still
+            // something to change.
+            (Domain::Terminal, "register-start") => format!(
+                "On the terminal face, find the empty frame — the box on the page that is not a terminal — and under the row of things a pane can be opened with, press the control that registers a command of your own. Fill the two fields it opens: the name \"{}\", and the command line `{}` written exactly as it stands here, spaces and quotes and all. Before saving, confirm the frame shows that same line back as what will run in the terminal. Then save.",
+                req(with, "name")?,
+                req(with, "line")?,
+            ),
+            // Opening a pane on one. It is the same two moves the plain shell is opened by — choose,
+            // then press — and it is written as its own step because what is being proved is that a
+            // row nobody catalogued is pressable at all.
+            (Domain::Terminal, "open-registered") => format!(
+                "On the empty frame, choose \"{}\" from the row of things a pane can be opened with — it stands among them after the ones Amenbo lists and before the plain shell — and press to open. A pane comes up and the command runs in it.",
+                req(with, "name")?
+            ),
+            // A line typed into the pane and sent. It is typed rather than pasted because what is
+            // under test is a terminal: keys are what a terminal is driven by, and a line that
+            // arrived some other way would be evidence of a path nobody walks.
+            //
+            // *Which* pane has to be said. A face can have several panes on it, and beside them it can
+            // be asking about work nothing is doing any more — a reader who clicked the wrong box
+            // would type this line nowhere at all.
+            //
+            // Where the road named it, it is named by its own line, which is the only thing on a page
+            // of panes that is the road's own. Where it did not, the pane is the one the step before
+            // opened — the box on the page with a prompt and nothing else on it. That is said by what
+            // is on it rather than by what it was opened for: on a page with a second pane already
+            // carrying the road's lines, "the pane the folder was opened in" names the wrong box.
+            (Domain::Terminal, "type-line") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\" — the one the road typed that line into, and not any of the others"),
+                    None => "the pane the step before opened — the box on the page with a prompt and nothing else on it, not the empty frame beside it".to_string(),
+                };
+                format!(
+                    "Click into {pane} — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and, where the pane has not been named yet, being the name it takes.",
+                    req(with, "text")?
+                )
+            }
+            // A file let go over a pane. It comes from outside for the reason the file face's drop does:
+            // a drop reads the disk the operator is sitting at, and nothing the run laid down is
+            // anywhere a hand can reach from there. What it lands as is not said here — where it goes
+            // is Amenbo's own answer, and the step that reads the input line is where that is settled.
+            (Domain::Terminal, "drop-in") => {
+                // Which pane it is let go over. A page with one has nothing to say here; a page with
+                // two is being told where the drop goes, because where it goes is what the steps
+                // after it read.
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                match with.get("beside").and_then(|v| v.as_str()) {
+                    None => format!(
+                        "From outside Amenbo — a file manager, the desktop, anywhere on this machine — drag a file named \"{}\" over {pane}, and let it go there.",
+                        req(with, "brings")?
+                    ),
+                    // One hand and one movement, said twice over, because a pair let go one after the
+                    // other is two drops and proves something else entirely.
+                    Some(beside) => format!(
+                        "From outside Amenbo — a file manager, the desktop, anywhere on this machine — select a file named \"{}\" and a file named \"{beside}\" together, drag the pair over {pane} in one movement, and let them both go there.",
+                        req(with, "brings")?
+                    ),
+                }
+            }
+            // What the last copy left, put into a pane's line. The pane is named the way the drop
+            // above names one, and the line ends where the drop's does: nothing is sent, because what
+            // a hand-over owes is a line the person still has to send themselves.
+            (Domain::Terminal, "paste") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Click into {pane}, then press the key this machine pastes with. What the last copy put on the clipboard appears in that pane's input line — leave it there, and press nothing else."
+                )
+            }
+            // A command run for its output, which is what the steps after it read. The clearing is
+            // said first because it is what makes "the ref" a place on the screen rather than one of
+            // several, and the waiting is said last because a press on a half-drawn line is a press
+            // on nothing.
+            (Domain::Terminal, "run") => {
+                let standing_in = match with.contains_key("target") {
+                    true => format!(
+                        ", putting the ref of the task \"{}\" — the `AMB-T-…` it is drawn by, which the pane had on it a step ago — where the command says `<ref>`",
+                        self.target_label(with)
+                    ),
+                    false => String::new(),
+                };
+                format!(
+                    "Click into the pane and clear what is on it — `clear` at the prompt does that — so nothing an earlier step left is still on the screen. Then type `{}` and press return{standing_in}, and wait until it has finished and the prompt is back.",
+                    req(with, "command")?
+                )
+            }
+            // Pressing one of those refs. The folded half asks for the width to be moved rather than
+            // for a particular width: where the fold lands is the run machine's business — its font,
+            // its screen, how wide the window will go — so what the road can ask for is the state,
+            // and the operator is the one who can see when it has arrived.
+            (Domain::Terminal, "press-ref") => match flagged(with, "folded") {
+                false => format!(
+                    "In the pane, press the ref of the task \"{}\" where the output drew it — the `AMB-T-…` characters themselves, which the pane offers as a link.",
+                    self.target_label(with)
+                ),
+                true => format!(
+                    "Drag the window's side edge in or out until the ref of the task \"{}\" is broken across two rows — part of it at the end of one row, the rest at the start of the next — and press it there. The fold is the whole of this step: pressed while it sits whole on one row, it proves what the step above already did.",
+                    self.target_label(with)
+                ),
+            },
+            // Something set running in the pane and left there, which is what parts it from `run`
+            // above: that step ends when the prompt is back, and this one is walked away from with
+            // the output still arriving.
+            //
+            // Something set running in the pane and left there. The command is written out in full
+            // for the reason `say`'s is — the whole of what the step is for is that something goes
+            // on coming out, and an operator improvising that would be improvising the step. It is
+            // written twice because the two shells a pane comes up in count their pings with
+            // different words and the rest of the line is the same in both. What it ends with is the
+            // road's own line: a step that waited for the interface to say it had finished would be
+            // waiting on words drawn in whatever language the run's machine is set to.
+            (Domain::Terminal, "keep-printing") => {
+                let text = req(with, "text")?;
+                format!(
+                    "In the pane that has a terminal running in it, run: ping -c {KEEP_PRINTING_SECONDS} 127.0.0.1; echo \"{text}\" — where that pane's shell is PowerShell, the count is written -n {KEEP_PRINTING_SECONDS} and the rest of the line is the same. A line arrives about once a second for the {KEEP_PRINTING_SECONDS} seconds that takes, which is a terminal putting something out with nobody typing at it. Leave the pane alone once it is going: what every step after this reads is a pane nobody is working in, and the step looking for \"{text}\" is the road waiting for the printing to stop."
+                )
+            }
+            // The two moves between one window and two. Named by what each does rather than by the
+            // words on them, and each said with where it is: the way out is on the face, the way back
+            // is in the window it made, and a road that pressed the wrong one would be in the wrong
+            // window for every step after it.
+            (Domain::Terminal, "split-out") =>
+                "On the terminal face, press the control that opens the terminal in a separate window. A second window appears, offset from this one."
+                    .to_string(),
+            (Domain::Terminal, "fold-back") =>
+                "Press the control that puts the terminal back into one window. This window closes and the terminal returns to the other one."
+                    .to_string(),
+            // The surface layer, said from inside the pane it is about. The command is written out in
+            // full rather than described, because it is the one instruction on these roads that is
+            // literally what an agent types — and because the layer refuses to be said anywhere else,
+            // so an operator improvising it from a description would be turned away.
+            //
+            // The layer's four verbs are the four accepted here. An unknown word is refused loudly.
+            (Domain::Terminal, "say") => {
+                let text = req(with, "text")?;
+                let verb = req(with, "verb")?;
+                let (command, what) = match verb {
+                    "name" => ("name", "the agent naming the pane it is running in"),
+                    "note" => ("note", "the agent saying what it is doing now"),
+                    "waiting" => ("waiting", "the agent handing the turn over, and saying why"),
+                    "finished" => ("finished", "the agent saying what came of the work"),
+                    other => return Err(format!("action `say` does not know the verb `{other}`")),
+                };
+                // Said and stood at, or said and walked away from. The second is the only way to a
+                // word that arrives while the ledger is the face up: the layer is spoken inside a
+                // pane and read on the other side of the switch, so the operator arms it and
+                // crosses over. The wait is here rather than in the road because how long a person
+                // needs to press one segment is the driver's business, not the goal's.
+                if flagged(with, "away") {
+                    format!(
+                        "In the pane that has a terminal running in it, run: sleep {SAY_AWAY_SECONDS} && amenbo talk {command} \"{text}\" — then press the segment that shows the ledger before those seconds are up. What lands is {what}, and it lands while the terminal is the face nobody is looking at, which is the only shape it ever reaches the other face in."
+                    )
+                } else {
+                    format!(
+                        "In the pane that has a terminal running in it, run: amenbo talk {command} \"{text}\" — this is {what}."
+                    )
+                }
+            }
+            // Ending the terminal in a pane, which is done from inside it. **The one control the pane
+            // has takes the place away and is not this**, so there is nothing to press here: what
+            // ends a program is the program being told to end. The pane is left standing with its
+            // last output on it, which is the half these roads go on to read.
+            (Domain::Terminal, "end-pane") =>
+                "In the pane that has a terminal running in it, run: exit — the program ends. The pane stays where it is with what it printed still on it, and nothing is running in it any more."
+                    .to_string(),
+            // Naming the place, which is three presses and not one: the row's menu, the item in it,
+            // and the key that takes the word. All three are said, and the last of them is said
+            // hardest — the box is left as easily as it is opened, and every way of leaving it keeps
+            // nothing. An operator who typed the name and then clicked somewhere to see what had
+            // happened would have walked the step that undoes this one.
+            //
+            // The item is named by where it sits and what it does rather than by the word on it, for
+            // the reason every control on these roads is: the word is the interface's, and the run's
+            // language is whatever the machine is set to.
+            //
+            // What is in the box already is said too. It opens on the name as it stands, selected, so
+            // typing replaces it — and an operator who cleared it first would be doing the one thing
+            // that ends in no name at all.
+            (Domain::Terminal, "name-pane") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "On the row above {pane}, press the control that opens what else the row can do, and choose the item that names the pane — the one set apart, below the two that hand the terminal something. A box takes the label's place with the name as it stands in it, already selected. Type \"{}\" straight over it and press Enter. The row carries that name afterwards. Press nothing else and click nowhere else in between: leaving the box, by any means, is the way this is taken back rather than kept.",
+                    req(with, "name")?
+                )
+            }
+            // Getting rid of the place. The pane is named by the words the road typed into it, since
+            // that is the only thing on a page of panes that is the road's own — and being sure which
+            // one is pressed is the whole point on the one move nothing takes back.
+            //
+            // The question is half the step, so the operator is told to read it before answering: what
+            // is being defended is that it stands there at all. What the answer costs is said with it,
+            // because an operator who did not know would have no way to tell an app that lost a pane
+            // from one doing exactly as it said.
+            //
+            // Which question comes up is the pane's own business and not the road's: a session holding
+            // a reservation is asked about it by name and offered three ways out, and one holding
+            // nothing is asked the plain thing. So `answer` is what a road says about the question it
+            // expects — left out for the plain one, and naming one of the three otherwise.
+            (Domain::Terminal, "remove-pane") => {
+                let press = format!(
+                    "On the pane showing \"{}\", press the cross at the end of its own row — the control beside what is said about that pane, and not the one on any other.",
+                    req(with, "shows")?
+                );
+                match arg_str(with, "answer") {
+                    // Nothing held, so nothing to choose between. The plain question, and yes.
+                    None => format!(
+                        "{press} A question comes up before anything happens: read it, then answer it yes. The terminal in that pane ends, the pane goes, and the page closes up behind it."
+                    ),
+                    Some(answer) => {
+                        // The reading is half the step here, and it is the half the three answers
+                        // exist for: a question that named the wrong pane's work, or named none, is
+                        // the loss it stands in front of. So the task is named before any of them is
+                        // pressed, and a step that forgot to name one would send the operator to read
+                        // a question against nothing.
+                        if !with.contains_key("target") {
+                            return Err(
+                                "action `remove-pane` answering the three-way question has to name the task the question must name — give it a `target`"
+                                    .to_string(),
+                            );
+                        }
+                        let question = format!(
+                            "{press} A question comes up before anything happens, and it names what this pane's session is holding: read it, and confirm what it lists is the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — and no other. Three answers stand under it.",
+                            self.target_label(with)
+                        );
+                        // Each is said by what it does rather than by what it reads, the way
+                        // `show-face`'s presses are: the words are the interface's own and the run's
+                        // language is whatever the machine is set to. Where they stand is said too,
+                        // so an operator has two ways to find the one they were sent to.
+                        match answer {
+                            "hand-back" => format!(
+                                "{question} Press the first of them — the one that hands the work back before going. The task named goes back to waiting for somebody to take it, the terminal in that pane ends, the pane goes, and the page closes up behind it."
+                            ),
+                            "leave" => format!(
+                                "{question} Press the second — the one that goes and leaves the work where it is. Nothing on the ledger is moved: the terminal in that pane ends, the pane goes, the page closes up behind it, and the task named is still held."
+                            ),
+                            "cancel" => format!(
+                                "{question} Press the third — the one that stays. Nothing happens at all: the question goes, the pane is still there with what was on it, and the task named is still held."
+                            ),
+                            other => {
+                                return Err(format!(
+                                    "action `remove-pane` does not know the answer `{other}` — it is hand-back, leave or cancel"
+                                ))
+                            }
+                        }
+                    }
+                }
+            }
+            // Moving the whole face to another project. The row is named by the project's own name,
+            // and the step says where the press leaves the screen rather than what the press looks
+            // like: the rail carries two lists, the projects and then the panes of the one being
+            // shown, and an operator who took a pane's row would be going to a pane instead of to a
+            // project, which is a different move with a different screen after it.
+            //
+            // What it says is the state arrived at rather than the change, and deliberately: which
+            // project the face came up on is the run's business, so a road may well press the one
+            // already shown, and a line promising the screen would change would read as a failure on
+            // the one press that is allowed to do nothing.
+            //
+            // How the tabs are drawn is said as well as where the press is, because they carry two
+            // widths: named, and compact — the project's colour with the first character of its name
+            // and no more. A road that named a tab without saying that would be
+            // naming something the screen may not have on it. Which width the tabs were left at is
+            // not a road's to choose, so the step asks for the one it can be walked on rather than
+            // reading anything about it.
+            (Domain::Terminal, "go-project") => format!(
+                "In the column of tabs at the edge of the face, press the tab for the project \"{}\". Where the tabs are drawn as colours alone, bring their names back first with the control under them. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
+                req(with, "project")?
+            ),
+            // Opening a pane where there is not one yet. **A pane is opened from the empty frame**,
+            // by the press on it that opens one — the row above that press is what it opens *with*,
+            // and a road that said nothing about the row would be walked with whatever was on it. So
+            // the step says to leave it alone: what this is about is the pane appearing, and which
+            // agent it runs is another road's (`open-shell`). That is the whole of it — the two ways in differ only in what happens
+            // before the press. From the face there is nothing before it: the empty frame is already
+            // on the page. From the strip there is one press first, which opens nothing — it goes to
+            // where a pane would land, and the empty frame is what is waiting there.
+            //
+            // The strip is what a full page has instead of an empty frame, so a road only reaches it
+            // where the page it stands on is full: on a page with room the way in is the frame, and
+            // there is no second control to press.
+            //
+            // Neither names a page: where a pane lands is the project's arithmetic and not the road's,
+            // and a step that named one would be a road asserting it from the wrong end.
+            //
+            // The asking half is where the ways in stop differing: a project bound to several folders
+            // answers the press on the empty frame with the same question either way, and nothing
+            // opens until it is answered. So what comes before is said per way in and the press on
+            // the empty frame is said once.
+            (Domain::Terminal, "open-pane") => {
+                let press = match req(with, "from")? {
+                    "face" => "On the terminal face, find the empty frame — the one box on the page that is not a terminal, at the first gap in it — and press what opens a terminal in it, leaving the row above that press as it came up.",
+                    "strip" => "On the terminal face, which is full, press the thin strip standing beside the panes at the edge of the page — the one control there that is not a pane. Nothing opens: the screen goes to the page a pane would land on, which is the page with room in it, brought into being where every one of them is full. On the empty frame waiting there, press what opens a terminal in it, leaving the row above that press as it came up.",
+                    other => {
+                        return Err(format!(
+                            "action `open-pane` does not know the way in `{other}` — it is face or strip"
+                        ))
+                    }
+                };
+                // The one time the row is not left as it came up. Before anybody on this machine has
+                // opened a pane there is nothing on it, and the press says so rather than opening on
+                // a guess — so the step has to say what to do about a control that will not answer.
+                // Which one is chosen is still another road's, hence "any of them".
+                let first_run = "If nothing on that row is on and the press will not answer — the first run on a machine, before anybody has opened a pane — choose any of them first, and the press comes alive; that is the only time this step chooses.";
+                let lands = match flagged(with, "asks") {
+                    true => "Nothing opens: this project is bound to more than one folder, so what comes up where the pane would have been is the question of which of them it works in.",
+                    false => "A pane opens there, in the folder the project is bound to, and nothing is asked.",
+                };
+                format!("{press} {first_run} {lands}")
+            }
+            // Answering that question. The row is found by the folder's name at the end of the path
+            // it draws, since what the face writes on it is where the folder is and the road knows
+            // only what it calls it.
+            //
+            // The list itself is the goal, so the operator is told what may be on it: a pane belongs
+            // to a project and the folders it can work in are that project's, which is the one thing
+            // the rail promises. A question offering a way to anywhere else is this road's failure
+            // even where the press that follows lands correctly.
+            (Domain::Terminal, "pick-folder") => format!(
+                "In the question standing where the pane will be, press the folder the road calls \"{}\" — the row whose path ends in that name. Confirm as you press that what it offers is this project's folders and nothing besides: no picker, and no way out to a folder the project is not bound to. The pane opens in the one pressed.",
+                req(with, "dir")?
+            ),
+            // Walking away from the question about where a pane runs. The press is named by what it
+            // is *not* — not one of the folders, and not the way in again — because what is under
+            // test is the leaving and not the place it was left from. The count already in force is
+            // offered as the one control that is on the face whatever else is: a project with
+            // nothing open has no panes to press and no second project to cross to, the page digits
+            // are not drawn at all where there is only one page, and an operator told only "press
+            // somewhere else" on a screen holding one question would be hunting for somewhere to
+            // press. Pressing the count that is on asks for the split the face is already at, so
+            // nothing about the page moves with it.
+            (Domain::Terminal, "leave-question") =>
+                "Without answering it, leave the question about which folder the pane works in: press somewhere else on the face — at the top, the pane count that is already in force is on every screen this question can come up on, and pressing the one already on leaves the page as it is. Answer nothing and press none of the folders it offers."
+                    .to_string(),
+            // How many panes a page draws. The control is named by what it holds rather than by
+            // where it sits, and the number is pressed as it is written: every count is drawn at
+            // once, so there is nothing to open first. What the step does not say is what
+            // becomes of the panes — the frames are one list re-cut by the new count, so a pane can
+            // land on another page, and which of that is right is the assert after it.
+            //
+            // Where the *screen* ends up is said, and it is a different kind of thing: an operator
+            // who was not told may read a page they did not ask for as the app having lost their
+            // place, and go looking for a pane that is exactly where it should be. The screen stays
+            // with the pane being worked in, which is the last one opened or typed at.
+            (Domain::Terminal, "set-panes") => format!(
+                "At the top of the terminal face, in the row of pane counts, press the one that says {}. It is words rather than a bare digit — the page numbers beside it are the digits — and the one in force is the one that is not dimmed. The page redraws at that split whether or not there are panes to fill it, and the screen stays with the pane being worked in, so it may end up on a different page from the one it was on.",
+                count(with, "count")?
+            ),
+            // Which way the two of them sit. The control carries no words at all — it is drawn as the
+            // two shapes — so the step says what the shape it presses looks like rather than naming
+            // it, the way `hide-side`'s controls are said by what they do.
+            //
+            // What the press does *not* do is written as plainly as what it does. It stands beside
+            // the counts and is drawn at their size, and the count re-pages every frame on the
+            // device — so an operator expecting the same of this one would read a page that stayed
+            // where it was as a press that never landed.
+            (Domain::Terminal, "set-orient") => format!(
+                "At the top of the terminal face, just past the row of pane counts, press the small control drawn as a box divided {} — the page with its two panes {}. The pair carries no words: each is the shape itself, and the one in force is the one that is not dimmed. The page redraws in that shape under the panes already standing on it: nothing opens, nothing closes, and the page you are on stays the one you are on.",
+                orient(with)?.glyph(),
+                orient(with)?.phrase()
+            ),
+            // Paging. The digits are the pages, so the step names the one it presses and says the
+            // whole screen moves: a pane that was on the page being left is not on the screen after
+            // this, which is the state half these roads are about.
+            (Domain::Terminal, "go-page") => format!(
+                "At the top of the terminal face, in the row of page digits, press {}. The whole screen moves to that page.",
+                count(with, "page")?
+            ),
+            // Putting a column away, and asking for it again. Each is said with *where* its control
+            // is, because the two are not in the same place: the rail is folded from the row above
+            // the panes and the file face from a cross on its own panel, while both are asked for
+            // again from that same row. An operator told only "close it" would go looking for one
+            // control on a face that has two.
+            //
+            // The controls are named by what they do rather than by what they read, for the reason
+            // `show-face`'s are: the words are the interface's own and the run's language is
+            // whatever the machine is set to.
+            (Domain::Terminal, "hide-side") => match side(with)? {
+                Side::Rail => "At the top of the terminal face, press the control that folds the folders away — the small one just after the way out to a separate window. The column goes, and the panes take the width it was using. The tabs of the projects stay where they are: they are at the edge of the face and have no way to close them.".to_string(),
+                Side::Files => "On the panel beside the panes — whichever of its two halves is up — press the cross at the end of its own top row. The panel goes, and the panes take the width it was using.".to_string(),
+            },
+            (Domain::Terminal, "show-side") => match side(with)? {
+                Side::Rail => "At the top of the terminal face, press that same control again. The folders come back where they were.".to_string(),
+                // One control, and it is a switch rather than a way in: the same press opens the
+                // panel and puts it away. So the step is written as the state to end in — a road
+                // that pressed regardless would close the panel on every run that came up with it
+                // standing, which is what a machine comes up with until somebody says otherwise.
+                Side::Files => "At the top of the terminal face, make sure the panel beside the panes is standing. What opens it is at the far end of the top row — the one control there for that panel, naming the page written on and the files together — so press it where the panel is away, and leave it where the panel is already up: that same press is what puts it away. It comes up on whichever of its two halves it was left on, and which half that is belongs to the panel's own row of tabs rather than to this press.".to_string(),
+            },
+            // The one gesture on these roads, and the one step aimed at something the screen does
+            // not name: the edge is a line rather than a button, so nothing reaches it the way a
+            // button is reached and what the operator is told is where the edge is. The screen tool
+            // drags between two points, but working those points out of the screen is an operator's.
+            (Domain::Terminal, "drag-side") => {
+                let which = side(with)?;
+                // Said by what it does to the column rather than by left and right: which way is
+                // wider depends on which edge of the face the column is on, and an operator handed a
+                // direction would drag the wrong way on one of the two.
+                let toward = match req(with, "toward")? {
+                    "wider" => "so the column grows by something like a finger's width, and the panes give up that much",
+                    "narrower" => "back to about where the edge started, so the panes take that width again",
+                    // A place and not a distance, so the operator is told where to stop rather than
+                    // how far to go: what a later step reads is this width, and it is asked for in
+                    // the words that step will use.
+                    "broad" => "well out across the face, as far as the edge will go — it stops of its own accord before the panes are squeezed away, and letting go anywhere near that stop is far enough",
+                    // The same gesture on the wide width, which stops somewhere else: it runs on
+                    // over the panes until it meets the folders, so the sentence that fits the narrow
+                    // width's stop would have the operator let go while the work is still in view.
+                    // It is the folders and not the edge of the face: the tabs stand further out
+                    // still, and neither they nor the folders are ever covered.
+                    "cover" => "on out over the panes, as far as the edge will go — it stops when it reaches the column of folders on the other side of them, by which point none of the panes is left showing, and letting go anywhere near that stop is far enough",
+                    other => return Err(format!("action `drag-side` does not know the direction `{other}`")),
+                };
+                format!(
+                    "Put the pointer on the line between {} and the panes — the cursor turns into the one that says a thing can be dragged sideways — and drag it {}. The column follows the pointer while you hold it and stays where you let go.",
+                    which.phrase(),
+                    toward
+                )
+            }
+            // A press on a pane and nothing else. What it is for is the column on the other side of
+            // the panes, so the line says plainly that nothing is typed: an operator who pressed the
+            // input line and carried on would be reading a face two steps had moved.
+            (Domain::Terminal, "press-pane") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Click once on {pane} — on the terminal itself, not on the row above it — and type nothing. Nothing is sent: the press is a reader going back to the work, and what it is for is what happens to the column beside it."
+                )
+            }
+            // A file put in the folder from outside Amenbo, while the app is up. It is written as an
+            // instruction and not left to the premise because *when* it happens is the whole of what
+            // is under test: what the face draws has to move without anybody touching the app, so the
+            // operator is told plainly to leave it alone.
+            (Domain::Repo, "write-file") => format!(
+                "Outside Amenbo — in a file manager or another terminal — make the file \"{}\" inside the folder the road calls \"{}\", with \"{}\" in it, making any folder on the way that is not there. Do not touch Amenbo while you do.",
+                req(with, "path")?,
+                req(with, "dir")?,
+                req(with, "content")?
+            ),
+            // The same, for a file whose bytes a road cannot hold in a line of YAML. What the operator
+            // is asked for is a copy over the top: the name stays, so nothing about the panel's own
+            // list changes, and the only thing that could reach the screen is what is inside the file.
+            //
+            // Where the fixture lies is said as the road says it, and where to find it is on stderr
+            // with the rest of the world the run stood up: the run places the folders, and this YAML
+            // never sees a path.
+            (Domain::Repo, "copy-fixture") => format!(
+                "Outside Amenbo — in a file manager or another terminal — copy this run's fixture \"{}\" over the file \"{}\" inside the folder the road calls \"{}\", keeping the name it has. Do not touch Amenbo while you do.",
+                req(with, "from")?,
+                req(with, "path")?,
+                req(with, "dir")?
+            ),
+            // The two halves of the clipboard that happen outside Amenbo. They are the operator's own
+            // file manager, named as loosely as the rest of the outside is: what matters is that the
+            // clipboard was used by something that is not this window, not which application it was.
+            (Domain::Repo, "copy-outside") => match with.get("dir").and_then(|v| v.as_str()) {
+                Some(dir) => format!(
+                    "Outside Amenbo — in a file manager — copy the file \"{}\" inside the folder the road calls \"{dir}\" the way that machine copies a file, so it is on the clipboard.",
+                    req(with, "path")?
+                ),
+                // No folder named is the run's own, which is where the line on stderr says to look:
+                // it is outside every folder the road binds, which is the point of a file kept there.
+                None => format!(
+                    "Outside Amenbo — in a file manager — copy the file \"{}\" from the folder this run works in, the way that machine copies a file, so it is on the clipboard. The run said where that folder is before the first step.",
+                    req(with, "path")?
+                ),
+            },
+            (Domain::Repo, "paste-outside") => format!(
+                "Outside Amenbo — in a file manager — open \"{}\" inside the folder the road calls \"{}\" and paste there, the way that machine pastes a file.",
+                req(with, "path")?,
+                req(with, "dir")?
+            ),
+            // A bound folder taken away from under the app, the same way and for the same reason: a
+            // folder is moved by whoever moves folders, and what Amenbo holds only becomes wrong
+            // afterwards. The screen road wants the move to land *while the app is watching*, which
+            // is what a premise could not do — the section it is about is drawn before it happens.
+            //
+            // Where it goes is named the way it is named everywhere else on these roads: by what the
+            // road calls it, since the run places the folders and the YAML never sees a path.
+            (Domain::Folder, "move") => format!(
+                "Outside Amenbo — in a file manager or another terminal — take the folder the road calls \"{}\" away from where it stands, moving it beside itself under the name \"{}\". Do not touch Amenbo while you do.",
+                req(with, "dir")?,
+                req(with, "to")?
+            ),
+            // ── the file face ─────────────────────────────────────────────────────────────────
+            // The tree, which is the whole of the column beside the panes — the column on the far
+            // side of them draws the file it opens and nothing else. Its sections are named by what
+            // each is about rather than by their headings, for the reason the segments are: the
+            // headings are the interface's own words and the run's language is whatever the machine
+            // is set to.
+            (Domain::Files, "tree") => match flag(with, "open")? {
+                // Every one of them: a project bound to several folders draws a section each, and a
+                // row can only be read in the section it belongs to now that the tree is the only
+                // place rows are.
+                //
+                // **The state, not the press.** The section is drawn unfolded, so on most roads
+                // there is nothing here for an operator to do — and a step that told them to unfold
+                // what is already unfolded would have them fold it. Saying where the screen has to
+                // stand leaves the road true wherever it is walked from, a section a step above
+                // folded included.
+                true => "Have the folders standing beside the panes: the column is drawn there, under the project's name, and where it has been put away the control on the row above the panes brings it back. The section that draws the folder itself is then to be standing unfolded, each of them where there is more than one. It is drawn that way, so the unfolding is usually nothing to do; unfold any that is folded.".to_string(),
+                false => "Fold those sections back up.".to_string(),
+            },
+            // A folder opened a level, or shut again. Opening is what a road asks for nearly every
+            // time, so it is what the step means when it says nothing.
+            (Domain::Files, "enter") if !unfolds(with) => format!(
+                "In the folder's section, fold the folder \"{}\" shut. What was under it goes off the screen; the folder's own row stays.",
+                req(with, "name")?
+            ),
+            (Domain::Files, "enter") => format!(
+                "In the folder's section, open the folder \"{}\" one level.",
+                req(with, "name")?
+            ),
+            // Twice, because one press picks the row out and does no more: the file lies over the
+            // tree while it is being read, so a row opened on the way past is the row that hides
+            // what a reader was reaching for next.
+            (Domain::Files, "open") => format!(
+                "In {}, press \"{}\" twice. The column is replaced by what is in that file.",
+                section(with)?,
+                req(with, "name")?
+            ),
+            // The one control with two ends and one press, so the step names the end. What it is
+            // called on screen is the form it is *not* in — a switch says where it goes — which is
+            // why the instruction describes the offer rather than quoting the word on it.
+            (Domain::Files, "show-as") => match form(with, "form")? {
+                "source" => "On the row the open file is named on, have it drawn as the text it is rather than as what that text says: press the control offering to edit it, if it is not already showing the text. The hashes and the brackets are then on the screen as characters."
+                    .to_string(),
+                _ => "On the row the open file is named on, have it drawn as what its text says rather than as the text itself: press the control offering to read it, if it is not already drawn that way. The hashes and the brackets are then gone, and what they marked is drawn."
+                    .to_string(),
+            },
+            // The control is named by what it says rather than by where it is: it draws the encoding
+            // and the newline with a dot between them, and those words are the file's rather than the
+            // interface's — so an operator can find it on a screen in any language.
+            (Domain::Files, "reopen-with") => format!(
+                "On the row the open file is named on, press what says how it was read — an encoding and a newline with a dot between them — and choose \"{}\" from the list that comes up. The file is read again from its bytes as that.",
+                req(with, "encoding")?
+            ),
+            (Domain::Files, "back") =>
+                "In the row above the file, press the way it offers to close it. Its tab goes with it, and where it was the only one open the column says nothing is."
+                    .to_string(),
+            // One tab pressed. The row is drawn at both of the column's widths, so this is the same
+            // press wherever the column is standing — and the scroll is said because a tab far
+            // enough along the row is off the end of it, which is a reader hunting for something the
+            // face has not lost.
+            (Domain::Files, "tab") => match arg_str(with, "name") {
+                Some(name) => format!(
+                    "In the row of tabs above the file, press the one named \"{name}\", scrolling the row sideways if it is not on the screen. What it names comes up in the column."
+                ),
+                None => "In the row of tabs above the file, press the first one — the draft page's, which is the one tab with no cross on it. The page comes up in the column."
+                    .to_string(),
+            },
+            // The other door onto the same tab, and the only one onto a tab off the end of the row.
+            // What comes up brings its tab into view, which is said because it is the half that makes
+            // the press worth walking: a face that marked a tab nobody can see would be answering a
+            // reader who still cannot tell which file is up.
+            (Domain::Files, "more-tabs") => format!(
+                "At the end of the row of tabs, past the last of them, press the control that lists what is open — and choose \"{}\" from the list that comes up. What it names comes up in the column, and the row scrolls until its tab is on the screen.",
+                req(with, "name")?
+            ),
+            // The keys. What each one reaches is decided by where the reader is standing, so every
+            // line here says where that has to be — and says the click is only for when it is not,
+            // because a road that opened or pressed a row a step ago has left the keyboard where
+            // the key wants it already, and an operator told to click every time would be walking
+            // a road no reader walks.
+            //
+            // They stand at three different heights. The key that leaves is the panel's and takes
+            // one layer per press; F2 and a letter are the row the keyboard is on and do nothing at
+            // all unless it is on one; the bin and the copy are what the reader has picked out,
+            // which is the row they are standing on and every other row picked out with it.
+            //
+            // **The last two are why no line here tells anybody to click first.** A click without a
+            // key held puts the selection back to one row, so a step that opened with one would
+            // undo the picking the steps before it did — and the road would go green over a face
+            // that had never acted on more than a row.
+            //
+            // The vocabulary is closed here rather than in the registry — a key the face has no
+            // answer for is a road nobody can walk, and it fails on the way in rather than on a
+            // screen.
+            (Domain::Files, "press") => match req(with, "key")? {
+                "escape" => "With the keyboard standing on the column the file is drawn in — which is where opening it has left it — press the key this machine leaves things with. It is one layer per press: the wide width goes first, and the column itself once it is standing narrow. Click the file's own text first only if something outside that column has been clicked since, because the terminal beside it hears the same key as meaning something of its own."
+                    .to_string(),
+                // The key that renames. It is the second door onto the box the menu opens — the
+                // typing is `rename` either way — and which row it opens the box on is decided by
+                // where the keyboard is standing, so the line says how a row comes to be stood on
+                // rather than naming one: telling an operator to click the row would move the
+                // keyboard off whatever the step before had walked it to.
+                "f2" => "With the keyboard standing on a row of the folder's section — the click that opens a folder leaves it there, and so does a letter typed on the tree — press F2. A box takes that row's place, holding the name the row has. Type nothing into it here — the row it opened on is what this step is for, and what goes into the box is the step after it."
+                    .to_string(),
+                // A letter, which walks the tree rather than doing anything to a row. Any single
+                // character is the vocabulary, because the face answers every one of them the same
+                // way; the space is the one it hands back, so it is out.
+                other if other.chars().count() == 1 && other != " " => format!(
+                    "With the keyboard standing on a row of the folder's section — the click that opens a folder leaves it there — press \"{other}\". The keyboard moves down to the next row whose name begins with that letter, wrapping past the last row round to the first. Nothing is opened and no name changes: what moves is which row the keyboard is standing on."
+                ),
+                // The bin, reached from the tree rather than from the row above an opened file:
+                // that one is the file on the screen and leaves what is picked out alone, and this
+                // one is what the reader picked. The question is left standing for `answer`, the
+                // way the other bin leaves it.
+                "delete" => "With the keyboard standing on a row of the folder's section — the click that picked one out leaves it there — press the key this machine deletes with. Everything picked out goes to the bin together. If the panel asks first, leave the question standing and answer nothing; leave the box about not asking again unticked."
+                    .to_string(),
+                // And the copy. It is not `files copy` with the click left out: that one stands the
+                // keyboard on a named row, which is a copy of one row, and this is a copy of what
+                // was picked.
+                "copy" => "With the keyboard standing on a row of the folder's section — the click that picked one out leaves it there — press the key this machine copies with. Everything picked out goes on the clipboard in one copy, and nothing on the screen changes to say so."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `press` does not know the key `{other}`"))
+                }
+            },
+            // The typing, put where it cannot land on top of what is already there: a road that reads the
+            // file afterwards reads it for both, and an operator who typed over the middle of it would
+            // leave one of the two readings answering for nothing.
+            (Domain::Files, "edit") => format!(
+                "Click into the text of the file, put the caret at the very end of it, press Enter and type \"{}\" on the new line.",
+                req(with, "types")?
+            ),
+            // The same box filled from the clipboard. Where the caret goes is said the way the typing
+            // says it, and for the same reason: what is already in the file is half of what the road
+            // reads afterwards. What arrives is not named, because a road cannot name it — that is the
+            // whole of why this is a step rather than a longer `edit`.
+            (Domain::Files, "paste-into-editor") =>
+                "Click into the text of the file, put the caret at the very end of it, press Enter, then press the key this machine pastes with. What the last copy put on the clipboard goes in on the new line."
+                    .to_string(),
+            // And the keeping. The control is named by what it does rather than quoted, the same as
+            // every other item on this face — and the line says where it is, since a reader who has just
+            // been typing is looking at the text and not at the row above it.
+            (Domain::Files, "save") =>
+                "In the row above the text — beside the file's name — press the way the panel offers to keep what was typed."
+                    .to_string(),
+            // And the offer that comes with the line about the file having moved. It is named by what
+            // it does — take the disk, drop the typing — because the words on it are the interface's
+            // own, and it is said where it is, since it stands with that line rather than in the row
+            // the saving is in.
+            (Domain::Files, "read-again") =>
+                "Beside the line saying somebody wrote to this file after it was opened, press the offer to read it again — what is on the disk now replaces what is in the editor."
+                    .to_string(),
+            // The file face's own settings row moved. The move and what it writes are one instruction,
+            // the way the tick's is: a row read in its new position with nothing written behind it
+            // would be evidence of an answer nothing kept.
+            (Domain::Files, "set") => match req(with, "position")? {
+                "asks" => "In Amenbo's own settings, under the section about files, move the row for the question before binning to the position that has the panel ask."
+                    .to_string(),
+                "quiet" => "In Amenbo's own settings, under the section about files, move the row for the question before binning to the position that has the panel not ask."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `set` does not know the position `{other}`"))
+                }
+            },
+            // The bin. The press and nothing after it: where a road put the row in `asks`, the panel
+            // puts its question here and the step leaves it standing, because deciding it is
+            // `answer`'s. The line says to leave the checkbox alone whatever happens — ticking it
+            // would turn the question off on this machine for every run walked here afterwards.
+            (Domain::Files, "trash") =>
+                "In the row above the file — at its right-hand end, past the file's name — press the bin. If the panel asks whether to move the file to the bin, leave the question standing and answer nothing; leave the box about not asking again unticked."
+                    .to_string(),
+            // And answering it. The two are named by what each does rather than by the words on the
+            // buttons, which are the interface's own.
+            (Domain::Files, "answer") => match req(with, "answer")? {
+                "yes" => "In the question the panel put about binning the file, press the answer that goes ahead and bins it. Leave the box about not asking again unticked."
+                    .to_string(),
+                "no" => "In the question the panel put about binning the file, press the answer that keeps the file where it is. Leave the box about not asking again unticked."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `answer` does not know the answer `{other}`"))
+                }
+            },
+            // And taking it back. The key is the machine's own, and the line says where to be standing:
+            // the terminal beside this column hears the same key as meaning something of its own.
+            // The copy, on the row named. The line says to stand on the row first, because the key
+            // reaches nothing where nothing is standing.
+            // Picking rows out, one press at a time. The key is named by what it does and not by its
+            // glyph, the way every key on this face is: which one adds a row is the machine's answer,
+            // and an operator on a Mac and one on Windows press different keys to say the same thing.
+            //
+            // What was picked before is said to stay, because that is the whole of what separates this
+            // press from an ordinary one — and an operator who saw the earlier row go plain would be
+            // looking at the bug this step exists to catch.
+            //
+            // **Both halves are said, because the press has two.** On a row already picked out the
+            // same key takes it back out, which is how a reader corrects a slip — and a line that
+            // promised only the adding would read as a failure to an operator walking the other half.
+            (Domain::Files, "pick") => format!(
+                "In {}, hold down the key this machine adds to a selection with and click the row \"{}\". If it was not picked out it joins whatever was, which stays as it is; if it was, that press takes it back out and leaves the rest.",
+                section(with)?,
+                req(with, "name")?
+            ),
+            // And a run of them in one press. Where the run starts is not named: it is wherever the
+            // last press without Shift landed, which the road put there a step ago and the operator can
+            // see on the screen. Which way it runs is not said either — a reader reaches back up a tree
+            // as often as down it, and a line that said "down" would send them looking the wrong way.
+            (Domain::Files, "pick-to") => format!(
+                "In {}, hold down Shift and click the row \"{}\". Every row between it and the one picked out last comes in with them, whichever way round the two stand.",
+                section(with)?,
+                req(with, "name")?
+            ),
+            (Domain::Files, "copy") => format!(
+                "In {}, click once on the row \"{}\" so the keyboard is standing on it, then press the key this machine copies with.",
+                section(with)?,
+                req(with, "name")?
+            ),
+            // The paste. Where it lands is the row the keyboard is on — the folder that row is, or the
+            // folder holding it where the row is a file — which is the rule a drop lands by. The line
+            // says to stand on the row first, because the key reaches nothing where nothing is
+            // standing.
+            (Domain::Files, "paste") => format!(
+                "In {}, click once on the row \"{}\" so the keyboard is standing on it, then press the key this machine pastes with.",
+                section(with)?,
+                req(with, "name")?
+            ),
+            (Domain::Files, "undo") =>
+                "With the file column in front of you — click once on an empty part of it if something else has the keyboard — press the key this machine undoes with."
+                    .to_string(),
+            // A file brought in from outside and let go over a folder's row. The instruction names where it
+            // is dragged from as loosely as it can — anywhere on the machine that is not this folder —
+            // because what would go wrong is dragging a row out of the panel and back into it, which is a
+            // move of its own and not this one.
+            (Domain::Files, "drop-in") => format!(
+                "From outside Amenbo — a file manager, the desktop, anywhere on this machine that is not this folder — drag a {} named \"{}\"{} over the row \"{}\" in {}, and let it go there.",
+                made(with)?,
+                req(with, "brings")?,
+                holding(with),
+                req(with, "name")?,
+                section(with)?
+            ),
+            // The menu over a folder, which is where a name is made. The heading is named by nothing, so the
+            // line says which of the two the operator is pointing at rather than leaving them to read it off
+            // an arg that is not there.
+            (Domain::Files, "menu-on-folder") => match with.get("name").and_then(|v| v.as_str()) {
+                Some(name) => format!(
+                    "Come back to Amenbo if something else is in front of it. Then in {}, right-click the folder's row \"{name}\": a short menu of what can be done in that folder comes up where the pointer is.",
+                    section(with)?
+                ),
+                None => format!(
+                    "Come back to Amenbo if something else is in front of it. Then right-click the heading over {} — the folder's own row, at the top of the tree: the same short menu comes up where the pointer is.",
+                    section(with)?
+                ),
+            },
+            // The item pressed and the name typed, which is one move. The refusal is described here rather
+            // than at the reading, because what the operator does next depends on the box still being open.
+            (Domain::Files, "name") => format!(
+                "In that menu, press the item that makes a new {}. A box takes the place of a row: type \"{}\" into it and press Enter. If the machine will not take that name it says so under the box, and the box stays open — leave it as it is.",
+                made(with)?,
+                req(with, "name")?
+            ),
+            // The same box over a name already on the row, which is why the line says the old one goes: a
+            // box that opened holding the old name would otherwise be read as one to add to.
+            //
+            // **What the box selects is not the whole name.** It opens with the part before the last
+            // dot picked out, so that renaming `archive.tar.gz` is a matter of typing — and an
+            // operator who typed a whole name over that selection would leave the extension standing
+            // twice. So the line asks for the selection to be widened before anything is typed.
+            (Domain::Files, "rename") => match with.get("by").and_then(|v| v.as_str()) {
+                // The box the key opened. The menu is not named, because there is none: `press`
+                // with `f2` left the box standing on the row the keyboard was on, and this is the
+                // typing that half of the move stops short of.
+                Some("key") => format!(
+                    "The box standing where the row was is holding the name that is there, with the part before the last dot selected. Select the whole of it, type \"{}\" so the box holds that and nothing else, and press Enter.",
+                    req(with, "name")?
+                ),
+                Some("menu") | None => format!(
+                    "In that menu, press the item that changes the name. The box opens holding the name that is there, with the part before the last dot selected. Select the whole of it, type \"{}\" so the box holds that and nothing else, and press Enter.",
+                    req(with, "name")?
+                ),
+                Some(other) => {
+                    return Err(format!("`by` does not know `{other}` — it is menu or key"))
+                }
+            },
+            // Handing the file to the machine. On a row the menu is a right-click, and it is drawn on files alone
+            // — a folder's row opens a level — so the step names a row the way every other one here does, and says
+            // where the menu comes up, since nothing else on this face does.
+            (Domain::Files, "menu") => format!(
+                "Come back to Amenbo if a hand-over left something else in front of it. Then in {}, right-click the row \"{}\": a short menu of what can be done with that file comes up where the pointer is.",
+                section(with)?,
+                req(with, "name")?
+            ),
+            // The same menu from the other side. What a refused file offers is a way on rather than a way back,
+            // and the pointer is nowhere near a row by then.
+            (Domain::Files, "menu-on-file") =>
+                "Under what the column says about the file, press the way on it offers — the one about opening the file in another application. The same short menu of what can be done with the file comes up where the pointer is."
+                    .to_string(),
+            // One item pressed. The item is described rather than quoted: its words are the
+            // interface's, and the run's language is whatever the machine is set to.
+            (Domain::Files, "hand-over") => match door(with)? {
+                "usual" => "In that menu, press the item that opens the file with the application this machine already opens that kind of file with."
+                    .to_string(),
+                "pick" => "In that menu, press the item that opens the file with an application you pick."
+                    .to_string(),
+                // `door` has already turned away anything that is not one of the three.
+                _ => "In that menu, press the item that shows the file in the file manager.".to_string(),
+            },
+            // The item that goes the other way — into Amenbo rather than out of it. It is described
+            // by where the path goes, the same as the three above, and the line says what is to be
+            // left alone: the path arrives where a person types, and sending it is theirs.
+            //
+            // **The row may be a folder as much as a file**, and the item says which it is in the
+            // interface's own words — so it is described here by what it does rather than named, the
+            // way every other item on this menu is.
+            (Domain::Files, "hand-to-pane") =>
+                "In that menu, press the item that pastes the row's path into the pane being worked in. The menu goes, and the path the row is at appears in the pane's input line — leave it there, and press nothing else."
+                    .to_string(),
+            // The item that copies. Nothing on the screen answers it, so the line says that too: an
+            // operator watching for something to happen would otherwise read a working press as a
+            // failed one and stop the run on the step before the one that reads it.
+            (Domain::Files, "copy-path") =>
+                "In that menu, press the item that copies the row's path. The menu goes and nothing else on the screen changes — what the press left is on this machine's clipboard, and the step that pastes it is where it is read."
+                    .to_string(),
+            // The same hand-over made by hand. No menu is opened: the row itself is taken hold of and
+            // carried, which is what the step says twice over — the press, and the pointer being over
+            // the pane before the hand lets go. Where it is let go is the whole of what this proves,
+            // so the pane is named and the surface it draws is read on the way past.
+            (Domain::Files, "carry-to-pane") => format!(
+                "In {}, press and hold on the row \"{}\" and drag it — without letting go — onto the pane showing \"{}\": that pane says it would take it. Let go there. The path the row is at appears in that pane's input line — leave it there, and press nothing else.",
+                section(with)?,
+                req(with, "name")?,
+                req(with, "onto")?
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -1676,11 +2709,30 @@ impl Instructor {
                 if present(with) { "among" } else { "not among" }
             ),
             // Which record the press opened. Both halves name the phrase rather than the record's title:
-            // the title is standing on the hit row as well, so a line read on it would pass over a press
-            // that opened nothing, and over one that opened the wrong record just as quietly.
+            // whatever row led here is carrying the title too — a hit, or the question the terminal face
+            // puts — so a line read on it would pass over a press that opened nothing, and over one that
+            // opened the wrong record just as quietly.
+            // The row that says where the work is happening. It is read on the task's own face, and
+            // what it carries is the pane's name rather than anything about the reservation — the
+            // status beside it already says that, and this says whose terminal it stands in.
+            //
+            // The absent half is not "no reservation". A move made outside a pane leaves no row, and a
+            // pane that has closed takes its row with it while the reservation stands — so the line says what is being looked for and never what it would mean.
+            (Domain::Task, "pane") => match present(with) {
+                true => format!(
+                    "On the ledger, open the task \"{}\" and confirm it draws a row saying where the work is happening, carrying the pane's own name \"{}\" — the line typed into that pane, which nothing else on this face says.",
+                    self.target_label(with),
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "On the ledger, open the task \"{}\" and confirm nothing on it says the work is happening in the pane \"{}\" — that row is not drawn at all. What the task says about itself otherwise is unchanged; this is about the row and nothing else.",
+                    self.target_label(with),
+                    req(with, "shows")?
+                ),
+            },
             (Domain::Task, "opened") => match present(with) {
                 true => format!(
-                    "Confirm the record \"{}\" is standing open beside the hits, showing \"{}\" — words the hits themselves do not carry.",
+                    "Confirm the record \"{}\" is the one standing open in the pane, showing \"{}\" — words the row that led here does not carry.",
                     self.target_label(with),
                     req(with, "shows")?
                 ),
@@ -1791,7 +2843,8 @@ impl Instructor {
             }
             // The same reading on the record the other side of the store keeps. A `Review` like the
             // task's own, and for the same reason once more: what a decision's pane says of its state is
-            // a word of the interface's, so an eye closes it.
+            // a word of the interface's, so an eye closes it. It is also the one thing a road can say
+            // about a proposal after asking about it: that asking did not settle it.
             (Domain::Decision, "field") => format!(
                 "Confirm the decision \"{}\" shows {} = {}.",
                 self.target_label(with),
@@ -2151,7 +3204,7 @@ impl Instructor {
                 req(with, "absent")?
             ),
             (Domain::Folder, "first-loop") => format!(
-                "Confirm the first loop is offered here: its first move opens a terminal already inside the linked folder, its second hands over the request to paste — which names \"{}\" — and its third says the tasks will appear on the board.",
+                "Confirm the first loop is offered here: one move starts a terminal already inside the linked folder, and under it the loop says the tasks will appear on the board. Then open the way out to your own terminal, folded beside that move, and confirm the request it hands over names \"{}\".",
                 req(with, "hands_over")?
             ),
             (Domain::Folder, "first-loop-order") => format!(
@@ -2409,6 +3462,17 @@ impl Instructor {
                     return Err(format!("assert `setting` does not know the position `{other}`"))
                 }
             },
+            // Where the file face's own settings row stands. The positions are named by what each
+            // does rather than by the word drawn on the row, since the words are the interface's own.
+            (Domain::Files, "setting") => match req(with, "position")? {
+                "asks" => "In Amenbo's own settings, under the section about files, confirm the row for the question before binning stands in the position that has the panel ask."
+                    .to_string(),
+                "quiet" => "In Amenbo's own settings, under the section about files, confirm the row for the question before binning stands in the position that has the panel not ask."
+                    .to_string(),
+                other => {
+                    return Err(format!("assert `setting` does not know the position `{other}`"))
+                }
+            },
             // The key that field is holding, read back. It is the one line on these roads whose word is
             // neither the interface's nor a title — a key is what a reader types for somewhere outside
             // Amenbo — so it is on the shot exactly once, in the field it was typed into.
@@ -2424,6 +3488,411 @@ impl Instructor {
                     ),
                 }
             }
+            // What the pane is showing. The words are the road's own, typed into that terminal by an
+            // earlier step, so a reading that finds them found the pane drawing that session — and
+            // the absent half is read with the ledger up, where the pane is hidden rather than gone.
+            // What the pane's label carries. It is the row above the pane rather than the pane itself:
+            // the words got there because the app read them out of the drop box the agent wrote to,
+            // or because a person typed them on that row (`name-pane`), and never because they were
+            // printed in the terminal.
+            //
+            // Which of the two hands put them there is not said, and that is the point of the reading
+            // rather than a gap in it: what is on the row is what a reader is promised, and a step
+            // that told the operator where to expect the words to have come from would have them mark
+            // a working face red on the half it did not name.
+            (Domain::Terminal, "label") => match present(with) {
+                true => format!(
+                    "On the row above the pane running a terminal, confirm the label carries \"{}\" — words of that pane's own, not any of the interface's, read off the screen.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "On the row above the pane running a terminal, confirm the label carries nothing saying \"{}\".",
+                    req(with, "shows")?
+                ),
+            },
+            // The dot on the terminal's own segment. It is read from the ledger, which is the only
+            // face it is ever drawn on, and it carries nothing to quote: a road says it is there, or
+            // that crossing over has spent it.
+            (Domain::Terminal, "face-badge") => match present(with) {
+                true => "In the pair of segments at the top of the window, confirm the one that shows the terminal is wearing a small mark — a dot, with no number and no words on it. It says a turn came up behind the face you are not looking at."
+                    .to_string(),
+                false => "In the pair of segments at the top of the window, confirm the one that shows the terminal is wearing no mark at all."
+                    .to_string(),
+            },
+            // What a project's tab is drawn with, down the edge of that same face. Both sides are a
+            // picture and neither is an absence, the way `project icon`'s are: registered, the tab
+            // wears the image, and with none registered it wears the project's colour with the first
+            // letter of its name on it. So each line names what an eye should find rather than
+            // asking for one of them to be missing.
+            //
+            // The tab is named and not pressed. Every project has one whether or not the face is
+            // drawing that project's panes, and going to it first would have the road reading the tab
+            // it had just moved the whole face onto — which is a tab that says nothing about the rest
+            // of them being drawn from the same picture.
+            (Domain::Terminal, "tab-icon") => match present(with) {
+                true => format!(
+                    "Down the edge of the terminal face, confirm the tab the project \"{}\" carries is drawn with the image registered for it.",
+                    req(with, "project")?
+                ),
+                false => format!(
+                    "Down the edge of the terminal face, confirm the tab the project \"{}\" carries is drawn with no image: it holds the project's colour with the first letter of its name on it.",
+                    req(with, "project")?
+                ),
+            },
+            // What is standing where a person types, with nothing run. Both halves are said: the words
+            // being there, and the line not having gone — a build that sent the newline would draw
+            // whatever the program did with it, and the input line would be empty again.
+            (Domain::Terminal, "in-the-box") => {
+                let pane = match arg_str(with, "on") {
+                    Some(on) => format!("the pane showing \"{on}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                match present(with) {
+                    true => format!(
+                        "On {pane}, confirm \"{}\" is standing in the line you would type into — and that it has not been sent: nothing ran, and the words are still there to be edited.",
+                        req(with, "shows")?
+                    ),
+                    false => format!(
+                        "On {pane}, confirm \"{}\" is not in the line you would type into.",
+                        req(with, "shows")?
+                    ),
+                }
+            }
+            // Which pane the reader is in, read as one thing off two marks. The frame says the face's
+            // answer and the cursor says the browser's, and a road that read only the first would go
+            // green on a pane that is drawn picked out and takes none of the typing.
+            (Domain::Terminal, "worked-in") => format!(
+                "Confirm the pane showing \"{}\" is the one being worked in: its frame is the one drawn picked out from the rest, and the block where you would type in it is filled in — the pane the keyboard is not in draws that block as an outline.",
+                req(with, "shows")?
+            ),
+            (Domain::Terminal, "pane") => match present(with) {
+                true => format!(
+                    "Confirm the line \"{}\" is on the screen, on the pane that printed it — the same pane, drawn here. What is on a pane stays where it was printed, so a pane whose terminal has since ended still carries it.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Confirm the line \"{}\" is nowhere on the screen — the pane that drew it is not being shown, the ledger being up, another page being the one on screen, the face being on another project's panes, or that pane having been taken away for good.",
+                    req(with, "shows")?
+                ),
+            },
+            // The lamp on a pane's label, on one of its three faces. Two of them hold still and are a
+            // picture; the third blinks, and that one is watched rather than shot — both ends of its
+            // turn rest at a step a photograph cannot tell from the others.
+            //
+            // Each half of the instruction says what to look for on a machine set to play no
+            // animation as well, because motion turned down holds the calling face at its brightest
+            // instead of moving it: the fact survives and the word for it does not, and an operator
+            // told only to watch for a blink would fail a lamp reporting exactly what was asked.
+            (Domain::Terminal, "dot") => match face(with)? {
+                Face::Lit => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is lit and holding still — a soft glow around it, in that pane's own colour, which is that terminal putting something out. It does not fade in and out: the one face that moves is the one calling for a person, and this is not it."),
+                Face::Calling => format!("{LAMP_ROW} watch the lamp to the left of the name for a few seconds: confirm it is blinking, and in the warning colour rather than that pane's own — which is that pane asking for a person. It falls to the same beat as the mark at the other end of the same row, and the two go together. Judge it by watching rather than by the shot: a still picture of a blink can be caught at the moment it rests. Where the machine is set to play no animation the lamp does not blink at all, and what to confirm there is the warning colour, held at its brightest."),
+                Face::Out => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is sunk — dim, in that pane's own colour, with no glow around it and no blinking. Out is the pane's resting state, not the pane having gone: the lamp is drawn either way."),
+            },
+            // The question about where a pane runs, read by a folder it offers. The absent half is the
+            // one the walking-away is proved by, and it is written to say what a screen with nothing
+            // on it means here: the question is the box, so a face drawing neither it nor a pane is a
+            // question that took its box with it.
+            (Domain::Terminal, "asking-folder") => match present(with) {
+                true => format!(
+                    "Confirm the question about which folder this pane works in is standing where the pane would be, and that \"{}\" is one of the folders it offers.",
+                    req(with, "dir")?
+                ),
+                false => format!(
+                    "Confirm the question about which folder a pane works in is nowhere on this screen — no box offering \"{}\", and nothing half-made standing where it was.",
+                    req(with, "dir")?
+                ),
+            },
+            // Whether a column is beside the panes. The absent half says what the width went to, so an
+            // operator reading it knows a screen that merely drew the column narrower would be a fail.
+            (Domain::Terminal, "side") => {
+                let which = side(with)?;
+                match present(with) {
+                    true => format!(
+                        "On the terminal face, confirm {} is beside the panes, taking width of its own.",
+                        which.phrase()
+                    ),
+                    false => format!(
+                        "On the terminal face, confirm {} is nowhere on the screen — not narrowed, not emptied, gone — and that the panes have spread into the width it was using.",
+                        which.phrase()
+                    ),
+                }
+            }
+            // And where its edge stands now. It is read against the shot before it rather than
+            // against a number: what the drag is asked to have done is move this edge and nothing
+            // else, and the two pictures side by side are what say so.
+            // The width and nothing about the panes. A column dragged wider takes the room from
+            // them, and the reading column at its wide width lies over them instead and takes none
+            // — so what is the same in both, and all a person at the screen can be asked for, is
+            // that the edge moved and the rest of the face did not.
+            (Domain::Terminal, "side-width") => {
+                let which = side(with)?;
+                let moved = match flag(with, "wider")? {
+                    true => "wider than it was on the shot before this one",
+                    false => "narrower than it was on the shot before this one",
+                };
+                format!(
+                    "Confirm {} is {} — the edge between it and the panes moved, and nothing else on the face did.",
+                    which.phrase(),
+                    moved
+                )
+            }
+            // And the same edge read off this shot alone. It is the reading a road reaches for once
+            // the face has changed under it — after a move between projects, where every column is
+            // redrawn and the shot before is a picture of somewhere else. The landmark is the panes,
+            // because their width is whatever the column left them: the two answer for each other on
+            // the one picture, and the operator is asked which of the two regions is the wider rather
+            // than for a number nobody can read off a screen.
+            (Domain::Terminal, "side-span") => {
+                let which = side(with)?;
+                format!("On the terminal face, confirm {} is {}", which.phrase(), span(with)?)
+            }
+            // And the reading that stands where that one cannot: the wide width, which lies over
+            // the panes instead of dividing the width with them. What is asked for is whether any of
+            // the work is still showing beside the column, because that is the one thing about this
+            // width that does not move with the size of the window — the width it ships with leaves a
+            // strip of the panes on the narrowest window the application opens, and one dragged to
+            // the stop leaves none on the widest.
+            (Domain::Terminal, "side-cover") => match side(with)? {
+                Side::Rail => return Err(
+                    "assert `side-cover` is the reading column's — the rail has one width, is never drawn over the panes, and has nothing for this reading to be about".to_string()
+                ),
+                // The panel is named and then read, in two sentences rather than one: what this
+                // reading is about is the width at which it is no longer beside the panes, and the
+                // name it goes by here says "beside" — running the two together would have the
+                // sentence contradict itself in front of the person closing it.
+                Side::Files => format!(
+                    "On the terminal face, look at {}. Confirm it is {}",
+                    Side::Files.phrase(),
+                    cover(with)?
+                ),
+            },
+            // The shape the page is drawn in, read off the two panes standing on it. What it is about
+            // is the width each of them ends up with rather than the arrangement for its own sake:
+            // `down` is pressed so that a pane keeps the whole of it, and a grid that shuffled the
+            // panes about without handing them that width would have honoured the press and missed
+            // what it was for.
+            (Domain::Terminal, "panes-sit") => match orient(with)? {
+                Orient::Across => "On the terminal face, confirm the two panes are side by side — one to the left of the other, each taking about half the width between the columns, and neither of them above or below the other.".to_string(),
+                Orient::Down => "On the terminal face, confirm the two panes are one above the other — one stacked on the other, each taking the whole width between the columns rather than half of it, and neither of them beside the other.".to_string(),
+            },
+            // What the empty frame is set to open with, read on the row above its press. The row is
+            // every agent Amenbo knows how to start, and which of them this machine has is the
+            // machine's own business: the ones it has not got are folded away behind a
+            // press that says how many, and nothing behind that press can be chosen. So the reading
+            // is about what is **on**, never about what is on the row — an operator told to expect
+            // one shape of row would mark a working face red on the machine that draws the other.
+            //
+            // The button is read beside it. Nothing on the row being on is the one state that stops
+            // the press, and it is what a build that forgot the choice would fall back to — so a step
+            // that looked only at which name is lit could pass on a frame that opens nothing.
+            (Domain::Terminal, "opens-with") => match req(with, "start")? {
+                "shell" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the plain shell is the one that is on, and that the press is live rather than asking to be told what to open with. What else is on the row is nothing to this reading: a press saying how many agents this machine has not got is left folded, and on a machine that can start none the plain shell may be the only thing there is to choose."
+                    .to_string(),
+                // The first run, which is a state and not a program: nobody has said, so the frame
+                // says so instead of guessing. Both halves are read because either alone passes on
+                // a build with the other fault — a row with nothing lit above a press that opens
+                // anyway is a build guessing quietly, and a press that asks with a name already lit
+                // is a build asking about an answer it has.
+                //
+                // The row has to be there to be read blank, and that is said out loud: this is the
+                // one reading here a machine cannot be relied on to be able to give, and the road
+                // that asks for it stood the machine up first (`can-start`).
+                "none" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the row is drawn, with several things on it to open with, and that **none of them is on**. The press below it does not open a pane: it asks to be told what to open with, and will not answer until one of the row is chosen. Leave folded any press saying how many agents this machine has not got — what is behind it cannot be chosen and is not part of this reading. Nothing is chosen here — that is the next step's — and if a name on that row is already on, this step has failed."
+                    .to_string(),
+                other => return Err(format!(
+                    "assert `opens-with` cannot name `{other}` — the plain shell is the one thing every machine's row has, `none` is nobody having chosen yet, and which agents are on the row is that machine's own"
+                )),
+            },
+            // A registered command as the frame draws it, name and line together. The line is read
+            // character for character rather than recognised: a build that tidied it — trimmed the
+            // quotes, dropped the arguments, rebuilt it from the first word — would draw something a
+            // reader would still call the right one, and it is the one thing this reading exists to
+            // catch.
+            (Domain::Terminal, "registered") => format!(
+                "On the empty frame, look under the row of things a pane can be opened with, at the list of the commands registered on this machine. Confirm one of them is called \"{}\" and that the line drawn beside it reads `{}` — the same characters in the same order, with nothing added, tidied or left out.",
+                req(with, "name")?,
+                req(with, "line")?,
+            ),
+            // The opening sentence, arrived in a pane whose launch line Amenbo did not compose, and
+            // sent. It is written as a wait as much as a reading: the sentence goes in after the
+            // program has drawn something and is submitted a moment later, so an operator who looked
+            // the instant the pane opened would be reading a screen the app has not finished with.
+            //
+            // The marked line is the whole of it, and the instruction says why: what the pane echoes
+            // proves only that Amenbo wrote into it, and the road's registered line is what puts the
+            // sentence back on the screen with a word of the road's own in front of it.
+            //
+            // The absent half is a wait and nothing else, and how long is said out loud: the app
+            // gives up after a minute, and an operator who looked away sooner would be reading a
+            // screen that is still being tried. What it must not find is written as a line rather
+            // than as a state, because the fault it catches leaves a mark and does not take one
+            // away.
+            (Domain::Terminal, "handed-over") => match present(with) {
+                true => format!(
+                    "In the pane the registered command is running in, wait a few seconds and then confirm Amenbo's opening sentence — the fixed English one, beginning \"Before you act on any request in this directory\" — is on a line the program gave back: the one marked \"{}\". Nothing is typed here; the sentence is put in and sent by Amenbo itself. The marked line is the reading — the pane shows the sentence as it goes in whether or not it was ever sent, and only the program giving it back says it was.",
+                    req(with, "given-back")?
+                ),
+                false => format!(
+                    "In the pane the registered command is running in, wait a full minute — that is how long Amenbo goes on trying — and then confirm no line marked \"{}\" is anywhere on it. The program hands back every line it is given, so a marked line would be a newline Amenbo sent into a pane that had shown it nothing, which is the one thing being read here. Nothing is typed during the wait, and the pane looking untouched apart from what the command printed at the start is the pass.",
+                    req(with, "given-back")?
+                ),
+            },
+            // What the row says once the hand-over has given up. It is described rather than quoted:
+            // these are the interface's own words, drawn in the machine's language, and the operator
+            // is told what the row means rather than which letters to find.
+            (Domain::Terminal, "unsent") =>
+                "On the row above that pane, confirm it is now saying the opening sentence was not sent — words to the effect that it has not been sent yet and that pressing return sends it, in the language the machine is set to, with a pause mark in front of them. It is the row above the pane and never the pane itself: nothing Amenbo says goes into a terminal it is reading. Confirm too that the row is still naming the pane and what it is on, and has not been given over to this alone."
+                    .to_string(),
+            // How many panes are standing on the page. Counted rather than read: the boxes carry no
+            // words of the road's, and the whole of what this asks is how many of them there are.
+            //
+            // What is ruled out is a page that filled its count with boxes, so the wording says what
+            // may stand beside the panes and what may not: **one** empty frame where the page has
+            // room, never a second, and nothing at all where the panes fill the count. An operator
+            // who was told only to count the panes would pass on the screen this exists to catch.
+            (Domain::Terminal, "frames") => {
+                // What may be standing beside the panes. Said exactly where the road says so, and as
+                // "at most one" where it does not: a page with room draws its one way in at the first
+                // gap, and a page whose panes fill the count has no room to offer and must draw none.
+                //
+                // A full page is not bare all the same. With no gap to draw a frame in, the way in is
+                // a strip on the right edge instead — thin enough to cost no pane its place — and an
+                // operator told the page must hold nothing but panes would mark a working face red.
+                let beside = |them: &str| match with.get("empty").and_then(|v| v.as_u64()) {
+                    None => Ok(format!(
+                        "Beside {them} there is at most one empty frame — never a second — and the rest of the page is bare."
+                    )),
+                    Some(0) => Ok(format!(
+                        "Beside {them} there is no empty frame at all: the panes fill what this page draws, so it has no room to offer. What stands beside them is the thin way in down the right edge of the page — the strip that opens another pane — and nothing else."
+                    )),
+                    Some(1) => Ok(format!(
+                        "Beside {them} there is exactly one empty frame, at the first gap in the page — never a second — and the rest of the page is bare."
+                    )),
+                    Some(n) => Err(format!(
+                        "assert `frames` cannot ask for {n} empty frames — a page draws one at its first gap or none at all"
+                    )),
+                };
+                match count(with, "count")? {
+                    // A page with nothing standing on it always has room, so its way in is always
+                    // drawn: asking for a page with neither is asking for a screen there is no way to
+                    // reach, and an operator who went looking would find the empty frame and be right.
+                    0 if with.get("empty").and_then(|v| v.as_u64()) == Some(0) => return Err(
+                        "assert `frames` cannot ask for a page with no panes and no empty frame — a page with room always draws its one way in".to_string()
+                    ),
+                    0 => "On the terminal face, confirm no pane is standing on the page at all — no terminal anywhere on it. What is on it is one empty frame, or, while it is standing, the question about where a pane runs — one box and no more, with the rest of the page bare."
+                        .to_string(),
+                    1 => format!(
+                        "On the terminal face, confirm exactly one pane is standing on the page. {}",
+                        beside("it")?
+                    ),
+                    n => format!(
+                        "On the terminal face, count the panes standing on the page: confirm there are exactly {n}. {}",
+                        beside("them")?
+                    ),
+                }
+            }
+            // ── the file face ─────────────────────────────────────────────────────────────────
+            (Domain::Files, "listed") => match present(with) {
+                true => format!(
+                    "In {}, confirm \"{}\" is one of the rows.",
+                    section(with)?,
+                    req(with, "name")?
+                ),
+                false => format!(
+                    "In {}, confirm \"{}\" is not among the rows — the section is drawn, and this is not on it.",
+                    section(with)?,
+                    req(with, "name")?
+                ),
+            },
+            (Domain::Files, "read-as") => match present(with) {
+                true => format!(
+                    "On the row the open file is named on, confirm what says how it was read now names \"{}\".",
+                    req(with, "encoding")?
+                ),
+                false => format!(
+                    "On the row the open file is named on, confirm what says how it was read does not name \"{}\".",
+                    req(with, "encoding")?
+                ),
+            },
+            // A picture is read for the words drawn in it, which is the one thing about a redrawn
+            // picture a shot can carry: what a road wants to know is that the bytes on screen are the
+            // new bytes, and two pictures that say different words answer that where two that differ
+            // only in their pixels would need an eye.
+            (Domain::Files, "reading") if picture(with) => match present(with) {
+                true => format!(
+                    "Confirm the picture drawn in the panel has \"{}\" written across it.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Confirm the picture drawn in the panel does **not** have \"{}\" written across it.",
+                    req(with, "shows")?
+                ),
+            },
+            (Domain::Files, "reading") if with.contains_key("as") => match form(with, "as")? {
+                "source" => format!(
+                    "Confirm the opened file shows \"{}\" as the text it is: the words stand in one plain size with the marks around them — a hash before a heading, and whatever else the file was written with — visible as characters.",
+                    req(with, "shows")?
+                ),
+                _ => format!(
+                    "Confirm the opened file shows \"{}\" as what the text says: no hash before it, and drawn as the heading it marks rather than in the size of the lines below.",
+                    req(with, "shows")?
+                ),
+            },
+            // Said of what the column has open rather than of a file, because the tab it is on may be
+            // the draft page — which is not one, and has no name a road could have opened it by. The
+            // two forms above stay a file's: what they are about is Markdown drawn one way or the
+            // other, and the page is written on rather than read.
+            (Domain::Files, "reading") => match present(with) {
+                true => format!(
+                    "Confirm what the panel has open shows \"{}\" — the words that are in it.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Confirm \"{}\" is nowhere on the screen — what the panel has open did not put those words on it.",
+                    req(with, "shows")?
+                ),
+            },
+            // What git says about a row. The mark is named by the state rather than by the colour, so
+            // the eye is told what to look for in words that outlive a palette.
+            (Domain::Files, "row-mark") => match present(with) {
+                true => format!(
+                    "In {}, confirm the row \"{}\" is drawn in the colour this build gives to {} — a colour and not a word, so read it against the rows beside it that git says nothing about.",
+                    section(with)?,
+                    req(with, "name")?,
+                    mark(with)?
+                ),
+                false => format!(
+                    "In {}, confirm the row \"{}\" wears no colour of its own — it is drawn like the rows git says nothing about, and not in the colour that would say it is {}.",
+                    section(with)?,
+                    req(with, "name")?,
+                    mark(with)?
+                ),
+            },
+            // Either column can be the one that says it: the tree in the rail says a folder has gone
+            // and the reading column says a file will not open, and the roads that read these lines
+            // are about what was said rather than about which side of the panes said it.
+            (Domain::Files, "says") => match present(with) {
+                true => format!("Confirm what is drawn beside the panes says {}.", note(with)?),
+                false => format!("Confirm what is drawn beside the panes does not say {}.", note(with)?),
+            },
+            // The row of tabs, read as a whole and in order. The draft page is left out of the list a
+            // road writes: it is always the first of them and it is named in the interface's own
+            // words, so what a road can say is which files stand after it.
+            (Domain::Files, "tabs") => format!(
+                "In the row of tabs above the file, confirm the tabs standing after the draft page's are exactly these, in this order and with no others among them:{}. Scroll the row sideways where it does not all fit — it scrolls and never wraps, so a tab off its end is still one of them.",
+                names(with, "names")?
+            ),
+            // What the hand-over left. Every one of the three is a `Review`, and for the same reason:
+            // what settles it is not on Amenbo's window, which is the window the run shoots. The
+            // operator standing at the screen is the one who saw it, so the line asks them for it.
+            (Domain::Files, "handed-over") => match door(with)? {
+                "usual" => "Confirm the machine took the file: the menu has gone, something came forward with the file open in it, and Amenbo drew nothing about the hand-over. Which application came forward, and what it does with the file, is not this road's — go no further than something having opened. The shot is of Amenbo's own window rather than of what came forward, so say what you saw."
+                    .to_string(),
+                "pick" => "Confirm something to choose an application from is on the screen. Which shape it takes belongs to the machine — on some it is a list of applications drawn where the menu was, on others the operating system's own chooser — and either one is right: what is read here is that a choice arrived, never who drew it. Leave it without choosing, and say which of the two you saw."
+                    .to_string(),
+                _ => "Confirm the file manager came forward with the file standing out in the folder it is in. Go no further into it — that the file reached it is the whole of this reading — and, the shot being of Amenbo's own window, say what you saw."
+                    .to_string(),
+            },
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -2664,6 +4133,293 @@ fn present(with: &Args) -> bool {
     with.get("present").and_then(|v| v.as_bool()).unwrap_or(true)
 }
 
+/// How long an armed word waits before it is said, in seconds.
+///
+/// It is a number a person has to beat with one press, so it is neither tight nor generous: long
+/// enough to cross a switch without hurrying, short enough that a road does not stand still. The road
+/// does not name it — what a road says is that the word arrives from behind the other face.
+const SAY_AWAY_SECONDS: u32 = 15;
+
+/// How long a pane set printing goes on putting something out.
+///
+/// It answers to both ends of the one road it is on. Long enough that the lamp is still lit after a
+/// second pane has been opened beside it and the row has been looked at; short enough that the step
+/// waiting for it to stop is a pause inside a road rather than a break from one. The road does not
+/// name it — what a road says is that the pane keeps printing and then does not.
+const KEEP_PRINTING_SECONDS: u32 = 30;
+
+/// An optional yes-or-no argument, false where it was not written. Unlike [`present`], whose default
+/// is the half most asserts want, these ask for a shape a step takes only when it says so.
+fn flagged(with: &Args, key: &str) -> bool {
+    with.get(key).and_then(|v| v.as_bool()).unwrap_or(false)
+}
+
+/// Which way a step about a folder is going. Opening is the ordinary ask — a road reaches down a
+/// tree far more often than it puts one away — so a step that says nothing is opening one.
+fn unfolds(with: &Args) -> bool {
+    with.get("open").and_then(|v| v.as_bool()).unwrap_or(true)
+}
+
+/// A required yes-or-no argument. It is not `present`'s neighbour: that one has a default because most
+/// asserts want one, and a value the op requires has none to fall back to.
+fn flag(with: &Args, key: &str) -> Result<bool, String> {
+    with.get(key)
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| format!("arg `{key}` must be true or false"))
+}
+
+/// Which of the two columns beside the panes a step is about.
+///
+/// They are named by what each holds rather than by any heading, for the reason the sections below
+/// are: what is written on them is the interface's own words, and the run's language is whatever the
+/// machine is set to.
+#[derive(Clone, Copy)]
+enum Side {
+    Rail,
+    Files,
+}
+
+impl Side {
+    /// The words an instruction is built around, written to fit after "confirm" and after "between".
+    fn phrase(self) -> &'static str {
+        match self {
+            Side::Rail => "the column of folders down one side",
+            Side::Files => "the panel beside the panes",
+        }
+    }
+}
+
+/// Which pane's row the lamp is read on, said the same way for all three faces.
+///
+/// A road can have more than one pane on the screen by the time it reads one, and the lamp says
+/// nothing about which pane it belongs to that an operator could use to pick it out — the hue does,
+/// but only against the other lamps. So the step points at the pane by what the road has been doing
+/// rather than by anything on the screen: the one the steps before it were about.
+const LAMP_ROW: &str = "On the row above the pane the steps before this one were about — where another pane has been opened since, it is still that first one —";
+
+/// Which of the lamp's three faces a step is reading (`app/src/talk/nameplate.ts`).
+#[derive(Clone, Copy)]
+enum Face {
+    Lit,
+    Calling,
+    Out,
+}
+
+fn face(with: &Args) -> Result<Face, String> {
+    match with.get("face").and_then(|v| v.as_str()) {
+        Some("lit") => Ok(Face::Lit),
+        Some("calling") => Ok(Face::Calling),
+        Some("out") => Ok(Face::Out),
+        Some(other) => Err(format!("`face` does not know `{other}` — it is lit, calling or out")),
+        None => Err("arg `face` must say which of the three faces the lamp is on".to_string()),
+    }
+}
+
+fn side(with: &Args) -> Result<Side, String> {
+    match with.get("side").and_then(|v| v.as_str()) {
+        Some("rail") => Ok(Side::Rail),
+        Some("files") => Ok(Side::Files),
+        Some(other) => Err(format!("`side` does not know `{other}` — it is rail or files")),
+        None => Err("arg `side` must say which of the two columns".to_string()),
+    }
+}
+
+/// How the column and the panes divide the width between them, read off one shot.
+///
+/// Coarse on purpose. What closes this is an eye at a picture, and the two answers are the two a
+/// person can give without measuring anything: the panes are plainly the wider of the pair, or they
+/// are not. A third answer between them would be asking for a judgement nobody can make twice.
+fn span(with: &Args) -> Result<&'static str, String> {
+    match with.get("span").and_then(|v| v.as_str()) {
+        Some("thin") => Ok("the narrower of the two by a plain margin — a strip at the edge, with most of the width between the two columns left to the panes."),
+        Some("broad") => Ok("as wide as what is left of the panes, or wider — the width between the two columns split roughly in two, rather than the column standing as a strip at the edge of it."),
+        Some(other) => Err(format!("`span` does not know `{other}` — it is thin or broad")),
+        None => Err("arg `span` must say how the column and the panes divide the width".to_string()),
+    }
+}
+
+/// How much of the panes the reading column has taken at its wide width, read off one shot.
+///
+/// Two answers, and a presence rather than a proportion. [`span`] divides the width between the
+/// column and the panes, which is an answer the wide width cannot be told apart by: the width it
+/// ships with takes about half on the window the application opens and less than half on a wider
+/// one, so the same build reads differently depending on how far somebody dragged the window. What
+/// is showing behind the column does not move with the window — the shipped width leaves a strip of
+/// the panes on the narrowest window there is, and the width dragged to the stop leaves nothing on
+/// the widest.
+fn cover(with: &Args) -> Result<&'static str, String> {
+    match with.get("cover").and_then(|v| v.as_str()) {
+        Some("part") => Ok("lying over the panes with some of the work still showing beside it — the panes run on underneath the column and are cut off by its edge, and a strip of them is left standing between that edge and the column at the other edge of the face."),
+        Some("all") => Ok("lying over the panes with none of the work showing beside it — the column has taken the whole width the panes were drawn in, from the column at the other edge of the face right out to this one, and no part of a pane is anywhere in view."),
+        Some(other) => Err(format!("`cover` does not know `{other}` — it is part or all")),
+        None => Err("arg `cover` must say whether any of the panes is left showing beside the column".to_string()),
+    }
+}
+
+/// Which way the two panes of a two-pane page sit (`app/src/talk/layout.ts`).
+///
+/// They are named by the shape they make and not by a heading, for the reason [`Side`] is: the
+/// control that picks between them is drawn rather than written, so there is no word on the screen
+/// for an operator to read either of them off.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Orient {
+    Across,
+    Down,
+}
+
+impl Orient {
+    /// The shape in words, written to fit after "two panes".
+    fn phrase(self) -> &'static str {
+        match self {
+            Orient::Across => "side by side",
+            Orient::Down => "one above the other",
+        }
+    }
+
+    /// And what the control that picks it is drawn as, which is the same shape a size smaller: one
+    /// box with a line through it, standing for the page (`app/src/components/Icon`). An operator
+    /// told only what the press means would be looking for a word, and the pair carries none.
+    fn glyph(self) -> &'static str {
+        match self {
+            Orient::Across => "down the middle",
+            Orient::Down => "across the middle",
+        }
+    }
+}
+
+fn orient(with: &Args) -> Result<Orient, String> {
+    match with.get("orient").and_then(|v| v.as_str()) {
+        Some("across") => Ok(Orient::Across),
+        Some("down") => Ok(Orient::Down),
+        Some(other) => Err(format!("`orient` does not know `{other}` — it is across or down")),
+        None => Err("arg `orient` must say which way the two panes sit".to_string()),
+    }
+}
+
+/// Which of the file face's sections a row is being looked for in, as a phrase an instruction can be
+/// built around. It is named by what it is about because its heading is the interface's own words,
+/// and the run's language is whatever the machine is set to.
+///
+/// **There is one left.** The section for what had changed lately is gone — what it answered was
+/// "yesterday", and what git says now goes on the tree's own rows instead. The arg stays because it
+/// is the one place a road says which part of the panel it means, and the panel is not finished
+/// growing.
+fn section(with: &Args) -> Result<&'static str, String> {
+    match with.get("section").and_then(|v| v.as_str()) {
+        Some("tree") => Ok("the folder's own section"),
+        Some(other) => Err(format!("`section` does not know `{other}` — it is tree")),
+        None => Err("arg `section` must say which section".to_string()),
+    }
+}
+
+/// Which of a Markdown file's two forms a step is about — what the text says, or the text itself.
+/// Named by the form and not by the word on the control, for the reason `section` and `note` are: the
+/// switch says where it goes rather than where it is, and the run's language is the machine's.
+///
+/// The key is the caller's because the two sides of the same question read differently: the move says
+/// the `form` to end in, and the reading says what the words are standing `as`.
+/// Whether a reading is of a picture rather than of a file's text. It is `as` like the other two
+/// forms and not an op of its own, because what is being asked is still "what does the opened file
+/// show" — but it is the only one of the three a shot can judge, so it is told apart here rather
+/// than in [`form`], which answers for the pair that are about text.
+fn picture(with: &Args) -> bool {
+    with.get("as").and_then(|v| v.as_str()) == Some("picture")
+}
+
+fn form(with: &Args, key: &str) -> Result<&'static str, String> {
+    match with.get(key).and_then(|v| v.as_str()) {
+        Some("rendered") => Ok("rendered"),
+        Some("source") => Ok("source"),
+        Some(other) => Err(format!("`{key}` does not know `{other}` — it is rendered or source")),
+        None => Err(format!("arg `{key}` must say which of the two forms")),
+    }
+}
+
+/// Which of the three things git's answer is folded into a step is about. Named by the state and not
+/// by the colour drawn for it, for the reason `section` and `note` are named as they are: what a row
+/// is drawn in belongs to the theme, and a road naming a colour would go red the day one moved.
+fn mark(with: &Args) -> Result<&'static str, String> {
+    match with.get("mark").and_then(|v| v.as_str()) {
+        Some("untracked") => Ok("something git has never seen"),
+        Some("added") => Ok("something staged as new"),
+        Some("modified") => Ok("something that has changed since git last recorded it"),
+        Some(other) => {
+            Err(format!("`mark` does not know `{other}` — it is untracked, added or modified"))
+        }
+        None => Err("arg `mark` must say what git says about the row".to_string()),
+    }
+}
+
+/// Which of the three ways out of a file's menu a step is about. They are named by what each hands the
+/// file to rather than by the item's words, for the reason `section` and `note` are: the words are the
+/// interface's own, and the run's language is whatever the machine is set to.
+fn door(with: &Args) -> Result<&'static str, String> {
+    match with.get("door").and_then(|v| v.as_str()) {
+        Some("usual") => Ok("usual"),
+        Some("pick") => Ok("pick"),
+        Some("manager") => Ok("manager"),
+        Some(other) => Err(format!("`door` does not know `{other}` — it is usual, pick or manager")),
+        None => Err("arg `door` must say which of the three ways out of the menu".to_string()),
+    }
+}
+
+/// Which of the two items that open a naming box a step is about, named by what it makes rather than
+/// by the item's words, for the reason `door` and `section` are named that way.
+fn made(with: &Args) -> Result<&'static str, String> {
+    match with.get("as").and_then(|v| v.as_str()) {
+        Some("file") => Ok("file"),
+        Some("folder") => Ok("folder"),
+        Some(other) => Err(format!("`as` does not know `{other}` — it is file or folder")),
+        None => Err("arg `as` must say which of the two the item makes".to_string()),
+    }
+}
+
+/// What a folder being dragged in has to have in it, said at the hand-over so the operator brings one
+/// that does. It is the folder case's alone — a file is read by its own name — and it renders to
+/// nothing when a step names none, which is every drop of a single file.
+fn holding(with: &Args) -> String {
+    match with.get("holding").and_then(|v| v.as_str()) {
+        Some(name) => format!(", with a file named \"{name}\" in it,"),
+        None => String::new(),
+    }
+}
+
+/// One of the file face's standing lines, named by what it says. The wording is the interface's, so an
+/// instruction describes the line rather than quoting it.
+fn note(with: &Args) -> Result<&'static str, String> {
+    match with.get("note").and_then(|v| v.as_str()) {
+        Some("not-text") => Ok("that this is not text and cannot be shown here"),
+        Some("too-big") => Ok(
+            "that this picture is too large to show here, followed by how large it was measured to be",
+        ),
+        Some("cut") => Ok("that only the beginning of the file is shown"),
+        Some("unreadable") => Ok("that the file could not be read"),
+        // Told apart from the line above on purpose: a link is refused because it is a link, and
+        // saying the file could not be read sends the one reader most likely to meet it — somebody
+        // keeping one file in one place and pointing several projects at it — looking for damage.
+        Some("link") => Ok("that this name is a link, which is not followed out of the project's folders"),
+        Some("partial") => Ok("that some of the folder is not being watched"),
+        Some("nothing-changed") => Ok("that nothing has changed yet"),
+        Some("no-folder") => Ok("that this project has no folder yet"),
+        Some("folder-gone") => Ok("that this folder is not there any more"),
+        // The file written under a reader who was typing in it. One line covers both ways it is
+        // reached — the watch noticing while they type, and a save turned away for the same reason —
+        // because the panel draws one state for them: what it says is the fact, and beside it is the
+        // one thing it can do about it.
+        Some("changed-underneath") => {
+            Ok("that somebody wrote to this file after it was opened here")
+        }
+        // The two refusals a name comes back with, read under the box the name was typed into rather
+        // than among the lines the column stands with. They are named by what the machine answered —
+        // the name is in the folder already, or it is not a name this machine will hold — and not by
+        // the sentence drawn for it, which is the interface's own.
+        Some("taken") => Ok("that the name typed into the box is already in that folder"),
+        Some("unnameable") => Ok("that this machine will not take what was typed as the name of one file"),
+        Some(other) => Err(format!("`note` does not know `{other}`")),
+        None => Err("arg `note` must say which of the face's lines".to_string()),
+    }
+}
+
 /// Which way round a `dimension closed` step reads its value. Closed is what a road walks this assert
 /// for, so it is the default, and `equals: false` is the reading after the way back was taken.
 fn closed_equals(with: &Args) -> bool {
@@ -2753,6 +4509,11 @@ pub struct StepRecord {
     pub kind: &'static str,
     pub domain: String,
     pub op: String,
+    /// The window this step was carried out in, as the road named it — `None` for the app's one
+    /// window. It is kept on the record because a shot cannot say which window it is of: two windows
+    /// of one app are the same app at the same size, and a manifest that did not name the window
+    /// would leave a reader to tell them apart by what is drawn in them.
+    pub window: Option<String>,
     pub instruction: String,
     pub screenshot: String,
     pub verdict: Verdict,
@@ -2786,6 +4547,9 @@ pub struct StepBrief<'a> {
     pub index: usize,
     /// `action` or `assert` — what is being asked of whoever is standing at the screen.
     pub kind: &'static str,
+    /// The window the step is carried out in, as the road named it — `None` for the app's one
+    /// window. Whoever is driving stands at that window before answering.
+    pub window: Option<&'a str>,
     /// The step rendered as the sentence an operator reads.
     pub instruction: &'a str,
     /// What OCR will be asked to find on the shot, for an assert that named it. `None` on an action,
@@ -2808,25 +4572,33 @@ pub struct StepBrief<'a> {
 /// and no shot is filed as evidence of a step nobody carried out. A hand-over that fails aborts the
 /// walk, since a run nobody is holding would shoot whatever screen was left standing.
 ///
+/// `run_again` is the one step nobody at the screen can take ([`ends_the_run`]): the app ends and
+/// another comes up on the same store. It is called **before** that step is handed over rather than
+/// after, which is what lets the operator be asked about a window that is already there — they are
+/// the one who can say it is a new one, and there is nothing for them to do to bring it about. A
+/// failure to start the app again aborts the walk: every step after it would be shot against an
+/// app that is not running.
 /// `read_store` closes the asserts on [`reads_the_store`], and it is asked **in the step's own
 /// place** rather than once the road has been walked. The order is the whole point: a road says how
 /// many blobs the store holds before an image is registered and again after, and a reading taken at
 /// the end would answer both with the state the last step left. Those steps are handed over and shot
 /// like every other, since what makes the reading honest is that the screen ahead of it is the one
 /// the step before stood up.
-pub fn walk<C, O, H, R>(
+pub fn walk<C, O, H, R, S>(
     scenario: &Scenario,
     evidence_dir: &Path,
     mut capture: C,
     mut read_text: O,
     mut hand_over: H,
-    mut read_store: R,
+    mut run_again: R,
+    mut read_store: S,
 ) -> Result<WalkOutcome, String>
 where
-    C: FnMut(&Path) -> Result<(), String>,
+    C: FnMut(Option<&str>, &Path) -> Result<(), String>,
     O: FnMut(&Path) -> Result<Reading, String>,
     H: FnMut(&StepBrief<'_>) -> Result<(), String>,
-    R: FnMut(&Step) -> Result<(bool, String), String>,
+    R: FnMut() -> Result<(), String>,
+    S: FnMut(&Step) -> Result<(bool, String), String>,
 {
     std::fs::create_dir_all(evidence_dir)
         .map_err(|e| format!("could not create evidence dir {}: {e}", evidence_dir.display()))?;
@@ -2844,22 +4616,33 @@ where
         };
         let instruction = instructor.render(step)?;
         let expected = instructor.expectation(step);
+        let window = step.window();
         let from_store = kind == "assert" && reads_the_store(domain, &op);
         let domain = domain_str(domain);
         let screenshot = format!("{:02}-{kind}-{domain}-{op}.png", i + 1);
         let shot_path = evidence_dir.join(&screenshot);
+
+        // The app put through a run of its own, where the road asks for one. It happens before the
+        // hand-over so that what the operator is asked to confirm is a window already standing:
+        // there is nothing for them to press, and the app they had is gone by the time they read
+        // the line.
+        if ends_the_run(step) {
+            run_again()
+                .map_err(|e| format!("step {}: starting the app again failed: {e}", i + 1))?;
+        }
 
         // Handed over first, shot second. The screen is nobody's until somebody has been asked to
         // stand it up, and a shot taken before that is a photograph of the step before this one.
         hand_over(&StepBrief {
             index: i,
             kind,
+            window,
             instruction: &instruction,
             expected: expected.as_ref(),
         })
         .map_err(|e| format!("step {}: handing the step over failed: {e}", i + 1))?;
 
-        capture(&shot_path)
+        capture(window, &shot_path)
             .map_err(|e| format!("step {}: capturing `{screenshot}` failed: {e}", i + 1))?;
 
         // The asserts nothing draws, put to the store instead of to the shot. Asked first, since a
@@ -2875,6 +4658,7 @@ where
                 kind,
                 domain: domain.to_string(),
                 op,
+                window: window.map(str::to_string),
                 instruction,
                 screenshot,
                 verdict: if pass { Verdict::Read } else { Verdict::Fail },
@@ -2915,6 +4699,7 @@ where
             kind,
             domain: domain.to_string(),
             op,
+            window: window.map(str::to_string),
             instruction,
             screenshot,
             verdict,
@@ -2926,6 +4711,16 @@ where
         records.push(record);
     }
     Ok(WalkOutcome { records, passed })
+}
+
+/// Whether this step is the app itself being run again — the one move on a road that is carried out
+/// by the harness rather than by whoever is standing at the screen.
+///
+/// It is asked of the step rather than declared in the scenario, because it is not a thing a road
+/// chooses: an op that ends the run ends it, and a road that could ask for the step without the
+/// restart would be reading a window nothing had put in front of it.
+fn ends_the_run(step: &Step) -> bool {
+    matches!(step, Step::Action { domain: Domain::Store, op, .. } if op == "run-again")
 }
 
 /// A domain as a road writes it — the other half of the `store blobs` a message names a step by.
@@ -2943,6 +4738,8 @@ pub fn domain_str(d: Domain) -> &'static str {
         Domain::Plugin => "plugin",
         Domain::Mcp => "mcp",
         Domain::Tick => "tick",
+        Domain::Terminal => "terminal",
+        Domain::Files => "files",
     }
 }
 
@@ -2975,6 +4772,13 @@ pub fn write_manifest(
                 ),
                 _ => String::new(),
             };
+            // The window only when the road named one: an app with a single window has nothing to
+            // say here, and a key carrying `null` on every step of every road would read as a
+            // question each of them had been asked.
+            let window = match &r.window {
+                Some(w) => format!(",\"window\":{}", js(w)),
+                    None => String::new(),
+                };
             // What the store answered, for a step the screen had no answer for. It carries the whole
             // reading rather than a flag: the verdict says whether the count met, and this says what
             // it was — which is what a reader coming back to a red step needs and cannot re-ask for.
@@ -2983,7 +4787,7 @@ pub fn write_manifest(
                 None => String::new(),
             };
             format!(
-                "{{\"step\":{},\"kind\":{},\"domain\":{},\"op\":{},\"verdict\":{},\"instruction\":{},\"screenshot\":{}{}{}}}",
+                "{{\"step\":{},\"kind\":{},\"domain\":{},\"op\":{},\"verdict\":{},\"instruction\":{},\"screenshot\":{}{}{}{}}}",
                 r.index + 1,
                 js(r.kind),
                 js(&r.domain),
@@ -2991,6 +4795,7 @@ pub fn write_manifest(
                 js(r.verdict.as_str()),
                 js(&r.instruction),
                 js(&r.screenshot),
+                window,
                 expect,
                 told
             )
@@ -3289,6 +5094,134 @@ steps_gui:
         );
     }
 
+    /// **What is standing in the input line and what a program printed are one screen and two
+    /// readings.** Both are read off the same shot, so nothing but the sentence tells the operator
+    /// which they are being asked for — and the difference is the whole of what a hand-over owes: a
+    /// build that sent the newline would have drawn what the program did with it, leaving the line
+    /// empty, and a road that read either as the other would go green over exactly that.
+    #[test]
+    fn what_is_standing_unsent_is_asked_for_as_unsent() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: files
+    op: hand-to-pane
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with: { shows: /work/notes.md }
+  - type: assert
+    domain: terminal
+    op: pane
+    with: { shows: /work/notes.md }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+
+        assert!(lines[0].contains("pastes the row's path into the pane"), "got: {}", lines[0]);
+        // The item leaves the path for the person, so the line says to leave it alone.
+        assert!(lines[0].contains("leave it there"), "got: {}", lines[0]);
+        assert!(lines[1].contains("not been sent"), "got: {}", lines[1]);
+        assert_ne!(lines[1], lines[2], "the two readings are one screen and must not be one line");
+
+        // And it is read off the shot, the same as what a program printed: the words are on it.
+        assert_eq!(
+            ins.expectation(&steps[1]),
+            Some(Expectation { text: "/work/notes.md".to_string(), present: true })
+        );
+    }
+
+    /// **A hand full and a hand with one thing in it are two gestures, and the line has to say which.**
+    /// Two files let go one after the other end on the same input line as a pair let go together, so
+    /// an instruction that named them one at a time would be walked as two drops and read as proof of
+    /// something nobody asked about. The pair form says the selecting, the one movement and the one
+    /// release, because each of the three is a place an operator would otherwise split it.
+    #[test]
+    fn a_pair_dragged_in_together_is_one_movement_and_says_so() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: terminal
+    op: drop-in
+    with: { brings: seeds.csv }
+  - type: action
+    domain: terminal
+    op: drop-in
+    with: { brings: seeds.csv, beside: labels.txt }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+
+        assert!(lines[0].contains("drag a file named \"seeds.csv\""), "got: {}", lines[0]);
+        assert!(!lines[0].contains("labels.txt"), "got: {}", lines[0]);
+
+        assert!(lines[1].contains("\"seeds.csv\""), "got: {}", lines[1]);
+        assert!(lines[1].contains("\"labels.txt\""), "got: {}", lines[1]);
+        assert!(lines[1].contains("together"), "the selecting is what makes it one hand: {}", lines[1]);
+        assert!(lines[1].contains("one movement"), "got: {}", lines[1]);
+    }
+
+    /// **The three ways out of a file's menu are three different sentences, and none of them is shot.**
+    /// What the operator is told to press has to name one item and not another — the three sit next to
+    /// each other on one menu — and what they are then asked to confirm cannot be read off the picture
+    /// the run takes: an application that came forward, or the operating system's own chooser, is not on
+    /// Amenbo's window. An expectation appearing on any of the three would send OCR hunting Amenbo's
+    /// window for words that were never going to be there, and fail the road over the harness.
+    #[test]
+    fn each_way_out_of_a_files_menu_is_its_own_line_and_none_of_them_is_read_off_the_shot() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: files
+    op: menu
+    with: { name: watering.md, section: tree }
+  - type: action
+    domain: files
+    op: hand-over
+    with: { door: usual }
+  - type: assert
+    domain: files
+    op: handed-over
+    with: { door: usual }
+  - type: action
+    domain: files
+    op: hand-over
+    with: { door: pick }
+  - type: assert
+    domain: files
+    op: handed-over
+    with: { door: pick }
+  - type: action
+    domain: files
+    op: hand-over
+    with: { door: manager }
+  - type: assert
+    domain: files
+    op: handed-over
+    with: { door: manager }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+
+        assert!(lines[0].contains("right-click the row \"watering.md\""), "got: {}", lines[0]);
+        assert!(lines[1].contains("already opens that kind of file with"), "got: {}", lines[1]);
+        assert!(lines[3].contains("an application you pick"), "got: {}", lines[3]);
+        assert!(lines[5].contains("shows the file in the file manager"), "got: {}", lines[5]);
+
+        for i in [2, 4, 6] {
+            assert_eq!(ins.expectation(&steps[i]), None, "step {i} is not a reading of the shot");
+        }
+    }
+
     /// Absent, a form reading leans the way every one of these leaned before there was anything to hide.
     #[test]
     fn a_form_reading_that_says_nothing_still_expects_the_words_present() {
@@ -3547,6 +5480,78 @@ steps_gui:
         assert!(err.contains("does not know the position `sideways`"), "got: {err}");
         let err = ins.render(&s.steps(Driver::Gui)[2]).unwrap_err();
         assert!(err.contains("does not know the position `sideways`"), "got: {err}");
+    }
+
+    /// The way out of a pane asks one of two questions, and which one is the pane's business: a
+    /// session holding a reservation is asked about it by name and offered three ways out, and one
+    /// holding nothing is asked the plain thing. So the plain instruction has to survive `answer`
+    /// being added, each of the three has to say a different outcome, and the two ways of writing
+    /// the step wrong — an answer nobody offers, and a three-way answer with nothing named — have to
+    /// be turned away rather than rendered into a line an operator could not act on.
+    #[test]
+    fn the_way_out_of_a_pane_is_answered_by_name_and_reads_what_it_is_leaving() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: Re-line the quench tank }
+    as: tank
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with: { shows: SCENARIO the pane }
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with: { shows: SCENARIO the pane, target: tank, answer: hand-back }
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with: { shows: SCENARIO the pane, target: tank, answer: leave }
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with: { shows: SCENARIO the pane, target: tank, answer: cancel }
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with: { shows: SCENARIO the pane, target: tank, answer: think-about-it }
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with: { shows: SCENARIO the pane, answer: hand-back }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        // The binding, so the three answers below have a title to name.
+        ins.render(&steps[0]).expect("the world's task renders");
+
+        // Nothing held: the plain question, and nothing about a reservation on it.
+        let plain = ins.render(&steps[1]).expect("the plain question renders");
+        assert!(plain.contains("answer it yes"), "got: {plain}");
+        assert!(!plain.contains("Three answers"), "got: {plain}");
+
+        // Each of the three names what stands to be lost, and then parts company on the outcome.
+        for (i, step) in steps.iter().enumerate().take(5).skip(2) {
+            let line = ins.render(step).unwrap_or_else(|e| panic!("step {i}: {e}"));
+            assert!(line.contains("Re-line the quench tank"), "step {i} got: {line}");
+            assert!(line.contains("and no other"), "step {i} got: {line}");
+        }
+        let back = ins.render(&steps[2]).expect("renders");
+        assert!(back.contains("hands the work back"), "got: {back}");
+        let leave = ins.render(&steps[3]).expect("renders");
+        assert!(leave.contains("leaves the work where it is"), "got: {leave}");
+        assert!(leave.contains("still held"), "got: {leave}");
+        let stay = ins.render(&steps[4]).expect("renders");
+        assert!(stay.contains("the pane is still there"), "got: {stay}");
+
+        let err = ins.render(&steps[5]).unwrap_err();
+        assert!(err.contains("does not know the answer `think-about-it`"), "got: {err}");
+        let err = ins.render(&steps[6]).unwrap_err();
+        assert!(err.contains("give it a `target`"), "got: {err}");
     }
 
     /// The press through a hit: the move names the word asked for and the record pressed, and what the
@@ -3837,6 +5842,56 @@ steps_gui:
             "clearing waits for the same button: {}",
             lines[3]
         );
+
+        for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
+            assert!(ins.expectation(st).is_none(), "step {i} reads a picture, which no reading settles");
+        }
+    }
+
+    /// The other surface that draws the same image: the tab a project carries down the edge of the
+    /// terminal face. Both lines name what an eye should find — the image, or the colour with the
+    /// first letter of the name on it — and neither is settled by a reading, a tab holding a
+    /// picture whichever of the two it is. Nothing presses the tab either: what the road is asking is
+    /// that every tab is drawn from the one picture the face is handed, and going to the project
+    /// first would have moved the whole face onto the one tab being read.
+    #[test]
+    fn a_projects_tab_is_read_for_the_image_it_carries_without_being_pressed() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: project
+    op: create
+    with: { name: Greenhouse }
+    as: greenhouse
+steps_gui:
+  - type: assert
+    domain: terminal
+    op: tab-icon
+    with: { project: Greenhouse, present: true }
+  - type: assert
+    domain: terminal
+    op: tab-icon
+    with: { project: Greenhouse, present: false }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[0].contains("Greenhouse") && lines[0].contains("image registered for it"),
+            "the tab is named by the project that carries it: {}",
+            lines[0]
+        );
+        assert!(
+            lines[1].contains("first letter of its name"),
+            "the fallback is named rather than an absence looked for: {}",
+            lines[1]
+        );
+        for line in &lines {
+            assert!(!line.contains("press"), "the tab is read where it stands: {line}");
+        }
 
         for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
             assert!(ins.expectation(st).is_none(), "step {i} reads a picture, which no reading settles");
@@ -5045,6 +7100,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         let said = Instructor::new().render(&warns).unwrap();
         assert!(said.contains("nothing opened"), "the row is read before the press: {said}");
@@ -5063,6 +7119,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         assert!(
             Instructor::new().expectation(&lists).is_some(),
@@ -5084,6 +7141,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         let said = Instructor::new().render(&step).unwrap();
         assert!(said.contains("no badge"), "got: {said}");
@@ -5099,6 +7157,7 @@ steps_gui:
             op: "open-view".to_string(),
             with: [("view".to_string(), serde_yaml::Value::from("overdue"))].into_iter().collect(),
             bind: None,
+            window: None,
         };
         let err = Instructor::new().render(&open).unwrap_err();
         assert!(err.contains("overdue"), "got: {err}");
@@ -5113,6 +7172,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         let err = Instructor::new().render(&warns).unwrap_err();
         assert!(err.contains("plain"), "got: {err}");
@@ -5133,6 +7193,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         let err = Instructor::new().render(&step).unwrap_err();
         assert!(err.contains("count"), "got: {err}");
@@ -5146,6 +7207,7 @@ steps_gui:
             domain: Domain::Repo,
             op: "ai-launch-answer".to_string(),
             with: [("answer".to_string(), serde_yaml::Value::from("maybe"))].into_iter().collect(),
+            window: None,
         };
         let err = Instructor::new().render(&step).unwrap_err();
         assert!(err.contains("maybe"), "got: {err}");
@@ -5162,6 +7224,7 @@ steps_gui:
                 op: "ai-launch-consent".to_string(),
                 with: [("answer".to_string(), serde_yaml::Value::from(answer))].into_iter().collect(),
                 bind: None,
+                window: None,
             };
             let err = Instructor::new().render(&step).unwrap_err();
             assert!(err.contains(answer), "got: {err}");
@@ -5178,6 +7241,7 @@ steps_gui:
             op: "group-by".to_string(),
             with: [("axis".to_string(), serde_yaml::Value::from("Medium"))].into_iter().collect(),
             bind: None,
+            window: None,
         };
         let said = Instructor::new().render(&regroup).unwrap();
         assert!(said.contains("Medium"), "the move names the axis to press: {said}");
@@ -5194,7 +7258,7 @@ steps_gui:
             if grouping {
                 with.insert("grouping".to_string(), serde_yaml::Value::from(true));
             }
-            Step::Assert { domain: Domain::Task, op: "carded".to_string(), with }
+            Step::Assert { domain: Domain::Task, op: "carded".to_string(), with, window: None }
         };
         assert!(
             Instructor::new().expectation(&carded(false)).is_some(),
@@ -5230,7 +7294,13 @@ steps_gui:
                     serde_yaml::Value::from("invalid_dimension_set_closed_value"),
                 );
             }
-            Step::Action { domain: Domain::Task, op: "drop-into-column".to_string(), with, bind: None }
+            Step::Action {
+                domain: Domain::Task,
+                op: "drop-into-column".to_string(),
+                with,
+                bind: None,
+                window: None,
+            }
         };
 
         let landed = Instructor::new().render(&drop("v19", false)).unwrap();
@@ -5266,7 +7336,7 @@ steps_gui:
                     serde_yaml::Value::from("invalid_dimension_required_without_values"),
                 );
             }
-            Step::Action { domain: Domain::Dimension, op: "required".to_string(), with, bind: None }
+            Step::Action { domain: Domain::Dimension, op: "required".to_string(), with, bind: None, window: None }
         };
         let said = Instructor::new().render(&raise("Focus", None, true)).unwrap();
         assert!(said.contains("Focus") && said.contains("turn on"), "got: {said}");
@@ -5285,7 +7355,7 @@ steps_gui:
                     serde_yaml::Value::from("invalid_task_required_dimension"),
                 );
             }
-            Step::Action { domain: Domain::Task, op: "finish-creating".to_string(), with, bind: None }
+            Step::Action { domain: Domain::Task, op: "finish-creating".to_string(), with, bind: None, window: None }
         };
         let held = Instructor::new().render(&finish(true)).unwrap();
         assert!(held.contains("shut") && held.contains("named beside it"), "got: {held}");
@@ -5305,6 +7375,7 @@ steps_gui:
             .into_iter()
             .collect(),
             bind: None,
+            window: None,
         };
         let said = Instructor::new().render(&set).unwrap();
         assert!(said.contains("Medium") && said.contains("print"), "got: {said}");
@@ -5330,7 +7401,7 @@ steps_gui:
             if let Some(code) = refused {
                 with.insert("refused".to_string(), serde_yaml::Value::from(code));
             }
-            Step::Action { domain: Domain::Dimension, op: "rekey".to_string(), with, bind: None }
+            Step::Action { domain: Domain::Dimension, op: "rekey".to_string(), with, bind: None, window: None }
         };
         let axis = Instructor::new().render(&rekey(None, "channel", None)).unwrap();
         assert!(axis.contains("Medium") && axis.contains("channel"), "got: {axis}");
@@ -5353,7 +7424,7 @@ steps_gui:
             if let Some(value) = value {
                 with.insert("value".to_string(), serde_yaml::Value::from(value));
             }
-            Step::Assert { domain: Domain::Dimension, op: "key".to_string(), with }
+            Step::Assert { domain: Domain::Dimension, op: "key".to_string(), with, window: None }
         };
         let exp = Instructor::new().expectation(&read(None)).expect("a key is read, not reviewed");
         assert_eq!(exp.text, "channel");
@@ -5385,8 +7456,9 @@ steps_gui:
             op: "config-set".to_string(),
             with: with(),
             bind: None,
+            window: None,
         };
-        let read = Step::Assert { domain: Domain::Plugin, op: "config".to_string(), with: with() };
+        let read = Step::Assert { domain: Domain::Plugin, op: "config".to_string(), with: with(), window: None };
         for step in [wrote, read] {
             let err = Instructor::new().render(&step).unwrap_err();
             assert!(err.contains("Greenhouse"), "the refusal names what was written: {err}");
@@ -5409,6 +7481,7 @@ steps_gui:
             .into_iter()
             .collect(),
             bind: None,
+            window: None,
         };
 
         for (field, day) in [("due", "due date"), ("start", "start date")] {
@@ -5435,6 +7508,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         let said = Instructor::new().render(&step).unwrap();
         assert!(said.contains("shows no due_on"), "the absence is what is asked for: {said}");
@@ -5445,6 +7519,417 @@ steps_gui:
         );
     }
 
+    /// The moves a page is worked with, and the two ways a pane is opened. What the road has to be
+    /// able to say is which control was pressed: a pane is opened by pressing the empty frame either
+    /// way, and the strip a full page draws is a press before it that only moves the screen, so a
+    /// step that named neither would leave an operator to pick between them.
+    #[test]
+    fn the_page_moves_name_the_control_they_press() {
+        let s = load(r#"
+id: x
+title: A page is re-cut, paged and opened on
+steps_gui:
+  - type: action
+    domain: terminal
+    op: set-panes
+    with: { count: 1 }
+  - type: action
+    domain: terminal
+    op: go-page
+    with: { page: 2 }
+  - type: action
+    domain: terminal
+    op: open-pane
+    with: { from: face }
+  - type: action
+    domain: terminal
+    op: open-pane
+    with: { from: strip }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("pane counts, press the one that says 1"), "got: {}", lines[0]);
+        assert!(lines[1].contains("page digits, press 2"), "got: {}", lines[1]);
+        assert!(
+            lines[2].contains("the empty frame") && !lines[2].contains("beside the name"),
+            "the face's way in is the empty frame and nothing before it: {}",
+            lines[2]
+        );
+        assert!(
+            lines[3].contains("the thin strip")
+                && lines[3].contains("Nothing opens")
+                && lines[3].contains("the empty frame waiting there"),
+            "the strip moves the screen, and the pane opens at the empty frame: {}",
+            lines[3]
+        );
+        // Both say to leave the row above the press alone: which agent a pane opens with is another
+        // road's, and a step silent about it would be walked with whatever happened to be on. Both
+        // also say what to do on the machine where nothing on it is on yet, since there the press
+        // does not answer and an operator left to work that out would mark a working face red.
+        for one in [&lines[2], &lines[3]] {
+            assert!(one.contains("leaving the row above that press as it came up"), "got: {one}");
+            assert!(one.contains("choose any of them first"), "got: {one}");
+        }
+    }
+
+    /// The one move on that row that re-cuts nothing, and the reading that closes it. Two things have
+    /// to be on the instruction: the shape the control is drawn as, since it carries no word an
+    /// operator could look for, and that the page stays where it is — the counts beside it re-page
+    /// every frame on the device, and somebody expecting the same here would read a page that held
+    /// still as a press that never landed. What the reading is about is the width each pane came out
+    /// with rather than where the boxes went: a grid that shuffled them about and handed neither of
+    /// them more room would have honoured the press and missed what it was for.
+    #[test]
+    fn the_orientation_is_pressed_by_its_shape_and_read_by_the_width_it_gives() {
+        let s = load(r#"
+id: x
+title: Two panes are stacked and then put back
+steps_gui:
+  - type: action
+    domain: terminal
+    op: set-orient
+    with: { orient: down }
+  - type: assert
+    domain: terminal
+    op: panes-sit
+    with: { orient: down }
+  - type: action
+    domain: terminal
+    op: set-orient
+    with: { orient: across }
+  - type: assert
+    domain: terminal
+    op: panes-sit
+    with: { orient: across }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[0].contains("a box divided across the middle") && lines[0].contains("one above the other"),
+            "the press is found by the shape it is drawn as: {}",
+            lines[0]
+        );
+        assert!(
+            lines[2].contains("a box divided down the middle") && lines[2].contains("side by side"),
+            "and so is the way back: {}",
+            lines[2]
+        );
+        for pressed in [&lines[0], &lines[2]] {
+            assert!(
+                pressed.contains("nothing opens, nothing closes")
+                    && pressed.contains("the page you are on stays the one you are on"),
+                "what the press does not do is said as plainly as what it does: {pressed}"
+            );
+        }
+        assert!(
+            lines[1].contains("the whole width between the columns rather than half of it"),
+            "the reading is the width, not the arrangement: {}",
+            lines[1]
+        );
+        assert!(
+            lines[3].contains("about half the width between the columns"),
+            "and the shape it started in is read the same way: {}",
+            lines[3]
+        );
+        // Neither is a reading: what tells the two shapes apart is where two boxes are, and the road's
+        // own lines are on the panes whichever way round they sit.
+        for step in s.steps(Driver::Gui) {
+            assert!(
+                Instructor::new().expectation(step).is_none(),
+                "where the panes sit is an eye's, not a reading's",
+            );
+        }
+    }
+
+    /// Where the project keeps several folders, both ways in meet the same question and neither opens
+    /// anything — so the press is said per control and what follows it is said once. An operator told
+    /// "nothing is asked" while a question stood in front of them would mark a working face red.
+    #[test]
+    fn a_press_that_meets_the_folder_question_does_not_promise_a_pane() {
+        let open = |from: &str, asks: bool| Step::Action {
+            domain: Domain::Terminal,
+            op: "open-pane".to_string(),
+            with: [
+                ("from".to_string(), serde_yaml::Value::from(from)),
+                ("asks".to_string(), serde_yaml::Value::from(asks)),
+            ]
+            .into_iter()
+            .collect(),
+            bind: None,
+            window: None,
+        };
+
+        for from in ["face", "strip"] {
+            let said = Instructor::new().render(&open(from, true)).unwrap();
+            assert!(said.contains("Nothing opens"), "the press opens no pane: {said}");
+            assert!(said.contains("which of them it works in"), "and what it meets instead: {said}");
+            assert!(!said.contains("nothing is asked"), "a question is standing: {said}");
+        }
+
+        let quiet = Instructor::new().render(&open("face", false)).unwrap();
+        assert!(quiet.contains("nothing is asked"), "one folder is not a question: {quiet}");
+    }
+
+    /// Answering it. The row is found by the folder's name at the end of the path it draws — a road
+    /// knows what it calls a folder and not where the run put it — and the list the answer is picked
+    /// out of is itself what the step is about, so the operator is told what may be on it.
+    #[test]
+    fn the_folder_a_pane_works_in_is_picked_out_of_this_projects_own() {
+        let step = Step::Action {
+            domain: Domain::Terminal,
+            op: "pick-folder".to_string(),
+            with: [("dir".to_string(), serde_yaml::Value::from("greenhouse-benches"))]
+                .into_iter()
+                .collect(),
+            bind: None,
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("greenhouse-benches"), "got: {said}");
+        assert!(said.contains("path ends in"), "a road names a folder, not a place: {said}");
+        assert!(said.contains("no picker"), "the list is the goal: {said}");
+    }
+
+    /// Going to a project. What the step says is where the screen is afterwards rather than that it
+    /// changed: which project the face came up on is the run's business, so a road may press the one
+    /// already shown, and that press is allowed to do nothing.
+    #[test]
+    fn going_to_a_project_says_where_the_face_lands_rather_than_that_it_moved() {
+        let step = Step::Action {
+            domain: Domain::Terminal,
+            op: "go-project".to_string(),
+            with: [("project".to_string(), serde_yaml::Value::from("Greenhouse"))]
+                .into_iter()
+                .collect(),
+            bind: None,
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("\"Greenhouse\""), "got: {said}");
+        assert!(said.contains("tabs at the edge"), "the tabs are where the press is: {said}");
+        assert!(
+            said.contains("colours alone"),
+            "a compact tab carries no name to press by: {said}"
+        );
+        assert!(
+            !said.contains("changes") && !said.contains("swaps"),
+            "the press may land where the face already was: {said}"
+        );
+    }
+
+    /// A way in the face does not have is refused here rather than rendered into a sentence nobody
+    /// could carry out — the same fail-closed contract an unmapped op keeps.
+    #[test]
+    fn a_way_into_a_pane_the_face_does_not_offer_is_refused() {
+        let step = Step::Action {
+            domain: Domain::Terminal,
+            op: "open-pane".to_string(),
+            with: [("from".to_string(), serde_yaml::Value::from("keyboard"))]
+                .into_iter()
+                .collect(),
+            bind: None,
+            window: None,
+        };
+        let err = Instructor::new().render(&step).unwrap_err();
+        assert!(err.contains("face or strip"), "got: {err}");
+    }
+
+    /// What the empty frame will open with is read on the frame rather than on the pane it has not
+    /// made yet, and the press is read beside the row: nothing on it being on is the one state that
+    /// stops that press, so a step that only looked at which name is lit could pass on a frame that
+    /// opens nothing.
+    #[test]
+    fn the_empty_frame_is_read_for_what_it_will_open_with_and_for_a_live_press() {
+        let step = Step::Assert {
+            domain: Domain::Terminal,
+            op: "opens-with".to_string(),
+            with: [("start".to_string(), serde_yaml::Value::from("shell"))]
+                .into_iter()
+                .collect(),
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("plain shell is the one that is on"), "got: {said}");
+        assert!(said.contains("press is live"), "the press is half the reading: {said}");
+        assert!(
+            said.contains("nothing to this reading"),
+            "the row carries what this machine has not got as well, so the step has to put those out \
+             of the reading rather than leave an operator counting them: {said}"
+        );
+        assert!(
+            Instructor::new().expectation(&step).is_none(),
+            "the names on the row are the interface's own words, so no reading is expected off the shot"
+        );
+    }
+
+    /// The first run, which is the one reading on that frame that is not a program: the row is read
+    /// for being drawn and blank, and the press for refusing to open. Both halves, because either
+    /// alone passes on a build carrying the other fault.
+    #[test]
+    fn the_first_run_is_read_as_a_row_with_nothing_on_it_and_a_press_that_asks() {
+        let step = Step::Assert {
+            domain: Domain::Terminal,
+            op: "opens-with".to_string(),
+            with: [("start".to_string(), serde_yaml::Value::from("none"))]
+                .into_iter()
+                .collect(),
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("none of them is on"), "got: {said}");
+        assert!(
+            said.contains("does not open a pane"),
+            "the press refusing is half the reading: {said}"
+        );
+        assert!(
+            said.contains("several things on it"),
+            "a blank row has to be a row that is there: {said}"
+        );
+        assert!(
+            Instructor::new().expectation(&step).is_none(),
+            "the names on the row are the interface's own words, so no reading is expected off the shot"
+        );
+    }
+
+    /// An agent named on that row is refused rather than rendered. Which agents are on it is a probe
+    /// of the run machine's own `PATH`, so a road that named one would be a road that runs where that
+    /// tool happens to be installed and nowhere else.
+    #[test]
+    fn a_start_the_row_cannot_be_named_by_is_refused() {
+        let step = Step::Assert {
+            domain: Domain::Terminal,
+            op: "opens-with".to_string(),
+            with: [("start".to_string(), serde_yaml::Value::from("claude-code"))]
+                .into_iter()
+                .collect(),
+            window: None,
+        };
+        let err = Instructor::new().render(&step).unwrap_err();
+        assert!(err.contains("that machine's own"), "got: {err}");
+    }
+
+    /// What the lit face of the lamp rests on: a pane set printing carries on putting lines out while
+    /// the road walks around it, and the line it ends with is what the road waits on. The command is
+    /// spelt out because an improvised one is the step itself being improvised, and both counts are
+    /// there because a pane comes up in one of two shells.
+    #[test]
+    fn a_pane_is_set_printing_with_a_line_that_says_when_it_stopped() {
+        let step = Step::Action {
+            domain: Domain::Terminal,
+            op: "keep-printing".to_string(),
+            with: [("text".to_string(), serde_yaml::Value::from("SCENARIO that is all"))]
+                .into_iter()
+                .collect(),
+            bind: None,
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("ping -c 30"), "the run is bounded, and spelt out: {said}");
+        assert!(said.contains("-n 30"), "the other shell counts its pings differently: {said}");
+        assert!(
+            said.matches("SCENARIO that is all").count() == 2,
+            "the road's own line is what it ends with and what the road waits on: {said}"
+        );
+        assert!(
+            said.contains("Leave the pane alone"),
+            "a pane stopped by hand is a pane the road put out itself: {said}"
+        );
+    }
+
+    /// The lamp's three faces, and the one of them that is watched rather than shot. The two still
+    /// ones are a picture; the blink rests, twice a turn, at a step a photograph cannot tell from
+    /// them — so only that half tells the operator to watch, and none of the three is a reading.
+    #[test]
+    fn the_lamp_is_read_by_its_face_and_the_blinking_one_is_watched() {
+        let dot = |face: &str| Step::Assert {
+            domain: Domain::Terminal,
+            op: "dot".to_string(),
+            with: [("face".to_string(), serde_yaml::Value::from(face))].into_iter().collect(),
+            window: None,
+        };
+        let lit = Instructor::new().render(&dot("lit")).unwrap();
+        assert!(lit.contains("glow") && lit.contains("holding still"), "got: {lit}");
+        let calling = Instructor::new().render(&dot("calling")).unwrap();
+        assert!(calling.contains("blinking"), "got: {calling}");
+        assert!(
+            calling.contains("watch") && calling.contains("warning colour"),
+            "the one face that moves, and the one that leaves the pane's own hue: {calling}"
+        );
+        let out = Instructor::new().render(&dot("out")).unwrap();
+        assert!(out.contains("sunk"), "got: {out}");
+        assert!(
+            out.contains("not the pane having gone"),
+            "out is the resting state, and a lamp that vanished would say the pane had: {out}"
+        );
+        let err = Instructor::new().render(&dot("pulsing")).unwrap_err();
+        assert!(err.contains("lit, calling or out"), "got: {err}");
+        assert!(
+            Instructor::new().expectation(&dot("calling")).is_none(),
+            "a mark with no words on it is not a reading",
+        );
+    }
+
+    /// Running a command for its output, and pressing a ref out of what it drew. Three things are
+    /// worth holding: the pane is cleared before a command, since "the ref" is otherwise one of
+    /// several places on the screen; a command needing a record's own number says so, because a road
+    /// cannot spell a number the run will mint; and the folded press asks for the fold rather than
+    /// for a width, which is the run machine's to settle.
+    #[test]
+    fn a_ref_is_pressed_out_of_what_a_command_drew() {
+        let s = load(r#"
+id: x
+title: A ref drawn in a pane is pressed
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: terminal
+    op: run
+    with: { command: amenbo task list --actor ai }
+  - type: action
+    domain: terminal
+    op: press-ref
+    with: { target: seed }
+  - type: action
+    domain: terminal
+    op: run
+    with: { command: 'echo "... <ref>"', target: seed }
+  - type: action
+    domain: terminal
+    op: press-ref
+    with: { target: seed, folded: true }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[1].contains("clear what is on it") && lines[1].contains("amenbo task list"),
+            "a command is run on a cleared pane: {}",
+            lines[1]
+        );
+        assert!(!lines[1].contains("<ref>"), "a command needing no ref says nothing of one: {}", lines[1]);
+        assert!(
+            lines[2].contains("\"SEED\"") && !lines[2].contains("broken across"),
+            "an ordinary press names the record and no fold: {}",
+            lines[2]
+        );
+        assert!(
+            lines[3].contains("<ref>") && lines[3].contains("\"SEED\""),
+            "a command that needs the number names the record it belongs to: {}",
+            lines[3]
+        );
+        assert!(
+            lines[4].contains("broken across two rows") && lines[4].contains("Drag"),
+            "the folded press asks for the fold, not for a width: {}",
+            lines[4]
+        );
+    }
+
     #[test]
     fn an_unmapped_op_fails_closed() {
         let step = Step::Action {
@@ -5452,6 +7937,7 @@ steps_gui:
             op: "frobnicate".to_string(),
             with: Args::new(),
             bind: None,
+            window: None,
         };
         let err = Instructor::new().render(&step).unwrap_err();
         assert!(err.contains("not yet mapped"), "got: {err}");
@@ -5469,13 +7955,14 @@ steps_gui:
         let outcome = walk(
             &s,
             &dir,
-            |p| {
+            |_, p| {
                 *shots.borrow_mut() += 1;
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
             // The board OCRs to text that contains the seed title.
             |_| Ok(reading("me-ai board\nSEED\nsome other card")),
             |_| Ok(()),
+            || Ok(()),
             nothing_to_read,
         )
         .expect("walk");
@@ -5500,6 +7987,58 @@ steps_gui:
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// A road that names a window says it to all three: the operator standing at the screen, the tool
+    /// taking the shot, and whoever reads the manifest afterwards. The tool's half is what nothing
+    /// else can recover — two windows of one app are the same app at the same size, so a shot cannot
+    /// be traced back to the window it is of.
+    #[test]
+    fn a_window_a_road_names_reaches_the_operator_the_tool_and_the_manifest() {
+        let s = load(&SCENARIO.replace(
+            "    with: { filter: \"assignee:me-ai status:todo\", target: seed, present: true }",
+            "    with: { filter: \"assignee:me-ai status:todo\", target: seed, present: true }\n    window: \"Amenbo — Terminal\"",
+        ));
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-window-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mut aimed: Vec<Option<String>> = Vec::new();
+        let mut handed: Vec<String> = Vec::new();
+        let outcome = walk(
+            &s,
+            &dir,
+            |window, p| {
+                aimed.push(window.map(str::to_string));
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| Ok(reading("SEED — a card on the me-ai board")),
+            |brief| {
+                handed.push(brief.instruction.to_string());
+                Ok(())
+            },
+            || Ok(()),
+            nothing_to_read,
+        )
+        .expect("walk");
+
+        // The tool is aimed at the named window on the step that named one, and at the app's one
+        // window on the steps that did not — a road says which screen per step, not per run.
+        assert_eq!(aimed, vec![None, None, Some("Amenbo — Terminal".to_string())]);
+        // The operator is told where to stand before being told what to do there.
+        assert!(
+            handed[2].starts_with("In the window called \"Amenbo — Terminal\": "),
+            "got: {}",
+            handed[2]
+        );
+        assert_eq!(outcome.records[2].window.as_deref(), Some("Amenbo — Terminal"));
+
+        let manifest = write_manifest(&dir, &s, &[], &outcome).expect("manifest");
+        let text = std::fs::read_to_string(&manifest).unwrap();
+        assert!(text.contains("\"window\":\"Amenbo — Terminal\""), "got: {text}");
+        // And a step that named none carries no window at all, rather than a null saying it was
+        // asked and left blank.
+        assert_eq!(text.matches("\"window\"").count(), 1, "got: {text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// When the expected title is NOT on the shot, a `present: true` assert fails and reddens the
     /// run — the reading is the whole verdict, not a pixel diff.
     #[test]
@@ -5511,9 +8050,10 @@ steps_gui:
         let outcome = walk(
             &s,
             &dir,
-            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("an empty board with no such card")),
             |_| Ok(()),
+            || Ok(()),
             nothing_to_read,
         )
         .expect("walk");
@@ -5619,9 +8159,10 @@ steps_gui:
         let outcome = walk(
             &s,
             &dir,
-            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("SCENARIO — nobodv holds it")),
             |_| Ok(()),
+            || Ok(()),
             nothing_to_read,
         )
         .expect("walk");
@@ -5645,9 +8186,10 @@ steps_gui:
         let err = walk(
             &s,
             &dir,
-            |_| Err("no screen".to_string()),
+            |_, _| Err("no screen".to_string()),
             |_| Ok(reading("")),
             |_| Ok(()),
+            || Ok(()),
             nothing_to_read,
         )
         .unwrap_err();
@@ -5668,7 +8210,7 @@ steps_gui:
         let outcome = walk(
             &s,
             &dir,
-            |p| {
+            |_, p| {
                 *shots.borrow_mut() += 1;
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
@@ -5680,6 +8222,7 @@ steps_gui:
                 assert!(!b.instruction.is_empty(), "a step is handed over as a sentence to carry out");
                 Ok(())
             },
+            || Ok(()),
             nothing_to_read,
         )
         .expect("walk");
@@ -5690,6 +8233,96 @@ steps_gui:
             vec![(0, "action", 0), (1, "action", 1), (2, "assert", 2)],
             "one hand-over per step, from the first, each before its own shot"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The one step nobody at the screen carries out. The app is put through a run of its own before
+    /// the step is handed over, and the order is the whole of it: handed the step first, the operator
+    /// would be asked to confirm a new window while still standing in front of the old one.
+    #[test]
+    fn the_app_is_run_again_before_that_step_is_handed_over() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: store
+    op: run-again
+"#);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-again-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let done: RefCell<Vec<String>> = RefCell::new(Vec::new());
+        let outcome = walk(
+            &s,
+            &dir,
+            |_, p| {
+                done.borrow_mut().push("shot".to_string());
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| Ok(reading("")),
+            |b| {
+                done.borrow_mut().push(format!("handed {}", b.index));
+                Ok(())
+            },
+            || {
+                done.borrow_mut().push("ran again".to_string());
+                Ok(())
+            },
+            nothing_to_read,
+        )
+        .expect("walk");
+
+        assert_eq!(
+            *done.borrow(),
+            vec!["handed 0", "shot", "ran again", "handed 1", "shot"],
+            "the app is started again for that step alone, and before it is handed over"
+        );
+        assert_eq!(outcome.records[1].op, "run-again", "and the step is recorded like any other");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An app that would not come up again ends the walk there. Every step after it would be shot
+    /// against nothing running, and those shots would read on the manifest like any others.
+    #[test]
+    fn an_app_that_will_not_start_again_aborts_the_walk() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: store
+    op: run-again
+  - type: assert
+    domain: terminal
+    op: frames
+    with: { count: 0, empty: 1 }
+"#);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-again-red-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let shots: RefCell<usize> = RefCell::new(0);
+        let err = walk(
+            &s,
+            &dir,
+            |_, p| {
+                *shots.borrow_mut() += 1;
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| Ok(reading("")),
+            |_| Ok(()),
+            || Err("no window came up".to_string()),
+            nothing_to_read,
+        )
+        .unwrap_err();
+
+        assert!(err.contains("step 1") && err.contains("no window came up"), "got: {err}");
+        assert_eq!(*shots.borrow(), 0, "nothing was shot");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -5706,12 +8339,13 @@ steps_gui:
         let err = walk(
             &s,
             &dir,
-            |p| {
+            |_, p| {
                 *shots.borrow_mut() += 1;
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
             |_| Ok(reading("")),
             |_| Err("nobody is watching".to_string()),
+            || Ok(()),
             nothing_to_read,
         )
         .unwrap_err();
@@ -5748,6 +8382,7 @@ steps_gui:
                 op: "blobs".to_string(),
                 with: Args::new(),
                 bind: None,
+                window: None,
             }),
             "an action is never read as an assert, however it is written",
         );
@@ -5765,9 +8400,10 @@ steps_gui:
         let outcome = walk(
             &s,
             &dir,
-            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a step read off the store is never sent to OCR"),
             |_| Ok(()),
+            || Ok(()),
             |_| {
                 *asked.borrow_mut() += 1;
                 Ok((true, "the store holds 1 blob file(s) (expected 1, as expected)".to_string()))
@@ -5804,9 +8440,10 @@ steps_gui:
         let outcome = walk(
             &s,
             &dir,
-            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a step read off the store is never sent to OCR"),
             |_| Ok(()),
+            || Ok(()),
             |_| Ok((false, "the store holds 0 blob file(s) (expected 1, MISMATCH)".to_string())),
         )
         .expect("walk");
@@ -5829,9 +8466,10 @@ steps_gui:
         let err = walk(
             &s,
             &dir,
-            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a step read off the store is never sent to OCR"),
             |_| Ok(()),
+            || Ok(()),
             |_| Err("the binary would not run".to_string()),
         )
         .unwrap_err();

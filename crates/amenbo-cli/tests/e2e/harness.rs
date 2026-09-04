@@ -225,6 +225,22 @@ impl Cli {
         (String::from_utf8_lossy(&out.stdout).to_string(), exit_code(&out))
     }
 
+    /// Run the binary with extra environment on top of the harness's, and return (stderr, exit_code) —
+    /// [`Cli::run_env`]'s reading for the paths that refuse.
+    pub(crate) fn run_env_err(&self, env: &[(&str, &str)], args: &[&str]) -> (String, i32) {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_amenbo"));
+        command
+            .env("AMENBO_HOME", &self.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(&self.home)
+            .args(with_defaults(args, "human"));
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        let out = command.output().expect("failed to run the binary");
+        (String::from_utf8_lossy(&out.stderr).to_string(), exit_code(&out))
+    }
+
     /// Test helper: create one project and return its id. `task add` always needs a project, so tests
     /// about assignment / status / the mailbox — where the home project is incidental — use this.
     pub(crate) fn a_project(&self) -> String {

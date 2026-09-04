@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "talk",
+  "description": "what the talk window may do — the window the terminal is split out into, built on request rather than declared in tauri.conf.json, so it matches by label at runtime. It draws the terminal face whole, so what it needs is what that face needs wherever it is drawn: the folder dialog for a frame with no folder yet, the confirmation for taking a pane away for good, and the opener for a link in a file it is reading. A window short of any of them would be the same face with a door that does nothing. Kept apart from the board's so the theme stays removable (delete the window and its permissions leave with this file)",
+  "windows": [
+    "talk"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-title",
+    "dialog:allow-open",
+    "dialog:allow-confirm",
+    "opener:allow-open-url",
+    "opener:allow-default-urls"
+  ]
+}

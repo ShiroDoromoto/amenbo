@@ -1,0 +1,150 @@
+# The terminal moved out to a screen of its own, and moved back — with the same session still running
+# in it.
+#
+# Every other road here walks the app as one window, which is what it is by default: the ledger and
+# the terminal are two faces of one window, and switching between them is a press. That default is
+# walked all over this set already — every screen road opens on the board — so what has never been
+# walked is the other shape. It is also the only place the screen tool can shoot the wrong window,
+# since it is the only place there are two.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here and no gap in one. What is under test is where a terminal is drawn,
+# and a terminal is the surface a reader is already typing in: the question does not arise for
+# somebody at a shell.
+#
+# ── What the line is for ─────────────────────────────────────────────────────────────────────────
+# The road types one line into the terminal and then follows it. That line does two things at once,
+# and each is why it is written rather than something the interface says:
+#
+#  - It is **the reader's own words.** Every other word on this face belongs to the interface, so a
+#    reading of one would hold this gate to whichever language the run's machine is set to.
+#  - It is **what tells one terminal from another.** A pane that came up showing a fresh prompt looks
+#    exactly like a pane still drawing the session that was running — until the line is on it. That
+#    difference is the whole of the decision this road defends: switching faces, splitting the window
+#    out and folding it back must all leave the process alone, and a reader with an agent running in
+#    the pane is who pays if one of them does not.
+#
+# ── How the two windows are told apart ───────────────────────────────────────────────────────────
+# The window the terminal is split out into holds the whole face rather than one pane of it, so it is
+# not named after anything on the screen: what its bar carries is the app's own name for that window.
+# The board keeps the product's name alone and the other carries it with a dash and a word after it —
+# the word after it is in the run's own language, so `window:` below names that window by the part of
+# its title every language keeps. That is enough to stand at the right one, which is all it is for.
+#
+# ── Why it folds back at the end ─────────────────────────────────────────────────────────────────
+# The shape a machine last used the app in is remembered, and it is remembered where a throwaway
+# store does not reach: it belongs to the webview and not to the ledger, so the same bundle opened
+# afterwards by whoever owns the machine comes up in the shape this road left. A road that split the
+# window out and walked away would hand them two windows they never asked for. The last two steps are
+# the road's own tidying as much as they are the half of the decision they prove.
+#
+# The world is empty on purpose. A terminal is not a record and needs none: what the pane runs is the
+# reader's own shell, and standing up tasks would be furnishing a board this road never looks at. The
+# folder the road chooses is not furniture either: choosing one is what raises the project it belongs
+# to, so the road makes the world it needs by walking in.
+id: put-the-terminal-on-its-own-screen
+title: The terminal moves to a screen of its own and back, and the session in it never restarts
+description: >
+  Open the terminal face of the one window, choose the folder it runs in, open a plain shell there,
+  and type a line into the pane. Switch to the ledger and back: the line is still there, because hiding a terminal must not end
+  it. Then open the terminal in a separate window — the line is on the pane there, the same session
+  drawn in the new window — and fold it back, where it is on the pane in the one window again. What is
+  under test is the process surviving all three moves: what a reader has running in the pane is theirs
+  until they end it.
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The face opens with no pane on it, because a terminal has to be started somewhere and only the
+  # reader knows where. Choosing a folder is the whole of the way in — one press and a folder, with
+  # nothing to name and nothing to submit — and the pane every step below is about opens in it.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  # And down to a plain shell, which is what the line below is typed at. A folder with an agent on it
+  # opens on the agent, and an agent's screen is its own to draw: the line would be read as something
+  # to answer rather than left sitting where it was typed, and what this road follows from window to
+  # window is exactly that — the line, still where it was put. A shell that does not know the command
+  # leaves it there, which is the whole reason the command is one nothing knows.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the same terminal
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the same terminal
+
+  # The ledger, and the pane hidden behind it. The absent half is worth a step of its own: it is what
+  # says the two faces are one window rather than two things drawn at once, and it is the state the
+  # step after it is coming back from.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the same terminal
+      present: false
+
+  # Back to the terminal. This is the first of the three moves, and the one a reader makes most: a
+  # look at the board must not cost them the session they left running.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the same terminal
+
+  # And out into a window of its own. Every step from here names the window it is in, this one
+  # included, because from here there are two — and a shot of the wrong one is a picture of a screen
+  # nobody stood at. This step is shot once it has been carried out, so the second window is already
+  # up when it is: what it is evidence of is the board with the pane gone off it.
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+
+  - type: assert
+    domain: terminal
+    op: pane
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO the same terminal
+
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: "Amenbo — "
+
+  # Folded back: one window again, and the terminal is its face once more with the same line on it.
+  # Nothing names a window here, which is the other half of what this step says — the second window
+  # has gone, and a road that still had to name one would be looking at an app that never folded.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the same terminal

@@ -420,6 +420,7 @@ fn task_comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> Resu
                 at: Timestamp::parse_rfc3339(&at.get(r)?).unwrap_or_default(),
                 kind: Kind::Comment,
                 author_kind: author.get(r)?.as_deref().and_then(ActorKind::parse),
+                // A comment table has no session column: absent, never inferred.
                 target_type: TargetType::Task,
                 target_id: task_id.get(r)?,
                 title: String::new(),
@@ -504,6 +505,7 @@ fn decision_comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> 
                 at: Timestamp::parse_rfc3339(&at.get(r)?).unwrap_or_default(),
                 kind: Kind::Comment,
                 author_kind: author.get(r)?.as_deref().and_then(ActorKind::parse),
+                // A comment table has no session column: absent, never inferred.
                 target_type: TargetType::Decision,
                 target_id: decision_id.get(r)?,
                 title: String::new(),

@@ -14,6 +14,11 @@
 // Scope is the shipped half of the tree: the dev toolchain (vite/vitest/typescript) does not ride
 // into the bundle, so its licenses do not bind what we distribute. Same split as the npm audit gate.
 //
+// Scope is also one license per package, which is as deep as npm records. A package that is a
+// container for other people's work — `@shikijs/langs` ships 361 TextMate grammars collected from
+// as many projects — declares its own license and says nothing about theirs. That question is
+// check-grammar-licenses.mjs's, and it reads the same allow-list this file parses.
+//
 // The source of truth is package-lock.json, not an installed node_modules. npm records each
 // resolved package's license in the lockfile, so the verdict is a pure function of the file CI's
 // path filter already watches — no install step, nothing to drift, and the mirror of the Rust gate

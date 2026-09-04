@@ -3,9 +3,14 @@
 #
 # The first loop is the single push that joins the two ends a project starts with no bridge between:
 # the reader asks their AI, the AI writes to Amenbo, and what it wrote lands on the board. Every move
-# the interface can make on their behalf it makes — the terminal opens already inside the linked
-# folder, and the request is handed over finished, with no hole left to fill in — so what stays with
-# the reader is launching their own AI and pasting.
+# the interface can make on their behalf it makes, which leaves one press — the terminal opens inside
+# the linked folder and the agent in it is handed the request before it starts, so there is nothing
+# for the reader to copy and nowhere for them to paste it.
+#
+# The request is still written down, folded beside that press, because the reader who works in their
+# own terminal still needs it — and so does anybody whose machine has no agent this app can start,
+# for whom the outside is the only road there is. That is why the road opens the fold rather than
+# reading the request off the screen it lands on.
 #
 # None of that reaches the store. A request that lost the file name it sends the AI to read, a
 # terminal opened somewhere other than the linked folder, a loop no longer leading the screen it was
@@ -23,6 +28,11 @@
 # the loop is what a linked folder buys, and the screen says so in its place. Stand on the getting
 # started screen when the run hands its first step over.
 #
+# ── What this road does not walk ─────────────────────────────────────────────────────────────────
+# The press itself. What the loop's one move opens — a pane, under the project whose card it was
+# pressed on — is `start-a-terminal-in-the-project-whose-loop-was-pressed`, which needs a second
+# project with a terminal already running in it to say the second half of that at all.
+#
 # Clear the notices along the top of the window before shooting. One of them — the one that says the
 # AI guidance in a folder is an old version — names the very file the request names, and a reading
 # says which words are on a shot, not which part of it they came from: left up, it answers for the
@@ -31,10 +41,10 @@ id: raise-a-project
 title: A reader who raises a project is left on a screen that leads with the first loop, and the request it hands over names the file the AI is told to read
 description: >
   Take the way in that raises a project, give it a name and a folder, and read what the screen it
-  ends on offers. The loop leads it — open a terminal, copy the request, watch the tasks arrive — and
-  the request it hands over names AGENTS.md, which is what sends the reader's AI to learn Amenbo
-  before it writes anything. The moves that were there before the loop sit underneath it, and the way
-  on to the board is last.
+  ends on offers. The loop leads it — start in the terminal, and watch the tasks arrive — with the
+  road out to the reader's own terminal folded beside that press; opened, the request it hands over
+  names AGENTS.md, which is what sends the reader's AI to learn Amenbo before it writes anything. The
+  moves that were there before the loop sit underneath it, and the way on to the board is last.
 given:
   # The project the open card has to have to be drawn at all. It is nothing this road touches — the
   # one it raises is its own — but the first step reads a screen offering both ways in, and with an

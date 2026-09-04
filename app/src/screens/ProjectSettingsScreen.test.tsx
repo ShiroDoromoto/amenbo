@@ -34,10 +34,24 @@ const hoisted = vi.hoisted(() => ({
   requests: { tools: [], dirs: [] } as AgentHookRequestsDto,
   /** The writes that were called, arguments and all. */
   calls: [] as Array<Array<number | string>>,
+  /** What this machine can start and what this project has kept (`wake_choices`). */
+  wake: { candidates: [], offered: [] } as unknown,
+  /** The commands that went straight to the host, arguments and all. */
+  sent: [] as Array<[string, unknown]>,
   /** The icon the project comes back with (`null` for one that has none). */
   icon: null as string | null,
   /** What `updateProject` was handed, in order — the patch itself, not just the name of the write. */
   patches: [] as Array<Record<string, unknown>>,
+}));
+
+// The device's own answers go by the command seam rather than through `mutations`: which agent a
+// project opens with is kept in this machine's settings and not in the store (`crate::wake`).
+vi.mock("../core/ipc", () => ({
+  invoke: vi.fn(async (cmd: string, args?: unknown) => {
+    hoisted.sent.push([cmd, args]);
+    if (cmd === "wake_choices") return hoisted.wake;
+    return undefined;
+  }),
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -101,6 +115,7 @@ vi.mock("../core/mutations", () => {
 
 import { ProjectSettingsScreen } from "./ProjectSettingsScreen";
 import { t, tf } from "../core/i18n";
+import { revealLabelKey } from "../core/platform";
 
 /**
  * A declared form of settings alone (`AMB-D-727`) — every field an entry, in order. The parts a form may
@@ -147,6 +162,8 @@ beforeEach(() => {
   hoisted.gated.length = 0;
   hoisted.answers.length = 0;
   hoisted.calls.length = 0;
+  hoisted.wake = { candidates: [], offered: [] };
+  hoisted.sent.length = 0;
   hoisted.icon = null;
   hoisted.patches.length = 0;
   container = document.createElement("div");
@@ -166,9 +183,10 @@ describe("invariants held by the rows of the linked-folder list", () => {
     expect(r.textContent).toContain(t("projset.aiReady"));
     expect(warnings(r)).toEqual([]);
     expect(button(r, t("projset.relink"))).toBeUndefined();
-    // It exists, so both ways of opening it are offered.
+    // It exists, so both ways of opening it are offered. The second is named for the file manager
+    // this OS opens, so the label is asked for the same way the screen asks.
     expect(button(r, t("newproj.openTerminal"))).toBeDefined();
-    expect(button(r, t("newproj.openFinder"))).toBeDefined();
+    expect(button(r, t(revealLabelKey()))).toBeDefined();
   });
 
   it("a mismatched row states what conflicts with what and does not drop from the list (id is authoritative)", async () => {
@@ -563,6 +581,97 @@ describe("taking the request whatever the report has gone quiet about", () => {
     await render([]);
 
     expect(requestBlock()).toBeNull();
+  });
+});
+
+/** What this machine can start, with everything named here installed. */
+function startable(ids: string[], kept?: string) {
+  return {
+    candidates: ids.map((id) => ({ id, label: id, command: id, traced: false, installed: true })),
+    offered: ids,
+    ...(kept === undefined ? {} : { kept }),
+  };
+}
+
+/** The picker for which agent this project's panes open with, where the screen drew one. */
+function agentPicker(): HTMLSelectElement | undefined {
+  return Array.from(container.querySelectorAll<HTMLSelectElement>("select"))
+    .find((one) => Array.from(one.options).some((o) => o.textContent === t("projset.agentAuto")));
+}
+
+/** Change the picker and save. */
+async function pickAgent(value: string) {
+  const pick = agentPicker()!;
+  await act(async () => {
+    pick.value = value;
+    pick.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await act(async () => {
+    button(container, t("projset.save"))?.click();
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+// Which agent a project's panes open with is settled the first time one is opened and changed here —
+// never by somebody reaching for a different tool on one frame (`../shell/EmptySlot`).
+describe("the agent this project's panes open with", () => {
+  it("is offered where this machine has more than one to choose between", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");
+    await render([folder()]);
+
+    const pick = agentPicker();
+    expect(pick, "the project had no way to say what its panes open with").toBeTruthy();
+    expect(pick?.value).toBe("codex-cli");
+  });
+
+  it("is not drawn where there is nothing to choose between", async () => {
+    hoisted.wake = startable(["claude-code"]);
+    await render([folder()]);
+
+    expect(agentPicker(), "a choice of one was put to the reader").toBeFalsy();
+  });
+
+  it("comes up unset where the project has kept nothing, and settles on what is saved", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"]);
+    await render([folder()]);
+    expect(agentPicker()?.value).toBe("");
+
+    await pickAgent("claude-code");
+
+    expect(hoisted.sent).toContainEqual(["wake_remember", { project: 1, agent: "claude-code" }]);
+  });
+
+  it("takes the answer back off, so the next pane settles one again", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");
+    await render([folder()]);
+
+    await pickAgent("");
+
+    expect(hoisted.sent).toContainEqual(["wake_forget", { project: 1 }]);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+  });
+
+  it("writes nothing where the reader saved something else", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");
+    await render([folder()]);
+
+    await act(async () => {
+      button(container, t("projset.save"))?.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_forget");
+  });
+
+  it("asks about the folders the project is bound to, so a trace in any of them is the project's", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"]);
+    await render([folder({ path: "/w/one" }), folder({ path: "/w/two" }), folder({ path: "/w/gone", exists: false })]);
+
+    expect(hoisted.sent).toContainEqual([
+      "wake_choices",
+      { project: 1, folders: ["/w/one", "/w/two"] },
+    ]);
   });
 });
 

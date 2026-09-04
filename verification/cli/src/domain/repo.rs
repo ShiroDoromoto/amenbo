@@ -39,6 +39,10 @@ impl Driver<'_> {
             // picker — which is why the copy is made of the bytes rather than of a string, and why the
             // line it leaves names where the file landed: on a screen road that path is what the
             // operator hunts the picker with, the instructions being rendered from the YAML alone.
+            //
+            // `dir` says where it lands, the way `write-file`'s does and for the same reason: what a
+            // face reads off a folder is read off that folder, so a file that has to be in one can
+            // only be put there.
             "copy-fixture" => {
                 let from = req_str(with, "from")?;
                 let path = req_str(with, "path")?;
@@ -48,7 +52,13 @@ impl Driver<'_> {
                     return Err(format!("`from: {from}` must name a file under fixtures/"));
                 }
                 let src = self.fixtures.join(from);
-                let full = self.in_session(path)?;
+                let full = match with.get("dir") {
+                    Some(_) => self.folder(with)?.join(self.inside(path)?),
+                    None => self.in_session(path)?,
+                };
+                if let Some(dir) = full.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                }
                 let bytes = std::fs::read(&src)
                     .map_err(|e| format!("could not read the fixture {}: {e}", src.display()))?;
                 std::fs::write(&full, &bytes).map_err(|e| format!("could not write {path}: {e}"))?;
@@ -58,6 +68,28 @@ impl Driver<'_> {
                     bytes.len()
                 )))
             }
+            // A name in that folder that is a link rather than a file. `path` is the name and `to`
+            // is what it points at, read in the run's own folder — outside every folder a `folder`
+            // step binds, which is the shape a person really has: one file kept in one place, and a
+            // project pointing at it.
+            //
+            // Nothing has to be lying at `to`. A link is what its own name is and never what it
+            // leads to, and a face that refuses to follow one refuses it either way — so a road
+            // about the refusal is not made to stand up the far side of the link as well.
+            "symlink" => {
+                let path = req_str(with, "path")?;
+                let to = req_str(with, "to")?;
+                let target = self.in_session(to)?;
+                let full = match with.get("dir") {
+                    Some(_) => self.folder(with)?.join(self.inside(path)?),
+                    None => self.in_session(path)?,
+                };
+                if let Some(dir) = full.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                }
+                symlink(&target, &full)?;
+                Ok(Outcome::action(format!("linked {} at {path}", target.display())))
+            }
             // The hooks are written into a git repository, so the scenario has to stand one up first.
             // This is the one step that is not Amenbo — everything it proves is about what Amenbo
             // then does to a repository that is really there.
@@ -65,11 +97,20 @@ impl Driver<'_> {
             // It leaves a `main` with one commit on it, rather than the branchless state a bare
             // `init` leaves behind: a repository with no commit has no branch either, and the
             // official `worktree` plugin needs one to cut a task's checkout from.
+            //
+            // Which folder becomes one is `write-file`'s rule, said by `dir:` and never by a path:
+            // the run's own folder, or one a `folder` step bound. A road reading what git says about
+            // a bound folder needs the second — the colours are drawn on the face of the folder the
+            // project is bound to, and a repository anywhere else leaves every row of it bare.
             "git-init" => {
+                let at = match with.get("dir") {
+                    Some(_) => self.folder(with)?,
+                    None => self.session.cwd.clone(),
+                };
                 let git = |args: &[&str]| -> Result<(), String> {
                     let out = Command::new("git")
                         .args(args)
-                        .current_dir(&self.session.cwd)
+                        .current_dir(&at)
                         .output()
                         .map_err(|e| format!("could not run git: {e}"))?;
                     if !out.status.success() {
@@ -90,7 +131,47 @@ impl Driver<'_> {
                     "commit", "--quiet", "--allow-empty",
                     "-m", "the branch a scenario cuts from",
                 ])?;
-                Ok(Outcome::action("made the run's folder a git repository on `main`".to_string()))
+                Ok(Outcome::action(format!("made {} a git repository on `main`", at.display())))
+            }
+            // What is lying in the folder, recorded — the one way a road can stand up a folder git
+            // has nothing to say about while a file inside it is new. Until something is committed,
+            // git names the whole top folder and never the paths under it, and a face reading what a
+            // folded folder holds is reading a state that cannot arise.
+            //
+            // Everything is staged rather than a named path: what a road puts in the folder is
+            // whatever its premises wrote, and a step that had to list them again would be a second
+            // place to keep the same list. An empty commit is refused by git and left to fail — a
+            // road committing nothing has a premise that did not do what it said.
+            "git-commit" => {
+                let at = match with.get("dir") {
+                    Some(_) => self.folder(with)?,
+                    None => self.session.cwd.clone(),
+                };
+                let git = |args: &[&str]| -> Result<(), String> {
+                    let out = Command::new("git")
+                        .args(args)
+                        .current_dir(&at)
+                        .output()
+                        .map_err(|e| format!("could not run git: {e}"))?;
+                    if !out.status.success() {
+                        return Err(format!(
+                            "`git {}` failed: {}",
+                            args.join(" "),
+                            String::from_utf8_lossy(&out.stderr).trim()
+                        ));
+                    }
+                    Ok(())
+                };
+                git(&["add", "-A"])?;
+                // The identity is named here for `git-init`'s reason: a box with none set would fail,
+                // and neither name belongs to anybody.
+                git(&[
+                    "-c", "user.name=verify",
+                    "-c", "user.email=verify@example.invalid",
+                    "commit", "--quiet",
+                    "-m", "what the road put here before it started",
+                ])?;
+                Ok(Outcome::action(format!("recorded what was lying in {}", at.display())))
             }
             // The edit the handed-over text asks for. Amenbo writes no settings file, so this stands
             // in for the AI the reader gives that text to — and it takes both halves of the answer
@@ -328,4 +409,26 @@ impl Driver<'_> {
             _ => Err(unmapped(Domain::Repo, op)),
         }
     }
+}
+
+/// Make `at` a link pointing at `target`.
+///
+/// The two platforms name the call differently — and on Windows a file link is a privilege rather
+/// than an ordinary write, so what comes back when the machine has not granted it is said here
+/// rather than left as a bare error number.
+#[cfg(unix)]
+fn symlink(target: &Path, at: &Path) -> Result<(), String> {
+    std::os::unix::fs::symlink(target, at)
+        .map_err(|e| format!("could not link {} at {}: {e}", target.display(), at.display()))
+}
+
+#[cfg(windows)]
+fn symlink(target: &Path, at: &Path) -> Result<(), String> {
+    std::os::windows::fs::symlink_file(target, at).map_err(|e| {
+        format!(
+            "could not link {} at {}: {e} — making one here needs the privilege developer mode grants",
+            target.display(),
+            at.display(),
+        )
+    })
 }

@@ -1,0 +1,193 @@
+# The middle of the terminal face, taken back from the two columns beside it and given to them again.
+#
+# The face draws four things across: the tabs of the projects at the edge, the folders of the one
+# being shown, the panes, and what is being read down the other side. The tabs are not among what
+# folds — they are the one column with no way to close it — so what this road walks is the other two. On a laptop the two columns together are most of a pane's worth of width, and
+# what this road defends is that a reader can have it back — and, having had it back, can ask for the
+# column again.
+#
+# ── Why the pairing is the goal, and not the folding ─────────────────────────────────────────────
+# A column that folds is easy and half of what a reader needs. The failure that matters is the one
+# after it: a column put away with nothing on the screen offering it back is not a column that is
+# hidden, it is a column that is lost, and the reader has no way to find out that it was ever theirs
+# to ask for. So every fold below is walked with the press that undoes it, and the assert between
+# them is what says the fold was real rather than a redraw.
+#
+# ── Why each side is walked separately ───────────────────────────────────────────────────────────
+# They are put away by different controls — the folders from the row above the panes, the panel from
+# a cross on itself — and it is the same road only in the reader's head. A run that folded one of them
+# and took the other on trust would be leaving the untested half exactly where a control is easiest
+# to forget: on the panel, which is the one that carries its own.
+#
+# ── Why the pane, and why the line typed into it ─────────────────────────────────────────────────
+# A face with nothing open would fold its columns just as well and prove less. What the width is
+# being taken *for* is a terminal, so there is one, and the line typed into it is the road's own
+# words for the reason every line on this face is: it is on that pane and on no other, so the steps
+# either side of a fold are reading the same pane rather than a face that redrew itself.
+#
+# It also gives the column something of the road's to be recognised by. The pane's name is the first
+# line sent into it, and that name is what the list down the side carries — which is what an eye
+# closing one of these shots is looking at.
+#
+# ── Why the drag is walked both ways ─────────────────────────────────────────────────────────────
+# A width that only grows is half a control, and the half a reader is left with is the one that took
+# their pane's room. So the edge is dragged out and then back, and the second of the two is the one
+# worth having: it is the move somebody makes when they have gone too far.
+#
+# The world is empty, as on every road on this face: a terminal is not a record, and what the pane
+# runs is the reader's own shell. Choosing the folder is what raises the project it belongs to, so
+# the road makes what it needs by walking in.
+id: fold-the-sides-away-and-bring-them-back
+title: Both columns beside the panes fold away, give their width to the panes, and come back from the row above
+description: >
+  Open the terminal face, choose the folder it runs in, get the pane down to a plain shell and type a
+  line into it. Fold the folders away from the row above — they go, and the panes spread into
+  its width — then press the same control and it is back. Close the file panel from the cross on the
+  panel itself, and bring it back from the row above. Then drag the edge the panel shares with the
+  panes outward and back again: the edge moves, the panes give up exactly that width and take it
+  back, and the line typed at the start is on its pane throughout.
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The way in, and what binds the folder to the project the face is on.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell. An agent's screen is its own to draw, and a line typed at one is something
+  # to answer rather than something left sitting where it was put — and being left where it was put is
+  # what makes it the mark this road reads the pane by.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane the width is for
+
+  # Both columns are there to begin with, which is the state a fold is measured from. Said out loud
+  # rather than assumed: a face that came up with one of them already folded would make every step
+  # below pass for the wrong reason.
+  - type: assert
+    domain: terminal
+    op: side
+    with:
+      side: rail
+
+  - type: assert
+    domain: terminal
+    op: side
+    with:
+      side: files
+
+  # ── the folders ───────────────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: hide-side
+    with:
+      side: rail
+
+  - type: assert
+    domain: terminal
+    op: side
+    with:
+      side: rail
+      present: false
+
+  # And the pane is untouched by it. Folding a column is a change to the shape of the face, and the
+  # one thing it must not be is a change to what is running on it.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane the width is for
+
+  # The half the whole road is about: the press that undoes it is on the screen, and it is the same
+  # one that did it.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: rail
+
+  - type: assert
+    domain: terminal
+    op: side
+    with:
+      side: rail
+
+  # ── the file panel ────────────────────────────────────────────────────────────────────────────
+  # Closed from its own cross, which is the control the other column has not got, and opened again
+  # from the row above — the one place both of them are asked for.
+  - type: action
+    domain: terminal
+    op: hide-side
+    with:
+      side: files
+
+  - type: assert
+    domain: terminal
+    op: side
+    with:
+      side: files
+      present: false
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: assert
+    domain: terminal
+    op: side
+    with:
+      side: files
+
+  # ── the edge between them ─────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: drag-side
+    with:
+      side: files
+      toward: wider
+
+  - type: assert
+    domain: terminal
+    op: side-width
+    with:
+      side: files
+      wider: true
+
+  # Back again, which is the move somebody makes when they have gone too far. What it has to give
+  # back is the panes' width, and the reading is against the shot before the drag out.
+  - type: action
+    domain: terminal
+    op: drag-side
+    with:
+      side: files
+      toward: narrower
+
+  - type: assert
+    domain: terminal
+    op: side-width
+    with:
+      side: files
+      wider: false
+
+  # And through all of it, the same terminal in the same pane. Every step above changed the shape of
+  # the face around it and none of them was allowed to reach what was running in it.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane the width is for

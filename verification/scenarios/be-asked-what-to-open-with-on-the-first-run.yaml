@@ -1,0 +1,133 @@
+# The very first pane on a machine: nobody has said what to open with, so the frame asks.
+#
+# What a frame opens a pane with comes from a rank, and the bottom of that rank is the run before
+# anybody has chosen anything (`crate::wake`). There the build has a real choice to make and makes
+# the honest one: it lights nothing, and the press says so instead of opening on a guess. This road
+# is that state — the one no reader ever sees twice, since answering it once ends it for good.
+#
+# ── Why the machine is stood up first ────────────────────────────────────────────────────────────
+# The row is every agent this machine can start, found by running the pane's own login shell over
+# the operator's `PATH`. On a machine with one agent that one is on — a row of one is not a choice —
+# and on a machine with none there is no row at all. Both are correct, and neither is this state. So
+# the road says what the machine has (`terminal can-start`), which puts stand-in programs in front
+# of the `PATH` the app under test is launched with, and reads a row it stood up rather than one it
+# happened to find.
+#
+# ── Why the reading comes before anything is pressed ─────────────────────────────────────────────
+# Because a choice is kept against the person and outlives the press that made it
+# (`open-a-pane-with-what-you-opened-the-last-one-with`). One press anywhere in the run and the
+# first run is over, in this store, for good. The store is fresh and this is the first thing the
+# road looks at.
+#
+# ── What the second half defends ─────────────────────────────────────────────────────────────────
+# That the asking is a state and not a wall. A build that drew a dead press would pass the first
+# assert on its own, so the road answers the question and opens the pane — and then reads the frame
+# beside it, which now comes up on the answer with a live press. The asking is over because
+# somebody answered it, which is the whole shape of "asked once".
+#
+# The world is empty apart from the place to work. A terminal is not a record and needs none, and
+# the one folder is there so nothing is asked about where the pane runs — that question is another
+# road's (`leave-the-question-about-where-a-pane-runs`).
+id: be-asked-what-to-open-with-on-the-first-run
+title: The first frame on a machine that can start several agents asks rather than guesses
+description: >
+  On a machine with more than one agent to start and a store nobody has opened a pane from, the
+  empty frame draws its row with nothing on it and its press asks to be told what to open with.
+  Choose the plain shell and the press comes alive: a pane opens, and the frame standing beside it
+  comes up on that answer with a press that opens. Nobody is asked twice.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lighthouse
+    as: lighthouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: lamproom
+      project: lighthouse
+
+  # The machine the row is read on. Two, because that is the smallest number that makes what to open
+  # with a question at all — with the plain shell beside them the row has three things on it.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
+  # that read a screen it had not put itself on would be reading somebody else's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lighthouse
+
+  # A page with room for two, set while nothing is open. It is what leaves an empty frame standing
+  # beside the pane at the end, which is the frame the second reading is taken on.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  # Where the road starts from: nothing open, so the page draws its one way in and nothing else.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 0
+
+  # The state under test, read before a finger has touched the frame. Nothing on the row is on, and
+  # the press will not open a pane — it asks to be told.
+  - type: assert
+    domain: terminal
+    op: opens-with
+    with:
+      start: none
+
+  # The answer. On an empty frame the row and the press are both on the frame itself, so this one
+  # step is the whole of somebody saying "a plain prompt" and the press coming alive.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The pane is named by the reader's own words — the one thing on the page that is the road's.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the first press was told what to open with
+
+  # It opened. The press that would not answer a moment ago answered once it had been told.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the first press was told what to open with
+
+  # The page had room for two, so one pane leaves one empty frame beside it.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 1
+      empty: 1
+
+  # And that frame is not asking. The answer given a moment ago is on the row, and the press opens.
+  - type: assert
+    domain: terminal
+    op: opens-with
+    with:
+      start: shell

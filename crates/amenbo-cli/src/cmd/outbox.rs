@@ -101,6 +101,22 @@ pub(crate) fn emit_event(store: &mut Store, flags: &Flags, target_id: i64, event
     }
 }
 
+/// The same, for a line whose subject is a decision rather than a task ([`emit_event`]).
+pub(crate) fn emit_decision_event(
+    store: &mut Store,
+    flags: &Flags,
+    decision_id: i64,
+    event: serde_json::Value,
+) {
+    let Ok(actor) = flags.facet() else {
+        eprintln!("warning: could not record the activity event: no facet was declared");
+        return;
+    };
+    if let Err(e) = store.add_decision_system_event(actor, decision_id, event) {
+        eprintln!("warning: could not record the activity event: {e}");
+    }
+}
+
 /// The live tasks that just became ready because `blocker_id` stopped blocking them; empty if the read
 /// fails. All this read feeds is the `task.unblocked` activity line — readiness itself is derived from the
 /// dependency edges on every query, so a dependent becomes ready whether or not the signal is emitted. So it

@@ -60,6 +60,14 @@ go:
   - 'scripts/go-gate.sh'
   - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
+# The two Swift tools — the screen driver a session drives the app with, and the display setter
+# sent into the verification VM — compile on nothing but a Mac, so they get a job of their own and a
+# layer of its own. The trees they sit in are gated on what those trees are for and neither gate
+# reads Swift: devtool/** opens the Go module's job, and scripts/ is on no layer at all.
+swift:
+  - '**/*.swift'
+  - '.github/workflows/_ci.yml'
+  - '.github/paths-filters.yml'
 shell:
   - '**/*.sh'
   - '.githooks/**'
@@ -102,6 +110,12 @@ npm_deps:
   # verdict — a test edited alone still has to re-open this.
   - 'deny.toml'
   - 'guards/*.mjs'
+  # The other things the same job judges, neither of which npm can answer for: the TextMate
+  # grammars the file panel bundles are licensed one by one inside a package that declares
+  # only its own license, and the language configurations baked out of VS Code are not an npm
+  # package at all. Both lists have to re-open the gate that reads them.
+  - 'app/src/files/grammars.ts'
+  - 'app/src/files/langconfig/**'
   - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
   - '.github/workflows/_rot-gates.yml'

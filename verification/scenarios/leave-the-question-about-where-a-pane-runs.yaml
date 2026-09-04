@@ -1,0 +1,161 @@
+# Somebody asked for a terminal, was asked where it should run, and changed their mind.
+#
+# A pane is made when the question is answered, not when it is asked. That is what this road is
+# about, and it is the half nobody sees when it works: the box drawn while the question is standing
+# is the question, so walking away has to take it with it. A build that made the frame first would
+# leave one behind here — a box standing where the empty frame was, that nobody can say what it is.
+#
+# ── Why the project is bound to two folders ──────────────────────────────────────────────────────
+# The question only comes up where there is something to ask. A project bound to one folder opens the
+# pane there and puts nothing on the screen, which is the shape every other road on this face walks;
+# a project bound to none goes to the operating system's own picker, which is a different question in
+# a window Amenbo does not draw. Two folders is the one shape where Amenbo asks, in Amenbo, and so
+# the one shape where anybody can walk away from it.
+#
+# ── Why the folder read is the second one ────────────────────────────────────────────────────────
+# The question offers the project's folders by their paths, and the last part of one is the name the
+# world was told to make it under — so a reading finds the road's own word rather than the
+# interface's, in whatever language the machine is set to. It is the *second* folder that is read,
+# and that matters for the absent half: the folder tree in the rail is rooted at the first folder
+# the project is bound to, so that name is on this screen whether or not any question is standing,
+# and a step reading it for its absence would go red on a screen that is exactly right. The project
+# is named after neither of them for the same reason — the rail draws the project's name, and the
+# reading folds case away.
+#
+# ── Why it is asked twice, and answered the second time ──────────────────────────────────────────
+# Leaving the question has to leave nothing behind, and "nothing" is two claims rather than one:
+# nothing was made, and nothing was spent. The first is the count of panes on the page. The second is
+# the question coming up again on the same press — a face that had quietly used the asking up would
+# answer the second press with something else, or with nothing at all.
+#
+# The last step answers it, and that is the other end of the same fact rather than a road of its own:
+# what the walking-away did not leave behind is exactly what an answer makes. A count of one there is
+# what says the frame is born of the answer — read after two presses and one walk-away, so a build
+# making frames on the asking would be standing at three by now.
+id: leave-the-question-about-where-a-pane-runs
+title: A question about where a pane should run, walked away from, leaves no box behind and no pane made
+description: >
+  Open the terminal face on a project bound to two folders and nothing open in it, and press its
+  empty frame: the question of which folder goes up where a pane would be, and no pane is made.
+  Leave it without answering — the question is gone, and the empty frame is back in its place: the
+  page has nothing standing on it. Press the empty frame again and the question comes up again, so
+  nothing was made by asking and nothing was used up by walking away. Answer it, and the pane
+  appears — the one the walking-away did not leave behind.
+
+given:
+  # Named after neither folder: the rail draws the project's name on this same screen, and a reading
+  # that folds case away would find a folder's name in it.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Sunroom
+    as: sunroom
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: sunroom
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: sunroom
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The project this road is about, pressed rather than assumed: which project the face comes up on is
+  # the run's business, and a road that read a screen it had not put itself on would be reading
+  # somebody else's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Sunroom
+
+  # Where the road starts from, said rather than assumed: a project with nothing open in it draws one
+  # empty frame and no other box. Everything below is about what that count does, so it is worth one
+  # step that it begins where the road says it does.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 0
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+      asks: true
+
+  - type: assert
+    domain: terminal
+    op: asking-folder
+    with:
+      dir: orchard
+
+  # And the asking made nothing. The question stands where a pane would stand, which is exactly what
+  # makes this worth counting: a box is on the screen, and it is not a frame.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 0
+
+  - type: action
+    domain: terminal
+    op: leave-question
+
+  # The question is gone, and it took its box with it. These two steps are the road: the first says
+  # the question is not standing, the second that nothing is standing in its place.
+  - type: assert
+    domain: terminal
+    op: asking-folder
+    with:
+      dir: orchard
+      present: false
+
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 0
+
+  # Asked again on the same press. Nothing was spent by walking away — the empty frame is back where
+  # it was, and the question it raises is the same one.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+      asks: true
+
+  - type: assert
+    domain: terminal
+    op: asking-folder
+    with:
+      dir: orchard
+
+  # And answered this time, which is the other end of the same fact: the frame the walking-away did
+  # not leave behind is the frame an answer makes.
+  - type: action
+    domain: terminal
+    op: pick-folder
+    with:
+      dir: orchard
+
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 1

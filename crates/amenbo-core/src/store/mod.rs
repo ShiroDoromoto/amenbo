@@ -389,6 +389,26 @@ impl Store {
         crate::nudge::mark_put(&self.engine, nudge_id)
     }
 
+    /// What is written on this project's draft page ([`crate::memo`]).
+    pub fn memo(&self, project_id: i64) -> Result<String> {
+        crate::memo::memo(&self.engine, project_id)
+    }
+
+    /// Write this project's draft page. Blank erases it.
+    pub fn set_memo(&self, project_id: i64, text: &str) -> Result<()> {
+        crate::memo::set_memo(&self.engine, project_id, text)
+    }
+
+    /// What this device kept of the talk window's arrangement ([`crate::frames`]).
+    pub fn saved_layout(&self) -> Result<Option<crate::frames::SavedLayout>> {
+        crate::frames::saved_layout(&self.engine)
+    }
+
+    /// Keep the part of the talk window's arrangement that outlives the run.
+    pub fn save_layout(&self, layout: &crate::frames::SavedLayout) -> Result<()> {
+        crate::frames::save_layout(&self.engine, layout)
+    }
+
     /// Count one launch of the app on this device (the tally two of the metrics are read from).
     pub fn record_launch(&self) -> Result<()> {
         crate::nudge::record_launch(&self.engine)

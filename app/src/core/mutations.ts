@@ -439,7 +439,7 @@ export async function createProject(name: string, dir: string | null): Promise<n
     ...s,
     projects: [
       ...s.projects,
-      { id, name, color: "#6b7280", view: "board", openCount: 0, proposedDecisionCount: 0, dimensions: [] },
+      { id, name, color: "#6b7280", icon: null, view: "board", openCount: 0, proposedDecisionCount: 0, dimensions: [] },
     ],
   }));
   return id;
@@ -1031,19 +1031,67 @@ export async function setAssignee(id: number, kind: Facet | null): Promise<void>
   }));
 }
 
-
 /**
- * Open the native folder picker and return the absolute path chosen — this backs the folder field on
- * the creation screen. Null if the dialog is cancelled. **It does not read the folder's contents**: it
+ * Open the native folder picker and return the absolute path chosen — this backs every place a folder
+ * is asked for: the creation screen's field, the settings screen's list, and the terminal face's way in
+ * (`chooseWorkFolder`). Null if the dialog is cancelled. **It does not read the folder's contents**: it
  * returns a path string, and the actual binding (placing the `.amenbo` pointer) is done on the Rust
- * side by `createProject(name, dir)`. Outside Tauri (browser) nothing touches the filesystem, so this
- * is a no-op returning null.
+ * side by whatever the caller does with it. Outside Tauri (browser) nothing touches the filesystem, so
+ * this is a no-op returning null.
  */
 export async function pickFolder(): Promise<string | null> {
   if (!inTauri()) return null;
   const { open } = await import("@tauri-apps/plugin-dialog");
   const dir = await open({ directory: true, multiple: false });
   return typeof dir === "string" ? dir : null; // anything but a string means the dialog was cancelled
+}
+
+/**
+ * Choose the folder to work in, and make it one that can be worked in — the first run's way in
+ * (`AMB-T-3606`).
+ *
+ * **One press is the whole of it.** Picking a folder there means three things at once: the folder is
+ * the one the AI is shown, it belongs to a project (raised here and named after the folder if it did
+ * not already), and a terminal opens in it. Nothing is typed and nothing is submitted, so there is no
+ * step between the dialog closing and the pane opening — which is why this binds rather than handing
+ * the caller a path to bind later, and why a folder that already belongs to a project comes back
+ * unchanged instead of as a refusal (`folder_open`).
+ *
+ * **It is the road for a machine that has no project yet**, and that is the only place left that
+ * takes it: a pane belongs to a project, so wherever there is one to belong to the folder is chosen
+ * among that project's own (`chooseFolderFor`, `../talk/agent`). Raising a project from a folder's
+ * name is right when there is none to raise it beside, and wrong the moment there is.
+ *
+ * Returns the folder chosen, or null where nothing was — the dialog cancelled, or the browser
+ * iteration, which has no folders to choose from. Anything the binding refuses is thrown, because the
+ * caller has an invitation on screen to say it on.
+ */
+export async function chooseWorkFolder(): Promise<string | null> {
+  const dir = await pickFolder();
+  if (dir === null) return null;
+  await invokeAck("folder_open", { dir });
+  return dir;
+}
+
+/**
+ * Choose this project's **first** folder — the way in, on either face, for a project bound to none.
+ *
+ * It differs from `chooseWorkFolder` in the one way that matters there: the folder is bound to the
+ * project the person is already looking at, rather than to whatever project the folder's own name
+ * would raise. A pane belongs to a project (`../talk/layout`), so a folder chosen to open a pane in
+ * has to end up in that project or the pane would be somewhere else entirely. The board's face takes
+ * it from the rail (`../shell/TerminalFace`) and the window split out of it from the arrangement the
+ * board left (`../talk/agent`).
+ *
+ * Returns the folder chosen, or null where nothing was — the dialog cancelled, or the browser
+ * iteration, which has no folders to choose from. A binding the host refuses is thrown, because the
+ * caller has the question on screen to say it on.
+ */
+export async function chooseFolderFor(projectId: number): Promise<string | null> {
+  const dir = await pickFolder();
+  if (dir === null) return null;
+  await bindFolder(projectId, dir);
+  return dir;
 }
 
 /**
@@ -1437,15 +1485,17 @@ export async function pickAndAttach(target: AttachTarget, targetId: number): Pro
 }
 
 /**
- * Attach dropped Files as blobs, by bytes. Drag-and-drop inside the webview cannot give us an OS path
- * (`dragDropEnabled:false`), so we read the file and hand over the bytes. For large files, prefer the
- * picker (`pickAndAttach`).
+ * Attach files dropped on a well, by the paths the host handed over (`./attachDrop`).
+ *
+ * The same road the picker takes: a path is ingested as a stream, so a large file never sits in this
+ * side's memory at all. What the reader asked for by the key they were holding is not read — a
+ * "move" would mean deleting the file where it lives, and taking somebody's file off their desktop
+ * is not what attaching one means.
  */
-export async function attachDroppedFiles(target: AttachTarget, targetId: number, files: FileList | File[]): Promise<void> {
+export async function attachDroppedPaths(target: AttachTarget, targetId: number, paths: string[]): Promise<void> {
   if (!inTauri()) return;
-  for (const file of Array.from(files)) {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    await invokeAck("attachment_add_bytes", { targetType: target, targetId, filename: file.name, bytes });
+  for (const path of paths) {
+    await invokeAck("attachment_add", { targetType: target, targetId, path });
   }
 }
 

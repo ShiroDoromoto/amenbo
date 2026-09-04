@@ -1,25 +1,41 @@
-import { useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { dataAdapter } from "../mock/adapter";
 import { useInboxCount } from "../core/mailbox";
 import { dueBadges, type DueCounts } from "../core/due";
 import { useArchivedProjects, useDueCounts } from "../core/reads";
 import { useStore } from "../store/store";
 import { t } from "../core/i18n";
+import { flowEdges } from "../core/edgeScroll";
+import { draggedFar } from "../core/pointerDrag";
 import { Icon, type IconName } from "../components/Icon";
 import type { SmartView } from "../mock/types";
 import type { Nav } from "./AppShell";
+import { landing } from "./rowDrag";
 
 // Which icon each smart view is drawn with. The views arrive as ids alone, so the drawing
 // is decided here rather than travelling with the data (`AMB-D-689`).
 const VIEW_ICON: Record<string, IconName> = { inbox: "inbox", activity: "activity", due: "calendar" };
 
+/** A project row's own id, off the markup — nothing else in the sidebar carries one. */
+function rowId(row: HTMLElement): number | null {
+  const id = Number(row.dataset.projectId);
+  return Number.isFinite(id) && id !== 0 ? id : null;
+}
+
 /**
- * The left sidebar (smart views, projects, other, and the collapsed archive). Reordering a project drags and drops
- * onto `moveProject`, and the new order arrives through the snapshot once the write is acked — there is no optimistic
- * state. Drag & drop inside the webview requires `dragDropEnabled:false` in tauri.conf.json. Where the row lands
- * (before/after) is computed from the drop's own clientY and the row under it, never from the stored `dropHint`: a
- * fast drag can end with the last dragover on a different row than the drop, leaving the hint unset or pointing
- * elsewhere, and trusting it would make the drop a silent no-op. The hint stays what it is — the visual indicator.
+ * The left sidebar (smart views, projects, other, and the collapsed archive). Reordering a project calls
+ * `moveProject`, and the new order arrives through the snapshot once the write is acked — there is no optimistic
+ * state.
+ *
+ * **The reorder is a press and a move, not the webview's drag.** The app itself takes what is dropped on it, and
+ * with that switch thrown an in-window HTML5 drag does not fire at all on macOS and Windows (`AMB-D-775`). So a
+ * press becomes a drag only past `DRAG_SLOP` (`../core/pointerDrag`), a press meant as a reorder does not navigate, and the
+ * click that follows one is swallowed. A row held against the top or the bottom of the list scrolls it, which the
+ * webview's drag never did either (`../core/edgeScroll`).
+ *
+ * Where the row lands (before/after) is computed from the release's own clientY and the row under it, never from the
+ * stored `dropHint`: the hint is drawn a frame at a time and can be pointing at a row the pointer has already left,
+ * and trusting it would make the release a silent no-op. The hint stays what it is — the visual indicator.
  */
 export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
   const store = useStore();
@@ -35,32 +51,121 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
   const [dragId, setDragId] = useState<number | null>(null);
   const [dropHint, setDropHint] = useState<{ id: number; pos: "before" | "after" } | null>(null);
   const canReorder = projects.length > 1;
-  const onRowDragStart = (e: DragEvent, id: number) => {
-    e.dataTransfer.setData("text/plain", String(id));
-    e.dataTransfer.effectAllowed = "move";
-    setDragId(id);
-  };
-  const onRowDragOver = (e: DragEvent, id: number) => {
-    if (!dragId || dragId === id) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    const r = e.currentTarget.getBoundingClientRect();
-    const pos: "before" | "after" = e.clientY < r.top + r.height / 2 ? "before" : "after";
-    setDropHint((h) => (h && h.id === id && h.pos === pos ? h : { id, pos }));
-  };
-  const onRowDrop = (e: DragEvent, id: number) => {
-    e.preventDefault();
-    const src = Number(e.dataTransfer.getData("text/plain")) || dragId;
-    setDropHint(null);
-    setDragId(null);
-    if (!src || src === id) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    const pos: "before" | "after" = e.clientY < r.top + r.height / 2 ? "before" : "after";
-    store.moveProject(src, pos, id);
-  };
-  const endDrag = () => {
+  // The press in flight. It is a ref because a move fires up to 165 times a second (`AMB-T-3755`) and none of what
+  // it carries is drawn — what is drawn is the two pieces of state above, and those move at most once a frame.
+  const press = useRef<{ id: number; from: { x: number; y: number }; dragging: boolean } | null>(null);
+  // Whether the click behind the release we just saw is the tail of a drag. A press that travelled is not a
+  // navigation, and the click arrives anyway.
+  const swallowClick = useRef(false);
+  // The hit test is put off to the next frame: the pointer reports far more often than the screen redraws — 165
+  // times a second on Windows against 58 on Linux (`AMB-T-3755`) — and a second test inside one frame is a
+  // rectangle read that nothing can act on. What the frame tests is where the pointer is *now*, not where it was
+  // when the frame was asked for, so the moves in between are folded rather than dropped.
+  const pending = useRef<number | null>(null);
+  const latest = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  // How to call off the frame loop that scrolls the list under a held row.
+  const stopFlow = useRef<(() => void) | null>(null);
+
+  const stopPress = () => {
+    press.current = null;
+    if (pending.current !== null) cancelAnimationFrame(pending.current);
+    pending.current = null;
+    stopFlow.current?.();
+    stopFlow.current = null;
     setDragId(null);
     setDropHint(null);
+  };
+
+  // A press outliving the sidebar would leave a frame loop scrolling a list that is gone.
+  useEffect(() => () => stopFlow.current?.(), []);
+
+  // Where the row would land, from wherever the pointer is now. Run from the frame a move asked for, and again on
+  // every frame the list scrolled under a hand that is holding still — the rows have moved, so the row under the
+  // pointer is a different one even though the pointer is not.
+  const retest = () => {
+    const held = press.current;
+    if (held?.dragging !== true) return;
+    const to = landing(held.id, latest.current, "data-project-row", rowId);
+    setDropHint((h) => (h?.id === to?.id && h?.pos === to?.side ? h : to && { id: to.id, pos: to.side }));
+  };
+
+  // Two fences a held row needs, and neither is optional (`AMB-T-3755`).
+  //
+  // A right-click during a drag opens the webview's own menu on all three systems, and macOS then delivers no
+  // pointer event at all until it is dismissed — measured at 12.2 seconds, which reads as "it froze while I was
+  // holding it". On Windows the menu's first item reloads the page outright.
+  //
+  // The other is the selection: dragging across rows selects their text on macOS and Linux. `user-select` is put on
+  // the body rather than on the rows because a selection begun on a row runs on across everything under it.
+  useEffect(() => {
+    if (dragId === null) return;
+    const block = (e: Event) => e.preventDefault();
+    document.addEventListener("contextmenu", block, true);
+    document.body.classList.add("dragging-row");
+    return () => {
+      document.removeEventListener("contextmenu", block, true);
+      document.body.classList.remove("dragging-row");
+    };
+  }, [dragId]);
+
+  const onRowPointerDown = (e: ReactPointerEvent<HTMLElement>, id: number) => {
+    // The primary button alone. A right-click is the menu's, and a middle-click is nobody's here.
+    if (e.button !== 0) return;
+    press.current = { id, from: { x: e.clientX, y: e.clientY }, dragging: false };
+    latest.current = { x: e.clientX, y: e.clientY };
+    // Captured from the press rather than from the threshold: it is what keeps the move and the release coming to
+    // this row after the pointer has left it, including outside the window entirely (`AMB-T-3755`).
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    // The list flows while a row is held against its top or bottom edge, and only once the press has become a
+    // drag: a click is not a reason to move the list out from under itself (`../core/edgeScroll`). A second press
+    // arriving on top of a first calls the first one off, rather than leaving its frame loop running unowned.
+    stopFlow.current?.();
+    stopFlow.current = flowEdges(() => (press.current?.dragging === true ? latest.current : null), retest);
+  };
+
+  const onRowPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
+    const held = press.current;
+    if (held === null) return;
+    latest.current = { x: e.clientX, y: e.clientY };
+    if (!held.dragging) {
+      if (!draggedFar(held.from, latest.current)) return;
+      held.dragging = true;
+      swallowClick.current = true;
+      setDragId(held.id);
+    }
+    // Against the selection, on top of the body's `user-select`: either one is enough on its own, and together they
+    // cover all three systems (`AMB-T-3755`).
+    e.preventDefault();
+    if (pending.current !== null) return;
+    pending.current = requestAnimationFrame(() => {
+      pending.current = null;
+      retest();
+    });
+  };
+
+  const onRowPointerUp = (e: ReactPointerEvent<HTMLElement>) => {
+    const held = press.current;
+    // Read off the release itself rather than off the hint, which is a frame behind it.
+    const to = held?.dragging === true
+      ? landing(held.id, { x: e.clientX, y: e.clientY }, "data-project-row", rowId)
+      : null;
+    stopPress();
+    if (held !== null && to !== null) store.moveProject(held.id, to.side, to.id);
+  };
+
+  // A drag the system took away — an incoming call, a screen lock. Nothing is written: what was interrupted is not
+  // a choice anybody made.
+  const onRowPointerCancel = () => {
+    if (press.current?.dragging === true) swallowClick.current = true;
+    stopPress();
+  };
+
+  const onRowClick = (n: Nav) => {
+    if (swallowClick.current) {
+      swallowClick.current = false;
+      return;
+    }
+    onNav(n);
   };
 
   return (
@@ -88,6 +193,7 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
           const cls = [
             "navitem",
             isActive(n) ? "navitem--active" : "",
+            canReorder ? "navitem--reorderable" : "",
             dragId === p.id ? "navitem--dragging" : "",
             hint === "before" ? "navitem--drop-before" : "",
             hint === "after" ? "navitem--drop-after" : "",
@@ -96,12 +202,15 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
             <button
               key={p.id}
               className={cls}
-              onClick={() => onNav(n)}
-              draggable={canReorder}
-              onDragStart={canReorder ? (e) => onRowDragStart(e, p.id) : undefined}
-              onDragOver={canReorder ? (e) => onRowDragOver(e, p.id) : undefined}
-              onDrop={canReorder ? (e) => onRowDrop(e, p.id) : undefined}
-              onDragEnd={canReorder ? endDrag : undefined}
+              onClick={() => onRowClick(n)}
+              // What the hit test looks for, and what it reads the row's own id off. The pointer is somewhere in
+              // the document rather than on a React element, so the answer has to be written into the markup.
+              data-project-row=""
+              data-project-id={p.id}
+              onPointerDown={canReorder ? (e) => onRowPointerDown(e, p.id) : undefined}
+              onPointerMove={canReorder ? onRowPointerMove : undefined}
+              onPointerUp={canReorder ? onRowPointerUp : undefined}
+              onPointerCancel={canReorder ? onRowPointerCancel : undefined}
             >
               <span className="navitem__dot" style={{ background: p.color }} />
               {p.name}

@@ -13,10 +13,12 @@ import { McpSetup } from "./McpSetup";
 import { PluginCrossingRow } from "../components/PluginCrossingRow";
 import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
+import { invoke } from "../core/ipc";
+import { revealLabelKey } from "../core/platform";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
 import { inkOn } from "../core/ink";
-import type { AgentHookRequestsDto, BoundFolderDto, ProjectSettingsDto } from "../bindings/bindings";
+import type { AgentHookRequestsDto, BoundFolderDto, ProjectSettingsDto, WakeDto } from "../bindings/bindings";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
@@ -39,6 +41,12 @@ export function ProjectSettingsScreen({
   const [icon, setIcon] = useState<string | null>(null);
   const [iconOriginal, setIconOriginal] = useState<Uint8Array | undefined>(undefined);
   const [view, setView] = useState<View>("board");
+  // Which agent this project's panes open with, and what there is to choose from on this machine.
+  // Null is "nothing kept": the first pane opened settles it, and the empty frame's row comes up on
+  // whatever the rank arrives at until then (`../talk/agent`).
+  const [agent, setAgent] = useState<string | null>(null);
+  const [keptAgent, setKeptAgent] = useState<string | null>(null);
+  const [agents, setAgents] = useState<{ id: string; label: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +66,29 @@ export function ProjectSettingsScreen({
     return () => { alive = false; };
   }, [projectId]);
 
+  // What this machine can start, and what this project has kept. It is the device's answer rather
+  // than the store's — what is installed here is not what is installed on the next machine — so it
+  // is read apart from the project's own row and written apart from it too (`crate::wake`).
+  useEffect(() => {
+    let alive = true;
+    if (!inTauri()) return;
+    void fetchBoundFolders(projectId)
+      .then((bound) => invoke<WakeDto>("wake_choices", {
+        project: projectId,
+        folders: bound.filter((one) => one.exists).map((one) => one.path),
+      }))
+      .then((said) => {
+        if (!alive) return;
+        setAgents(said.candidates.filter((one) => one.installed).map((one) => ({ id: one.id, label: one.label })));
+        setAgent(said.kept ?? null);
+        setKeptAgent(said.kept ?? null);
+      })
+      // A read that failed leaves the row off rather than offering a list nobody can act on: what
+      // the panes open with is settled on the pane's own side either way.
+      .catch(() => { if (alive) setAgents([]); });
+    return () => { alive = false; };
+  }, [projectId]);
+
   if (!loaded) {
     return (
       <div className="board__toolbar"><span className="board__title"><Icon name="gear" size="md" /> {t("projset.title")}</span></div>
@@ -66,7 +97,7 @@ export function ProjectSettingsScreen({
 
   // Send only the fields that changed (the rest stay put). Core rejects an empty name, but the UI disables save as well.
   const dirty = name.trim() !== loaded.name || notes !== loaded.notes || color !== loaded.color
-    || icon !== loaded.icon || view !== loaded.view;
+    || icon !== loaded.icon || view !== loaded.view || agent !== keptAgent;
   const canSave = dirty && name.trim().length > 0 && !busy;
 
   const save = async () => {
@@ -83,6 +114,14 @@ export function ProjectSettingsScreen({
         iconOriginal: icon !== loaded.icon ? iconOriginal : undefined,
         view: view !== loaded.view ? view : undefined,
       });
+      // The agent is the device's and goes its own way (`crate::wake`). Taking it off is a write of
+      // its own rather than an empty value: what is being said is "settle it again next time", and a
+      // row holding the empty string would be an answer nothing can start.
+      if (agent !== keptAgent) {
+        if (agent === null) await invoke("wake_forget", { project: projectId });
+        else await invoke("wake_remember", { project: projectId, agent });
+        setKeptAgent(agent);
+      }
       setLoaded({ ...loaded, name: name.trim(), notes, color, icon, view });
       // The original has landed in the blob store; a later save that does not touch the icon must not
       // send those bytes again.
@@ -177,6 +216,22 @@ export function ProjectSettingsScreen({
                 {VIEWS.map((v) => <option key={v} value={v}>{viewLabel(v)}</option>)}
               </select>
             </div>
+            {/* What this project's panes open with. It is drawn only where there is something to
+                choose between: a machine with one agent on it has no choice to offer, and one with
+                none has nothing to name (`../shell/EmptySlot`). */}
+            {agents.length > 1 && (
+              <div className="settings__row">
+                <span className="settings__k">{t("projset.agentLabel")}</span>
+                <select
+                  className="btn"
+                  value={agent ?? ""}
+                  onChange={(e) => setAgent(e.target.value === "" ? null : e.target.value)}
+                >
+                  <option value="">{t("projset.agentAuto")}</option>
+                  {agents.map((one) => <option key={one.id} value={one.id}>{one.label}</option>)}
+                </select>
+              </div>
+            )}
 
             {error && <ErrorNote>{error}</ErrorNote>}
 
@@ -421,7 +476,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
             )}
             <div className="buttonrow">
               {f.exists && <button className="btn" onClick={() => void terminal(f.path)} disabled={busy}><Icon name="keyboard" /> {t("newproj.openTerminal")}</button>}
-              {f.exists && <button className="btn" onClick={() => void reveal(f.path)} disabled={busy}><Icon name="folder" /> {t("newproj.openFinder")}</button>}
+              {f.exists && <button className="btn" onClick={() => void reveal(f.path)} disabled={busy}><Icon name="folder" /> {t(revealLabelKey())}</button>}
               {f.exists && (f.mismatch || f.legacy || f.pointerMissing || f.foreign) && <button className="btn" onClick={() => void relink(f.path)} disabled={busy}><Icon name="link" /> {t("projset.relink")}</button>}
               <button className="btn btn--danger" onClick={() => void unbind(f.path)} disabled={busy}>{t("projset.unbind")}</button>
             </div>

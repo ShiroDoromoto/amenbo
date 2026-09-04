@@ -14,6 +14,7 @@
 //! A bundle carries two programs, and this module answers for the app. The CLI beside it — what a
 //! run asks which build this is, and stands the scenario's world up with — is [`crate::shipped`]'s.
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -38,8 +39,12 @@ const POLL: Duration = Duration::from_millis(500);
 /// premise is stood up in that same store before there is an app to launch at all.
 #[derive(Debug)]
 pub struct Gui<'a> {
-    /// The process id the launch answered with — the app the screen tool is named.
+    /// The process id the launch answered with — the app the screen tool is named. It moves when the
+    /// app is run again ([`Gui::run_again`]), so a caller shooting by pid reads it each time rather
+    /// than keeping a copy: a shot named by the pid of a run that has ended is a shot of nothing.
     pub pid: i64,
+    /// The program inside the bundle, kept so a second run of it needs no bundle to be read again.
+    exe: PathBuf,
     child: Child,
     store: &'a Session,
 }
@@ -59,16 +64,51 @@ pub struct Gui<'a> {
 /// numbers the product is measured by would carry every launch this harness made, indistinguishable
 /// from somebody going to look for a new version. The CLI driver beside this one has always carried
 /// the same switch; this is the app being held to it too.
+///
+/// The third thing it carries is the **machine**: the session's own directory of stand-in programs
+/// goes in front of the `PATH`, which is how a road says what a pane could be opened with
+/// (`amenbo_verify_cli::domain::terminal`). It is handed over on every launch and is empty unless a
+/// premise filled it, so a run that asked for nothing is a run on the operator's own machine. What
+/// reads it is a login shell of the operator's, started by the app when it probes — and a profile
+/// that rebuilds the `PATH` from scratch rather than adding to it would drop the directory on the
+/// floor, which shows as a road failing to find the row it stood up.
 pub fn launch<'a>(bundle: &Path, store: &'a Session) -> Result<Gui<'a>, String> {
     let exe = executable(bundle)?;
-    let child = Command::new(&exe)
+    let child = start(&exe, store)?;
+    Ok(Gui { pid: i64::from(child.id()), exe, child, store })
+}
+
+/// One run of the app, started against `store`. Both the first launch and every one after it go
+/// through here, which is what keeps them the same run: an app started again with anything else in
+/// its environment would be a different app to the one the road walked up to that point.
+fn start(exe: &Path, store: &Session) -> Result<Child, String> {
+    Command::new(exe)
         .env("AMENBO_HOME", &store.home)
         .env("AMENBO_UPDATE_CHECK", "0")
+        .env("PATH", tooled_path(&store.tools))
         .current_dir(&store.cwd)
         .stdout(Stdio::null())
         .spawn()
-        .map_err(|e| format!("could not launch {}: {e}", exe.display()))?;
-    Ok(Gui { pid: i64::from(child.id()), child, store })
+        .map_err(|e| format!("could not launch {}: {e}", exe.display()))
+}
+
+/// This process's `PATH` with the run's own stand-ins in front of it.
+///
+/// In front and not behind: a stand-in is the run's answer about the machine, and one that lost to
+/// a real install would leave the road reading whatever the operator has — which is the thing being
+/// answered. Nothing is taken out, because a `PATH` handed over is only a starting point: the probe
+/// is a login shell reading the operator's profile, and what that profile adds is theirs.
+///
+/// A harness that could not read its own `PATH` hands over the directory alone, which is a machine
+/// with the stand-ins and nothing else — a poorer answer than the truth, and never a wrong one.
+fn tooled_path(tools: &Path) -> OsString {
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let mut path = OsString::from(tools);
+    if !inherited.is_empty() {
+        path.push(":");
+        path.push(&inherited);
+    }
+    path
 }
 
 impl Gui<'_> {
@@ -90,7 +130,7 @@ impl Gui<'_> {
                     "the app exited while starting ({status}) — no window was ever put on screen"
                 ));
             }
-            let last = match front(self.pid, screen).and_then(|()| shoot(self.pid, &probe, screen)) {
+            let last = match front(self.pid, screen).and_then(|()| shoot(self.pid, None, &probe, screen)) {
                 Ok(()) => {
                     let _ = std::fs::remove_file(&probe);
                     return Ok(());
@@ -105,6 +145,28 @@ impl Gui<'_> {
             }
             std::thread::sleep(POLL);
         }
+    }
+
+    /// End this run of the app and start another on the same store, holding until the new one can be
+    /// shot. The store is untouched between the two, so what the second run comes up on is whatever
+    /// the first one left written in it — which is the whole of what a road walking this is about.
+    ///
+    /// **It is the harness that does this and not the operator**, for the reason the first launch is
+    /// the harness's: the app has to come up pointed at the run's throwaway store and be namable by
+    /// a pid, and an app opened from the machine is neither. The pid moves with it, which is why a
+    /// caller shoots by reading [`Gui::pid`] rather than by a copy taken at the start.
+    ///
+    /// The app is killed rather than asked to quit, the way [`Drop`] takes it down: asking goes
+    /// through the app's name, and a name cannot pick out one instance of it. Nothing a graceful
+    /// close would flush is being relied on — what Amenbo keeps of a run it writes as it changes —
+    /// and a build that put that off until the door would be caught here, which is what this step is
+    /// for.
+    pub fn run_again(&mut self, screen: &Path) -> Result<(), String> {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        self.child = start(&self.exe, self.store)?;
+        self.pid = i64::from(self.child.id());
+        self.wait_until_shootable(screen)
     }
 }
 
@@ -191,7 +253,7 @@ mod tests {
         let app = bundle(
             &cwd,
             "stand-in-app",
-            "#!/bin/sh\nprintf '%s\\n%s\\n' \"$AMENBO_HOME\" \"$PWD\" > \"$AMENBO_HOME/launched\"\nexec sleep 300\n",
+            "#!/bin/sh\nprintf '%s\\n%s\\n%s\\n' \"$AMENBO_HOME\" \"$PWD\" \"$PATH\" > \"$AMENBO_HOME/launched\"\nexec sleep 300\n",
         );
 
         let gui = launch(&app, &store).unwrap();
@@ -207,6 +269,13 @@ mod tests {
         // path it resolves to — the same directory, spelled the way the kernel spells it.
         let stood_in = lines.next().map(|l| std::fs::canonicalize(l).unwrap());
         assert_eq!(stood_in, Some(std::fs::canonicalize(&cwd).unwrap()), "run from the throwaway dir");
+        // What the run says this machine can start leads the `PATH`, and what the machine says is
+        // still behind it: a stand-in that lost to a real install would leave a road reading the
+        // operator's own tools, and a `PATH` cut down to ours would be a machine nobody is at.
+        let tools = store.tools.to_str().unwrap();
+        let path = lines.next().expect("the app it launched said what its `PATH` is");
+        assert!(path.starts_with(tools), "the run's own stand-ins lead the `PATH`: {path}");
+        assert!(path.len() > tools.len(), "and the machine's own is still behind them: {path}");
 
         let pid = gui.pid;
         assert!(alive(pid), "the app is up while the run holds it");

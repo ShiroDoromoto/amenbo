@@ -1,0 +1,145 @@
+# The first loop's one press, walked past the card and into the pane it opens.
+#
+# `raise-a-project` reads the screen a raise ends on — that the loop leads it, and that the request
+# folded beside the press names the file the AI is sent to read. It stops at the press. What the
+# press does is the half no reading of that card reaches: a pane opens, and the project it belongs
+# to is settled at that moment and never again. A pane cannot be moved to another project, so a
+# terminal that landed under the wrong one is not a display that is out by one — it is a pane the
+# reader has to close and open again, on the very screen they are meeting the app on.
+#
+# ── Why a project is already open when the road starts ───────────────────────────────────────────
+# The wrong answer this road exists to catch is a plausible one: the face draws one project's panes,
+# so a press that arrived without saying whose it was could be answered from the project already on
+# the screen. That answer is right on a board — the card there is that project's own — and wrong on
+# the screen a raise ends on, which is a view and not a project at all. So the world has a project
+# with a pane in it, and the reader is standing on that pane when they go off to raise another.
+#
+# ── Why a line in each pane ──────────────────────────────────────────────────────────────────────
+# Which project a pane belongs to is read the way `go-to-the-panes-of-another-project` reads it: the
+# tabs are the division itself, so a line typed into a pane is on the screen under its own project
+# and nowhere else. Two lines give the two readings — the new project's pane carrying the line the
+# loop's terminal was named by, and the old project's pane carrying nothing of it.
+#
+# The world raises the project the reader starts on and nothing else. The one this road is about is
+# raised on the screen, which is where the press being read is.
+id: start-a-terminal-in-the-project-whose-loop-was-pressed
+title: The terminal the first loop starts belongs to the project whose loop was pressed, and not to the project the reader was last looking at
+description: >
+  A reader with a terminal running in one project goes off and raises another, and presses the one
+  move the new project's first loop offers. The pane opens under the new project — its line is on
+  the screen there, and the terminal that was running stays where it was, under the project it was
+  opened in.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+steps_gui:
+  # The state the wrong answer would be taken from: a project on the face, with a pane in it, and
+  # the reader standing there.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the terminal in the greenhouse
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal in the greenhouse
+
+  # Off to raise another. What the ledger is showing from here on is a view, which is the whole of
+  # why the press cannot be answered from what the reader was last looking at.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Seedbed
+
+  - type: action
+    domain: folder
+    op: start-terminal
+
+  # The pane the press opened, named so the face can be asked about it.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the terminal the new project's loop opened
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal the new project's loop opened
+
+  # And the half that says which project it landed under. The face is drawing one project's panes,
+  # so the terminal the reader left running being nowhere on this screen is the pane being somewhere
+  # other than beside it — under the project the loop was pressed on, which is the only other place
+  # a pane can be.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal in the greenhouse
+      present: false
+
+  # Read from the other end as well, because the first reading alone would also be satisfied by a
+  # pane that landed nowhere a reader can reach. The project the reader came from still has its own
+  # terminal, and has not been given the new one.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal in the greenhouse
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal the new project's loop opened
+      present: false

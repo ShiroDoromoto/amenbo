@@ -26,7 +26,7 @@ fn ensure_migrated() -> Result<(), CmdError> {
 ///
 /// The one long-lived connection this process holds is let go of first when it has been orphaned
 /// ([`release_orphaned_watch`]) — held on to, it would fail this write and every write after it.
-fn open_store() -> Result<Store, CmdError> {
+pub(crate) fn open_store() -> Result<Store, CmdError> {
     ensure_migrated()?;
     release_orphaned_watch();
     Store::open_at(amenbo_core::config::Paths::resolve()?).map_err(CmdError::from)
@@ -36,7 +36,7 @@ fn open_store() -> Result<Store, CmdError> {
 /// engine's back-projection instead of paying for a full hydrate (`Store::open_read_at`).
 /// **Read commands only** — never call a write on the `Store` it hands back. Falls back to a full
 /// open internally if the engine has not been primed yet.
-fn open_store_read() -> Result<Store, CmdError> {
+pub(crate) fn open_store_read() -> Result<Store, CmdError> {
     ensure_migrated()?;
     Store::open_read_at(amenbo_core::config::Paths::resolve()?).map_err(CmdError::from)
 }
@@ -410,6 +410,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
             id: p.id,
             name: p.name.clone(),
             color: p.color.clone().unwrap_or_else(|| "#9aa7b2".to_string()),
+            icon: p.icon.clone(),
             view: p.default_view.clone(),
             open_count: p.open_count,
             proposed_decision_count: p.proposed_decision_count,
@@ -871,12 +872,13 @@ fn activity_dto(it: amenbo_core::activity::Item, config: &amenbo_core::config::C
     // Read before `it` is taken apart below: the sequence is derived from the whole row.
     let seq = it.seq().rank();
     let event = it.event.as_ref().map(event_dto);
+    let author = facet_actor(config, it.author_kind);
     ActivityItemDto {
         id: it.id,
         seq,
         at: it.at.to_rfc3339_z(),
         kind: it.kind.as_str().to_string(),
-        author: facet_actor(config, it.author_kind),
+        author,
         target: ActivityTargetDto {
             target_type: it.target_type.as_str().to_string(),
             id: it.target_id,
@@ -1750,6 +1752,10 @@ pub fn attachments_for(target_type: String, target_id: i64) -> Result<Vec<Attach
 /// Ingest a file as a blob and attach it to a task or decision record. Same shape as the CLI's
 /// `task/decision attach`: check the per-file size cap, ingest content-addressed, record the
 /// metadata. The MIME type is guessed from the extension.
+///
+/// **Every attachment the screen adds comes through here**, whether it was picked or dragged in: the
+/// host receives an outside drop and hands over the paths (`AMB-D-775`), so nothing has to read a
+/// file into memory to pass it on. A file of any size is ingested as a stream.
 #[tauri::command]
 pub fn attachment_add(
     target_type: String,
@@ -1772,50 +1778,6 @@ pub fn attachment_add(
         let mime = amenbo_core::blob::mime_from_filename(&filename);
         store.config.attachment_limits.check_per_file(mime, meta.len())?;
         let blob = store.blobs().ingest_path(src)?;
-        store.attach_blob(
-            target,
-            target_id,
-            &blob.hash,
-            &filename,
-            mime,
-            blob.size_bytes as i64,
-            ActorKind::Human,
-        )?;
-        Ok(())
-    })?;
-    let scope: &[&'static str] = if target == amenbo_core::model::AttachmentTarget::Decision {
-        &["decisions"]
-    } else {
-        &["tasks"]
-    };
-    let ack = WriteAck::new(scope);
-    Ok(if target == amenbo_core::model::AttachmentTarget::Decision {
-        ack.decision(target_id)
-    } else {
-        ack.task(target_id)
-    })
-}
-
-/// Ingest raw bytes as a blob and attach them. HTML5 drag-and-drop inside the webview cannot give us
-/// an OS path (`dragDropEnabled:false` is the setting that lets card drag-and-drop on the board work
-/// at all), so the front end reads the dropped File itself and hands the bytes over this path. Large
-/// files are better off going through the file picker ([`attachment_add`] takes a path and ingests
-/// as a stream). The body is the same as [`attachment_add`]: check the cap, ingest
-/// content-addressed, record the metadata.
-#[tauri::command]
-pub fn attachment_add_bytes(
-    target_type: String,
-    target_id: i64,
-    filename: String,
-    bytes: Vec<u8>,
-) -> Result<WriteAck, CmdError> {
-    let target = amenbo_core::model::AttachmentTarget::parse(&target_type)
-        .ok_or_else(|| format!("attachment target '{target_type}' is not one of task / decision / task_comment / decision_comment"))?;
-    let filename = if filename.trim().is_empty() { "attachment".to_string() } else { filename };
-    with_store_mut(|store| {
-        let mime = amenbo_core::blob::mime_from_filename(&filename);
-        store.config.attachment_limits.check_per_file(mime, bytes.len() as u64)?;
-        let blob = store.blobs().ingest_bytes(&bytes)?;
         store.attach_blob(
             target,
             target_id,
@@ -2036,6 +1998,13 @@ pub fn decision_add(
         let d = store.add_decision_with_dimensions(amenbo_core::ops::decision::NewDecision {
             title, body: body.unwrap_or_default(), project_id,
         }, &dimension_value_ids.unwrap_or_default())?;
+        // The proposal is a moment, and the column cannot hold it (`AMB-T-3639`). A line that could
+        // not be written is not a decision that was not made: the ledger is not the record.
+        let _ = store.add_decision_system_event(
+            ActorKind::Human,
+            d.id,
+            amenbo_core::activity_log::event::decision_proposed(&d.title),
+        );
         Ok(d.id)
     })?;
     Ok(WriteAck::new(&["decisions"]).decision(id))
@@ -2160,6 +2129,11 @@ pub fn decision_promote(comment_id: i64, title: String) -> Result<WriteAck, CmdE
             title, body, project_id,
         })?;
         let did = d.id;
+        let _ = store.add_decision_system_event(
+            ActorKind::Human,
+            did,
+            amenbo_core::activity_log::event::decision_proposed(&d.title),
+        );
         store.link_decision(did, task_id)?;
         Ok((did, task_id))
     })?;
@@ -2394,6 +2368,31 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
         amenbo_core::config::Paths::command_name(),
     );
     Ok(WriteAck::new(&["tasks"]))
+}
+
+/// **Make the chosen folder one a pane can be opened in** — the terminal face's single way in.
+///
+/// Choosing a folder there is three things at once: the folder becomes a project's, the project comes
+/// into being, and the terminal opens in it. The first two are here; where a pane opens is the face's
+/// (`app/src/talk/agent.ts`).
+///
+/// **A folder that is already spoken for is not bound again, and is not refused either.** That is the
+/// whole difference from [`project_add_folder`], which refuses one because a second pointer beneath an
+/// existing one would shadow the binding above it. Here the answer to "something already owns this" is
+/// that there is nothing left to do — the pane opens in the folder, under the project that owns it —
+/// and a refusal would be a wall across the one flow the face has. The empty ack says as much: nothing
+/// was written, so there is nothing to invalidate.
+///
+/// Nothing asks for a name, because the flow is a folder and nothing else: the project a new binding
+/// raises is named after the folder ([`project_add_folder`] falls back to the basename when the name is
+/// left out). Everything else a bound folder can be — a lost pointer to recover, several projects
+/// claiming it — is that command's to answer, and is answered there.
+#[tauri::command]
+pub fn folder_open(dir: String) -> Result<WriteAck, CmdError> {
+    if amenbo_core::binding::find_upward(std::path::Path::new(&dir)).is_some() {
+        return Ok(WriteAck::default());
+    }
+    project_add_folder(dir, None)
 }
 
 /// When the `.amenbo` is gone but the bindings registry's reverse lookup names **exactly one living
@@ -3467,26 +3466,38 @@ pub async fn run_export(window: tauri::Window, path: String) -> Result<ExportRep
     })
 }
 
-/// Raise an OS notification when something arrives in the inbox. macOS delivers it ourselves through
-/// UNUserNotificationCenter, Windows through notify-rust (with the click wired to inbox navigation),
-/// and Linux through `tauri-plugin-notification` (D-Bus). If the OS drops it — permission not
-/// granted, say — that is not fatal (the app has no sound of its own; the arrival sound is the OS
-/// notification's).
+/// Raise an OS notification. macOS delivers it ourselves through UNUserNotificationCenter, Windows
+/// through notify-rust, and Linux through `tauri-plugin-notification` (D-Bus). If the OS drops it —
+/// permission not granted, say — that is not fatal (the app has no sound of its own; the sound is the
+/// OS notification's).
+///
+/// `kind` is what the toast is about, and it decides where a click lands: the inbox is on the board,
+/// and a turn is in the terminal, which may be a window of its own (`crate::notify`). An unknown word
+/// is read as an arrival, which is where this started.
 #[tauri::command]
 #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(unused_variables))]
-pub fn notify_os(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+pub fn notify_os(
+    app: tauri::AppHandle,
+    title: String,
+    body: String,
+    kind: String,
+) -> Result<(), String> {
+    let kind = crate::notify::Kind::parse(&kind);
     #[cfg(target_os = "macos")]
     {
-        crate::macos_notify::send(&title, &body);
+        crate::macos_notify::send(&title, &body, kind);
         Ok(())
     }
     #[cfg(target_os = "windows")]
     {
-        crate::windows_notify::send(&app, title, body);
+        crate::windows_notify::send(&app, title, body, kind);
         Ok(())
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
+        // The plugin's toast carries no click of ours, so the kind reaches no further here. What it
+        // decides — where a click lands — is a thing this platform does not offer.
+        let _ = kind;
         use tauri_plugin_notification::NotificationExt;
         app.notification()
             .builder()
@@ -3805,6 +3816,47 @@ pub fn tick_answer(yes: bool) -> Result<WriteAck, CmdError> {
 pub fn tick_banner_later() -> Result<(), CmdError> {
     let day = amenbo_core::time::date_to_string(amenbo_core::time::today());
     open_store()?.defer_tick_banner(&day)?;
+    Ok(())
+}
+
+/// What the volatile area says the session in one pane has been doing.
+///
+/// **Read, never inferred.** A status move made inside a pane is written under the session that made it
+/// (`AMB-D-758`), so which pane holds a task is a record rather than a guess — and a task whose newest
+/// move was made in another pane is not this one's, however it started here
+/// (`amenbo_core::session_work`).
+///
+/// **The window is the only reader of that area**, and this command is the door. Nothing in core asks
+/// it anything: a reservation, a `ready` and a `task list` answer the same on a machine that has never
+/// opened this window.
+#[tauri::command]
+pub fn session_work(session: String) -> Result<SessionWorkDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("session_work");
+    let mut out = SessionWorkDto { holding: Vec::new(), finished: 0 };
+    with_store_read(|store| {
+        let work = amenbo_core::session_work::work(&store.paths.sessions_dir, &session);
+        out = SessionWorkDto { holding: work.holding, finished: work.finished.len() };
+        Ok(())
+    })?;
+    Ok(out)
+}
+
+/// What is written on this project's draft page ([`amenbo_core::memo`]).
+///
+/// It is the one place in Amenbo that is not a record: where a long request is put together before
+/// it is sent. It stays and it does not grow — what is worth keeping moves to a task or a decision.
+#[tauri::command]
+pub fn project_memo(project_id: i64) -> Result<String, CmdError> {
+    Ok(open_store_read()?.memo(project_id)?)
+}
+
+/// Write this project's draft page. Blank erases it — a page nobody wrote on is not a page.
+///
+/// No `WriteAck`: nothing reads the page but the panel it is typed in, so there is no view to
+/// invalidate and no other screen to catch up.
+#[tauri::command]
+pub fn set_project_memo(project_id: i64, text: String) -> Result<(), CmdError> {
+    open_store()?.set_memo(project_id, &text)?;
     Ok(())
 }
 
@@ -7639,7 +7691,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    /// Round-trips per-comment attachments at the command layer. `attachment_add_bytes` with
+    /// Round-trips per-comment attachments at the command layer. `attachment_add` with
     /// `target_type="task_comment"` hangs an attachment off a comment id, `attachments_for` reads it
     /// back by the same id, and it **never bleeds into the task body's attachments** — they are
     /// different targets. The ack puts the comment id in `tasks` so the attachments query gets
@@ -7670,11 +7722,12 @@ mod tests {
             store.comment_list(task_id, None, None).unwrap().comments[0].id
         };
 
-        let ack = attachment_add_bytes(
+        let file = tmp.join("note.txt");
+        std::fs::write(&file, b"hello").unwrap();
+        let ack = attachment_add(
             "task_comment".into(),
             comment_id,
-            "note.txt".into(),
-            b"hello".to_vec(),
+            file.to_string_lossy().into_owned(),
         )
         .unwrap();
         assert!(

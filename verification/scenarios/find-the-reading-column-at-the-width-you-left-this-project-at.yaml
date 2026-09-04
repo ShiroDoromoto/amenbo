@@ -1,0 +1,279 @@
+# The width the reading column is drawn at is the person's, and it is kept for the project they
+# dragged it in. This is the road that says so: a column widened in one project is the shipped width
+# in the next, and the widened one again on coming back.
+#
+# ── Why a width is kept per project at all ───────────────────────────────────────────────────────
+# How many panes there are and how much there is to read are not the same from one project to the
+# next, so one answer for the whole device fits whichever project it was dragged in and fights every
+# other. What that promises a reader is this road: the drag is a thing they said once, about this
+# project, and going somewhere else does not spend it.
+#
+# ── Why the width is read against the panes rather than against the shot before ──────────────────
+# `side-width` is the other reading of this edge, and it cannot be used here: it answers against the
+# picture before it, and a press on a project's tab redraws every column on the face. "Wider than it was"
+# after a move between projects would be a sentence about two faces rather than about one width. So
+# each reading here stands on its own shot — the column and the panes divide the width between them,
+# and which of the two is the wider is what an eye at a picture can say (`side-span`).
+#
+# ── Why the shipped width is read before the drag ────────────────────────────────────────────────
+# The reading after the drag means nothing on its own: a face that drew every column broad would pass
+# it. The pair is the road — thin, then broad, then thin again in the other project — and each one is
+# read the same way, so nothing in the middle can be a difference in how it was measured.
+#
+# ── Why a pane is opened in each project ─────────────────────────────────────────────────────────
+# The panes are what the column is read against, so there has to be one. A plain shell is enough and
+# nothing is typed into it: what this road is about is the width beside a pane, not the pane.
+#
+# ── Why the wide width is read by what is left of the panes rather than by the split ─────────────
+# It is the second width kept per project, and `side-span` cannot tell its two states apart: the wide
+# width the column ships with takes about the room the panes are left with, so it and a dragged one
+# are the same answer on the window the application opens — and on a window dragged wider, the
+# shipped one turns `thin` while nothing is wrong with the build. A reading that moves with the size
+# of the window is one this road cannot carry across two projects.
+#
+# What does not move with it is whether any of the work is showing. The wide width lies over the
+# panes and stops at the rail: the shipped one leaves a strip of them in view on the narrowest window
+# there is, and one dragged to the stop leaves none on the widest. So the wide leg is read with
+# `side-cover`, and its pair is the same shape as the narrow leg's — part, then all, then part again
+# in the other project, and all once more on coming back to the one it was dragged in.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A width is a thing on a screen, and the binary is handed paths.
+id: find-the-reading-column-at-the-width-you-left-this-project-at
+title: The reading column's two widths are kept for the project they were dragged in, so another project is drawn at its own and the first is drawn at the dragged ones on coming back
+description: >
+  Raise two projects, each with a folder of its own, and open a terminal in each. In the first, open a
+  file — the column comes over the panes at its wide width — and drag that width on until the work is
+  gone behind it; then go back to the panes and drag the narrow width out until the column has taken
+  about the panes' width. Go to the second project: both of its widths are the ones they shipped with,
+  the drags having been about the first project and not about this device. Go back to the first: both
+  are the widths they were left at.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+  # One file per folder, named apart. It is here for the wide width and nothing else: that width is
+  # what the column comes up at when a reader asks for a file, and there is no other way onto it.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: seedlings.md
+      content: SCENARIO the seedlings are moved out when the frosts have finished
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: boathouse
+      path: oars.md
+      content: SCENARIO the oars are stood on end so the blades dry out
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face opens on is the run's business, so the road presses for the one it means
+  # to drag in rather than reading whichever was selected.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # The width it shipped with, which is what the drag is about to move away from.
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: files
+      span: thin
+
+  # Onto the wide width, which is reached by asking for a file rather than by dragging anything: the
+  # column comes over the panes to read in, and that is the width the rest of this leg is about. The
+  # tree is in the rail, so the row is standing there to reach.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: seedlings.md
+      section: tree
+
+  # The wide width it shipped with, read by what is left of the panes rather than by the split it
+  # makes with them — the reason is at the top of this road.
+  - type: assert
+    domain: terminal
+    op: side-cover
+    with:
+      side: files
+      cover: part
+
+  - type: action
+    domain: terminal
+    op: drag-side
+    with:
+      side: files
+      toward: cover
+
+  - type: assert
+    domain: terminal
+    op: side-cover
+    with:
+      side: files
+      cover: all
+
+  # Back to the panes, which puts the column on its narrow step without letting the file go. The
+  # reading after it is the half a build keeping one width for both steps would fail: the drag above
+  # was of the wide one, and this one is still where it shipped.
+  - type: action
+    domain: terminal
+    op: press-pane
+
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: files
+      span: thin
+
+  - type: action
+    domain: terminal
+    op: drag-side
+    with:
+      side: files
+      toward: broad
+
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: files
+      span: broad
+
+  # The other project, which was never dragged in. The column is up here because being open at all is
+  # how this reader likes to work, wherever they are — it is the *width* that belongs to the project.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The half a device-wide width would fail: a face keeping one answer for the machine would draw this
+  # project at the width dragged in the other one, and a reader would find their panes gone in a
+  # project they had never touched the edge in.
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: files
+      span: thin
+
+  # And its wide width, which was never dragged either. This is the half a face keeping one answer
+  # for the machine would fail: it would draw this project's column over the whole of its work, in a
+  # project nobody had touched the edge in.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: oars.md
+      section: tree
+
+  - type: assert
+    domain: terminal
+    op: side-cover
+    with:
+      side: files
+      cover: part
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # And the drag is still spent here. A face that kept the width only while the project was shown
+  # would pass every reading above and fail this one, which is the half a reader is actually promised.
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: files
+      span: broad
+
+  # The wide width with it. A project is arrived at on the narrow step, so the file is asked for
+  # again — and what it comes up at is what this project was left at, not what it ships with.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: seedlings.md
+      section: tree
+
+  - type: assert
+    domain: terminal
+    op: side-cover
+    with:
+      side: files
+      cover: all

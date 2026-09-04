@@ -1,0 +1,140 @@
+# The pane that is never quiet, and the sentence that reaches it anyway.
+#
+# Amenbo writes its opening sentence into a pane that has held the same bytes for three looks
+# running, and that stillness is what keeps it out of a program still drawing its interface: a
+# newline sent into one would answer whatever it happens to be asking. **But some programs are never
+# still.** One that repaints something of its own — a spinner, a clock, a status line counting — never
+# holds anything for three looks, and against it the stillness rule waits forever: the sentence is
+# not sent, not shown, and not even sitting in the input box for the reader to send themselves. That
+# pane's agent works without ever being told where it is.
+#
+# So a screen that has moved without a break for ten seconds is written into anyway, once. Ten
+# seconds of unbroken movement says the one thing the stillness was being asked for — the program is
+# up and reading — and a program still drawing its own interface does not manage it, because it goes
+# quiet between the pieces.
+#
+# ── What the road proves, and what it must not pass on ───────────────────────────────────────────
+# A build that never writes into a restless pane shows nothing on this road at all: no sentence, no
+# marked line, nothing but the ticking. That is the state this exists to catch, and it is why the
+# reading is a line the program gave back rather than anything on the screen — a paste that was
+# never sent is a paste the program was never handed.
+#
+# ── Why the line is this line ────────────────────────────────────────────────────────────────────
+# It has to be restless, show what it is written, and hand back what it is given.
+#
+# **Restless is a tick a second, and the arithmetic is the reason.** Amenbo looks every half second
+# and calls a screen still only after three looks running find it unchanged — and three looks span
+# two of those gaps, which is longer than a second. A tick a second therefore always lands inside
+# them, and the screen is never still. Nothing shorter is needed and nothing shorter is portable:
+# a second is the smallest sleep every machine's shell agrees on.
+#
+# **The terminal's own echo is left on**, which is the opposite of the roads about a silent pane and
+# is the point of this one: what is written into this pane comes back onto the screen, so the sending
+# is judged on the sentence being shown — the strong reading, and the only one used here. A pane that
+# is never still is one where movement after a paste says nothing about the paste.
+#
+# **The first twelve ticks are counted out loud, and that is what times the road.** The app writes
+# into a restless pane after ten seconds, and no reading can be taken before then — an operator who
+# looked sooner would mark a working build red. So the wait is a step rather than a word: the twelfth
+# tick is on the screen or it is not, and by the time it is, the moment being read about has passed.
+#
+# **After the twelfth it ticks without saying so**, a character at a time on one line. It has to go
+# on moving — a screen that went still inside the app's patience would be written into by the
+# stillness rule, and this road would go green on a build with nothing in it that this is about — but
+# the counting cannot go on with it: a numbered line a second scrolls the earlier readings off the
+# pane, and every one of them has to stay put for an operator working down the list.
+#
+# **The ticking stops on its own.** It counts its way out rather than looping forever, so a road left
+# half-walked leaves nothing running behind it on the operator's machine.
+#
+# ── Why the machine is stood up first ────────────────────────────────────────────────────────────
+# So the frame draws the row a command is registered under: where a machine can start one thing there
+# is no row to write anything under, and where it can start none there is none either.
+id: be-told-how-to-work-here-in-a-pane-that-never-holds-still
+title: A pane whose program never stops drawing is written into all the same, and the opening sentence is sent
+description: >
+  Amenbo tells whatever runs in a pane to read `amenbo agent --json` first, and where the launch line
+  is the reader's own the sentence follows the command in rather than riding as an argument. It waits
+  for the pane to stand still before writing, which a program that repaints something of its own
+  never does — so after ten seconds of unbroken movement it writes anyway, once, and sends the
+  sentence when the pane shows it. The road registers a command that ticks once a second and hands
+  back every line it is given, and reads the sentence off a line the program was handed.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Beacon
+    as: beacon
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: beaconhouse
+      project: beacon
+
+  # Two, so there is a row to register under: with one thing to start there is no choice to draw, and
+  # with none there is no row.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Beacon
+
+  # Draws as it starts, then never stops drawing, and hands back what it is given. Each of the three
+  # does a job — see the head of the file.
+  - type: action
+    domain: terminal
+    op: register-start
+    with:
+      name: Ticking log
+      line: printf 'SCENARIO the pane is ready\n'; i=0; while [ $i -lt 150 ]; do sleep 1; i=$((i+1)); if [ $i -le 12 ]; then printf 'SCENARIO tick %s\n' "$i"; else printf .; fi; done & sed 's/^/SCENARIO back> /'
+
+  - type: action
+    domain: terminal
+    op: open-registered
+    with:
+      name: Ticking log
+
+  # The program is up and has drawn, which is what makes the pane one Amenbo will write into at all.
+  # Without this the road could pass on a build that never tried.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane is ready
+
+  # And it has been drawing ever since, without a break, for longer than the app waits. The one line
+  # carries both readings: twelve ticks is a pane the stillness rule was never going to be satisfied
+  # by — the state this whole road is about — and it is also the clock. Nothing after this could be
+  # read before it, and an operator who looked sooner would mark a working build red. It goes on
+  # moving after this without saying so, which is what keeps the readings above it on the pane.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO tick 12
+
+  # And the sentence came, and was sent, into a pane that never gave the stillness rule what it asks
+  # for. The marked line is the reading: what the pane echoes says only that Amenbo wrote into it, and
+  # a line the program was handed says the newline went too.
+  - type: assert
+    domain: terminal
+    op: handed-over
+    with:
+      given-back: SCENARIO back>

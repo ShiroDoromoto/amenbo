@@ -45,6 +45,20 @@ pub struct Cli {
     pub command: Option<Command>,
 }
 
+/// The command tree's root, and the one line drawn across it (`AMB-D-757`).
+///
+/// **A command belongs to the core or to the talk window, decided here rather than at run time.** The
+/// question is whether it would mean anything typed outside that window: if it would, it is core, and it
+/// sits at this level. **The line is not drawn on capability** — what only works in the window today may
+/// work anywhere tomorrow, and a line drawn on that leaves the verbs behind when it moves. Where it runs
+/// changes; where it belongs does not.
+///
+/// **What the window's own namespace ([`Command::Talk`]) takes is narrower still**: only what the window
+/// knows and the store cannot record. Anything that would still be true tomorrow goes to the core, whoever
+/// happens to be able to say it.
+///
+/// **The surface layer is closed by default.** A new verb goes to the core unless it is argued past both
+/// of the above.
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Present how to work here — the workflow and rules in full, plus an index of the commands (the
@@ -336,6 +350,28 @@ pub enum Command {
         /// lint the text piped on stdin instead
         #[arg(long, conflicts_with = "paths")]
         stdin: bool,
+    },
+
+    /// The **surface layer**: what you say about the session you are running in, inside the talk window's
+    /// terminal (`AMB-D-749`). It moves the pane on the person's screen and writes to no store — nothing
+    /// said here outlives the window, and every verb of it **fails outside one**, loudly, rather than
+    /// answering "ok" where nothing was shown.
+    ///
+    /// Named for the window it speaks to (`AMB-D-757`), so the namespace and the boundary are one word:
+    /// under `talk` is the surface layer, and everywhere else is the core.
+    ///
+    /// Hidden because it is not a command for every place `amenbo` runs: `--help` is read in terminals
+    /// this vocabulary does not exist in, and `agent --json` is read in all of them. The canon that
+    /// teaches it is `talk --json`, which is inside the window, where it can be used.
+    ///
+    /// It declares no `--actor`: the facet says who is writing to the store, and this writes to none.
+    #[command(hide = true)]
+    Talk {
+        /// A verb of the layer. With none, the canon is printed — the vocabulary and what is owed
+        /// (`--json` for the machine-readable shape). A bare word that is not a verb is refused rather
+        /// than taken as something to say: this is not the mouth that talks to the agent.
+        #[command(subcommand)]
+        sub: Option<TalkCmd>,
     },
 
     /// The entry point Amenbo's own `pre-commit` hook calls — it lints the staged diff, the same as a bare
@@ -960,6 +996,32 @@ pub enum HardEraseCmd {
         /// read the replacement body from this file instead of --body / stdin
         #[arg(long, conflicts_with = "body")]
         body_file: Option<String>,
+    },
+}
+
+/// The verbs of the surface layer (`talk`). Two are owed — `waiting` and `finished` say the things
+/// nothing outside the pane can find out (`AMB-D-748`) — and the rest are offered.
+#[derive(Subcommand, Debug)]
+pub enum TalkCmd {
+    /// Name this pane. The name sticks to the frame rather than to what runs in it
+    Name {
+        /// the name to show on the pane
+        text: String,
+    },
+    /// A line about what you are doing now, shown on the pane's label
+    Note {
+        /// the line to show
+        text: String,
+    },
+    /// A person's turn has come. Say why in the same breath — the reason is what they read
+    Waiting {
+        /// why their turn has come
+        text: String,
+    },
+    /// The work is done. Say what came of it
+    Finished {
+        /// what came of it
+        text: String,
     },
 }
 

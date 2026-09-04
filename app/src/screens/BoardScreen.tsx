@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { dataAdapter } from "../mock/adapter";
 import { useStore } from "../store/store";
@@ -14,6 +14,7 @@ import { FirstLoop } from "../components/FirstLoop";
 import { AgentHookWiringRow, useAgentHookWiring } from "./AgentHookWiringRow";
 import { LinkFolderNotice } from "./LinkFolderNotice";
 import { pickBoardNotice } from "./boardNotice";
+import { DROP_ATTR, splitColumn, useCardDrag } from "./boardDrag";
 import { useBoundFolders } from "../core/boundFolders";
 import { inTauri } from "../core/snapshot";
 import { axesFor } from "../core/appliesTo";
@@ -99,6 +100,7 @@ const DONE_COLUMN_CAP = 20;
  */
 export function BoardScreen({
   projectId, headerSlot, selectedTaskId, onSelectTask, selectedDecisionId, onSelectDecision, onComposeTask, onOpenSettings,
+  onStartTerminal,
 }: {
   projectId: number;
   // Where the project header (toolbar) is drawn. It is portalled into AppShell's full-width header row, so the
@@ -110,6 +112,9 @@ export function BoardScreen({
   onSelectDecision: (id: number | null) => void;
   onComposeTask: (target: ComposeTarget) => void;
   onOpenSettings: () => void;
+  /** Work in this folder, in this project, in the terminal — the first loop's one move, carried out
+   *  by the shell (`../shell/AppShell`). */
+  onStartTerminal: (project: number, dir: string) => void;
 }) {
   const store = useStore();
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
@@ -136,13 +141,38 @@ export function BoardScreen({
   // Free-word search, run by core over every face the word index carries (see the doc comment above).
   // Incremental, and ANDs with the filter chips.
   const [search, setSearch] = useState("");
-  // Id of the card currently being dragged (drives the column highlight and dims the card that was grabbed).
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const clearDragging = useCallback(() => setDraggingId(null), []);
+  // Where a card let go over a column goes. The key says which board is being looked at and which of
+  // its columns took the card, and it is the only thing the gesture knows about either — what is
+  // under the pointer is a `data-` attribute, not a React tree (`./boardDrag`).
+  //
+  // Nothing here asks whether the write would change anything: a card let go where it already was
+  // never reaches this, because the gesture compares the column it came from with the one it landed
+  // on and says nothing when they are the same.
+  const dropOn = useCallback((column: string, id: number) => {
+    const [board, which] = splitColumn(column);
+    if (board === "status") {
+      store.setStatus(id, which as Status);
+      return;
+    }
+    const to = which === "none" ? undefined : Number(which);
+    const was = dimAssign[id];
+    showDimAssign(id, to);
+    const done = to === undefined
+      ? store.unsetTaskDimensionValue(id, was)
+      : store.setTaskDimensionValue(id, to);
+    void done.then((ok) => { if (!ok) showDimAssign(id, was); });
+  }, [store, dimAssign, showDimAssign]);
+  // Dragging a card is pointer events now, not HTML5 drag: the OS handler that lets a file be dropped
+  // on the window swallows the latter on two of the three operating systems (`./boardDrag`, `AMB-D-775`).
+  const drag = useCardDrag(dropOn);
+  // Where a card already is, on each of the two boards. On the status board that is its own status
+  // and not the column it is drawn in — the done column draws the rejected too (`AMB-D-397`).
+  const statusHome = useCallback((card: TaskCard) => `status:${card.status}`, []);
+  const dimHome = useCallback((card: TaskCard) => `dim:${dimAssign[card.id] ?? "none"}`, [dimAssign]);
   // The board surface, for the move flourish. Only one `.board` mounts at a time, so both grouping
   // layouts share this ref. useBoardFlip is inert outside Tauri and when its flag is off.
   const boardRef = useRef<HTMLDivElement>(null);
-  const armMove = useBoardFlip(boardRef, draggingId);
+  const armMove = useBoardFlip(boardRef, drag.draggingId);
   // What this project has left to wire. Read here rather than inside the row, because whether the row is
   // standing is one of the inputs to which notice the board draws (see `notice` below).
   const wiring = useAgentHookWiring(projectId);
@@ -353,7 +383,7 @@ export function BoardScreen({
           is one to speak about. */}
       {tab === "tasks" && notice === "firstLoop" && folders.live[0] && (
         <div className="board__firstloop">
-          <FirstLoop dir={folders.live[0].path} />
+          <FirstLoop dir={folders.live[0].path} onStart={(where) => onStartTerminal(projectId, where)} />
         </div>
       )}
 
@@ -473,15 +503,12 @@ export function BoardScreen({
                 onAdd={st === "todo"
                   ? () => onComposeTask({ projectId, label: project.name })
                   : undefined}
-                droppable
-                draggingId={draggingId}
-                onCardDragStart={setDraggingId}
-                onCardDragEnd={clearDragging}
-                canDragCard={movableStatus}
-                onDropTask={(id) => {
-                  const tk = all.find((t) => t.id === id);
-                  if (tk && tk.status !== st) store.setStatus(id, st);
-                }}
+                dropKey={`status:${st}`}
+                over={drag.overColumn === `status:${st}`}
+                draggingId={drag.draggingId}
+                homeOf={statusHome}
+                canGrab={movableStatus}
+                onPress={drag.press}
               />
             );
           })}
@@ -510,17 +537,11 @@ export function BoardScreen({
               onSelectTask={onSelectTask}
               onStatus={store.setStatus}
               onSeeAllList={() => setView("list")}
-              droppable={!v.closed}
-              draggingId={draggingId}
-              onCardDragStart={setDraggingId}
-              onCardDragEnd={clearDragging}
-              onDropTask={(id) => {
-                if (dimAssign[id] === v.id) return;
-                const prev = dimAssign[id];
-                showDimAssign(id, v.id);
-                void store.setTaskDimensionValue(id, v.id)
-                  .then((ok) => { if (!ok) showDimAssign(id, prev); });
-              }}
+              dropKey={v.closed ? undefined : `dim:${v.id}`}
+              over={drag.overColumn === `dim:${v.id}`}
+              draggingId={drag.draggingId}
+              homeOf={dimHome}
+              onPress={drag.press}
             />
           ))}
           <Column
@@ -531,17 +552,11 @@ export function BoardScreen({
             onSelectTask={onSelectTask}
             onStatus={store.setStatus}
             onSeeAllList={() => setView("list")}
-            droppable
-            draggingId={draggingId}
-            onCardDragStart={setDraggingId}
-            onCardDragEnd={clearDragging}
-            onDropTask={(id) => {
-              const cur = dimAssign[id];
-              if (!cur) return;
-              showDimAssign(id, undefined);
-              void store.unsetTaskDimensionValue(id, cur)
-                .then((ok) => { if (!ok) showDimAssign(id, cur); });
-            }}
+            dropKey="dim:none"
+            over={drag.overColumn === "dim:none"}
+            draggingId={drag.draggingId}
+            homeOf={dimHome}
+            onPress={drag.press}
           />
           <AddDimensionValue onAdd={(name) => store.addDimensionValue(groupingDim.id, name)} />
         </div>
@@ -636,7 +651,7 @@ function AddDimensionValue({ onAdd }: { onAdd: (name: string) => void }) {
 // handlers are fresh each render); what matters is that a change of selection stops before the sibling cards.
 const Column = memo(function Column({
   name, cards, chips, count, note, overflow, onSeeAllList, selectedTaskId, onSelectTask, onStatus, onAdd,
-  droppable, draggingId, onDropTask, onCardDragStart, onCardDragEnd, canDragCard,
+  dropKey, over, draggingId, homeOf, canGrab, onPress,
 }: {
   name: string;
   cards: TaskCard[];
@@ -660,43 +675,44 @@ const Column = memo(function Column({
   onSelectTask: (id: number) => void;
   onStatus: (id: number, status: Status, reason?: string) => void;
   onAdd?: () => void;
-  // Drag and drop (the status board only). Cards can be grabbed from a droppable column, and a drop sets status.
-  droppable?: boolean;
+  /**
+   * What this column answers to when a card is let go over it. A column with no key takes no cards —
+   * it is the whole of what "droppable" used to say, and it is also what a card carries as the column
+   * it came from (`./boardDrag`).
+   */
+  dropKey?: string;
+  /** Whether a held card is over this column. The board says so: it is the one place that knows. */
+  over?: boolean;
   draggingId?: number | null;
-  onDropTask?: (id: number) => void;
-  onCardDragStart?: (id: number) => void;
-  onCardDragEnd?: () => void;
+  /**
+   * Where a card already is, spelled as a column key.
+   *
+   * **Not the column it is drawn in.** The done column draws both terminals (`AMB-D-397`), so a
+   * rejected card sits under a "done" heading while its own place is `rejected` — and letting it go
+   * there is a reader saying it was done after all. Asking the card rather than the column is what
+   * keeps that meaning.
+   */
+  homeOf?: (card: TaskCard) => string;
   /**
    * Which cards may be grabbed, where the answer is not "all of them". The status board asks it: a drop
    * there writes status, and a task still being created has none to write (`AMB-D-846`), so the card is
    * left where it is rather than dragged into a refusal. The dimension board writes a value, not a
-   * status, so it passes nothing and every card stays draggable.
+   * status, so it passes nothing and every card stays grabbable.
    */
-  canDragCard?: (task: TaskCard) => boolean;
+  canGrab?: (card: TaskCard) => boolean;
+  onPress?: (id: number, from: string, event: PointerEvent<HTMLElement>) => void;
 }) {
-  const [over, setOver] = useState(false);
   // Capping: for the done column the caller has already trimmed to N and passed `overflow`. Any other column is
   // trimmed to its first N only when it exceeds BOARD_COLUMN_CAP and has somewhere to send the rest (onSeeAllList).
   const capped = !overflow && !!onSeeAllList && cards.length > BOARD_COLUMN_CAP;
   const shownCards = capped ? cards.slice(0, BOARD_COLUMN_CAP) : cards;
   const hiddenCount = capped ? cards.length - BOARD_COLUMN_CAP : 0;
-  const dnd = droppable && onDropTask
-    ? {
-        onDragOver: (e: DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (!over) setOver(true); },
-        // Keep the highlight from flickering as the pointer crosses children (clear it only on leaving the column).
-        onDragLeave: (e: DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); },
-        onDrop: (e: DragEvent) => {
-          e.preventDefault();
-          setOver(false);
-          const id = Number(e.dataTransfer.getData("text/plain"));
-          if (id) onDropTask(id);
-        },
-      }
-    : {};
   return (
     <div
-      className={`column ${droppable ? "column--droppable" : ""} ${over ? "column--dragover" : ""}`.trim()}
-      {...dnd}
+      className={`column ${dropKey ? "column--droppable" : ""} ${over ? "column--dragover" : ""}`.trim()}
+      // What is under the pointer is read off the document rather than out of the React tree: the
+      // gesture is given a point and nothing else (`./boardDrag`).
+      {...(dropKey ? { [DROP_ATTR]: dropKey } : {})}
     >
       <div className="column__head">
         <span className="column__name">{name}</span>
@@ -712,10 +728,10 @@ const Column = memo(function Column({
           task={t}
           chips={chips[t.id]}
           selected={t.id === selectedTaskId}
-          draggable={!!onCardDragStart && (canDragCard?.(t) ?? true)}
+          home={homeOf?.(t)}
+          canGrab={canGrab?.(t) ?? true}
           dragging={t.id === draggingId}
-          onBeginDrag={onCardDragStart}
-          onEndDrag={onCardDragEnd}
+          onPress={onPress}
           onSelect={onSelectTask}
           onStatus={onStatus}
         />
@@ -734,23 +750,27 @@ const Column = memo(function Column({
 });
 
 // Cards are memoised so that a change of selection does not re-render the siblings. For the memo to hold, the
-// click props have to be stable references (onSelect=AppShell, onStatus=store, onBeginDrag=setDraggingId,
-// onEndDrag=the stable clearDragging) and the id is bound inside the card from task.id. The status select in the
-// footer must stop mousedown to suppress the card's drag start, or selecting and dragging cannot both work.
+// click props have to be stable references (onSelect=AppShell, onStatus=store, onPress=the gesture's own, which
+// holds what to do with a landed card in a ref for exactly this reason) and the id is bound inside the card from
+// task.id. The status select in the footer must stop the press to suppress the card's drag start, or selecting
+// and dragging cannot both work.
 const TaskCardView = memo(function TaskCardView({
-  task, chips, selected, draggable, dragging, onBeginDrag, onEndDrag, onSelect, onStatus,
+  task, chips, selected, home, canGrab = true, dragging, onPress, onSelect, onStatus,
 }: {
   task: TaskCard;
   /** The values this task carries on the axes flagged for the card. Undefined when it carries none. */
   chips?: CardChip[];
   selected: boolean;
-  draggable?: boolean;
+  /** Where this card already is, which is what says a drop back onto it changes nothing (see `Column`). */
+  home?: string;
+  /** Whether this one may be grabbed at all (see `Column`'s `canGrab`). */
+  canGrab?: boolean;
   dragging?: boolean;
-  onBeginDrag?: (id: number) => void;
-  onEndDrag?: () => void;
+  onPress?: (id: number, from: string, event: PointerEvent<HTMLElement>) => void;
   onSelect: (id: number) => void;
   onStatus: (id: number, status: Status, reason?: string) => void;
 }) {
+  const grabbable = onPress !== undefined && home !== undefined && canGrab;
   return (
     <div
       className={[
@@ -759,18 +779,12 @@ const TaskCardView = memo(function TaskCardView({
         // Struck through once it has ended, either way it ended. Which terminal it reached is the
         // pull-down's to say (it sits in the footer, set to `done` or `rejected`).
         isClosed(task.status) ? "card--closed" : "",
-        draggable ? "card--draggable" : "",
+        grabbable ? "card--draggable" : "",
         dragging ? "card--dragging" : "",
       ].join(" ")}
       // The move flourish keys on this to track a card across columns; the flag omits it when off.
       data-flip-id={BOARD_FLIP ? task.id : undefined}
-      draggable={draggable}
-      onDragStart={draggable ? (e: DragEvent) => {
-        e.dataTransfer.setData("text/plain", String(task.id));
-        e.dataTransfer.effectAllowed = "move";
-        onBeginDrag?.(task.id);
-      } : undefined}
-      onDragEnd={draggable ? () => onEndDrag?.() : undefined}
+      onPointerDown={grabbable ? (e) => onPress(task.id, home, e) : undefined}
       onClick={() => onSelect(task.id)}
       role="button"
       data-pane-select

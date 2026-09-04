@@ -21,6 +21,7 @@ pub(crate) mod premise;
 pub(crate) mod project;
 pub(crate) mod setup;
 pub(crate) mod status;
+pub(crate) mod talk;
 pub(crate) mod task;
 pub(crate) mod tick;
 pub(crate) mod update;

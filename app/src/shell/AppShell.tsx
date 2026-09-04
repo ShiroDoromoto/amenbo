@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { RefTargetDto } from "../bindings/bindings";
 import { TopBar } from "./TopBar";
+import { TerminalFace } from "./TerminalFace";
 import { useNavHistory, NO_SELECTION } from "./navHistory";
 import { isBlankSpaceClose } from "./outsideClose";
 import { Sidebar } from "./Sidebar";
@@ -29,12 +31,16 @@ import { DecisionDetailPane } from "../screens/DecisionDetailPane";
 import { TaskComposePane } from "../screens/TaskComposePane";
 import { dataAdapter } from "../mock/adapter";
 import { checkForUpdatesFresh, inTauri, subscribe } from "../core/snapshot";
+import { type Face, getWindowShape, setWindowShape, type WindowShape } from "../core/windowShape";
+import { badgeUp, knock, looked, NO_ATTENTION, turnCame } from "./terminalBadge";
+import { notifyTurn } from "../core/osNotify";
+import { invoke } from "../core/ipc";
 import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sidebarWidth";
 import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollapsed";
 import { RefNavProvider } from "../core/refNav";
-import { currentLang, t } from "../core/i18n";
+import { currentLang, errLabel, t, type CmdError } from "../core/i18n";
 import { Icon } from "../components/Icon";
 
 /**
@@ -130,6 +136,223 @@ export function AppShell() {
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsedState((c) => setSidebarCollapsed(!c));
   }, []);
+
+  // Which face this window is showing, and whether the terminal has a window of its own
+  // (`AMB-D-753`). A launch shows the ledger; the shape is what the machine was last used in.
+  const [face, setFace] = useState<Face>("tasks");
+  const [shape, setShapeState] = useState<WindowShape>(() => getWindowShape());
+  // Has the terminal been asked for in this window at all? Until it has, there is no pane and no
+  // shell — a launch that never leaves the ledger starts no process it was not asked to. Once asked
+  // it stays true, because the face is hidden rather than taken down (`TerminalFace`).
+  const [terminalAsked, setTerminalAsked] = useState(false);
+  const hostsTerminal = shape === "one" && terminalAsked;
+  // Splitting out and folding back are the same move seen from either end, and both go through the
+  // shape: the window is opened and closed by the effect below, so every way into two windows — the
+  // button, and a launch that remembers being two — arrives at the same place.
+  const setShape = useCallback((next: WindowShape) => setShapeState(setWindowShape(next)), []);
+  // The window the terminal was split out into failing to become one. It is the one failure here a
+  // person has to be told about, because they asked for the window and would otherwise watch the
+  // button do nothing — and it is told on the face they are put back on, which is where they were
+  // going. Two things can fail: the platform refusing to build the window at all, and a window that
+  // was built around a page that never drew (`crate::windows::talk_open`).
+  const [windowError, setWindowError] = useState<string | null>(null);
+  // Whether an open is still out. The window is not this window's to watch, so what says the app is
+  // doing something is the request not having come back yet — and the wait is real, since the host
+  // holds the answer until the other window says it drew.
+  const [opening, setOpening] = useState(false);
+  /**
+   * One window again, with the terminal as its face — and `note` to say why, where there is a why.
+   *
+   * Every way the second window can fail to be there ends here: it was refused, it drew nothing, or
+   * it went without this window hearing. The reader was on their way to the terminal in all three,
+   * so this is where they are put, and `terminalAsked` is set because the face is only hosted once
+   * it has been asked for — a launch that came up believing it was two windows never asked.
+   */
+  const foldBackToTerminal = useCallback((note: string | null) => {
+    setWindowError(note);
+    setShapeState(setWindowShape("one"));
+    setTerminalAsked(true);
+    setFace("terminal");
+  }, []);
+  /**
+   * A press meant for the terminal, made while this window believes the terminal is in the other one.
+   *
+   * It asks for that window rather than opening one, because opening is what a press means only when
+   * the reader asked for two windows — and here they are asking to *see* the terminal. A `false`
+   * means the belief was wrong and there is no window: the reader is put back on the face here
+   * rather than left pressing at nothing, which is what a raise of a window that is not there
+   * silently was (`crate::windows::talk_raise`).
+   */
+  const goToTalkWindow = useCallback((instead: () => void) => {
+    void invoke<boolean>("talk_raise")
+      .then((there) => { if (!there) instead(); })
+      .catch(instead);
+  }, []);
+  // Whether the window the shape is about to open was asked for by a press, and so comes to the
+  // front. A launch restoring the shape was not asking for anything, and the window the user is
+  // looking at is this one — "nothing comes forward but what somebody pressed" (`AMB-D-753`).
+  const raiseTalk = useRef(false);
+  // Nothing else travels with the press. What the window draws is the terminal face whole, and the
+  // face reads the arrangement this run holds and takes up the terminals still running — the same two
+  // questions it answers when the app folds back into one window (`./TerminalFace`, `../talk.tsx`).
+  useEffect(() => {
+    if (!inTauri()) return;
+    if (shape !== "two") {
+      void invoke("talk_close").catch(() => {});
+      return;
+    }
+    const raise = raiseTalk.current;
+    raiseTalk.current = false;
+    setOpening(true);
+    void invoke("talk_open", { raise })
+      .catch((e: unknown) => {
+        // Back to one window, where the terminal still is: what was split out is put back rather
+        // than left pointing at a window that was never built, or at one that was built and drew
+        // nothing.
+        foldBackToTerminal(errLabel(e as CmdError));
+      })
+      .finally(() => setOpening(false));
+  }, [shape, foldBackToTerminal]);
+  // The talk window going away, however it went: the button that folds the app back, and the title
+  // bar's close, which is the one an app that only watched its own button would miss. Either way the
+  // terminal is still running and is now nobody's to draw, so this window takes it and shows it —
+  // landing where the user was looking when they closed the other window.
+  useEffect(() => {
+    if (!inTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen("talk://closed", () => {
+          setShape("one");
+          setTerminalAsked(true);
+          setFace("terminal");
+        }),
+      )
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [setShape]);
+  // Pressing a segment. With the terminal in a window of its own there is nothing to switch to here,
+  // so the press raises that window instead — and never opens a second one (`windows::talk_open`).
+  const selectFace = useCallback((next: Face) => {
+    if (next === "terminal" && shape === "two") {
+      goToTalkWindow(() => foldBackToTerminal(null));
+      return;
+    }
+    if (next === "terminal") setTerminalAsked(true);
+    setFace(next);
+  }, [shape, goToTalkWindow, foldBackToTerminal]);
+  // The folder the ledger has asked the terminal to work in, whose project it is, and a count of the
+  // asking: the face is a component, so what it is handed is where to work rather than a call to make
+  // (`./TerminalFace`).
+  const [openIn, setOpenIn] = useState<{ project: number; dir: string; nth: number } | null>(null);
+  /**
+   * "Start in the terminal" — the one move the first loop offers (`../components/FirstLoop`).
+   *
+   * With the terminal split out into a window of its own, this window has no face to hand the folder
+   * to. What the press does then is raise that window: the terminal is where the reader is being sent
+   * either way, and the folder is asked for there rather than promised here (`AMB-D-749`).
+   *
+   * **The project comes from the screen that was pressed on, and is not worked out here.** A pane
+   * belongs to a project (`../talk/layout`), and the screens the button is on each know which one
+   * they are about — the board from the project it draws, the completion step from the project it
+   * has just made. Reading it off the navigation instead would be right on the board and wrong on
+   * that step, where what is being looked at is a view and not a project at all (`AMB-T-3708`).
+   */
+  const startTerminalIn = useCallback((project: number, dir: string) => {
+    const here = () => {
+      setOpenIn((asked) => ({ project, dir, nth: (asked?.nth ?? 0) + 1 }));
+      setTerminalAsked(true);
+      setFace("terminal");
+    };
+    if (shape === "two") {
+      // And where that window turns out not to exist, the folder is not dropped along with the
+      // belief: the reader asked to work in it, and this window can now host the face that does.
+      goToTalkWindow(() => { foldBackToTerminal(null); here(); });
+      return;
+    }
+    here();
+  }, [shape, goToTalkWindow, foldBackToTerminal]);
+
+  /**
+   * The pane a task on the ledger is being worked in, asked for from the task itself.
+   *
+   * It arrives from the host rather than from a press in this tree, because the two faces can be in
+   * two windows: the task is read here and the pane may be over there, so what raises the right
+   * window is the process that owns them both (`crate::windows::show_pane`). This window is told only
+   * when it is the one holding the face — so what is left to do here is put that face up, and the
+   * session goes down to it to be found among the places (`./TerminalFace`).
+   *
+   * `terminalAsked` is set for the same reason `foldBackToTerminal` sets it: the face is only hosted
+   * once it has been asked for, and a reader on their way to a pane is asking.
+   */
+  const [goPane, setGoPane] = useState<{ session: string; nth: number } | null>(null);
+  useEffect(() => {
+    if (!inTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<string>("pane-activated", (e) => {
+          setTerminalAsked(true);
+          setFace("terminal");
+          setGoPane((asked) => ({ session: e.payload, nth: (asked?.nth ?? 0) + 1 }));
+        }),
+      )
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  // "Open in a separate window". The face comes down as the shape changes, leaving the terminals in
+  // its panes running for the window that is about to draw them, and this window goes back to the
+  // ledger — the face it is now the only one of.
+  const splitOutTerminal = useCallback(() => {
+    setWindowError(null);
+    raiseTalk.current = true;
+    setFace("tasks");
+    setShape("two");
+  }, [setShape]);
+
+  // A turn standing in the terminal while the ledger is the face that is up (`./terminalBadge`). In
+  // two windows there is no badge and nothing to feed it: the terminal is on screen already, with its
+  // own nameplates, and this window stops hosting the pane that would speak.
+  const [attention, setAttention] = useState(NO_ATTENTION);
+  // The face as the pane finds it, not as the render that made the callback saw it: `noteWaiting` is
+  // handed to a component that puts its terminal up once, so it has to keep the same identity for the
+  // life of the pane — reading the face through a ref is what buys that.
+  const facing = useRef(face);
+  facing.current = face;
+  const noteWaiting = useCallback((waiting: boolean) => {
+    setAttention((was) => {
+      const now = turnCame(was, waiting, facing.current === "terminal");
+      // The badge going up is also the moment to knock on the OS: the same question — a turn came up
+      // while the person was not looking at the terminal — answered on the screen for whoever is at it
+      // and off the screen for whoever is not (`./terminalBadge`).
+      if (knock(was, now)) void notifyTurn();
+      return now;
+    });
+  }, []);
+  // Every way onto the terminal face is being shown what is standing there — the segment, the other
+  // window closing, a window that could not be built — so the badge is spent here rather than at each
+  // of them.
+  useEffect(() => {
+    if (face === "terminal") setAttention(looked);
+  }, [face]);
+  useEffect(() => {
+    if (!hostsTerminal) setAttention(NO_ATTENTION);
+  }, [hostsTerminal]);
 
   const rightpaneRef = useRef<HTMLDivElement>(null);
   // The right pane's width (a device-local, persisted UI setting). Dragging the left-edge handle widens it, up to
@@ -253,7 +476,15 @@ export function AppShell() {
     let unlisten: (() => void) | undefined;
     let disposed = false;
     void import("@tauri-apps/api/event")
-      .then(({ listen }) => listen("notification-activated", () => navTo({ type: "view", id: "inbox" })))
+      // Where a click on a toast lands: what it was about says which face, and the host has already
+      // raised the window that face is in — with the terminal split out that is a different window,
+      // and this one cannot raise it (`crate::notify`).
+      .then(({ listen }) =>
+        listen<string>("notification-activated", ({ payload }) => {
+          if (payload === "turn") selectFace("terminal");
+          else navTo({ type: "view", id: "inbox" });
+        }),
+      )
       .then((un) => {
         if (disposed) un();
         else unlisten = un;
@@ -263,6 +494,30 @@ export function AppShell() {
       unlisten?.();
     };
   }, [navTo]);
+
+  // A ref clicked in a pane of the talk window. The host has already brought this window forward and
+  // settled what was clicked (`crate::windows::show_ref`); what is left is the move this shell alone
+  // knows how to make, and it is the same one an in-body ref makes — down to the unsaved-input
+  // confirmation, which a ref arriving from the other window has no more right to walk past than one
+  // clicked here.
+  useEffect(() => {
+    if (!inTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<RefTargetDto>("ref-activated", ({ payload }) => {
+        if (payload.kind === "task") void selectTask(payload.id);
+        else void selectDecision(payload.id);
+      }))
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [selectTask, selectDecision]);
 
   // The app menu's "check for updates" click arrives as a Tauri event (menu.rs → lib.rs). Run the fresh check and let
   // the outcome drive the feedback note; `available` clears the note because the UpdateBanner shows the offer instead.
@@ -321,6 +576,9 @@ export function AppShell() {
         canForward={canForward}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
+        face={face}
+        onSelectFace={selectFace}
+        terminalBadge={badgeUp(attention)}
       />
       {/* Every band the app can raise, stacked in one place. They share a row of the shell rather than
           claiming one each: the grid needs a definite row per child, and news does not arrive one item
@@ -335,9 +593,37 @@ export function AppShell() {
         <OrphanBindingBanner />
         <HookSetupBanner asked={hooksAsked} />
         <TickBanner />
+        {/* The open that is still out. It is a band rather than something on the terminal segment
+            because the face has already come down by now — the shape changed as the press landed —
+            so the only place left to say anything is the board the reader is looking at. */}
+        {opening && (
+          <div className="healthbanner" role="status">
+            <Icon name="newWindow" size="lg" />
+            <div className="healthbanner__body">
+              <div className="healthbanner__title">{t("face.opening")}</div>
+            </div>
+          </div>
+        )}
       </div>
+      {/* The terminal face, kept up from the moment it is first asked for. `hidden` is what the
+          other face being up means here: taking this down would take the emulator with it, and the
+          agent running in the pane would have nowhere to come back to (`AMB-D-753`). */}
+      {hostsTerminal && (
+        <div className="shell__terminal" hidden={face !== "terminal"}>
+          <TerminalFace
+            onWindow={splitOutTerminal}
+            note={windowError}
+            onWaiting={noteWaiting}
+            projectId={nav.type === "project" ? Number(nav.id) : (dataAdapter.listProjects()[0]?.id ?? null)}
+            onOpenLedger={() => setFace("tasks")}
+            openIn={openIn}
+            goPane={goPane}
+          />
+        </div>
+      )}
       <div
         className={`shell__body ${showRight ? "" : "shell__body--no-right"}${sidebarCollapsed ? " shell__body--sidebar-collapsed" : ""}`}
+        hidden={face === "terminal"}
         style={{ "--rightpane-w": `${rightWidth}px`, "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}
       >
         <div className="sidebar-wrap">
@@ -365,6 +651,7 @@ export function AppShell() {
               onSelectDecision={selectDecision}
               onComposeTask={openCompose}
               onOpenSettings={() => navTo({ type: "projectSettings", id: nav.id })}
+              onStartTerminal={startTerminalIn}
             />
           )}
           {nav.type === "projectSettings" && (
@@ -405,6 +692,7 @@ export function AppShell() {
               onCreated={navTo}
               onCancel={goBack}
               onOpenMcp={(projectId) => navTo({ type: "view", id: "mcp", pick: projectId })}
+              onStartTerminal={startTerminalIn}
             />
           )}
         </div>

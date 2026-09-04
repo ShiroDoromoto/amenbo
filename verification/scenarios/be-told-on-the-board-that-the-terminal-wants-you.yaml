@@ -1,0 +1,122 @@
+# The one thing that crosses the switch: a turn came up in the terminal while the board was the face
+# being looked at.
+#
+# Amenbo is one window with two faces, and the pane keeps running behind whichever is up. That is what
+# makes this needed: a person reading the board cannot see the pane's nameplate, and an agent that
+# has stopped and is waiting on them would go on waiting unheard. So the segment wears a mark — a dot
+# and nothing more. It says a turn is standing and nothing about whose or what it is; what it is for
+# is getting somebody to press the segment, and everything else is on the face they land on.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here and no gap in one. What is under test is a mark on a control, put there
+# by a word that only exists inside a pane. Neither half has a shape outside a screen.
+#
+# ── Why the word is said from behind the other face ──────────────────────────────────────────────
+# The mark is raised only by a turn that arrives while the terminal is *not* the face being looked at
+# — a turn that came up while somebody was already reading the pane has been told already, and a badge
+# for it would be a light rather than a knock. But the layer is only ever spoken inside a pane, which
+# is on the face the mark is never drawn on. So the road arms the word and walks away from it: the
+# operator starts it in the pane, then presses the other segment before it lands. That is not a trick
+# around the seam — it is the seam, and the only door it has.
+#
+# ── Why the lamp is read on the way through ─────────────────────────────────────────────────────
+# The same turn is said three times, and each time the reader is closer: a mark on the segment from
+# the other face, the lamp on the pane's own label once that face is up, and the session's own words
+# beside it. This road already walked the first and the third, and the lamp is the rung between them
+# — read here rather than on a road of its own because it is the same turn, raised the same way, and
+# a second road would be arming the same word twice to look at the middle of it.
+#
+# ── Why the badge is spent at the end ────────────────────────────────────────────────────────────
+# Being on the terminal face is being told. The last two steps are the other half of the same rule:
+# crossing over takes the mark away, so the reader is never asked twice about one turn, and the
+# segment never becomes a status light that has to be dismissed.
+#
+# The world is empty on purpose. What raises the mark is a session's own word, not a record: standing
+# tasks up would furnish a board this road only ever looks at for the dot on a segment. The folder is
+# not furniture either — choosing one is what raises the project it belongs to, so the road makes the
+# world it needs by walking in.
+id: be-told-on-the-board-that-the-terminal-wants-you
+title: A turn comes up in the terminal while the board is up, and the segment says so
+description: >
+  Open the terminal face, choose the folder the pane runs in, and open a plain shell there. Hand the
+  turn over from inside the pane and cross to the board before the word lands: the segment for the
+  terminal is wearing a mark, which is the whole of what a person reading the board is told. Press it,
+  and the lamp on the pane's own label is blinking beside the reason in the session's own words — the
+  same turn, said closer. The mark on the segment is gone: being on that face is being told, and a
+  turn is knocked once.
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The pane the word is said in. Choosing a folder is the whole of the way in, and the terminal opens
+  # in what was chosen.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  # And down to a plain shell, because the word below is run rather than typed. A folder with an agent
+  # on it opens on the agent, and a command handed to one is a request: whether it is carried out is
+  # the agent's own, and what raises the mark here has to be said rather than asked for.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # Armed, and left behind. This is the one step on these roads that ends somewhere other than where
+  # it started: the word is said in the pane and the person is on the board when it arrives, which is
+  # the only shape that raises anything.
+  - type: action
+    domain: terminal
+    op: say
+    with:
+      verb: waiting
+      text: SCENARIO the migration needs a decision
+      away: true
+
+  # The whole of what crossed. It is read on the segment and not on the board, because the board is
+  # the ledger's and has nothing to say about a session.
+  - type: assert
+    domain: terminal
+    op: face-badge
+
+  # And the press it exists to get. What is on the other side is the pane, saying in the session's own
+  # words what the dot could not.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The middle rung. The lamp is the same turn as the mark just left behind, said closer: not a dot on
+  # a control saying somebody is needed somewhere, but a lamp on the row of the pane it is needed in.
+  # It is why the colour is the segment's and not the pane's own — the two are one signal.
+  - type: assert
+    domain: terminal
+    op: dot
+    with:
+      face: calling
+
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the migration needs a decision
+
+  # Spent. The reader has been shown the turn, so the segment they came from is bare again — a mark
+  # still up here would be one they had to dismiss, and the whole of this is that they never do.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  - type: assert
+    domain: terminal
+    op: face-badge
+    with:
+      present: false

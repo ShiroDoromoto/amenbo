@@ -275,8 +275,9 @@ export async function finishTaskCreation(id: number): Promise<void> {
  * Set the status. **Reserving a task (→ in_progress) passes the same two guards core applies**: a
  * compare-and-swap that only fires when the task is currently `todo` (this is what stops two actors
  * starting the same work), and `ready` — no unfinished blocker and no unsettled grounding decision.
- * If the mock waved these through, browser iteration would be the only place a task "could be
- * reserved" that Tauri refuses.
+ * A task whose creation is still open passes a third: the three closing or stalling transitions are
+ * refused outright (`AMB-D-846`). If the mock waved any of these through, browser iteration would be
+ * the only place a status "could be moved" that Tauri refuses.
  */
 export async function setStatus(id: number, status: Status): Promise<void> {
   if (inTauri()) return invokeAck("task_status", { id, status });
@@ -302,6 +303,17 @@ export async function setStatus(id: number, status: Status): Promise<void> {
         { fields: { ref: t.ref }, parts },
       );
     }
+  }
+  // A creation that is still open pins the status where it stands (`AMB-D-846`). None of the three
+  // closing or stalling transitions says anything true about a half-written task, and the way out of a
+  // draft written in error is `delete`. `→ in_progress` is not named here: `ready` already carries the
+  // draft as one of its premises, so it is refused a line above with `not_ready_draft` among its parts.
+  if ((status === "done" || status === "blocked" || status === "rejected") && t.draft) {
+    throw mockErr(
+      "invalid_task_status_draft",
+      `cannot change the status of task ${t.ref}: it is still being created — finish creating it, or delete it`,
+      { fields: { ref: t.ref } },
+    );
   }
   // Status is the single source of truth for completion; `completedAt` only carries a value while a task is done
   // (`ops::task::set_status`) — a rejection is a terminal but not an achievement, so it leaves the field unset.

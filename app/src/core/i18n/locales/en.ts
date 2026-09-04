@@ -742,6 +742,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_dimension_close_last_open: "“{name}” is a required category and “{value}” is the last value it still offers, so closing it would leave a demand nobody can meet — turn off Required first.",
   invalid_dimension_set_closed_value: "“{value}” is closed on “{name}”, so nothing new is filed under it — choose an open value, or reopen this one.",
   invalid_task_required_dimension: "This task carries no value on {names}, which this project requires.",
+  invalid_task_status_draft: "{ref} is still being created, so its status cannot be changed — finish creating it, or delete it.",
   invalid_decision_required_dimension: "This decision carries no value on {names}, which this project requires.",
   invalid_dimension_values_unordered: "This category's values carry no order, so they cannot be re-ordered.",
   invalid_decision_edit_rejected: "{ref} was rejected, and a rejected decision cannot be edited.",

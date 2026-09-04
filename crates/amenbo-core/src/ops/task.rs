@@ -384,8 +384,14 @@ fn not_ready(subject: &str, blockers: &[ReserveBlocker]) -> Error {
 /// — already `in_progress` (a second session starting the same task), or `blocked`/`done` — is rejected with
 /// [`Error::AlreadyReserved`]. The only thing it judges on is whether the source state is `todo`; who the
 /// reserver is never enters into it. A reservation always goes via `todo` (from `blocked`/`done` you return
-/// to `todo` first). The other transitions (`→ todo` / `→ blocked` / `→ done`) are unconditional, and
-/// idempotent re-setting is the caller's business. A reservation **also demands `ready`**: a task with an
+/// to `todo` first). The other transitions (`→ todo` / `→ blocked` / `→ done`) are unconditional once the
+/// task is written, and idempotent re-setting is the caller's business. **A task whose creation is still
+/// open has no transition at all**: `→ done` / `→ blocked` / `→ rejected` are refused with
+/// [`Error::Invalid`] ([`ErrorCode::InvalidTaskStatusDraft`]), `→ in_progress` is refused by the `ready`
+/// guard below, and `→ todo` is where it already stands — so a draft stays `todo` until someone finishes
+/// creating it, and the way to be rid of one written in error is [`delete`] (`AMB-D-846`).
+///
+/// A reservation **also demands `ready`**: a task with an
 /// unfinished blocker left on it, or with a decision linked as a premise that is not settled, is rejected
 /// with [`Error::NotReady`]. That is evaluated after the CAS, so "another session holds it" and "its premises
 /// are unmet" arrive as different errors. There is no `--force`, and no actor is exempt (the coherence of a
@@ -408,6 +414,24 @@ pub fn set_status(tx: &WriteTx<'_>, id: i64, status: TaskStatus) -> Result<Task>
             // The status is not sent: naming it would put an English token ('in_progress') inside the
             // reader's sentence, and what the sentence has to say is that it is not `todo`.
             .coded(ErrorCode::AlreadyReserved)
+            .with("ref", subject),
+        ));
+    }
+    // A creation that is still open pins the status where it stands (`AMB-D-846`). None of the three
+    // closing or stalling transitions says anything true about a half-written task: `done` claims work
+    // finished, `blocked` an outside stall, and `rejected` a judgement on work that was written. A draft
+    // written in error is a mistake in the writing, not a decision to be recorded, so the way out of it is
+    // `delete`. `not_ready` is not reused for this: its sentence opens with "cannot reserve", which is not
+    // what is being refused here.
+    if matches!(status, TaskStatus::Done | TaskStatus::Blocked | TaskStatus::Rejected)
+        && read::task_draft(tx.conn(), id)?
+    {
+        let subject = subject(tx, id);
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "cannot change the status of task {subject}: it is still being created — finish creating it, or delete it"
+            ))
+            .coded(ErrorCode::InvalidTaskStatusDraft)
             .with("ref", subject),
         ));
     }
@@ -981,16 +1005,26 @@ mod tests {
     }
 
     #[test]
-    fn the_creation_guard_only_fires_on_the_reserve_transition() {
-        // Same rule as the other three premises: a task pushed back into being created does not strip a
-        // reservation already held, and the other transitions stay unconditional.
+    fn a_reopened_creation_keeps_the_reservation_and_leaves_only_the_way_back_to_todo() {
+        // Half of this is the rule the other three premises share: a premise that reappears under a
+        // running task does not strip the status it already holds. The other half is where the fourth
+        // premise parts from them (`AMB-D-846`) — it does not merely hold the reserve back, it refuses to
+        // close or stall the task at all, so the one transition left is the way back to `todo`.
         with_numbered_task(|tx, _pid, tid| {
             set_status(tx, tid, TaskStatus::InProgress).unwrap();
             set_draft(tx, tid, true);
 
             assert_eq!(status_of(tx, tid), TaskStatus::InProgress, "a creation reopened after the fact does not strip the reservation");
             assert_eq!(set_status(tx, tid, TaskStatus::Todo).unwrap().status, TaskStatus::Todo);
-            assert_eq!(set_status(tx, tid, TaskStatus::Blocked).unwrap().status, TaskStatus::Blocked);
+            for refused in [TaskStatus::Blocked, TaskStatus::Done, TaskStatus::Rejected] {
+                let err = set_status(tx, tid, refused).unwrap_err();
+                assert_eq!(err.code(), "invalid_task_status_draft", "{refused:?}");
+                assert!(err.message_en().contains("still being created"), "{}", err.message_en());
+                assert_eq!(status_of(tx, tid), TaskStatus::Todo, "refused, and the status has not moved: {refused:?}");
+            }
+            // Finishing the creation is what opens them again — and a draft written in error leaves by
+            // `delete`, never by a status.
+            set_draft(tx, tid, false);
             assert_eq!(set_status(tx, tid, TaskStatus::Done).unwrap().status, TaskStatus::Done);
         });
     }

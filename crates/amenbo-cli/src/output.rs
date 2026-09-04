@@ -470,6 +470,12 @@ impl From<amenbo_core::Error> for CliError {
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidDecisionRequiredDimension) => Some(format!(
                 "This project requires a value on that axis. `{cmd} dimension show <axis>` lists what it offers; then classify it as you record it with `{cmd} decision add … --dim <axis>=<value>`, or put a value on a decision already recorded with `{cmd} dimension set <AMB-D-n> <axis> <value>`."
             )),
+            // A status a draft cannot take. The caller was closing or stalling the task, so the two ways
+            // out point opposite ways — finish writing it and the status opens, or the draft was written
+            // in error and `delete` is what it leaves by. `reject` is not one of them (`AMB-D-846`).
+            E::Invalid(m) if m.code() == Some(ErrorCode::InvalidTaskStatusDraft) => Some(format!(
+                "A task still being created stays at `todo`. End the creation with `{cmd} task finish-creating <AMB-T-n>` and the status opens up — or, if it was written in error, remove it with `{cmd} task delete <AMB-T-n>`."
+            )),
             // Lowering the flag is the other way out, and it is the one nobody thinks of while holding a
             // task they only wanted to reclassify.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidDimensionRequiredUnset) => Some(format!(

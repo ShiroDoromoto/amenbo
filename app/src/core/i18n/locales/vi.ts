@@ -663,6 +663,7 @@ export const vi: Translation = {
     invalid_dimension_close_last_open: "«{name}» là phân loại bắt buộc và «{value}» là giá trị cuối cùng nó còn cung cấp, nên đóng lại sẽ để lại một đòi hỏi không ai đáp được — hãy tắt «Bắt buộc» trước.",
     invalid_dimension_set_closed_value: "«{value}» đã đóng trên «{name}», nên không có gì mới được phân loại theo nó — hãy chọn một giá trị đang mở, hoặc mở lại giá trị này.",
     invalid_task_required_dimension: "Công việc này không mang giá trị nào ở {names}, thứ mà dự án này yêu cầu.",
+    invalid_task_status_draft: "{ref} vẫn đang được tạo nên không thể đổi trạng thái — hãy hoàn tất việc tạo hoặc xóa nó.",
     invalid_decision_required_dimension: "Quyết định này không mang giá trị nào ở {names}, thứ mà dự án này yêu cầu.",
     invalid_dimension_values_unordered: "Các giá trị của phân loại này không có thứ tự nên không thể sắp xếp lại.",
     invalid_decision_edit_rejected: "{ref} đã bị bác bỏ, và một quyết định bị bác bỏ thì không sửa được.",

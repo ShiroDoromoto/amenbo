@@ -39,6 +39,9 @@ steps_cli:
   - { type: action, domain: task, op: update, with: { target: today_task, due: "+1d" } }
   - { type: assert, domain: task, op: status-bucket, with: { target: today_task, bucket: due_today, present: false } }
 
-  # Finished work leaves the view — what to do now is what is left to do.
+  # Finished work leaves the view — what to do now is what is left to do. Ending the creation comes
+  # first for the same reason the reservation needed it: a task nobody finished writing has no status
+  # to close.
+  - { type: action, domain: task, op: finish-creating, with: { target: late } }
   - { type: action, domain: task, op: done, with: { target: late } }
   - { type: assert, domain: task, op: status-bucket, with: { target: late, bucket: overdue, present: false } }

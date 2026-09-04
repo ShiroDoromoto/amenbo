@@ -142,6 +142,14 @@ steps_cli:
       title: SCENARIO SEED — carried out
     as: cleared
 
+  # Only this one ends its creation: what is closed below has to be a task somebody finished writing,
+  # and the other stays open work either way.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: cleared
+
   - type: action
     domain: task
     op: move

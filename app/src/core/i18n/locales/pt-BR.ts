@@ -690,6 +690,7 @@ export const ptBR: Translation = {
     invalid_dimension_close_last_open: "«{name}» é uma categoria obrigatória e «{value}» é o último valor que ela ainda oferece, então fechá-lo deixaria uma exigência que ninguém pode cumprir: desligue antes «Obrigatória».",
     invalid_dimension_set_closed_value: "«{value}» está fechado em «{name}», então nada novo é classificado nele: escolha um valor aberto, ou reabra este.",
     invalid_task_required_dimension: "Esta tarefa não carrega valor algum em {names}, que este projeto exige.",
+    invalid_task_status_draft: "{ref} ainda está sendo criada, então o status não pode ser alterado — termine a criação ou exclua a tarefa.",
     invalid_decision_required_dimension: "Esta decisão não carrega valor algum em {names}, que este projeto exige.",
     invalid_dimension_values_unordered: "Os valores desta categoria não têm ordem, então não dá para reordená-los.",
     invalid_decision_edit_rejected: "{ref} foi rejeitada, e uma decisão rejeitada não pode ser editada.",

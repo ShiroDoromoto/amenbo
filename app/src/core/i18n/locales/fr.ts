@@ -690,6 +690,7 @@ export const fr: Translation = {
     invalid_dimension_close_last_open: "« {name} » est une catégorie obligatoire et « {value} » est la dernière valeur qu'elle propose encore : la fermer laisserait une exigence que personne ne peut satisfaire — désactivez d'abord « Obligatoire ».",
     invalid_dimension_set_closed_value: "« {value} » est fermée sur « {name} », plus rien de nouveau n'y est classé — choisissez une valeur ouverte, ou rouvrez celle-ci.",
     invalid_task_required_dimension: "Cette tâche ne porte aucune valeur sur {names}, ce que ce projet exige.",
+    invalid_task_status_draft: "{ref} est encore en cours de création, son statut ne peut donc pas être modifié — terminez sa création ou supprimez-la.",
     invalid_decision_required_dimension: "Cette décision ne porte aucune valeur sur {names}, ce que ce projet exige.",
     invalid_dimension_values_unordered:
       "Les valeurs de cette catégorie ne portent aucun ordre, elles ne peuvent donc pas être réordonnées.",

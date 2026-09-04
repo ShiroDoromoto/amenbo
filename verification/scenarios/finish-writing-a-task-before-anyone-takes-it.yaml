@@ -6,16 +6,18 @@
 # the middle: a set that walked nothing but the green half would read the same over a build where
 # the creation ends the moment it starts.
 id: finish-writing-a-task-before-anyone-takes-it
-title: A task still being created is on the board but out of the mailbox, refuses a reservation, and is handed over only when its creation is finished
+title: A task still being created is on the board but out of the mailbox, refuses a reservation and every status that would close it, and is handed over only when its creation is finished
 description: >
   Register a task and read the stage it lands in — still being created, listed all the same, and out
   of the listing a session takes its next work from. Name it by number and watch the reserve turned
-  away, since the guard sits in the write path and not in the filtering in front of it. Then finish
-  the creation and read every one of those answers come back the other way, the last of them being
-  the reserve that now goes through. On the screen the guard is met one step earlier: while the
-  creation is open the status reads as plain text with nothing to pick, on the card and on the page
-  alike, and the card cannot be dragged into another status column — leaving the two ways out of a
-  creation, ending it and deleting the task. The control comes back once the creation is over.
+  away, since the guard sits in the write path and not in the filtering in front of it. Try to close
+  it instead and meet the other guard, the one that refuses in its own words rather than borrowing
+  the reserve's. Then finish the creation and read every one of those answers come back the other
+  way, the last of them being the reserve that now goes through. On the screen the guard is met one
+  step earlier: while the creation is open the status reads as plain text with nothing to pick, on
+  the card and on the page alike, and the card cannot be dragged into another status column — leaving
+  the two ways out of a creation, ending it and deleting the task. The control comes back once the
+  creation is over.
 # One piece of ordinary, settled work, and it is the only premise this road has. Filing a task is what
 # the road is about, so the task it reads back is its own to make — but a board with nothing on it draws
 # the first loop in place of its columns, and the way to add a card is in a column head. So the world
@@ -91,6 +93,42 @@ steps_cli:
       target: seed
       status: in_progress
       refused: not_ready
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: status
+      equals: todo
+
+  # Nor is the reserve the only door shut. A task nobody has finished writing has no status to move at
+  # all: `done` claims work that was finished, `blocked` an outside stall, and `rejected` a judgement on
+  # work that was written — none of the three says anything true here. So the refusal is its own rather
+  # than the reserve's borrowed, and what a draft written in error leaves by is `task delete`.
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: done
+      refused: invalid_task_status_draft
+
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: blocked
+      refused: invalid_task_status_draft
+
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: seed
+      status: rejected
+      refused: invalid_task_status_draft
 
   - type: assert
     domain: task

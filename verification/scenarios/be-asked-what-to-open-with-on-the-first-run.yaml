@@ -37,19 +37,16 @@ description: >
   comes up on that answer with a press that opens. Nobody is asked twice.
 
 given:
+  # The folder is named here rather than bound in a step of its own: creating a project links one
+  # either way, so a bind beside it leaves the project on two — and two is the question this road
+  # says it is not asking (`leave-the-question-about-where-a-pane-runs`).
   - type: action
     domain: project
     op: create
     with:
       name: Lighthouse
-    as: lighthouse
-
-  - type: action
-    domain: folder
-    op: bind
-    with:
       dir: lamproom
-      project: lighthouse
+    as: lighthouse
 
   # The machine the row is read on. Two, because that is the smallest number that makes what to open
   # with a question at all — with the plain shell beside them the row has three things on it.

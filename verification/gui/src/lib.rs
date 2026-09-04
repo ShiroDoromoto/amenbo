@@ -924,6 +924,12 @@ impl Instructor {
             (Domain::Terminal, "asking-folder") => {
                 Some(Expectation { text: arg_str(with, "dir")?.to_string(), present: present(with) })
             }
+            // The store the way in named as the folder's owner, read where the reader it turned away
+            // is standing. It is a store's name and not a word of the interface's, so a reading finds
+            // it in the answer and nowhere else on this face, whatever language the screen is set to.
+            (Domain::Terminal, "turned-away") => {
+                Some(Expectation { text: arg_str(with, "store")?.to_string(), present: true })
+            }
             // A row on the file face, and the words an opened file draws. Both are read off the shot
             // as the road wrote them: a file's name is a name the road gave it, and what is inside is
             // what the road put there.
@@ -1732,7 +1738,7 @@ impl Instructor {
             // What is worth confirming while walking it is that nothing else is asked — no name, no
             // submit — since the whole of this road is one press and a folder.
             (Domain::Terminal, "open-folder") => format!(
-                "On the terminal face, press the one control it offers — the way in in the middle — and in the picker that opens choose a folder the road calls \"{}\". The folder is bound to the project the face is on, and on a machine with no project it raises the one it belongs to. Either way the face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none — and nothing is named and nothing is submitted.",
+                "On the terminal face, press the one control it offers — the way in in the middle — and in the picker that opens choose a folder the road calls \"{}\". The folder is bound to the project the face is on, and on a machine with no project it raises the one it belongs to. Either way the face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none, or it says the folder belongs to another store — and nothing is named and nothing is submitted.",
                 req(with, "dir")?
             ),
             // Getting to a plain shell, which is what a road that speaks in a pane speaks to. It is
@@ -3602,6 +3608,15 @@ impl Instructor {
                     req(with, "dir")?
                 ),
             },
+            // The way in answering that it cannot take the folder that was picked. It is read under
+            // the control that was pressed and not elsewhere on the face: a reader who has just
+            // chosen a folder is looking at the thing they pressed, and an answer drawn anywhere else
+            // is one they never meet. What is confirmed beside it is that no pane came up — the fault
+            // this reading exists to catch is a face that moved on as if the folder had been taken.
+            (Domain::Terminal, "turned-away") => format!(
+                "On the terminal face, confirm no pane opened for the folder just chosen, and that the way in is answering under itself: it says the folder belongs to another store, and names \"{}\" as the store it belongs to.",
+                req(with, "store")?
+            ),
             // Whether a column is beside the panes. The absent half says what the width went to, so an
             // operator reading it knows a screen that merely drew the column narrower would be a fail.
             (Domain::Terminal, "side") => {

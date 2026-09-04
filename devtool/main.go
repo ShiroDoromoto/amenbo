@@ -190,7 +190,9 @@ vm verify    walk a pre-distribution screen road inside that VM. The harness is
              a release from before the per-user move left one, which is the
              install that asks for a password once. 'install' sends and installs
              the shipped build (a path, or --from-run to take the mac artifact
-             of a CI run), the harness, the scenarios and the screen tool; 'run'
+             of a CI run), the harness, the scenarios and the screen tool — the
+             install runs in the guest's own screen session, so that password is
+             asked there and answered from here; 'run'
              starts one road and comes back when the first step is handed over;
              'step' sends one line and waits for what the harness says next; 'log' re-reads that without advancing; 'pull' brings the
              shots and the manifest back out. The road itself is still walked by

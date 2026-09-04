@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { WakeDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { asTyped } from "../core/keys";
-import { onAgentsInstalled, wakeRescan } from "./wake";
+import { onAgentChosen, onAgentsInstalled, wakeRescan } from "./wake";
 import { SHELL } from "../talk/terminal";
 import { errText, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
@@ -135,20 +135,24 @@ export function EmptySlot({
     return () => { alive = false; };
   }, [read]);
 
-  // The host asks this machine again behind the window it has already drawn, and says so when what
-  // it found differs from what was remembered (`crate::wake`). This is the half that puts the fresh
-  // answer on the screen: the news carries no rows, so what it means is ask again.
+  // The two ways the answer changes under a frame that is already drawn (`./wake`). The host asks
+  // this machine again behind the window and says so when what it found differs from what was
+  // remembered; and a press somewhere else on the page keeps what it opened with as this person's
+  // answer, which is the rank this frame came up on. Neither word carries rows, so what both mean is
+  // ask again — and the second is why the frame beside a pane just opened stops asking what the
+  // person answered to open it (`AMB-T-4357`).
   useEffect(() => {
     let alive = true;
-    let stop = () => {};
+    let stop: (() => void)[] = [];
+    const again = () => {
+      void read().then((said) => { if (alive) setWake(said); }).catch(() => {});
+    };
     void (async () => {
-      const off = await onAgentsInstalled(() => {
-        void read().then((said) => { if (alive) setWake(said); }).catch(() => {});
-      });
+      const off = await Promise.all([onAgentsInstalled(again), onAgentChosen(again)]);
       if (alive) stop = off;
-      else off();
+      else for (const one of off) one();
     })().catch(() => {});
-    return () => { alive = false; stop(); };
+    return () => { alive = false; for (const one of stop) one(); };
   }, [read]);
 
   // The row, in catalog order, in two groups: what this machine can start, and what it has not got

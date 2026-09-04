@@ -30,19 +30,16 @@ description: >
   line, with the room the page got back offered beside it.
 
 given:
+  # The folder is named here rather than bound in a step of its own: creating a project links one
+  # either way, so a bind beside it leaves the project on two — and two is the question this road
+  # says it is not asking.
   - type: action
     domain: project
     op: create
     with:
       name: Boathouse
-    as: boathouse
-
-  - type: action
-    domain: folder
-    op: bind
-    with:
       dir: slipway
-      project: boathouse
+    as: boathouse
 
 steps_gui:
   - type: action

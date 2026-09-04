@@ -38,19 +38,16 @@ description: >
   they have already given.
 
 given:
+  # The folder is named here rather than bound in a step of its own: creating a project links one
+  # either way, so a bind beside it leaves the project on two — and two is the question this road
+  # says it is not asking (`leave-the-question-about-where-a-pane-runs`).
   - type: action
     domain: project
     op: create
     with:
       name: Lighthouse
-    as: lighthouse
-
-  - type: action
-    domain: folder
-    op: bind
-    with:
       dir: lamproom
-      project: lighthouse
+    as: lighthouse
 
 steps_gui:
   - type: action

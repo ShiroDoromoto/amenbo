@@ -29,6 +29,8 @@ const hoisted = vi.hoisted(() => ({
   wakeHangs: false,
   /** What `wake_rescan` answers: whether the machine could be reached this time. */
   reached: true,
+  /** What the frame asked to be told when this person's answer changes — called to say it has. */
+  chosen: [] as (() => void)[],
 }));
 
 // Asking this machine again is a Tauri call and is gated on being inside Tauri, which a jsdom run is
@@ -36,6 +38,12 @@ const hoisted = vi.hoisted(() => ({
 // owes is the order: ask the machine again, then put the question again (`AMB-D-792`).
 vi.mock("./wake", () => ({
   onAgentsInstalled: async () => () => {},
+  // Kept rather than dropped: what this one says is that somebody answered on another frame, and a
+  // test of the frame beside a pane has to be able to say it.
+  onAgentChosen: async (take: () => void) => {
+    hoisted.chosen.push(take);
+    return () => { hoisted.chosen = hoisted.chosen.filter((one) => one !== take); };
+  },
   wakeRescan: async () => {
     hoisted.asked.push("wake_rescan");
     if (hoisted.wakeAfter !== null) hoisted.wake = hoisted.wakeAfter;
@@ -138,6 +146,7 @@ beforeEach(() => {
   hoisted.keepFails = false;
   hoisted.wakeHangs = false;
   hoisted.reached = true;
+  hoisted.chosen = [];
   started.length = 0;
   container = document.createElement("div");
   document.body.append(container);
@@ -275,6 +284,22 @@ describe("what a terminal opened here is opened with", () => {
 
     expect(on(), "something was on before anybody chose").toBeNull();
     expect(container.querySelector(".slot__open")?.textContent).toBe("Choose one");
+  });
+
+  // And the first run ends for every frame at once. This one is the frame standing beside the pane
+  // somebody just opened: it read the ranks while nobody had answered, and the press that opened
+  // that pane kept an answer (`wake_chose`). Being told is what ends the asking here — without it
+  // the reader is asked a second time for what they answered a press ago (`AMB-T-4357`).
+  it("stops asking once the answer was given on the frame beside it", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"]);
+    await draw("/work/here");
+    expect(on()).toBeNull();
+
+    hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");
+    await act(async () => { for (const one of hoisted.chosen) one(); });
+
+    expect(on(), "the frame asked again for what was answered beside it").toBe("codex-cli");
+    expect(container.querySelector(".slot__open")?.textContent).toBe("Open a terminal here");
   });
 
   it("does not open a terminal until one of them is chosen", async () => {

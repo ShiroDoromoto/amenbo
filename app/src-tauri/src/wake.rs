@@ -64,6 +64,16 @@ use crate::launch::Probe;
 /// do with this is put that question again (the shape `folder-changed` takes, `AMB-D-785`).
 const REFRESHED_EVENT: &str = "agents-installed";
 
+/// Said when this person's answer changed — what they last opened a pane with — so a frame that was
+/// drawn before the press comes up on the answer instead of going on asking the question.
+///
+/// **Being told is the whole of it**, the same as [`REFRESHED_EVENT`] and for the same reason: what
+/// changed is the device's settings, and every empty frame already puts a question that reads them
+/// ([`wake_choices`]). A page with room for two draws a frame beside the pane that was just opened,
+/// and that frame read the ranks while the answer was still nobody's — without this word it keeps
+/// asking what the person answered one press ago (`AMB-T-4357`).
+const CHOSEN_EVENT: &str = "agent-chosen";
+
 /// What a folder says, what this machine says, and the answer the two come to.
 ///
 /// `folder` is where the pane would open, and it is asked for rather than defaulted: a pane is opened
@@ -280,15 +290,21 @@ pub fn wake_remember(project: i64, agent: String) -> Result<(), CmdError> {
 ///
 /// Written through the store for the same reason [`wake_remember`] is: a write is a whole-file
 /// rewrite of the device's settings.
+///
+/// **Kept and then said** ([`CHOSEN_EVENT`]): the frames standing on the page read this rank when
+/// they were drawn, which for the frame beside a pane just opened was before there was an answer to
+/// read. Only a write that landed is worth saying anything about, so the word goes out after it.
 #[tauri::command]
-pub fn wake_chose(agent: String) -> Result<(), CmdError> {
+pub fn wake_chose(app: tauri::AppHandle, agent: String) -> Result<(), CmdError> {
     crate::migrate::gate()?;
     let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
     if agent != wake::SHELL {
         known(&store.config, &agent)?;
     }
     store.config.remember_last_agent(&agent);
-    store.save_config().map_err(not_kept)
+    store.save_config().map_err(not_kept)?;
+    let _ = app.emit(CHOSEN_EVENT, ());
+    Ok(())
 }
 
 /// Drop this project's answer, so the next pane opened in it settles one from the rank again — what

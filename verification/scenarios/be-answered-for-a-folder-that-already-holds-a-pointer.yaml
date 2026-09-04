@@ -1,0 +1,145 @@
+# A reader with nothing raised presses the way in, and the folder they pick is one that has been
+# through Amenbo before. Neither of the two pointers it can be left holding is one this build can
+# use, and the whole of this road is that the way in *answers* for both — because the press that
+# reaches nothing is the one a first run has nowhere to go from.
+#
+# ── Why this is the face it is walked on ─────────────────────────────────────────────────────────
+# A pointer no build can use is met in two places, and they do not read alike. From a terminal it is
+# a command that is refused, and `link-a-folder` walks that. Here there is no command: the reader has
+# pressed the one control a machine with no project offers, and what stands in for the refusal is the
+# way in answering under itself, where the hand that pressed it still is. A face that went quiet
+# instead is the fault this road exists for — pressing and nothing happening is where a first run
+# ends, since there is no second thing on the screen to try.
+#
+# ── The two pointers, and why the refusal goes first ─────────────────────────────────────────────
+# One folder was claimed by another store, and one names a project this store used to have. They are
+# opposite answers on purpose: a folder another store wrote in is one this build must not go to work
+# in, and a folder whose project is gone is one it can take, since nothing is left to be wrong about.
+# The refusal is walked first because the other road ends the world both of them stand in: raising a
+# project takes the machine off the screen a reader with none is on, and the way in is not drawn
+# again. Read the other way round, the second half would have nothing to press.
+#
+# What the refusal has to say is the store's name. Being turned away helps nobody who is not then
+# told whose folder this is — that is the one word a reader can act on — and it is a name the world
+# was stood up with rather than a word of the interface's, so it is read on this screen whatever
+# language the machine is set to.
+#
+# ── What the folder that leads nowhere is let in on ──────────────────────────────────────────────
+# It is taken, and a project is raised for it: the pointer is written again, this time naming
+# something that answers, and the pane opens in the folder the reader picked. The pane is read the
+# way every pane on this face is — a line typed into it, which is the reader's own words and on no
+# other screen — because the state before the fix was no pane at all.
+#
+# And then a second pane, which is the half the first cannot say. A folder that was taken but never
+# recorded as the project's would leave the project bound to nothing, and the next press would go
+# back to asking where to work; the question not being drawn is the pointer having landed on both
+# sides. It costs one press to read, and it is the difference between a project a reader can work in
+# and one that asks them the same question every time.
+#
+# ── The world ───────────────────────────────────────────────────────────────────────────────────
+# Nothing raised, and that comes first: losing a project releases the folders pointing at it, so a
+# pointer laid down before it would go with the projects. The two folders are written from outside,
+# the way every pointer no build would write is — a build run inside one brings it forward to its own
+# shape, and there is no move on this screen that leaves one behind either.
+#
+# A screen road alone. Every reading here is of the face a machine with no project comes up on, and
+# a terminal has no such face: what it meets in these folders is a command being refused, which is
+# `link-a-folder`'s road and already written.
+id: be-answered-for-a-folder-that-already-holds-a-pointer
+title: The way in answers for a folder that already holds a pointer — turned away from another store's, and let in on one that leads nowhere
+description: >
+  On a device with nothing raised on it, the terminal face offers one control. Press it and pick a
+  folder another store claimed: the way in answers under itself, naming the store the folder belongs
+  to, and no pane comes up. Press it again and pick a folder whose project this store no longer has:
+  that one is taken — a project is raised for it, the pointer is written again naming one that
+  answers, and a pane opens in the folder, with a line typed into it to say it is live. Ask for a
+  second pane and nothing is asked back: the folder is the project's now, so the next pane opens
+  where the first one did.
+
+given:
+  # First, and it has to be: deleting a project releases the folders still pointing at it, so the two
+  # pointers below are laid down after the device is empty rather than before.
+  - type: action
+    domain: store
+    op: nothing-raised
+
+  # The folder another store got to first. Everything on the pointer agrees but the name — it is this
+  # run's own with a different store stamped on it — which is the one claim no cross-check catches
+  # and the only one that would land this build in a project it was never sent to.
+  - type: action
+    domain: folder
+    op: foreign-pointer
+    with:
+      dir: orchard
+      store: amenbo-dev
+
+  # And the folder whose project went. The pointer is well formed and this build wrote it; the number
+  # it carries is the whole of what leads nowhere.
+  - type: action
+    domain: folder
+    op: lost-pointer
+    with:
+      dir: workshop
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The way in, pressed on a machine with no project — and answered with a refusal rather than a
+  # pane. The reader is left where they were, which is with a folder still to choose.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: orchard
+      refused: pointer_other_store
+
+  - type: assert
+    domain: terminal
+    op: turned-away
+    with:
+      store: amenbo-dev
+
+  # The same control, pressed again on the folder whose project is gone. This one is taken: the
+  # project it belongs to is raised, and the pointer is written again naming it.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell, which is what a road that speaks in a pane speaks to.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the folder the way in took
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the folder the way in took
+
+  # And the project knows where it is. A folder taken but never recorded as the project's leaves the
+  # next press asking where to work all over again, which reads on the screen as a binding that came
+  # undone.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: assert
+    domain: terminal
+    op: asking-folder
+    with:
+      dir: workshop
+      present: false

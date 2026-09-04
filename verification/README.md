@@ -1139,6 +1139,11 @@ one. This takes the store back to none. It goes **first** in a premise, since lo
 releases every folder still pointing at it: a pointer laid on the disk beforehand goes with the
 projects, and what such a road wants lying in a folder is written by the steps after it.
 
+The folder the run itself works in is one of the ones released, and the two premises that leave a
+pointer no build would write (`folder foreign-pointer`, `folder lost-pointer`) copy that one. So the
+driver takes its text down as it opens, before any premise walks — which is what lets a road stand
+both worlds at once, and those two are exactly the ops a road on an empty device reaches for.
+
 `folder foreign-pointer` is on the list for the neighbouring reason: not that nobody could have done
 it a moment before, but that nobody under test could have done it at all. A build stamps its own name
 as it writes a pointer, so the one store that cannot leave another's is the one being driven, and on

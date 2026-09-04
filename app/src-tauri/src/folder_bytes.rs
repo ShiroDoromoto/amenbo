@@ -493,7 +493,9 @@ fn read_head(path: &Path, cap: usize) -> std::io::Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use amenbo_core::binding::canonical_dir;
+    #[cfg(unix)]
     use std::path::PathBuf;
 
     /// A folder with something in it, and a sibling holding a secret that must stay out of reach.

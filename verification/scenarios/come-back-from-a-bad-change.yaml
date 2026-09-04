@@ -22,6 +22,14 @@ steps_cli:
       title: SCENARIO SEED — in the archive
     as: seed
 
+  # A task still being created has no status to close, and this road closes it further down to prove
+  # the restore brings it back open.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
   - type: action
     domain: task
     op: comment

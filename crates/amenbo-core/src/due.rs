@@ -187,6 +187,9 @@ mod tests {
         let done = file(&mut store, project, "済んだ", Some(today));
         let rejected = file(&mut store, project, "やらないと決めた", Some(today));
         let open = file(&mut store, project, "残っている", Some(today));
+        // A creation still open has no status to close (`AMB-D-846`); what is under test here is the day.
+        store.finish_task_creation(done, ActorKind::Human).unwrap();
+        store.finish_task_creation(rejected, ActorKind::Human).unwrap();
         store.set_task_status(done, TaskStatus::Done, ActorKind::Human).unwrap();
         store.set_task_status(rejected, TaskStatus::Rejected, ActorKind::Human).unwrap();
 

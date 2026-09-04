@@ -664,6 +664,7 @@ export const id: Translation = {
     invalid_dimension_close_last_open: "«{name}» adalah kategori wajib dan «{value}» nilai terakhir yang masih ditawarkannya, jadi menutupnya meninggalkan tuntutan yang tak bisa dipenuhi siapa pun — matikan dulu «Wajib».",
     invalid_dimension_set_closed_value: "«{value}» ditutup pada «{name}», jadi tidak ada yang baru diklasifikasikan dengannya — pilih nilai yang terbuka, atau buka lagi yang ini.",
     invalid_task_required_dimension: "Tugas ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
+    invalid_task_status_draft: "{ref} masih dibuat, jadi statusnya tidak bisa diubah — selesaikan pembuatannya atau hapus tugas ini.",
     invalid_decision_required_dimension: "Keputusan ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
     invalid_dimension_values_unordered: "Nilai kategori ini tidak berurutan, jadi tidak bisa diurutkan ulang.",
     invalid_decision_edit_rejected: "{ref} sudah ditolak, dan keputusan yang ditolak tidak bisa disunting.",

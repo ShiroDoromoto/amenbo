@@ -469,7 +469,9 @@ fn doctor_reports_a_body_pointing_at_a_ref_that_resolves_to_nothing() {
 
     // Once the work has ended, that same body stops being an entrance: nobody is arriving through a finished
     // task's notes, and the number it names is history rather than a broken pointer. The body is untouched —
-    // only the question doctor asks of it has gone away.
+    // only the question doctor asks of it has gone away. Ending the creation comes first, since a task
+    // nobody has finished writing has no status to close (`AMB-D-846`).
+    cli.finish_creating(&live);
     cli.run(&["task", "done", &live]);
     assert!(
         dead(&cli.json(&["doctor", "--json"])).is_empty(),

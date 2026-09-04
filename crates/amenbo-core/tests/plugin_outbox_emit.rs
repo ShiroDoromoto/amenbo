@@ -421,6 +421,8 @@ fn rejecting_a_task_fires_its_own_event_and_not_the_catch_all() {
     let mut store = temp_store();
     let project = store.project_add(new_project("PJ")).unwrap().id;
     let task = store.add_task(new_task("やらないと決めたタスク", project)).unwrap().id;
+    // A creation still open has no status to close (`AMB-D-846`), and the terminal is what is under test.
+    store.finish_task_creation(task, ActorKind::Human).unwrap();
 
     let h = head(&store);
     store.set_task_status(task, TaskStatus::Rejected, ActorKind::Ai).unwrap();

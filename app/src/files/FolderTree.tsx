@@ -418,7 +418,12 @@ export function FolderTree({
     }
   };
 
-  if (projectId === null || sections.length === 0) {
+  // No project to root the tree in — the terminal face before it has been told which one it is on,
+  // and the machine that has none at all. Nothing is said either way: what is on the screen is about
+  // a project, and there is no project here for it to be about (`AMB-T-4358`).
+  if (projectId === null) return <div className="files" />;
+
+  if (sections.length === 0) {
     // A read that has not come back draws nothing at all: a flash of "no folder" on a project that
     // has one reads as a broken binding (`core/boundFolders`).
     return folders.answered

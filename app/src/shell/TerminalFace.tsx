@@ -26,7 +26,7 @@ import { isBlankSpaceClose } from "./outsideClose";
 import { useHandDrag } from "../files/handDrag";
 import { Icon } from "../components/Icon";
 import { useBoundFolders } from "../core/boundFolders";
-import { chooseFolderFor, fetchBoundFolders } from "../core/mutations";
+import { chooseFolderFor, chooseWorkFolder, fetchBoundFolders } from "../core/mutations";
 import { dataAdapter } from "../mock/adapter";
 import { invoke } from "../core/ipc";
 import type { PaneDrawnDto, PtySessionDto } from "../bindings/bindings";
@@ -49,6 +49,11 @@ import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal"
  * the one picked there owns the whole screen, and a pane opened on it works in one of *that
  * project's* folders (`./FolderChoice`). There is no way to point a pane anywhere else, which is what makes the division
  * a division rather than a label.
+ *
+ * **Except on a machine that has no project**, where the order is the other way round and has to be:
+ * the way in is drawn all the same, and the folder chosen at it raises the project it belongs to
+ * (`raiseFirstProject`, `AMB-T-4358`). A face that drew nothing until a project existed would be a
+ * face nobody could raise one from, which is a first run standing in front of an empty page.
  *
  * It is put up once and then left alone. Switching back to the ledger hides it with CSS rather than
  * taking it down, which is the one thing this component exists to guarantee: unmounting would take
@@ -557,6 +562,37 @@ export function TerminalFace({
   }, [openPane]);
 
   /**
+   * The first project of all, raised by the folder chosen for it — the way in on a machine that has
+   * none (`../core/mutations`).
+   *
+   * **It is the same one press the empty frame always is**, and what differs is where the folder
+   * lands: with no project to bind it to, the folder raises the project it belongs to, named after
+   * itself. That is the whole of the first run, and it is the only place left that takes this road —
+   * wherever there is a project the folder is chosen among *that* project's own (`bindFirstFolder`).
+   *
+   * The project is read back off the ledger rather than returned: the write is answered before the
+   * choice resolves, so what is in front of the read is the store with the new project in it, and it
+   * is the only one there — this road is not walked on a machine that has any.
+   */
+  const raiseFirstProject = useCallback((agent: string | null) => {
+    void chooseWorkFolder()
+      .then((chosen) => {
+        // Cancelling is not a refusal and not an answer: nothing was raised, and nothing is left on
+        // the screen to say it was.
+        if (chosen === null) return setAsking(null);
+        const raised = dataAdapter.listProjects()[0];
+        // A folder already spoken for by a store this machine no longer has raises nothing
+        // (`crate::commands::folder_open`). There is no pane to open and nothing to be shown, so the
+        // way in is left standing where it was.
+        if (raised === undefined) return setAsking(null);
+        openPane(raised.id, chosen, agent);
+      })
+      // The refusal has to be put somewhere, and where the reader was is where they still are: with
+      // a folder to choose.
+      .catch((e: unknown) => setAsking({ note: errText(e), agent }));
+  }, [openPane]);
+
+  /**
    * Where a press lands, now that what the project is bound to is known.
    *
    * Where the project is bound to one folder there is nothing to ask and the pane opens there — the
@@ -581,10 +617,13 @@ export function TerminalFace({
    * binding that has come undone (`AMB-T-3700`). The press is held instead and carried out below, so
    * that it is still one press and still opens where the project actually is.
    */
-  const askToOpen = useCallback((project: number, agent: string | null) => {
+  const askToOpen = useCallback((project: number | null, agent: string | null) => {
+    // Nothing is read for a machine with no project: there are no folders to be bound to one, so the
+    // press goes straight to the picker and what it chooses raises the project (`raiseFirstProject`).
+    if (project === null) return raiseFirstProject(agent);
     if (bound.answered) openOrAsk(project, agent);
     else setHeld({ project, agent });
-  }, [bound.answered, openOrAsk]);
+  }, [bound.answered, openOrAsk, raiseFirstProject]);
 
   // The held press, once the read has come back. A press held while the face was on another project is
   // dropped rather than carried over: it was pressed on that project's frame, and opening a pane in a
@@ -1034,7 +1073,11 @@ export function TerminalFace({
           className={`termface__page-grid termface__page-grid--${pageShape(layout.count, layout.orient)}${
             room ? "" : " termface__page-grid--add"}`}
         >
-          {!settled || layout.project === null
+          {/* Nothing until the arrangement has been read back, and nothing while the face has been
+              told there are projects but not yet which one it is on. **A machine with no project at
+              all is not that**: the way in is what this page draws, and a page that waited for a
+              project would be waiting for the thing the press is about to make (`AMB-T-4358`). */}
+          {!settled || (layout.project === null && projects.length > 0)
             ? null
             : (
               <>
@@ -1086,7 +1129,12 @@ export function TerminalFace({
                   <FolderChoice
                     folders={bound.live}
                     onPick={(folder) => openPane(layout.project!, folder, asking.agent)}
-                    onBind={() => bindFirstFolder(layout.project!, asking.agent)}
+                    // With no project the folder raises one; with a project it is bound to that one.
+                    // There is no list either way, so the question standing here is a refusal from
+                    // the last press and the same way in under it.
+                    onBind={() => (layout.project === null
+                      ? raiseFirstProject(asking.agent)
+                      : bindFirstFolder(layout.project, asking.agent))}
                     note={asking.note}
                   />
                 )}
@@ -1096,7 +1144,7 @@ export function TerminalFace({
                   <EmptySlot
                     folders={boundPaths}
                     project={layout.project}
-                    onOpen={(agent) => askToOpen(layout.project!, agent)}
+                    onOpen={(agent) => askToOpen(layout.project, agent)}
                   />
                 )}
                 {/* A full page draws no empty frame — there is no gap to draw — so the way in is put

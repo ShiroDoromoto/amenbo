@@ -786,6 +786,7 @@ export const fr: Translation = {
   err: {
     ambiguous_id: "L'identifiant « {prefix} » correspond à plusieurs candidats ({candidates})",
     binding_stale: "Le répertoire lié au projet est introuvable : {path}",
+    pointer_other_store: "Le .amenbo de ce dossier a été écrit par « {recorded} », alors que cette version est « {running} » : il n'y a donc aucun projet à ouvrir ici : {path}",
     init_pointer_exists: "Ce dossier (ou l'un au-dessus) est déjà lié à un projet Amenbo : {path}",
     init_ambiguous_owners:
       "Plusieurs projets vivants revendiquent ce dossier ({candidates}), la marque perdue ne peut donc pas être remise pour l'un d'eux : {path}",

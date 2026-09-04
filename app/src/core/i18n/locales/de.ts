@@ -771,6 +771,7 @@ export const de: Translation = {
   err: {
     ambiguous_id: "Die ID „{prefix}“ passt auf mehrere Kandidaten ({candidates})",
     binding_stale: "Das mit dem Projekt verknüpfte Verzeichnis wurde nicht gefunden: {path}",
+    pointer_other_store: "Die .amenbo dieses Ordners wurde von „{recorded}“ geschrieben, dieser Build ist aber „{running}“ — hier lässt sich also kein Projekt öffnen: {path}",
     init_pointer_exists: "Dieser Ordner (oder einer darüber) ist bereits mit einem Amenbo-Projekt verknüpft: {path}",
     init_ambiguous_owners:
       "Mehrere lebende Projekte beanspruchen diesen Ordner ({candidates}), deshalb lässt sich die verlorene Markierung nicht für eines von ihnen zurücksetzen: {path}",

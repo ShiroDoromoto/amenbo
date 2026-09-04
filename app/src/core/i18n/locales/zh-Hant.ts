@@ -757,6 +757,7 @@ export const zhHant: Translation = {
   err: {
     ambiguous_id: "ID「{prefix}」對應到多個候選（{candidates}）",
     binding_stale: "找不到專案連結的目錄：{path}",
+    pointer_other_store: "這個資料夾的 .amenbo 是「{recorded}」寫的，而目前這個版本是「{running}」，所以這裡沒有可以開啟的專案：{path}",
     init_pointer_exists: "這個資料夾（或它的上層）已經連結到某個 Amenbo 專案：{path}",
     init_ambiguous_owners:
       "有多個存活的專案認領這個資料夾（{candidates}），因此無法決定該為哪一個放回遺失的標記：{path}",

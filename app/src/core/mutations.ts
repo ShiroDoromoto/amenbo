@@ -1054,8 +1054,9 @@ export async function pickFolder(): Promise<string | null> {
  * the one the AI is shown, it belongs to a project (raised here and named after the folder if it did
  * not already), and a terminal opens in it. Nothing is typed and nothing is submitted, so there is no
  * step between the dialog closing and the pane opening — which is why this binds rather than handing
- * the caller a path to bind later, and why a folder that already belongs to a project comes back
- * unchanged instead of as a refusal (`folder_open`).
+ * the caller a path to bind later, and why a folder that already belongs to a **living** project comes
+ * back unchanged instead of as a refusal (`folder_open`). One whose marker names a project that is
+ * gone is not one of those: it is healed, so that this still answers with a project to open a pane on.
  *
  * **It is the road for a machine that has no project yet**, and that is the only place left that
  * takes it: a pane belongs to a project, so wherever there is one to belong to the folder is chosen

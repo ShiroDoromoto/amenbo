@@ -760,6 +760,7 @@ export const th: Translation = {
   err: {
     ambiguous_id: "รหัส “{prefix}” ตรงกับหลายรายการ ({candidates})",
     binding_stale: "ไม่พบไดเรกทอรีของโปรเจกต์ที่ผูกไว้: {path}",
+    pointer_other_store: "ไฟล์ .amenbo ของโฟลเดอร์นี้เขียนโดย “{recorded}” ส่วนบิลด์นี้คือ “{running}” จึงไม่มีโปรเจกต์ให้เปิดที่นี่: {path}",
     init_pointer_exists: "โฟลเดอร์นี้ (หรือโฟลเดอร์เหนือขึ้นไป) ผูกกับโปรเจกต์ Amenbo อยู่แล้ว: {path}",
     init_ambiguous_owners:
       "มีหลายโปรเจกต์ที่ยังอยู่อ้างสิทธิ์โฟลเดอร์นี้ ({candidates}) จึงคืนเครื่องหมายที่หายไปให้โปรเจกต์ใดโปรเจกต์หนึ่งไม่ได้: {path}",

@@ -2330,24 +2330,21 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
             [project_id] => {
                 return recover_lost_pointer(path, *project_id);
             }
-            many if many.len() > 1 => {
-                let candidates =
-                    many.iter().map(|pid| pid.to_string()).collect::<Vec<_>>().join(", ");
-                return Err(CmdError::coded(
-                    "init_ambiguous_owners",
-                    format!(
-                        "several living projects claim this folder, so the lost pointer can't be recovered unambiguously (candidates: {candidates}): {}",
-                        path.display()
-                    ),
-                    serde_json::json!({
-                        "path": path.display().to_string(),
-                        "candidates": candidates,
-                    }),
-                ));
-            }
+            many if many.len() > 1 => return Err(ambiguous_owners(path, many)),
             _ => {}
         }
     }
+    raise_project_in(path, name)
+}
+
+/// Bring a project into being for this folder and claim the folder for it: write the `.amenbo`
+/// pointer, record the project → folder reverse lookup, and upsert the managed block in the AI
+/// guidance files. The name is the one that was passed, falling back to the folder's basename.
+///
+/// It is the tail both roads into a new project share — [`project_add_folder`] once its guards have
+/// let it past, and [`folder_open`] where the pointer it found names nothing at all. The pointer is
+/// written unconditionally, so every caller owes its own guard on what is already in the folder.
+fn raise_project_in(path: &std::path::Path, name: Option<String>) -> Result<WriteAck, CmdError> {
     let name = name
         .map(|n| n.trim().to_string())
         .filter(|n| !n.is_empty())
@@ -2370,6 +2367,24 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
     Ok(WriteAck::new(&["tasks"]))
 }
 
+/// Several living projects claim this folder, so which lost pointer to put back is not determined:
+/// stop and hand the candidates over. Both roads that recover a pointer end here when the reverse
+/// lookup answers with more than one owner.
+fn ambiguous_owners(path: &std::path::Path, owners: &[i64]) -> CmdError {
+    let candidates = owners.iter().map(|pid| pid.to_string()).collect::<Vec<_>>().join(", ");
+    CmdError::coded(
+        "init_ambiguous_owners",
+        format!(
+            "several living projects claim this folder, so the lost pointer can't be recovered unambiguously (candidates: {candidates}): {}",
+            path.display()
+        ),
+        serde_json::json!({
+            "path": path.display().to_string(),
+            "candidates": candidates,
+        }),
+    )
+}
+
 /// **Make the chosen folder one a pane can be opened in** — the terminal face's single way in.
 ///
 /// Choosing a folder there is three things at once: the folder becomes a project's, the project comes
@@ -2383,16 +2398,60 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
 /// and a refusal would be a wall across the one flow the face has. The empty ack says as much: nothing
 /// was written, so there is nothing to invalidate.
 ///
+/// **But spoken for means by a project that is still there.** A `.amenbo` naming a project this store
+/// no longer holds — the store was replaced, the project deleted — is a pointer into nothing, and
+/// taking it as ownership left the one press this face has doing nothing at all: no project rose, so
+/// the face had no pane to open and nothing to say (`AMB-T-4360`). Such a pointer is healed where it
+/// stands, the same three ways [`project_add_folder`] heals a folder whose pointer went missing —
+/// exactly one living project claiming it is recovered onto, several are an ambiguity to hand over,
+/// and none means the folder is nobody's, so a project is raised for it and the dead pointer is
+/// overwritten. It is healed at the folder **holding** the pointer, which is not always the one that
+/// was chosen: that is the folder the binding is about, and the chosen one resolves upward into it
+/// the same way it would have to a healthy pointer.
+///
+/// The one pointer left alone is another channel's (`AMB-D-685`): its `project_id` is a key in that
+/// store's numbering, so there is nothing here to open and nothing here to heal, and overwriting it
+/// would take the folder from the build it belongs to. That one is refused, so that the press says
+/// something instead of doing nothing.
+///
 /// Nothing asks for a name, because the flow is a folder and nothing else: the project a new binding
-/// raises is named after the folder ([`project_add_folder`] falls back to the basename when the name is
-/// left out). Everything else a bound folder can be — a lost pointer to recover, several projects
-/// claiming it — is that command's to answer, and is answered there.
+/// raises is named after the folder ([`raise_project_in`] falls back to the basename when the name is
+/// left out).
 #[tauri::command]
 pub fn folder_open(dir: String) -> Result<WriteAck, CmdError> {
-    if amenbo_core::binding::find_upward(std::path::Path::new(&dir)).is_some() {
-        return Ok(WriteAck::default());
+    let path = std::path::Path::new(&dir);
+    let Some((bound_dir, binding)) = amenbo_core::binding::find_upward(path) else {
+        return project_add_folder(dir, None);
+    };
+    if let Some(recorded) = binding.mismatched_store() {
+        let running = amenbo_core::config::Paths::APP_NAME;
+        return Err(CmdError::coded(
+            "pointer_other_store",
+            format!(
+                "the .amenbo in {} was written by '{recorded}', and this build is '{running}'",
+                bound_dir.display()
+            ),
+            serde_json::json!({
+                "path": bound_dir.display().to_string(),
+                "recorded": recorded,
+                "running": running,
+            }),
+        ));
     }
-    project_add_folder(dir, None)
+    // Asked of the same store the pointer would be resolved against, and dropped before anything is
+    // written: the roads below open the store for themselves.
+    let owners = {
+        let store = open_store_read()?;
+        if binding.project_id.is_some_and(|pid| store.project(pid).ok().flatten().is_some()) {
+            return Ok(WriteAck::default());
+        }
+        amenbo_core::binding::live_projects_claiming(&store, &bound_dir)
+    };
+    match owners.as_slice() {
+        [project_id] => recover_lost_pointer(&bound_dir, *project_id),
+        many if many.len() > 1 => Err(ambiguous_owners(&bound_dir, many)),
+        _ => raise_project_in(&bound_dir, None),
+    }
 }
 
 /// When the `.amenbo` is gone but the bindings registry's reverse lookup names **exactly one living
@@ -9487,5 +9546,125 @@ mod tests {
         let stale = agreed_pin(&probe_of(Some(fp), None), Some("0000000000000000")).unwrap_err();
         assert_eq!(stale.code, "plugin_catalog_key_changed", "a key that moved under the screen");
         assert!(stale.message_en.contains(fp), "the refusal names what is served now: {}", stale.message_en);
+    }
+
+    /// A store with nothing in it, and a folder beside it to choose — the shape the terminal face's
+    /// way in is walked on, which is a machine that has no project yet.
+    fn a_machine_with_no_project(tag: &str) -> std::path::PathBuf {
+        let tmp = amenbo_scratch::scratch(tag);
+        std::env::set_var("AMENBO_HOME", &tmp);
+        Store::open().unwrap();
+        let dir = tmp.join("work");
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Plant a `.amenbo` naming `project_id` in the store this build belongs to — what a folder that
+    /// was somebody's is left holding once the project it named is gone.
+    fn plant_pointer(dir: &std::path::Path, project_id: i64) {
+        amenbo_core::binding::DirBinding::new(Some(project_id), None).write(dir).unwrap();
+    }
+
+    /// How many projects the store holds, and which one the folder's own pointer names — the pair
+    /// every one of these is written against.
+    fn projects_and_pointer(dir: &std::path::Path) -> (usize, Option<i64>) {
+        let store = Store::open().unwrap();
+        let count = store.project_list(true).unwrap().count;
+        (count, amenbo_core::binding::read_pointer(dir).and_then(|b| b.project_id))
+    }
+
+    /// The face has one press, and a marker naming a project that is gone used to answer it with
+    /// nothing at all: the pointer was read as ownership, no project rose, and there was neither a
+    /// pane to open nor a word on the screen (`AMB-T-4360`). Nothing living claims this folder, so
+    /// the folder is nobody's and the press raises the project it belongs to.
+    #[test]
+    fn a_marker_naming_a_project_that_is_gone_raises_one() {
+        let _env = env_guard();
+        let dir = a_machine_with_no_project("folder-open-dead-marker");
+        plant_pointer(&dir, 4360);
+
+        folder_open(dir.to_string_lossy().to_string()).unwrap();
+
+        let raised = Store::open().unwrap().project_list(true).unwrap();
+        assert_eq!(raised.count, 1, "the press has to leave a project behind, or there is no pane to open");
+        let (_, named) = projects_and_pointer(&dir);
+        assert_eq!(named, Some(raised.projects[0].id), "and the dead marker now names it");
+    }
+
+    /// The other half of the same heal. The reverse lookup still names one living project as this
+    /// folder's owner, so the pointer is put back onto **that** project rather than a second one
+    /// being raised beside it — the answer `project_add_folder` already gives a folder whose marker
+    /// went missing.
+    #[test]
+    fn a_marker_naming_a_project_that_is_gone_is_recovered_onto_the_one_still_claiming_it() {
+        let _env = env_guard();
+        let dir = a_machine_with_no_project("folder-open-recover");
+        let (_store, project_id) = provision_project("となりのPJ").unwrap();
+        {
+            let store = Store::open().unwrap();
+            let mut reg = store.bindings();
+            reg.claim_project_ref(project_id, dir.to_string_lossy());
+            store.save_bindings(&reg).unwrap();
+        }
+        plant_pointer(&dir, project_id + 4360);
+
+        folder_open(dir.to_string_lossy().to_string()).unwrap();
+
+        assert_eq!(
+            projects_and_pointer(&dir),
+            (1, Some(project_id)),
+            "recovering is putting the pointer back, not raising a project beside the owner",
+        );
+    }
+
+    /// The case that has always worked, and must keep working: a folder a living project owns is not
+    /// bound again and not refused either. Nothing is written, and the empty ack says so.
+    #[test]
+    fn a_folder_a_living_project_owns_is_opened_with_nothing_written() {
+        let _env = env_guard();
+        let dir = a_machine_with_no_project("folder-open-owned");
+        let (_store, project_id) = provision_project("いまのPJ").unwrap();
+        plant_pointer(&dir, project_id);
+
+        let ack = folder_open(dir.to_string_lossy().to_string()).unwrap();
+
+        assert!(ack.scopes.is_empty(), "nothing was written, so there is nothing to invalidate");
+        assert_eq!(projects_and_pointer(&dir), (1, Some(project_id)));
+    }
+
+    /// The one marker that is not healed. Another channel's build wrote it, so its `project_id` is a
+    /// key in that store's numbering (`AMB-D-685`): there is nothing here to open, and overwriting it
+    /// would take the folder from the build it belongs to. It is refused instead — which is what puts
+    /// a sentence under the way in, rather than leaving the press silent.
+    #[test]
+    fn a_marker_another_build_wrote_is_refused_rather_than_overwritten() {
+        let _env = env_guard();
+        let dir = a_machine_with_no_project("folder-open-other-store");
+        let elsewhere = format!("{}-elsewhere", amenbo_core::config::Paths::APP_NAME);
+        amenbo_core::binding::DirBinding {
+            v: amenbo_core::binding::POINTER_VERSION,
+            store: Some(elsewhere.clone()),
+            project_id: Some(7),
+            slug: None,
+        }
+        .write(&dir)
+        .unwrap();
+
+        let refused = match folder_open(dir.to_string_lossy().to_string()) {
+            Ok(_) => panic!("another build's folder is not this one's to claim"),
+            Err(e) => e,
+        };
+
+        assert_eq!(refused.code, "pointer_other_store");
+        assert!(
+            refused.message_en.contains(&elsewhere),
+            "the refusal names whose the folder is: {}",
+            refused.message_en,
+        );
+        assert_eq!(
+            projects_and_pointer(&dir),
+            (0, Some(7)),
+            "nothing is raised over another build's folder, and its marker is left as it was",
+        );
     }
 }

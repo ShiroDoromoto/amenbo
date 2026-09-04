@@ -760,6 +760,7 @@ export const id: Translation = {
   err: {
     ambiguous_id: "ID “{prefix}” cocok dengan beberapa kandidat ({candidates})",
     binding_stale: "Direktori proyek yang tertaut tidak ditemukan: {path}",
+    pointer_other_store: "File .amenbo folder ini ditulis oleh “{recorded}”, sedangkan build ini “{running}”, jadi tidak ada proyek yang bisa dibuka di sini: {path}",
     init_pointer_exists: "Folder ini (atau salah satu di atasnya) sudah tertaut ke sebuah proyek Amenbo: {path}",
     init_ambiguous_owners:
       "Beberapa proyek yang masih hidup mengklaim folder ini ({candidates}), jadi penanda yang hilang tidak bisa dikembalikan untuk salah satunya: {path}",

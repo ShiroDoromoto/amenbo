@@ -581,9 +581,11 @@ export function TerminalFace({
         // the screen to say it was.
         if (chosen === null) return setAsking(null);
         const raised = dataAdapter.listProjects()[0];
-        // A folder already spoken for by a store this machine no longer has raises nothing
-        // (`crate::commands::folder_open`). There is no pane to open and nothing to be shown, so the
-        // way in is left standing where it was.
+        // Every folder that gets this far leaves a project behind — one raised for it, or the one a
+        // dangling marker was healed onto (`crate::commands::folder_open`, `AMB-T-4360`); a folder
+        // that could leave none is a refusal, and comes back through the catch below. So the ledger
+        // being empty here is the write and the read disagreeing, and the way in is left standing
+        // rather than a pane being opened on a project nobody can name.
         if (raised === undefined) return setAsking(null);
         openPane(raised.id, chosen, agent);
       })

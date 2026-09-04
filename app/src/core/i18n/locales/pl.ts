@@ -795,6 +795,7 @@ export const pl: Translation = {
   err: {
     ambiguous_id: "Identyfikator „{prefix}” pasuje do kilku kandydatów ({candidates})",
     binding_stale: "Nie znaleziono podpiętego katalogu projektu: {path}",
+    pointer_other_store: "Plik .amenbo tego folderu zapisał „{recorded}”, a ta kompilacja to „{running}”, więc nie ma tu projektu do otwarcia: {path}",
     init_pointer_exists: "Ten folder (albo któryś powyżej) jest już podpięty do projektu Amenbo: {path}",
     init_ambiguous_owners:
       "Do tego folderu przyznaje się kilka żyjących projektów ({candidates}), więc zagubionego znacznika nie da się przywrócić dla żadnego z osobna: {path}",

@@ -757,6 +757,7 @@ export const zhHans: Translation = {
   err: {
     ambiguous_id: "ID“{prefix}”匹配到多个候选（{candidates}）",
     binding_stale: "找不到项目关联的目录：{path}",
+    pointer_other_store: "这个文件夹的 .amenbo 是“{recorded}”写的，而当前这个版本是“{running}”，所以这里没有可以打开的项目：{path}",
     init_pointer_exists: "这个文件夹（或它的上级）已经关联到某个 Amenbo 项目：{path}",
     init_ambiguous_owners:
       "有多个存活的项目认领这个文件夹（{candidates}），因此无法确定该为哪一个放回丢失的目印：{path}",

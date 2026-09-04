@@ -780,6 +780,7 @@ export const ja: Translation = {
   err: {
     ambiguous_id: "ID「{prefix}」は複数の候補に一致します（候補: {candidates}）",
     binding_stale: "プロジェクトの紐付け先ディレクトリが見つかりません: {path}",
+    pointer_other_store: "このフォルダの .amenbo は「{recorded}」が書いたものです。こちらは「{running}」なので、ここに開けるプロジェクトはありません: {path}",
     init_pointer_exists: "このフォルダ（または上位）は既に Amenbo プロジェクトに紐付いています: {path}",
     init_ambiguous_owners:
       "複数のプロジェクト（{candidates}）がこのフォルダを自分のものとして記録していて、どれの目印（.amenbo）を戻すか決められません: {path}",

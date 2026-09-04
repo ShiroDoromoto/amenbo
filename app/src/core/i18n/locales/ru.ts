@@ -798,6 +798,7 @@ export const ru: Translation = {
   err: {
     ambiguous_id: "Идентификатор «{prefix}» подходит сразу нескольким ({candidates})",
     binding_stale: "Связанный с проектом каталог не найден: {path}",
+    pointer_other_store: "Файл .amenbo этой папки записан «{recorded}», а эта сборка — «{running}», так что здесь нечего открывать: {path}",
     init_pointer_exists: "Эта папка (или папка выше) уже связана с проектом Amenbo: {path}",
     init_ambiguous_owners:
       "На эту папку претендуют несколько живых проектов ({candidates}), поэтому непонятно, для какого из них возвращать потерянную метку: {path}",

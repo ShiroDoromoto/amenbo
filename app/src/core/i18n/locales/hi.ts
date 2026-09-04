@@ -758,6 +758,7 @@ export const hi: Translation = {
   err: {
     ambiguous_id: "आईडी “{prefix}” कई उम्मीदवारों से मेल खाती है ({candidates})",
     binding_stale: "जुड़ी हुई प्रोजेक्ट निर्देशिका नहीं मिली: {path}",
+    pointer_other_store: "इस फ़ोल्डर का .amenbo “{recorded}” ने लिखा था, जबकि यह बिल्ड “{running}” है, इसलिए यहाँ खोलने के लिए कोई प्रोजेक्ट नहीं है: {path}",
     init_pointer_exists: "यह फ़ोल्डर (या उसके ऊपर का कोई) पहले से किसी Amenbo प्रोजेक्ट से जुड़ा है: {path}",
     init_ambiguous_owners:
       "कई जीवित प्रोजेक्ट इस फ़ोल्डर पर दावा करते हैं ({candidates}), इसलिए खोया हुआ चिह्न उनमें से किसी एक के लिए वापस नहीं रखा जा सकता: {path}",

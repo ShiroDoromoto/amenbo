@@ -902,6 +902,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   binding_stale: "The linked project directory was not found: {path}",
   // The refusals the Tauri layer raises itself, for contexts core knows nothing about. Their
   // sentences live here rather than in Rust, so the reader gets them in their own language.
+  pointer_other_store: "This folder's .amenbo was written by “{recorded}” and this build is “{running}”, so there is no project here to open: {path}",
   init_pointer_exists: "This folder (or one above it) is already bound to an Amenbo project: {path}",
   init_ambiguous_owners:
     "Several living projects claim this folder ({candidates}), so the lost marker cannot be put back for one of them: {path}",

@@ -179,7 +179,7 @@ notify-rust = "4"
 # `#[implement]` writes one; it is the same 0.61.3 tauri already links, so nothing new is compiled.
 # `windows-core` is named outright because that is what `#[implement]` expands to, and `windows` 0.61
 # carries no feature that would re-export it under its own name.
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_System_Com",
   "Win32_UI_Shell",

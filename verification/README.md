@@ -364,6 +364,14 @@ A part of a name will do — the name an element answers to is not the label
 on the screen (an emoji in front of the words belongs to it, and a card folds its lines into one
 string), so a whole one is rarely knowable in advance. When several names hold what was asked for,
 the tool prints them and presses nothing.
+**A field is called by what it holds, not by the word standing beside it.** The task pane's assignee
+answers to `Unassigned` or to the person it holds; `Assignee` is the label next to it, a piece of
+static text with nothing to press — and a press on that exits 0 having done nothing, which is the one
+failure a road cannot see. `find` says which is which in its first column, and
+`--role <role>` presses the one of that kind: `click-named <pid> Unassigned --role AXPopUpButton`
+reaches the pane's own field where the filter panel's `AXCheckBox` carries the same word. It is also
+the way past the refusal a name in two places ends in — a point is what that costs otherwise, and the
+paragraph below is why a point is the last resort.
 A point worked out from a shot's pixels carries two errors instead: the shot's pixels are the window's
 points times the scale of the display it was on (2 on a built-in panel, 1 on an external one), and the
 screen goes on moving after the shot — opening the right pane pushes a column header down by tens of

@@ -1,25 +1,27 @@
-# An axis a project cannot be left empty on, and the two places the demand bites. Classification is
+# An axis a project cannot be left empty on, and the places the demand bites. Classification is
 # otherwise entirely optional — a task filed under nothing is a task like any other — so what this
 # raises is the exception: the axis whose answer a project will not do without. The demand lands on
-# the step a record passes through once — the one that ends a creation, and the one that settles a
-# decision — and nowhere else, which is what keeps raising it from stopping a board
-# that is already full: the work already filed is finished being written, so it never meets the
-# guard. A road that walked only the filing would read the same over a build whose flag does
-# nothing, so this one is written to be turned away seven times — on the axis nobody could answer, on
-# the creation that left the answer out, on the acceptance that left it out, on the supersession that
-# would settle a decision the same way, on the hand that would take the answer back off one task at
-# a time, on the removal that would take it off every task at once, and on the removal that would
-# leave the axis with nothing to answer with at all. The screen meets the decision's half one step
-# earlier than the terminal does: it will not record a blank decision at all, because the press that
-# reads the demand belongs to whoever accepts it and the writer would never be standing there.
+# the steps a record passes through once — the one that ends a task's creation, and, on the decision
+# side, both the record itself and the ruling that settles it — and nowhere else, which is what keeps
+# raising it from stopping a board that is already full: the work already filed is finished being
+# written, so it never meets the guard. A road that walked only the filing would read the same over a
+# build whose flag does nothing, so this one is written to be turned away eight times — on the axis
+# nobody could answer, on the creation that left the answer out, on the decision that would be
+# recorded without it, on the acceptance that left it out, on the supersession that would settle a
+# decision the same way, on the hand that would take the answer back off one task at a time, on the
+# removal that would take it off every task at once, and on the removal that would leave the axis
+# with nothing to answer with at all. The decision's two doors are walked by different people — one
+# writes, another rules — which is why both are here, and why the rulings that meet the second door
+# are the ones written before the demand went up.
 id: make-an-axis-nobody-can-leave-empty
-title: An axis marked required turns away the creation and the acceptance that left it empty, and holds the answer on once it is there
+title: An axis marked required turns away the creation, the record and the acceptance that left it empty, and holds the answer on once it is there
 description: >
   Raise the demand on an axis offering no values and be refused — a requirement nobody could answer
   would stop every creation on the project. Raise it on an axis that offers two, file a task without
   answering it, and watch the creation refused and the task held out of the mailbox. Put a value on
-  and watch the same creation end. A decision recorded with the axis blank meets the same demand
-  where it is settled, through the acceptance and through the supersession that promotes it, and
+  and watch the same creation end. A decision left blank is turned away as it is recorded, and goes
+  through once the answer rides along with it; the rulings written before the demand went up meet it
+  where they are settled, through the acceptance and through the supersession that promotes one, and
   answering the axis opens both. Then try to take the value back off and be refused there too —
   from the task, and from the axis itself, where removing the value would empty every task on it at
   once unless the removal says where they go. Say where, and the value goes with the task carried
@@ -71,6 +73,23 @@ given:
     op: finish-creating
     with:
       target: standing
+
+  # Two rulings written before any demand goes up, and here for the same reason the standing task is:
+  # once the flag is raised the record's own door turns a blank decision away, so the records that go
+  # on to meet the *ruling's* door have to be the ones already on the board when it went up.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO WORLD — a ruling this board already carried
+    as: standing-ruling
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO WORLD — the ruling that would replace it
+    as: standing-revision
 
 steps_cli:
   # The demand nobody could satisfy, refused where it would be raised. An axis offering no values has
@@ -167,21 +186,34 @@ steps_cli:
       target: seed
       present: true
 
-  # The same demand, met by the other kind of record at the door it passes through once. A decision is
-  # written and then ruled on, which is the shape a creation has — so the flag is read where the ruling
-  # happens, and a decision whose axis is blank does not settle.
+  # The same demand on the other kind of record, and its first door is the record itself. A decision is
+  # written by one person and ruled on by another, so a demand read only at the ruling would turn away
+  # somebody who was never the one who left the axis blank — the writer hears it here instead.
   - type: action
     domain: decision
     op: create
     with:
-      title: SCENARIO SEED — ruled on with the answer missing
+      title: SCENARIO SEED — recorded with the answer missing
+      refused: invalid_decision_required_dimension
+
+  # The answer rides along with the record, and the same step goes through — which is what says the
+  # demand let go rather than never having been there.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO SEED — recorded with the answer given
+      dimension: Medium
+      value: print
     as: ruling
 
+  # And the second door, met by a ruling written before the demand went up. Raising a flag does not
+  # reach back, so this one is on the board with the axis blank — and it is the settling that reads it.
   - type: action
     domain: decision
     op: accept
     with:
-      target: ruling
+      target: standing-ruling
       refused: invalid_decision_required_dimension
 
   # Turned away leaves it where it was, exactly as the creation was left: still under discussion, and
@@ -190,7 +222,7 @@ steps_cli:
     domain: decision
     op: field
     with:
-      target: ruling
+      target: standing-ruling
       field: status
       equals: proposed
 
@@ -198,7 +230,7 @@ steps_cli:
     domain: dimension
     op: set
     with:
-      target: ruling
+      target: standing-ruling
       dimension: Medium
       value: print
 
@@ -206,13 +238,13 @@ steps_cli:
     domain: decision
     op: accept
     with:
-      target: ruling
+      target: standing-ruling
 
   - type: assert
     domain: decision
     op: field
     with:
-      target: ruling
+      target: standing-ruling
       field: status
       equals: accepted
 
@@ -221,24 +253,17 @@ steps_cli:
   # guard is on the transition rather than on the one command that happens to be named after it.
   - type: action
     domain: decision
-    op: create
-    with:
-      title: SCENARIO SEED — the ruling that would replace it
-    as: revision
-
-  - type: action
-    domain: decision
     op: supersede
     with:
-      target: revision
-      replaces: ruling
+      target: standing-revision
+      replaces: standing-ruling
       refused: invalid_decision_required_dimension
 
   - type: assert
     domain: decision
     op: field
     with:
-      target: revision
+      target: standing-revision
       field: status
       equals: proposed
 
@@ -246,7 +271,7 @@ steps_cli:
     domain: dimension
     op: set
     with:
-      target: revision
+      target: standing-revision
       dimension: Medium
       value: print
 
@@ -254,14 +279,14 @@ steps_cli:
     domain: decision
     op: supersede
     with:
-      target: revision
-      replaces: ruling
+      target: standing-revision
+      replaces: standing-ruling
 
   - type: assert
     domain: decision
     op: field
     with:
-      target: revision
+      target: standing-revision
       field: status
       equals: accepted
 
@@ -450,12 +475,10 @@ steps_gui:
       field: draft
       equals: false
 
-  # The same demand on the other kind of record, and on this face it is met one screen earlier. A
-  # terminal can record a decision blank and be turned away at the acceptance; the form will not let
-  # one out that way, because the press that reads the demand belongs to whoever accepts it and the
-  # writer would never be standing there to see it. So the control the screen holds is the one that
-  # records — the decision twin of the task's held finish-creating, on a different screen, which is why
-  # a road that walked only the task's would leave this unwalked.
+  # The same demand on the other kind of record, met at the same door the terminal meets it at — and
+  # this face answers with a held control rather than a code. What it holds is the button that records,
+  # the decision twin of the task's held finish-creating and on a different screen, which is why a road
+  # that walked only the task's would leave this unwalked.
   - type: action
     domain: decision
     op: create

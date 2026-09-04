@@ -100,11 +100,12 @@ fn task_add_files_the_new_task_under_the_axes_it_names() {
     assert_eq!(all["count"], 1, "a refused create leaves no unclassified task behind: {all}");
 }
 
-/// `decision add --dim <axis>=<value>` is the same flag on the other classified side (`AMB-D-781`): a
-/// decision is classified as it is recorded, so a required axis is filled before `decision accept` reads
-/// it and turns the acceptance away. The refusals are the task side's, plus the one this side has of its
-/// own — an axis narrowed off decisions (`applies_to`, `AMB-D-789`) classifies nothing here, so it is
-/// refused rather than written as a row that means nothing.
+/// `decision add --dim <axis>=<value>` is the same flag on the other classified side (`AMB-D-781`), and
+/// the only road through the door a required axis puts in front of the record (`AMB-D-847`): a decision
+/// left blank on one is refused rather than written for whoever accepts it to be turned away over. The
+/// other refusals are the task side's, plus the one this side has of its own — an axis narrowed off
+/// decisions (`applies_to`, `AMB-D-789`) classifies nothing here, so it is refused rather than written
+/// as a row that means nothing.
 #[test]
 fn decision_add_files_the_new_decision_under_the_axes_it_names() {
     let cli = Cli::new();
@@ -134,21 +135,16 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
     let (accepted, code) = cli.run(&["decision", "accept", &decision_ref(&did), "--json"]);
     assert_eq!(code, 0, "a decision classified at creation accepts straight away: {accepted}");
 
-    // Recorded with the required axis left blank: written all the same, and the response names the axis
-    // rather than leaving the writer to find out when somebody else presses accept.
-    let blank = cli.json(&["decision", "add", "--project", &pid, "--title", "分類なし", "--body", "根拠", "--json"]);
-    assert_eq!(
-        blank["decision"]["unmet_required_dimensions"],
-        serde_json::json!(["テーマ"]),
-        "the create names what is still blank: {blank}"
-    );
-    let (said, code) = cli.run(&["decision", "add", "--project", &pid, "--title", "分類なし2", "--body", "根拠"]);
-    assert_eq!(code, 0, "naming it is not refusing it: {said}");
-    assert!(said.contains("テーマ"), "the human face names the axis too: {said}");
-    assert!(said.contains("--dim"), "and the way to fill it in: {said}");
+    // The required axis left blank: refused at the record, not written and reported on (`AMB-D-847`).
+    // The one who accepts a decision is not the one who wrote it, so the demand is put to the writer.
+    let (err, code) = cli.run_err(&["decision", "add", "--project", &pid, "--title", "分類なし", "--body", "根拠", "--json"]);
+    assert_ne!(code, 0, "a blank required axis refuses the record: {err}");
+    assert!(err.contains("テーマ"), "the refusal names the axis: {err}");
+    assert!(err.contains("invalid_decision_required_dimension"), "under the code the acceptance uses: {err}");
+    assert!(err.contains("--dim"), "and the way in is the flag that classifies it as it is written: {err}");
 
-    // Nothing left blank, nothing said — the field is absent rather than an empty list, so a reader
-    // testing for it is testing for something to do.
+    // Nothing blank, nothing said — the field is absent rather than an empty list, so a reader testing
+    // for it is testing for something to do.
     assert!(
         cli.json(&["decision", "add", "--project", &pid, "--title", "分類あり", "--body", "根拠", "--dim", "テーマ=メイン", "--json"])
             ["decision"]["unmet_required_dimensions"]
@@ -178,12 +174,11 @@ fn decision_add_files_the_new_decision_under_the_axes_it_names() {
     assert_eq!(all["count"], before, "a refused create leaves no unclassified decision behind: {all}");
 }
 
-/// The other door that records a decision. `decision promote` raises one out of a comment, and it
-/// leaves the same gap `decision add` did: the demand is read where the decision is settled, by
-/// somebody else. So the response names the axes still blank here too — and names one way in rather
-/// than two, since a promotion carries no `--dim` to send anyone to.
+/// The other door that records a decision. `decision promote` raises one out of a comment, and it goes
+/// through the same refusal (`AMB-D-847`): a required axis the new decision would be blank on turns the
+/// promotion away rather than leaving the gap for whoever settles it.
 #[test]
-fn promoting_a_comment_names_the_required_axes_too() {
+fn promoting_a_comment_is_refused_on_a_required_axis_left_blank() {
     let cli = Cli::new();
     let pid = id_str(&cli.json(&["project", "add", "--name", "昇格PJ", "--json"])["project"]["id"]);
     cli.json(&["dimension", "add", "--project", &pid, "--name", "テーマ", "--json"]);
@@ -193,23 +188,51 @@ fn promoting_a_comment_names_the_required_axes_too() {
     let tid = id_str(&cli.json(&["task", "add", "--project", &pid, "--title", "土台", "--json"])["task"]["id"]);
     let cid = id_str(&cli.json(&["comment", "add", &task_ref(&tid), "--text", "UTC で保存する", "--json"])["comment"]["id"]);
 
-    let response = cli.json(&[
+    let (err, code) = cli.run_err(&[
         "decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC", "--json",
     ]);
-    let promoted = &response["decision"];
-    assert_eq!(
-        promoted["unmet_required_dimensions"],
-        serde_json::json!(["テーマ"]),
-        "the promotion names what is still blank: {promoted}"
-    );
+    assert_ne!(code, 0, "a blank required axis refuses the promotion: {err}");
+    assert!(err.contains("テーマ"), "the refusal names the axis: {err}");
+    assert!(err.contains("invalid_decision_required_dimension"), "under the same code the record uses: {err}");
 
-    // The human face says it too, and points at the one command that fills it in — a promotion has no
-    // flag of its own to offer.
-    let (said, code) = cli.run(&["decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC2"]);
-    assert_eq!(code, 0, "naming it is not refusing it: {said}");
-    assert!(said.contains("テーマ"), "the axis is named: {said}");
-    assert!(said.contains("dimension set"), "and the way to fill it in: {said}");
-    assert!(!said.contains("--dim"), "but not a flag this command does not have: {said}");
+    // Refused before anything was written: no decision, and the comment it was raised from is untouched.
+    let listed = cli.json(&["decision", "list", "--project", &pid, "--json"]);
+    assert_eq!(listed["count"], 0, "a refused promotion leaves no decision behind: {listed}");
+
+    // Lower the demand and the same promotion goes through — the axis was the whole of what stopped it.
+    cli.json(&["dimension", "update", "テーマ", "--required", "false", "--json"]);
+    let promoted = cli.json(&[
+        "decision", "promote", &format!("AMB-TC-{cid}"), "--title", "保存はUTC", "--json",
+    ]);
+    assert_eq!(promoted["decision"]["title"], "保存はUTC");
+}
+
+/// The one required axis the record does **not** refuse over (`AMB-D-847`). The time axis is filled from
+/// the era that contains today (`AMB-D-147`), so demanding it at the record would refuse a write over a
+/// value the store puts on in the same transaction. A project whose eras leave today uncovered has no
+/// era to fill it with — and there the decision is recorded all the same, with the axis named in the
+/// response, and it is `decision accept` (whose range is every required axis) that turns it away.
+#[test]
+fn a_required_time_axis_is_named_at_the_record_rather_than_refused() {
+    let cli = Cli::new();
+    let pid = id_str(&cli.json(&["project", "add", "--name", "時代必須PJ", "--json"])["project"]["id"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "時代", "--ordered", "--time-axis", "--json"]);
+    // A closed era, long past: nothing covers today, so there is no value to fill the axis from.
+    cli.json(&["dimension", "value-add", "時代", "--name", "黎明期", "--start", "2020-01-01", "--end", "2020-12-31", "--json"]);
+    cli.json(&["dimension", "update", "時代", "--required", "true", "--json"]);
+
+    let recorded = cli.json(&["decision", "add", "--project", &pid, "--title", "時代なし", "--body", "根拠", "--json"]);
+    assert_eq!(
+        recorded["decision"]["unmet_required_dimensions"],
+        serde_json::json!(["時代"]),
+        "recorded, and the response names the axis: {recorded}"
+    );
+    let did = id_str(&recorded["decision"]["id"]);
+
+    // The demand is real — it is read one door later, where the range is every required axis.
+    let (err, code) = cli.run_err(&["decision", "accept", &decision_ref(&did), "--json"]);
+    assert_ne!(code, 0, "the acceptance is what asks for the time axis: {err}");
+    assert!(err.contains("時代"), "and names it: {err}");
 }
 
 /// Only values on a time axis (role: time_axis) carry a period `[start_on, end_on]`. value-add /
@@ -438,13 +461,18 @@ fn a_required_axis_holds_an_acceptance_on_the_side_it_classifies() {
 
     let axis = cli.json(&["dimension", "add", "--project", &pid, "--name", "影響半径", "--json"]);
     cli.json(&["dimension", "value-add", "影響半径", "--name", "この一箇所", "--json"]);
-    cli.json(&["dimension", "update", "影響半径", "--required", "true", "--json"]);
     assert_eq!(axis["dimension"]["applies_to"], "both", "raised plainly, it classifies both sides");
 
-    // A decision recorded with the axis blank cannot be settled, and the refusal names the axis and
-    // the way to answer it.
+    // Recorded before the flag went up. Raising one does not reach back (`AMB-D-790`), so these are the
+    // decisions that arrive at the acceptance's door with the axis blank — the record's own door
+    // (`AMB-D-847`) would have turned them away had the demand been standing when they were written.
     let d = cli.json(&["decision", "add", "--project", &pid, "--title", "分類のない決定", "--json"]);
     let did = id_str(&d["decision"]["id"]);
+    let old = cli.json(&["decision", "add", "--project", &pid, "--title", "覆される決定", "--json"]);
+    let old_id = id_str(&old["decision"]["id"]);
+    cli.json(&["dimension", "update", "影響半径", "--required", "true", "--json"]);
+
+    // The acceptance is held, and the refusal names the axis and the way to answer it.
     let (err, code) = cli.run_err(&["decision", "accept", &did]);
     assert_ne!(code, 0, "the acceptance is held: {err}");
     assert!(err.contains("影響半径"), "and the axis is named: {err}");
@@ -458,8 +486,6 @@ fn a_required_axis_holds_an_acceptance_on_the_side_it_classifies() {
     assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "proposed");
 
     // `supersede` settles the new side too, so it meets the same door.
-    let old = cli.json(&["decision", "add", "--project", &pid, "--title", "覆される決定", "--json"]);
-    let old_id = id_str(&old["decision"]["id"]);
     cli.json(&["dimension", "set", &decision_ref(&old_id), "影響半径", "この一箇所", "--json"]);
     cli.json(&["decision", "accept", &old_id, "--json"]);
     let (err, code) = cli.run_err(&["decision", "supersede", &did, "--replaces", &old_id]);
@@ -477,9 +503,11 @@ fn a_required_axis_holds_an_acceptance_on_the_side_it_classifies() {
     let task_only_id = id_str(&task_only["dimension"]["id"]);
     cli.json(&["dimension", "value-add", "占有", "--name", "iOS", "--json"]);
     cli.json(&["dimension", "update", "占有", "--required", "true", "--json"]);
-    let free = cli.json(&["decision", "add", "--project", &pid, "--title", "レーンを問われない決定", "--json"]);
+    let free = cli.json(&[
+        "decision", "add", "--project", &pid, "--title", "レーンを問われない決定",
+        "--dim", "影響半径=この一箇所", "--json",
+    ]);
     let free_id = id_str(&free["decision"]["id"]);
-    cli.json(&["dimension", "set", &decision_ref(&free_id), "影響半径", "この一箇所", "--json"]);
     assert_eq!(
         cli.json(&["decision", "accept", &free_id, "--json"])["decision"]["status"],
         "accepted",
@@ -748,8 +776,10 @@ fn a_required_axis_still_lets_a_decisions_value_be_cleared() {
     cli.json(&["dimension", "value-add", "プロダクト", "--name", "本体", "--json"]);
     cli.json(&["dimension", "update", "プロダクト", "--required", "true", "--json"]);
 
-    let did = id_str(&cli.json(&["decision", "add", "--project", &pid, "--title", "決定", "--body", "根拠", "--json"])["decision"]["id"]);
-    cli.json(&["dimension", "set", &decision_ref(&did), "プロダクト", "本体", "--json"]);
+    let did = id_str(&cli.json(&[
+        "decision", "add", "--project", &pid, "--title", "決定", "--body", "根拠",
+        "--dim", "プロダクト=本体", "--json",
+    ])["decision"]["id"]);
     assert_eq!(
         cli.json(&["dimension", "unset", &decision_ref(&did), "プロダクト", "本体", "--json"])["noop"],
         false,

@@ -356,13 +356,15 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
 /// The required axes a decision was just created blank on, folded into the response under
 /// `unmet_required_dimensions` and handed back for the human line to name (`AMB-D-790`).
 ///
-/// **Both doors that create a decision go through here**, because both leave the same gap. A task hears
-/// this at `task finish-creating`, which its own writer types; a decision has no second stage, and the
-/// demand is read where it is settled — a press that belongs to whoever accepts it, not to whoever
-/// wrote it. Saying nothing at the create leaves the writer no moment to notice at all.
+/// **Both doors that create a decision go through here**, and after `AMB-D-847` what reaches it is the
+/// one axis the door does not refuse over: the time axis, which the store fills from the era that
+/// contains today rather than demanding (`AMB-D-147`). A project whose eras leave today uncovered
+/// records a decision blank on it, and `decision accept` — whose range is every required axis — is
+/// where that would otherwise first be heard, by somebody who did not write it.
 ///
 /// Nothing blank means the key is **absent** rather than an empty list: a reader testing for it is
-/// testing for something to do. It names, it does not refuse — the record is written either way.
+/// testing for something to do. It names, it does not refuse: what is refused was refused one layer
+/// down, before there was a decision to report on.
 fn unmet_on_new_decision(
     store: &Store,
     decision_id: i64,

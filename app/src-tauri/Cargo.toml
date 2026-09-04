@@ -184,7 +184,7 @@ windows = { version = "0.61", features = [
   "Win32_System_Com",
   "Win32_UI_Shell",
 ] }
-windows-core = "0.61"
+windows-core = "0.62"
 # Asks whether the drive is remote (a network drive) (`store_watch`), and whether this process holds an
 # administrator's token (`launch`) — elevation is what stops a terminal reaching anything scoop installed.
 # Same version tauri already pulls in.

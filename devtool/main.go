@@ -81,6 +81,7 @@ Usage:
   devtool vm push          <local…> <remote>
   devtool vm screen
   devtool vm golden        [--refresh]
+  devtool vm verify seed    [<path.pkg>] [--from-run <run id>] [--system-wide]
   devtool vm verify install [<path.pkg>] [--from-run <run id>]
   devtool vm verify run    <scenario.yaml>
   devtool vm verify step | log | pull
@@ -183,12 +184,15 @@ vm verify    walk a pre-distribution screen road inside that VM. The harness is
              not changed and nothing here repeats what it does — it still
              launches the shipped bundle, holds that pid, stands up the world
              and shoots one screen per step, which is why the harness moves into
-             the guest rather than being driven from outside. 'install' sends and
-             installs the shipped build (a path, or --from-run to take the mac
-             artifact of a CI run), the harness, the scenarios and the screen
-             tool; 'run' starts one road and comes back when the first step is
-             handed over; 'step' sends one line and waits for what the harness
-             says next; 'log' re-reads that without advancing; 'pull' brings the
+             the guest rather than being driven from outside. 'seed' puts a
+             build in there and stops, so the next install goes on over one
+             instead of into a bare machine — with --system-wide it lands where
+             a release from before the per-user move left one, which is the
+             install that asks for a password once. 'install' sends and installs
+             the shipped build (a path, or --from-run to take the mac artifact
+             of a CI run), the harness, the scenarios and the screen tool; 'run'
+             starts one road and comes back when the first step is handed over;
+             'step' sends one line and waits for what the harness says next; 'log' re-reads that without advancing; 'pull' brings the
              shots and the manifest back out. The road itself is still walked by
              whoever is driving — the screen tool in the guest is how.`)
 }

@@ -46,6 +46,15 @@ const (
 	vmScreenSource = vmGuestHome + "/screen.swift"
 	// vmGuestApp is where a per-user install of the unified installer puts the bundle.
 	vmGuestApp = vmGuestHome + "/Applications/Amenbo.app"
+	// vmGuestCLI is the symlink that install's postinstall puts on the user's PATH — and the one
+	// thing in the guest that answers with the version standing there.
+	vmGuestCLI = vmGuestHome + "/.local/bin/amenbo"
+	// vmGuestSystemApp and vmGuestSystemCLI are where a release from before the per-user move left
+	// its copy: root-owned under /Applications, with the CLI ahead of ~/.local/bin on the stock
+	// PATH. A new build's postinstall keys on exactly these two to offer the one-time migration
+	// (`scripts/build-pkg-mac.sh`), which is what `seed --system-wide` leaves behind.
+	vmGuestSystemApp = "/Applications/Amenbo.app"
+	vmGuestSystemCLI = "/usr/local/bin/amenbo"
 	// vmReleaseArtifact is the CI artifact the mac build is published as.
 	vmReleaseArtifact = "dist-macos"
 )
@@ -66,6 +75,16 @@ func vmVerifyCmd(args []string) {
 	}
 
 	switch sub {
+	case "seed":
+		fs := flag.NewFlagSet("vm verify seed", flag.ExitOnError)
+		fromRun := fs.String("from-run", "", "download the mac build from this CI run instead of taking a path")
+		systemWide := fs.Bool("system-wide", false, "leave it the way a release from before the per-user move did: /Applications, root-owned, CLI at /usr/local/bin")
+		pkg, extra := parseAroundID(fs, args[1:])
+		if len(extra) > 0 {
+			logf("devtool: vm verify seed takes one .pkg, got extra argument(s): %s", strings.Join(extra, " "))
+			os.Exit(2)
+		}
+		fail(vmVerifySeed(pkg, *fromRun, *systemWide))
 	case "install":
 		fs := flag.NewFlagSet("vm verify install", flag.ExitOnError)
 		fromRun := fs.String("from-run", "", "download the mac build from this CI run instead of taking a path")
@@ -126,20 +145,8 @@ func vmVerifyInstall(pkg, fromRun string) error {
 		return err
 	}
 	root := mustTreeRoot()
-
-	arch, err := sshRun(ip, "uname -m")
+	pkg, err = vmVerifyPkgForGuest(ip, root, pkg, fromRun)
 	if err != nil {
-		return fmt.Errorf("could not ask the guest its architecture: %w", err)
-	}
-	if pkg == "" {
-		if fromRun == "" {
-			return fmt.Errorf("nothing to install — pass a .pkg, or `--from-run <run id>` to take one from that CI run's %q artifact", vmReleaseArtifact)
-		}
-		if pkg, err = downloadReleasePkg(root, fromRun, strings.TrimSpace(arch)); err != nil {
-			return err
-		}
-	}
-	if err := refuseForeignArch(pkg, strings.TrimSpace(arch)); err != nil {
 		return err
 	}
 
@@ -162,14 +169,9 @@ func vmVerifyInstall(pkg, fromRun string) error {
 		return err
 	}
 
-	guestPkg := vmGuestHome + "/" + filepath.Base(pkg)
-	logf("  verify  : installing %s", filepath.Base(pkg))
-	if _, err := sshRun(ip, "installer -pkg "+guestPkg+" -target CurrentUserHomeDirectory"); err != nil {
-		return fmt.Errorf("installing the build in the guest: %w", err)
-	}
-	version, err := sshRun(ip, vmGuestHome+"/.local/bin/amenbo --version")
+	version, err := vmVerifyInstallPkg(ip, pkg)
 	if err != nil {
-		return fmt.Errorf("the build installed but does not answer: %w", err)
+		return err
 	}
 
 	// The first `swift <source>` on a machine builds a module cache and takes some twenty seconds;
@@ -180,8 +182,66 @@ func vmVerifyInstall(pkg, fromRun string) error {
 		logf("  verify  : warning — the screen tool did not answer (%v); the first step will be slow or fail", err)
 	}
 
-	logf("✓ %s installed in %s — `devtool vm verify run <scenario.yaml>` walks a road", strings.TrimSpace(version), vmCloneName)
+	logf("✓ %s installed in %s — `devtool vm verify run <scenario.yaml>` walks a road", version, vmCloneName)
 	return nil
+}
+
+// vmVerifyPkgForGuest resolves the build to install — the path given, or the mac artifact of a CI
+// run — and refuses one the guest could install and then not start.
+func vmVerifyPkgForGuest(ip, root, pkg, fromRun string) (string, error) {
+	arch, err := sshRun(ip, "uname -m")
+	if err != nil {
+		return "", fmt.Errorf("could not ask the guest its architecture: %w", err)
+	}
+	arch = strings.TrimSpace(arch)
+	if pkg == "" {
+		if fromRun == "" {
+			return "", fmt.Errorf("nothing to install — pass a .pkg, or `--from-run <run id>` to take one from that CI run's %q artifact", vmReleaseArtifact)
+		}
+		if pkg, err = downloadReleasePkg(root, fromRun, arch); err != nil {
+			return "", err
+		}
+	}
+	if err := refuseForeignArch(pkg, arch); err != nil {
+		return "", err
+	}
+	return pkg, nil
+}
+
+// vmVerifyInstallPkg installs one build in the guest and answers with the version now standing
+// there. The distribution enables the current user's home domain and no other, so that is the only
+// target a build of ours takes.
+//
+// What it went on over is said first, while there is still something to say it about: a clone is cut
+// from a bare macOS, so an install into one is a first install unless something was seeded ahead of
+// it — and which of the two a road was walked on is read off this line afterwards.
+func vmVerifyInstallPkg(ip, pkg string) (string, error) {
+	guestPkg := vmGuestHome + "/" + filepath.Base(pkg)
+	if standing := vmVerifyStanding(ip); standing != "" {
+		logf("  verify  : over %s", standing)
+	}
+	logf("  verify  : installing %s", filepath.Base(pkg))
+	if _, err := sshRun(ip, "installer -pkg "+guestPkg+" -target CurrentUserHomeDirectory"); err != nil {
+		return "", fmt.Errorf("installing the build in the guest: %w", err)
+	}
+	version, err := sshRun(ip, vmGuestCLI+" --version")
+	if err != nil {
+		return "", fmt.Errorf("the build installed but does not answer: %w", err)
+	}
+	return strings.TrimSpace(version), nil
+}
+
+// vmVerifyStanding is the build the guest already carries, and where — "" for a machine carrying
+// none. Both places are asked, because `seed --system-wide` leaves one in neither the per-user path
+// nor on the per-user PATH.
+func vmVerifyStanding(ip string) string {
+	for _, cli := range []string{vmGuestCLI, vmGuestSystemCLI} {
+		out, err := sshRun(ip, cli+" --version")
+		if err == nil && strings.TrimSpace(out) != "" {
+			return strings.TrimSpace(out) + " at " + cli
+		}
+	}
+	return ""
 }
 
 // downloadReleasePkg takes the mac artifact of one CI run and answers with the `.pkg` in it that
@@ -227,6 +287,104 @@ func refuseForeignArch(pkg, arch string) error {
 	}
 	return nil
 }
+
+// ---------------------------------------------------------------------------
+// what a build is installed over
+// ---------------------------------------------------------------------------
+
+// vmVerifySeed puts a build in the guest and stops there — no harness, no scenarios, no screen tool.
+// It is what the next `install` goes on over.
+//
+// The clone is cut from a bare macOS, so every install into one is a first install, and the road
+// most people actually walk — a version already there, being replaced under a running app — is the
+// one the VM could not reach. Two commands walk it now: this one with the version they are on, then
+// `install` with the one being shipped.
+//
+// **`--system-wide` leaves it the way a release from before the per-user move did**: the bundle in
+// /Applications owned by root, the CLI symlinked into it from /usr/local/bin, and no per-user copy
+// or PATH line anywhere. A build from that era is not obtainable any more, and it is not what the
+// next install reads — the postinstall keys on those two paths and on nothing else about the old
+// build, so the shape is the whole of it. That is the one path that asks for an admin password, and
+// the only elevation in a per-user lifetime.
+func vmVerifySeed(pkg, fromRun string, systemWide bool) error {
+	ip, err := vmEnsureUp()
+	if err != nil {
+		return err
+	}
+	pkg, err = vmVerifyPkgForGuest(ip, mustTreeRoot(), pkg, fromRun)
+	if err != nil {
+		return err
+	}
+	if err := vmPush([]string{pkg}, vmGuestHome+"/"); err != nil {
+		return err
+	}
+	if standing := vmVerifyStanding(ip); standing != "" {
+		logf("  verify  : taking down %s", standing)
+	}
+	if _, err := sshRun(ip, vmVerifySeedClear); err != nil {
+		return fmt.Errorf("taking down the build already in the guest: %w", err)
+	}
+	version, err := vmVerifyInstallPkg(ip, pkg)
+	if err != nil {
+		return err
+	}
+	if !systemWide {
+		logf("✓ %s seeded in %s — `devtool vm verify install <pkg>` goes on over it", version, vmCloneName)
+		return nil
+	}
+	logf("  verify  : moving it where a system-wide release left one")
+	if _, err := sshRun(ip, vmSystemWideSeed); err != nil {
+		return fmt.Errorf("leaving the build where a system-wide release would have: %w", err)
+	}
+	logf("✓ %s seeded in %s as a system-wide install (%s, %s) — the next `install` offers to retire it",
+		version, vmCloneName, vmGuestSystemApp, vmGuestSystemCLI)
+	return nil
+}
+
+// vmVerifySeedClear is what a seed takes down before it puts its own build in.
+//
+// **An installer skips a payload whose bundle is older than the one already installed** — pkgbuild
+// marks the component version-checked — so a seed that only ran the installer would leave the newer
+// build standing, and the overlay would then be walked against the very version the seed was meant
+// to replace. Measured in the guest on 2026-09-05: 22.2.0 seeded over 22.3.0 answered 22.3.0.
+//
+// A seed says which version this machine is on, so what it is not on goes first — the per-user pair
+// and the system-wide pair both, since either would be found by what installs next. The store is
+// left alone: a machine on that version has one, and it is what a migration is rehearsed against.
+const vmVerifySeedClear = `pkill -f ` + vmGuestApp + ` 2>/dev/null || true
+sleep 1
+rm -rf ` + vmGuestApp + ` ` + vmGuestCLI + `
+sudo -n rm -rf ` + vmGuestSystemApp + `
+sudo -n rm -f ` + vmGuestSystemCLI
+
+// vmSystemWideSeed turns the per-user install just made into what a machine that never took one
+// looks like. Every line is something that machine had, or did not:
+//
+//   - the app is quit first — the seed's own postinstall launched it, and it is about to be moved
+//     out from under itself
+//   - the bundle sits in /Applications owned by root, which is why retiring it needs a password
+//   - /usr/local/bin/amenbo resolves into THAT bundle: the postinstall retires the link only when it
+//     does, never a sibling channel's
+//   - neither the per-user bundle nor the per-user CLI is left, because that machine had neither
+//   - the installer's PATH lines are taken back out, so the next install writes them for the first
+//     time — they carry a marker, and a second run appends nothing over it
+//
+// It ends by asking the system copy its version: a seed that left something that cannot run is a
+// road walked against nothing.
+const vmSystemWideSeed = `set -e
+pkill -f ` + vmGuestApp + ` 2>/dev/null || true
+sleep 1
+sudo -n rm -rf ` + vmGuestSystemApp + `
+sudo -n mv ` + vmGuestApp + ` ` + vmGuestSystemApp + `
+sudo -n chown -R root:wheel ` + vmGuestSystemApp + `
+sudo -n mkdir -p /usr/local/bin
+sudo -n ln -sf ` + vmGuestSystemApp + `/Contents/MacOS/amenbo ` + vmGuestSystemCLI + `
+rm -f ` + vmGuestCLI + `
+for rc in ` + vmGuestHome + `/.zprofile ` + vmGuestHome + `/.bash_profile; do
+  [ -f "$rc" ] || continue
+  awk '/# added by amenbo installer/{drop=2} drop>0{drop--; next} {print}' "$rc" > "$rc.seeded" && mv "$rc.seeded" "$rc"
+done
+` + vmGuestSystemCLI + ` --version`
 
 // ---------------------------------------------------------------------------
 // walking a road

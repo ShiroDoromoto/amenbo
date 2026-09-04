@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -121,9 +122,48 @@ func TestGuestPathsAreOneAgreement(t *testing.T) {
 		{vmVerifyEvidence, "/Users/admin/verify-gui-evidence"},
 		{vmScreenSource, "/Users/admin/screen.swift"},
 		{vmGuestApp, "/Users/admin/Applications/Amenbo.app"},
+		{vmGuestCLI, "/Users/admin/.local/bin/amenbo"},
 	} {
 		if c.got != c.want {
 			t.Errorf("guest path = %q, want %q", c.got, c.want)
+		}
+	}
+}
+
+// TestSystemWideSeedLeavesWhatThePostinstallLooksFor reads the one file this side does not own. The
+// seed stands in for a release from before the per-user move, and what makes it stand in is that the
+// next build's postinstall finds it: that script keys on `/Applications/<app>` and on a
+// `/usr/local/bin/amenbo` resolving into it, and a move on that side would leave this seeding
+// something nothing offers to retire — silently, since the migration is best-effort and says nothing
+// when it finds no old copy.
+func TestSystemWideSeedLeavesWhatThePostinstallLooksFor(t *testing.T) {
+	pkg, err := os.ReadFile("../scripts/build-pkg-mac.sh")
+	if err != nil {
+		t.Skipf("no installer script beside devtool to read: %v", err)
+	}
+	for _, want := range []string{`OLD_SYS_APP="/Applications/$APP_NAME"`, `OLD_SYS_CLI="/usr/local/bin/amenbo"`} {
+		if !strings.Contains(string(pkg), want) {
+			t.Errorf("the postinstall no longer says %s — the seed is aimed at a path nothing retires", want)
+		}
+	}
+	if got, want := vmGuestSystemApp, "/Applications/Amenbo.app"; got != want {
+		t.Errorf("vmGuestSystemApp = %q, want %q", got, want)
+	}
+	if got, want := vmGuestSystemCLI, "/usr/local/bin/amenbo"; got != want {
+		t.Errorf("vmGuestSystemCLI = %q, want %q", got, want)
+	}
+	// And the script leaves that shape and no other: the old copy in place, root-owned, with the
+	// link into it — and nothing of the per-user install the seed was made through, which is what
+	// tells a machine that never took one from a machine that did.
+	for _, want := range []string{
+		"mv " + vmGuestApp + " " + vmGuestSystemApp,
+		"chown -R root:wheel " + vmGuestSystemApp,
+		"ln -sf " + vmGuestSystemApp + "/Contents/MacOS/amenbo " + vmGuestSystemCLI,
+		"rm -f " + vmGuestCLI,
+		"# added by amenbo installer",
+	} {
+		if !strings.Contains(vmSystemWideSeed, want) {
+			t.Errorf("the system-wide seed does not %q", want)
 		}
 	}
 }

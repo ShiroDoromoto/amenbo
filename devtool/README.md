@@ -723,11 +723,12 @@ Only the way the golden is made would change to move off it.
   the image's password, which is a credential to type. `--refresh` prints the
   `ssh-copy-id` line to run and says to stop the golden again afterwards.
 
-### `devtool vm verify install | run | step | log | pull`
+### `devtool vm verify seed | install | run | step | log | pull`
 
 Walks a **pre-distribution screen road** (`verification/scenarios/`) inside that VM.
 
 ```sh
+devtool vm verify seed ~/dist/22.2.0/amenbo-darwin-arm64.pkg # optional: the version already there
 devtool vm verify install ~/dist/amenbo-darwin-arm64.pkg     # or --from-run <run id>
 devtool vm verify run verification/scenarios/link-a-folder.yaml
 # … drive the screen in the guest, then:
@@ -756,6 +757,32 @@ screen tool.
 - The first `swift <source>` on a machine builds a module cache and takes some twenty seconds; every
   one after it is under a second. That is paid here, rather than inside the harness's own window for
   the app to draw a window — which that first call would otherwise run out.
+
+**`seed`** puts a build in there and stops — no harness, no scenarios, no screen tool. It is what the
+next `install` goes on over.
+
+- **A clone is cut from a bare macOS, so an install into one is always a first install.** The road
+  most people actually walk — a version already there, being replaced under a running app — was the
+  one the VM could not reach. Two commands walk it: this one with the version they are on, then
+  `install` with the one being shipped. `install` says what it went on over.
+- **Whatever is installed is taken down first.** An installer skips a payload older than the bundle
+  it finds — the component is version-checked — so a seed that only ran the installer would leave the
+  newer build standing and answer with its version (measured in the guest: 22.2.0 seeded over 22.3.0
+  answered 22.3.0). The store is not touched: a machine on that version has one, and it is what a
+  migration is rehearsed against.
+- **`--system-wide` leaves it where a release from before the per-user move did**: the bundle in
+  `/Applications` owned by root, the CLI symlinked into it from `/usr/local/bin`, and no per-user
+  copy or PATH line anywhere. That is the install whose postinstall asks for an admin password once,
+  and the only elevation in a per-user lifetime.
+- **The old build itself is not the seed — the shape is.** A build from that era is not obtainable
+  any more, and it is not what the next install reads: the postinstall keys on those two paths
+  (`scripts/build-pkg-mac.sh`) and on nothing else about what stood there.
+- **The password itself is not asked from here.** The postinstall asks with `osascript … with
+  administrator privileges`, and an install driven over ssh has no session to draw that dialog in: it
+  comes back `-60007`, and the block being best-effort, the install goes on without it. Measured: the
+  old copy and its link are both still there afterwards, and the link still shadows the new CLI on
+  the stock PATH — which is the hazard the migration exists for. What the seed gives is the machine
+  the question is asked on; asking it takes an install started in the guest's own screen session.
 
 **`run`** starts one road and comes back when the harness has handed over its first step. It does
 not wait for the run: a road is walked by somebody, and that somebody is whoever calls `step`

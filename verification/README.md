@@ -1109,7 +1109,8 @@ already standing on that board.
 project a run already stands in, which Amenbo raises for the folder the run works in and calls after
 it. The name travels as a word rather than as a binding, so nothing in the lint or the render would
 catch a road sending an operator to hunt a list for a project nobody made; a test over the scenario
-set holds it instead.
+set holds it instead. A premise carrying `store nothing-raised` leaves none of them standing, `cwd`
+included, so after it a road names only what the premise raised again.
 
 A board the road raised itself is that same empty board, and no earlier step can fill it: a project a
 road makes is one the premise never saw. So a second project a road only reads across — the neighbour
@@ -1129,6 +1130,14 @@ the one world a road can only be given, every other premise being something some
 a moment before the run. `store worn-in` is how much Amenbo has been used on this device, which they
 could only have done over days; `tick deferred` is a day having passed — or not — since the band was
 put off, which no run can wait out, the band being judged once at launch.
+
+`store nothing-raised` is on it for a third reason again: what it stands up is an **absence**. The
+driver raises a project as it boots, because a store has to have somewhere to file what a premise
+stands up — so the moment a road declares a world at all, there is a project on the screen it was
+written without, and a road that opens on the machine a first-time reader meets could not be given
+one. This takes the store back to none. It goes **first** in a premise, since losing a project
+releases every folder still pointing at it: a pointer laid on the disk beforehand goes with the
+projects, and what such a road wants lying in a folder is written by the steps after it.
 
 `folder foreign-pointer` is on the list for the neighbouring reason: not that nobody could have done
 it a moment before, but that nobody under test could have done it at all. A build stamps its own name

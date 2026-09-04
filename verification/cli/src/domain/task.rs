@@ -16,7 +16,7 @@ impl Driver<'_> {
                 // way `folder bind` picks the project it points a folder at.
                 let pid = match with.get("project") {
                     Some(_) => self.resolve_key(with, "project")?,
-                    None => self.project_id,
+                    None => self.standing_project()?,
                 }
                 .to_string();
                 // Classification the create itself carries. It is the same one transaction as the row,

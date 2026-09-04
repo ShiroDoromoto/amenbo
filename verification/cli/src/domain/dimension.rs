@@ -11,7 +11,7 @@ impl Driver<'_> {
         match op {
             "create" => {
                 let name = req_str(with, "name")?;
-                let pid = self.project_id.to_string();
+                let pid = self.standing_project()?.to_string();
                 let mut args = vec!["dimension", "add", "--name", name, "--project", &pid];
                 // The key is named only where a road names it; left out, the door derives one from the
                 // id, and passing an empty `--slug` would be a different request altogether.

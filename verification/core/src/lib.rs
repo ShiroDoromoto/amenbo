@@ -733,6 +733,17 @@ const REGISTRY: &[OpSpec] = &[
     // build is not — claimed by the build's own name is a folder it is welcome in, which is every
     // other road in this file.
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "foreign-pointer", required: &["dir", "store"], refs: &[], strings: &["dir", "store"], binds: false },
+    // A pointer naming a project the store under test does not have. It is what a folder is left
+    // holding when the store that answered for it goes — a channel wiped, a throwaway store dropped,
+    // an export restored somewhere else — and nothing on the folder says so: the file is well formed,
+    // this build wrote it, and only the number it carries leads nowhere.
+    //
+    // Made here for the reason its two neighbours are. A build names a project it has as it writes,
+    // so the one state it cannot arrive at is this one, and on screen there is no move that leaves a
+    // folder behind at all. What it is made out of is this run's own pointer with the number moved,
+    // so everything a build reads before it resolves that number agrees — which is what leaves the
+    // number as the whole of what the road is about.
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "lost-pointer", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
     // A folder that went somewhere else. Renamed, moved, restored beside where it was — to the
     // registry they are one thing, since what it holds is a path and the path no longer leads
     // anywhere. `dir` is the folder as it stood and `to` where it stands now, and what is in it
@@ -2452,6 +2463,17 @@ const REGISTRY: &[OpSpec] = &[
     // gone": the question *is* the box, drawn where a pane would be, so a screen with neither on it is
     // a question that left nothing behind.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "asking-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // The way in saying it cannot take the folder that was picked, read by the store that folder
+    // belongs to. Where a terminal meets a claimed folder as a refusal on the command it typed, the
+    // face has no command to be turned away from — so what stands in for it is the way in answering
+    // under itself, where the hand that pressed it still is.
+    //
+    // Read by the store's name for the reason `folder claimed` is read by it: it is a name the world
+    // was stood up with rather than a word of the interface's, so it is found on this screen whatever
+    // language the machine is set to — and it is the one word a reader turned away can act on. A face
+    // that went quiet instead, or answered without saying whose folder this is, is the same verdict:
+    // a reader left holding a folder nothing of theirs reaches.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "turned-away", required: &["store"], refs: &[], strings: &["store"], binds: false },
     // What the empty frame will open a pane with, read on the row above the press that opens one.
     // The row is every agent this machine can start with the plain shell beside them, and exactly one
     // of them is on. A road reads it to say that a choice made once is still the answer afterwards,
@@ -3064,6 +3086,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // under test — and on screen there is not even a command to try it with. A road that reads the
     // claim has to open on it.
     (Domain::Folder, "foreign-pointer"),
+    // And one whose store is gone rather than standing beside this one. It is out of reach for the
+    // same reason and one step further: a build writes the number of a project it has, so a folder
+    // naming one nothing answers for is a folder some other store wrote in and then went away.
+    (Domain::Folder, "lost-pointer"),
     // A file already lying in one of those folders. What a folder traces is read off its contents and
     // recorded nowhere, so a bound folder that already carries a provider's settings — the state every
     // road about wiring an AI starts from — is a world no amount of store seeding reaches.

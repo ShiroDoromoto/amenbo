@@ -77,6 +77,28 @@ impl Driver<'_> {
                     .map_err(|e| format!("could not write {}: {e}", claimed.display()))?;
                 Ok(Outcome::action(format!("left {} claimed by {by}, everything but the name agreeing", dir.display())))
             }
+            // Leave the folder naming a project this store does not have: the run's own pointer with
+            // the number moved out of range. Copied rather than written from parts, for the reason
+            // `foreign-pointer` is copied — the shape and the store's name are this build's, so a
+            // build that turned the folder away over its version, or picked it up as another store's,
+            // would be answering something this road is not about.
+            //
+            // Written from outside the folder, the way its two neighbours are: a build run in there
+            // answers for the pointer it finds, and this is a pointer a road wants answered for on
+            // the way in rather than before anyone got there.
+            "lost-pointer" => {
+                let dir = self.folder(with)?;
+                let ours = self.session.cwd.join(".amenbo");
+                let text = std::fs::read_to_string(&ours)
+                    .map_err(|e| format!("could not read the run's own pointer at {}: {e}", ours.display()))?;
+                let lost = dir.join(".amenbo");
+                std::fs::write(&lost, pointing_nowhere(&text)?)
+                    .map_err(|e| format!("could not write {}: {e}", lost.display()))?;
+                Ok(Outcome::action(format!(
+                    "left {} naming project {NO_SUCH_PROJECT}, which this store does not have",
+                    dir.display()
+                )))
+            }
             "sync-guide" => {
                 let dir = self.folder(with)?;
                 let path = dir.to_string_lossy().into_owned();
@@ -392,6 +414,23 @@ fn claimed_by(pointer: &str, store: &str) -> Result<String, String> {
     Ok(v.to_string())
 }
 
+/// The number a lost pointer names. It is written down rather than read off the store, because a
+/// store's ids are its own to hand out: a road that asked for the highest one and added to it would
+/// be racing the writes it is standing on, and one that named a small number would collide with the
+/// project the run itself raised. Far enough out that nothing a run creates reaches it.
+const NO_SUCH_PROJECT: i64 = 9_000_000;
+
+/// The same pointer, naming a project nothing in this store answers for. Only the number is moved,
+/// for the reason `claimed_by` moves only the name: everything a build reads before it resolves that
+/// number stays as this build wrote it, so what the folder is met with on the way in is about the
+/// number alone.
+fn pointing_nowhere(pointer: &str) -> Result<String, String> {
+    let mut v: serde_json::Value =
+        serde_json::from_str(pointer).map_err(|e| format!("the run's own pointer is not JSON ({e}): {pointer}"))?;
+    v["project_id"] = serde_json::Value::from(NO_SUCH_PROJECT);
+    Ok(v.to_string())
+}
+
 /// A path as a note names it, and what to write where there is none to name.
 fn show(path: Option<&Path>) -> String {
     path.map_or_else(|| "nothing".to_string(), |p| p.display().to_string())
@@ -473,6 +512,23 @@ mod tests {
         // A pointer that could not be read is the run's own gone wrong, which is a failure to report
         // rather than a folder to leave half claimed.
         assert!(claimed_by("not json", "amenbo-dev").is_err());
+    }
+
+    /// A pointer that leads nowhere: the one this build wrote, with the number moved past anything a
+    /// run hands out and nothing else touched. What makes it the fixture is what it keeps — the shape
+    /// and the store's name are this build's, so the folder reads as its own right up to the number,
+    /// which is the whole of what is being met on the way in.
+    #[test]
+    fn a_lost_pointer_keeps_everything_this_build_wrote_but_the_project_it_names() {
+        let ours = r#"{"v":2,"project_id":4,"slug":"greenhouse","store":"amenbo"}"#;
+        let lost: serde_json::Value = serde_json::from_str(&pointing_nowhere(ours).unwrap()).unwrap();
+        assert_eq!(lost["project_id"], NO_SUCH_PROJECT, "the number leads nowhere");
+        assert_eq!(lost["store"], "amenbo", "and the build that wrote it is still this one");
+        assert_eq!(lost["v"], 2, "written in the shape this build reads");
+        assert_eq!(lost["slug"], "greenhouse", "the cross-check beside it is left as it stood");
+
+        // The run's own pointer gone wrong is a failure to report, not a folder to leave half written.
+        assert!(pointing_nowhere("not json").is_err());
     }
 
     /// A folder that moved is the same folder: what was lying in it — the pointer above all — is

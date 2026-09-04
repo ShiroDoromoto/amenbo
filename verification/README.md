@@ -911,6 +911,11 @@ which is what the guard in front of every read refuses — a build stamps its ow
 the one store that cannot leave another's pointer is the build under test. It is the run's own
 pointer with a different name on it, which is the fixture worth making: every other field agrees, and
 a pointer whose id and slug both check out is the one nothing but the name can turn away.
+`folder lost-pointer` leaves one naming a project this store does not have, which is what a folder is
+left holding once the store that answered for it goes — a channel wiped, a throwaway store dropped.
+It is made the same way and for the same reason: the run's own pointer with the number moved past
+anything a run hands out, so the shape and the store's name are still this build's and the number is
+the whole of what leads nowhere.
 `plugin stale-manifest` leaves an installed plugin recording a
 build the catalog has moved past, which is what `plugin update` puts right — the catalog publishes one
 build, and an asset is trusted only by the key of the catalog that served it, so there is no second
@@ -1130,6 +1135,10 @@ it a moment before, but that nobody under test could have done it at all. A buil
 as it writes a pointer, so the one store that cannot leave another's is the one being driven, and on
 screen there is not even a command to try it with. Both roads that read the claim — the terminal's
 refusal, the row the screen lists the folder as — therefore open on it.
+
+`folder lost-pointer` stands beside it, one step further out: a build writes the number of a project
+it has, so a folder naming one nothing answers for is a folder some other store wrote in and then
+went away. There is no move on any face that leaves one behind, so a road that meets one opens on it.
 
 `terminal can-start` is the one premise that stands up **the machine** rather than anything Amenbo
 holds. What a frame offers to open a pane with is every agent the build could find, and it finds them

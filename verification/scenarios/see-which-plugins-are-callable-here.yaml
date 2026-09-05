@@ -60,6 +60,9 @@ steps_cli:
       name: worktree
       present: true
 
+  # A call names the step it belongs at, and that is what carries it to the entry point at all: a
+  # command no step reaches for is left to `plugin run <name> --help` rather than charged to every
+  # session. What the steps themselves do is `find-the-tool-at-the-step-that-needs-it`'s subject.
   - type: action
     domain: plugin
     op: declare-agent
@@ -67,6 +70,7 @@ steps_cli:
       name: worktree
       when: SCENARIO — when an AI should reach for this plugin
       cmd: start <task-id>
+      steps: worktree.cut-per-task
       does: SCENARIO — what the call does, and what it returns
 
   # The author's line, relayed rather than paraphrased — and the one thing Amenbo adds: the calling
@@ -112,6 +116,7 @@ steps_cli:
       name: worktree
       when: SCENARIO — when an AI should reach for this plugin
       cmd: start <task-id>
+      steps: worktree.cut-per-task
       does: SCENARIO — what the call does, and what it returns
 
   - type: assert

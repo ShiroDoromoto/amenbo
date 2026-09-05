@@ -21,6 +21,8 @@
 //   swift screen.swift click <x> <y>             left-click at a screen point
 //   swift screen.swift dblclick <x> <y>          double-click at a screen point (what opens a dialog's row)
 //   swift screen.swift drag <pid> <x1> <y1> <x2> <y2> [steps]   press at the first point, move to the second, let go
+//   swift screen.swift drop-file <pid> <x> <y> <path>…   drag those files in from outside the app and
+//                                                let them go at that point (a real dragging session, which `drag` is not)
 //   swift screen.swift type "text"               type into the focused element (Unicode direct, so no IME)
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 51=Backspace / 121=Page Down)
 //                                                — held under `--cmd` / `--shift` / `--opt` / `--ctrl` when the press is a
@@ -643,6 +645,186 @@ func drag(pid: Int, window: String?, from a: CGPoint, to b: CGPoint, steps: Int)
     mouse(.leftMouseUp, at: b)
 }
 
+/// The near side of a dragging session: what it is willing to be, and the one message worth waiting
+/// for.
+final class DragSource: NSObject, NSDraggingSource {
+    /// What the far side did with it, once it is over. Nothing until then, which is not the same as
+    /// nothing having taken it.
+    var landed: NSDragOperation?
+
+    /// Copy, outside this app as much as inside it. What a road brings in is a file on the machine
+    /// the screen is on, and a move would take it off that machine's disk — a drag that emptied the
+    /// folder it came from would be a road with a change nobody wrote down.
+    func draggingSession(
+        _ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext
+    ) -> NSDragOperation {
+        .copy
+    }
+
+    /// The run loop is stopped rather than exited from, so what the caller does after the drop still
+    /// happens. A stop takes effect on the next event, so one is posted to be it.
+    func draggingSession(
+        _ session: NSDraggingSession, endedAt point: NSPoint, operation: NSDragOperation
+    ) {
+        landed = operation
+        DispatchQueue.main.async {
+            NSApp.stop(nil)
+            let wake = NSEvent.otherEvent(
+                with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0
+            )
+            if let wake { NSApp.postEvent(wake, atStart: true) }
+        }
+    }
+}
+
+/// The crossing a begun session is steered by: `drag`'s run of moves, and then a few more in place
+/// before the hand opens.
+///
+/// The ones in place are not a nicety. A window works out what is over it on the moves it is given,
+/// and one whose first move arrived in the same instant as the release has been asked to decide
+/// about a drop it never saw coming — measured, and it comes back as a drop nothing took.
+///
+/// **Every move goes out twice**, and the two deliveries do different halves of the job. Posted to
+/// the machine, it moves the pointer, which is what decides the window under it; handed to this
+/// process, it reaches the session, which follows the moves *it* is given and not the pointer. Only
+/// the machine was posted to at first, and the session sat at the point it started from for the
+/// whole crossing while the pointer walked away without it (measured on a Mac with a screen of its
+/// own; in the verification VM the same run tracked).
+///
+/// It is posted from a thread of its own, and started *before* the session is: beginning one does
+/// not return until the drag is over, so a crossing sent from the line after it is a crossing
+/// nobody ever makes and a drag nobody ever ends.
+func crossHolding(from a: CGPoint, to b: CGPoint) {
+    let mine = pid_t(ProcessInfo.processInfo.processIdentifier)
+    func move(_ phase: CGEventType, _ p: CGPoint) {
+        let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: .left)
+        e?.setIntegerValueField(.mouseEventClickState, value: 1)
+        e?.postToPid(mine)
+        e?.post(tap: .cghidEventTap)
+    }
+    let steps = 24
+    usleep(150_000) // long enough that the session is up and looking for the pointer
+    for i in 1 ... steps {
+        let t = Double(i) / Double(steps)
+        move(.leftMouseDragged, CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t))
+        usleep(20_000)
+    }
+    for _ in 0 ..< 6 {
+        move(.leftMouseDragged, b)
+        usleep(80_000)
+    }
+    usleep(200_000)
+    move(.leftMouseUp, b)
+}
+
+/// A file brought in from outside the app and let go over a point on it.
+///
+/// The one gesture here that posted events cannot make. What crosses a screen when a file is dragged
+/// in is a **dragging session** — a pasteboard travelling with the pointer — and a pointer on its own
+/// carries none: `drag` walks one across a window and the window is told nothing at all. Nor can the
+/// events be aimed at the app the file is picked up *from*, since that hand is a file manager's and
+/// nothing outside it reaches into its rows.
+///
+/// So the session is begun here. Only an app with a window on screen can begin one, which is what
+/// this puts up: a small clear panel at the point the drag starts from, the files picked up in it,
+/// and from there `drag`'s own crossing for `drag`'s own reason.
+///
+/// **The press that picks them up is written rather than waited for.** One posted at the panel does
+/// not begin the session: the panel is on screen and the press was never delivered to it (measured).
+/// Nothing is lost by making the event instead — what `beginDraggingSession` reads off one is where
+/// the drag starts and which window it starts in. A real press *is* posted first all the same, so
+/// the button the crossing then moves is a button the machine is holding down.
+///
+/// **The front is taken and then given back.** A drag out of an application the machine does not
+/// have in front is carried nowhere: the session tracks, the pointer arrives, and every drop comes
+/// back as one nothing took (measured). So this app comes forward for the length of the drag, and
+/// the app under test is put back in front after it — which is what the steps that read the screen
+/// afterwards are read against.
+///
+/// What the far side did with the drop is read off the session and refused when it is nothing. A
+/// point that took no file leaves a screen looking exactly like the one before it, which is the
+/// silent miss every refusal in this file is written against.
+func dropFile(pid: Int, window: String?, to: CGPoint, paths: [String]) {
+    let urls = paths.map { path -> URL in
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            fail("there is nothing at \(url.path) to drag in — a drop carries a file on this machine's own disk")
+        }
+        return url
+    }
+    front(pid: pid, window: window)
+
+    let app = NSApplication.shared
+    app.setActivationPolicy(.regular)
+
+    // A screen point here is the accessibility tree's — the primary panel's top left, y downward —
+    // and a window is placed in the other one. The conversion is made once, here.
+    guard let primary = NSScreen.screens.first else { fail("this machine has no screen to drag across") }
+    let side = 40.0
+    // Clear of the menu bar, and far enough off that the crossing is a crossing. What is under it
+    // does not matter — the press that begins the session is written rather than aimed — so the
+    // panel is only put above the rest so that the drag starts from a thing that is on screen.
+    let from = CGPoint(x: 80, y: 120)
+    let well = NSView(frame: NSRect(x: 0, y: 0, width: side, height: side))
+    let panel = NSPanel(
+        contentRect: NSRect(
+            x: from.x - side / 2, y: primary.frame.maxY - from.y - side / 2, width: side, height: side
+        ),
+        // Non-activating: the app is brought forward as a whole below, and a panel that took the
+        // keyboard on its way up would leave it somewhere no road asked for.
+        styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false
+    )
+    panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)))
+    panel.isOpaque = false
+    panel.backgroundColor = .clear
+    panel.contentView = well
+    panel.orderFrontRegardless()
+    app.activate(ignoringOtherApps: true)
+
+    let source = DragSource()
+    // The button goes down for real, and the drag is begun off an event written to match it, once
+    // the run loop below has had a moment to put the panel on screen.
+    DispatchQueue.global().async {
+        usleep(300_000)
+        hover(from)
+        mouse(.leftMouseDown, at: from)
+        usleep(80_000)
+        DispatchQueue.main.async {
+            guard let press = NSEvent.mouseEvent(
+                with: .leftMouseDown, location: NSPoint(x: side / 2, y: side / 2), modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1, pressure: 1
+            ) else { fail("this machine would not make a press to begin a drag with") }
+            let items = urls.map { url -> NSDraggingItem in
+                let item = NSDraggingItem(pasteboardWriter: url as NSURL)
+                item.setDraggingFrame(
+                    NSRect(x: 0, y: 0, width: side, height: side),
+                    contents: NSWorkspace.shared.icon(forFile: url.path)
+                )
+                return item
+            }
+            DispatchQueue.global().async { crossHolding(from: from, to: to) }
+            let session = well.beginDraggingSession(with: items, event: press, source: source)
+            session.animatesToStartingPositionsOnCancelOrFail = false
+        }
+    }
+    // A session nobody ends would hold the loop for good, with the button still down. This tool is
+    // run inside a road, and a road that stops answering is worse than one that comes out red.
+    DispatchQueue.global().asyncAfter(deadline: .now() + 30) {
+        mouse(.leftMouseUp, at: to)
+        fail("the drag never ended — the press went in and nothing let it go")
+    }
+    app.run()
+
+    panel.orderOut(nil)
+    front(pid: pid, window: window)
+    guard let landed = source.landed, !landed.isEmpty else {
+        let what = urls.count == 1 ? "the file" : "the files"
+        fail("nothing took \(what) at \(Int(to.x)),\(Int(to.y)) — the point is on something that reads no drop")
+    }
+}
+
 /// type sends the string itself rather than keycodes. It bypasses the IME, so any script goes in as-is.
 func type(_ s: String) {
     for ch in s {
@@ -870,7 +1052,7 @@ let (window, afterWindow) = takeOption("--window", CommandLine.arguments, needs:
 let (role, afterRole) = takeOption("--role", afterWindow, needs: "the role find prints in its first column")
 let (held, args) = takeModifiers(afterRole)
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|right-click-named|dblclick-named|click|right-click|dblclick|drag|type|key|scroll|set-date|trusted> … [--window <title>]")
+    fail("usage: screen <front|shot|read|find|click-named|right-click-named|dblclick-named|click|right-click|dblclick|drag|drop-file|type|key|scroll|set-date|trusted> … [--window <title>]")
 }
 // Refused rather than ignored: a qualifier the subcommand never reads would narrow nothing and say so
 // nowhere, which is the silent miss every refusal in this file is written against.
@@ -921,6 +1103,12 @@ case "drag":
     let steps = args.count == 8 ? Int(args[7]) : 24
     guard let steps, steps > 0 else { fail(dragUsage) }
     drag(pid: pid, window: window, from: CGPoint(x: x1, y: y1), to: CGPoint(x: x2, y: y2), steps: steps)
+case "drop-file":
+    let dropUsage = "usage: screen drop-file <pid> <x> <y> <path>… [--window <title>]"
+    guard args.count >= 6, let pid = Int(args[2]), let x = Double(args[3]), let y = Double(args[4]) else {
+        fail(dropUsage)
+    }
+    dropFile(pid: pid, window: window, to: CGPoint(x: x, y: y), paths: Array(args[5...]))
 case "type":
     guard args.count == 3 else { fail("usage: screen type <text>") }
     type(args[2])

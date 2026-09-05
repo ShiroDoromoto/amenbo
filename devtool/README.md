@@ -693,6 +693,11 @@ anything having to be re-baked into it.
 call it, and a VM's bare desktop has a Terminal on it that a click is otherwise
 taken by — exit 0, nothing delivered.
 
+**`drop-file` carries a file that is in the guest.** A drop reads the disk the
+screen is on, so what is dragged in is a path in there — `devtool vm push` is how
+one gets there. The drag takes the front for as long as it lasts and gives it back
+after, so a road can read the window it was dropped on straight away.
+
 **A shortcut is one press: `key <keycode> --cmd`.** ⌘C is `key 8 --cmd` and ⌘V is
 `key 9 --cmd`. The modifier rides on the event's flags and is never held as a key
 of its own, so nothing is left pressed if the run stops between the two.

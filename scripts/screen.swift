@@ -23,6 +23,8 @@
 //   swift screen.swift drag <pid> <x1> <y1> <x2> <y2> [steps]   press at the first point, move to the second, let go
 //   swift screen.swift type "text"               type into the focused element (Unicode direct, so no IME)
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 51=Backspace / 121=Page Down)
+//                                                — held under `--cmd` / `--shift` / `--opt` / `--ctrl` when the press is a
+//                                                  shortcut: ⌘C is `key 8 --cmd`, ⌘V is `key 9 --cmd`
 //   swift screen.swift scroll <pid> <dx> <dy>    turn a wheel over that app's window (+dy is back toward the top)
 //   swift screen.swift right-click <x> <y>       right-click at a screen point
 //   swift screen.swift right-click-named <pid> <name>  right-click what that name names
@@ -654,15 +656,24 @@ func type(_ s: String) {
     }
 }
 
-/// One keycode, pressed and released. No modifier goes with it — what a key here can say is one key.
+/// One keycode, pressed and released, under whatever modifiers were asked for. A shortcut is one
+/// press to a caller — ⌘C, ⌘V — so it is said as one here rather than as a key and the keys around it.
+///
+/// **The modifiers ride on the event's own flags**, and are never pressed as keys of their own. A run
+/// that failed between pressing ⌘ and letting it go would leave the machine holding a key nobody
+/// pressed, and everything sent after it would arrive as a shortcut — the same reason `right-click`
+/// is the other button rather than a control-click.
 ///
 /// Not every key arrives. Return, Tab, Backspace and Page Down reach the webview; Page Up, Home, End
 /// and the arrows were posted the same way and nothing moved. So a key is not the way to walk a page:
 /// `scroll` is, and it goes where these do not.
-func key(_ code: CGKeyCode) {
-    CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: true)?.post(tap: .cghidEventTap)
-    usleep(40_000)
-    CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false)?.post(tap: .cghidEventTap)
+func key(_ code: CGKeyCode, flags: CGEventFlags = []) {
+    for down in [true, false] {
+        let e = CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: down)
+        e?.flags = flags
+        e?.post(tap: .cghidEventTap)
+        if down { usleep(40_000) }
+    }
 }
 
 /// Pull `--<flag> <value>` out of the line, wherever in it the caller wrote it, and hand back what is
@@ -685,6 +696,21 @@ func takeOption(_ flag: String, _ argv: [String], needs: String) -> (value: Stri
         i += 1
     }
     return (value, rest)
+}
+
+/// The modifiers a key is held under, pulled out of the line wherever the caller wrote them — the
+/// freedom `--window` and `--role` have, for the reason they have it. They carry no value of their
+/// own, so each is simply there or not, and several may be.
+func takeModifiers(_ argv: [String]) -> (flags: CGEventFlags, rest: [String]) {
+    let known: [String: CGEventFlags] = [
+        "--cmd": .maskCommand, "--shift": .maskShift, "--opt": .maskAlternate, "--ctrl": .maskControl,
+    ]
+    var flags: CGEventFlags = []
+    var rest: [String] = []
+    for arg in argv {
+        if let held = known[arg] { flags.insert(held) } else { rest.append(arg) }
+    }
+    return (flags, rest)
 }
 
 /// Turn a wheel over the app's window.
@@ -841,7 +867,8 @@ func setDate(pid: Int, name: String, day: String, window: String?, near: String?
 }
 
 let (window, afterWindow) = takeOption("--window", CommandLine.arguments, needs: "the title of a window")
-let (role, args) = takeOption("--role", afterWindow, needs: "the role find prints in its first column")
+let (role, afterRole) = takeOption("--role", afterWindow, needs: "the role find prints in its first column")
+let (held, args) = takeModifiers(afterRole)
 guard args.count >= 2 else {
     fail("usage: screen <front|shot|read|find|click-named|right-click-named|dblclick-named|click|right-click|dblclick|drag|type|key|scroll|set-date|trusted> … [--window <title>]")
 }
@@ -849,6 +876,9 @@ guard args.count >= 2 else {
 // nowhere, which is the silent miss every refusal in this file is written against.
 if role != nil, !["find", "click-named", "right-click-named", "dblclick-named"].contains(args[1]) {
     fail("--role says which kind of element to reach, and only find / click-named / right-click-named / dblclick-named take one")
+}
+if !held.isEmpty, args[1] != "key" {
+    fail("--cmd / --shift / --opt / --ctrl say what a key is held under, and only key takes them")
 }
 
 switch args[1] {
@@ -895,8 +925,10 @@ case "type":
     guard args.count == 3 else { fail("usage: screen type <text>") }
     type(args[2])
 case "key":
-    guard args.count == 3, let code = UInt16(args[2]) else { fail("usage: screen key <keycode>") }
-    key(CGKeyCode(code))
+    guard args.count == 3, let code = UInt16(args[2]) else {
+        fail("usage: screen key <keycode> [--cmd] [--shift] [--opt] [--ctrl]")
+    }
+    key(CGKeyCode(code), flags: held)
 case "scroll":
     guard args.count == 5, let pid = Int(args[2]), let dx = Double(args[3]), let dy = Double(args[4]) else {
         fail("usage: screen scroll <pid> <dx> <dy> [--window <title>]")

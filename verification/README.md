@@ -452,6 +452,9 @@ A screen road is walked by somebody, always. The run prints the step it is about
 for a line on stdin; between the two, the screen belongs to whoever is driving — carry the step out
 by hand, or with the screen tool's `click-named` / `drag` / `type` / `key` / `scroll` / `set-date`, and send the line
 once the screen is standing where the step says it should. There is no flag for running it any other way.
+A step that names the key this machine copies or pastes with is `key 8 --cmd` and `key 9 --cmd`:
+the modifier is a flag on the press rather than a key held around it, so nothing stays down between
+steps.
 
 **The hand-over comes before the step, the first one included.** That is what lets a road open with a
 check: a run starts on a store made for it a moment ago, so the screen a launch leaves behind is

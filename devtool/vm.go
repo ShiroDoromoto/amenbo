@@ -364,6 +364,13 @@ func reportDisplay(ip string) {
 // mouse are never taken. `system_profiler SPDisplaysDataType` answers empty in there and the display
 // is nonetheless real — do not read that answer as "no screen".
 //
+// `--no-clipboard` because the guest's own clipboard is what the roads are read against. With the
+// sharing on, the host's clipboard is pushed into the guest whenever it changes, so a ⌘V in there
+// puts down whatever the person at the host copied last rather than what the run copied a moment
+// ago — measured: a path copied in the file panel came out of the paste as another session's text,
+// having read back correctly from `pbpaste` just before. Nothing in this arrangement carries
+// anything in or out by clipboard, so there is nothing on the other side of the switch.
+//
 // `tart run` stays in the foreground for as long as the VM lives, so it is detached into its own
 // process group: a Ctrl-C on devtool, or devtool simply ending, must not take the VM down with it.
 // Its output goes to a log file, named here, because a VM that failed to boot says so there and
@@ -376,7 +383,7 @@ func tartRun() error {
 	}
 	defer f.Close()
 
-	cmd := exec.Command("tart", "run", vmCloneName, "--no-graphics")
+	cmd := exec.Command("tart", "run", vmCloneName, "--no-graphics", "--no-clipboard")
 	cmd.Stdin = nil
 	cmd.Stdout, cmd.Stderr = f, f
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

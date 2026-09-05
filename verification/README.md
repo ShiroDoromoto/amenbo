@@ -259,6 +259,16 @@ too, so it can red a run and never green one on a screen nobody stood up. A step
 because a character was forgiven says so in the summary and carries `slipped` in `manifest.json`;
 several of those in one run is a reader going wrong rather than a screen.
 
+**Where one word ends is not read at all.** The reader cuts a row into regions wherever it likes and
+the fold puts a space at every seam, so a pane that broke `before` across two rows hands back `be
+fore`; and inside one region it drops a space that was there, so `the run` comes back as `therun`.
+Both were on one reading of one terminal pane. Neither is a word misread — every letter is right,
+and in order — so an expectation the spaced reading does not hold is matched again with the spaces
+taken out of both sides, and the best of the two greens wins: one that needed nothing forgiven beats
+one that spent the budget. That is what keeps the budget for the letters it is for, a pane being
+narrow enough that a wrap and a lost space land on the same shot. What it gives up is telling `the
+rapist` from `therapist`, which no reading of this screen could do either.
+
 **Two pairs of glyphs are folded onto each other before any of that**: the digit `1` against the
 letter `l`, and the digit `0` against the letter `o`. They are one drawing, not a reader's slip, so
 they cost nothing out of the budget above and reach the expectations the budget cannot — a category's

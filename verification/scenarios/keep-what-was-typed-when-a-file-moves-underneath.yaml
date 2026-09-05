@@ -12,9 +12,9 @@
 #
 # ── Why the disk is read through the offer rather than by opening the file again ─────────────────
 # The editor holds what somebody typed until the offer is pressed, so a reading taken after pressing
-# it is a reading of the bytes and not of the screen. That is what turns "the save was refused" from
-# a line of prose into something a road can see: the words on screen afterwards are the ones the
-# outside wrote, and the ones that were typed are gone.
+# it is a reading of the bytes and not of the screen. That is what turns "nothing of the reader's
+# went to the disk" from a line of prose into something a road can see: the words on screen
+# afterwards are the ones the outside wrote, and the ones that were typed are gone.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no second road. Typing into a file at a shell is an editor of its own, and Amenbo is the
@@ -24,8 +24,8 @@ title: A file rewritten from outside is taken up quietly, and said out loud once
 description: >
   Open a file in the panel and rewrite it from outside: the column takes up the new words with no
   fuss. Type into it, rewrite it from outside again: the panel says so and what was typed is still
-  there. Press save and it is turned away; press the offer to read it again and the disk's words
-  replace what was typed.
+  there. The way to keep it is shut while that stands; press the offer to read it again and the
+  disk's words replace what was typed.
 
 given:
   - type: action
@@ -156,24 +156,22 @@ steps_gui:
       shows: third the seedlings
       present: false
 
-  # ── the save that is turned away ────────────────────────────────────────────────────────────────
-  - type: action
-    domain: files
-    op: save
-
-  - type: assert
-    domain: files
-    op: says
-    with:
-      note: changed-underneath
+  # ── the save that is no longer offered ──────────────────────────────────────────────────────────
+  # The road used to press save here and read the same line again. It no longer can: the panel is
+  # holding the mark the disk has moved past, so a save could only come back refused, and the
+  # control is shut rather than taking a press that spends a round trip to land on the screen the
+  # reader is already reading. Reading a shut control is not something the file face can be asked
+  # about yet — there is no assert for it here — so that reading is filed as work of its own rather
+  # than invented here, and what the save would have written is read below, in the file the disk
+  # still holds.
 
   # ── the offer taken, which is the disk read out loud ────────────────────────────────────────────
   - type: action
     domain: files
     op: read-again
 
-  # What the disk holds is what the outside wrote last — so the save above wrote nothing, which is
-  # the whole of what being turned away means.
+  # What the disk holds is what the outside wrote last — so nothing of the reader's went into it,
+  # which is the whole of what the panel refusing to save comes to.
   - type: assert
     domain: files
     op: reading

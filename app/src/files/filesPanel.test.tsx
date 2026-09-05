@@ -1652,7 +1652,9 @@ describe("the file face", () => {
     });
 
     /** The belt behind the watch: a move the panel never heard about is still refused at the door,
-     *  and what the reader gets is the same offer rather than a sentence to read. */
+     *  and what the reader gets is the same offer rather than a sentence to read. The press is
+     *  answered once — by the offer appearing — and the control shuts behind it, because a second
+     *  press would go to the same door for the same refusal. */
     it("says so when the save is the thing that finds out", async () => {
       await open();
       hoisted.refuseSave = {
@@ -1666,7 +1668,32 @@ describe("the file face", () => {
 
       expect(container.textContent).toContain(t("files.changedUnderneath"));
       expect(hoisted.saved).toEqual([]);
-      expect(pressable(t("files.save"))?.disabled).toBe(false);
+      // What they typed is still theirs and still unsaved — the word on the control says so.
+      expect(pressable(t("files.save"))?.disabled).toBe(true);
+    });
+
+    /** The press a reader actually makes: they were told the file moved, and they press save
+     *  anyway. The panel is already holding the mark the door refuses, so an open control took the
+     *  press, spent a round trip on a refusal it could see coming, and put them back on the screen
+     *  they were already reading with nothing said about any of it (`AMB-T-4401`). */
+    it("stops offering a save it cannot take, once it has said the file moved", async () => {
+      await open();
+      await type("#!/bin/sh\necho mine");
+      await written("#!/bin/sh\necho theirs", "after");
+      expect(container.textContent).toContain(t("files.changedUnderneath"));
+
+      expect(pressable(t("files.save"))?.disabled).toBe(true);
+      await click(button(t("files.save")));
+      await settle();
+      expect(hoisted.saved).toEqual([]);
+
+      // And it is shut rather than dead: the offer beside it is the way back to a save that works.
+      await click(button(t("files.readAgain")));
+      await settle();
+      await type("#!/bin/sh\necho theirs, and mine");
+      await click(button(t("files.save")));
+      await settle();
+      expect(last(hoisted.saved)?.seen).toBe("after");
     });
 
     /** A save answers with the mark of what it wrote, and the panel takes it: without that, the

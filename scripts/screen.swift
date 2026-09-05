@@ -45,7 +45,9 @@
 // told to say which rather than answered with whichever the list held first. That silence is the failure worth refusing: a
 // road reading the wrong window finds nothing it expected and comes out red for a reason nobody can
 // see, or finds a name both windows carry and comes out green without having looked at the screen
-// under test.
+// under test. A panel the app puts up — the one it opens a file with — is one of those windows while
+// it is up, so it is named the same way and reached the same way, and until one is named the app is
+// two windows rather than one.
 //
 // `find` / `click-named` / `right-click-named` / `dblclick-named` take `--role <role>` the same
 // way, for a name that is on more than one kind of element. The role is the first column `find`
@@ -120,9 +122,19 @@ func windowTitle(_ w: AXUIElement) -> String {
 /// A webview app keeps panels beside its real ones — a shadow, a drag surface — and they arrive in
 /// the same list, untitled and filed under `AXUnknown`. Counting them would make an app with a single
 /// window look ambiguous, and then every call would have to name a window that has no name.
-func standardWindows(of app: AXUIElement) -> [AXUIElement] {
+///
+/// Those surfaces are therefore what is dropped, rather than everything but a standard window being
+/// kept. A file panel arrives here as `AXDialog`, and it is a window in every sense that matters: it
+/// is what is in front, it takes the presses, and the app behind it takes none. Kept out of this
+/// list it was invisible to `find` and unreachable by `--window`, while `click-named` went on aiming
+/// at the window behind it and reported the press as made — the silence this tool refuses everywhere
+/// else. Counted, an app with a panel up simply has two windows, and is answered the way any app
+/// with two is: with the titles, and a caller who says which (measured 2026-09-05, the Open panel
+/// over the app's own window: `AXDialog` "Open" beside `AXStandardWindow` "Amenbo", with the drawing
+/// surface `AXUnknown` and untitled alongside them).
+func windowsOnScreen(of app: AXUIElement) -> [AXUIElement] {
     let all = axAttribute(app, kAXWindowsAttribute as String) as? [AXUIElement] ?? []
-    return all.filter { axString($0, kAXSubroleAttribute as String) == (kAXStandardWindowSubrole as String) }
+    return all.filter { axString($0, kAXSubroleAttribute as String) != (kAXUnknownSubrole as String) }
 }
 
 /// The window the caller named, as the two things anything here does to one: the id
@@ -389,7 +401,7 @@ func appWindow(pid: Int, named wanted: String?) -> AXUIElement {
     let deadline = Date().addingTimeInterval(5)
     var windows: [AXUIElement] = []
     repeat {
-        windows = standardWindows(of: app)
+        windows = windowsOnScreen(of: app)
         // Resolved on each pass rather than once at the end: until the named window is both there
         // and filled, there is nothing to wait on and nothing to hand back.
         if windows.count == 1 || wanted != nil {

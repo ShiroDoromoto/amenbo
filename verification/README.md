@@ -1290,6 +1290,12 @@ A shot of the wrong window is a picture of a screen nobody stood at, and on the 
 exactly like a picture of the right one — red for a reason nobody can see, or green off a name both
 windows happened to carry.
 
+A panel the app puts up — the one a file is chosen in — is a second window while it is up, and is
+named the same way (`window: "Open"`). A step written under one without saying so is refused now,
+where before it was answered off the window behind the panel: the tool did not count a panel as a
+window at all, so what a road read was a screen it was not standing at and what it pressed was
+swallowed, both without a word.
+
 **What it names is where the step is carried out, not where the shot is taken.** The two are the
 same window everywhere but one: `terminal fold-back` is pressed in the window that the press closes,
 so the shot after it is of the window left standing — the app's one window, which a road says by

@@ -709,6 +709,13 @@ of its own, so nothing is left pressed if the run stops between the two.
 reached on the wrong window is a check that passed without looking at the screen
 it was written for.
 
+**A file panel is one of those windows.** While the app has one up it draws two,
+so `find` refuses and lists `"Open"` beside the app's own title, and the panel is
+walked and pressed by naming it — `find $PID --window Open`, `click-named $PID
+Cancel --window Open`. Before, it was not counted at all: `find` printed the
+window behind it as though nothing were in front, and `click-named` went on aiming
+there and reported the press as made, while the panel took it.
+
 **A name on two kinds of element is said apart with `--role <role>`.** The role is
 the first column `find` prints. The task pane's assignee is an `AXPopUpButton`
 called by the person it holds — `Assignee` is the static text beside it, and a

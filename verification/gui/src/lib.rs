@@ -16,9 +16,12 @@
 //!
 //! An assert step is judged from that shot by asking the same tool to read it (macOS **Vision**
 //! behind it): the harness derives the text the step expects on screen and matches it against the
-//! reading, passing when it is present (or absent, for a `present: false` assert). What no screen
-//! draws at all is put to the store instead, through the CLI the bundle ships — a short, closed
-//! table ([`reads_the_store`]). An assert neither of them can settle — a structured
+//! reading, passing when it is present (or absent, for a `present: false` assert). What a screen
+//! draws **cut** — a row in a column narrower than the name it carries — is read off the window's
+//! accessibility tree instead, where the whole name stands, by asking the same tool to list what is
+//! on that window ([`reads_the_tree`]). What no screen draws at all is put to the store, through the
+//! CLI the bundle ships — a short, closed table ([`reads_the_store`]). Both keep the shot: the
+//! reading moves, the evidence does not. An assert none of them can settle — a structured
 //! field value — is left as a `Review`: its shot is kept for an AI/human eye, the run is not failed
 //! by it. tesseract stays the Linux container path (`scripts/docker/gui-e2e.sh`); each driver maps
 //! the one scenario source to its own world.
@@ -153,6 +156,23 @@ pub fn read_shot(image: &Path, screen: &Path) -> Result<Reading, String> {
             .ok_or_else(|| format!("`screen read {}` answered without `{k}`", image.display()))
     };
     Ok(Reading { text: field("text")?, raw: field("raw")? })
+}
+
+/// Read the names off the window's own accessibility tree, for the asserts a shot cannot be read for
+/// ([`reads_the_tree`]). It is the window the step was shot at, read a second way: the tool lists
+/// every named element under it, and the lines that listing makes are the reading.
+///
+/// The lines are not parsed. What an assert on that table asks is whether a name is on the window at
+/// all — the same search [`read_shot`]'s answer is put to — so the listing goes through the same fold
+/// and the same match, and a name the tool broke across its columns is still found in it.
+///
+/// The fold is taken here rather than in the tool, which is the one place this differs from a shot's
+/// reading: `screen find` prints a listing for whoever is driving the screen, and folding it there
+/// would take that listing away from them.
+pub fn read_tree(pid: i64, window: Option<&str>, screen: &Path) -> Result<Reading, String> {
+    let out = tool(screen, "find", &[OsStr::new(&pid.to_string())], window)?;
+    let raw = String::from_utf8_lossy(&out).into_owned();
+    Ok(Reading { text: fold(&raw), raw })
 }
 
 /// The dashes Unicode files under letters. A long vowel mark is what Vision most often returns for an
@@ -4593,6 +4613,24 @@ pub fn step_reads_the_store(step: &Step) -> bool {
     matches!(step, Step::Assert { domain, op, .. } if reads_the_store(*domain, op))
 }
 
+/// Whether an assert is read off the window's accessibility tree rather than off the shot.
+///
+/// What is on this table is a name a screen **draws and elides**. The tree of a bound folder stands
+/// in a rail a person drags, and a row narrower than the name it carries is drawn cut, with the tail
+/// replaced by one glyph — `grafting.md` comes out `grafting…`. A reader returns what is drawn, so
+/// the step goes red against a build doing exactly what a file tree should.
+///
+/// The eliding is the drawing and not the row: the tree carries the whole name. So the reading moves
+/// and nothing else does — the same window, the same expectation, the same match — and the shot is
+/// still taken and still filed, because the picture is what an eye reads the step back from.
+///
+/// The table is closed and stays short, for the reason [`reads_the_store`]'s is. An assert whose
+/// words a shot can be read for stays the shot's: a build asked what it drew is a build checked
+/// against itself, where a reading is the screen checked against the road.
+pub fn reads_the_tree(domain: Domain, op: &str) -> bool {
+    matches!((domain, op), (Domain::Files, "listed"))
+}
+
 /// What one step left behind: its instruction, the screenshot proving the operator stood at it,
 /// the verdict, and — for a judged assert — the expected text and whether OCR found it.
 #[derive(Debug, Clone)]
@@ -4647,6 +4685,10 @@ pub struct StepBrief<'a> {
     /// What OCR will be asked to find on the shot, for an assert that named it. `None` on an action,
     /// and on an assert whose check no reading can settle — the shot goes to a human eye instead.
     pub expected: Option<&'a Expectation>,
+    /// Whether that reading is taken off the window's accessibility tree rather than off the shot
+    /// ([`reads_the_tree`]). What is expected is the same either way; where it is looked for is not,
+    /// and a name the column drew cut is on the one and not the other.
+    pub from_the_tree: bool,
 }
 
 /// Walk a scenario step by step: capture one screenshot per step into `evidence_dir`, and for an
@@ -4670,17 +4712,26 @@ pub struct StepBrief<'a> {
 /// the one who can say it is a new one, and there is nothing for them to do to bring it about. A
 /// failure to start the app again aborts the walk: every step after it would be shot against an
 /// app that is not running.
+///
+/// `read_tree` closes the asserts on [`reads_the_tree`], and it is the same reading in a different
+/// place: the window the shot was aimed at, listed off its accessibility tree instead of read off
+/// the picture. The shot is taken either way — the reading moves, the evidence does not.
+///
 /// `read_store` closes the asserts on [`reads_the_store`], and it is asked **in the step's own
 /// place** rather than once the road has been walked. The order is the whole point: a road says how
 /// many blobs the store holds before an image is registered and again after, and a reading taken at
 /// the end would answer both with the state the last step left. Those steps are handed over and shot
 /// like every other, since what makes the reading honest is that the screen ahead of it is the one
 /// the step before stood up.
-pub fn walk<C, O, H, R, S>(
+// One argument per side effect the walk has on the world outside it, which is what makes the walk
+// testable without a screen: a struct around them would name the six and hide none of them.
+#[allow(clippy::too_many_arguments)]
+pub fn walk<C, O, T, H, R, S>(
     scenario: &Scenario,
     evidence_dir: &Path,
     mut capture: C,
     mut read_text: O,
+    mut read_tree: T,
     mut hand_over: H,
     mut run_again: R,
     mut read_store: S,
@@ -4688,6 +4739,7 @@ pub fn walk<C, O, H, R, S>(
 where
     C: FnMut(Option<&str>, &Path) -> Result<(), String>,
     O: FnMut(&Path) -> Result<Reading, String>,
+    T: FnMut(Option<&str>) -> Result<Reading, String>,
     H: FnMut(&StepBrief<'_>) -> Result<(), String>,
     R: FnMut() -> Result<(), String>,
     S: FnMut(&Step) -> Result<(bool, String), String>,
@@ -4710,6 +4762,7 @@ where
         let expected = instructor.expectation(step);
         let window = step.window();
         let from_store = kind == "assert" && reads_the_store(domain, &op);
+        let from_tree = kind == "assert" && reads_the_tree(domain, &op);
         let domain = domain_str(domain);
         let screenshot = format!("{:02}-{kind}-{domain}-{op}.png", i + 1);
         let shot_path = evidence_dir.join(&screenshot);
@@ -4731,6 +4784,7 @@ where
             window,
             instruction: &instruction,
             expected: expected.as_ref(),
+            from_the_tree: from_tree,
         })
         .map_err(|e| format!("step {}: handing the step over failed: {e}", i + 1))?;
 
@@ -4770,8 +4824,16 @@ where
         // Judge an assert that named an expectation; keep the reading as evidence.
         let (verdict, found, slipped) = match (kind, &expected) {
             ("assert", Some(exp)) => {
-                let reading = read_text(&shot_path)
-                    .map_err(|e| format!("step {}: reading `{screenshot}` failed: {e}", i + 1))?;
+                // Off the tree of the window the shot was aimed at, for the asserts on that table —
+                // off the shot for every other. Both answer the one question below, so only where
+                // the reading came from differs.
+                let reading = if from_tree {
+                    read_tree(shot_at)
+                        .map_err(|e| format!("step {}: reading the screen failed: {e}", i + 1))?
+                } else {
+                    read_text(&shot_path)
+                        .map_err(|e| format!("step {}: reading `{screenshot}` failed: {e}", i + 1))?
+                };
                 let hit = held_whatever_the_spacing(&reading.text, &fold(&exp.text));
                 let _ = std::fs::write(
                     evidence_dir.join(format!("{:02}-{kind}-{domain}-{op}.txt", i + 1)),
@@ -4981,6 +5043,12 @@ steps_gui:
     /// answering.
     fn nothing_to_read(_: &Step) -> Result<(bool, String), String> {
         unreachable!("no step on this road is closed by reading the store")
+    }
+
+    /// The same, for [`reads_the_tree`]: a road with no row on the file face is never to reach for
+    /// the accessibility tree, and a walk that did would be reading a screen off the wrong side.
+    fn nothing_on_the_tree(_: Option<&str>) -> Result<Reading, String> {
+        unreachable!("no step on this road is read off the accessibility tree")
     }
 
     #[test]
@@ -8160,6 +8228,7 @@ steps_gui:
             },
             // The board OCRs to text that contains the seed title.
             |_| Ok(reading("me-ai board\nSEED\nsome other card")),
+            nothing_on_the_tree,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8209,6 +8278,7 @@ steps_gui:
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
             |_| Ok(reading("SEED — a card on the me-ai board")),
+            nothing_on_the_tree,
             |brief| {
                 handed.push(brief.instruction.to_string());
                 Ok(())
@@ -8272,6 +8342,7 @@ steps_gui:
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
             |_| unreachable!("no step on this road is judged by reading a shot"),
+            nothing_on_the_tree,
             |brief| {
                 handed.push(brief.instruction.to_string());
                 Ok(())
@@ -8306,6 +8377,7 @@ steps_gui:
             &dir,
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("an empty board with no such card")),
+            nothing_on_the_tree,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8469,6 +8541,7 @@ steps_gui:
             &dir,
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("SCENARIO — nobodv holds it")),
+            nothing_on_the_tree,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8496,6 +8569,7 @@ steps_gui:
             &dir,
             |_, _| Err("no screen".to_string()),
             |_| Ok(reading("")),
+            nothing_on_the_tree,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8523,6 +8597,7 @@ steps_gui:
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
             |_| Ok(reading("me-ai board\nSEED")),
+            nothing_on_the_tree,
             |b| {
                 // The shot count taken at the hand-over says which side of the capture it fell on:
                 // step `i` is handed over with `i` shots on disk, never `i + 1`.
@@ -8574,6 +8649,7 @@ steps_gui:
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
             |_| Ok(reading("")),
+            nothing_on_the_tree,
             |b| {
                 done.borrow_mut().push(format!("handed {}", b.index));
                 Ok(())
@@ -8623,6 +8699,7 @@ steps_gui:
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
             |_| Ok(reading("")),
+            nothing_on_the_tree,
             |_| Ok(()),
             || Err("no window came up".to_string()),
             nothing_to_read,
@@ -8652,6 +8729,7 @@ steps_gui:
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
             |_| Ok(reading("")),
+            nothing_on_the_tree,
             |_| Err("nobody is watching".to_string()),
             || Ok(()),
             nothing_to_read,
@@ -8710,6 +8788,7 @@ steps_gui:
             &dir,
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a step read off the store is never sent to OCR"),
+            nothing_on_the_tree,
             |_| Ok(()),
             || Ok(()),
             |_| {
@@ -8750,6 +8829,7 @@ steps_gui:
             &dir,
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a step read off the store is never sent to OCR"),
+            nothing_on_the_tree,
             |_| Ok(()),
             || Ok(()),
             |_| Ok((false, "the store holds 0 blob file(s) (expected 1, MISMATCH)".to_string())),
@@ -8776,6 +8856,7 @@ steps_gui:
             &dir,
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a step read off the store is never sent to OCR"),
+            nothing_on_the_tree,
             |_| Ok(()),
             || Ok(()),
             |_| Err("the binary would not run".to_string()),
@@ -8783,6 +8864,119 @@ steps_gui:
         .unwrap_err();
 
         assert!(err.contains("step 2") && err.contains("would not run"), "got: {err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A road whose assert is of a row in a column narrow enough to draw the name cut.
+    const OFF_THE_TREE: &str = r#"
+id: sample-tree
+title: A name the rail draws cut, which the tree carries whole
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with: { face: terminal }
+  - type: assert
+    domain: files
+    op: listed
+    with: { name: grafting.md, section: tree }
+"#;
+
+    /// The table is what decides where an assert is read, and it holds only what a column can draw
+    /// cut. Everything else stays the shot's — a name read off the tree where a picture would answer
+    /// is the build saying what it meant to draw.
+    #[test]
+    fn only_a_row_a_column_can_elide_is_read_off_the_tree() {
+        assert!(reads_the_tree(Domain::Files, "listed"));
+        assert!(!reads_the_tree(Domain::Files, "reading"), "what an open file draws is the shot's");
+        assert!(!reads_the_tree(Domain::Task, "listed"), "a card is drawn with room for its title");
+    }
+
+    /// The row whose name the rail drew cut: the reader returns `grafting…` and would go red on it,
+    /// the tree carries `grafting.md`, and the step is green off the tree. The shot is taken and the
+    /// listing filed beside it all the same — the picture is what an eye reads the step back from.
+    #[test]
+    fn a_name_a_column_drew_cut_is_read_off_the_tree() {
+        let s = load(OFF_THE_TREE);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-tree-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let asked: RefCell<Vec<Option<String>>> = RefCell::new(Vec::new());
+        let outcome = walk(
+            &s,
+            &dir,
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("a row read off the tree is never sent to the reader"),
+            |window| {
+                asked.borrow_mut().push(window.map(str::to_string));
+                Ok(reading("AXRow\tgrafting.md\t504 379 123 22"))
+            },
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+        )
+        .expect("walk");
+
+        assert!(outcome.passed, "the whole name is on the tree, however the rail drew it");
+        assert_eq!(*asked.borrow(), vec![None], "asked once, at the window the shot was aimed at");
+        let rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
+        assert_eq!(rec.verdict, Verdict::Pass);
+        assert_eq!(rec.found, Some(true));
+        assert!(dir.join(&rec.screenshot).exists(), "the shot is evidence either way");
+        let kept =
+            std::fs::read_to_string(dir.join("02-assert-files-listed.txt")).expect("the listing");
+        assert!(kept.contains("AXRow"), "the listing is filed as the tool gave it — got: {kept}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// And the half that keeps it a reading: a row the face is not drawing is on neither the shot nor
+    /// the tree, so the step goes red where a road said it should be there.
+    #[test]
+    fn a_row_the_tree_does_not_carry_still_reds_the_run() {
+        let s = load(OFF_THE_TREE);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-notree-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let outcome = walk(
+            &s,
+            &dir,
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("a row read off the tree is never sent to the reader"),
+            |_| Ok(reading("AXRow\tpruning.md\t504 357 123 22")),
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+        )
+        .expect("walk");
+
+        assert!(!outcome.passed);
+        let rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
+        assert_eq!(rec.verdict, Verdict::Fail);
+        assert_eq!(rec.found, Some(false));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A tree that cannot be read at all is an execution failure, not a red step — the run has
+    /// nothing to say about the row it was sent to look for.
+    #[test]
+    fn a_tree_that_cannot_be_read_aborts_the_walk() {
+        let s = load(OFF_THE_TREE);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-treeerr-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let err = walk(
+            &s,
+            &dir,
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("a row read off the tree is never sent to the reader"),
+            |_| Err("the window answered with nothing".to_string()),
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+        )
+        .unwrap_err();
+
+        assert!(err.contains("step 2") && err.contains("answered with nothing"), "got: {err}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

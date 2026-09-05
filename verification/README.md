@@ -278,8 +278,8 @@ which no reading of a photograph could do anyway. A lowercase `i` is deliberatel
 face this serves draws it with a dot, so folding it onto `l` would give away discrimination against a
 misreading this screen does not produce. A green earned this way carries `slipped` like any other.
 An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`, unless it is
-one of the few read off the store instead (below): its shot is kept for an AI/human eye and does not
-fail the run. A task's **title is one of those once the task
+one of the few read off the window's tree or off the store instead (below): its shot is kept for an
+AI/human eye and does not fail the run. A task's **title is one of those once the task
 has ended**: done and rejected are drawn with a line through them, and the reader returns the glyphs
 under that line as other letters (`SCENARIO — work is over` came back as `SCENARIOwotk is eveF`), so
 no fold brings the two sides together. The harness follows each binding through its terminal states
@@ -317,6 +317,29 @@ Where the reading is taken settles three things:
 What stays off that table is as much the point. An assert whose words *are* on screen remains the
 screen's: reading the store for those would check the build's records against themselves rather than
 against what a reader sees.
+
+### The asserts a screen draws cut — read off the accessibility tree
+
+A row is drawn in the column it stands in, and a name longer than that column is drawn cut, the tail
+replaced by one glyph: `grafting.md` comes out `grafting…` in the rail a bound folder's tree stands
+in. The reader returns what is drawn, so `files listed` went red against a build doing exactly what a
+file tree should — and widening the column by hand before every run is not a road anybody walks.
+
+The eliding is the drawing and not the row: the window's accessibility tree carries the whole name.
+So a second short, closed table — `amenbo_verify_gui::reads_the_tree`, which holds `files listed` and
+nothing else yet — takes its reading off that tree instead, by asking the screen tool to list every
+named element under the window the step was shot at (`screen find <pid>`). The listing is not parsed:
+what the assert asks is whether the name is on that window at all, which is the same search a shot's
+reading is put to, so it goes through the same fold and the same match. A step on this table comes
+out `pass`/`fail` like any other, and the listing is filed beside the shot the way a reading is.
+
+**The shot is still taken and still filed.** The reading moves; the evidence does not — the picture
+is what an eye reads the step back from, and a tree read is no more legible to a person than a
+photograph of a screen nobody kept.
+
+What stays off that table is as much the point, for the reason the store's is. An assert whose words
+a shot can be read for stays the shot's: a build asked what it drew is a build checked against
+itself, where a reading is the screen checked against the road.
 
 The Linux container carries no toolchain, so it can't read the scenario itself. Its host launcher
 (`make verify-gui-linux`) resolves the scenario through the `emit` bin and passes the card — the

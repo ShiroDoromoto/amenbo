@@ -6,10 +6,13 @@
 //! (`scripts/screen.swift`): the app is named by the pid that launch answered with, one shot per
 //! step lands in an evidence directory, and each assert OCR can judge is decided from that shot.
 //!
-//! Three things can close an assert, and which one is on it follows from what the assert asks about.
-//! Words on the screen are OCR's. State **no screen draws** — the original image an ingest kept — is
-//! read back out of the store the app is running against, through the CLI the same bundle ships;
-//! what is on that table is [`amenbo_verify_gui::reads_the_store`], and it is short.
+//! Four things can close an assert, and which one is on it follows from what the assert asks about.
+//! Words on the screen are OCR's. A name the screen draws **cut** — a row in a column narrower than
+//! the name it carries — is read off the window's own accessibility tree, where it stands whole;
+//! what is on that table is [`amenbo_verify_gui::reads_the_tree`]. State **no screen draws** — the
+//! original image an ingest kept — is read back out of the store the app is running against, through
+//! the CLI the same bundle ships; what is on that table is
+//! [`amenbo_verify_gui::reads_the_store`]. Both tables are short, and both keep the shot.
 //! Everything else is left as a `Review` for a human eye, with its shot kept.
 //!
 //! Usage: `verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>]
@@ -66,9 +69,9 @@
 //! [`amenbo_verify_gui::instructions`] returns, one to a line, which is the very text a run hands the
 //! operator; a road carrying an op this harness has not mapped fails here exactly as it would there.
 //!
-//! Exit code is the machine signal: 0 when every assert a machine judged — off the shot or off the
-//! store — passed and every step was captured, non-zero on a failed assert, a load failure, or a
-//! capture/OCR/store-read failure. A `Review` step does not fail the run — a human closes it from
+//! Exit code is the machine signal: 0 when every assert a machine judged — off the shot, off the
+//! window's tree or off the store — passed and every step was captured, non-zero on a failed assert,
+//! a load failure, or a capture/reading/store-read failure. A `Review` step does not fail the run — a human closes it from
 //! the evidence.
 
 use std::io::{BufRead, Write};
@@ -78,7 +81,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use amenbo_verify_cli::World;
 use amenbo_verify_gui::{
-    launch, read_shot, scratch, shoot, walk, write_manifest, StepBrief, StepRecord, Verdict,
+    launch, read_shot, read_tree, scratch, shoot, walk, write_manifest, StepBrief, StepRecord,
+    Verdict,
 };
 
 fn main() -> ExitCode {
@@ -198,6 +202,9 @@ fn run(opts: &Opts) -> Result<bool, String> {
         &evidence,
         |window, path| shoot(gui.borrow().pid, window, path, &screen),
         |image| read_shot(image, &screen),
+        // The same window the shot was aimed at, listed off its accessibility tree — for the asserts
+        // a picture carries but cannot be read for, a name a narrow column drew cut being the one.
+        |window| read_tree(gui.borrow().pid, window, &screen),
         |brief| hand_over(&stdin, brief),
         || gui.borrow_mut().run_again(&screen),
         // The store the app is running against, asked through the driver that stood its world up.
@@ -293,10 +300,11 @@ fn step_lines(r: &StepRecord) -> String {
 /// its one machine-readable line, and a line is all it asks for — the content is the driver's to use
 /// as a note to themselves.
 ///
-/// What an assert expects OCR to find is shown with it. The reading is a search for those words and
-/// no more — one misread character inside them is forgiven and nothing else is — so a driver who can
-/// see the screen is the one who can tell a check that genuinely passed from one the words happened
-/// to satisfy.
+/// What an assert expects to find is shown with it, and where it will be looked for: on the shot, or
+/// on the window's accessibility tree, for the asserts a picture carries but cannot be read for. The
+/// reading is a search for those words and no more — one misread character inside them is forgiven
+/// and nothing else is — so a driver who can see the screen is the one who can tell a check that
+/// genuinely passed from one the words happened to satisfy.
 ///
 /// End of input is a failure rather than a nod. A run with nothing left to hold it would walk the
 /// rest of the scenario off whichever screen was up, and file those shots as evidence of steps
@@ -304,8 +312,13 @@ fn step_lines(r: &StepRecord) -> String {
 fn hand_over(stdin: &std::io::Stdin, brief: &StepBrief<'_>) -> Result<(), String> {
     eprintln!("  → {:02} [{}] {}", brief.index + 1, brief.kind, brief.instruction);
     if let Some(exp) = brief.expected {
-        let side = if exp.present { "reads" } else { "does not read" };
-        eprintln!("        the shot {side}: {}", exp.text);
+        let side = match (brief.from_the_tree, exp.present) {
+            (false, true) => "the shot reads",
+            (false, false) => "the shot does not read",
+            (true, true) => "the screen names",
+            (true, false) => "the screen does not name",
+        };
+        eprintln!("        {side}: {}", exp.text);
     }
     eprint!("  … stand the screen where this step says, then press Enter: ");
     let _ = std::io::stderr().flush();

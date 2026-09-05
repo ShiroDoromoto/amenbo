@@ -413,6 +413,16 @@ lands is decided by which side of a row's middle it is let go on, and both sides
 same row — a name says which row and cannot say which side of it. So the arithmetic is the caller's,
 and `find`'s rectangle is what each end is built from.
 
+**A file comes in from outside with `drop-file <pid> <x> <y> <path>…`, and `drag` cannot stand in for
+it.** What crosses the screen when a file is dragged in is a dragging *session* — a pasteboard
+travelling with the pointer — and moving a pointer carries none of it: a pane walked over that way is
+told nothing at all. Nor can the moves be aimed at the file manager the file is picked up from, whose
+rows nothing outside it reaches. So the tool begins the session itself, off a window of its own, and
+lets it go at the point named. Several paths in one call are one hand full and not several drops,
+which is the whole of what a road asks of that gesture. What is brought has to be a file on the
+machine the screen is on — the same thing the instruction asks the operator for — and a drop nothing
+took is refused rather than reported as done.
+
 **A day goes in through `set-date <pid> <name> <yyyy-mm-dd>` rather than through the keys.** A date
 field is one control with three numbered parts in it, and typing into it is a digit at a time — but
 every digit that leaves the value a valid day makes the app commit and redraw the field, and the

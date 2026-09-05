@@ -1394,10 +1394,20 @@ function Tree({
             // where this is one of them, and this row alone where it is not. The ghost that follows
             // the pointer is still this row — the one under the hand is what a person is carrying,
             // however many are coming with it.
-            onPointerDown={(e) => onCarry?.(
-              rowsAbout(picked, line.path).map((one) => fileAt(root, one)),
-              e,
-            )}
+            //
+            // **The row takes the keyboard here, rather than leaving it to the press's default.**
+            // The band and the keyboard are two different things on this tree — one is the rows
+            // picked out, the other the row `⌘C` and the arrows are standing on — and the press was
+            // only ever moving the first. In the webview it moved neither: the gesture raises its
+            // fence against the browser's own text selection the moment the press lands
+            // (`./handDrag`), and the default that would have stood the keyboard on the row does
+            // not survive it. What a reader saw was the band on the row they pressed and the copy
+            // taking the row before it, or nothing at all (`AMB-T-4368`). Stood on explicitly, the
+            // way the menu already stands on the row it is about.
+            onPointerDown={(e) => {
+              e.currentTarget.focus();
+              onCarry?.(rowsAbout(picked, line.path).map((one) => fileAt(root, one)), e);
+            }}
             // Stood on before the menu opens, because the row a menu is about is the row a reader
             // comes back to when it closes — and a right-click is not a press the browser moves the
             // focus for.

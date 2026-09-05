@@ -867,7 +867,6 @@ describe("the file face", () => {
     await settle();
     expect(container.textContent).toContain("main.rs");
 
-    // Onto the row, so that the tab stop is somewhere a reader put it, and then into the file.
     const stop = () =>
       [...container.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")]
         .find((one) => one.tabIndex === 0);
@@ -875,8 +874,9 @@ describe("the file face", () => {
     const named = (name: string) =>
       [...container.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")]
         .find((one) => labelOf(one) === name);
-    await act(async () => { named("main.rs")!.focus(); });
-    await openFile(button("a.md"));
+    // Onto the row and into the file in one gesture: a press is what puts the tab stop somewhere,
+    // so pressing the row twice both stands the reader on it and opens what it names.
+    await openFile(named("main.rs"));
     await settle();
     // Both at once: the file is up and the tree is still under it. Drawn in place of each other,
     // the tree came off the page here, and its state went with it.
@@ -2200,9 +2200,9 @@ describe("the file face", () => {
     await clickWith(rowFor("c.md"), { shiftKey: true });
     expect(picked()).toEqual(["a.md", "b.md", "c.md"]);
 
-    // The keyboard is still on the row `four` stood it on, and a step from there is one row.
+    // The keyboard followed the press that reached the range, and a step from there is one row.
     await press(document.activeElement!, "ArrowDown");
-    expect(picked()).toEqual(["b.md"]);
+    expect(picked()).toEqual(["d.md"]);
   });
 
   it("picks the row a menu was opened away from the selection on", async () => {
@@ -2283,6 +2283,25 @@ describe("the file face", () => {
     // The press is aimed at a row outside the selection: what a reader means by it is that row.
     await pressOn(rowFor("b.md"), "c");
     expect(hoisted.asked).toContain(`clip-copy:${ROOT}:b.md`);
+  });
+
+  /**
+   * The band and the keyboard are two answers about a tree, and a press has to move both: the band
+   * says which rows are picked out, the keyboard which row `⌘C` and the arrows are standing on.
+   *
+   * A press that moved only the band left the two on different rows, and what a reader saw was the
+   * copy taking the row before the one they had just pressed (`AMB-T-4368`). The presses above hand
+   * the key to the row a reader meant, so none of them can catch that — this one asks the document
+   * which row the key would actually arrive on.
+   */
+  it("stands the keyboard on the row a press landed on, so the copy is about it", async () => {
+    // The keyboard starts on the first row, which is the row a broken press leaves it on.
+    await four();
+    await clickWith(rowFor("c.md"), {});
+    expect(labelOf(document.activeElement as HTMLElement)).toBe("c.md");
+
+    await pressOn(document.activeElement, "c");
+    expect(hoisted.asked).toContain(`clip-copy:${ROOT}:c.md`);
   });
 
   it("copies every picked row off the menu as well as off the key", async () => {

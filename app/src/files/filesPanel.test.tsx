@@ -2906,6 +2906,11 @@ describe("a project bound to several folders", () => {
       () => container.textContent?.includes(errLabel(refusal)) === true,
       "the refusal never reached the screen",
     );
+    // And said inside the box's own row, which is what carries it to a reader being read to. A tree
+    // names what may be inside it, so a line drawn anywhere else is thrown out of what the machine
+    // hands that reader: the words are on the screen and nowhere in the answer, which is a refusal
+    // only somebody looking at the screen is told about (`AMB-T-4403`, the shape of `AMB-T-4396`).
+    expect(namebox()!.closest("[role=\"treeitem\"]")?.textContent).toContain(errLabel(refusal));
     // Still there, still holding what was typed: a refusal a person has to type their way back to
     // is one they were told nothing by. And the name was asked for once, not once per leaving.
     expect(namebox()?.value).toBe("notes.md");

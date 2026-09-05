@@ -1285,9 +1285,14 @@ function Tree({
           as the tree is and the scrollbar says how much of it there is. */}
       {from > 0 && <li role="none" aria-hidden="true" style={{ height: from * ROW }} />}
       {drawn.map((line) => {
+        // 🚨 **The box is a row of the tree, not a line standing beside the rows.** What a tree may
+        // hold is named, and a line drawn as anything else is thrown out of the tree the machine
+        // hands a reader being read to — so the box was on the screen and nowhere in what the
+        // machine said was there, which is a rename a screen reader cannot find (`AMB-T-4396`). It
+        // holds no name of its own to be picked out or stood on: how deep it is is what it says.
         if (line.kind === "make") {
           return (
-            <li key="make" role="none" style={step(line.depth)}>
+            <li key="make" role="treeitem" aria-level={line.depth + 1} style={step(line.depth)}>
               <NameBox
                 initial=""
                 onName={(name) => folderMake(
@@ -1300,10 +1305,20 @@ function Tree({
         }
         // The row is the box while its name is being written over. Drawn in place of the row rather
         // than beside it: what is being changed is this name, and two of them on the screen at once
-        // would leave a reader wondering which one they were about to keep.
+        // would leave a reader wondering which one they were about to keep. It keeps the row's own
+        // place in the tree — how deep it is, how many it stands among and which of them it is —
+        // because it is still that row, and a line the tree may not hold is a line nobody being
+        // read to is told about (the box above).
         if (renaming(naming.edit, root, line.path)) {
           return (
-            <li key={line.key} role="none" style={step(line.depth)}>
+            <li
+              key={line.key}
+              role="treeitem"
+              aria-level={line.depth + 1}
+              aria-setsize={line.setsize}
+              aria-posinset={line.posinset}
+              style={step(line.depth)}
+            >
               <NameBox
                 initial={line.name}
                 onName={(name) => folderRename(projectId, root, line.path, name)}

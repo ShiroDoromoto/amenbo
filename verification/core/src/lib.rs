@@ -3467,6 +3467,18 @@ impl Scenario {
             self.validate_list(Some(driver), self.steps(driver), &standing, &mut errs);
         }
 
+        // And the one rule that is about where a road has left the screen rather than about a step's
+        // own text. A screen's question alone: the CLI's road has no column to draw a file in.
+        for (i, op) in rendering_in_the_way(self.steps(Driver::Gui)) {
+            errs.push(ValidationError {
+                driver: Some(Driver::Gui),
+                step: Some(i),
+                message: format!(
+                    "`{op}` needs the file's own text on the screen, and the Markdown file this road has open is drawn as what that text says — put the text up first with `show-as` (`form: source`)"
+                ),
+            });
+        }
+
         if errs.is_empty() {
             Ok(())
         } else {
@@ -3707,6 +3719,60 @@ impl Scenario {
     }
 }
 
+/// Every step on a screen road that types into a file whose text is not on the screen.
+///
+/// **A Markdown file opens on what its text draws, and a rendering has no editor** — the switch
+/// beside the name is what puts the text up (`app/src/files/FilesPanel.tsx`). So a road that opens a
+/// `.md` and goes straight to the typing reads perfectly and stops dead on the screen: the operator
+/// finds a heading where the caret should be, and every step after it is unwalkable. That is the
+/// road's fault and not the panel's, which is why it is caught here rather than left for the
+/// pre-distribution run to find on the day.
+///
+/// What the column is holding is followed through the three doors a road has for changing it — a
+/// file opened from the tree, a tab pressed, and the draft page, which is written on rather than
+/// read and is nobody's Markdown — and the form it is drawn in through the two that change that:
+/// the switch, and reading the bytes again as another encoding, which opens the file afresh.
+fn rendering_in_the_way(steps: &[Step]) -> Vec<(usize, &str)> {
+    let markdown = |name: &str| {
+        let lower = name.to_lowercase();
+        lower.ends_with(".md") || lower.ends_with(".markdown")
+    };
+    let mut holding_markdown = false;
+    let mut as_source = false;
+    let mut found = Vec::new();
+    for (i, step) in steps.iter().enumerate() {
+        if step.domain() != Domain::Files {
+            continue;
+        }
+        let named = step.with().get("name").and_then(|v| v.as_str());
+        match step.op() {
+            // The column comes to hold another file, drawn the way every file opens. A tab with no
+            // name is the draft page, which is not a file at all.
+            "open" | "tab" | "more-tabs" => {
+                holding_markdown = named.is_some_and(markdown);
+                as_source = false;
+            }
+            // The file closes, and what stands where it was is not one.
+            "back" => {
+                holding_markdown = false;
+                as_source = false;
+            }
+            // Read again from its bytes, which is the file opened afresh — the form goes back with
+            // it (`FilesPanel`).
+            "reopen-with" => as_source = false,
+            "show-as" => {
+                as_source =
+                    matches!(step.with().get("form").and_then(|v| v.as_str()), Some("source"));
+            }
+            "edit" | "paste-into-editor" | "save" if holding_markdown && !as_source => {
+                found.push((i, step.op()));
+            }
+            _ => {}
+        }
+    }
+    found
+}
+
 /// Where the files a road copies into its world are kept when nobody says otherwise, resolved
 /// against this crate so it is the same folder whatever the CWD.
 ///
@@ -3861,6 +3927,46 @@ steps_gui:
         let s = load_str(yaml).expect("parses");
         let errs = s.validate().expect_err("an empty title is refused");
         assert!(errs.iter().any(|e| e.message.contains("cannot be empty")), "{errs:?}");
+    }
+
+    /// The road that reads right and cannot be walked: a Markdown file is drawn as what its text
+    /// says, so there is no editor to click into until the switch beside the name is pressed.
+    #[test]
+    fn typing_into_a_markdown_file_still_drawn_as_markdown_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: files
+    op: open
+    with: { name: watering.md, section: tree }
+  - type: action
+    domain: files
+    op: edit
+    with: { types: SCENARIO a line }
+"#;
+        let errs = load_str(yaml).unwrap().validate().unwrap_err();
+        assert!(
+            errs.iter().any(|e| e.message.contains("`show-as`") && e.step == Some(1)),
+            "{errs:?}"
+        );
+    }
+
+    /// And the three ways it is not a fault: the switch pressed, a file that has only one form to
+    /// be drawn in, and the draft page, which is written on rather than read.
+    #[test]
+    fn the_text_on_the_screen_leaves_the_typing_alone() {
+        for road in [
+            "  - type: action\n    domain: files\n    op: open\n    with: { name: watering.md, section: tree }\n  - type: action\n    domain: files\n    op: show-as\n    with: { form: source }\n",
+            "  - type: action\n    domain: files\n    op: open\n    with: { name: watering.txt, section: tree }\n",
+            "  - type: action\n    domain: files\n    op: tab\n",
+        ] {
+            let yaml = format!(
+                "id: x\ntitle: y\nsteps_gui:\n{road}  - type: action\n    domain: files\n    op: edit\n    with: {{ types: SCENARIO a line }}\n"
+            );
+            load_str(&yaml).unwrap().validate().expect("the text is on the screen");
+        }
     }
 
     #[test]

@@ -94,7 +94,7 @@ impl ScenarioResult {
 /// Load and run one scenario, folding a load or execution failure into an `Errored` entry so the
 /// runner carries on to the next.
 fn run_one(path: &Path, bin: &Path, keep: bool) -> ScenarioResult {
-    let scenario = match amenbo_scenario::lint_file(path) {
+    let scenario = match amenbo_scenario::lint_file(path, None) {
         Ok(s) => s,
         Err(errs) => {
             return ScenarioResult::Errored {

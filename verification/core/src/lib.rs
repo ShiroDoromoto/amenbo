@@ -3707,8 +3707,8 @@ impl Scenario {
     }
 }
 
-/// Where the files a road copies into its world are kept, resolved against this crate so it is the
-/// same folder whatever the CWD.
+/// Where the files a road copies into its world are kept when nobody says otherwise, resolved
+/// against this crate so it is the same folder whatever the CWD.
 ///
 /// It is answered here rather than beside the driver that reads from it, because the lint below has
 /// to look in the very folder the run will: two answers to "where are the fixtures" is how a road
@@ -3720,15 +3720,14 @@ pub fn fixtures_dir() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("fixtures"))
 }
 
-/// Every fixture this scenario names that is not in [`fixtures_dir`].
+/// Every fixture this scenario names that is not in `dir`.
 ///
 /// **The one check in the lint that touches the disk**, and the reason it is not in
 /// [`Scenario::validate`] with the rest: validate answers about the text of a road, and this asks
 /// the filesystem. It is worth the exception because nothing else asks — `cargo test` and `--print`
 /// both read a road without ever fetching what it copies, so a `from:` naming nothing is green
 /// everywhere until the pre-distribution run walks it for real and stops.
-fn missing_fixtures(scenario: &Scenario) -> Vec<ValidationError> {
-    let dir = fixtures_dir();
+fn missing_fixtures(scenario: &Scenario, dir: &Path) -> Vec<ValidationError> {
     let mut errs = Vec::new();
     let mut look = |driver: Option<Driver>, steps: &[Step]| {
         for (i, step) in steps.iter().enumerate() {
@@ -3757,13 +3756,21 @@ fn missing_fixtures(scenario: &Scenario) -> Vec<ValidationError> {
 }
 
 /// Load and validate in one call — the check a `lint` run performs on each file.
-pub fn lint_file(path: impl AsRef<Path>) -> Result<Scenario, Vec<String>> {
+///
+/// `fixtures` is the folder the run standing behind this lint will copy from; `None` is
+/// [`fixtures_dir`], this repository's own. A caller that takes the folder on its own command line
+/// hands the same value here, and the argument is what asks it to: the screen harness runs inside a
+/// VM and copies from a folder in the guest, while this crate's compile-time path names nothing
+/// there — so a lint left to answer for itself turns away every road that copies a file, and the
+/// run never starts.
+pub fn lint_file(path: impl AsRef<Path>, fixtures: Option<&Path>) -> Result<Scenario, Vec<String>> {
     let scenario = load_file(path).map_err(|e| vec![e.to_string()])?;
     let mut errs = scenario.validate().err().unwrap_or_default();
     // Only once the road itself reads: a `copy-fixture` whose op or args are wrong has already been
     // named, and a second line about the file it points at would be noise on top of the real fault.
     if errs.is_empty() {
-        errs = missing_fixtures(&scenario);
+        let dir = fixtures.map(Path::to_path_buf).unwrap_or_else(fixtures_dir);
+        errs = missing_fixtures(&scenario, &dir);
     }
     if errs.is_empty() {
         Ok(scenario)

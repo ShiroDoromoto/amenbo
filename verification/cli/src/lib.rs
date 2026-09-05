@@ -165,13 +165,6 @@ pub fn anchor_bin(bin: PathBuf) -> PathBuf {
     }
 }
 
-/// Where the scenario fixtures live when nobody says otherwise — `verification/fixtures/`, beside
-/// the scenarios that name them. Resolved from this crate's own location rather than from the CWD,
-/// so `verify-all` finds them wherever it is invoked from.
-fn default_fixtures_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("fixtures")
-}
-
 /// Drives the shipped binary against one isolated store, remembering the ids that steps bind.
 ///
 /// The store is borrowed rather than owned, because a driver is not always the only one working in
@@ -289,7 +282,7 @@ impl<'a> Driver<'a> {
             server: None,
             tick_at_start: false,
             refusal: None,
-            fixtures: fixtures.unwrap_or_else(default_fixtures_dir),
+            fixtures: fixtures.unwrap_or_else(amenbo_scenario::fixtures_dir),
             own_pointer: String::new(),
         };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;

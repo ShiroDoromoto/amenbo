@@ -43,6 +43,8 @@ steps_cli:
     with:
       name: worktree
 
+  # The step the call belongs at, which is what carries it to the entry point at all — a command no
+  # step reaches for is left to `plugin run <name> --help` instead.
   - type: action
     domain: plugin
     op: declare-agent
@@ -50,6 +52,7 @@ steps_cli:
       name: worktree
       when: SCENARIO — when an AI should reach for this plugin
       cmd: start <task-id>
+      steps: worktree.cut-per-task
       does: SCENARIO — what the call does, and what it returns
 
   # The call still arrives, whole and typeable. A stranger's plugin is not a suspect one: the user

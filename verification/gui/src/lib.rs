@@ -776,6 +776,12 @@ impl Instructor {
     /// the state git is in rather than the colour it is drawn in — which colour that is belongs to the
     /// theme, and an eye at the screen can see that two rows differ without being told what to expect.
     ///
+    /// `files save-shut` is a `Review` for the reason `ai-launch-consent-clear-shut` is: what it is
+    /// about is a control refusing the hand, which puts no words on a shot either way. The word on it
+    /// is the same word a control that would take the press carries — the file still holds something
+    /// typed and not kept — so the only thing that tells the two apart is how it is drawn, and paint
+    /// is not something a reading gives back.
+    ///
     /// `files handed-over` is a `Review` on all three of its doors, and further out than most: what
     /// settles it is not on Amenbo's window at all. A file handed to the machine leaves through an
     /// application that came forward, or an operating system's own chooser drawn by the system, and
@@ -3981,6 +3987,12 @@ impl Instructor {
                 true => format!("Confirm what is drawn beside the panes says {}.", note(with)?),
                 false => format!("Confirm what is drawn beside the panes does not say {}.", note(with)?),
             },
+            // The keeping, read rather than pressed. Where `save` names the control by what it does,
+            // this one asks whether it would do it — and the answer is in how it is drawn, so the line
+            // asks the operator to say what they saw.
+            (Domain::Files, "save-shut") =>
+                "In the row above the text — beside the file's name — confirm the way the panel offers to keep what was typed is standing there and will not take a press. It is drawn, and drawn shut: there is still something typed that has not been kept, so the control is not saying there is nothing to save. What tells a shut control from one that would take the hand is how it is drawn, so say what you saw."
+                    .to_string(),
             // The row of tabs, read as a whole and in order. The draft page is left out of the list a
             // road writes: it is always the first of them and it is named in the interface's own
             // words, so what a road can say is which files stand after it.

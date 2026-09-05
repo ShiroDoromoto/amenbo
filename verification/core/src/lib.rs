@@ -2781,6 +2781,12 @@ const REGISTRY: &[OpSpec] = &[
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
+    // The way to keep what was typed, read as a control rather than pressed. A file the panel already
+    // knows has moved under the reader cannot be saved from here — the mark it is holding is the one
+    // the door refuses — so the control is shut, rather than taking a press that spends a round trip
+    // and lands back on the screen the reader is already reading. It takes no arguments because the
+    // face draws one of these, in the row above the text, and the file it belongs to is the one open.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "save-shut", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── the files the column is holding ───────────────────────────────────────────────────────────
     // The reading column holds several files at once, as a row of tabs above the one on top

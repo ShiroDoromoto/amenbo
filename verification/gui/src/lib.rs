@@ -722,8 +722,17 @@ impl Instructor {
     /// it is the road's own words — the panes have not been typed into yet, and the empty ones this
     /// step exists to rule out would carry the interface's — so there is nothing for a reading to
     /// look for, and its absence would settle nothing either way. Its neighbour `asking-folder` is
-    /// read, and the two are worth having side by side: one says what is standing, and the other
-    /// says how many.
+    /// a `Review` beside it, and the two are worth having side by side all the same: one says what
+    /// is standing, and the other says how many.
+    ///
+    /// `terminal asking-folder` is a `Review` on both of its states, and where it is read is why.
+    /// The question comes up only where a project binds more than one folder — and binding more
+    /// than one is exactly what puts a heading naming each of them on the column of folders down
+    /// the side. So the folder the step names is on the shot whether the question is standing or
+    /// gone: the absent half fails on every build, the box being nowhere and the word still on the
+    /// column, and the standing half would pass on a build that had stopped offering that folder
+    /// at all. The eye that closes both has the box to look at instead of the word. Splitting the
+    /// face out into its own window changes none of it — the column is drawn there too.
     ///
     /// `terminal side` and `terminal side-width` are `Review`s, and for the reason `frames` is: what
     /// they read is a region of the screen rather than anything written in one. Every word a column
@@ -916,13 +925,6 @@ impl Instructor {
             // one shot, one reading, and the sentence is where the difference between them lives.
             | (Domain::Terminal, "in-the-box") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
-            }
-            // The folder the question offers, read by the name the road gave it. The buttons carry the
-            // folders' own paths, and the last part of one is the word the world was told to make it
-            // under — so a reading finds it on the question and nowhere else on this face, and finds
-            // it gone once the question has been left.
-            (Domain::Terminal, "asking-folder") => {
-                Some(Expectation { text: arg_str(with, "dir")?.to_string(), present: present(with) })
             }
             // The store the way in named as the folder's owner, read where the reader it turned away
             // is standing. It is a store's name and not a word of the interface's, so a reading finds
@@ -3594,17 +3596,19 @@ impl Instructor {
                 Face::Calling => format!("{LAMP_ROW} watch the lamp to the left of the name for a few seconds: confirm it is blinking, and in the warning colour rather than that pane's own — which is that pane asking for a person. It falls to the same beat as the mark at the other end of the same row, and the two go together. Judge it by watching rather than by the shot: a still picture of a blink can be caught at the moment it rests. Where the machine is set to play no animation the lamp does not blink at all, and what to confirm there is the warning colour, held at its brightest."),
                 Face::Out => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is sunk — dim, in that pane's own colour, with no glow around it and no blinking. Out is the pane's resting state, not the pane having gone: the lamp is drawn either way."),
             },
-            // The question about where a pane runs, read by a folder it offers. The absent half is the
-            // one the walking-away is proved by, and it is written to say what a screen with nothing
-            // on it means here: the question is the box, so a face drawing neither it nor a pane is a
-            // question that took its box with it.
+            // The question about where a pane runs, pointed at by a folder it offers. Both halves name
+            // the box rather than the folder, because the folder is on the column down the side of
+            // this face either way — an eye closes them, and what it is being asked for is the box.
+            // The absent half is the one the walking-away is proved by, and it is written to say what
+            // a screen with nothing on it means here: the question is the box, so a face drawing
+            // neither it nor a pane is a question that took its box with it.
             (Domain::Terminal, "asking-folder") => match present(with) {
                 true => format!(
-                    "Confirm the question about which folder this pane works in is standing where the pane would be, and that \"{}\" is one of the folders it offers.",
+                    "Confirm the question about which folder this pane works in is standing where the pane would be, and that \"{}\" is one of the folders it offers — on the question itself, not on the column of folders down the side, which names it whatever is standing.",
                     req(with, "dir")?
                 ),
                 false => format!(
-                    "Confirm the question about which folder a pane works in is nowhere on this screen — no box offering \"{}\", and nothing half-made standing where it was.",
+                    "Confirm the question about which folder a pane works in is nowhere on this screen — no box offering \"{}\", and nothing half-made standing where it was. The column of folders down the side goes on naming that folder either way, and it is not the question.",
                     req(with, "dir")?
                 ),
             },
@@ -5584,6 +5588,42 @@ steps_gui:
         assert!(err.contains("does not know the answer `think-about-it`"), "got: {err}");
         let err = ins.render(&steps[6]).unwrap_err();
         assert!(err.contains("give it a `target`"), "got: {err}");
+    }
+
+    /// The question about which folder a pane works in, on both of its halves. Neither is a reading:
+    /// the question only comes up where a project binds more than one folder, and that is exactly the
+    /// case where the column of folders down the side puts a heading over each of them — so the folder
+    /// the step names is on the shot standing or gone. Left as a reading, the absent half would fail on
+    /// every build and the standing half would pass on one that had stopped offering the folder. Both
+    /// instructions therefore point at the box, and the absent one says the column is not it.
+    #[test]
+    fn the_question_about_where_a_pane_runs_is_read_by_an_eye_and_not_by_the_folder_it_names() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: terminal
+    op: asking-folder
+    with: { dir: orchard }
+  - type: assert
+    domain: terminal
+    op: asking-folder
+    with: { dir: orchard, present: false }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("standing where the pane would be"), "got: {}", lines[0]);
+        assert!(lines[0].contains("not on the column of folders"), "got: {}", lines[0]);
+        assert!(lines[1].contains("nowhere on this screen"), "got: {}", lines[1]);
+        assert!(lines[1].contains("it is not the question"), "got: {}", lines[1]);
+        for (i, step) in steps.iter().enumerate() {
+            assert!(
+                ins.expectation(step).is_none(),
+                "step {i}: the folder is on the column either way — an eye closes this"
+            );
+        }
     }
 
     /// The press through a hit: the move names the word asked for and the record pressed, and what the

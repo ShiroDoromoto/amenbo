@@ -741,9 +741,12 @@ takes it with it — `leave-question` is that move, and `leave-the-question-abou
 road. Where the leaving is done is the driver's to say rather than the road's, the question coming
 down on a press anywhere else on the face. The road ends by answering the same question, since what
 the walking-away did not leave behind is exactly what an answer makes.
-`asking-folder` reads whether the question is standing, by a folder it offers: the rows carry the
-folders' own paths, so what a reading finds is a word the road put in the world and not one of the
-interface's, and its absent half is what says the box left with the question.
+`asking-folder` says whether the question is standing, by a folder it offers, and its absent half is
+what says the box left with the question. It is a `Review` on both halves: the question comes up only
+where a project binds more than one folder, and binding more than one is exactly what puts a heading
+naming each of them on the column of folders down the side — so that folder is on the shot whether the
+box is standing or gone, and only an eye can say which. The instruction names the box for that reason,
+and says the column is not it.
 
 `frames` counts what is standing on the page, and it is a `Review` for the reason `dot` below is —
 a box carries no words of the road's, and an empty one would carry the interface's. What it defends

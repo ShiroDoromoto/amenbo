@@ -1228,6 +1228,14 @@ A shot of the wrong window is a picture of a screen nobody stood at, and on the 
 exactly like a picture of the right one — red for a reason nobody can see, or green off a name both
 windows happened to carry.
 
+**What it names is where the step is carried out, not where the shot is taken.** The two are the
+same window everywhere but one: `terminal fold-back` is pressed in the window that the press closes,
+so the shot after it is of the window left standing — the app's one window, which a road says by
+saying nothing. The harness works that out from the op rather than reading it off the road, for the
+reason it works out a restart from `store run-again`: it is not a thing a road chooses. A road that
+had to name the shot's window as well would be writing down twice what the op already says, and the
+second name would have to be an absence.
+
 Where the word is written down is where it belongs: on `given` it would name a window nothing has
 drawn yet, and on `steps_cli` one that never exists, so the lint turns both away rather than reading
 past a road filed under the wrong key.

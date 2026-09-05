@@ -4657,7 +4657,12 @@ where
         })
         .map_err(|e| format!("step {}: handing the step over failed: {e}", i + 1))?;
 
-        capture(window, &shot_path)
+        // Shot at the window the step named, except where the step is the closing of that window:
+        // there the shot is of what is left standing. The road names where the press goes, not where
+        // the camera does, and on `fold-back` those are two different windows — one of which no
+        // longer exists by the time there is anything to photograph.
+        let shot_at = if closes_its_window(step) { None } else { window };
+        capture(shot_at, &shot_path)
             .map_err(|e| format!("step {}: capturing `{screenshot}` failed: {e}", i + 1))?;
 
         // The asserts nothing draws, put to the store instead of to the shot. Asked first, since a
@@ -4736,6 +4741,18 @@ where
 /// restart would be reading a window nothing had put in front of it.
 fn ends_the_run(step: &Step) -> bool {
     matches!(step, Step::Action { domain: Domain::Store, op, .. } if op == "run-again")
+}
+
+/// Whether this step closes the window it is carried out in — the one place on these roads where the
+/// window a step is pressed in and the window its shot is taken of come apart.
+///
+/// It is asked of the step rather than declared in the scenario, for the reason [`ends_the_run`] is:
+/// a road names the window the operator stands at, and folding the terminal back is pressed in the
+/// window that goes away. Left to the road, the field would have to mean two things at once — the
+/// window to press in, and the window to shoot — and the second would be unanswerable here, because
+/// the window that is left is the app's one window and a road says that by saying nothing.
+fn closes_its_window(step: &Step) -> bool {
+    matches!(step, Step::Action { domain: Domain::Terminal, op, .. } if op == "fold-back")
 }
 
 /// A domain as a road writes it — the other half of the `store blobs` a message names a step by.
@@ -8051,6 +8068,61 @@ steps_gui:
         // And a step that named none carries no window at all, rather than a null saying it was
         // asked and left blank.
         assert_eq!(text.matches("\"window\"").count(), 1, "got: {text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The one step whose window is pressed in and not shot: folding the terminal back closes the
+    /// window the road named, so the shot is of the window left standing. Aimed at the named one, the
+    /// run dies at the last step of an otherwise green road, and the tool is right to refuse — there
+    /// is no such window any more.
+    #[test]
+    fn folding_back_is_shot_in_the_window_that_is_left() {
+        let s = load(
+            r#"
+id: sample
+title: The terminal goes out into a window of its own and comes back
+steps_gui:
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: "Amenbo — "
+"#,
+        );
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-fold-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mut aimed: Vec<Option<String>> = Vec::new();
+        let mut handed: Vec<String> = Vec::new();
+        let outcome = walk(
+            &s,
+            &dir,
+            |window, p| {
+                aimed.push(window.map(str::to_string));
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| unreachable!("no step on this road is judged by reading a shot"),
+            |brief| {
+                handed.push(brief.instruction.to_string());
+                Ok(())
+            },
+            || Ok(()),
+            nothing_to_read,
+        )
+        .expect("walk");
+
+        assert_eq!(aimed, vec![Some("Amenbo".to_string()), None]);
+        // What the road named still reaches the operator and the manifest: the press is in the window
+        // that is about to go, and only the camera is moved off it.
+        assert!(
+            handed[1].starts_with("In the window called \"Amenbo — \": "),
+            "got: {}",
+            handed[1]
+        );
+        assert_eq!(outcome.records[1].window.as_deref(), Some("Amenbo — "));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

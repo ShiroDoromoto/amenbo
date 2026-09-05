@@ -1831,6 +1831,15 @@ impl Instructor {
             // said first because it is what makes "the ref" a place on the screen rather than one of
             // several, and the waiting is said last because a press on a half-drawn line is a press
             // on nothing.
+            //
+            // **The clearing is a key press and not a command typed at the prompt.** The first line a
+            // person sends into a pane nobody has named is what names it, and a naming by typing
+            // never replaces one (`amenbo_core::frames`) — so a road that cleared by typing `clear`
+            // would leave the pane called `clear` for good, and the line a later step types to give
+            // it the road's own name would land on a frame that already has one.
+            // Control-L clears the screen in every shell a pane comes up in, and is read as a
+            // command to the shell rather than sent as a line, so the naming is still the road's to
+            // make.
             (Domain::Terminal, "run") => {
                 let standing_in = match with.contains_key("target") {
                     true => format!(
@@ -1840,7 +1849,7 @@ impl Instructor {
                     false => String::new(),
                 };
                 format!(
-                    "Click into the pane and clear what is on it — `clear` at the prompt does that — so nothing an earlier step left is still on the screen. Then type `{}` and press return{standing_in}, and wait until it has finished and the prompt is back.",
+                    "Click into the pane and clear what is on it — hold control and press L, which clears the screen without sending a line — so nothing an earlier step left is still on the screen. Do not type a command to clear it: the first line typed into a pane is what names the pane, and naming one is never this step's to do. Then type `{}` and press return{standing_in}, and wait until it has finished and the prompt is back.",
                     req(with, "command")?
                 )
             }
@@ -7985,6 +7994,13 @@ steps_gui:
             lines[1]
         );
         assert!(!lines[1].contains("<ref>"), "a command needing no ref says nothing of one: {}", lines[1]);
+        // The clearing is a key press: a line typed to clear would name the pane, and a name taken
+        // that way is one no later step can take back.
+        assert!(
+            lines[1].contains("hold control and press L") && !lines[1].contains("`clear`"),
+            "the clearing is pressed, not typed: {}",
+            lines[1]
+        );
         assert!(
             lines[2].contains("\"SEED\"") && !lines[2].contains("broken across"),
             "an ordinary press names the record and no fold: {}",

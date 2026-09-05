@@ -670,8 +670,11 @@ so `open-shell` takes the pane down to a plain prompt first, and every road that
 it. `run` is a command run there for its output: it clears the pane before it, so what a step after
 it presses is one place on the screen rather than one of several, and where the command needs a
 record's own number it carries `<ref>` and names the record beside it, a road having no way to spell
-a number the run will mint. `press-ref` is the press itself — the ref where the output drew it,
-naming the record rather than the characters — and `folded: true` asks for the same press on a ref
+a number the run will mint. **The clearing is a key press and not a typed `clear`**, because a pane
+is named by the first line typed into it and a naming by typing never replaces one — so a road that
+wants a pane called by words of its own types them before it runs anything there, and no step of the
+harness's own takes that name first. `press-ref` is the press itself — the ref where the output
+drew it, naming the record rather than the characters — and `folded: true` asks for the same press on a ref
 the pane broke across two rows. That last one is the only place the two ways a ref becomes pressable
 part company: what Amenbo's own output says of itself travels beside the characters and a fold cannot
 touch it, while reading them back off the screen means joining the rows a line was drawn across

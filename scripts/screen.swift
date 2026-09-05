@@ -65,6 +65,12 @@
 // front before pressing — the one action here that does not have to be sequenced by its caller.
 // `click` and `type` take no pid, so what is in front is still the caller's to know.
 //
+// Being in the tree is not being on the window. A webview keeps a row it has scrolled out of sight
+// named and framed, and the frame stands past the window's edge — so `find` writes `outside the
+// window` at the end of that line, and the named presses refuse it instead of aiming at it. A press
+// is a screen point like any other: one sent there lands on the desktop, or on whatever app is
+// under it, and comes back 0 for having pressed nothing.
+//
 // The tool holds no notion of what to operate in which order: an app-specific sequence burned in
 // here would go false every time the UI moves.
 
@@ -418,8 +424,35 @@ func appWindow(pid: Int, named wanted: String?) -> AXUIElement {
 /// screen's own, and the app's other windows left out too. Two windows of one app draw two screens,
 /// and a name read off the wrong one is a road that passed without looking at the screen it was
 /// written for.
-func windowElements(pid: Int, window wanted: String?) -> [Element] {
-    elements(under: appWindow(pid: pid, named: wanted))
+///
+/// The window's own frame comes back beside them, because standing under the window in the tree is
+/// not the same as standing on it: a webview answers for a row it has scrolled out of sight with the
+/// name it answers to and a frame past the window's edge, and every press here is a screen point. A
+/// window that will not say where it stands answers `.infinite`, so a frame nobody could read refuses
+/// nothing.
+func windowAndElements(pid: Int, window wanted: String?) -> (frame: CGRect, elements: [Element]) {
+    let w = appWindow(pid: pid, named: wanted)
+    return (axFrame(w) ?? .infinite, elements(under: w))
+}
+
+/// Whether the window holds the point a press aimed at `e` would land on.
+///
+/// The middle of the element is that point — what `pointOf` arrives at for a name on one element, and
+/// what `set-date` presses — so a listing is asked exactly what the press will ask of it.
+func onTheWindow(_ e: Element, _ window: CGRect) -> Bool {
+    window.contains(CGPoint(x: e.frame.midX, y: e.frame.midY))
+}
+
+/// Refuse a point the window does not hold.
+///
+/// A press is a screen point and nothing else, so one aimed past the window's edge lands on whatever
+/// is there — the desktop, another app — and comes back 0 having pressed nothing anybody meant. That
+/// is the worst shape a failure takes here: the road that sent it goes on to look for what the press
+/// was supposed to do, finds none of it, and reports the app broken.
+func mustBeOnTheWindow(_ p: CGPoint, _ window: CGRect, _ what: String) {
+    guard !window.contains(p) else { return }
+    let w = "\(Int(window.minX)),\(Int(window.minY)) \(Int(window.width))x\(Int(window.height))"
+    fail("\(what) stands outside the window, at \(Int(p.x)),\(Int(p.y)) — the window is \(w); a press there would land on whatever is at that point. Bring it into the window first — scroll to it, or open the window wider — and aim again")
 }
 
 /// The elements `wanted` names: the ones called exactly that, or — when the screen carries no such
@@ -489,10 +522,16 @@ func aimedAt(_ name: String?, _ role: String?) -> String {
 }
 
 func find(pid: Int, name: String?, role: String?, window: String?) {
-    let all = ofRole(role, windowElements(pid: pid, window: window))
+    let (frame, elements) = windowAndElements(pid: pid, window: window)
+    let all = ofRole(role, elements)
     let found = name.map { named($0, among: all) } ?? all
     for e in found {
-        print("\(e.role)\t\(e.name)\t\(Int(e.frame.minX)) \(Int(e.frame.minY)) \(Int(e.frame.width)) \(Int(e.frame.height))")
+        // Said on the line rather than left off the listing: a row scrolled out of sight is still on
+        // this screen, and a caller is often looking for exactly that — it is there, it just has to be
+        // brought into the window before anything can be aimed at it. Left unsaid, the coordinates
+        // read like any other and the press that follows them goes nowhere, quietly.
+        let standing = onTheWindow(e, frame) ? "" : "\toutside the window"
+        print("\(e.role)\t\(e.name)\t\(Int(e.frame.minX)) \(Int(e.frame.minY)) \(Int(e.frame.width)) \(Int(e.frame.height))\(standing)")
     }
     if found.isEmpty { fail("nothing on screen is \(aimedAt(name, role))") }
 }
@@ -549,7 +588,8 @@ func doubleClickNamed(pid: Int, name: String, role: String?, window: String?) {
 ///
 func pointOf(pid: Int, name: String, role: String?, window: String?) -> CGPoint {
     front(pid: pid, window: window)
-    let found = named(name, among: ofRole(role, windowElements(pid: pid, window: window)))
+    let (frame, elements) = windowAndElements(pid: pid, window: window)
+    let found = named(name, among: ofRole(role, elements))
     guard let first = found.first else { fail("nothing on screen is \(aimedAt(name, role))") }
 
     var reached: [String] = []
@@ -569,7 +609,9 @@ func pointOf(pid: Int, name: String, role: String?, window: String?) -> CGPoint 
             : "click a point instead"
         fail("\(found.count) elements are called \(oneLine(first.name)), in different places — at \(places); \(onward)")
     }
-    return CGPoint(x: overlap.midX, y: overlap.midY)
+    let p = CGPoint(x: overlap.midX, y: overlap.midY)
+    mustBeOnTheWindow(p, frame, oneLine(first.name))
+    return p
 }
 
 /// Move onto the point before pressing, so an element that expects a hover first (a button's hover
@@ -989,8 +1031,8 @@ func scroll(pid: Int, window: String?, dx: Double, dy: Double, at: CGPoint?) {
 
 /// The date element in this app whose day can be written — the picker panel's, once it is open.
 ///
-/// Walked off the raw tree rather than through [`windowElements`], which keeps only the elements that
-/// answer to a name: the panel carries none, being drawn as the field's own pop-up rather than as a
+/// Walked off the raw tree rather than through [`windowAndElements`], which keeps only the elements
+/// that answer to a name: the panel carries none, being drawn as the field's own pop-up rather than a
 /// control of its own, so a listing of the screen never holds it. It is the one element here that is
 /// looked up by what it can do instead of by what it is called.
 func writableDay(pid: Int) -> AXUIElement? {
@@ -1047,7 +1089,7 @@ func setDate(pid: Int, name: String, day: String, window: String?, near: String?
     guard let wanted = stamp.date(from: day) else { fail("\(day) is not a day — write it as yyyy-mm-dd") }
 
     front(pid: pid, window: window)
-    let all = windowElements(pid: pid, window: window)
+    let (frame, all) = windowAndElements(pid: pid, window: window)
     var fields = named(name, among: all.filter { $0.role == "AXDateTimeArea" })
     if fields.isEmpty { fail("no date field on screen is called \(name)") }
     if let near {
@@ -1069,6 +1111,7 @@ func setDate(pid: Int, name: String, day: String, window: String?, near: String?
     // opened again — the press that opens one closes one, so pressing regardless would shut the very
     // panel being waited for.
     if writableDay(pid: pid) == nil {
+        mustBeOnTheWindow(CGPoint(x: field.frame.midX, y: field.frame.midY), frame, oneLine(field.name))
         click(x: field.frame.midX, y: field.frame.midY)
     }
     let deadline = Date().addingTimeInterval(3)

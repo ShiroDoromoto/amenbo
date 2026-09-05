@@ -415,6 +415,13 @@ pixels. Anything wide swallows both, which is why aiming works until it is aimed
 the board's `＋` and the view tabs read as unreachable elements until the arithmetic was suspected
 instead.
 
+**What the tree holds is not what the window shows.** A webview keeps a row it has scrolled out of
+sight in the tree, named and framed like anything else, and the frame stands past the window's edge.
+A press aimed there is a screen point like any other, so it lands on the desktop and exits 0 having
+pressed nothing — the same failure a road cannot see as a press on a label. `find` writes `outside
+the window` at the end of those lines, and `click-named` and its two siblings refuse them instead of
+aiming at them: scroll it into view first, then press it by name.
+
 **A page is walked with `scroll <pid> <dx> <dy>`, not with the keys.** Page Down is the one scrolling
 key that reaches the webview — Page Up, Home, End and the arrows were posted the same way and nothing
 moved — so a road that went down a pane had no way back up to what it had passed, and reopening the

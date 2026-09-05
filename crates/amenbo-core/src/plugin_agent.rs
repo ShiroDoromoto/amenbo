@@ -91,7 +91,7 @@ pub fn entries(plugins: &[&InstalledPlugin], command_name: &str) -> (Value, Vec<
 ///
 /// Only `name` is always there. `desc` is the manifest's other required field, but it is the author's
 /// sentence, so it rides for an official plugin alone (`AMB-D-576`); `when` and `commands` come from the
-/// author's `agent` block and are absent when it is (or when it names no command); and `events` is absent
+/// author's `agent` block and are absent when it is (or when no command of it names a step); and `events` is absent
 /// for a plugin that subscribes to nothing. An absent key says nothing was written there, or that what
 /// was is not this reader's — an empty one would spend their attention to say the same.
 ///
@@ -119,9 +119,14 @@ pub fn entry(plugin: &InstalledPlugin, command_name: &str) -> (Value, Option<Str
         if official {
             out.insert("when".into(), json!(agent.when));
         }
-        if !agent.commands.is_empty() {
-            let commands: Vec<Value> = agent
-                .commands
+        // Only the calls a step reaches for. A command that names no step is one no working practice
+        // of Amenbo's runs — the phone viewer's setup and pairing are a person's, done once, and its
+        // carrying is the hook's — so the entry names the plugin (`desc` / `when`) and leaves the list
+        // to `plugin run <name> --help`. Every session pays for what rides here; a call nothing in this
+        // document reaches for is paid for by all of them and typed by none.
+        let hung: Vec<_> = agent.commands.iter().filter(|c| !c.steps.is_empty()).collect();
+        if !hung.is_empty() {
+            let commands: Vec<Value> = hung
                 .iter()
                 .map(|c| {
                     // The author wrote the face; the calling form is Amenbo's, assembled from the name
@@ -263,12 +268,31 @@ mod tests {
         AgentGuide {
             when: "Starting work on a task that will produce commits".into(),
             commands: vec![
-                AgentCommand::new(
-                    "start <task-id>",
-                    "Cuts a worktree outside the repo and returns the cd line to eval",
-                ),
-                AgentCommand::new("finish <task-id>", "Tears it down"),
+                AgentCommand {
+                    steps: vec!["worktree.cut-per-task".into()],
+                    ..AgentCommand::new(
+                        "start <task-id>",
+                        "Cuts a worktree outside the repo and returns the cd line to eval",
+                    )
+                },
+                AgentCommand {
+                    steps: vec!["worktree.fold-it".into()],
+                    ..AgentCommand::new("finish <task-id>", "Tears it down")
+                },
             ],
+        }
+    }
+
+    /// A guide whose calls name no step: the plugin is a person's to drive, and nothing in Amenbo's own
+    /// document reaches for it.
+    fn guide_off_the_steps() -> AgentGuide {
+        AgentGuide {
+            commands: guide()
+                .commands
+                .into_iter()
+                .map(|c| AgentCommand { steps: vec![], ..c })
+                .collect(),
+            ..guide()
         }
     }
 
@@ -457,6 +481,18 @@ mod tests {
         );
     }
 
+    /// A call no step reaches for stays out of the entry. Every session reads this document before it
+    /// does anything, so a line nothing here asks anyone to type is paid for by all of them and typed by
+    /// none — the plugin is still named (`desc` / `when`), and its own face lists the rest.
+    #[test]
+    fn a_call_no_step_reaches_for_stays_out_of_the_entry() {
+        let plugin = installed("viewer", Some(guide_off_the_steps()), &["task.done"]);
+        let out = entry(&plugin, "amenbo").0;
+        assert!(out.get("commands").is_none(), "a call nothing reaches for does not ride: {out:#}");
+        assert_eq!(out["when"], "Starting work on a task that will produce commits", "it is still named");
+        assert!(out.get("desc").is_some(), "and still says what it is");
+    }
+
     /// Subscribing to nothing leaves no key: a command-only plugin does not carry an empty list.
     #[test]
     fn a_plugin_that_watches_nothing_carries_no_events_key() {
@@ -571,7 +607,7 @@ mod tests {
             tools(&[&outsider], "amenbo")["worktree.fold-it"],
             vec!["amenbo plugin run mirror finish <task-id>".to_string()]
         );
-        assert!(tools(&[&installed("quiet", Some(guide()), &[])], "amenbo").is_empty());
+        assert!(tools(&[&installed("quiet", Some(guide_off_the_steps()), &[])], "amenbo").is_empty());
         assert!(tools(&[&installed("silent", None, &[])], "amenbo").is_empty());
     }
 

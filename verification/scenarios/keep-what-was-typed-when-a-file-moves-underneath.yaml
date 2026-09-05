@@ -160,10 +160,11 @@ steps_gui:
   # The road used to press save here and read the same line again. It no longer can: the panel is
   # holding the mark the disk has moved past, so a save could only come back refused, and the
   # control is shut rather than taking a press that spends a round trip to land on the screen the
-  # reader is already reading. Reading a shut control is not something the file face can be asked
-  # about yet — there is no assert for it here — so that reading is filed as work of its own rather
-  # than invented here, and what the save would have written is read below, in the file the disk
-  # still holds.
+  # reader is already reading. What is read instead is the control itself — and what the save would
+  # have written is read below, in the file the disk still holds.
+  - type: assert
+    domain: files
+    op: save-shut
 
   # ── the offer taken, which is the disk read out loud ────────────────────────────────────────────
   - type: action

@@ -111,6 +111,15 @@ steps_gui:
       present: false
 
   # ── somebody has typed: the column says so and keeps what they wrote ────────────────────────────
+  # A Markdown file opens on what its text draws, and there is no editor on a rendering — so the
+  # text goes on the screen before anything is typed into it. Without this step the road stops
+  # here, with the operator looking for a caret in a heading.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
   - type: action
     domain: files
     op: edit

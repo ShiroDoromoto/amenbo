@@ -173,6 +173,14 @@ steps_gui:
       name: keep.md
       section: tree
 
+  # `keep.md` is Markdown, so it opens on what its text draws — and a rendering has no editor to
+  # paste into. The text goes on the screen first, and the paste below lands in it.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
   - type: action
     domain: files
     op: paste-into-editor

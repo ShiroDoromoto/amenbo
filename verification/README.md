@@ -1457,6 +1457,13 @@ ever fetching what it copies. The shelf it looks on is the one the run behind it
 a harness given `--fixtures <dir>` lints against that dir rather than against the tree it was
 compiled in; otherwise a run in the VM is turned away, over a shelf on a machine it is not standing
 on, before it starts.
+
+One reads across a road rather than at one step of it. A Markdown file opens as what its text says
+and a rendering has no editor in it, so a road that opens a `.md` and then types, pastes or saves
+without putting the text up first (`show-as`, `form: source`) leaves its operator looking for a caret
+in a heading. It reads perfectly and cannot be walked, which is the one kind of fault nothing else
+here catches until somebody is standing in front of the screen.
+
 The crate's tests assert that every real scenario lints and every invalid fixture is
 rejected:
 

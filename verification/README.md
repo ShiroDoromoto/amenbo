@@ -422,6 +422,12 @@ pressed nothing — the same failure a road cannot see as a press on a label. `f
 the window` at the end of those lines, and `click-named` and its two siblings refuse them instead of
 aiming at them: scroll it into view first, then press it by name.
 
+**A point is refused on the same ground, against whatever the subcommand knows.** `drag`, `drop-file`
+and `scroll --at` are handed a pid, so each end is held to that window. `click`, `dblclick` and
+`right-click` are not, so theirs is held to the displays instead — a point on none of them is a press
+nobody could have meant, and it is the shape the scale conversion arrives in when it is made the
+wrong way round.
+
 **A page is walked with `scroll <pid> <dx> <dy>`, not with the keys.** Page Down is the one scrolling
 key that reaches the webview — Page Up, Home, End and the arrows were posted the same way and nothing
 moved — so a road that went down a pane had no way back up to what it had passed, and reopening the

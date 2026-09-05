@@ -613,6 +613,13 @@ existing tools work inside unchanged.
   in the guest all the same. `system_profiler SPDisplaysDataType` answers empty in
   there and the display is nonetheless real — do not read that answer as "no
   screen".
+- **The VM is started `--no-clipboard` too**, so the guest keeps a clipboard of
+  its own. Shared, the host's is pushed in whenever it changes, and a ⌘V in the
+  guest puts down whatever was copied at the host rather than what the run copied
+  a moment ago — a path copied in the file panel came out of the paste as another
+  session's text, having read back correctly from `pbpaste` just before. Nothing
+  here carries anything in or out by clipboard, so there is nothing on the other
+  side of the switch.
 - **`up` waits for a GUI session, not for a ping.** `/dev/console` owned by the
   account is what says there is a screen to draw on; without one the screen tools
   fail in the shape that is hardest to read — exit 0, nothing delivered. Measured:
@@ -685,6 +692,12 @@ anything having to be re-baked into it.
 **`click`/`click-named` in there still want a `front` first.** The tool does not
 call it, and a VM's bare desktop has a Terminal on it that a click is otherwise
 taken by — exit 0, nothing delivered.
+
+**A shortcut is one press: `key <keycode> --cmd`.** ⌘C is `key 8 --cmd` and ⌘V is
+`key 9 --cmd`. The modifier rides on the event's flags and is never held as a key
+of its own, so nothing is left pressed if the run stops between the two.
+`--shift` / `--opt` / `--ctrl` are there the same way, and a subcommand other than
+`key` refuses them rather than ignoring them.
 
 **`find`/`click-named` read one window, not the app.** They take the same
 `--window <title>`, and with two windows up they refuse without it — a name

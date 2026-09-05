@@ -1895,6 +1895,24 @@ describe("the file face", () => {
     expect(namebox()?.value).toBe("src");
   });
 
+  // The box stands among the rows, so it has to be one of them: a tree names what may be inside it,
+  // and a line drawn as anything else is thrown away before it reaches a reader who is being read
+  // to — the box is on the screen and nowhere in what the machine says is there (`AMB-T-4396`).
+  it("draws the box a name is typed into as a row of the tree, from both doors", async () => {
+    await stood();
+
+    await press(rows()[0]!, "F2");
+    await settle();
+    expect(namebox()!.closest("[role=\"treeitem\"]")).not.toBeNull();
+    await press(namebox()!, "Escape");
+    await settle();
+
+    await menuOn(rowFor("src"));
+    await click(button(t("files.newFile")));
+    await settle();
+    expect(namebox()!.closest("[role=\"treeitem\"]")).not.toBeNull();
+  });
+
   // The pattern every tree is walked by once it is longer than the screen. Read off the row's own
   // path and not its drawn text: an open folder's row holds the text of everything under it.
   it("jumps to the next row starting with the letter that was typed, and round again", async () => {

@@ -303,6 +303,51 @@ fn within_one_edit(haystack: &[char], needle: &[char]) -> bool {
     best <= 1
 }
 
+/// A folded string with the spaces taken out — the letters in order, and nothing said about where
+/// one word ends and the next begins.
+///
+/// Where a word ends is not something a shot records. The reader cuts a row into regions wherever it
+/// likes and the fold puts a space at every seam, so a pane that broke `before` across two rows
+/// hands back `be fore`; and inside one region it drops a space that was there, so `the run` comes
+/// back as `therun`. Both were on one reading of one terminal pane, measured off the reader itself.
+///
+/// Neither is a word misread — every letter is right, and in order — so neither should be spent out
+/// of the one-character budget in [`held`], which is there for the letters a reader actually gets
+/// wrong. Taken out on the reading and the expectation both, the two meet on the letters.
+fn spaces_out(s: &str) -> String {
+    s.chars().filter(|c| *c != ' ').collect()
+}
+
+/// Whether a reading holds an expectation — as the reader spaced it, and again with the spaces of
+/// both taken out ([`spaces_out`]).
+///
+/// **The best of the two wins, and a green that needed nothing forgiven beats one that did.** That
+/// is the point of the second reading rather than a detail of the order. [`held`] would meet a
+/// wrapped word anyway by spending its one character on the space the fold left at the seam — and
+/// then the *other* thing the reader did to the same line has nothing left to be forgiven with. A
+/// pane is narrow and its words are small, so a wrap and a lost space on one shot is an everyday
+/// shot, and a road's own text is what is being looked for on it.
+///
+/// What it costs is telling `the rapist` from `therapist`: two readings a space apart are not told
+/// apart from a photograph of this screen, so declaring them the same is the honest answer rather
+/// than a widened tolerance. The looseness leans the way the rest of this does — it can only turn a
+/// `present: true` step green and a `present: false` step red, never pass a screen nobody stood up.
+fn held_whatever_the_spacing(reading: &str, expected: &str) -> Held {
+    let spaced = held(reading, expected);
+    if spaced.found && !spaced.slipped {
+        return spaced;
+    }
+    let unspaced = held(&spaces_out(reading), &spaces_out(expected));
+    if unspaced.found && !unspaced.slipped {
+        return unspaced;
+    }
+    if spaced.found {
+        spaced
+    } else {
+        unspaced
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Turning a step into a screen instruction and an expectation (the pure part)
 // ---------------------------------------------------------------------------
@@ -4721,7 +4766,7 @@ where
             ("assert", Some(exp)) => {
                 let reading = read_text(&shot_path)
                     .map_err(|e| format!("step {}: reading `{screenshot}` failed: {e}", i + 1))?;
-                let hit = held(&reading.text, &fold(&exp.text));
+                let hit = held_whatever_the_spacing(&reading.text, &fold(&exp.text));
                 let _ = std::fs::write(
                     evidence_dir.join(format!("{:02}-{kind}-{domain}-{op}.txt", i + 1)),
                     &reading.raw,
@@ -8321,6 +8366,60 @@ steps_gui:
         let misread = fold("絞り込んだあとに版へ残る仕事");
         assert!(!title.contains(' '), "the fold leaves this one word");
         assert_eq!(held(&misread, &title), Held { found: true, slipped: true });
+    }
+
+    /// The reading that started this, taken off the reader itself: one shot of a terminal pane,
+    /// where the pane broke `before` across two rows **and** the reader ran `the run` together
+    /// inside the row above. Neither is a letter got wrong, and together they are two more than the
+    /// budget can carry — which is how a line plainly on the screen came back absent.
+    #[test]
+    fn a_line_the_reader_respaced_is_still_the_line_that_was_typed() {
+        let shot = fold(
+            "Greenhouse project\n\
+             admin@Manageds-Virtual-Machine waterside o SCENARIO the\n\
+             terminal of\n\
+             therun be\n\
+             fore\n\
+             zsh: command not found: SCENARIO",
+        );
+        let expected = fold("SCENARIO the terminal of the run before");
+        assert_eq!(held(&shot, &expected), Held { found: false, slipped: true });
+        assert_eq!(
+            held_whatever_the_spacing(&shot, &expected),
+            Held { found: true, slipped: false }
+        );
+    }
+
+    /// A wrap on its own, which the budget did carry — and should stop paying for. Met on the
+    /// letters, the shot needs nothing forgiven, so what the budget is for is still there.
+    #[test]
+    fn a_wrap_no_longer_spends_the_budget_a_misread_needs() {
+        let shot = fold("SCENARIO the terminal of the run be\nfore");
+        let expected = fold("SCENARIO the terminal of the run before");
+        assert_eq!(held(&shot, &expected), Held { found: true, slipped: true });
+        assert_eq!(
+            held_whatever_the_spacing(&shot, &expected),
+            Held { found: true, slipped: false }
+        );
+
+        // And the budget, now unspent, carries the misread on the same line that it is for.
+        let with_a_slip = fold("SCENARIO the terminal of tho run be\nfore");
+        assert_eq!(held(&with_a_slip, &expected), Held { found: false, slipped: true });
+        assert_eq!(
+            held_whatever_the_spacing(&with_a_slip, &expected),
+            Held { found: true, slipped: true }
+        );
+    }
+
+    /// Taking the spaces out is not a second chance at the letters: a line that is not on the shot
+    /// is not on either reading of it.
+    #[test]
+    fn a_line_that_was_never_there_is_not_found_by_respacing_it() {
+        let shot = fold("admin@host waterside % SCENARIO the terminal of the run be\nfore");
+        assert_eq!(
+            held_whatever_the_spacing(&shot, &fold("SCENARIO the terminal of the run beside")),
+            Held { found: false, slipped: true }
+        );
     }
 
     /// Which way the looseness leans. The same tolerance that finds a misread title on a step saying

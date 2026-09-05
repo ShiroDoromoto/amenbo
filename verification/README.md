@@ -807,8 +807,11 @@ The third thing about the mark is what `keep-printing` is for. A pane reads as m
 and a half after its last output, so a pulse anybody can watch for a few seconds is a pane that keeps
 printing — and no other step on this face starts one. The line a road types is deliberately a command
 no shell knows, which prints once and is over. `keep-printing` sets something running in the pane and
-leaves it running: a bounded run, about half a minute of a line a second, ending on a line the road
-chose. It is not `run` with a longer command in it — that step is waited on and is over when the
+leaves it running: a bounded run, a line a second for a minute and a half, ending on a line the road
+chose. **What the length answers to is the road's own steps and not the one press** — a pane has to
+be opened beside this one and the lamp then read, each of them a whole turn of whoever is walking the
+road, and printing that runs out in between makes a lamp doing its job read as a lamp that will not
+light. It is not `run` with a longer command in it — that step is waited on and is over when the
 prompt is back, and this one is walked away from with the output still arriving. Bounded, because that is how the still half is reached. Every control a pane has is on the
 pane and the face takes a press anywhere in one as going to work in it, so there is no way to cut the
 output short by hand that does not also make that pane the one being worked in — and a dot read there

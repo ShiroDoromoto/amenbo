@@ -3659,7 +3659,7 @@ impl Instructor {
             // instead of moving it: the fact survives and the word for it does not, and an operator
             // told only to watch for a blink would fail a lamp reporting exactly what was asked.
             (Domain::Terminal, "dot") => match face(with)? {
-                Face::Lit => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is lit and holding still — a soft glow around it, in that pane's own colour, which is that terminal putting something out. It does not fade in and out: the one face that moves is the one calling for a person, and this is not it."),
+                Face::Lit => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is lit and holding still — a soft glow around it, in that pane's own colour, which is that terminal putting something out. It does not fade in and out: the one face that moves is the one calling for a person, and this is not it. **Read it while something is still arriving.** The lamp follows the stream and nothing else, so a pane that has already stopped — its last line on the screen with nothing following it — is one this reading came too late for: a sunk lamp there is the lateness and not a fault. Set that pane printing again and read the lamp while it is."),
                 Face::Calling => format!("{LAMP_ROW} watch the lamp to the left of the name for a few seconds: confirm it is blinking, and in the warning colour rather than that pane's own — which is that pane asking for a person. It falls to the same beat as the mark at the other end of the same row, and the two go together. Judge it by watching rather than by the shot: a still picture of a blink can be caught at the moment it rests. Where the machine is set to play no animation the lamp does not blink at all, and what to confirm there is the warning colour, held at its brightest."),
                 Face::Out => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is sunk — dim, in that pane's own colour, with no glow around it and no blinking. Out is the pane's resting state, not the pane having gone: the lamp is drawn either way."),
             },
@@ -4232,7 +4232,13 @@ const SAY_AWAY_SECONDS: u32 = 15;
 /// second pane has been opened beside it and the row has been looked at; short enough that the step
 /// waiting for it to stop is a pause inside a road rather than a break from one. The road does not
 /// name it — what a road says is that the pane keeps printing and then does not.
-const KEEP_PRINTING_SECONDS: u32 = 30;
+///
+/// **What it has to outlast is the road's own steps, not the one press.** Thirty seconds did not:
+/// on a walk through this road the pane beside it took twenty-two of them to open, and by the
+/// reading after that the printing had run out — a lamp doing exactly what it should, read as a lamp
+/// that would not light. What the number covers now is two of these steps, each of them a whole turn
+/// of whoever is walking the road, with room for a slower one.
+const KEEP_PRINTING_SECONDS: u32 = 90;
 
 /// An optional yes-or-no argument, false where it was not written. Unlike [`present`], whose default
 /// is the half most asserts want, these ask for a shape a step takes only when it says so.
@@ -7965,8 +7971,17 @@ steps_gui:
             window: None,
         };
         let said = Instructor::new().render(&step).unwrap();
-        assert!(said.contains("ping -c 30"), "the run is bounded, and spelt out: {said}");
-        assert!(said.contains("-n 30"), "the other shell counts its pings differently: {said}");
+        // The shape is what is pinned, not the count: how long a pane prints for is a number tuned
+        // against how long the road's own steps take (`KEEP_PRINTING_SECONDS`), and a test spelling
+        // it out a second time would only have to be changed alongside it.
+        assert!(
+            said.contains(&format!("ping -c {KEEP_PRINTING_SECONDS}")),
+            "the run is bounded, and spelt out: {said}"
+        );
+        assert!(
+            said.contains(&format!("-n {KEEP_PRINTING_SECONDS}")),
+            "the other shell counts its pings differently: {said}"
+        );
         assert!(
             said.matches("SCENARIO that is all").count() == 2,
             "the road's own line is what it ends with and what the road waits on: {said}"
@@ -7990,6 +8005,10 @@ steps_gui:
         };
         let lit = Instructor::new().render(&dot("lit")).unwrap();
         assert!(lit.contains("glow") && lit.contains("holding still"), "got: {lit}");
+        assert!(
+            lit.contains("came too late for"),
+            "a lamp read after the printing stopped is the road being late, and the road has to say so: {lit}"
+        );
         let calling = Instructor::new().render(&dot("calling")).unwrap();
         assert!(calling.contains("blinking"), "got: {calling}");
         assert!(

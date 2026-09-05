@@ -7,6 +7,7 @@
 // editor whose layout does not run under jsdom.
 
 import type { Extension } from "@codemirror/state";
+import { takesPastedFiles } from "../core/clipFiles";
 import { langFor, type LangId } from "./grammars";
 
 /**
@@ -173,6 +174,28 @@ export async function mountEditor(
     }),
   });
 
+  // **A paste carrying files puts the paths in as words** (`AMB-T-4400`). A reader who copied a row
+  // in the panel beside this one has the file itself on the clipboard, and the editor's own paste —
+  // which reads the words off the event — is handed nothing at all for it, so the press lands and
+  // the file's text is unchanged. What the host reads back goes in instead.
+  //
+  // **Bare, one to a line, which is how they were copied** (`AMB-D-832`). Quoting is the pane's,
+  // because a pane is a shell and a name with a space in it is two words there; a path pasted into
+  // a file's text is a path, and a quote around it would be a character the reader has to delete.
+  //
+  // A file this panel cannot save takes no paste at all: the editor refuses every other way of
+  // typing into it, and a door of our own that wrote where those will not would be the one way in.
+  const stopPaste = editable
+    ? takesPastedFiles(parent, (paths, words) => {
+        const text = paths.length > 0 ? paths.join("\n") : words;
+        if (!text) return;
+        editor.dispatch(editor.state.replaceSelection(text), {
+          scrollIntoView: true,
+          userEvent: "input.paste",
+        });
+      })
+    : () => {};
+
   return {
     show(next: string) {
       editor.dispatch({
@@ -185,6 +208,7 @@ export async function mountEditor(
       return editor.state.doc.toString();
     },
     close() {
+      stopPaste();
       editor.destroy();
     },
   };

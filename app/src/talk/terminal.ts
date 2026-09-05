@@ -28,6 +28,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type IBufferCell } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import type { PtyChunkDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
+import { takesPastedFiles } from "../core/clipFiles";
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
 import { hostOs, type HostOs } from "../core/platform";
@@ -337,18 +338,6 @@ export function quotedPaths(paths: string[], os: HostOs = hostOs()): string {
 }
 
 /**
- * Whether a paste is carrying files, rather than only the words somebody copied.
- *
- * Both signs are read because they are not the same question and neither is promised on all three
- * machines: `files` is what the paste is carrying, and `types` is what it says it is carrying. The
- * paths themselves are in neither — a page is not told where a file it is handed lives, which is why
- * the host is asked (`crate::clipboard`).
- */
-export function holdsFiles(data: DataTransfer): boolean {
-  return data.files.length > 0 || Array.from(data.types).includes("Files");
-}
-
-/**
  * Put `text` in the input box of whatever is running in a terminal, as a paste.
  *
  * **Nothing is submitted.** The newline is left out for the reason the handover leaves it out
@@ -583,45 +572,20 @@ export async function mountTerminal(
   };
   textarea?.addEventListener("compositionend", composed);
 
-  // **A paste carrying files is answered here; every other paste is the emulator's.** What a reader
-  // has on the clipboard after copying a row — in this panel or in their file manager — is the files
-  // themselves, and the words beside them are bare paths (`AMB-D-832`). Pasted as they stand, a name
-  // with a space in it is two words to the shell, so the host is asked what the files are and the
-  // quoting a drop already gets goes on them (`AMB-D-801`).
+  // **A paste carrying files is answered here; every other paste is the emulator's** — the reading
+  // itself, and why it is taken on the way down, are `../core/clipFiles`. What is written is this
+  // side's: pasted as they stand, a name with a space in it is two words to the shell, so the
+  // quoting a drop already gets goes on them (`AMB-D-801`, `AMB-D-832`).
   //
-  // **The narrowness is the point**, the way it is for Shift-Enter below. A paste of ordinary text is
-  // left alone because the emulator knows something this does not: whether the program inside asked
-  // for bracketed paste. Answering that one here would bracket text for a program that never asked
-  // for it, and the escape would be typed out on the screen.
-  //
-  // ⚠ **It is caught on the way down, on the pane rather than on the box.** The emulator's own paste
-  // listener sits on the box it collects typing in, and it was put there when the terminal was drawn
-  // — so a listener added beside it runs second, by which time the words have already gone to the
-  // program. Held one level up and in the capture phase, this one is reached first and can stop the
-  // event before the box ever sees it. Both halves are needed: `stopPropagation` keeps the emulator
-  // out of it, and `preventDefault` keeps the page from typing the words into the box itself.
-  //
-  // The words are read before the asking rather than after: a clipboard event only carries what it
-  // carries while it is being handled, and by the time the host has answered there is nothing left to
-  // fall back to. Falling back is not a mishap — a file manager that puts a file on and no path with
-  // it (`AMB-T-4220`) is exactly what this reaches for the host about, and if the host finds nothing
-  // the reader still gets what they copied.
-  const pasted = (e: ClipboardEvent) => {
-    const carried = e.clipboardData;
-    if (carried === null || !holdsFiles(carried)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const words = carried.getData("text/plain");
+  // Falling back to the words the paste carried is not a mishap — a file manager that puts a file on
+  // and no path with it (`AMB-T-4220`) is exactly what the host is asked about, and if the host finds
+  // nothing the reader still gets what they copied.
+  const stopPaste = takesPastedFiles(host, (paths, words) => {
     const its = session;
     if (its === null) return;
-    void invoke<string[]>("clip_files", {})
-      .then((paths) => {
-        const text = paths.length > 0 ? quotedPaths(paths) : words;
-        if (text) return pasteIntoTerminal(its, text);
-      })
-      .catch(() => {});
-  };
-  host.addEventListener("paste", pasted, true);
+    const text = paths.length > 0 ? quotedPaths(paths) : words;
+    if (text) void pasteIntoTerminal(its, text).catch(() => {});
+  });
 
   // **Shift-Enter, which is the one press the emulator cannot pass on.** What a terminal is given for
   // Enter is a carriage return, and it is given the same one whether or not Shift was held — so an
@@ -664,7 +628,7 @@ export async function mountTerminal(
     stream.dispose();
     presses.dispose();
     textarea?.removeEventListener("compositionend", composed);
-    host.removeEventListener("paste", pasted, true);
+    stopPaste();
     void unlistenOutput();
     void unlistenClosed();
     void unlistenSaid();

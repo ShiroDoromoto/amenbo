@@ -34,11 +34,13 @@ use std::path::PathBuf;
 
 /// What is on the machine's clipboard, for a face that cannot look for itself (`AMB-D-832`).
 ///
-/// **The webview has no way to ask.** `navigator.clipboard` carries text and images and knows
-/// nothing of files, so a pane handed a `⌘V` can read the line that was copied and not whether a
-/// file was copied along with it. That is the one thing it has to know: a path is quoted for the
-/// shell only where it really is a path, and the pane is the side that knows the paste is going
-/// into a terminal (`AMB-D-832`).
+/// **The webview has no way to ask**, and the two faces that ask are stuck on it from opposite ends.
+/// A pane handed a `⌘V` can read the line that was copied and not whether a file was copied along
+/// with it — and that is the one thing it has to know, because a path is quoted for the shell only
+/// where it really is a path and the pane is the side that knows the paste is going into a terminal
+/// (`AMB-D-832`). The file panel's editor is worse off still: WebKit hides the text flavours of a
+/// clipboard that is carrying file paths, so the line it would have pasted is not there to read at
+/// all and the press puts nothing in (`AMB-T-4400`).
 ///
 /// A clipboard holding no files answers with none rather than a failure — a line of text is a
 /// perfectly ordinary thing to paste into a pane, and it is the caller's to paste as it stands.

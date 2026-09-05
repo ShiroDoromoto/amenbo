@@ -27,7 +27,9 @@
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 51=Backspace / 121=Page Down)
 //                                                — held under `--cmd` / `--shift` / `--opt` / `--ctrl` when the press is a
 //                                                  shortcut: ⌘C is `key 8 --cmd`, ⌘V is `key 9 --cmd`
-//   swift screen.swift scroll <pid> <dx> <dy>    turn a wheel over that app's window (+dy is back toward the top)
+//   swift screen.swift scroll <pid> <dx> <dy>    turn a wheel over that app's window, in points (+dy is back
+//                                                toward the top) — over `--at <x> <y>` when what is to move is
+//                                                not what the middle of the window is on
 //   swift screen.swift right-click <x> <y>       right-click at a screen point
 //   swift screen.swift right-click-named <pid> <name>  right-click what that name names
 //   swift screen.swift dblclick-named <pid> <name>     double-click what that name names
@@ -895,6 +897,33 @@ func takeModifiers(_ argv: [String]) -> (flags: CGEventFlags, rest: [String]) {
     return (flags, rest)
 }
 
+/// Pull `--at <x> <y>` out of the line, wherever the caller wrote it — the freedom `--window` and
+/// `--role` have, for the reason they have it. Where the finger stands is a qualifier on the aim
+/// rather than two more things to name, so it takes no place in `scroll <pid> <dx> <dy>`, whose
+/// trailing pair would otherwise read as an amount written across.
+///
+/// Two numbers rather than one word, so [`takeOption`] does not serve: a point is a pair, and the
+/// pair is checked here so that a caller who wrote one number is told, rather than having the second
+/// half of the point read as the subcommand's own argument.
+func takeAt(_ argv: [String]) -> (point: CGPoint?, rest: [String]) {
+    var point: CGPoint?
+    var rest: [String] = []
+    var i = 0
+    while i < argv.count {
+        if argv[i] == "--at" {
+            guard i + 2 < argv.count, let x = Double(argv[i + 1]), let y = Double(argv[i + 2]) else {
+                fail("--at needs a screen point, written as two numbers: --at <x> <y>")
+            }
+            point = CGPoint(x: x, y: y)
+            i += 3
+            continue
+        }
+        rest.append(argv[i])
+        i += 1
+    }
+    return (point, rest)
+}
+
 /// Turn a wheel over the app's window.
 ///
 /// This is the way back up a page. Page Down is the one scrolling key that reaches the webview, so a
@@ -902,23 +931,28 @@ func takeModifiers(_ argv: [String]) -> (flags: CGEventFlags, rest: [String]) {
 /// not reset it either, the position being kept. A wheel is not a key, and arrives where they do not.
 ///
 /// A wheel event lands wherever the pointer is rather than on whatever holds focus, so the app is
-/// fronted and the pointer put in the middle of its window first — the same reason `click-named`
-/// fronts before it presses. The middle is where a pane's scrollable body is; something else that
-/// scrolls is reached by clicking into it first and scrolling after.
+/// fronted and the pointer put somewhere over its window first — the same reason `click-named` fronts
+/// before it presses. **Where the pointer stands is the whole of which pane moves**, and nothing else
+/// redirects it: clicking into a pane first changes nothing, the click moving focus where the wheel
+/// does not look. So a window split into panes takes `--at <x> <y>`, the middle being a divider or
+/// another pane on such a screen; left out, the middle of the window is where the finger goes, which
+/// is the scrollable body of a window drawing one pane.
 ///
 /// Positive is the way back: `scroll <pid> 0 800` goes 800 points up the page, and toward its left
 /// across. The amount is in points, and it is delivered as a run of short turns rather than one
 /// jump — a webview animates each turn, and a single large delta arrives mid-animation and is
 /// swallowed. Rounding is carried along the run, so what is asked for is what is delivered.
-func scroll(pid: Int, window: String?, dx: Double, dy: Double) {
+func scroll(pid: Int, window: String?, dx: Double, dy: Double, at: CGPoint?) {
     // Refused rather than trusted: an amount no screen is that tall would run the turns below for as
     // long as it took to overflow, which is a hang where a sentence belongs.
     guard dx.isFinite, dy.isFinite, abs(dx) <= 100_000, abs(dy) <= 100_000 else {
         fail("scroll takes an amount in points, and \(dx),\(dy) is longer than any screen")
     }
     front(pid: pid, window: window)
-    let frame = windowOf(pid: pid, named: window).frame
-    hover(CGPoint(x: frame.midX, y: frame.midY))
+    hover(at ?? {
+        let frame = windowOf(pid: pid, named: window).frame
+        return CGPoint(x: frame.midX, y: frame.midY)
+    }())
 
     let perTurn = 60.0 // about what one notch of a wheel moves
     let turns = Int((max(abs(dx), abs(dy)) / perTurn).rounded(.up))
@@ -1050,7 +1084,8 @@ func setDate(pid: Int, name: String, day: String, window: String?, near: String?
 
 let (window, afterWindow) = takeOption("--window", CommandLine.arguments, needs: "the title of a window")
 let (role, afterRole) = takeOption("--role", afterWindow, needs: "the role find prints in its first column")
-let (held, args) = takeModifiers(afterRole)
+let (at, afterAt) = takeAt(afterRole)
+let (held, args) = takeModifiers(afterAt)
 guard args.count >= 2 else {
     fail("usage: screen <front|shot|read|find|click-named|right-click-named|dblclick-named|click|right-click|dblclick|drag|drop-file|type|key|scroll|set-date|trusted> … [--window <title>]")
 }
@@ -1061,6 +1096,9 @@ if role != nil, !["find", "click-named", "right-click-named", "dblclick-named"].
 }
 if !held.isEmpty, args[1] != "key" {
     fail("--cmd / --shift / --opt / --ctrl say what a key is held under, and only key takes them")
+}
+if at != nil, args[1] != "scroll" {
+    fail("--at says where the finger stands for a wheel, and only scroll takes one")
 }
 
 switch args[1] {
@@ -1119,9 +1157,9 @@ case "key":
     key(CGKeyCode(code), flags: held)
 case "scroll":
     guard args.count == 5, let pid = Int(args[2]), let dx = Double(args[3]), let dy = Double(args[4]) else {
-        fail("usage: screen scroll <pid> <dx> <dy> [--window <title>]")
+        fail("usage: screen scroll <pid> <dx> <dy> [--at <x> <y>] [--window <title>]")
     }
-    scroll(pid: pid, window: window, dx: dx, dy: dy)
+    scroll(pid: pid, window: window, dx: dx, dy: dy, at: at)
 case "set-date":
     guard args.count == 5 || (args.count == 7 && args[5] == "--near"), let pid = Int(args[2]) else {
         fail("usage: screen set-date <pid> <name> <yyyy-mm-dd> [--near <name>] [--window <title>]")

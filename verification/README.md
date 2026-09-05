@@ -420,9 +420,11 @@ key that reaches the webview — Page Up, Home, End and the arrows were posted t
 moved — so a road that went down a pane had no way back up to what it had passed, and reopening the
 pane does not reset it either, the position being kept. A wheel arrives where those keys do not.
 Positive is the way back: `scroll <pid> 0 800` goes 800 points up the page, and toward its left
-across. The pointer is put in the middle of the window first, since a wheel lands where it is
-pointing rather than on whatever holds focus; something else on the screen that scrolls is reached by
-clicking into it and scrolling after.
+across — the amount is in points, not notches of a wheel. The pointer is put in the middle of the
+window first, since a wheel lands where it is pointing rather than on whatever holds focus. That is
+the whole of which pane moves, and clicking into one first changes nothing: the click moves focus,
+where the wheel does not look. A window split into panes takes `--at <x> <y>` for the pane to move,
+the middle standing on a divider or on another pane there.
 
 **A card is carried with `drag <pid> <x1> <y1> <x2> <y2> [steps]`, and not out of two clicks.** Filing
 work by moving its card is a road on the board, and what the screen is watching for is the run of

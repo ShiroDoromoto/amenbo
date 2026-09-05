@@ -71,6 +71,12 @@
 // is a screen point like any other: one sent there lands on the desktop, or on whatever app is
 // under it, and comes back 0 for having pressed nothing.
 //
+// The points a caller works out are refused on the same ground, against whatever the subcommand
+// knows. `drag`, `drop-file` and `scroll --at` were handed a pid, so their points are held to that
+// window; `click`, `dblclick` and `right-click` were not, so theirs are held to the displays — a
+// point on none of them is a press nobody could have meant, and it is the shape a scale conversion
+// gone the wrong way arrives in.
+//
 // The tool holds no notion of what to operate in which order: an app-specific sequence burned in
 // here would go false every time the UI moves.
 
@@ -455,6 +461,37 @@ func mustBeOnTheWindow(_ p: CGPoint, _ window: CGRect, _ what: String) {
     fail("\(what) stands outside the window, at \(Int(p.x)),\(Int(p.y)) — the window is \(w); a press there would land on whatever is at that point. Bring it into the window first — scroll to it, or open the window wider — and aim again")
 }
 
+/// Every display, as the rectangles a mouse event is posted into.
+///
+/// `CGDisplayBounds` rather than `NSScreen.frame`: the two say the same thing in opposite spaces, and
+/// this one is already the top-left, y-downward space every point in this file is written in. The
+/// other would have to be flipped about the primary screen's height, which is the arithmetic
+/// `drop-file` does once and the head of this file is about not doing twice.
+func screens() -> [CGRect] {
+    var count: UInt32 = 0
+    guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else { return [] }
+    var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+    guard CGGetActiveDisplayList(count, &ids, &count) == .success else { return [] }
+    return ids.prefix(Int(count)).map(CGDisplayBounds)
+}
+
+/// Refuse a point no display holds.
+///
+/// What [`mustBeOnTheWindow`] is for a caller that named a window, this is for one that named
+/// nothing: `click` / `dblclick` / `right-click` take no pid, so which window is under the point is
+/// not a question they can ask — but whether any screen is there at all is, and a point on none of
+/// them is a press nobody could have meant. It goes to the machine, lands nowhere, and comes back 0
+/// with both streams empty, which is the same silent miss read off the far side as an app that did
+/// not respond.
+func mustBeOnAScreen(_ p: CGPoint, _ what: String) {
+    let all = screens()
+    guard !all.isEmpty else { fail("this machine has no screen to press on") }
+    guard !all.contains(where: { $0.contains(p) }) else { return }
+    let places = all.map { "\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))x\(Int($0.height))" }
+        .joined(separator: " / ")
+    fail("\(what) at \(Int(p.x)),\(Int(p.y)) is on no screen — the screens are \(places); nothing is there to press. A point is worked out from a shot, whose pixels are the window's points times the scale of the display it was on, so a point off the end of every screen is usually that arithmetic and not the aim")
+}
+
 /// The elements `wanted` names: the ones called exactly that, or — when the screen carries no such
 /// name — the ones whose name holds it.
 ///
@@ -642,6 +679,7 @@ func press(at p: CGPoint, clickState: Int64) {
 
 func click(x: Double, y: Double) {
     let p = CGPoint(x: x, y: y)
+    mustBeOnAScreen(p, "the click")
     hover(p)
     press(at: p, clickState: 1)
 }
@@ -655,6 +693,7 @@ func click(x: Double, y: Double) {
 /// go of — and a run that failed between the two would leave the machine holding a key nobody pressed.
 func rightClick(x: Double, y: Double) {
     let p = CGPoint(x: x, y: y)
+    mustBeOnAScreen(p, "the right-click")
     hover(p)
     for phase in [CGEventType.rightMouseDown, CGEventType.rightMouseUp] {
         mouse(phase, at: p, button: .right)
@@ -667,6 +706,7 @@ func rightClick(x: Double, y: Double) {
 /// picking a file out of one needs this.
 func doubleClick(x: Double, y: Double) {
     let p = CGPoint(x: x, y: y)
+    mustBeOnAScreen(p, "the double click")
     hover(p)
     press(at: p, clickState: 1)
     press(at: p, clickState: 2)
@@ -690,6 +730,13 @@ func doubleClick(x: Double, y: Double) {
 /// nowhere else.
 func drag(pid: Int, window: String?, from a: CGPoint, to b: CGPoint, steps: Int) {
     front(pid: pid, window: window)
+    // Both ends, and against the window rather than the screen: this one was handed a pid, so the
+    // narrower question is the one it can ask. A crossing that starts off the window picks nothing
+    // up, and one that ends off it drops what it carried where the app is not looking — and either
+    // way the run comes back 0.
+    let frame = windowOf(pid: pid, named: window).frame
+    mustBeOnTheWindow(a, frame, "the drag's start")
+    mustBeOnTheWindow(b, frame, "the drag's end")
     hover(a)
     mouse(.leftMouseDown, at: a)
     usleep(80_000) // long enough that what is under the pointer has taken the press before it moves
@@ -810,6 +857,9 @@ func dropFile(pid: Int, window: String?, to: CGPoint, paths: [String]) {
         return url
     }
     front(pid: pid, window: window)
+    // The far end only. The near one is the panel written below, which is deliberately off the app's
+    // window — it is what the session is begun from, not somewhere anything is let go.
+    mustBeOnTheWindow(to, windowOf(pid: pid, named: window).frame, "the point the files are let go at")
 
     let app = NSApplication.shared
     app.setActivationPolicy(.regular)
@@ -996,7 +1046,8 @@ func takeAt(_ argv: [String]) -> (point: CGPoint?, rest: [String]) {
 /// redirects it: clicking into a pane first changes nothing, the click moving focus where the wheel
 /// does not look. So a window split into panes takes `--at <x> <y>`, the middle being a divider or
 /// another pane on such a screen; left out, the middle of the window is where the finger goes, which
-/// is the scrollable body of a window drawing one pane.
+/// is the scrollable body of a window drawing one pane. A finger put off the window is refused for
+/// the reason a press there is: the turn would move whatever else is under it, and say nothing.
 ///
 /// Positive is the way back: `scroll <pid> 0 800` goes 800 points up the page, and toward its left
 /// across. The amount is in points, and it is delivered as a run of short turns rather than one
@@ -1009,10 +1060,9 @@ func scroll(pid: Int, window: String?, dx: Double, dy: Double, at: CGPoint?) {
         fail("scroll takes an amount in points, and \(dx),\(dy) is longer than any screen")
     }
     front(pid: pid, window: window)
-    hover(at ?? {
-        let frame = windowOf(pid: pid, named: window).frame
-        return CGPoint(x: frame.midX, y: frame.midY)
-    }())
+    let frame = windowOf(pid: pid, named: window).frame
+    if let at { mustBeOnTheWindow(at, frame, "the finger") }
+    hover(at ?? CGPoint(x: frame.midX, y: frame.midY))
 
     let perTurn = 60.0 // about what one notch of a wheel moves
     let turns = Int((max(abs(dx), abs(dy)) / perTurn).rounded(.up))

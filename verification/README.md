@@ -673,7 +673,10 @@ record's own number it carries `<ref>` and names the record beside it, a road ha
 a number the run will mint. **The clearing is a key press and not a typed `clear`**, because a pane
 is named by the first line typed into it and a naming by typing never replaces one — so a road that
 wants a pane called by words of its own types them before it runs anything there, and no step of the
-harness's own takes that name first. `press-ref` is the press itself — the ref where the output
+harness's own takes that name first. The same rule ends a program by a press: `open-shell` and
+`end-pane` both say control-D — the end of input, which is not a line — rather than a typed `exit`,
+which would have left every pane they walked through called `exit`.
+`press-ref` is the press itself — the ref where the output
 drew it, naming the record rather than the characters — and `folded: true` asks for the same press on a ref
 the pane broke across two rows. That last one is the only place the two ways a ref becomes pressable
 part company: what Amenbo's own output says of itself travels beside the characters and a fold cannot
@@ -832,7 +835,9 @@ typed at it is the agent's own, so a gate resting on one carrying out a command 
 nothing holds it to. One op covers the three shapes the face can come up in — a pane already running
 an agent, the offer of several, the notice that none was found — because a plain shell is reachable
 from every one of them, and which of the three is on screen is the run's machine's business rather
-than the road's.
+than the road's. The agent it has to end first is ended by control-D and never by a typed `exit`, for
+the reason `run` clears by a press: a pane with no name takes the first line typed into it, and a road
+that ends an agent that way has spent the pane's name on the harness's own word.
 
 `face-badge` reads the one thing that crosses between the two faces: the mark the terminal's segment
 wears while a turn is standing behind it. It carries no number and no words, so a road says it is

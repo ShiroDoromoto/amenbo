@@ -1748,8 +1748,17 @@ impl Instructor {
             // which of them is on screen is the run's machine's business and not the road's — an
             // operator told only "choose the plain shell" would be hunting for a control that is not
             // on theirs.
+            //
+            // **The agent already running is ended by a press and not by a line typed at it.** The
+            // first line a person sends into a pane nobody has named is what names it, and a naming
+            // by typing never replaces one (`amenbo_core::frames`) — so a step that ended the agent
+            // by typing `exit` would leave every pane it walked through called `exit`, and the words
+            // a road types afterwards to name the pane its own way would land on a frame that
+            // already has a name. Control-D is the end of input rather than a line, and a press held
+            // with a modifier is not part of a line at all (`app/src/talk/frames.ts`), so the naming
+            // is still the road's to make. It is the same reason `run` clears by pressing.
             (Domain::Terminal, "open-shell") =>
-                "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first (run: exit): the row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. On an empty frame the same list is on the frame itself, above the press that opens it: choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane."
+                "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first by holding control and pressing D, which is the end of input and not a line sent into the pane — do not type a command to end it, the first line typed into a pane being what names the pane and naming one never this step's to do. The row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. On an empty frame the same list is on the frame itself, above the press that opens it: choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane."
                     .to_string(),
             // Writing a command of the reader's own down on the frame. Two fields and a
             // press, and the reading that matters is taken before the press: what is registered runs
@@ -1926,11 +1935,15 @@ impl Instructor {
                 }
             }
             // Ending the terminal in a pane, which is done from inside it. **The one control the pane
-            // has takes the place away and is not this**, so there is nothing to press here: what
-            // ends a program is the program being told to end. The pane is left standing with its
-            // last output on it, which is the half these roads go on to read.
+            // has takes the place away and is not this**, so there is nothing on the row to press
+            // here: what ends a program is the program being told to end. The pane is left standing
+            // with its last output on it, which is the half these roads go on to read.
+            //
+            // Told by a press, for the reason `open-shell` ends an agent by one: a typed `exit`
+            // would be the first line into a pane that has no name, and would take the name for
+            // good. Control-D says the same thing to a shell and says it off the line.
             (Domain::Terminal, "end-pane") =>
-                "In the pane that has a terminal running in it, run: exit — the program ends. The pane stays where it is with what it printed still on it, and nothing is running in it any more."
+                "In the pane that has a terminal running in it, hold control and press D — the end of input, which ends the program. Do not type a command to end it: the first line typed into a pane is what names the pane, and naming one is never this step's to do. The pane stays where it is with what it printed still on it, and nothing is running in it any more."
                     .to_string(),
             // Naming the place, which is three presses and not one: the row's menu, the item in it,
             // and the key that takes the word. All three are said, and the last of them is said
@@ -7950,6 +7963,40 @@ steps_gui:
             Instructor::new().expectation(&dot("calling")).is_none(),
             "a mark with no words on it is not a reading",
         );
+    }
+
+    /// Ending a program, on the two steps that do it. Neither may say it with a line: a pane that has
+    /// no name takes the first one typed into it and never gives it back, so a step that ended an
+    /// agent by typing `exit` would name every pane it walked through after its own word, and the
+    /// line a road types afterwards to call the pane something would land on a frame already named.
+    /// Both say control-D instead, which is the end of input and no part of a line.
+    #[test]
+    fn a_program_is_ended_by_a_press_so_the_pane_keeps_its_name_for_the_road() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: terminal
+    op: open-shell
+  - type: action
+    domain: terminal
+    op: end-pane
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        for (i, line) in lines.iter().enumerate() {
+            assert!(
+                line.contains("holding control and pressing D")
+                    || line.contains("hold control and press D"),
+                "step {i} got: {line}"
+            );
+            assert!(!line.contains("run: exit"), "step {i} still types the ending: {line}");
+            assert!(line.contains("what names the pane"), "step {i} does not say why: {line}");
+        }
+        // And the plain shell is still reached from all three shapes the face can be in.
+        assert!(lines[0].contains("On an empty frame") && lines[0].contains("offering several agents"), "got: {}", lines[0]);
     }
 
     /// Running a command for its output, and pressing a ref out of what it drew. Three things are

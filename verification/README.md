@@ -498,8 +498,27 @@ stands the screen where the line says before anything is captured.
 Left to itself a run would photograph one screen as many times as the scenario is long, and pass:
 the verdict is a substring in what OCR read off the shot, so the screen before a step and the screen
 after it are not told apart, and a line asking that something *not* be on screen passes for as long
-as nothing moves. A step nobody carried out is the one thing this harness cannot see, which is why it
-never runs without somebody there.
+as nothing moves. A step nobody carried out is the one thing this harness cannot judge, which is why
+it never runs without somebody there.
+
+It can, though, notice one trace of it. An `action` whose shot comes back as the picture the step
+before it left is remarked on where it is shot, on a line marked `!` among the hand-overs:
+
+```
+  ! step 4: the screen is the one the step before it left — this shot and that one are the same
+    picture. An action that was never going to move anything reads like this too, but so does one
+    nobody carried out.
+```
+
+A remark and not a refusal, because the two it cannot tell apart are both ordinary: a step handed
+over and never carried out, and a step that was never going to move anything (a face already
+showing, a tree already open). The driver can tell those apart; the harness cannot. Only actions are
+asked — an assert is meant to shoot the screen the step before it stood up — the app's own restart
+(`store run-again`) is left out, being the harness's move rather than the driver's, and two shots of
+two different windows are never held up against each other. The comparison is byte for byte, so two
+shots that differ by a blinking caret are two pictures here and pass without a word: a remark
+withheld costs a run the driver would have caught anyway, where a remark made about a screen that
+did move would cost the driver their trust in every later one.
 
 The wait is on a line and not on a clock on purpose. A run held for a fixed number of seconds shoots
 whatever is up when the clock runs out, so a step that took a moment longer is filed as evidence of a

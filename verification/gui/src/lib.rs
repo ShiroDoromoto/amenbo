@@ -4735,10 +4735,19 @@ pub struct StepBrief<'a> {
 /// the end would answer both with the state the last step left. Those steps are handed over and shot
 /// like every other, since what makes the reading honest is that the screen ahead of it is the one
 /// the step before stood up.
+///
+/// `say` is where the walk speaks to whoever is driving without asking them anything, and it carries
+/// one remark: an `action` whose shot came back as the picture the step before it left
+/// ([`same_picture`]). That is the trace a step handed over and never carried out leaves — the hand-
+/// over returns, the screen is still the last one, and the shot is filed as evidence of a move
+/// nobody made. It is said and not refused, because an action that was never going to move anything
+/// (a face already showing, a tree already open) reads exactly the same and is right to go on; the
+/// driver is the one who can tell the two apart. The remark is made on the spot rather than kept for
+/// the summary, so a run can be stopped while there is still something to stop.
 // One argument per side effect the walk has on the world outside it, which is what makes the walk
-// testable without a screen: a struct around them would name the six and hide none of them.
+// testable without a screen: a struct around them would name the seven and hide none of them.
 #[allow(clippy::too_many_arguments)]
-pub fn walk<C, O, T, H, R, S>(
+pub fn walk<C, O, T, H, R, S, Q>(
     scenario: &Scenario,
     evidence_dir: &Path,
     mut capture: C,
@@ -4747,6 +4756,7 @@ pub fn walk<C, O, T, H, R, S>(
     mut hand_over: H,
     mut run_again: R,
     mut read_store: S,
+    mut say: Q,
 ) -> Result<WalkOutcome, String>
 where
     C: FnMut(Option<&str>, &Path) -> Result<(), String>,
@@ -4755,6 +4765,7 @@ where
     H: FnMut(&StepBrief<'_>) -> Result<(), String>,
     R: FnMut() -> Result<(), String>,
     S: FnMut(&Step) -> Result<(bool, String), String>,
+    Q: FnMut(&str),
 {
     std::fs::create_dir_all(evidence_dir)
         .map_err(|e| format!("could not create evidence dir {}: {e}", evidence_dir.display()))?;
@@ -4763,6 +4774,10 @@ where
     instructor.learn(&scenario.given);
     let mut records = Vec::new();
     let mut passed = true;
+    // The shot the step before this one left, and the window it was aimed at — held so an action can
+    // be asked whether it moved anything. The window is held with it because two shots are only the
+    // same screen twice when they are of the same window.
+    let mut before: Option<(Option<String>, PathBuf)> = None;
 
     let steps = scenario.steps(Driver::Gui);
     for (i, step) in steps.iter().enumerate() {
@@ -4807,6 +4822,24 @@ where
         let shot_at = if closes_its_window(step) { None } else { window };
         capture(shot_at, &shot_path)
             .map_err(|e| format!("step {}: capturing `{screenshot}` failed: {e}", i + 1))?;
+
+        // An action that left the screen where it found it, said out loud before the run goes on.
+        // Only an action, since an assert is meant to shoot the screen the step before it stood up;
+        // and not the app's own restart, which is the harness's move and comes back to a window that
+        // may well look the same.
+        if kind == "action" && !ends_the_run(step) {
+            if let Some((aimed, shot)) = &before {
+                if aimed.as_deref() == shot_at && same_picture(shot, &shot_path) {
+                    say(&format!(
+                        "step {}: the screen is the one the step before it left — this shot and that \
+                         one are the same picture. An action that was never going to move anything \
+                         reads like this too, but so does one nobody carried out.",
+                        i + 1
+                    ));
+                }
+            }
+        }
+        before = Some((shot_at.map(str::to_string), shot_path.clone()));
 
         // The asserts nothing draws, put to the store instead of to the shot. Asked first, since a
         // step on that table names no expectation and would otherwise fall through to `Review`.
@@ -4904,6 +4937,24 @@ fn ends_the_run(step: &Step) -> bool {
 /// the window that is left is the app's one window and a road says that by saying nothing.
 fn closes_its_window(step: &Step) -> bool {
     matches!(step, Step::Action { domain: Domain::Terminal, op, .. } if op == "fold-back")
+}
+
+/// Whether two shots are the same picture, byte for byte.
+///
+/// Byte equality and not a likeness, because the two errors are not worth the same. Two shots that
+/// differ by a blinking caret are two pictures here, and the walk says nothing about them — a
+/// remark withheld costs a run the driver would have caught anyway. A remark made where the screen
+/// did move would cost the driver their trust in every later one.
+///
+/// A shot that cannot be read back is not the same picture as anything: the silence is the safe
+/// answer, and a shot that failed to land has already stopped the walk at the capture.
+fn same_picture(a: &Path, b: &Path) -> bool {
+    match (std::fs::metadata(a), std::fs::metadata(b)) {
+        (Ok(x), Ok(y)) if x.len() == y.len() => {
+            matches!((std::fs::read(a), std::fs::read(b)), (Ok(u), Ok(v)) if u == v)
+        }
+        _ => false,
+    }
 }
 
 /// A domain as a road writes it — the other half of the `store blobs` a message names a step by.
@@ -5062,6 +5113,11 @@ steps_gui:
     fn nothing_on_the_tree(_: Option<&str>) -> Result<Reading, String> {
         unreachable!("no step on this road is read off the accessibility tree")
     }
+
+    /// Where a walk's remarks go in a test that is not about them. It drops them rather than
+    /// refusing to be called: these walks shoot one fixture over and over, so every action after the
+    /// first is a screen that did not move and the walk is right to say so.
+    fn unheard(_: &str) {}
 
     #[test]
     fn instructions_read_a_bound_target_by_its_title() {
@@ -8244,6 +8300,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .expect("walk");
 
@@ -8297,6 +8354,7 @@ steps_gui:
             },
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .expect("walk");
 
@@ -8361,6 +8419,7 @@ steps_gui:
             },
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .expect("walk");
 
@@ -8393,6 +8452,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .expect("walk");
 
@@ -8400,6 +8460,111 @@ steps_gui:
         let assert_rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
         assert_eq!(assert_rec.verdict, Verdict::Fail);
         assert_eq!(assert_rec.found, Some(false));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The one thing the walk says without being asked: an action whose shot came back as the
+    /// picture the step before it left. It is said of the action alone — an assert is meant to shoot
+    /// the screen the step before it stood up — and it leaves the verdict where it found it.
+    #[test]
+    fn an_action_that_left_the_screen_where_it_was_is_said_out_loud() {
+        let s = load(SCENARIO);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-still-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let said: RefCell<Vec<String>> = RefCell::new(Vec::new());
+        let outcome = walk(
+            &s,
+            &dir,
+            // One screen for the whole road: the second action moved nothing, and the assert after
+            // it is shooting what that action was supposed to have stood up.
+            |_, p| std::fs::write(p, b"one-screen").map_err(|e| e.to_string()),
+            |_| Ok(reading("me-ai board\nSEED")),
+            nothing_on_the_tree,
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+            |line| said.borrow_mut().push(line.to_string()),
+        )
+        .expect("walk");
+
+        // Green, because the remark is a remark: the assert is still judged on its reading alone.
+        assert!(outcome.passed, "a screen that did not move does not redden the run");
+        let said = said.borrow();
+        assert_eq!(said.len(), 1, "the action, and not the assert behind it: {said:?}");
+        assert!(said[0].starts_with("step 2:"), "got: {}", said[0]);
+        assert!(said[0].contains("same picture"), "got: {}", said[0]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// And a road whose every step moved something is walked in silence — the remark is worth having
+    /// only as long as it is not made about screens that did change.
+    #[test]
+    fn a_screen_that_moved_is_not_remarked_on() {
+        let s = load(SCENARIO);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-moved-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let shots: RefCell<usize> = RefCell::new(0);
+        let said: RefCell<Vec<String>> = RefCell::new(Vec::new());
+        walk(
+            &s,
+            &dir,
+            |_, p| {
+                *shots.borrow_mut() += 1;
+                std::fs::write(p, format!("screen-{}", shots.borrow())).map_err(|e| e.to_string())
+            },
+            |_| Ok(reading("me-ai board\nSEED")),
+            nothing_on_the_tree,
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+            |line| said.borrow_mut().push(line.to_string()),
+        )
+        .expect("walk");
+
+        assert!(said.borrow().is_empty(), "got: {:?}", said.borrow());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Two shots of two different windows are not one screen shot twice, whatever their bytes say.
+    /// Folding the terminal back is the case on these roads: the press is in the window that goes,
+    /// and the shot is of the one left standing, so there is nothing to compare it with.
+    #[test]
+    fn a_shot_of_another_window_is_not_the_screen_that_did_not_move() {
+        let s = load(
+            r#"
+id: sample
+title: The terminal goes out into a window of its own and comes back
+steps_gui:
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: "Amenbo — "
+"#,
+        );
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-elsewhere-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let said: RefCell<Vec<String>> = RefCell::new(Vec::new());
+        walk(
+            &s,
+            &dir,
+            |_, p| std::fs::write(p, b"one-screen").map_err(|e| e.to_string()),
+            |_| unreachable!("no step on this road is judged by reading a shot"),
+            nothing_on_the_tree,
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+            |line| said.borrow_mut().push(line.to_string()),
+        )
+        .expect("walk");
+
+        assert!(said.borrow().is_empty(), "got: {:?}", said.borrow());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -8557,6 +8722,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .expect("walk");
 
@@ -8585,6 +8751,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .unwrap_err();
         assert!(err.contains("step 1") && err.contains("no screen"), "got: {err}");
@@ -8619,6 +8786,7 @@ steps_gui:
             },
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .expect("walk");
 
@@ -8671,6 +8839,7 @@ steps_gui:
                 Ok(())
             },
             nothing_to_read,
+            unheard,
         )
         .expect("walk");
 
@@ -8715,6 +8884,7 @@ steps_gui:
             |_| Ok(()),
             || Err("no window came up".to_string()),
             nothing_to_read,
+            unheard,
         )
         .unwrap_err();
 
@@ -8745,6 +8915,7 @@ steps_gui:
             |_| Err("nobody is watching".to_string()),
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .unwrap_err();
         assert!(err.contains("step 1") && err.contains("nobody is watching"), "got: {err}");
@@ -8807,6 +8978,7 @@ steps_gui:
                 *asked.borrow_mut() += 1;
                 Ok((true, "the store holds 1 blob file(s) (expected 1, as expected)".to_string()))
             },
+            unheard,
         )
         .expect("walk");
 
@@ -8845,6 +9017,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             |_| Ok((false, "the store holds 0 blob file(s) (expected 1, MISMATCH)".to_string())),
+            unheard,
         )
         .expect("walk");
 
@@ -8872,6 +9045,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             |_| Err("the binary would not run".to_string()),
+            unheard,
         )
         .unwrap_err();
 
@@ -8926,6 +9100,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .expect("walk");
 
@@ -8958,6 +9133,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .expect("walk");
 
@@ -8985,6 +9161,7 @@ steps_gui:
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
+            unheard,
         )
         .unwrap_err();
 

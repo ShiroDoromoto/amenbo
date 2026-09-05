@@ -62,6 +62,11 @@
 //! evidence of a screen nobody stood on. Everything the wait says goes to stderr, so a `--json` run
 //! is still one line of JSON on stdout.
 //!
+//! One thing is said between the steps without being asked about: an action whose shot came back as
+//! the picture the step before it left. A step that was handed over and never carried out leaves
+//! exactly that trace, and so does an action that was never going to move anything — which is why
+//! the line is a remark and not a refusal. It is marked `!` and goes to stderr with the hand-over.
+//!
 //! `--print` is the other half of that: the road rendered into the instructions an operator would
 //! read, and nothing else done with them. The sentences are written here in Rust while the road is
 //! written in YAML, so what a step will say cannot be read off the file it was written in — and
@@ -214,6 +219,9 @@ fn run(opts: &Opts) -> Result<bool, String> {
             Some(w) => w.read(step),
             None => Err("internal: a step to read the store, on a road that stood none up".into()),
         },
+        // What the walk noticed and is not asking about. To stderr with the hand-over, since it is
+        // read by the same eye at the same moment and a `--json` run keeps stdout to its one line.
+        |line| eprintln!("  ! {line}"),
     )?;
 
     let stood = world.as_ref().map(World::stood).unwrap_or_default();

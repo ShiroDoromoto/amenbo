@@ -21,7 +21,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
 
-    let scenario = match lint_file(path) {
+    let scenario = match lint_file(path, None) {
         Ok(s) => s,
         Err(errs) => {
             eprintln!("FAIL  {path}");

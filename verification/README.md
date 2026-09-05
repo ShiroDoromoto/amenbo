@@ -1415,6 +1415,13 @@ cargo run -p amenbo-scenario --bin lint -- scenarios/delegate-to-ai.yaml
 ```
 
 Non-zero exit on any parse or validation failure, so it drops into a make target or CI.
+
+One check in it reads the disk: a `copy-fixture` naming a file that is not on the fixtures shelf is
+a lint failure, because nothing else looks — `cargo test` and `--print` both read a road without
+ever fetching what it copies. The shelf it looks on is the one the run behind it will copy from, so
+a harness given `--fixtures <dir>` lints against that dir rather than against the tree it was
+compiled in; otherwise a run in the VM is turned away, over a shelf on a machine it is not standing
+on, before it starts.
 The crate's tests assert that every real scenario lints and every invalid fixture is
 rejected:
 

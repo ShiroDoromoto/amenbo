@@ -105,7 +105,7 @@ fn main() -> ExitCode {
 /// Run one scenario. `Ok(passed)` is the verdict; `Err` is an execution failure (load, capture, or
 /// OCR would not run) — distinct from a clean run whose assert came out red.
 fn run(opts: &Opts) -> Result<bool, String> {
-    let scenario = amenbo_scenario::lint_file(&opts.scenario)
+    let scenario = amenbo_scenario::lint_file(&opts.scenario, opts.fixtures.as_deref())
         .map_err(|errs| format!("scenario does not load/validate:\n  {}", errs.join("\n  ")))?;
 
     // The screen is asked for in the scenario, never assumed by the harness: shooting a road written

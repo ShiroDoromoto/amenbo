@@ -24,7 +24,7 @@ fn main() -> ExitCode {
 
     let mut failed = 0usize;
     for path in &files {
-        match lint_file(path) {
+        match lint_file(path, None) {
             Ok(s) => {
                 // One line per file names each road it carries, since a file whose GUI steps went
                 // missing still lints clean on its CLI ones alone.

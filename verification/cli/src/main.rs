@@ -29,7 +29,7 @@ fn main() -> ExitCode {
         }
     };
 
-    let loaded = amenbo_scenario::lint_file(&opts.scenario)
+    let loaded = amenbo_scenario::lint_file(&opts.scenario, None)
         .map_err(|errs| format!("scenario does not load/validate:\n  {}", errs.join("\n  ")));
 
     let result = loaded.and_then(|scenario| run_scenario(&scenario, &opts.bin, opts.keep));

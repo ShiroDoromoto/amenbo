@@ -20,7 +20,7 @@ fn scenarios_dir() -> PathBuf {
 fn every_screen_road_renders_into_instructions() {
     let mut roads = 0;
     for f in scenario_files() {
-        let scenario = amenbo_scenario::lint_file(&f)
+        let scenario = amenbo_scenario::lint_file(&f, None)
             .unwrap_or_else(|errs| panic!("{} does not lint: {}", f.display(), errs.join("\n")));
         if !scenario.runs_on(Driver::Gui) {
             continue;
@@ -45,7 +45,7 @@ fn every_screen_road_renders_into_instructions() {
 fn every_project_a_screen_road_opens_is_a_project_that_exists() {
     let by_name = [(Domain::Project, "open"), (Domain::Terminal, "go-project")];
     for f in scenario_files() {
-        let scenario = amenbo_scenario::lint_file(&f).expect("lints");
+        let scenario = amenbo_scenario::lint_file(&f, None).expect("lints");
         if !scenario.runs_on(Driver::Gui) {
             continue;
         }

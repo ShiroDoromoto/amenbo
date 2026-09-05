@@ -22,7 +22,15 @@
 // column's tabs, and that column has a narrow width the panes are drawn beside and a wide one that
 // lies over them (`AMB-D-835`). A page carrying a second answer to the same question would be one
 // question with two controls, drifting apart at the first change.
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { takesPastedFiles } from "../core/clipFiles";
 import { t } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { projectMemo, setProjectMemo } from "./memo";
@@ -43,6 +51,14 @@ export function MemoPage({ projectId }: { projectId: number }) {
   // about to do.
   const pending = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // The field itself, because a paste carrying files is answered on the element rather than
+  // through React: what has to be stopped is the page's own answer to the press, and that is only
+  // reachable on the way down to it (`../core/clipFiles`).
+  const box = useRef<HTMLTextAreaElement | null>(null);
+  // Where the caret goes once what arrived has been drawn. The text is state, so it comes back
+  // down on the next render — and a field re-rendered with a longer value puts the caret at the
+  // end of it, which is not where a person pasting into the middle of a draft left off.
+  const caret = useRef<number | null>(null);
 
   const write = useCallback(() => {
     const unsaved = pending.current;
@@ -63,18 +79,48 @@ export function MemoPage({ projectId }: { projectId: number }) {
     };
   }, [projectId, write]);
 
-  const typed = (value: string) => {
+  const typed = useCallback((value: string) => {
     setText(value);
     pending.current = value;
     setKeep("typing");
     setFills((n) => n + 1);
     clearTimeout(timer.current);
     timer.current = setTimeout(() => { write(); setKeep("kept"); }, SETTLE_MS);
-  };
+  }, [write]);
+
+  // **A paste carrying files puts the paths in as words** (`AMB-T-4404`). A reader who copied a
+  // row in the panel this page shares its column with has the file itself on the clipboard, and
+  // the page's own paste is handed nothing at all for it — so the press lands and the draft is
+  // unchanged. Bare and one to a line, which is how they were copied: quoting belongs to a pane,
+  // where a name with a space in it would otherwise be two words to a shell (`AMB-D-832`).
+  //
+  // It goes in where the caret is and takes the selection with it, which is what every other
+  // paste into a text box does.
+  useEffect(() => {
+    const field = box.current;
+    if (field === null) return;
+    return takesPastedFiles(field, (paths, words) => {
+      const arrived = paths.length > 0 ? paths.join("\n") : words;
+      if (arrived === "") return;
+      const from = field.selectionStart;
+      const to = field.selectionEnd;
+      typed(field.value.slice(0, from) + arrived + field.value.slice(to));
+      caret.current = from + arrived.length;
+    });
+  }, [typed]);
+
+  // And the caret put back, before the browser has drawn the field the state came down into.
+  useLayoutEffect(() => {
+    const where = caret.current;
+    if (where === null) return;
+    caret.current = null;
+    box.current?.setSelectionRange(where, where);
+  });
 
   const field = (
     <textarea
       {...asTyped}
+      ref={box}
       className="memo__field"
       value={text}
       aria-label={t("files.memo")}

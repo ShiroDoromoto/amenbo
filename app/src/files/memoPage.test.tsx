@@ -19,6 +19,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const hoisted = vi.hoisted(() => ({
   kept: {} as Record<number, string>,
   writes: [] as { project: number; text: string }[],
+  /** The paths the host says are on the clipboard. */
+  paths: [] as string[],
+}));
+
+// The host's side of a paste carrying files. The page cannot read a path off the clipboard
+// itself — the window is not told where a file it is handed lives (`../core/clipFiles`).
+vi.mock("../core/ipc", () => ({
+  invoke: vi.fn(async () => hoisted.paths),
 }));
 
 vi.mock("./memo", () => ({
@@ -48,6 +56,22 @@ async function draw(projectId: number) {
   });
 }
 
+/** A paste carrying files, landing on the field the way a real one does. */
+async function pasteFiles(over: { words?: string } = {}) {
+  await act(async () => {
+    const e = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(e, "clipboardData", {
+      value: {
+        files: { length: 1 },
+        types: ["Files"],
+        getData: () => over.words ?? "",
+      },
+    });
+    field().dispatchEvent(e);
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
 async function type(value: string) {
   await act(async () => {
     const one = field();
@@ -62,6 +86,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   hoisted.kept = {};
   hoisted.writes = [];
+  hoisted.paths = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -127,6 +152,53 @@ describe("the project's draft page", () => {
 
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(word()).toBe(t("files.memoKept"));
+  });
+
+  // **A copy made in the panel beside this page is files, not words** (`AMB-D-832`), and the
+  // window is handed nothing at all for the text of one — so a paste that was not answered here
+  // would leave the draft exactly as it was (`AMB-T-4404`).
+  it("takes a paste carrying files as the paths, bare and one to a line", async () => {
+    hoisted.paths = ["/work/a plain one.md", "/work/100% done.md"];
+    await draw(1);
+    await type("さきに書いたぶん");
+    field().setSelectionRange(8, 8);
+
+    await pasteFiles();
+
+    expect(field().value).toBe("さきに書いたぶん/work/a plain one.md\n/work/100% done.md");
+  });
+
+  it("puts what arrived where the caret was, and the caret after it", async () => {
+    hoisted.paths = ["/work/one.md"];
+    await draw(1);
+    await type("まえうしろ");
+    field().setSelectionRange(3, 3);
+
+    await pasteFiles();
+
+    expect(field().value).toBe("まえう/work/one.mdしろ");
+    expect(field().selectionStart, "the caret is at the end of what arrived").toBe(15);
+  });
+
+  // A file manager that puts a file on and no path with it (`AMB-T-4220`) leaves the words the
+  // paste itself carried, and those are what the reader copied.
+  it("falls back to the words the paste carried, where the host names no file", async () => {
+    hoisted.paths = [];
+    await draw(1);
+
+    await pasteFiles({ words: "/work/named.md" });
+
+    expect(field().value).toBe("/work/named.md");
+  });
+
+  it("keeps what a paste left, the way it keeps what was typed", async () => {
+    hoisted.paths = ["/work/one.md"];
+    await draw(1);
+
+    await pasteFiles();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+
+    expect(hoisted.writes).toEqual([{ project: 1, text: "/work/one.md" }]);
   });
 
   it("leaves 'kept' standing through the quiet that follows", async () => {

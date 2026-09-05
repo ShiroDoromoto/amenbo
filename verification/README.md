@@ -334,8 +334,8 @@ one build produces alongside the app and one installer carries with it. The exec
 asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
 The screen tool is the input primitive too, called by whoever drives the screen between steps: its
-`find` / `click-named` / `right-click-named` / `click` / `right-click` / `dblclick` / `drag` /
-`type` / `key` / `scroll` / `set-date` carry out the action steps the
+`find` / `click-named` / `right-click-named` / `dblclick-named` / `click` / `right-click` /
+`dblclick` / `drag` / `type` / `key` / `scroll` / `set-date` carry out the action steps the
 checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
 at all — the proof it waits for is a shot it throws away, since an app the system has taken up is
 not yet an app with a window, and a walk that started between the two would fail on its first step.
@@ -356,10 +356,13 @@ clicks the one of that name — bringing that pid's app to the front first, sinc
 whatever is frontmost where it is aimed and anything that took the front would swallow it silently.
 `right-click-named` is the same press with the other button, which is the only way to reach a menu
 drawn where the pointer is: until it is up there is no name on the screen to aim at.
-The screen is a webview, so both read it through the accessibility tree the app serves once asked.
-Both read one window and not the app, and take the same `--window <title>` a road's step does — an
-app drawing two draws two screens, and a name reached on the wrong one is a check that passed without
-looking at the screen it was written for.
+`dblclick-named` is that press counted twice, for a row a single one only selects. The coordinate
+`dblclick` is not a substitute: it takes no pid, so it fronts nothing, and a press meant for the app
+under test lands on whatever window took the front — which no shot of the app says.
+The screen is a webview, so all three read it through the accessibility tree the app serves once
+asked. They read one window and not the app, and take the same `--window <title>` a road's step
+does — an app drawing two draws two screens, and a name reached on the wrong one is a check that
+passed without looking at the screen it was written for.
 A part of a name will do — the name an element answers to is not the label
 on the screen (an emoji in front of the words belongs to it, and a card folds its lines into one
 string), so a whole one is rarely knowable in advance. When several names hold what was asked for,

@@ -26,6 +26,7 @@
 //   swift screen.swift scroll <pid> <dx> <dy>    turn a wheel over that app's window (+dy is back toward the top)
 //   swift screen.swift right-click <x> <y>       right-click at a screen point
 //   swift screen.swift right-click-named <pid> <name>  right-click what that name names
+//   swift screen.swift dblclick-named <pid> <name>     double-click what that name names
 //   swift screen.swift set-date <pid> <name> <yyyy-mm-dd> [--near <name>]
 //                                                put a day into the date field of that name, on the
 //                                                row that --near names when the name reaches several
@@ -40,11 +41,11 @@
 // see, or finds a name both windows carry and comes out green without having looked at the screen
 // under test.
 //
-// `find` / `click-named` / `right-click-named` take `--role <role>` the same way, for a name that is
-// on more than one kind of element. The role is the first column `find` prints, so it is read off the
-// screen rather than remembered: `--role AXPopUpButton` reaches the pane's own field where a filter's
-// `AXCheckBox` carries the same word, and it is the way past the refusal one name in two places
-// otherwise ends in.
+// `find` / `click-named` / `right-click-named` / `dblclick-named` take `--role <role>` the same
+// way, for a name that is on more than one kind of element. The role is the first column `find`
+// prints, so it is read off the screen rather than remembered: `--role AXPopUpButton` reaches the
+// pane's own field where a filter's `AXCheckBox` carries the same word, and it is the way past the
+// refusal one name in two places otherwise ends in.
 //
 // Reach for `click-named` over a point. A point costs two conversions a name costs neither of: a
 // shot's pixels are the window's points times the scale of *that* display, which is 2 on a built-in
@@ -500,6 +501,15 @@ func rightClickNamed(pid: Int, name: String, role: String?, window: String?) {
     rightClick(x: p.x, y: p.y)
 }
 
+/// The same press counted twice, for a row a single press only selects. The point is arrived at by
+/// name for the reason the other two are, and the coordinate `dblclick` is no substitute here: it
+/// takes no pid, so it fronts nothing, and a press aimed at this app's row lands on whatever window
+/// took the front instead — silently, since a click cannot report what swallowed it.
+func doubleClickNamed(pid: Int, name: String, role: String?, window: String?) {
+    let p = pointOf(pid: pid, name: name, role: role, window: window)
+    doubleClick(x: p.x, y: p.y)
+}
+
 /// Where a name stands, with the app brought to the front — the arithmetic both named presses share,
 /// and the refusals they share with it.
 ///
@@ -833,12 +843,12 @@ func setDate(pid: Int, name: String, day: String, window: String?, near: String?
 let (window, afterWindow) = takeOption("--window", CommandLine.arguments, needs: "the title of a window")
 let (role, args) = takeOption("--role", afterWindow, needs: "the role find prints in its first column")
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|right-click-named|click|right-click|dblclick|drag|type|key|scroll|set-date|trusted> … [--window <title>]")
+    fail("usage: screen <front|shot|read|find|click-named|right-click-named|dblclick-named|click|right-click|dblclick|drag|type|key|scroll|set-date|trusted> … [--window <title>]")
 }
 // Refused rather than ignored: a qualifier the subcommand never reads would narrow nothing and say so
 // nowhere, which is the silent miss every refusal in this file is written against.
-if role != nil, !["find", "click-named", "right-click-named"].contains(args[1]) {
-    fail("--role says which kind of element to reach, and only find / click-named / right-click-named take one")
+if role != nil, !["find", "click-named", "right-click-named", "dblclick-named"].contains(args[1]) {
+    fail("--role says which kind of element to reach, and only find / click-named / right-click-named / dblclick-named take one")
 }
 
 switch args[1] {
@@ -860,6 +870,9 @@ case "click-named":
 case "right-click-named":
     guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen right-click-named <pid> <name> [--role <role>] [--window <title>]") }
     rightClickNamed(pid: pid, name: args[3], role: role, window: window)
+case "dblclick-named":
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen dblclick-named <pid> <name> [--role <role>] [--window <title>]") }
+    doubleClickNamed(pid: pid, name: args[3], role: role, window: window)
 case "click":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen click <x> <y>") }
     click(x: x, y: y)

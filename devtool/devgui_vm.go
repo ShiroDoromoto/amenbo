@@ -78,6 +78,10 @@ func shq(s string) string {
 //
 // It raises the clone if it is not running rather than refusing: what a person decides is when the
 // VM is thrown away, never when it is raised, and there is nothing to place until one is up.
+//
+// **What it does refuse is a screen somebody else is driving** (vmscreen.go): the guest has one, and
+// an instance placed in there while a pre-distribution road is walking is a window over the app that
+// road is pressing.
 func devGUIInstallVM(id string) error {
 	if runtime.GOOS != "darwin" {
 		return fmt.Errorf("the dev GUI and the VM it is put in are both macOS-only")
@@ -91,8 +95,17 @@ func devGUIInstallVM(id string) error {
 		return fmt.Errorf("no bundle built for task %s at %s — `make install-gui-dev-vm AMB-T-ID=%s` builds it and puts it there", id, bundle, id)
 	}
 
+	release, err := vmTakeScreen("`devtool devgui install " + id + " --vm`")
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	ip, err := vmEnsureUp()
 	if err != nil {
+		return err
+	}
+	if err := vmRefuseWhileRoadWalking(ip, "putting "+taskDevBundle(id)+" in there"); err != nil {
 		return err
 	}
 	if err := vmStopTaskDevGUI(ip, id); err != nil {
@@ -399,6 +412,12 @@ func vmResolveDevGUI(id string, front bool, window string) (ip string, target de
 			taskDevBundle(id), vmCloneName, id, shq(vmTaskDevBundle(id)))
 	}
 	if front {
+		// A front is the collision itself, not a step towards it: it is what puts one window over
+		// the one a road is pressing. Reading the pid or shooting the window without it disturbs
+		// nothing, so the guard sits here rather than over the whole command.
+		if err := vmRefuseWhileRoadWalking(ip, "bringing "+taskDevBundle(id)+" forward"); err != nil {
+			return "", devGUITarget{}, err
+		}
 		if _, err := sshRun(ip, shq(vmScreenPath)+" front "+strconv.Itoa(pid)+vmWindowArg(window)); err != nil {
 			logf("  warning: bringing %s forward in %s failed (%v) — is the screen tool in there? (`devtool vm screen`)", taskDevBundle(id), vmCloneName, err)
 		}

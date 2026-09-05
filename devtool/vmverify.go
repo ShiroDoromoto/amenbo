@@ -148,7 +148,15 @@ func vmVerifyCmd(args []string) {
 //
 // Nothing is built for the guest. Host and guest are the same architecture, so the harness compiled
 // here runs there, and the guest needs neither Rust nor node.
+//
+// The guest's screen is claimed for the length of this: the install is answered on it, and a dev GUI
+// placed in there meanwhile would be typed at instead of the dialog (vmscreen.go).
 func vmVerifyInstall(pkg, fromRun string) error {
+	release, err := vmTakeScreen("`devtool vm verify install`")
+	if err != nil {
+		return err
+	}
+	defer release()
 	ip, err := vmEnsureUp()
 	if err != nil {
 		return err
@@ -455,6 +463,11 @@ func refuseForeignArch(pkg, arch string) error {
 // build, so the shape is the whole of it. That is the one path that asks for an admin password, and
 // the only elevation in a per-user lifetime.
 func vmVerifySeed(pkg, fromRun string, systemWide bool) error {
+	release, err := vmTakeScreen("`devtool vm verify seed`")
+	if err != nil {
+		return err
+	}
+	defer release()
 	ip, err := vmEnsureUp()
 	if err != nil {
 		return err
@@ -547,6 +560,13 @@ done
 // fails a minute in, having launched an app and photographed nothing; without the second a road that
 // copies a fixture fails before that, standing up its world.
 func vmVerifyRun(scenario string) error {
+	// Held only until the harness is up and has handed over its first step. From there the run
+	// itself is the claim, which is what carries it across the `step` commands that walk it.
+	release, err := vmTakeScreen("`devtool vm verify run`")
+	if err != nil {
+		return err
+	}
+	defer release()
 	ip, err := vmIP()
 	if err != nil {
 		return err
@@ -618,7 +638,7 @@ func vmVerifyAwait(ip string, from int, budget time.Duration) error {
 		if err == nil && size > from {
 			return nil
 		}
-		if _, err := sshRun(ip, "pgrep -f "+vmVerifyBin+" > /dev/null"); err != nil {
+		if !vmRoadWalking(ip) {
 			return nil // the run is over; whatever it ended on is in the log
 		}
 		if time.Now().After(deadline) {

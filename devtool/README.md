@@ -215,6 +215,11 @@ command exists, and without it you are asking for the route that has one already
 
 - **It raises the VM if none is running.** When a clone is thrown away is a
   person's call (`devtool vm rm`); when one is raised is not.
+- **It stops when somebody else is driving that screen** — a pre-distribution
+  road walking in there, or another command holding the claim. See
+  [one screen, two roles](#one-screen-two-roles). `devtool devgui pid` and
+  `devtool devgui shot` stop the same way when they are asked to bring the
+  window forward, and go through untouched when they are not.
 - **The instance is quit in the guest first**, by executable name
   (`amenbo-app-dev-<id>`). An app replaced under itself writes its store back on
   the way out, over the bundle just sent. One that will not quit is a non-zero
@@ -747,6 +752,39 @@ Only the way the golden is made would change to move off it.
 - **Enrolling the key is left to a person, and named rather than done.** It takes
   the image's password, which is a credential to type. `--refresh` prints the
   `ssh-copy-id` line to run and says to stop the golden again afterwards.
+
+### One screen, two roles
+
+The guest has one screen, and two roles reach for it: a pre-distribution road
+walking a scenario (`vm verify …`), and an implementation session's own dev GUI
+(`devgui install --vm`). On 2026-09-05 the two met — six task instances went into
+the clone while a road was walking, and the road's shots came back with somebody
+else's window in front of the app it was pressing.
+
+Two claims settle it, because the two roles are held by different things.
+
+- **A command on this machine** holds the screen for as long as it runs:
+  `vm verify seed`, `vm verify install`, `vm verify run`, `devgui install --vm`,
+  and a `devgui pid` / `devgui shot` that fronts a window. The claim is a lock on
+  this side (`~/Library/Caches/amenbo-vm-screen.lock`), the flock form the dev
+  GUI build lock uses and for the reason that one gives: the kernel drops it when
+  the last descriptor closes, so a session killed part-way leaves nothing a later
+  one has to break by hand. A second caller is **turned away naming the first**,
+  never queued behind it — queuing is what the collision looked like from the
+  outside.
+- **A road being walked** holds it for as long as the run lasts, which outlives
+  the command that started it: a road is walked from separate commands with
+  nothing alive between them. Nothing is written for this one — the harness
+  process in the guest *is* the claim, and it clears itself by ending.
+
+**The two are read asymmetrically, on purpose.** A road being walked turns a dev
+GUI away, and does not turn away the road's own next command: `vm verify run`
+already takes a stopped run's app down and starts over, and whoever types it is
+the one walking that road.
+
+What this does not cover: opening an instance already in there
+(`devtool vm exec -- open -a …`) is a plain command in the guest and is not
+claimed against. Placing one is the checkpoint.
 
 ### `devtool vm verify seed | install | run | step | log | pull`
 

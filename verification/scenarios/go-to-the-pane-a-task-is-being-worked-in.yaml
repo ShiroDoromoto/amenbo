@@ -33,8 +33,8 @@
 id: go-to-the-pane-a-task-is-being-worked-in
 title: A task names the pane its work is happening in, and pressing it goes to that pane
 description: >
-  Open a pane, reserve a task from inside it with the CLI, and name the pane with a line of the
-  reader's own. Open a second pane, which at one to a page stands on a page of its own, and leave the
+  Open a pane, name it with a line of the reader's own, and reserve a task from inside it with the
+  CLI. Open a second pane, which at one to a page stands on a page of its own, and leave the
   reader there. On the ledger the task now draws a row naming the first pane — and a task reserved
   outside any pane, holding the same status, draws none. Press the row: the screen goes to the
   terminal, on the first pane's page, with that pane in front. Then take that pane away and leave its
@@ -130,20 +130,25 @@ steps_gui:
     domain: terminal
     op: open-shell
 
+  # The reader's own words, which are what names this pane — and so what the row on the task has to
+  # carry. Nothing else on the screen says them.
+  #
+  # **It comes before the command below, and the order is not a preference.** A pane is named by the
+  # first line typed into it, and a naming by typing never replaces one (`amenbo_core::frames`) — so
+  # a road that ran its command first would have the pane called after that command, with these
+  # words arriving too late to take the name.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane at the furnace
+
   - type: action
     domain: terminal
     op: run
     with:
       command: amenbo task status <ref> in_progress --actor ai
       target: crucible
-
-  # The reader's own words, which are what names this pane — and so what the row on the task has to
-  # carry. Nothing else on the screen says them.
-  - type: action
-    domain: terminal
-    op: type-line
-    with:
-      text: SCENARIO the pane at the furnace
 
   # The second pane, on a page of its own, and the reader is left standing on it. Without this the
   # press below would have nowhere to go and would prove only that the face came up.

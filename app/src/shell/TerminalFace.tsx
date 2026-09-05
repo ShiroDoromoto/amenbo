@@ -321,13 +321,22 @@ export function TerminalFace({
   // paired any other way the two panes trade contents, and each is then drawn under the other's
   // name, because a name belongs to the place rather than to what is running in it (`../talk/frames`).
   const restoring = useRef(false);
+  // Whether the face has come down. It is the only thing that stops the restore, and it is kept
+  // apart from the effect's own cleanup because the two are not the same event: the cleanup also
+  // runs whenever the project or the count of projects turns over, which is exactly what happens
+  // while the read is out on a machine whose ledger answers after the host does. Cancelling on
+  // that stranded a read that is deliberately made once — the answer came back to nobody, the face
+  // was never settled, and the page draws nothing at all until it is (`AMB-T-4398`).
+  const gone = useRef(false);
+  useEffect(() => {
+    gone.current = false;
+    return () => { gone.current = true; };
+  }, []);
   useEffect(() => {
     // Waiting on the project, where there is one to wait for: it answers for the panes an older
     // build kept without one (`../talk/layout`).
     if (restoring.current || (layout.project === null && projects.length > 0)) return;
     restoring.current = true;
-    const onto = layout.project;
-    let alive = true;
     void Promise.all([
       savedLayout().catch(() => null),
       inTauri()
@@ -335,9 +344,16 @@ export function TerminalFace({
         : Promise.resolve([] as PtySessionDto[]),
     ])
       .then(([saved, running]) => {
-        if (!alive) return;
+        if (gone.current) return;
         setLayout((was) => {
-          let next = saved === null ? was : restored(saved, onto);
+          // The project is read off `was` rather than out of the effect's own closure. The read
+          // starts before the ledger has said which projects there are — a machine whose snapshot
+          // has not landed has none, which is the one state this effect does not wait on — and by
+          // the time it answers, the face has been told which project it is on. A restore that
+          // carried the older answer would put the face back to having no project, and the page
+          // draws nothing at all while it has none, so the way in would be gone from a face that
+          // had one a moment ago (`AMB-T-4398`).
+          let next = saved === null ? was : restored(saved, was.project);
           // The project the board was on, for the window that has no ledger to have taken one from.
           // It answers only where nothing came back to say it: an arrangement with panes in it names
           // the project of every one of them, and this is the machine that has never had any.
@@ -367,8 +383,7 @@ export function TerminalFace({
           return next;
         });
       })
-      .finally(() => { if (alive) setSettled(true); });
-    return () => { alive = false; };
+      .finally(() => { if (!gone.current) setSettled(true); });
   }, [layout.project, projects.length, ownWindow]);
 
   // And written down as it changes, for the other window to read. Only the shape goes, so a session

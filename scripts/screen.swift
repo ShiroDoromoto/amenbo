@@ -826,11 +826,17 @@ func dropFile(pid: Int, window: String?, to: CGPoint, paths: [String]) {
 }
 
 /// type sends the string itself rather than keycodes. It bypasses the IME, so any script goes in as-is.
+///
+/// **Each event is sent under no modifiers**, the way `key` sends its own. An event left with none
+/// written on it carries whatever the machine is holding down at that moment, and one modifier still
+/// held turns every letter into a shortcut: nothing lands, and the run returns 0 with the field
+/// unchanged — the loudest way this tool can be silent.
 func type(_ s: String) {
     for ch in s {
         let utf16 = Array(String(ch).utf16)
         for down in [true, false] {
             let e = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: down)
+            e?.flags = []
             e?.keyboardSetUnicodeString(stringLength: utf16.count, unicodeString: utf16)
             e?.post(tap: .cghidEventTap)
         }

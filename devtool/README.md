@@ -712,8 +712,14 @@ after, so a road can read the window it was dropped on straight away.
 **A shortcut is one press: `key <keycode> --cmd`.** ⌘C is `key 8 --cmd` and ⌘V is
 `key 9 --cmd`. The modifier rides on the event's flags and is never held as a key
 of its own, so nothing is left pressed if the run stops between the two.
-`--shift` / `--opt` / `--ctrl` are there the same way, and a subcommand other than
-`key` refuses them rather than ignoring them.
+`--shift` / `--opt` / `--ctrl` are there the same way.
+
+**A press takes the same four.** `click` / `right-click` / `dblclick` and the
+three `-named` forms are held under a modifier the way `key` is, on the event's
+own flags: a list that adds to a selection with a held key is reached by
+`click-named $PID <name> --cmd`, and a second row cannot be reached any other
+way. Everything else — `drag`, `type`, `scroll` — refuses them rather than
+ignoring them.
 
 **`find`/`click-named` read one window, not the app.** They take the same
 `--window <title>`, and with two windows up they refuse without it — a name

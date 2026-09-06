@@ -602,8 +602,12 @@ const ui = {
   // panes (`AMB-D-835`). Each word names what its half holds rather than what pressing it does, because
   // both are always drawn and one of them is always on.
   "face.railFolders": "Folders",
-  "face.tabsCompact": "Show the colors only",
-  "face.tabsNamed": "Show the project names",
+  // The fold button on the rail, which says what pressing it does rather than which state the rail is
+  // in: a button that names a state reads as either the state it is in or the one it goes to, and a
+  // person cannot tell which (`AMB-D-848`). Neither word says "project", because the sidebar on the
+  // task face folds with the same two words.
+  "face.tabsCompact": "Hide the names",
+  "face.tabsNamed": "Show the names",
   "face.paneCount": "Panes on screen",
   // The orientation, named in words because the control itself is drawn
   // (`app/src/shell/TerminalFace.tsx`): a shape with nothing said about it is a

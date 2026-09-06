@@ -1,0 +1,119 @@
+# A picture on the machine's clipboard put in front of the agent running in a pane.
+#
+# A terminal takes text and nothing else, so a screenshot has to become a **path** on the way in: the
+# bytes are written into the pane's own directory and what lands on the line is where they went,
+# quoted the way every other path handed to an agent is. Nothing on screen
+# says that happened — the line reads like any other paste — so the writing is exactly the half a
+# reader cannot check for themselves, and the half this road is for.
+#
+# ── Why the picture is copied out of a viewer and not out of a file manager ──────────────────────
+# They put different things on the clipboard. A file manager's copy leaves a **file**, which the host
+# can already name, and that road is `copy-a-path-once-and-put-it-down-in-three-places`. Opening the
+# image and copying from inside it leaves **bytes with no name**, which is the only thing a
+# screenshot ever is and the only shape that needs writing down. A road that copied the row would go
+# green over a build that had never written a byte.
+#
+# ── Why the file it copies lies outside every folder the road binds ──────────────────────────────
+# The run's own folder is where nothing in Amenbo can reach, so a path appearing in the pane
+# afterwards came through the clipboard and could not have come from the panel, from a drop, or from
+# anything the road typed.
+#
+# ── Why the line is read before the copy as well as after ────────────────────────────────────────
+# `pasted-` and `.png` are short words, and a step that only read them at the end would go green on a
+# line that had been carrying them all along. Read once on an empty line, they are the paste's doing
+# and nothing else's.
+#
+# ── Why the press is named twice ─────────────────────────────────────────────────────────────────
+# It is one road on three machines, and on one of them it is a different press. macOS and Windows
+# carry the image on the paste itself; WebKitGTK carries nothing there, so Linux reads the clipboard
+# when asked and the asking is `Ctrl+Shift+V` (`app/src/core/clipFiles.ts`). An
+# operator walks whichever half is theirs, and the reading afterwards is the same on all three.
+#
+# ── Why nothing is sent ──────────────────────────────────────────────────────────────────────────
+# The same reason a dropped file is not sent: a path put in front of an agent is a path the person
+# has still to send, and a build that sent the newline would have answered whatever the screen was
+# asking at that moment.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. A clipboard is not a thing a shell holds, and the writing this proves
+# happens in the webview.
+id: hand-a-picture-on-the-clipboard-to-a-pane
+title: A picture on the clipboard reaches a pane as a path, written down on the way in
+description: >
+  Open the terminal face on a project's folder and get a shell running in a pane. With nothing on
+  the line yet, copy a picture outside Amenbo — the image itself, out of whatever shows pictures on
+  this machine — and paste it into the pane. A quoted path appears there, naming a file the paste
+  wrote, and the line is left standing for the person to send.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # The picture the operator copies. It is an image, which no line of YAML holds, and it is put in the
+  # run's own folder — outside every folder the road binds — so what reaches the pane can only have
+  # come through the clipboard.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: image/scenario-icon.png
+      path: scenario-icon.png
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # A shell, because what this road is about is a pane's input line and an empty frame has none.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The line before anything is put on it. Both words the reading below rests on are absent here, so
+  # finding them afterwards is the paste and nothing else.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: "pasted-"
+      present: false
+
+  - type: action
+    domain: repo
+    op: copy-image-outside
+    with:
+      path: scenario-icon.png
+
+  - type: action
+    domain: terminal
+    op: paste-image
+
+  # What the paste wrote, named the way the build names one. A picture that arrived as words, or as
+  # nothing at all, has no such name on the line.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: "pasted-"
+
+  # And the shape it arrived in: the extension the type it was handed decides, with the closing quote
+  # after it. The quote is the point of this reading — the clipboard was carrying bytes and no
+  # punctuation, so it can only have been put there on the way in.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: ".png'"

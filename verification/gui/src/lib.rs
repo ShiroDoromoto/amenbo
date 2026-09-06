@@ -1552,6 +1552,90 @@ impl Instructor {
             (Domain::Store, "run-again") =>
                 "Nothing to press: the run has ended Amenbo and started it again on the same store, and the window on the screen is the one the new run drew. Confirm the app you were working in has gone and this one came up in its place — it opens where a fresh launch opens, with nothing of the last run's doing carried out again in front of you — and bring it forward if anything else is standing over it."
                     .to_string(),
+            // The way out of the app pressed, and nothing answered yet. It is the gesture alone: what
+            // comes of it is the app's own business, and which of the two it turns out to be is what
+            // the road is reading.
+            //
+            // The two doors are said apart rather than left to whoever is standing there. An operator
+            // told to "quit Amenbo" presses whichever is nearer, and the two arrive by different
+            // roads — one through a menu item this app wrote, one through the run loop — so half the
+            // gate would go unwalked and the manifest would not say which half.
+            //
+            // Where a question comes up, nothing is pressed on it here. Reading that it is standing
+            // is the whole of this step, and `answer-quit` is the next one — which is what lets a road
+            // put a reading between the press and the answer.
+            (Domain::Store, "quit") => {
+                let door = match arg_str(with, "how").unwrap_or("menu") {
+                    "menu" => "Ask Amenbo to end from its own menu — the item ⌘Q reaches, and not the machine's own way of forcing an application to stop.",
+                    "last-window" => "Press the close at the corner of Amenbo's window. It is the only window the app has up, so what this asks for is the app itself and not one window of several.",
+                    other => {
+                        return Err(format!(
+                            "action `quit` does not know the way out `{other}` — it is menu or last-window"
+                        ))
+                    }
+                };
+                if flag(with, "asks")? {
+                    format!(
+                        "{door} Amenbo does not end: a question comes up on its board instead, because something is still running in a pane. Read it and press nothing — the answer is the next step. Bring the board forward if anything is standing over it."
+                    )
+                } else {
+                    format!(
+                        "{door} Nothing is asked and Amenbo ends, there being no terminal open to lose. Confirm both halves — that nothing came up in the way, and that the app you were working in has gone. The run then brings another up on the same store, so the window on the screen after that is a new one."
+                    )
+                }
+            }
+            // The answer given to that question, and the step the app actually goes out on.
+            //
+            // Which question is standing is the app's business and not the road's, so `answer` is what
+            // a road says about the one it expects: left out for the plain one a process holding no
+            // reservation gets, and naming one of the three otherwise. Each of the three is said here
+            // by what it does rather than by what it reads: the words are the interface's own and the
+            // run's language is whatever the machine is set to.
+            //
+            // Everything but `cancel` ends the app, and the line says so along with what the run does
+            // next: the operator watches the app they were working in go, and the harness brings
+            // another up on the same store, because a shot is aimed at a pid and an app that has gone
+            // has none.
+            (Domain::Store, "answer-quit") => {
+                let back = " The run then brings Amenbo up again on the same store, so the window on the screen after that is a new one.";
+                match arg_str(with, "answer") {
+                    // Nothing held, so nothing to choose between. The plain question, and yes.
+                    None => format!(
+                        "The question standing on the board is the plain one — no session is holding anything. Read it, then answer it yes. Every terminal that was open ends with the app and none of them comes back.{back}"
+                    ),
+                    Some(answer) => {
+                        // The reading is half the step, and it is the half the three answers exist
+                        // for: a question that named the wrong work, or named none, is the loss it
+                        // stands in front of.
+                        if !with.contains_key("target") {
+                            return Err(
+                                "action `answer-quit` answering the three-way question has to name the task the question must name — give it a `target`"
+                                    .to_string(),
+                            );
+                        }
+                        let question = format!(
+                            "The question standing on the board names what the sessions still running are holding: read it, and confirm what it lists is the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — and no other. Three answers stand under it.",
+                            self.target_label(with)
+                        );
+                        match answer {
+                            "hand-back" => format!(
+                                "{question} Press the first of them — the one that hands the work back before going. The task named goes back to waiting for somebody to take it, and Amenbo ends with every terminal that was open in it.{back}"
+                            ),
+                            "leave" => format!(
+                                "{question} Press the second — the one that goes and leaves the work where it is. Nothing on the ledger is moved: Amenbo ends with every terminal that was open in it, and the task named is still held.{back}"
+                            ),
+                            "cancel" => format!(
+                                "{question} Press the third — the one that stays. Nothing happens at all: the question goes, Amenbo is still running, every pane is where it was, and the task named is still held."
+                            ),
+                            other => {
+                                return Err(format!(
+                                    "action `answer-quit` does not know the answer `{other}` — it is hand-back, leave or cancel"
+                                ))
+                            }
+                        }
+                    }
+                }
+            }
             // The screen the two faces are made on, opened. It is a step of its own rather than a
             // clause on the ones below because the road walks it twice, and the second walk is what
             // the road is for: a slot redrawn under the operator's eye says the screen heard, and only
@@ -1921,6 +2005,18 @@ impl Instructor {
                 };
                 format!(
                     "Click into {pane}, then press the key this machine pastes with. What the last copy put on the clipboard appears in that pane's input line — leave it there, and press nothing else."
+                )
+            }
+            // The same line reached with a picture on the clipboard, which is a different press on one
+            // of the three machines. Both are said, because the operator is on one machine and the
+            // road is walked on all of them — and the reading afterwards is the same either way.
+            (Domain::Terminal, "paste-image") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Click into {pane}. On macOS and Windows, press the key this machine pastes with; on Linux, hold Ctrl and Shift and press V. A quoted path appears in that pane's input line, and the picture itself does not — leave the line there, and press nothing else."
                 )
             }
             // A command run for its output, which is what the steps after it read. The clearing is
@@ -2307,6 +2403,20 @@ impl Instructor {
                 // it is outside every folder the road binds, which is the point of a file kept there.
                 None => format!(
                     "Outside Amenbo — in a file manager — copy the file \"{}\" from the folder this run works in, the way that machine copies a file, so it is on the clipboard. The run said where that folder is before the first step.",
+                    req(with, "path")?
+                ),
+            },
+            // The picture road's own copy. What is named is the file and the folder as the road calls
+            // them, and the how is said in full: opened and copied from inside whatever shows
+            // pictures on this machine, so the clipboard holds the image rather than the file.
+            (Domain::Repo, "copy-image-outside") => match with.get("dir").and_then(|v| v.as_str()) {
+                Some(dir) => format!(
+                    "Outside Amenbo, open the file \"{}\" inside the folder the road calls \"{dir}\" in whatever this machine shows pictures in, and copy the picture from inside that — select all, then press the key this machine copies with. The clipboard is now holding the image itself and not the file.",
+                    req(with, "path")?
+                ),
+                // No folder named is the run's own, the way `copy-outside` reads one.
+                None => format!(
+                    "Outside Amenbo, open the file \"{}\" from the folder this run works in — the run said where that folder is before the first step — in whatever this machine shows pictures in, and copy the picture from inside that: select all, then press the key this machine copies with. The clipboard is now holding the image itself and not the file.",
                     req(with, "path")?
                 ),
             },
@@ -4818,6 +4928,17 @@ where
         })
         .map_err(|e| format!("step {}: handing the step over failed: {e}", i + 1))?;
 
+        // The app sent out the door by the step just handed over, and another brought up in its
+        // place. The operator is the one who ended it — that is the whole of what these roads are
+        // about — and the harness is the one who can bring it back: every shot is aimed at a pid,
+        // and an app that has gone has none. It happens **after** the hand-over rather than before
+        // it, which is the whole difference from `run-again`: there the operator confirms a window
+        // already standing, and here they watch the one they were working in go.
+        if goes_out_the_door(step) {
+            run_again()
+                .map_err(|e| format!("step {}: starting the app again failed: {e}", i + 1))?;
+        }
+
         // Shot at the window the step named, except where the step is the closing of that window:
         // there the shot is of what is left standing. The road names where the press goes, not where
         // the camera does, and on `fold-back` those are two different windows — one of which no
@@ -4830,7 +4951,7 @@ where
         // Only an action, since an assert is meant to shoot the screen the step before it stood up;
         // and not the app's own restart, which is the harness's move and comes back to a window that
         // may well look the same.
-        if kind == "action" && !ends_the_run(step) {
+        if kind == "action" && !ends_the_run(step) && !goes_out_the_door(step) {
             if let Some((aimed, shot)) = &before {
                 if aimed.as_deref() == shot_at && same_picture(shot, &shot_path) {
                     say(&format!(
@@ -4928,6 +5049,25 @@ where
 /// restart would be reading a window nothing had put in front of it.
 fn ends_the_run(step: &Step) -> bool {
     matches!(step, Step::Action { domain: Domain::Store, op, .. } if op == "run-again")
+}
+
+/// Whether this step is the operator ending the app — the way out pressed, and answered so that it
+/// is taken.
+///
+/// It is asked of the step rather than declared in the scenario, for the reason [`ends_the_run`] is:
+/// an answer that takes the door takes it, and a road that could say otherwise would be reading a
+/// window nothing had left standing. Two steps do it — a `quit` nothing was asked about
+/// (`asks: false`), and an `answer-quit` answered anything but `cancel`, the plain yes among them.
+fn goes_out_the_door(step: &Step) -> bool {
+    match step {
+        Step::Action { domain: Domain::Store, op, with, .. } if op == "quit" => {
+            with.get("asks").and_then(|v| v.as_bool()) == Some(false)
+        }
+        Step::Action { domain: Domain::Store, op, with, .. } if op == "answer-quit" => {
+            with.get("answer").and_then(|v| v.as_str()) != Some("cancel")
+        }
+        _ => false,
+    }
 }
 
 /// Whether this step closes the window it is carried out in — the one place on these roads where the
@@ -5750,6 +5890,107 @@ steps_gui:
         assert!(line.contains("SCENARIO the pane"), "got: {line}");
         assert!(line.contains("answer it yes"), "got: {line}");
         assert!(line.contains("the pane goes"), "got: {line}");
+    }
+
+    /// The way out of the app is two steps and the question stands between them, so each half has to
+    /// hold on its own: the press says which door was taken and what came of it, and the answer says
+    /// which of the three was pressed and what it left behind. The three ways of writing it wrong — a
+    /// door nobody has, an answer nobody offers, and a three-way answer with nothing named — are
+    /// turned away rather than rendered into a line an operator could not act on.
+    #[test]
+    fn the_way_out_of_the_app_says_which_door_it_took_and_what_the_answer_left_behind() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: Re-line the quench tank }
+    as: tank
+  - type: action
+    domain: store
+    op: quit
+    with: { asks: true }
+  - type: action
+    domain: store
+    op: quit
+    with: { how: last-window, asks: true }
+  - type: action
+    domain: store
+    op: quit
+    with: { how: menu, asks: false }
+  - type: action
+    domain: store
+    op: answer-quit
+  - type: action
+    domain: store
+    op: answer-quit
+    with: { target: tank, answer: hand-back }
+  - type: action
+    domain: store
+    op: answer-quit
+    with: { target: tank, answer: leave }
+  - type: action
+    domain: store
+    op: answer-quit
+    with: { target: tank, answer: cancel }
+  - type: action
+    domain: store
+    op: quit
+    with: { how: sideways, asks: true }
+  - type: action
+    domain: store
+    op: answer-quit
+    with: { target: tank, answer: think-about-it }
+  - type: action
+    domain: store
+    op: answer-quit
+    with: { answer: hand-back }
+"#);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        // The binding, so the three answers below have a title to name.
+        ins.render(&steps[0]).expect("the world's task renders");
+
+        // The doors are two, and said apart. Left out, it is the menu.
+        let menu = ins.render(&steps[1]).expect("renders");
+        assert!(menu.contains("from its own menu"), "got: {menu}");
+        assert!(menu.contains("does not end"), "got: {menu}");
+        let window = ins.render(&steps[2]).expect("renders");
+        assert!(window.contains("close at the corner"), "got: {window}");
+
+        // Nothing open to lose: the app goes on the gesture, and the run brings another up.
+        let silent = ins.render(&steps[3]).expect("renders");
+        assert!(silent.contains("Nothing is asked"), "got: {silent}");
+        assert!(silent.contains("brings another up"), "got: {silent}");
+
+        // Nothing held: the plain question, and nothing about a reservation on it.
+        let plain = ins.render(&steps[4]).expect("the plain question renders");
+        assert!(plain.contains("answer it yes"), "got: {plain}");
+        assert!(!plain.contains("Three answers"), "got: {plain}");
+
+        // Each of the three names what stands to be lost, and then parts company on the outcome.
+        for (i, step) in steps.iter().enumerate().take(8).skip(5) {
+            let line = ins.render(step).unwrap_or_else(|e| panic!("step {i}: {e}"));
+            assert!(line.contains("Re-line the quench tank"), "step {i} got: {line}");
+            assert!(line.contains("and no other"), "step {i} got: {line}");
+        }
+        let back = ins.render(&steps[5]).expect("renders");
+        assert!(back.contains("hands the work back"), "got: {back}");
+        let leave = ins.render(&steps[6]).expect("renders");
+        assert!(leave.contains("still held"), "got: {leave}");
+        // The one answer the app survives says so, and says nothing about coming back.
+        let stay = ins.render(&steps[7]).expect("renders");
+        assert!(stay.contains("Amenbo is still running"), "got: {stay}");
+        assert!(!stay.contains("brings Amenbo up again"), "got: {stay}");
+
+        let err = ins.render(&steps[8]).unwrap_err();
+        assert!(err.contains("does not know the way out `sideways`"), "got: {err}");
+        let err = ins.render(&steps[9]).unwrap_err();
+        assert!(err.contains("does not know the answer `think-about-it`"), "got: {err}");
+        let err = ins.render(&steps[10]).unwrap_err();
+        assert!(err.contains("give it a `target`"), "got: {err}");
     }
 
     /// The question about which folder a pane works in, on both of its halves. Neither is a reading:
@@ -8811,6 +9052,78 @@ steps_gui:
             "the app is started again for that step alone, and before it is handed over"
         );
         assert_eq!(outcome.records[1].op, "run-again", "and the step is recorded like any other");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The other order, and the reason there are two. Here the operator is the one who ends the app,
+    /// so the step is handed over first and the app brought back after — before the shot, because a
+    /// shot is aimed at a pid and an app that has gone has none. The answer that stays is not a way
+    /// out at all and nothing is restarted for it.
+    #[test]
+    fn the_app_is_brought_back_after_the_operator_sends_it_out_the_door() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: store
+    op: answer-quit
+    with: { answer: cancel, target: seed }
+  - type: action
+    domain: store
+    op: answer-quit
+    with: { answer: leave, target: seed }
+  - type: action
+    domain: store
+    op: quit
+    with: { asks: false }
+given:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+"#);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-quit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let done: RefCell<Vec<String>> = RefCell::new(Vec::new());
+        walk(
+            &s,
+            &dir,
+            |_, p| {
+                done.borrow_mut().push("shot".to_string());
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| Ok(reading("")),
+            nothing_on_the_tree,
+            |b| {
+                done.borrow_mut().push(format!("handed {}", b.index));
+                Ok(())
+            },
+            || {
+                done.borrow_mut().push("ran again".to_string());
+                Ok(())
+            },
+            nothing_to_read,
+            unheard,
+        )
+        .expect("walk");
+
+        assert_eq!(
+            *done.borrow(),
+            vec![
+                "handed 0",
+                "shot",
+                "handed 1",
+                "ran again",
+                "shot",
+                "handed 2",
+                "ran again",
+                "shot",
+            ],
+            "the app comes back after the step that ended it, and only for the steps that end it"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

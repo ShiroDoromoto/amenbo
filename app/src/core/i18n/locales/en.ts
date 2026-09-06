@@ -352,6 +352,11 @@ const ui = {
   "restart.how": "Restarting reopens it with the new Amenbo already on disk (the GUI and the CLI ship together).",
   "restart.button": "Restart",
   "restart.failed": "Could not restart. Quit Amenbo and open it again.",
+  "restart.confirm": "Restart Amenbo? Every terminal open in it ends, and no session comes back on the next run.",
+  "restart.holding": "The sessions still running are holding:",
+  "restart.handBack": "Hand back and restart",
+  "restart.anyway": "Restart as it is",
+  "restart.cancel": "Cancel",
   "restart.stuck.title": "If restarting does not help",
   "restart.stuck.intro": "Then the Amenbo on disk is still the old one. There is no downgrade — the way back is the pre-migration backup the update left behind.",
   "restart.stuck.how": "Either install the newer version (the GUI and the CLI ship together), or restore from that backup on the command line:",
@@ -579,6 +584,15 @@ const ui = {
   // program exits with is on the screen to be read (`AMB-T-3666`).
   "face.drop": "Remove this pane",
   "face.dropConfirm": "Remove this pane? The terminal in it ends, and the place does not come back on the next run.",
+  // The way out of the whole app, which ends every terminal at once and is asked about for the same
+  // reason one pane is (`app/src/shell/HoldingAsk.tsx`, `crate::quit`). It is its own set of words
+  // rather than the pane's: what is being left behind is every session in the process, and a
+  // sentence about "this pane" would name the wrong thing at the moment it matters most.
+  "quit.confirm": "Quit Amenbo? Every terminal open in it ends, and no session comes back on the next run.",
+  "quit.holding": "The sessions still running are holding:",
+  "quit.handBack": "Hand back and quit",
+  "quit.anyway": "Quit as it is",
+  "quit.cancel": "Cancel",
   // The OS notification a pane raises when its turn has come and nobody is looking at the terminal
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.

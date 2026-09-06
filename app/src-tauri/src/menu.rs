@@ -11,6 +11,8 @@ use tauri::menu::{
   AboutMetadataBuilder, Menu, MenuBuilder, MenuItem, PredefinedMenuItem, SubmenuBuilder,
 };
 
+use crate::quit;
+
 /// Product site — the About dialog links here.
 const WEBSITE: &str = "https://amenbo.work/";
 
@@ -22,14 +24,21 @@ pub const CHECK_UPDATES_ID: &str = "check-updates";
 /// The words the native menu needs, in one language.
 ///
 /// This is the whole of the exception carved out in `AMB-D-396`: everywhere else the words live in
-/// the webview's dictionary, but the menu bar is assembled before the webview runs, so these seven
-/// have to be reachable from Rust. Seven is the ceiling — anything the OS labels for us (Quit,
-/// Copy, Minimize on macOS) is not here, and nothing else should join them.
+/// the webview's dictionary, but the menu bar is assembled before the webview runs, so these eight
+/// have to be reachable from Rust. Eight is the ceiling — anything the OS labels for us (Copy,
+/// Minimize on macOS) is not here, and nothing else should join them.
+///
+/// **Quit is written here rather than left to the OS**, which is what `quit_app` is. macOS labels
+/// its own predefined quit, and the item that comes with that label is wired to the platform's
+/// terminate — a way out that ends the process without this side ever being asked, and so without
+/// the question a pane full of running agents deserves (`crate::quit`). An item of the app's own
+/// carries the click here, and has to carry the words too.
 ///
 /// Which fields are read depends on the platform: macOS builds the app / Edit / Window submenus and
-/// lets the OS label Quit, while Windows and Linux build File / Help and label Exit themselves. All
-/// seven stay in one table anyway, because the unit a translator works in is a language, not a
-/// platform — splitting them would mean writing one language's menu in two places.
+/// names the quit the way that platform's menus name it, while Windows and Linux build File / Help
+/// and label Exit themselves. All eight stay in one table anyway, because the unit a translator
+/// works in is a language, not a platform — splitting them would mean writing one language's menu
+/// in two places.
 #[allow(dead_code)]
 struct Labels {
   about: &'static str,
@@ -39,6 +48,7 @@ struct Labels {
   file: &'static str,
   help: &'static str,
   exit: &'static str,
+  quit_app: &'static str,
 }
 
 /// The nineteen languages of `AMB-D-394`, each written the way that language's own menu bars are.
@@ -48,78 +58,97 @@ struct Labels {
 const EN: Labels = Labels {
   about: "About Amenbo", check_updates: "Check for Updates",
   edit: "Edit", window: "Window", file: "File", help: "Help", exit: "Exit",
+  quit_app: "Quit Amenbo",
 };
 const JA: Labels = Labels {
   about: "Amenbo について", check_updates: "更新を確認",
   edit: "編集", window: "ウインドウ", file: "ファイル", help: "ヘルプ", exit: "終了",
+  quit_app: "Amenbo を終了",
 };
 const ZH_HANS: Labels = Labels {
   about: "关于 Amenbo", check_updates: "检查更新",
   edit: "编辑", window: "窗口", file: "文件", help: "帮助", exit: "退出",
+  quit_app: "退出 Amenbo",
 };
 const ZH_HANT: Labels = Labels {
   about: "關於 Amenbo", check_updates: "檢查更新",
   edit: "編輯", window: "視窗", file: "檔案", help: "說明", exit: "結束",
+  quit_app: "結束 Amenbo",
 };
 const KO: Labels = Labels {
   about: "Amenbo 정보", check_updates: "업데이트 확인",
   edit: "편집", window: "윈도우", file: "파일", help: "도움말", exit: "종료",
+  quit_app: "Amenbo 종료",
 };
 const ES: Labels = Labels {
   about: "Acerca de Amenbo", check_updates: "Buscar actualizaciones",
   edit: "Edición", window: "Ventana", file: "Archivo", help: "Ayuda", exit: "Salir",
+  quit_app: "Salir de Amenbo",
 };
 const PT_BR: Labels = Labels {
   about: "Sobre o Amenbo", check_updates: "Verificar atualizações",
   edit: "Editar", window: "Janela", file: "Arquivo", help: "Ajuda", exit: "Sair",
+  quit_app: "Encerrar Amenbo",
 };
 const FR: Labels = Labels {
   about: "À propos d’Amenbo", check_updates: "Rechercher les mises à jour",
   edit: "Édition", window: "Fenêtre", file: "Fichier", help: "Aide", exit: "Quitter",
+  quit_app: "Quitter Amenbo",
 };
 const DE: Labels = Labels {
   about: "Über Amenbo", check_updates: "Nach Updates suchen",
   edit: "Bearbeiten", window: "Fenster", file: "Datei", help: "Hilfe", exit: "Beenden",
+  quit_app: "Amenbo beenden",
 };
 const IT: Labels = Labels {
   about: "Informazioni su Amenbo", check_updates: "Verifica aggiornamenti",
   edit: "Modifica", window: "Finestra", file: "File", help: "Aiuto", exit: "Esci",
+  quit_app: "Esci da Amenbo",
 };
 const RU: Labels = Labels {
   about: "О программе Amenbo", check_updates: "Проверить обновления",
   edit: "Правка", window: "Окно", file: "Файл", help: "Справка", exit: "Выход",
+  quit_app: "Завершить Amenbo",
 };
 const HI: Labels = Labels {
   about: "Amenbo के बारे में", check_updates: "अपडेट जाँचें",
   edit: "संपादन", window: "विंडो", file: "फ़ाइल", help: "सहायता", exit: "बाहर निकलें",
+  quit_app: "Amenbo छोड़ें",
 };
 const ID: Labels = Labels {
   about: "Tentang Amenbo", check_updates: "Periksa Pembaruan",
   edit: "Edit", window: "Jendela", file: "Berkas", help: "Bantuan", exit: "Keluar",
+  quit_app: "Keluar dari Amenbo",
 };
 const VI: Labels = Labels {
   about: "Giới thiệu về Amenbo", check_updates: "Kiểm tra bản cập nhật",
   edit: "Chỉnh sửa", window: "Cửa sổ", file: "Tệp", help: "Trợ giúp", exit: "Thoát",
+  quit_app: "Thoát Amenbo",
 };
 const TH: Labels = Labels {
   about: "เกี่ยวกับ Amenbo", check_updates: "ตรวจสอบการอัปเดต",
   edit: "แก้ไข", window: "หน้าต่าง", file: "ไฟล์", help: "ช่วยเหลือ", exit: "ออก",
+  quit_app: "ออกจาก Amenbo",
 };
 const TR: Labels = Labels {
   about: "Amenbo Hakkında", check_updates: "Güncellemeleri Denetle",
   edit: "Düzen", window: "Pencere", file: "Dosya", help: "Yardım", exit: "Çıkış",
+  quit_app: "Amenbo'dan Çık",
 };
 const PL: Labels = Labels {
   about: "O programie Amenbo", check_updates: "Sprawdź aktualizacje",
   edit: "Edycja", window: "Okno", file: "Plik", help: "Pomoc", exit: "Zakończ",
+  quit_app: "Zakończ Amenbo",
 };
 const NL: Labels = Labels {
   about: "Over Amenbo", check_updates: "Controleren op updates",
   edit: "Bewerken", window: "Venster", file: "Bestand", help: "Help", exit: "Afsluiten",
+  quit_app: "Stop Amenbo",
 };
 const UK: Labels = Labels {
   about: "Про Amenbo", check_updates: "Перевірити оновлення",
   edit: "Редагування", window: "Вікно", file: "Файл", help: "Довідка", exit: "Вихід",
+  quit_app: "Завершити Amenbo",
 };
 
 /// The menu's words for `config.language`, English for anything else (`AMB-D-394`: English is where
@@ -195,6 +224,10 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
 
   #[cfg(target_os = "macos")]
   {
+    // The way out, with the shortcut this platform's readers reach for. It is the app's own item and
+    // not the predefined quit, so the click arrives here and the question can be asked before
+    // anything ends (`crate::quit`) — the predefined one is the OS's terminate, which never offers.
+    let quit = MenuItem::with_id(handle, quit::QUIT_ID, l.quit_app, true, Some("CmdOrCtrl+Q"))?;
     // The first submenu becomes the application menu; macOS localizes the predefined items itself.
     let mut app_menu = SubmenuBuilder::new(handle, "Amenbo").item(&about);
     if let Some(check_updates) = &check_updates {
@@ -208,7 +241,7 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
       .hide_others()
       .show_all()
       .separator()
-      .quit()
+      .item(&quit)
       .build()?;
     let edit_menu = SubmenuBuilder::new(handle, l.edit)
       .undo()
@@ -232,8 +265,10 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
   #[cfg(not(target_os = "macos"))]
   {
     // A File submenu carries Exit so the menu bar is not a single lonely Help entry (macOS keeps
-    // Quit under its app menu instead). Predefined quit exits the app; the label is localized.
-    let quit = PredefinedMenuItem::quit(handle, Some(l.exit))?;
+    // Quit under its app menu instead). It is the app's own item rather than the predefined quit,
+    // for the reason the macOS branch gives: the click has to reach this side before anything ends
+    // (`crate::quit`). No accelerator, which is what the predefined one carried here too.
+    let quit = MenuItem::with_id(handle, quit::QUIT_ID, l.exit, true, None::<&str>)?;
     let file_menu = SubmenuBuilder::new(handle, l.file)
       .item(&quit)
       .build()?;

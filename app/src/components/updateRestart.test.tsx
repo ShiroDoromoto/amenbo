@@ -7,8 +7,8 @@
 // the box that lists them by number, panes open and nothing held is the plain confirmation, and
 // nothing open says nothing at all.
 //
-// What is pinned here is that no answer but a yes ever reaches `restartApp`, and that a hand-back
-// moves every task it named before it goes.
+// What is pinned here is that no answer but a yes ever reaches `restartApp`, and that the box which
+// names reservations moves none of them (`AMB-D-855`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,8 +26,9 @@ const hoisted = vi.hoisted(() => ({
   agrees: true,
   /** How many times they were asked it. */
   asked: 0,
-  /** The tasks handed back, in the order they were moved. */
-  handedBack: [] as Array<[number, string]>,
+  /** Any task the banner moved. Never anything: the box names reservations and writes none of them
+   *  (`AMB-D-855`), and this is what says so. */
+  moved: [] as Array<[number, string]>,
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -49,7 +50,7 @@ vi.mock("../core/mutations", async (importOriginal) => {
     openLatestInstaller: vi.fn(async () => {}),
     installUpdate: vi.fn(async () => true),
     restartApp: vi.fn(async () => { hoisted.restarted++; }),
-    setStatus: vi.fn(async (id: number, status: string) => { hoisted.handedBack.push([id, status]); }),
+    setStatus: vi.fn(async (id: number, status: string) => { hoisted.moved.push([id, status]); }),
   };
 });
 vi.mock("../core/dialog", () => ({
@@ -105,7 +106,7 @@ beforeEach(() => {
   hoisted.restarted = 0;
   hoisted.agrees = true;
   hoisted.asked = 0;
-  hoisted.handedBack = [];
+  hoisted.moved = [];
   localStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -179,25 +180,14 @@ describe("the reservations the restart would leave standing", () => {
     expect(document.body.textContent).toContain(taskRef(12));
   });
 
-  it("hands every one of them back before it goes", async () => {
+  it("leaves every one of them standing on the way out", async () => {
     open("a");
     hoisted.holding = { a: [3, 12] };
     await offered();
     await press(t("update.restart"));
-    await press(t("restart.handBack"));
-
-    expect(hoisted.handedBack).toEqual([[3, "todo"], [12, "todo"]]);
-    expect(hoisted.restarted).toBe(1);
-  });
-
-  it("leaves them standing when that is what was asked for", async () => {
-    open("a");
-    hoisted.holding = { a: [7] };
-    await offered();
-    await press(t("update.restart"));
     await press(t("restart.anyway"));
 
-    expect(hoisted.handedBack).toEqual([]);
+    expect(hoisted.moved).toEqual([]);
     expect(hoisted.restarted).toBe(1);
   });
 
@@ -208,7 +198,7 @@ describe("the reservations the restart would leave standing", () => {
     await press(t("update.restart"));
     await press(t("restart.cancel"));
 
-    expect(hoisted.handedBack).toEqual([]);
+    expect(hoisted.moved).toEqual([]);
     expect(hoisted.restarted).toBe(0);
     expect(document.body.textContent).not.toContain(t("restart.holding"));
   });

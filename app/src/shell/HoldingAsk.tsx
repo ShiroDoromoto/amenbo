@@ -11,8 +11,6 @@ export type AskWords = {
   title: string;
   /** The line above the tasks, introducing them. */
   held: string;
-  /** Hand every one of them back, then go. */
-  handBack: string;
   /** Go, and leave them standing. */
   leave: string;
   /** Stay. */
@@ -30,37 +28,30 @@ export type AskWords = {
  * process (`AMB-D-758`). Nothing afterwards can notice that happened, so the only place it can be
  * said is here.
  *
- * **Losing one pane is not one of them** (`AMB-D-855`). The cross on a pane asks the plain
- * confirmation and moves nothing (`./TerminalPane`): what the area answers is the newest row it still
- * has, which after a move made outside a pane is an older one, and a hand-back driven from it would
- * write the ledger on a fact the world has passed.
+ * **It names them, and moves nothing** (`AMB-D-855`). The numbers come from the volatile area, and
+ * what that area answers is the newest row it still has — after a move made outside a pane, an older
+ * one. A name that is out of date is a line to read; a hand-back driven from the same answer was a
+ * write to the ledger on a fact the world had passed, and it is gone. Where a reservation goes from
+ * here is the ledger's own question, asked where reservations are (`task status <id> todo`).
  *
- * **The three answers are three different things to want**, which is why this is a question and not a
- * confirmation: hand the work back and go, go and leave it standing, or stay. The middle one is not a
- * mistake to be talked out of — a person stepping away from a machine for the night has every reason
- * to leave a reservation where it is.
+ * So there are two answers: go, or stay. Going leaves every reservation standing, which is the state
+ * a person stepping away from a machine for the night wants anyway.
  *
- * **Nothing is moved until one of them is pressed.** The screen does not tidy the ledger up on its
- * own: a reservation is a fact somebody made, and the only thing that may unmake it is somebody.
- *
- * A hand-back that is refused leaves the question standing with the refusal under it. Nothing is
- * ended in that case — the way out was asked for *with* the work handed back, and doing half of it
- * would lose the very thing that was just named.
+ * The road is taken on the press and can still refuse; a refusal leaves the question standing with it
+ * underneath, nothing ended.
  */
-export function HoldingAsk({ holding, words, onHandBack, onLeave, onCancel }: {
+export function HoldingAsk({ holding, words, onLeave, onCancel }: {
   /** The tasks the sessions in question are holding, as the volatile area has them. Never empty — a
    *  way out that loses nothing is not asked this question at all. */
   holding: readonly number[];
   /** What this particular way out is called, in the reader's language. */
   words: AskWords;
-  /** Hand every one of them back to `todo`, then take the road. */
-  onHandBack: () => Promise<void>;
   /** Take the road and leave the reservations standing. */
   onLeave: () => Promise<void>;
   onCancel: () => void;
 }) {
-  // Pressed once. Both roads that act end with this box gone, and a second press before that lands
-  // would ask the same thing of the store twice.
+  // Pressed once. The road that acts ends with this box gone, and a second press before that lands
+  // would ask the same thing of the host twice.
   const [busy, setBusy] = useState(false);
   // A refusal from the road just taken, kept under the question rather than in place of it.
   const [failed, setFailed] = useState<string | null>(null);
@@ -93,11 +84,8 @@ export function HoldingAsk({ holding, words, onHandBack, onLeave, onCancel }: {
             className="holdingask__action holdingask__action--go"
             autoFocus
             disabled={busy}
-            onClick={() => go(onHandBack)}
+            onClick={() => go(onLeave)}
           >
-            {words.handBack}
-          </button>
-          <button className="holdingask__action" disabled={busy} onClick={() => go(onLeave)}>
             {words.leave}
           </button>
           <button className="holdingask__action" disabled={busy} onClick={onCancel}>
@@ -115,7 +103,6 @@ export function quitWords(): AskWords {
   return {
     title: t("quit.confirm"),
     held: t("quit.holding"),
-    handBack: t("quit.handBack"),
     leave: t("quit.anyway"),
     cancel: t("quit.cancel"),
   };
@@ -135,7 +122,6 @@ export function restartWords(): AskWords {
   return {
     title: t("restart.confirm"),
     held: t("restart.holding"),
-    handBack: t("restart.handBack"),
     leave: t("restart.anyway"),
     cancel: t("restart.cancel"),
   };

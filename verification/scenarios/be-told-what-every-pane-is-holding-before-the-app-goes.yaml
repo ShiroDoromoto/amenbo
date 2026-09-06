@@ -1,10 +1,15 @@
-# The way out of the app names the work its sessions are holding, and offers the same three answers
-# one pane's way out does.
+# The way out of the app names the work its sessions are holding, and lets the reader go or stay.
 #
 # **Ending the app ends every terminal in it at once.** A session is the process's — not a window's
 # and not a pane's — so the gesture that ends Amenbo takes down every agent that was running, and none
-# of them comes back on the next launch (`app/src-tauri/src/quit.rs`). Pressing `✕` on one pane has
-# asked about that for a while; the way out that takes all of them had nothing in front of it at all.
+# of them comes back on the next launch (`app/src-tauri/src/quit.rs`). Nothing afterwards can notice
+# that happened, so the only place it can be said is in front of the gesture.
+#
+# ── Why nothing here moves the ledger ────────────────────────────────────────────────────────────
+# The box names and does not write. What it names comes from the volatile area, whose
+# newest row about a task can be one the world has already passed — a move made outside a pane is not
+# written there at all. A name that is out of date is a line to read; a hand-back driven from the same
+# answer was the ledger being written on a fact that had gone, and there is no such answer any more.
 #
 # ── Why both doors are walked ────────────────────────────────────────────────────────────────────
 # There are two ways out and they arrive by different roads. The menu's item is one this app wrote,
@@ -15,8 +20,8 @@
 # ── Why the question comes in two shapes ─────────────────────────────────────────────────────────
 # What a session is holding is what the box names, so a process holding nothing has nothing to list
 # and nothing to choose between: what comes up there is the plain confirmation. Both shapes are
-# walked, because a build that raised the three-way question over an empty list would be asking a
-# person to decide about nothing, and the road that only ever held something would never see it.
+# walked, because a build that raised the naming question over an empty list would be asking a person
+# to read about nothing, and the road that only ever held something would never see it.
 #
 # ── Why the silent way out is on the road ────────────────────────────────────────────────────────
 # **No terminal open means no question.** That is a promise as much as the question is — a build that
@@ -30,15 +35,14 @@
 # pointed at the run's own store and be namable by a pid. What the next leg opens on is therefore
 # whatever the last one left written down, which is exactly what the readings below are about.
 id: be-told-what-every-pane-is-holding-before-the-app-goes
-title: The way out of the app names the reservations its sessions are holding, and each of the three answers does what it says
+title: The way out of the app names the reservations its sessions are holding, and moves none of them
 description: >
   Reserve a task from a terminal running in a pane, then ask Amenbo to end. The question names that
-  task by its ref and offers three answers. Stay, and nothing has happened: the app is still running
-  and the task is still held. Ask again and go without handing anything back — the app ends and the
-  reservation is still standing when it comes back. Then do the same through the other door, the
-  close on the last window, and hand the work back: the task is waiting for somebody again. Then ask
-  again from a pane holding nothing, and the question is the plain one. Finally quit with no pane open
-  at all, and nothing is asked.
+  task by its ref and offers two answers. Stay, and nothing has happened: the app is still running and
+  the task is still held. Ask again and go — the app ends and the reservation is still standing when it
+  comes back. Then do the same through the other door, the close on the last window, and that
+  reservation stands too. Then ask again from a pane holding nothing, and the question is the plain
+  one. Finally quit with no pane open at all, and nothing is asked.
 
 given:
   - type: action
@@ -203,9 +207,11 @@ steps_gui:
       field: status
       equals: in_progress
 
-  # ── Hand it back, then go, through the other door ───────────────────────────────────────────────
+  # ── Go, through the other door ──────────────────────────────────────────────────────────────────
   # A fresh pane, on a run of the app that is itself fresh. The reservation is made the same way, and
-  # the way out this time is the close on the last window — no menu is passed on the way.
+  # the way out this time is the close on the last window — no menu is passed on the way. The two
+  # doors arrive by different roads inside the app, so this is the half of the gate the menu cannot
+  # prove.
   - type: action
     domain: terminal
     op: show-face
@@ -247,7 +253,7 @@ steps_gui:
     op: answer-quit
     with:
       target: shears
-      answer: hand-back
+      answer: leave
 
   - type: action
     domain: terminal
@@ -267,14 +273,15 @@ steps_gui:
     with:
       face: tasks
 
-  # Waiting for somebody again, which is the whole of what that answer is for.
+  # Still held. The door was different and the answer moved nothing, which is what the box promises
+  # whichever way it was raised.
   - type: assert
     domain: task
     op: field
     with:
       target: shears
       field: status
-      equals: todo
+      equals: in_progress
 
   # And the one left standing two legs ago is still standing. The press could only ever reach what the
   # sessions it was ending had written down.

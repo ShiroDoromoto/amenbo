@@ -1588,9 +1588,9 @@ impl Instructor {
             //
             // Which question is standing is the app's business and not the road's, so `answer` is what
             // a road says about the one it expects: left out for the plain one a process holding no
-            // reservation gets, and naming one of the three otherwise. Each of the three is said here
-            // by what it does rather than by what it reads: the words are the interface's own and the
-            // run's language is whatever the machine is set to.
+            // reservation gets, and naming one of the two otherwise. Each is said here by what it
+            // does rather than by what it reads: the words are the interface's own and the run's
+            // language is whatever the machine is set to.
             //
             // Everything but `cancel` ends the app, and the line says so along with what the run does
             // next: the operator watches the app they were working in go, and the harness brings
@@ -1604,32 +1604,29 @@ impl Instructor {
                         "The question standing on the board is the plain one — no session is holding anything. Read it, then answer it yes. Every terminal that was open ends with the app and none of them comes back.{back}"
                     ),
                     Some(answer) => {
-                        // The reading is half the step, and it is the half the three answers exist
-                        // for: a question that named the wrong work, or named none, is the loss it
-                        // stands in front of.
+                        // The reading is half the step, and it is the half the question exists for:
+                        // one that named the wrong work, or named none, is the loss it stands in
+                        // front of.
                         if !with.contains_key("target") {
                             return Err(
-                                "action `answer-quit` answering the three-way question has to name the task the question must name — give it a `target`"
+                                "action `answer-quit` answering the question that names reservations has to name the task it must name — give it a `target`"
                                     .to_string(),
                             );
                         }
                         let question = format!(
-                            "The question standing on the board names what the sessions still running are holding: read it, and confirm what it lists is the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — and no other. Three answers stand under it.",
+                            "The question standing on the board names what the sessions still running are holding: read it, and confirm what it lists is the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — and no other. Two answers stand under it.",
                             self.target_label(with)
                         );
                         match answer {
-                            "hand-back" => format!(
-                                "{question} Press the first of them — the one that hands the work back before going. The task named goes back to waiting for somebody to take it, and Amenbo ends with every terminal that was open in it.{back}"
-                            ),
                             "leave" => format!(
-                                "{question} Press the second — the one that goes and leaves the work where it is. Nothing on the ledger is moved: Amenbo ends with every terminal that was open in it, and the task named is still held.{back}"
+                                "{question} Press the first of them — the one that goes. Nothing on the ledger is moved: Amenbo ends with every terminal that was open in it, and the task named is still held.{back}"
                             ),
                             "cancel" => format!(
-                                "{question} Press the third — the one that stays. Nothing happens at all: the question goes, Amenbo is still running, every pane is where it was, and the task named is still held."
+                                "{question} Press the second — the one that stays. Nothing happens at all: the question goes, Amenbo is still running, every pane is where it was, and the task named is still held."
                             ),
                             other => {
                                 return Err(format!(
-                                    "action `answer-quit` does not know the answer `{other}` — it is hand-back, leave or cancel"
+                                    "action `answer-quit` does not know the answer `{other}` — it is leave or cancel"
                                 ))
                             }
                         }
@@ -5894,9 +5891,9 @@ steps_gui:
 
     /// The way out of the app is two steps and the question stands between them, so each half has to
     /// hold on its own: the press says which door was taken and what came of it, and the answer says
-    /// which of the three was pressed and what it left behind. The three ways of writing it wrong — a
-    /// door nobody has, an answer nobody offers, and a three-way answer with nothing named — are
-    /// turned away rather than rendered into a line an operator could not act on.
+    /// which of the two was pressed and what it left behind. The three ways of writing it wrong — a
+    /// door nobody has, an answer nobody offers, and an answer with nothing named — are turned away
+    /// rather than rendered into a line an operator could not act on.
     #[test]
     fn the_way_out_of_the_app_says_which_door_it_took_and_what_the_answer_left_behind() {
         let s = load(r#"
@@ -5926,10 +5923,6 @@ steps_gui:
   - type: action
     domain: store
     op: answer-quit
-    with: { target: tank, answer: hand-back }
-  - type: action
-    domain: store
-    op: answer-quit
     with: { target: tank, answer: leave }
   - type: action
     domain: store
@@ -5946,11 +5939,11 @@ steps_gui:
   - type: action
     domain: store
     op: answer-quit
-    with: { answer: hand-back }
+    with: { answer: leave }
 "#);
         let mut ins = Instructor::new();
         let steps = s.steps(Driver::Gui);
-        // The binding, so the three answers below have a title to name.
+        // The binding, so the answers below have a title to name.
         ins.render(&steps[0]).expect("the world's task renders");
 
         // The doors are two, and said apart. Left out, it is the menu.
@@ -5968,28 +5961,27 @@ steps_gui:
         // Nothing held: the plain question, and nothing about a reservation on it.
         let plain = ins.render(&steps[4]).expect("the plain question renders");
         assert!(plain.contains("answer it yes"), "got: {plain}");
-        assert!(!plain.contains("Three answers"), "got: {plain}");
+        assert!(!plain.contains("Two answers"), "got: {plain}");
 
-        // Each of the three names what stands to be lost, and then parts company on the outcome.
-        for (i, step) in steps.iter().enumerate().take(8).skip(5) {
+        // Both name what stands to be lost, and then part company on the outcome.
+        for (i, step) in steps.iter().enumerate().take(7).skip(5) {
             let line = ins.render(step).unwrap_or_else(|e| panic!("step {i}: {e}"));
             assert!(line.contains("Re-line the quench tank"), "step {i} got: {line}");
             assert!(line.contains("and no other"), "step {i} got: {line}");
         }
-        let back = ins.render(&steps[5]).expect("renders");
-        assert!(back.contains("hands the work back"), "got: {back}");
-        let leave = ins.render(&steps[6]).expect("renders");
+        // Going moves nothing: what it says about the task named is that it is still held.
+        let leave = ins.render(&steps[5]).expect("renders");
         assert!(leave.contains("still held"), "got: {leave}");
         // The one answer the app survives says so, and says nothing about coming back.
-        let stay = ins.render(&steps[7]).expect("renders");
+        let stay = ins.render(&steps[6]).expect("renders");
         assert!(stay.contains("Amenbo is still running"), "got: {stay}");
         assert!(!stay.contains("brings Amenbo up again"), "got: {stay}");
 
-        let err = ins.render(&steps[8]).unwrap_err();
+        let err = ins.render(&steps[7]).unwrap_err();
         assert!(err.contains("does not know the way out `sideways`"), "got: {err}");
-        let err = ins.render(&steps[9]).unwrap_err();
+        let err = ins.render(&steps[8]).unwrap_err();
         assert!(err.contains("does not know the answer `think-about-it`"), "got: {err}");
-        let err = ins.render(&steps[10]).unwrap_err();
+        let err = ins.render(&steps[9]).unwrap_err();
         assert!(err.contains("give it a `target`"), "got: {err}");
     }
 

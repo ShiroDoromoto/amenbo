@@ -686,8 +686,6 @@ export const id: Translation = {
     "pane.discardConfirm": "Ada isian yang belum disimpan. Buang saja dan tutup?",
     "pane.resize": "Seret untuk mengubah ukuran",
     "sidebar.resize": "Seret untuk mengubah ukuran",
-    "sidebar.collapse": "Ciutkan bilah sisi",
-    "sidebar.expand": "Bentangkan bilah sisi",
     "health.title": "Pemeriksaan keutuhan saat mulai menemukan masalah",
     "health.hint": "Pemeriksaan hanya-baca, tanpa perbaikan otomatis. Pengaturan > Keutuhan mendaftar setiap masalah dan bisa memperbaikinya.",
     "health.dismiss": "Tutup",

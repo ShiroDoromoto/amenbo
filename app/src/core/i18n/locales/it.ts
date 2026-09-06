@@ -706,8 +706,6 @@ export const it: Translation = {
     "pane.discardConfirm": "Hai del testo non salvato. Scartarlo e chiudere?",
     "pane.resize": "Trascina per ridimensionare",
     "sidebar.resize": "Trascina per cambiare la larghezza",
-    "sidebar.collapse": "Richiudi la barra laterale",
-    "sidebar.expand": "Apri la barra laterale",
     "health.title": "Il controllo di integrità all'avvio ha trovato dei problemi",
     "health.hint": "Controllo in sola lettura, senza riparazione automatica. Impostazioni > Integrità elenca tutti i problemi e può ripararli.",
     "health.dismiss": "Chiudi",

@@ -684,8 +684,6 @@ export const tr: Translation = {
     "pane.discardConfirm": "Kaydedilmemiş girdiniz var. Atıp kapatılsın mı?",
     "pane.resize": "Boyutlandırmak için sürükleyin",
     "sidebar.resize": "Boyutlandırmak için sürükleyin",
-    "sidebar.collapse": "Kenar çubuğunu daralt",
-    "sidebar.expand": "Kenar çubuğunu genişlet",
     "health.title": "Açılıştaki bütünlük denetimi sorun buldu",
     "health.hint": "Salt okunur bir denetim, kendiliğinden onarım yok. Ayarlar > Bütünlük her sorunu sıralar ve onarabilir.",
     "health.dismiss": "Kapat",

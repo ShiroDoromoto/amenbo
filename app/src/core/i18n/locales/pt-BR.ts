@@ -707,8 +707,6 @@ export const ptBR: Translation = {
     "pane.discardConfirm": "Você tem texto não salvo. Descartar e fechar?",
     "pane.resize": "Arraste para redimensionar",
     "sidebar.resize": "Arraste para mudar a largura",
-    "sidebar.collapse": "Recolher a barra lateral",
-    "sidebar.expand": "Expandir a barra lateral",
     "health.title": "A checagem de integridade na inicialização encontrou problemas",
     "health.hint": "Checagem somente leitura, sem reparo automático. Configurações > Integridade lista todos os problemas e consegue repará-los.",
     "health.dismiss": "Dispensar",

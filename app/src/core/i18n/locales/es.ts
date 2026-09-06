@@ -706,8 +706,6 @@ export const es: Translation = {
     "pane.discardConfirm": "Tienes texto sin guardar. ¿Descartarlo y cerrar?",
     "pane.resize": "Arrastra para cambiar el tamaño",
     "sidebar.resize": "Arrastra para cambiar el ancho",
-    "sidebar.collapse": "Plegar la barra lateral",
-    "sidebar.expand": "Desplegar la barra lateral",
     "health.title": "La comprobación de integridad al arrancar encontró problemas",
     "health.hint": "Comprobación de solo lectura, sin reparación automática. Ajustes > Integridad lista todos los problemas y puede repararlos.",
     "health.dismiss": "Descartar",

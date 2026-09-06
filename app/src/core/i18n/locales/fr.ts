@@ -706,8 +706,6 @@ export const fr: Translation = {
     "pane.discardConfirm": "Vous avez une saisie non enregistrée. L'abandonner et fermer ?",
     "pane.resize": "Faites glisser pour redimensionner",
     "sidebar.resize": "Faites glisser pour changer la largeur",
-    "sidebar.collapse": "Replier la barre latérale",
-    "sidebar.expand": "Déplier la barre latérale",
     "health.title": "La vérification d'intégrité au démarrage a trouvé des problèmes",
     "health.hint": "Vérification en lecture seule, sans réparation automatique. Réglages > Intégrité liste tous les problèmes et peut les réparer.",
     "health.dismiss": "Ignorer",

@@ -78,6 +78,8 @@ beforeEach(() => {
     root.render(createElement(Sidebar, {
       nav: { type: "view", id: "inbox" },
       onNav: (n: { type: string; id?: string }) => went.push(`${n.type}:${n.id}`),
+      compact: false,
+      onCompact: () => {},
     }));
   });
   // The three rows, stacked from y=100 — the layout a headless DOM will not do.

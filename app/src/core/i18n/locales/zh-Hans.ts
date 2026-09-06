@@ -683,8 +683,6 @@ export const zhHans: Translation = {
     "pane.discardConfirm": "还有未保存的输入。要丢弃并关闭吗？",
     "pane.resize": "拖动可调整大小",
     "sidebar.resize": "拖动可调整宽度",
-    "sidebar.collapse": "收起侧边栏",
-    "sidebar.expand": "展开侧边栏",
     "health.title": "启动时的完整性检查发现了问题",
     "health.hint": "只读检查，不会自动修复。设置 > 完整性会列出全部问题，并能修复它们。",
     "health.dismiss": "知道了",

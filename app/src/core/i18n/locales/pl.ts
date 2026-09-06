@@ -712,8 +712,6 @@ export const pl: Translation = {
     "pane.discardConfirm": "Masz niezapisany tekst. Porzucić go i zamknąć?",
     "pane.resize": "Przeciągnij, aby zmienić rozmiar",
     "sidebar.resize": "Przeciągnij, aby zmienić rozmiar",
-    "sidebar.collapse": "Zwiń pasek boczny",
-    "sidebar.expand": "Rozwiń pasek boczny",
     "health.title": "Kontrola spójności przy starcie znalazła problemy",
     "health.hint": "Kontrola tylko do odczytu, bez samoczynnych napraw. Ustawienia > Spójność wypisują każdy problem i potrafią je naprawić.",
     "health.dismiss": "Zamknij",

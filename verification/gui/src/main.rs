@@ -86,7 +86,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use amenbo_verify_cli::World;
 use amenbo_verify_gui::{
-    launch, read_shot, read_tree, scratch, shoot, walk, write_manifest, StepBrief, StepRecord,
+    launch, read_menu, read_shot, read_tree, scratch, shoot, walk, write_manifest, StepBrief, StepRecord,
     Verdict,
 };
 
@@ -210,6 +210,8 @@ fn run(opts: &Opts) -> Result<bool, String> {
         // The same window the shot was aimed at, listed off its accessibility tree — for the asserts
         // a picture carries but cannot be read for, a name a narrow column drew cut being the one.
         |window| read_tree(gui.borrow().pid, window, &screen),
+        // The app's own menu bar, which stands above every window and is on no shot of one.
+        || read_menu(gui.borrow().pid, &screen),
         |brief| hand_over(&stdin, brief),
         || gui.borrow_mut().run_again(&screen),
         // The store the app is running against, asked through the driver that stood its world up.

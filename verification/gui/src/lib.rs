@@ -178,6 +178,21 @@ pub fn read_tree(pid: i64, window: Option<&str>, screen: &Path) -> Result<Readin
     Ok(Reading { text: fold(&raw), raw })
 }
 
+/// Read the names off the app's own menu bar, for the asserts that ask what it carries
+/// ([`reads_the_menu`]).
+///
+/// **It is the app and not a window.** A menu bar stands above every window an app draws, so there
+/// is nothing for a `window:` to name here — and a menu nobody has pulled down draws its items
+/// nowhere at all, which is why they cannot be read off the shot the step is photographed by.
+///
+/// Folded and matched exactly the way a tree's listing is, and for the same reason: what an assert
+/// on that table asks is whether a word is on the bar, not which column the tool printed it in.
+pub fn read_menu(pid: i64, screen: &Path) -> Result<Reading, String> {
+    let out = tool(screen, "menu", &[OsStr::new(&pid.to_string())], None)?;
+    let raw = String::from_utf8_lossy(&out).into_owned();
+    Ok(Reading { text: fold(&raw), raw })
+}
+
 /// The dashes Unicode files under letters. A long vowel mark is what Vision most often returns for an
 /// em dash on a Japanese screen, and it is alphanumeric where every other dash is punctuation — so it
 /// would survive the fold on the read side while the dash it stands for is dropped on the expected
@@ -889,6 +904,11 @@ impl Instructor {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
             (Domain::Task, "opened") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
+            // The word the menu bar is asked for, matched against the bar's own listing rather than
+            // against the shot (`reads_the_menu`).
+            (Domain::Store, "menu-reads") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
             // The pane's own name, on the row the task draws for it. A road names its own pane
@@ -2817,6 +2837,30 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // The bar above the app. Nothing is pulled down for it: the reading is taken off the
+            // app's own menu tree, which carries the items of a menu nobody has opened, and the shot
+            // beside it is the screen the operator was standing at.
+            //
+            // **The word is the interface's own, which is the whole of what is being read.** A road
+            // reaches this only after it has said which language the interface is in, so the word is
+            // one the road is entitled to name — and the line says the menu it hangs under, since the
+            // same word under another heading would answer a question nobody asked.
+            (Domain::Store, "menu-reads") => {
+                let under = match with.get("menu").and_then(|v| v.as_str()) {
+                    Some(menu) => format!(" — it hangs under \"{menu}\""),
+                    None => String::new(),
+                };
+                match present(with) {
+                    true => format!(
+                        "Confirm the app's menu bar carries \"{}\"{under}.",
+                        req(with, "shows")?
+                    ),
+                    false => format!(
+                        "Confirm \"{}\" is nowhere on the app's menu bar{under}.",
+                        req(with, "shows")?
+                    ),
+                }
+            }
             (Domain::Task, "listed") => format!(
                 "Confirm the task \"{}\" is {} the listing filtered by `{}`.{}",
                 self.target_label(with),
@@ -4760,6 +4804,16 @@ pub fn reads_the_tree(domain: Domain, op: &str) -> bool {
     matches!((domain, op), (Domain::Files, "listed") | (Domain::Terminal, "label"))
 }
 
+/// The asserts closed by reading the app's own menu bar ([`read_menu`]) rather than the shot.
+///
+/// One entry, and the table is closed for the reason the two above it are. What puts an assert here
+/// is not that a shot reads it badly but that a shot cannot hold it at all: the bar is not on the
+/// window a step is photographed at, and the items under a heading are drawn only while somebody is
+/// holding that menu open.
+pub fn reads_the_menu(domain: Domain, op: &str) -> bool {
+    matches!((domain, op), (Domain::Store, "menu-reads"))
+}
+
 /// What one step left behind: its instruction, the screenshot proving the operator stood at it,
 /// the verdict, and — for a judged assert — the expected text and whether OCR found it.
 #[derive(Debug, Clone)]
@@ -4846,6 +4900,9 @@ pub struct StepBrief<'a> {
 /// place: the window the shot was aimed at, listed off its accessibility tree instead of read off
 /// the picture. The shot is taken either way — the reading moves, the evidence does not.
 ///
+/// `read_menu` does the same for [`reads_the_menu`], one step further out: the app's menu bar, which
+/// no window holds and no shot of one can carry.
+///
 /// `read_store` closes the asserts on [`reads_the_store`], and it is asked **in the step's own
 /// place** rather than once the road has been walked. The order is the whole point: a road says how
 /// many blobs the store holds before an image is registered and again after, and a reading taken at
@@ -4864,12 +4921,13 @@ pub struct StepBrief<'a> {
 // One argument per side effect the walk has on the world outside it, which is what makes the walk
 // testable without a screen: a struct around them would name the seven and hide none of them.
 #[allow(clippy::too_many_arguments)]
-pub fn walk<C, O, T, H, R, S, Q>(
+pub fn walk<C, O, T, M, H, R, S, Q>(
     scenario: &Scenario,
     evidence_dir: &Path,
     mut capture: C,
     mut read_text: O,
     mut read_tree: T,
+    mut read_menu: M,
     mut hand_over: H,
     mut run_again: R,
     mut read_store: S,
@@ -4879,6 +4937,7 @@ where
     C: FnMut(Option<&str>, &Path) -> Result<(), String>,
     O: FnMut(&Path) -> Result<Reading, String>,
     T: FnMut(Option<&str>) -> Result<Reading, String>,
+    M: FnMut() -> Result<Reading, String>,
     H: FnMut(&StepBrief<'_>) -> Result<(), String>,
     R: FnMut() -> Result<(), String>,
     S: FnMut(&Step) -> Result<(bool, String), String>,
@@ -4907,6 +4966,7 @@ where
         let window = step.window();
         let from_store = kind == "assert" && reads_the_store(domain, &op);
         let from_tree = kind == "assert" && reads_the_tree(domain, &op);
+        let from_menu = kind == "assert" && reads_the_menu(domain, &op);
         let domain = domain_str(domain);
         let screenshot = format!("{:02}-{kind}-{domain}-{op}.png", i + 1);
         let shot_path = evidence_dir.join(&screenshot);
@@ -4997,10 +5057,14 @@ where
         // Judge an assert that named an expectation; keep the reading as evidence.
         let (verdict, found, slipped) = match (kind, &expected) {
             ("assert", Some(exp)) => {
-                // Off the tree of the window the shot was aimed at, for the asserts on that table —
-                // off the shot for every other. Both answer the one question below, so only where
-                // the reading came from differs.
-                let reading = if from_tree {
+                // Off the app's menu bar for the asserts on that table, off the tree of the window
+                // the shot was aimed at for the ones on the other — off the shot for every other one.
+                // All three answer the one question below, so only where the reading came from
+                // differs.
+                let reading = if from_menu {
+                    read_menu()
+                        .map_err(|e| format!("step {}: reading the menu bar failed: {e}", i + 1))?
+                } else if from_tree {
                     read_tree(shot_at)
                         .map_err(|e| format!("step {}: reading the screen failed: {e}", i + 1))?
                 } else {
@@ -5259,6 +5323,11 @@ steps_gui:
     /// the accessibility tree, and a walk that did would be reading a screen off the wrong side.
     fn nothing_on_the_tree(_: Option<&str>) -> Result<Reading, String> {
         unreachable!("no step on this road is read off the accessibility tree")
+    }
+
+    /// The same for the menu bar: a road with no step on that table is never to reach for one.
+    fn nothing_on_the_menu() -> Result<Reading, String> {
+        Err("the menu bar was read on a road with no step that reads it".into())
     }
 
     /// Where a walk's remarks go in a test that is not about them. It drops them rather than
@@ -8499,6 +8568,7 @@ steps_gui:
             // The board OCRs to text that contains the seed title.
             |_| Ok(reading("me-ai board\nSEED\nsome other card")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8550,6 +8620,7 @@ steps_gui:
             },
             |_| Ok(reading("SEED — a card on the me-ai board")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |brief| {
                 handed.push(brief.instruction.to_string());
                 Ok(())
@@ -8615,6 +8686,7 @@ steps_gui:
             },
             |_| unreachable!("no step on this road is judged by reading a shot"),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |brief| {
                 handed.push(brief.instruction.to_string());
                 Ok(())
@@ -8651,6 +8723,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("an empty board with no such card")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8683,6 +8756,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"one-screen").map_err(|e| e.to_string()),
             |_| Ok(reading("me-ai board\nSEED")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8718,6 +8792,7 @@ steps_gui:
             },
             |_| Ok(reading("me-ai board\nSEED")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8759,6 +8834,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"one-screen").map_err(|e| e.to_string()),
             |_| unreachable!("no step on this road is judged by reading a shot"),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8921,6 +8997,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("SCENARIO — nobodv holds it")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8950,6 +9027,7 @@ steps_gui:
             |_, _| Err("no screen".to_string()),
             |_| Ok(reading("")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -8979,6 +9057,7 @@ steps_gui:
             },
             |_| Ok(reading("me-ai board\nSEED")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |b| {
                 // The shot count taken at the hand-over says which side of the capture it fell on:
                 // step `i` is handed over with `i` shots on disk, never `i + 1`.
@@ -9032,6 +9111,7 @@ steps_gui:
             },
             |_| Ok(reading("")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |b| {
                 done.borrow_mut().push(format!("handed {}", b.index));
                 Ok(())
@@ -9096,6 +9176,7 @@ given:
             },
             |_| Ok(reading("")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |b| {
                 done.borrow_mut().push(format!("handed {}", b.index));
                 Ok(())
@@ -9155,6 +9236,7 @@ steps_gui:
             },
             |_| Ok(reading("")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Err("no window came up".to_string()),
             nothing_to_read,
@@ -9186,6 +9268,7 @@ steps_gui:
             },
             |_| Ok(reading("")),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Err("nobody is watching".to_string()),
             || Ok(()),
             nothing_to_read,
@@ -9246,6 +9329,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a step read off the store is never sent to OCR"),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             |_| {
@@ -9288,6 +9372,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a step read off the store is never sent to OCR"),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             |_| Ok((false, "the store holds 0 blob file(s) (expected 1, MISMATCH)".to_string())),
@@ -9316,6 +9401,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a step read off the store is never sent to OCR"),
             nothing_on_the_tree,
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             |_| Err("the binary would not run".to_string()),
@@ -9341,6 +9427,85 @@ steps_gui:
     op: listed
     with: { name: grafting.md, section: tree }
 "#;
+
+    const OFF_THE_MENU: &str = r#"
+id: sample-menu
+title: The bar above the app, in the language the reader picked
+steps_gui:
+  - type: action
+    domain: store
+    op: set-language
+    with: { language: ja }
+  - type: assert
+    domain: store
+    op: menu-reads
+    with: { shows: "編集" }
+"#;
+
+    /// The bar is read off the app rather than off the shot, and off the app rather than off a
+    /// window's tree: the two tables are separate because what they answer for is.
+    #[test]
+    fn the_menu_bar_is_read_off_the_app_and_nothing_else_is() {
+        assert!(reads_the_menu(Domain::Store, "menu-reads"));
+        assert!(!reads_the_menu(Domain::Files, "listed"), "a rail is on the window");
+        assert!(!reads_the_tree(Domain::Store, "menu-reads"), "the bar is on no window");
+    }
+
+    /// A word on the bar and nowhere on the window: the shot reads as a screen without it, the bar
+    /// says it is there, and the step is green off the bar. The shot is taken and the listing filed
+    /// beside it all the same.
+    #[test]
+    fn a_word_on_the_menu_bar_is_read_off_the_bar() {
+        let s = load(OFF_THE_MENU);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-menu-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let outcome = walk(
+            &s,
+            &dir,
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("a word read off the bar is never sent to the reader"),
+            nothing_on_the_tree,
+            || Ok(reading("AXMenuBarItem\t編集\nAXMenuItem\t編集\tカット")),
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+            unheard,
+        )
+        .expect("walk");
+
+        assert!(outcome.passed, "the heading is on the bar the app draws");
+        let rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
+        assert_eq!(rec.verdict, Verdict::Pass);
+        assert!(dir.join("02-assert-store-menu-reads.png").exists(), "the shot is still filed");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A bar that cannot be read at all is an execution failure, not a red step — the run has
+    /// nothing to say about the word it was sent to look for.
+    #[test]
+    fn a_menu_bar_that_cannot_be_read_aborts_the_walk() {
+        let s = load(OFF_THE_MENU);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-menuerr-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let err = walk(
+            &s,
+            &dir,
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| unreachable!("a word read off the bar is never sent to the reader"),
+            nothing_on_the_tree,
+            || Err("the app answered with no menu bar".to_string()),
+            |_| Ok(()),
+            || Ok(()),
+            nothing_to_read,
+            unheard,
+        )
+        .unwrap_err();
+
+        assert!(err.contains("step 2") && err.contains("no menu bar"), "got: {err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// The table is what decides where an assert is read, and it holds only a name the space around
     /// it can draw cut. Everything else stays the shot's — a name read off the tree where a picture
@@ -9373,6 +9538,7 @@ steps_gui:
                 asked.borrow_mut().push(window.map(str::to_string));
                 Ok(reading("AXRow\tgrafting.md\t504 379 123 22"))
             },
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -9406,6 +9572,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a row read off the tree is never sent to the reader"),
             |_| Ok(reading("AXRow\tpruning.md\t504 357 123 22")),
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,
@@ -9434,6 +9601,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| unreachable!("a row read off the tree is never sent to the reader"),
             |_| Err("the window answered with nothing".to_string()),
+            nothing_on_the_menu,
             |_| Ok(()),
             || Ok(()),
             nothing_to_read,

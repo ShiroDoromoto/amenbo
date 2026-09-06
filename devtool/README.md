@@ -744,6 +744,12 @@ ignoring them.
 reached on the wrong window is a check that passed without looking at the screen
 it was written for.
 
+**The menu bar is read by a word of its own.** `menu $PID` lists the app's own
+menu bar — each heading, and the items under it, whether or not anything is
+pulled down — which is the one surface `find` cannot answer for. The Apple menu
+is left off it: macOS draws that one in every app's bar, and its words are the
+system's rather than the app's.
+
 **A file panel is one of those windows.** While the app has one up it draws two,
 so `find` refuses and lists `"Open"` beside the app's own title, and the panel is
 walked and pressed by naming it — `find $PID --window Open`, `click-named $PID

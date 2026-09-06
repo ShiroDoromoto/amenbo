@@ -1,0 +1,104 @@
+# The bar above the app, read in the language the reader chose.
+#
+# Everything inside Amenbo's window is drawn by the front end, and every road here reads one of those
+# screens. The menu bar is the other half: it is macOS's, built by the app out of its own dictionary,
+# and a build that translated its windows and left its menus in English would pass every one of those
+# roads. This is the road that would not.
+#
+# ── Why two languages and not one ────────────────────────────────────────────────────────────────
+# A bar that reads `Edit` proves nothing on its own — that is what an untranslated build draws too.
+# What says the words followed the reader is the pair: the same bar, read twice, saying different
+# things, with the word from the other language nowhere on it each time. A store opens in the
+# language of the machine it was made on, so the road says which language it is in before it reads
+# anything.
+#
+# ── Why a heading and an item inside one ─────────────────────────────────────────────────────────
+# They are put there by different hands and break separately. A heading is Amenbo's own menu, built
+# from its dictionary; an item like Cut is one of the platform's predefined ones, which arrives with
+# an English title already in it unless the build passes its own. A road reading only the headings
+# went green for months over menus whose contents were entirely English.
+#
+# ── Why nothing is pulled down ───────────────────────────────────────────────────────────────────
+# The reading is taken off the app's own menu tree, which carries the items of a menu nobody has
+# opened. A road that asked for one to be held open would be asking the operator to hold a screen
+# still while it is photographed, and would prove nothing more.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. A menu bar is what the machine draws above a window, and a terminal has
+# none — what the CLI prints is English whatever this setting says.
+id: read-the-menu-bar-in-your-own-language
+title: The app's menu bar is read in the language the reader picked, headings and items alike
+description: >
+  Open Amenbo, set the interface language to English in its settings, and read the menu bar above the
+  window: it says Edit, and Cut is in that menu. Set the language to German and read the same bar
+  again in German: it says Bearbeiten, Ausschneiden is in that menu, and Select All is gone from
+  it.
+
+steps_gui:
+  # Where the road starts is said out loud rather than assumed: a fresh store opens in whatever
+  # language the machine it was made on reads, which is the driver's and not the road's.
+  - type: action
+    domain: store
+    op: set-language
+    with:
+      language: en
+
+  - type: assert
+    domain: store
+    op: menu-reads
+    with:
+      shows: Edit
+
+  # The item, which is the half a build gets wrong on its own: the platform hands this one over with
+  # an English title in it already, and a build that passed none of its own would draw exactly this
+  # word here whatever the language beside it said.
+  - type: assert
+    domain: store
+    op: menu-reads
+    with:
+      shows: Cut
+      menu: Edit
+
+  # And the other language nowhere on the bar. Read now, while the bar is in English, so that finding
+  # it after the change is the change and not a word that had been standing there all along.
+  - type: assert
+    domain: store
+    op: menu-reads
+    with:
+      shows: Bearbeiten
+      present: false
+
+  - type: action
+    domain: store
+    op: set-language
+    with:
+      language: de
+
+  # The bar followed, without the app having been started again. This is the line the whole road is
+  # for.
+  - type: assert
+    domain: store
+    op: menu-reads
+    with:
+      shows: Bearbeiten
+
+  - type: assert
+    domain: store
+    op: menu-reads
+    with:
+      shows: Ausschneiden
+      menu: Bearbeiten
+
+  # And the English is gone rather than standing beside it, which is what a bar rebuilt says and a
+  # bar added to would not.
+  #
+  # It is the item and not the heading, because a reading is a search over the whole bar and a short
+  # word hides inside a longer one: `Edit` is inside `Credit Card…`, which macOS itself puts in that
+  # very menu, so a road asking for `Edit` to be absent would go red against a build that had done
+  # everything right.
+  - type: assert
+    domain: store
+    op: menu-reads
+    with:
+      shows: Select All
+      present: false

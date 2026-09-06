@@ -29,6 +29,30 @@ GUI_APP     := $(BUNDLE_DIR)/$(GUI_NAME).app
 # and `bundle.externalBin` both say it, and the dev channel says GUI_DEV_DATA in its place.
 CLI_NAME    := amenbo
 
+# The production app-data name — `work.amenbo.amenbo`. The same word as CLI_NAME above and a
+# different fact: that one is what the command is typed as, this one is which directory the store
+# lives in. amenbo-core compiles no name of its own, so the build entry point is where it is said.
+PROD_APP_NAME := amenbo
+
+# The two values a build has to be told. amenbo-core carries a default for neither, and an unset one
+# stops the compile rather than falling back — a default is what lets a build that was never told
+# ship as though it had been. Both are read with `option_env!`, so they belong to the environment of
+# the *build*, and every entry point that compiles has to carry them. A `docker run` is one of those
+# and inherits nothing, so the recipes below hand them over explicitly.
+#
+# What is written here is what a build that is not a release gets. `?=` is what lets a caller who
+# knows better speak first: the release workflow puts the production pair in its own environment
+# (_release.yml, beside AMENBO_BUILD), and the dev-channel recipes below name their own app-data on
+# the command that compiles.
+#
+# The endpoint is loopback on a port nothing listens on, and nothing ever asks it: only a stamped
+# build queries at all (update_check::withheld_from_build). Its job is to be a value that says, if it
+# ever does turn up in a shipped binary, that the release was built without being told where to ask.
+AMENBO_APP_NAME ?= $(PROD_APP_NAME)
+AMENBO_LATEST_JSON_URL ?= http://127.0.0.1:1/latest.json
+export AMENBO_APP_NAME
+export AMENBO_LATEST_JSON_URL
+
 # The dev GUI comes in three shapes, and two doors pick which one every dev-GUI target builds and
 # installs. Unset is the shared dev app: one permanent bundle, the place to keep a grown setup
 # (plugins, catalog, projects) that no task may delete. AMB-T-ID=<id> is a throwaway instance one
@@ -450,6 +474,7 @@ dist-gui-linux:
 	docker run --rm --platform linux/$(LINUX_GUI_ARCH) \
 	  -e VERSION="$(VERSION)" -e TARGET_ARCH="$(LINUX_GUI_ARCH)" -e XDG_CACHE_HOME=/cache \
 	  -e TAURI_SIGNING_PRIVATE_KEY -e TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
+	  -e AMENBO_APP_NAME -e AMENBO_LATEST_JSON_URL \
 	  -v "amenbo-tauri-cache-$(LINUX_GUI_ARCH):/cache" \
 	  -v "$(CURDIR):/src:ro" \
 	  -v "$(CURDIR)/$(DIST_DIR):/out" \
@@ -472,6 +497,7 @@ dist-cli-linux:
 	docker run --rm --platform linux/$(LINUX_CLI_ARCH) \
 	  -e OUT_NAME=$(notdir $(CLI_LINUX_OUT)) \
 	  -e DEV_APP_NAME="$(CLI_LINUX_APP_NAME)" \
+	  -e AMENBO_APP_NAME -e AMENBO_LATEST_JSON_URL \
 	  -v "amenbo-lint-registry-$(LINUX_CLI_ARCH):/root/.cargo/registry" \
 	  -v "amenbo-lint-target-$(LINUX_CLI_ARCH):/build/target" \
 	  -v "$(CURDIR):/src:ro" \
@@ -582,6 +608,7 @@ verify-network-linux:
 	docker build --platform linux/$(HOST_GUI_ARCH) -f scripts/docker/Dockerfile.linux-gui -t $(LINUX_GUI_IMAGE) scripts/docker/
 	docker run --rm --privileged --platform linux/$(HOST_GUI_ARCH) \
 	  -e CARGO_TARGET_DIR=/tmp/ctarget \
+	  -e AMENBO_APP_NAME -e AMENBO_LATEST_JSON_URL \
 	  -v "$(CURDIR):/src" -w /src \
 	  $(LINUX_GUI_IMAGE) bash scripts/verify-network-watch.sh
 
@@ -773,6 +800,7 @@ lint-linux:
 	@command -v docker >/dev/null 2>&1 || { echo "✗ docker is required (the Linux-branch clippy runs in a container)"; exit 1; }
 	docker build --platform linux/$(HOST_GUI_ARCH) -f scripts/docker/Dockerfile.linux-gui -t $(LINUX_LINT_IMAGE) scripts/docker/
 	docker run --rm --platform linux/$(HOST_GUI_ARCH) \
+	  -e AMENBO_APP_NAME -e AMENBO_LATEST_JSON_URL \
 	  -v "amenbo-lint-registry-$(HOST_GUI_ARCH):/root/.cargo/registry" \
 	  -v "amenbo-lint-target-$(HOST_GUI_ARCH):/build/target" \
 	  -v "amenbo-lint-target-app-$(HOST_GUI_ARCH):/build/app/src-tauri/target" \
@@ -1066,6 +1094,7 @@ gui-dev-linux:
 	docker run --rm --platform linux/$(LINUX_GUI_ARCH) \
 	  -e VERSION="$(VERSION)" -e TARGET_ARCH="$(LINUX_GUI_ARCH)" -e XDG_CACHE_HOME=/cache \
 	  -e DEV_APP_NAME="$(GUI_DEV_DATA)" -e DEV_CONFIG='$(GUI_DEV_CONFIG)' \
+	  -e AMENBO_APP_NAME -e AMENBO_LATEST_JSON_URL \
 	  -e OUT_IMG_NAME="$(notdir $(GUI_DEV_APPIMAGE))" \
 	  $(if $(AMENBO_BUILD_SHA),-e AMENBO_BUILD_SHA="$(AMENBO_BUILD_SHA)",) \
 	  $(if $(AMENBO_BUILD_TIME),-e AMENBO_BUILD_TIME="$(AMENBO_BUILD_TIME)",) \

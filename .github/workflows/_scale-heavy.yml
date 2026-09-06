@@ -23,6 +23,13 @@ name: _scale-heavy
 on:
   workflow_call:
 
+# What the cargo line below has to be told: amenbo-core keeps no default for either, and an unset one
+# stops the compile. This job calls cargo straight rather than through the Makefile, so it names the
+# same non-production pair the merge gate does — nothing built here is distributed.
+env:
+  AMENBO_APP_NAME: amenbo
+  AMENBO_LATEST_JSON_URL: http://127.0.0.1:1/latest.json
+
 jobs:
   scale-heavy:
     name: read scaling guard (full 10k)

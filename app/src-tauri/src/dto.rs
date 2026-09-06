@@ -2781,3 +2781,31 @@ pub struct TalkFrameDto {
     #[ts(optional)]
     pub(crate) folder: Option<String>,
 }
+
+/// **The store's identity, in the parts a reader has to tell apart** (`AMB-D-856`). It was one string
+/// once, and one string can only answer "did anything move"; the screen's question is narrower — *what*
+/// moved decides whether every query is re-read or one scope is.
+///
+/// - `file` is the main file's identity (mtime and size). It moves when the file is **swapped out from
+///   under the app** — `fold`, `stage_and_swap`, a `backup` restore, a migration — and nothing the feed
+///   holds survives that, so a reader that sees this move re-reads everything.
+/// - `config` is `config.json`'s identity. That file is not in the database at all, so no row in the feed
+///   will ever speak for it: a language, a theme or a default view set from the CLI moves this and nothing
+///   else. A reader that sees it move re-reads everything too.
+/// - `version` is `PRAGMA data_version` — the value SQLite guarantees answers "has another connection
+///   committed?". It moves on every commit, ours included, and says nothing about **what** was committed;
+///   that is the change feed's word.
+///
+/// All three are strings so the front end can compare them without knowing what is inside: a `u128` mtime
+/// does not survive a JSON number, and nothing here is ever done arithmetic on.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct StoreSignatureDto {
+    /// The main store file's identity — `"<mtime nanos>:<size>"`.
+    pub(crate) file: String,
+    /// `config.json`'s identity, in the same shape.
+    pub(crate) config: String,
+    /// `PRAGMA data_version`, as text.
+    pub(crate) version: String,
+}

@@ -5,6 +5,11 @@
 // is pinned here: **when the feed cannot say what changed, we always fall to `reconcile("gap")`, a
 // full re-read from the source of truth.**
 //
+// The other half is which leg of the signature moved (`AMB-D-856`). A file swapped out and a
+// `config.json` written are the two the feed structurally cannot speak for, and they are read off the
+// signature rather than guessed at from an empty page — which is what lets an empty page mean what it
+// says: a commit with no row on the feed, and nothing to re-read.
+//
 // The Tauri host is stubbed (`listen` / `invoke`) so this runs on its own. The dataset-to-scope
 // folding itself is covered by `changes.test.ts`.
 import { beforeEach, describe, it, expect, vi } from "vitest";
@@ -57,11 +62,26 @@ const SNAPSHOT = {
 };
 
 /** What core is made to answer. Each test rewrites these. */
-let signature = "sig-0";
+let signature = { file: "file-0", config: "config-0", version: "1" };
 let head = 0; // `change_cursor` (the feed's current head)
 let pages: unknown[] = []; // The replies to `changes_since` (consumed oldest first)
 
 const row = (dataset: string) => ({ dataset, rowId: 1, op: "update" as const });
+
+/** Somebody committed: `data_version` moves and the two file legs stand still. */
+function committed(): void {
+  signature = { ...signature, version: String(Number(signature.version) + 1) };
+}
+
+/** The store file was swapped out from under us (`fold`, `stage_and_swap`, a restore). */
+function fileSwapped(): void {
+  signature = { file: `${signature.file}-swapped`, config: signature.config, version: "1" };
+}
+
+/** `config.json` was written — a file no row of the feed will ever speak for. */
+function configWritten(): void {
+  signature = { ...signature, config: `${signature.config}-again` };
+}
 
 function feed(rows: ReturnType<typeof row>[], cursor: number, expired = false) {
   return { rows, cursor, more: false, expired };
@@ -71,7 +91,7 @@ beforeEach(() => {
   invoke.mockReset();
   invalidateScopes.mockReset();
   invalidateAllQueries.mockReset();
-  signature = "sig-0";
+  signature = { file: "file-0", config: "config-0", version: "1" };
   head = 0;
   pages = [];
   invoke.mockImplementation((cmd: string) => {
@@ -110,7 +130,7 @@ describe("watchStore — while the feed can speak, refetch only the surfaces tha
   it("external write → invalidates only the scope folded from the feed's dataset (no full re-read)", async () => {
     head = 10;
     const fire = await boot();
-    signature = "sig-1"; // Another process wrote.
+    committed(); // Another process wrote.
     pages = [feed([row("task"), row("task_comment")], 12)];
     const { seen, stop } = captureReflected();
 
@@ -119,6 +139,47 @@ describe("watchStore — while the feed can speak, refetch only the surfaces tha
     expect(invalidateScopes).toHaveBeenCalledWith(new Set(["tasks"]));
     expect(invalidateAllQueries).not.toHaveBeenCalled();
     expect(seen.map((r) => r.reason)).toEqual(["live"]);
+    stop();
+  });
+
+  it("a device-local table is a scope like any other — the folders bound to a project fold to `projects`", async () => {
+    head = 10;
+    const fire = await boot();
+    committed();
+    pages = [feed([row("binding_project_dir")], 11)];
+    const { seen, stop } = captureReflected();
+
+    await fire();
+
+    expect(invalidateScopes).toHaveBeenCalledWith(new Set(["projects"]));
+    expect(invalidateAllQueries).not.toHaveBeenCalled();
+    expect(seen.map((r) => r.reason)).toEqual(["live"]);
+    stop();
+  });
+
+  it("a commit with no row on the feed reads nothing and announces nothing — and the next wake is still targeted", async () => {
+    head = 10;
+    const fire = await boot();
+    committed(); // The dispatcher drained its outbox: a real commit, and no dataset the feed collects.
+    pages = [feed([], 10)];
+    const { seen, stop } = captureReflected();
+
+    await fire();
+
+    expect(reloaded()).toBe(0);
+    expect(invalidateScopes).not.toHaveBeenCalled();
+    expect(invalidateAllQueries).not.toHaveBeenCalled();
+    expect(seen).toEqual([]);
+
+    // The signature was carried forward, so the write that follows is compared against what is on
+    // disk now — not against a store two commits old, which would read as a swap and re-read everything.
+    committed();
+    pages = [feed([row("task")], 11)];
+
+    await fire();
+
+    expect(invalidateScopes).toHaveBeenCalledWith(new Set(["tasks"]));
+    expect(invalidateAllQueries).not.toHaveBeenCalled();
     stop();
   });
 
@@ -141,7 +202,7 @@ describe("watchStore — when the feed cannot speak, always re-read from the sou
   it("cursor expiry (truncation dropped an unread row) → full re-read via gap; afterward it resumes from the feed's head", async () => {
     head = 1;
     const fire = await boot();
-    signature = "sig-1";
+    committed();
     pages = [feed([], 900, true)]; // expired: an empty reply must not be read as "nothing changed".
     const { seen, stop } = captureReflected();
 
@@ -156,7 +217,7 @@ describe("watchStore — when the feed cannot speak, always re-read from the sou
     // Recovery: the re-read notes the new cursor (the feed's current head), so the next wake-up is
     // targeted again — we do not stay stuck in gap.
     head = 900;
-    signature = "sig-2";
+    committed();
     pages = [feed([row("decision")], 901)];
     invalidateAllQueries.mockClear();
 
@@ -170,8 +231,23 @@ describe("watchStore — when the feed cannot speak, always re-read from the sou
   it("whole-file replacement (fold / stage_and_swap / restore) → the feed is not continuous → gap", async () => {
     head = 5;
     const fire = await boot();
-    signature = "sig-swapped"; // A different file is in place now.
+    fileSwapped(); // A different file is in place now.
     pages = [feed([], 5)]; // The swapped-in file's feed knows nothing of our changes.
+    const { seen, stop } = captureReflected();
+
+    await fire();
+
+    expect(getLastReconcile()?.reason).toBe("gap");
+    expect(invalidateAllQueries).toHaveBeenCalledTimes(1);
+    expect(seen.map((r) => r.reason)).toEqual(["gap"]);
+    stop();
+  });
+
+  it("`config.json` written from the CLI → no row will ever speak for it → gap", async () => {
+    head = 5;
+    const fire = await boot();
+    configWritten(); // A language, a theme, a default view: written straight to disk, not to the database.
+    pages = [feed([], 5)];
     const { seen, stop } = captureReflected();
 
     await fire();
@@ -191,7 +267,7 @@ describe("watchStore — when the feed cannot speak, always re-read from the sou
     await fire();
     expect(reloaded()).toBe(0);
 
-    signature = "sig-late"; // By the time of the re-read, the disk has moved.
+    committed(); // By the time of the re-read, the disk has moved.
     await reconcile("focus");
 
     expect(reloaded()).toBeGreaterThan(0);

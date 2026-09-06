@@ -13,28 +13,41 @@
 # question directly — is every dataset the feed can name folded, and does the map name
 # only tables that exist?
 #
+# The producer is two lists, not one. The records are what `Record::new` names; beside them
+# the feed carries a few of this device's own plain tables, named in `FEED_PLAIN_TABLES`
+# (they are on the feed so a screen here hears them change, and on no road out of the
+# store). A guard reading only the first would call the second stale.
+#
 # Usage: guards/check-change-scopes.sh    (no args; reads the two source files below)
 # Exit codes: 0 = the two sides agree, 1 = they drifted.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 records=$root/crates/amenbo-core/src/store_engine/record.rs
+schema=$root/crates/amenbo-core/src/store_engine/schema.rs
 scopes=$root/app/src/core/changes.ts
 
-for f in "$records" "$scopes"; do
+for f in "$records" "$schema" "$scopes"; do
   if [ ! -f "$f" ]; then
     echo "✗ change scopes: $f is missing — did the feed's producer or its consumer move?" >&2
     exit 1
   fi
 done
 
-python3 - "$records" "$scopes" <<'PY'
+python3 - "$records" "$schema" "$scopes" <<'PY'
 import re, sys
 
-records, scopes = sys.argv[1], sys.argv[2]
+records, schema, scopes = sys.argv[1], sys.argv[2], sys.argv[3]
 
-# The producer: every `Record::new("<dataset>", …)` in core — the names that reach the feed.
+# The producer, first half: every `Record::new("<dataset>", …)` in core.
 emitted = set(re.findall(r'Record::new\(\s*"([a-z_]+)"', open(records).read()))
+# The producer, second half: the plain tables the feed carries beside the records.
+plain = re.search(r'FEED_PLAIN_TABLES:\s*&\[&str\]\s*=\s*&\[(.*?)\];', open(schema).read(), re.S)
+if not plain:
+    print("✗ change scopes: FEED_PLAIN_TABLES could not be read — the feed's second producer "
+          "list moved. Fix the guard rather than deleting it.", file=sys.stderr)
+    sys.exit(1)
+emitted |= set(re.findall(r'"([a-z_]+)"', plain.group(1)))
 
 # The consumer: the keys of DATASET_SCOPES, up to its closing brace.
 body = open(scopes).read()

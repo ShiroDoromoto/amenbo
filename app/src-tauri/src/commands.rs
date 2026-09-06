@@ -518,13 +518,13 @@ fn store_file() -> Option<std::path::PathBuf> {
 }
 
 /// The config file (`config.json`), which sits in the same directory as the store and so is already
-/// covered by the watcher. It is the signature's third leg — see [`store_signature_string`].
+/// covered by the watcher. It is a leg of the signature — see [`store_signature_parts`].
 fn config_file() -> Option<std::path::PathBuf> {
     amenbo_core::config::Paths::resolve().ok().map(|p| p.config_file)
 }
 
 /// A file's identity (mtime, size). **Not for detecting changes** — its only job is to tell whether
-/// the file itself was swapped out from under us (see [`store_signature_string`] below).
+/// the file itself was swapped out from under us (see [`store_signature_parts`] below).
 fn file_identity(p: &std::path::Path) -> (u128, u64) {
     let Ok(m) = std::fs::metadata(p) else { return (0, 0) };
     let mtime = m
@@ -633,9 +633,10 @@ fn release_orphaned_watch() {
 /// spurious one. Without the leg, a language, a theme or a default view set from the CLI — the AI's
 /// ordinary route, run beside a GUI somebody has open — would reach the screen only at the next
 /// restart, and not even on focus return, since the focus catch-up asks this same question.
-fn store_signature_string() -> String {
-    let Some(path) = store_file() else { return String::new() };
-    let Ok(mut w) = watch().lock() else { return String::new() };
+fn store_signature_parts() -> StoreSignatureDto {
+    let empty = || StoreSignatureDto { file: String::new(), config: String::new(), version: String::new() };
+    let Some(path) = store_file() else { return empty() };
+    let Ok(mut w) = watch().lock() else { return empty() };
 
     let file = file_identity(&path);
     if w.store.is_none() || watch_is_orphaned(&w, &path) || w.file != file || w.path != path {
@@ -649,14 +650,27 @@ fn store_signature_string() -> String {
         .and_then(|s| amenbo_core::store_engine::read::data_version(s.read_model().conn()).ok())
         .unwrap_or(0);
     let config = config_file().map(|p| file_identity(&p)).unwrap_or((0, 0));
-    format!("{}:{}:{}:{}:{}", file.0, file.1, version, config.0, config.1)
+    StoreSignatureDto {
+        file: format!("{}:{}", file.0, file.1),
+        config: format!("{}:{}", config.0, config.1),
+        version: version.to_string(),
+    }
 }
 
-/// The signature (`store_signature_string`) the GUI uses to filter out the `store-changed` events
-/// its own writes caused.
+/// The three legs as one string — what the **watcher** compares, since all it decides is whether to
+/// wake the front end at all. The front end gets the legs apart ([`store_signature`]), because its
+/// question is which of them moved.
+fn store_signature_string() -> String {
+    let s = store_signature_parts();
+    format!("{}:{}:{}", s.file, s.version, s.config)
+}
+
+/// The signature the GUI holds on to: it filters out the `store-changed` events its own writes caused
+/// (all three legs unchanged), and reads which leg moved to decide between re-reading everything and
+/// re-reading one scope (`AMB-D-856`).
 #[tauri::command]
-pub fn store_signature() -> String {
-    store_signature_string()
+pub fn store_signature() -> StoreSignatureDto {
+    store_signature_parts()
 }
 
 /// The published release this build measures itself against, or `None` when there is none to have.
@@ -6625,6 +6639,7 @@ mod tests {
                 .id
         };
         let before = store_signature_string();
+        let parts_before = store_signature_parts();
         assert!(!before.is_empty(), "a signature is produced when a store exists");
 
         {
@@ -6646,6 +6661,16 @@ mod tests {
         assert_ne!(before, store_signature_string(), "an external writer's commit moves the signature");
 
         assert!(!store_signature_string().contains('|'), "does not mix in the `|` separator");
+
+        // And it moves **one leg**. That is what the front end reads the signature apart for
+        // (`AMB-D-856`): a commit is the case where the change feed can say what moved, so the screen
+        // re-reads one scope; a main file that moved is the case where nothing the feed held survived,
+        // and it re-reads everything. A commit that moved the file leg would send it down the second
+        // road on every ordinary write from the CLI.
+        let after = store_signature_parts();
+        assert_eq!(after.file, parts_before.file, "a WAL commit leaves the main file where it was");
+        assert_eq!(after.config, parts_before.config, "and touches config.json not at all");
+        assert_ne!(after.version, parts_before.version, "what moved is the commit counter");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -7290,7 +7315,7 @@ mod tests {
 
         let sig_before = store_signature();
         let _ = task_add(Some(project_id), "シグネチャ確認".into(), None, None, None).unwrap();
-        assert!(!sig_before.is_empty(), "store signature is non-empty when a store exists");
+        assert!(!sig_before.version.is_empty(), "store signature is answered when a store exists");
         assert_ne!(store_signature(), sig_before, "a write advances the store signature");
 
         let _ = std::fs::remove_dir_all(&tmp);

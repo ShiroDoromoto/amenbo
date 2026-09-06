@@ -37,14 +37,20 @@ const vmStagingDir = "/tmp"
 const guiBundleBuildDir = "app/src-tauri/target/release/bundle/macos"
 
 // vmTaskDevBundle and vmTaskDevAppData are the two places an instance occupies on both machines —
-// the ones the host holds (taskDevGUIPaths), read under the guest's own home. The third place is
-// the guest's alone (vmTaskWorkDir).
+// the ones the host holds (taskDevGUIPaths), read under the guest's own home. The other two are the
+// guest's alone: the CLI it is driven from (vmTaskCLIBin) and the folder it is worked from
+// (vmTaskWorkDir).
 func vmTaskDevBundle(id string) string {
 	return filepath.Join(macAppsDir, taskDevBundle(id)+".app")
 }
 
 func vmTaskDevAppData(id string) string {
 	return appDataDir(vmGuestHome, taskDevAppData(id))
+}
+
+// vmTaskCLIBin is the copy of this task's CLI that was sent in there, straight in the guest's home.
+func vmTaskCLIBin(id string) string {
+	return taskDevCLIPath(vmGuestHome, id)
 }
 
 // vmTaskWorkDir is the folder in the guest an instance is worked *from* — its own bound folder, and
@@ -553,7 +559,7 @@ func vmSendCLI(ip, id, worktree string, noBuild bool) (string, error) {
 	if _, err := os.Stat(bin); err != nil {
 		return "", fmt.Errorf("no CLI at %s — drop --no-build so it is built", bin)
 	}
-	guestBin := filepath.Join(vmGuestHome, "amenbo-cli-"+id)
+	guestBin := vmTaskCLIBin(id)
 	scpArgs := append(sshOpts(), bin, vmUser+"@"+ip+":"+guestBin)
 	if _, err := run("", "scp", scpArgs...); err != nil {
 		return "", fmt.Errorf("sending the CLI to %s: %w", vmCloneName, err)
@@ -579,11 +585,12 @@ func vmRemoveTaskDevGUI(id string) error {
 }
 
 // vmTaskDevGUIPaths lists everything an instance occupies in the guest, in the order teardown
-// removes it — the guest's own reading of taskDevGUIPaths, plus the bound folder that exists only
-// in there. The folder is last because it is the smallest thing and the one whose absence is
-// hardest to notice: a pointer left behind names a store that teardown has just deleted.
+// removes it — the guest's own reading of taskDevGUIPaths, plus the CLI copy and the bound folder
+// that exist only in there. The two guest-only ones come last because they are the small ones, and
+// the ones whose absence is hardest to notice: a CLI left behind is 29 MB nobody looks for, and a
+// pointer left behind names a store that teardown has just deleted.
 func vmTaskDevGUIPaths(id string) []string {
-	return append(taskDevGUIPaths(vmGuestHome, macAppsDir, id), vmTaskWorkDir(id))
+	return append(taskDevGUIPaths(vmGuestHome, macAppsDir, id), vmTaskCLIBin(id), vmTaskWorkDir(id))
 }
 
 // vmReclaim removes each of `paths` in the guest that is actually there and reports it. One round
@@ -641,8 +648,12 @@ func vmDevGUISweep(apply bool) error {
 	if err != nil {
 		return err
 	}
+	clis, err := vmListDir(ip, vmGuestHome)
+	if err != nil {
+		return err
+	}
 
-	instances := instancesFrom(bundles, stores, vmGuestHome, macAppsDir, liveIDs)
+	instances := instancesFrom(bundles, stores, clis, vmGuestHome, macAppsDir, liveIDs)
 	if len(instances) == 0 {
 		logf("  no per-task dev GUI in %s", vmCloneName)
 		return nil

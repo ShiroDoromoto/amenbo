@@ -73,12 +73,13 @@ func TestShqSurvivesTheNamesABundleCarries(t *testing.T) {
 }
 
 // TestInstancesFromReadsListingsAlone holds the reading the guest sweep depends on: what is there
-// comes from the two listings and nothing else. Nothing in the guest can be stat'ed from here, so a
-// scan that reached for the disk would have no answer to give on that machine at all.
+// comes from the three listings and nothing else. Nothing in the guest can be stat'ed from here, so
+// a scan that reached for the disk would have no answer to give on that machine at all.
 func TestInstancesFromReadsListingsAlone(t *testing.T) {
 	got := instancesFrom(
 		[]string{"amenbo (dev 2131).app", "amenbo (dev 2140).app", "Amenbo.app", "amenbo (dev wip).app"},
 		[]string{"work.amenbo.amenbo-dev-2131", "work.amenbo.amenbo-dev-2135", "work.amenbo.amenbo-dev"},
+		[]string{"amenbo-cli-2131", "amenbo-cli-2150", "amenbo", "Documents"},
 		"/Users/admin", macAppsDir, []string{"2135"})
 
 	want := []struct {
@@ -86,12 +87,15 @@ func TestInstancesFromReadsListingsAlone(t *testing.T) {
 		live  bool
 		paths []string
 	}{
-		// Both halves there.
-		{"2131", false, []string{"/Applications/amenbo (dev 2131).app", "/Users/admin/Library/Application Support/work.amenbo.amenbo-dev-2131"}},
+		// All three there.
+		{"2131", false, []string{"/Applications/amenbo (dev 2131).app", "/Users/admin/Library/Application Support/work.amenbo.amenbo-dev-2131", "/Users/admin/amenbo-cli-2131"}},
 		// A store whose bundle was already taken is still an instance to reclaim.
 		{"2135", true, []string{"/Users/admin/Library/Application Support/work.amenbo.amenbo-dev-2135"}},
 		// A bundle whose store was removed by hand, likewise.
 		{"2140", false, []string{"/Applications/amenbo (dev 2140).app"}},
+		// A CLI copy alone: `devgui cli --vm` builds one before any bundle is, and teardown that
+		// took the other two left this behind. Nothing but this listing names it.
+		{"2150", false, []string{"/Users/admin/amenbo-cli-2150"}},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("scanned %+v, want %d instances", got, len(want))
@@ -112,12 +116,13 @@ func TestInstancesFromReadsListingsAlone(t *testing.T) {
 }
 
 // TestVMTaskDevGUIPathsTakeBothHalvesInOrder pins the guest teardown to the same two halves, in the
-// same order, the host teardown takes — the bundle first, the store second — and to the bound folder
-// after them, which only the guest has. A teardown that leaves the folder leaves a pointer naming a
-// store it has just deleted.
+// same order, the host teardown takes — the bundle first, the store second — and to the CLI copy and
+// the bound folder after them, which only the guest has. A teardown that leaves the CLI leaves 29 MB
+// nobody goes looking for; one that leaves the folder leaves a pointer naming a store it has just
+// deleted.
 func TestVMTaskDevGUIPathsTakeBothHalvesInOrder(t *testing.T) {
 	got := vmTaskDevGUIPaths("2131")
-	want := append(taskDevGUIPaths(vmGuestHome, macAppsDir, "2131"), vmTaskWorkDir("2131"))
+	want := append(taskDevGUIPaths(vmGuestHome, macAppsDir, "2131"), vmTaskCLIBin("2131"), vmTaskWorkDir("2131"))
 	if len(got) != len(want) {
 		t.Fatalf("guest paths = %v, want %v", got, want)
 	}

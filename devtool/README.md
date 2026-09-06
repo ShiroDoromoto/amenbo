@@ -253,10 +253,12 @@ command exists, and without it you are asking for the route that has one already
   unbound, and the first `devgui cli --vm` binds it.
 - **The guest layout mirrors this machine's exactly** (`/Applications` bundle,
   `~/Library/Application Support` store), so what addresses an instance by path
-  reads the same on both sides and only the machine it is asked of changes. The
-  bound folder is the one thing the guest holds that the host has no counterpart
-  for: on this machine every instance's store is a directory of its own, so a
-  pointer beside one is already one instance's and no other's.
+  reads the same on both sides and only the machine it is asked of changes. Two
+  things the guest holds have no counterpart here: the bound folder — on this
+  machine every instance's store is a directory of its own, so a pointer beside
+  one is already one instance's and no other's — and the CLI copy
+  (`/Users/admin/amenbo-cli-<id>`, ~29MB) that `devgui cli --vm` sends across,
+  which a checkout has no need of because it runs its own build in place.
 - **Nothing lands on this machine.** The bundle is read out of the build
   directory, so the host `/Applications` and the host app-data are untouched —
   and `devgui rm` reclaims neither of the guest's halves. Throwing the VM away is
@@ -310,7 +312,8 @@ Details worth knowing:
 sent across — the guest holds no toolchain, and the two machines are the same
 arch — and run in there, pointed at that store the same way. It is sent on every
 run, because the reason the CLI is rebuilt first is that the tree it seeds a
-store for keeps moving.
+store for keeps moving. It lands in the guest's home as `amenbo-cli-<id>` and is
+reclaimed with the rest of the instance by `devgui rm --vm` and the sweep.
 
 Where it runs is the one place the two routes part: **in the guest it runs in the
 instance's bound folder** (`/Users/admin/amenbo-work-<id>`), not in the store.
@@ -410,7 +413,8 @@ that reported it reclaimed reads as green while the leftover returns minutes
 later.
 
 `--vm` takes the instance in the guest, the same two halves the same way, plus
-the bound folder that only the guest has — a pointer left behind would name a
+the two the guest alone holds: the CLI copy and the bound folder. A CLI left
+behind is ~29MB nobody goes looking for, and a pointer left behind would name a
 store that has just been deleted. Throwing the VM away (`devtool vm rm`) takes
 every instance in there at once, so this is for reclaiming one while the clone
 goes on being used.
@@ -436,10 +440,13 @@ a store behind under a number nobody will type again.
 Only the digits form an instance: a hand-made `amenbo (dev wip).app` is
 somebody's own, and the shared `amenbo (dev)` app is permanent.
 
-`--vm` sweeps the guest instead — an orphan's bound folder goes with its halves,
-though a folder alone is never what makes an instance show up in the listing —
-and **it can only be asked from here**: what makes an instance live is a
-checkout, and the checkouts are on this machine.
+`--vm` sweeps the guest instead. There the CLI copy counts as a half of its own:
+`devgui cli --vm` sends one before any bundle is built, and teardown takes the
+bundle and the store together, so an instance whose only trace is that copy is
+one nothing else in the guest names. An orphan's bound folder still goes with
+its halves without being one — a folder holding one JSON file is not evidence of
+a dev GUI. And the sweep **can only be asked from here**: what makes an instance
+live is a checkout, and the checkouts are on this machine.
 Asked inside the guest, git has nothing to answer with — and a sweep that cannot
 tell live from orphan refuses rather than guess, so it would simply never run.
 

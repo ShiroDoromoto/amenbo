@@ -2573,6 +2573,12 @@ impl Instructor {
             (Domain::Files, "paste-into-editor") =>
                 "Click into the text of the file, put the caret at the very end of it, press Enter, then press the key this machine pastes with. What the last copy put on the clipboard goes in on the new line."
                     .to_string(),
+            // The same box filled from a picture. One press on all three machines, unlike the pane's
+            // — and what to look for is said, because a path standing where a picture was copied is
+            // the whole of what this step is walked for.
+            (Domain::Files, "paste-image") =>
+                "Click into the text that is open, put the caret at the very end of it, press Enter, then press the key this machine pastes with. A path goes in on the new line, and the picture itself does not."
+                    .to_string(),
             // And the keeping. The control is named by what it does rather than quoted, the same as
             // every other item on this face — and the line says where it is, since a reader who has just
             // been typing is looking at the text and not at the row above it.

@@ -202,6 +202,11 @@ jobs:
         working-directory: app
         env:
           AMENBO_APP_NAME: ${{ needs.names.outputs.app_name }}
+          # The update endpoint amenbo-core compiles in, which has no default either. This leg is
+          # the one that calls tauri straight instead of through the Makefile, so it says what the
+          # Makefile says for the other two: loopback on a port nothing listens on, which a preview
+          # never asks — it carries no stamp, so it withholds the check entirely.
+          AMENBO_LATEST_JSON_URL: http://127.0.0.1:1/latest.json
           AMENBO_BUILD_SHA: ${{ github.sha }}
           AMENBO_BUILD_TIME: ${{ needs.names.outputs.built_at }}
         run: npm run tauri build -- --bundles nsis --config src-tauri/tauri.dev.conf.json --config src-tauri/theme-preview.conf.json

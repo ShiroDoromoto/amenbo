@@ -60,6 +60,17 @@ on:
 # recompiles only what moved.
 env:
   SAVE_CACHE: ${{ github.ref == 'refs/heads/main' }}
+  # What every `cargo` line below has to be told: amenbo-core keeps no default for either, and an
+  # unset one stops the compile. The jobs here call cargo straight rather than through the Makefile,
+  # so the Makefile's own pair never reaches them — they are named again here, once, for the whole
+  # workflow.
+  #
+  # Nothing this workflow builds is distributed, so both say so. The app-data name is production's
+  # because that is the channel the suite is compiled on, and the endpoint is loopback on a port
+  # nothing listens on — an unstamped build asks nothing anyway
+  # (update_check::withheld_from_build). The production pair lives in _release.yml alone.
+  AMENBO_APP_NAME: amenbo
+  AMENBO_LATEST_JSON_URL: http://127.0.0.1:1/latest.json
 
 jobs:
   # Path gate for the build/test jobs: run each only when a change can affect it.

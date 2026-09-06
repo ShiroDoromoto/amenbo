@@ -39,6 +39,27 @@ import (
 // (`env::HOME_VAR`), not a string this file invented.
 const storeEnv = "AMENBO_HOME"
 
+// buildEnv is what the cargo build below has to be told. amenbo-core keeps no default for either
+// name and an unset one stops the compile, so every entry point that compiles has to carry them —
+// the Makefile does it for the builds make drives, and this one is not one of those.
+//
+// The values are the ones that say "not a release". The app-data name is production's, which is what
+// this build has always compiled as and what the note above is about; the endpoint is loopback on a
+// port nothing listens on, and nothing asks it, because an unstamped build withholds the update check
+// entirely. A caller who exported either is left alone: a shell that named one meant it.
+func buildEnv() []string {
+	var env []string
+	for _, kv := range [][2]string{
+		{"AMENBO_APP_NAME", "amenbo"},
+		{"AMENBO_LATEST_JSON_URL", "http://127.0.0.1:1/latest.json"},
+	} {
+		if _, set := os.LookupEnv(kv[0]); !set {
+			env = append(env, kv[0]+"="+kv[1])
+		}
+	}
+	return env
+}
+
 // taskCLIBin is the CLI a task's checkout builds — the ordinary debug build, which is the one its
 // tests and `make verify` already produce, so seeding a store costs no build of its own.
 func taskCLIBin(worktree string) string {
@@ -101,7 +122,7 @@ func taskCLI(id string, noBuild bool, argv []string) (int, error) {
 		logf("  store   : %s was not there — this run starts it empty", store)
 	}
 	if !noBuild {
-		if _, err := run(worktree, "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
+		if _, err := runEnv(worktree, buildEnv(), "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
 			return 0, fmt.Errorf("build the task's CLI: %w", err)
 		}
 	}

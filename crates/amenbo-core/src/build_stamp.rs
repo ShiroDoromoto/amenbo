@@ -9,9 +9,9 @@
 //! Nothing distinguished a working-tree build from a shipped one at run time. Both are named
 //! `amenbo`, both report the same version (a bump happens at release, so an unreleased tree wears the
 //! released number), and both point at the same app-data directory, because that directory is chosen
-//! by `AMENBO_APP_NAME` at build time and only the *dev* channel passes it. On 2026-07-23 that gap
-//! carried a real production store from format v4 to v7 — by opening a locally built bundle once, to
-//! see whether it launched.
+//! by `AMENBO_APP_NAME` at build time and every build off the dev channel is handed the same
+//! production name. On 2026-07-23 that gap carried a real production store from format v4 to v7 — by
+//! opening a locally built bundle once, to see whether it launched.
 //!
 //! **The stamp closes it.** `AMENBO_BUILD=release` is set in the release workflow's environment and
 //! nowhere else — not in the Makefile, not in a plain `cargo build` — so it is present in exactly the

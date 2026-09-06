@@ -2408,20 +2408,12 @@ const REGISTRY: &[OpSpec] = &[
     // page has several and they carry nothing else a road put there, so a step that only said "the
     // pane" would leave the operator to choose one — and the whole of what follows is which one went.
     //
-    // `answer` is which way the question is answered, and it is left out where there is nothing to
-    // choose between: a pane whose session is holding nothing is asked the plain thing it has always
-    // been asked, and answering that is saying yes. Where the session made a reservation from inside
-    // the pane, the question names it and offers three, which are three different things to want
-    // (`app/src/shell/HoldingAsk.tsx`): `hand-back` puts the work back to `todo` and then goes,
-    // `leave` goes and leaves the reservation standing, `cancel` stays. The middle one is not a
-    // mistake — somebody stepping away for the night has every reason to leave a reservation where it
-    // is — so a road that only ever walked the first would be proving two thirds of the question.
-    //
-    // `target` is the task the question has to name, and it is what makes this step self-judging: the
-    // whole of what the three-answer question is for is naming what stands to be lost, and a question
-    // that named the wrong pane's work — or nothing at all — is the failure it exists to prevent. It
-    // is named beside `answer` and not on its own, a pane holding nothing having nothing to name.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "remove-pane", required: &["shows"], refs: &["target"], strings: &["shows", "answer"], binds: false },
+    // **The question is the plain one, whatever the session is holding**, so there is
+    // nothing for a road to choose between and no task for it to name. What the volatile area says a
+    // pane reserved is drawn on the label above it and is not a fact the ledger may be moved on — a
+    // move made outside a pane leaves no row there, so the newest row left can be one the world has
+    // already passed.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "remove-pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // Something the agent in the pane said about its own session — the surface layer, said with the
     // CLI from inside the terminal it is about. `verb` is which of the layer's words was used and
     // `text` is what was said in it; both travel as values because the layer is one seam with several

@@ -584,10 +584,6 @@ const ui = {
   // program exits with is on the screen to be read (`AMB-T-3666`).
   "face.drop": "Remove this pane",
   "face.dropConfirm": "Remove this pane? The terminal in it ends, and the place does not come back on the next run.",
-  "face.dropHolding": "This pane's session is still holding:",
-  "face.dropHandBack": "Hand back and remove",
-  "face.dropAnyway": "Remove as it is",
-  "face.dropCancel": "Cancel",
   // The way out of the whole app, which ends every terminal at once and is asked about for the same
   // reason one pane is (`app/src/shell/HoldingAsk.tsx`, `crate::quit`). It is its own set of words
   // rather than the pane's: what is being left behind is every session in the process, and a

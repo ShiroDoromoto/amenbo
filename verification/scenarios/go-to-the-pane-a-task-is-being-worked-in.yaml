@@ -218,13 +218,14 @@ steps_gui:
       present: false
 
   # ── The pane goes, the reservation stays ────────────────────────────────────────────────────────
+  # Answered yes, and that is the whole of what the press asks. Taking the place away
+  # moves nothing on the ledger — a reservation is a fact somebody made, and the screen does not unmake
+  # it on the way out.
   - type: action
     domain: terminal
     op: remove-pane
     with:
       shows: SCENARIO the pane at the furnace
-      target: crucible
-      answer: leave
 
   - type: action
     domain: terminal

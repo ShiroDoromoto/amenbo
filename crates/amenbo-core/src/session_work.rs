@@ -32,8 +32,14 @@
 //!
 //! **A move made outside a pane is not written at all**, which is not an error case. Somebody's own
 //! terminal, an editor that is not the talk window, a person typing at a shell — all of them go through
-//! the same path and leave one thing off it. What the label loses is one row, and what nobody may do is
-//! guess it back.
+//! the same path and leave one thing off it.
+//!
+//! **What that costs is not one missing row — it is a stale answer** (`AMB-D-855`). [`newest`] takes
+//! the highest `seq` the area has about a task, so a task whose newest move was made elsewhere is
+//! answered for by the older row that is still here: the pane that reserved it yesterday and let it go
+//! outside is named as holding it, and `done` is not seen at all. So this is read for a **label** and
+//! nothing else. Nothing that writes the ledger may stand on it — a hand-back driven from here would
+//! move a task on the strength of a row the world has already passed.
 
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};

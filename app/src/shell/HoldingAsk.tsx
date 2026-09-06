@@ -22,13 +22,18 @@ export type AskWords = {
 /**
  * What a way out asks when the sessions behind it are still holding something.
  *
- * **It names what is about to be lost, at the moment it is about to be lost.** Three roads end a
- * session and none of them can be taken back: pressing `✕` on a pane (`./TerminalPane`), ending the
- * app, which ends every pane at once (`./AppShell`, `crate::quit`), and starting it again to come
- * back on a newer build, which ends them the same way (`../components/UpdateBanner`). However it
- * goes, a reservation that session made stays `in_progress` with nothing left that could say whose
- * it was — the volatile area goes with the process (`AMB-D-758`). Nothing afterwards can notice that
- * happened, so the only place it can be said is here.
+ * **It names what is about to be lost, at the moment it is about to be lost.** Two roads end every
+ * session in the process at once and neither can be taken back: ending the app (`./AppShell`,
+ * `crate::quit`), and starting it again to come back on a newer build, which ends them the same way
+ * (`../components/UpdateBanner`). Either way, a reservation one of those sessions made stays
+ * `in_progress` with nothing left that could say whose it was — the volatile area goes with the
+ * process (`AMB-D-758`). Nothing afterwards can notice that happened, so the only place it can be
+ * said is here.
+ *
+ * **Losing one pane is not one of them** (`AMB-D-855`). The cross on a pane asks the plain
+ * confirmation and moves nothing (`./TerminalPane`): what the area answers is the newest row it still
+ * has, which after a move made outside a pane is an older one, and a hand-back driven from it would
+ * write the ledger on a fact the world has passed.
  *
  * **The three answers are three different things to want**, which is why this is a question and not a
  * confirmation: hand the work back and go, go and leave it standing, or stay. The middle one is not a
@@ -105,17 +110,6 @@ export function HoldingAsk({ holding, words, onHandBack, onLeave, onCancel }: {
   );
 }
 
-/** The words the way out of one pane asks in (`./TerminalPane`). */
-export function paneDropWords(): AskWords {
-  return {
-    title: t("face.dropConfirm"),
-    held: t("face.dropHolding"),
-    handBack: t("face.dropHandBack"),
-    leave: t("face.dropAnyway"),
-    cancel: t("face.dropCancel"),
-  };
-}
-
 /** The words the way out of the app asks in (`./AppShell`). */
 export function quitWords(): AskWords {
   return {
@@ -148,8 +142,9 @@ export function restartWords(): AskWords {
 }
 
 /**
- * What the volatile area says a session is holding, asked at the moment a way out is pressed
- * (`commands.rs::session_work`).
+ * What the volatile area says one session is holding, asked at the moment a way out is pressed
+ * (`commands.rs::session_work`). It is `heldByAll`'s half of the question — nothing outside this
+ * module asks about one session, the two roads here ending every one of them at once.
  *
  * **Read at the press and not kept.** The answer is only worth having about the instant it is acted
  * on — a reservation made a second ago is exactly the one nobody would think to look for.
@@ -159,7 +154,7 @@ export function restartWords(): AskWords {
  * is being left behind, and a question raised on a guess would be a question about nothing
  * (`AMB-D-758` — a move made outside a pane is not written here at all, and may not be guessed back).
  */
-export async function heldBy(session: string | null): Promise<readonly number[]> {
+async function heldBy(session: string | null): Promise<readonly number[]> {
   if (session === null) return [];
   return invoke<SessionWorkDto>("session_work", { session })
     .then((work) => work.holding)

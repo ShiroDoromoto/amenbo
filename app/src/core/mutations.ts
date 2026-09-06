@@ -943,9 +943,12 @@ export async function runDoctorFix(): Promise<DoctorFixDto> {
 /**
  * The shortest path to an update: open this OS's all-in-one installer (GUI and CLI together) in the
  * default browser. Core resolves the installer URL for the current platform from the published
- * latest.json, falling back to the latest release page if it has not been fetched or lists no
- * installer for us, and opens it. There is no self-update — it only opens. Returns the URL it opened.
+ * latest.json and opens it. There is no self-update — it only opens. Returns the URL it opened.
  * Outside Tauri (browser iteration) it does nothing and returns null.
+ *
+ * It throws where there is no address: the manifest was not fetched, or it lists no installer for
+ * this platform. Nothing stands in for one — a build that could not read its manifest does not know
+ * where the release is hosted — so the caller keeps the button and lets the reader ask again.
  */
 export async function openLatestInstaller(): Promise<string | null> {
   if (!inTauri()) return null;

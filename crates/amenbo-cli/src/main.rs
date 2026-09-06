@@ -1012,13 +1012,23 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // and give the per-OS installer URL.
     if let Some(rel) = upstream.as_ref() {
         if rel.is_newer_than(agent::VERSION) {
-            eprintln!(
-                "⚠ A newer Amenbo ({}) is available (this build is {}). Run `{} update` to install it, or see {}",
-                rel.version,
-                agent::VERSION,
-                Paths::command_name(),
-                rel.update_url(),
-            );
+            // The address is the manifest's, and a manifest that named none for this machine leaves
+            // the line without one rather than with a page guessed at here (`AMB-D-849`). The
+            // command to run is the half that is true either way.
+            match rel.update_url() {
+                Some(url) => eprintln!(
+                    "⚠ A newer Amenbo ({}) is available (this build is {}). Run `{} update` to install it, or see {url}",
+                    rel.version,
+                    agent::VERSION,
+                    Paths::command_name(),
+                ),
+                None => eprintln!(
+                    "⚠ A newer Amenbo ({}) is available (this build is {}). Run `{} update` to install it.",
+                    rel.version,
+                    agent::VERSION,
+                    Paths::command_name(),
+                ),
+            }
         }
     }
 

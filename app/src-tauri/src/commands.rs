@@ -4345,15 +4345,20 @@ pub fn doctor_fix() -> Result<DoctorFixDto, CmdError> {
 
 /// The shortest path to an update: open this OS's all-in-one installer (GUI and CLI together) in the
 /// OS's default browser. Core resolves the installer URL for the current platform from the published
-/// `latest.json` — falling back to the latest release page when it has not been fetched, is not
-/// listed, or the check is disabled by the environment — and `os_open` opens it. There is no
-/// self-update; it only opens. Because this is an explicit user action (the button on the update
-/// banner), it goes and fetches regardless of the update_check toggle in config. Returns the URL it
-/// opened, which the front end can display or log. The store is untouched: the only side effect is
-/// launching an external browser.
+/// `latest.json` and `os_open` opens it. There is no self-update; it only opens. Because this is an
+/// explicit user action (the button on the update banner), it goes and fetches regardless of the
+/// update_check toggle in config. Returns the URL it opened, which the front end can display or log.
+/// The store is untouched: the only side effect is launching an external browser.
+///
+/// **Nothing to open is an error, and not a page picked out here.** The manifest was unreadable —
+/// unfetched, switched off by the environment — or it named no installer for this machine, and a
+/// build in that state does not know where the release is hosted (`AMB-D-849`). The banner keeps the
+/// button, so the reader can ask again once whatever stopped it is gone.
 #[tauri::command]
 pub fn open_latest_installer() -> Result<String, CmdError> {
-    let url = amenbo_core::update_check::resolve_update_url();
+    let url = amenbo_core::update_check::resolve_update_url().ok_or_else(|| -> CmdError {
+        "no installer address to open: the release manifest could not be read, or names none for this platform".into()
+    })?;
     os_open(&url).map_err(|e| -> CmdError { format!("cannot open the installer URL: {e}").into() })?;
     Ok(url)
 }

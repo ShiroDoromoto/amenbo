@@ -74,10 +74,14 @@ fn unstamped_refusal() -> (String, &'static str) {
 /// is no self-update — opening is all it does. Because the user asked for it, the lookup runs regardless of
 /// the config toggle **and regardless of the detection cache's TTL** (`AMB-D-463`): it goes and asks, rather
 /// than answering from an entry up to 24 hours old, since what someone who typed this wants to know is the
-/// state now. Neither what startup fetched nor a warm cache is reused for the same reason. It still falls
-/// back to the latest-release page if the fetch fails or the OS is not listed, and offline behaviour is
-/// unchanged — the fresh query shares the fall-back-to-stale contract with the cached one. Callable from
-/// outside a binding, so it never touches the store.
+/// state now. Neither what startup fetched nor a warm cache is reused for the same reason. A fetch that
+/// fails is an error, and there is no page to fall to: a build that could not read its manifest does not
+/// know where the release is hosted (`AMB-D-849`). Two neighbours of that are not errors, because in
+/// neither did a reading fail — this machine's kill switch, which asked nothing and says so, and a
+/// manifest that came back naming no installer for this platform, which is reported with no address and
+/// opens nothing. Offline behaviour is otherwise unchanged: the fresh query shares the fall-back-to-stale
+/// contract with the cached one, so a stale entry still answers. Callable from outside a binding, so it
+/// never touches the store.
 ///
 /// Two builds answer differently, and before any of that: the installer this would open is
 /// production's, and the manifest it would name a version from is withheld from both
@@ -124,34 +128,79 @@ pub(crate) fn update_cmd(flags: &Flags, print: bool) -> Result<i32, CliError> {
         }
         return Ok(0);
     }
-    let latest = amenbo_core::update_check::check_fresh(true);
-    let url = latest
-        .as_ref()
-        .map(|r| r.update_url())
-        .unwrap_or_else(|| amenbo_core::update_check::LATEST_RELEASE_PAGE.to_string());
-    let newer = latest
-        .as_ref()
+    // Nothing was read, so there is no address — and the two ways that happens are told apart,
+    // because only one of them is something the person who typed this can lift (`AMB-D-849`).
+    // The third state nothing is asked in, beside the channel and the stamp above: this machine's own
+    // kill switch. It is the person's own setting rather than a fault, so it is reported the way the
+    // other two are — plainly, with a zero exit and nothing claimed about upstream.
+    if amenbo_core::env::update_check_disabled() {
+        let line = format!(
+            "The update check is switched off here (AMENBO_UPDATE_CHECK), so {} did not ask where the installer is.",
+            Paths::command_name()
+        );
+        if flags.json {
+            print_json(&json!({
+                "action": "update",
+                "current_version": agent::VERSION,
+                // Nothing was queried, so claim nothing about upstream — do not pad these.
+                "latest_version": serde_json::Value::Null,
+                "update_available": false,
+                "reason": "update_check_off",
+                "url": serde_json::Value::Null,
+                "opened": false,
+            }));
+        } else {
+            human(flags, line);
+            human(flags, "Unset AMENBO_UPDATE_CHECK, or set it to 1, and run this again.");
+        }
+        return Ok(0);
+    }
+    // And the query itself. A manifest that cannot be read leaves nothing to open, and there is no
+    // page to send the reader to instead: a build that could not read its manifest does not know
+    // where this release is hosted (`AMB-D-849`).
+    let Some(latest) = amenbo_core::update_check::check_fresh(true) else {
+        return Err(CliError {
+            code: "io_error",
+            message: "could not reach the release manifest, so there is no installer address to open".to_string(),
+            hint: Some("check your connection and run this again.".to_string()),
+            exit: 1,
+        });
+    };
+    // The manifest was read. It may still name nothing this machine can install from — a release
+    // that published no installer for this platform — and that is reported rather than papered over
+    // with an address of this code's own choosing (`AMB-D-849`). It is not a failure either: the
+    // reading came back, and what it says is that there is nothing here for this machine.
+    let url = latest.update_url();
+    let newer = Some(&latest)
         .filter(|r| r.is_newer_than(agent::VERSION))
         .map(|r| r.version.clone());
+    let opening = !print && url.is_some();
     if flags.json {
         print_json(&json!({
             "action": "update",
             "current_version": agent::VERSION,
-            "latest_version": latest.as_ref().map(|r| r.version.clone()),
+            "latest_version": latest.version.clone(),
             "update_available": newer.is_some(),
             "url": url,
-            "opened": !print,
+            "opened": opening,
         }));
     } else {
-        // `--print` is the face that opens nothing (headless / scripts), so it must not say it will.
-        match (&newer, print) {
+        // `--print` is the face that opens nothing (headless / scripts), so it must not say it will
+        // — and neither must the other face, where there is nothing to open.
+        match (&newer, opening) {
             (Some(v), _) => human(flags, format!("A newer Amenbo ({v}) is available (this build is {}).", agent::VERSION)),
-            (None, false) => human(flags, format!("This build is {} — no newer version detected (opening the installer anyway).", agent::VERSION)),
-            (None, true) => human(flags, format!("This build is {} — no newer version detected.", agent::VERSION)),
+            (None, true) => human(flags, format!("This build is {} — no newer version detected (opening the installer anyway).", agent::VERSION)),
+            (None, false) => human(flags, format!("This build is {} — no newer version detected.", agent::VERSION)),
         }
-        human(flags, format!("Installer: {url}"));
+        match &url {
+            Some(url) => human(flags, format!("Installer: {url}")),
+            None => human(
+                flags,
+                format!("Release {} names no installer for this platform and no release notes — there is nothing to open.", latest.version),
+            ),
+        }
     }
-    if !print {
+    if let Some(url) = url.filter(|_| !print) {
         os_open(&url)?;
     }
     Ok(0)

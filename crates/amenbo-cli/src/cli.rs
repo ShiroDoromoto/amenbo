@@ -75,7 +75,8 @@ pub enum Command {
     /// Version information
     Version,
     /// Update Amenbo to the latest release. By default this opens this OS's one-piece installer
-    /// (resolved from the published latest.json, falling back to the releases page) in your browser.
+    /// (resolved from the published latest.json) in your browser — and where that cannot be read,
+    /// says so rather than opening a page of its own choosing.
     /// Pass --apply to self-update the standalone CLI in place instead — download the new CLI archive
     /// over TLS and swap this binary, no installer, no elevation (CLI-only installs; a GUI-managed CLI
     /// is updated from the desktop app). Pass --rollback to undo the last --apply, restoring the binary

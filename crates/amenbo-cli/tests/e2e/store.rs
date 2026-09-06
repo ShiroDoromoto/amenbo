@@ -388,7 +388,8 @@ fn personal_mode_has_no_sharing_commands() {
 /// The manifest URL is overridden because a test binary carries no release stamp, and an unstamped
 /// build declines `update` outright rather than naming an installer. The override says "ask here
 /// instead", which is what puts this run back on the road a shipped build takes; the kill switch is
-/// still what keeps it off the network, so nothing is fetched from the address either.
+/// still what keeps it off the network, so nothing is fetched from the address either — which is the
+/// state `update` reports here, rather than an answer it did not go and get.
 #[test]
 fn version_and_update_answer_without_a_pointer() {
     let dir = temp_home();
@@ -417,8 +418,14 @@ fn version_and_update_answer_without_a_pointer() {
     let (code, stdout) = run(&["update", "--print", "--json"]);
     assert_eq!(code, Some(0), "update answers even without a binding: {stdout}");
     let v: Value = serde_json::from_str(stdout.trim()).unwrap_or_else(|_| panic!("update JSON: {stdout}"));
-    assert!(v["url"].as_str().is_some_and(|u| u.starts_with("https://")), "returns the installer link: {stdout}");
-    assert_eq!(v["opened"], false, "--print does not open, it only prints the URL: {stdout}");
+    // The kill switch is on here, so nothing was asked — and nothing is claimed in place of an
+    // answer: no version, and no address, an address nobody read from a manifest being one this
+    // build was never given (`AMB-D-849`). What the reading proves is that the command answered at
+    // all, without a store under it.
+    assert_eq!(v["reason"], "update_check_off", "it names the switch, not the network: {stdout}");
+    assert!(v["latest_version"].is_null(), "no version is claimed: {stdout}");
+    assert!(v["url"].is_null(), "and no installer address is invented: {stdout}");
+    assert_eq!(v["opened"], false, "--print does not open, and there was nothing to open: {stdout}");
 }
 
 /// `update --apply` (CLI self-update) is wired the same store-free way as `update`, and stays graceful

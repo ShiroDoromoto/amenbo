@@ -28,7 +28,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type IBufferCell } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import type { PtyChunkDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
-import { takesPastedFiles } from "../core/clipFiles";
+import { takesPastedFiles, writesPastedImage } from "../core/clipFiles";
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
 import { hostOs, type HostOs } from "../core/platform";
@@ -597,11 +597,7 @@ export async function mountTerminal(
     async (bytes, mime) => {
       const its = session;
       if (its === null) return [];
-      // An image that could not be written down leaves the paste with the words it carried, which
-      // for an image is nothing — the same silence every other paste this pane cannot land ends in.
-      return await invoke<string>("pty_paste_image", { session: its, mime, bytes })
-        .then((path) => [path])
-        .catch(() => []);
+      return await writesPastedImage(bytes, mime, its);
     },
   );
 

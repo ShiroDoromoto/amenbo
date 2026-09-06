@@ -21,12 +21,19 @@ const hoisted = vi.hoisted(() => ({
   writes: [] as { project: number; text: string }[],
   /** The paths the host says are on the clipboard. */
   paths: [] as string[],
+  /** Where the host writes a pasted image down, or none where it refuses to write one. */
+  wrote: "/tmp/amenbo-pasted-page-9f1c/pasted-0a0b0c0d.png" as string | null,
 }));
 
 // The host's side of a paste carrying files. The page cannot read a path off the clipboard
-// itself — the window is not told where a file it is handed lives (`../core/clipFiles`).
+// itself — the window is not told where a file it is handed lives (`../core/clipFiles`) — and an
+// image is not on the clipboard as a file at all, so the host is asked to write it down.
 vi.mock("../core/ipc", () => ({
-  invoke: vi.fn(async () => hoisted.paths),
+  invoke: vi.fn(async (cmd: string) => {
+    if (cmd !== "pty_paste_image") return hoisted.paths;
+    if (hoisted.wrote === null) throw new Error("the image could not be written down");
+    return hoisted.wrote;
+  }),
 }));
 
 vi.mock("./memo", () => ({
@@ -57,12 +64,12 @@ async function draw(projectId: number) {
 }
 
 /** A paste carrying files, landing on the field the way a real one does. */
-async function pasteFiles(over: { words?: string } = {}) {
+async function pasteFiles(over: { words?: string; carried?: File[] } = {}) {
   await act(async () => {
     const e = new Event("paste", { bubbles: true, cancelable: true });
     Object.defineProperty(e, "clipboardData", {
       value: {
-        files: { length: 1 },
+        files: over.carried ?? [new File(["a note"], "a note.md", { type: "text/markdown" })],
         types: ["Files"],
         getData: () => over.words ?? "",
       },
@@ -70,6 +77,14 @@ async function pasteFiles(over: { words?: string } = {}) {
     field().dispatchEvent(e);
     await new Promise((r) => setTimeout(r, 0));
   });
+}
+
+/**
+ * A paste carrying a screenshot: an image the engine made, and no file on disk behind it — which is
+ * why the host names no path for it (`AMB-D-854`).
+ */
+async function pasteImage(type = "image/png") {
+  await pasteFiles({ carried: [new File(["the image"], "pasted", { type })] });
 }
 
 async function type(value: string) {
@@ -87,6 +102,7 @@ beforeEach(() => {
   hoisted.kept = {};
   hoisted.writes = [];
   hoisted.paths = [];
+  hoisted.wrote = "/tmp/amenbo-pasted-page-9f1c/pasted-0a0b0c0d.png";
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -189,6 +205,31 @@ describe("the project's draft page", () => {
     await pasteFiles({ words: "/work/named.md" });
 
     expect(field().value).toBe("/work/named.md");
+  });
+
+  // **An image is on the clipboard as bytes and nothing else** (`AMB-D-854`), so the host is asked
+  // to write it down and what goes in is the path it landed at — bare, the same as a copied file's,
+  // and not a markdown image: the draft is plain text and this page does not decide otherwise.
+  it("writes a pasted image down and puts the path it landed at in", async () => {
+    hoisted.paths = [];
+    await draw(1);
+
+    await pasteImage();
+
+    expect(field().value).toBe("/tmp/amenbo-pasted-page-9f1c/pasted-0a0b0c0d.png");
+  });
+
+  // The paste carried no words either — an image never does — so there is nothing to fall back to,
+  // and the press lands on a draft that is exactly as it was.
+  it("leaves the draft as it was, where the image could not be written down", async () => {
+    hoisted.paths = [];
+    hoisted.wrote = null;
+    await draw(1);
+    await type("書きかけ");
+
+    await pasteImage();
+
+    expect(field().value).toBe("書きかけ");
   });
 
   it("keeps what a paste left, the way it keeps what was typed", async () => {

@@ -7,7 +7,7 @@
 // editor whose layout does not run under jsdom.
 
 import type { Extension } from "@codemirror/state";
-import { takesPastedFiles } from "../core/clipFiles";
+import { takesPastedFiles, writesPastedImage } from "../core/clipFiles";
 import { langFor, type LangId } from "./grammars";
 
 /**
@@ -185,15 +185,29 @@ export async function mountEditor(
   //
   // A file this panel cannot save takes no paste at all: the editor refuses every other way of
   // typing into it, and a door of our own that wrote where those will not would be the one way in.
+  //
+  // **A screenshot is written down first and its path put in, the same as a copied file's**
+  // (`AMB-D-854`). An image on the clipboard is bytes and no file, so there is nothing to name until
+  // it has been put somewhere; the host puts it in a directory belonging to the run, because an
+  // editor is no pane and has no session of its own (`../core/clipFiles`). The path goes in bare
+  // like every other — what the file being edited makes of it is the file's business, and an editor
+  // that wrote markdown into a `.rs` would be wrong more often than right.
+  //
+  // ⚠ **The picture does not outlast the app**, so what is saved is a path that will stop reaching
+  // it. That is the trade: it is for handing a screenshot to something running now.
   const stopPaste = editable
-    ? takesPastedFiles(parent, (paths, words) => {
-        const text = paths.length > 0 ? paths.join("\n") : words;
-        if (!text) return;
-        editor.dispatch(editor.state.replaceSelection(text), {
-          scrollIntoView: true,
-          userEvent: "input.paste",
-        });
-      })
+    ? takesPastedFiles(
+        parent,
+        (paths, words) => {
+          const text = paths.length > 0 ? paths.join("\n") : words;
+          if (!text) return;
+          editor.dispatch(editor.state.replaceSelection(text), {
+            scrollIntoView: true,
+            userEvent: "input.paste",
+          });
+        },
+        (bytes, mime) => writesPastedImage(bytes, mime, null),
+      )
     : () => {};
 
   return {

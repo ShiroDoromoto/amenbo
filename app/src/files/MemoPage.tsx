@@ -30,7 +30,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { takesPastedFiles } from "../core/clipFiles";
+import { takesPastedFiles, writesPastedImage } from "../core/clipFiles";
 import { t } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { projectMemo, setProjectMemo } from "./memo";
@@ -96,17 +96,32 @@ export function MemoPage({ projectId }: { projectId: number }) {
   //
   // It goes in where the caret is and takes the selection with it, which is what every other
   // paste into a text box does.
+  //
+  // **A screenshot is written down first and its path put in, the same as a copied file's**
+  // (`AMB-D-854`). An image on the clipboard is bytes and no file, so there is nothing to name until
+  // it has been put somewhere; the host puts it in a directory belonging to the run, because this
+  // page is no pane and has no session of its own (`../core/clipFiles`). What goes in is the path
+  // and nothing around it — not a markdown image, which would be this page deciding the draft is
+  // markdown, and it is plain text.
+  //
+  // ⚠ **The picture does not outlast the app.** A draft kept over a restart keeps a path that
+  // reaches nothing, which is the trade this door is: it is for a screenshot being handed to an
+  // agent now, not for a draft that holds pictures.
   useEffect(() => {
     const field = box.current;
     if (field === null) return;
-    return takesPastedFiles(field, (paths, words) => {
-      const arrived = paths.length > 0 ? paths.join("\n") : words;
-      if (arrived === "") return;
-      const from = field.selectionStart;
-      const to = field.selectionEnd;
-      typed(field.value.slice(0, from) + arrived + field.value.slice(to));
-      caret.current = from + arrived.length;
-    });
+    return takesPastedFiles(
+      field,
+      (paths, words) => {
+        const arrived = paths.length > 0 ? paths.join("\n") : words;
+        if (arrived === "") return;
+        const from = field.selectionStart;
+        const to = field.selectionEnd;
+        typed(field.value.slice(0, from) + arrived + field.value.slice(to));
+        caret.current = from + arrived.length;
+      },
+      (bytes, mime) => writesPastedImage(bytes, mime, null),
+    );
   }, [typed]);
 
   // And the caret put back, before the browser has drawn the field the state came down into.

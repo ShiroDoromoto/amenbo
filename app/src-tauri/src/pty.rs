@@ -637,9 +637,10 @@ const STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(24 * 60 
 /// temporary directory ([`OUR_PREFIXES`]).
 const DROP_BOX_PREFIX: &str = "amenbo-session-";
 
-/// What a pane's pasted images are kept under. **A directory of its own rather than the drop box**,
-/// because the drop box is watched and everything put in it is read as a statement the agent made
-/// ([`listen`]) — an image left there would be read as one and thrown away for not parsing.
+/// What pasted images are kept under — a pane's ([`paste_box`]) and the run's own ([`page_box`])
+/// alike. **A directory apart from the drop box**, because the drop box is watched and everything
+/// put in it is read as a statement the agent made ([`listen`]) — an image left there would be read
+/// as one and thrown away for not parsing.
 const PASTE_BOX_PREFIX: &str = "amenbo-pasted-";
 
 /// The names the sweep answers for: every directory this process leaves in the temporary directory
@@ -653,33 +654,70 @@ fn paste_box(session: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("{PASTE_BOX_PREFIX}{session}"))
 }
 
-/// Write an image the webview was handed into the pane's own directory, and answer with the path it
-/// landed at.
+/// What the run's own paste box is named between the prefix and its randomness. **`page-` is a name
+/// no session can have**: a session id is sixteen bytes in hex ([`new_session`]), and hex has no `p`
+/// and no `-` in it, so the run's box can never be mistaken for a pane's.
+const PAGE_BOX_INFIX: &str = "page-";
+
+/// Where an image pasted somewhere that is not a pane goes — the draft page's field, the file
+/// panel's editor.
+///
+/// **One directory for the run rather than one per place**, because neither of those places is a
+/// session: they are drawn once for the whole window and nothing closes them the way closing a pane
+/// closes a terminal. So there is no moment to take a box of theirs away at, and a box per place
+/// would only mean more of them left standing.
+///
+/// **It is left for the next launch's sweep**, which is what the app does with everything volatile
+/// it cannot take away on the way out (`sweep`). A path pasted into a draft therefore reaches the
+/// image for as long as it is worth reaching — the run it was pasted in, and a while after — and a
+/// draft kept for longer than that keeps a path and not a picture. That is the whole of what this
+/// door promises.
+///
+/// Drawn once and held, so every paste in one run lands in the same place.
+fn page_box() -> &'static std::path::Path {
+    static BOX: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    BOX.get_or_init(|| {
+        std::env::temp_dir().join(format!("{PASTE_BOX_PREFIX}{PAGE_BOX_INFIX}{}", random_hex(8)))
+    })
+}
+
+/// Write an image the webview was handed into the directory kept for whoever took the paste, and
+/// answer with the path it landed at.
 ///
 /// **The bytes are read in the webview and nothing here decodes them** (`AMB-D-854`). The engine has
 /// already turned whatever the machine's clipboard was holding into a `File` whose type it names —
 /// macOS's TIFF and Windows' DIB both arrive as PNG — so this door writes what it is given under the
 /// name that type asks for.
 ///
-/// **What it is for is that a pane can only be pasted into as text.** A terminal takes a line, so an
-/// image has to become a path before the paste can happen at all, and the pasting side puts the
-/// quoting on the path it gets back (`AMB-D-832`).
+/// **What it is for is that a place a person writes can only be pasted into as text.** A terminal
+/// takes a line, and so does a draft and a file being edited, so an image has to become a path
+/// before the paste can happen at all. What is written around the path is the pasting side's: a pane
+/// quotes it because a name with a space in it is two words to a shell, and an editor does not
+/// (`AMB-D-832`).
 ///
-/// A session that names no open terminal is refused rather than written for: the directory is the
-/// pane's, and one made for a pane that is gone is one nothing will ever take away.
+/// **A pane names its session and everywhere else names none.** With a session, the image goes to
+/// that pane's box and a session naming no open terminal is refused rather than written for — one
+/// made for a pane that is gone is one nothing will ever take away. Without, it goes to the run's
+/// own box ([`page_box`]), which is what the draft page and the panel's editor paste into
+/// (`AMB-T-4446`).
 #[tauri::command]
 pub fn pty_paste_image(
     terminals: tauri::State<'_, Terminals>,
-    session: String,
+    session: Option<String>,
     mime: String,
     bytes: Vec<u8>,
 ) -> Result<String, CmdError> {
-    if !terminals.0.lock().expect("terminals lock").contains_key(&session) {
-        return Err(gone(&session));
-    }
+    let dir = match &session {
+        Some(session) => {
+            if !terminals.0.lock().expect("terminals lock").contains_key(session) {
+                return Err(gone(session));
+            }
+            paste_box(session)
+        }
+        None => page_box().to_path_buf(),
+    };
     let extension = extension_for(&mime)
         .ok_or_else(|| paste_refused(format!("{mime} is not an image type a file can be named for")))?;
-    let dir = paste_box(&session);
     std::fs::create_dir_all(&dir).map_err(paste_refused)?;
     let path = dir.join(format!("pasted-{}.{extension}", random_hex(4)));
     std::fs::write(&path, bytes).map_err(paste_refused)?;
@@ -1313,6 +1351,28 @@ mod tests {
         assert_ne!(pasted, drop_box);
         assert!(!pasted.starts_with(&drop_box), "and neither is inside the other");
         assert!(!drop_box.starts_with(&pasted));
+    }
+
+    /// The box the draft page and the editor paste into is the run's, and it is one box: every paste
+    /// made outside a pane lands in the same place for as long as the app is up.
+    #[test]
+    fn everywhere_that_is_not_a_pane_pastes_into_one_box() {
+        assert_eq!(page_box(), page_box(), "asked twice in a run, it is the same directory");
+    }
+
+    /// It is a box the sweep answers for, and one no pane can be handed. A session is hex, and this
+    /// is not — so a run's box and a pane's never collide however either is named.
+    #[test]
+    fn the_run_s_box_is_swept_and_is_no_pane_s() {
+        let name = page_box().file_name().expect("a name").to_string_lossy().into_owned();
+        assert!(
+            OUR_PREFIXES.iter().any(|p| name.starts_with(p)),
+            "the sweep would leave `{name}` behind"
+        );
+        assert!(name.starts_with(&format!("{PASTE_BOX_PREFIX}{PAGE_BOX_INFIX}")));
+        // No session can be named into this box, because a session id is hex and this is not.
+        assert!(!new_session().starts_with(PAGE_BOX_INFIX), "a session cannot be named `page-…`");
+        assert_ne!(page_box(), paste_box(&new_session()), "so it is not any pane's");
     }
 
     /// The one statement a pane keeps for itself, taken off the same drop box the window reads.

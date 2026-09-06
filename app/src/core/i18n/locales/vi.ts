@@ -189,7 +189,6 @@ export const vi: Translation = {
     "detail.unassign": "Bỏ người phụ trách", "detail.assignAi": "Giao cho AI",
     "detail.assignee": "Người phụ trách", "detail.unassigned": "Chưa giao",
     "detail.project": "Dự án", "detail.none": "Không có",
-    "detail.workingIn": "Đang làm ở", "detail.goToPane": "Đến khung này",
     "detail.blockedBy": "Đang chờ", "detail.blockedByHint": "bị chặn (phụ thuộc)",
     "detail.notStarted": "Bắt đầu từ",
     "detail.draft": "Tạo", "detail.finishCreating": "Hoàn tất việc tạo",
@@ -333,9 +332,7 @@ export const vi: Translation = {
     "restart.button": "Khởi động lại",
     "restart.failed": "Không khởi động lại được. Hãy thoát Amenbo rồi mở lại.",
     "restart.confirm": "Khởi động lại Amenbo? Mọi terminal đang mở sẽ kết thúc, và không phiên nào trở lại ở lần chạy sau.",
-    "restart.holding": "Các phiên đang chạy vẫn đang giữ:",
-    "restart.anyway": "Khởi động lại nguyên như vậy",
-    "restart.cancel": "Hủy",
+
     "restart.stuck.title": "Nếu khởi động lại vẫn không được",
     "restart.stuck.intro": "Thì Amenbo trên đĩa vẫn là bản cũ. Không có đường hạ phiên bản — đường về là bản sao lưu trước khi chuyển đổi mà bản cập nhật để lại.",
     "restart.stuck.how": "Hoặc cài bản mới hơn (GUI và CLI đi cùng nhau), hoặc phục hồi từ bản sao lưu đó trên dòng lệnh:",
@@ -514,8 +511,7 @@ export const vi: Translation = {
     "talk.shell": "Shell thường",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "Đang trao đổi", "talk.holding": "{n} việc",
-    "talk.finished": "xong {n}", "talk.premiseBroken": "Một tiền đề đã không còn đúng",
+
     "talk.quiet": "yên {n} phút",
     "talk.unsent": "Chưa được gửi. Nhấn Enter để gửi.",
     "face.switch": "Cửa sổ này đang hiển thị gì",
@@ -527,9 +523,7 @@ export const vi: Translation = {
     "face.drop": "Bỏ khung này",
     "face.dropConfirm": "Bỏ khung này? Terminal trong đó sẽ kết thúc, và chỗ này không trở lại ở lần chạy sau.",
     "quit.confirm": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc, và không phiên nào trở lại ở lần chạy sau.",
-    "quit.holding": "Các phiên đang chạy vẫn đang giữ:",
-    "quit.anyway": "Thoát nguyên như vậy",
-    "quit.cancel": "Hủy",
+
     "face.turnTitle": "Amenbo — đến lượt bạn",
     "face.turnBody": "Một terminal đang đợi bạn.",
     "face.ended": "Chương trình trong terminal này đã kết thúc.",

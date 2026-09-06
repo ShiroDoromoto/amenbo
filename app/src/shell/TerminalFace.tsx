@@ -252,8 +252,8 @@ export function TerminalFace({
   // it belongs in the arrangement that is kept (`../talk/layout`).
   const startWith = useRef(new Map<string, string>());
 
-  // Which panes have a turn standing in them — the agent said so, or the ledger says a task the pane
-  // is holding is no longer ready (`../talk/plate`). It is state rather than a ref because it is
+  // Which panes have a turn standing in them — the agent said so, or the sentence Amenbo opened it
+  // with is still unsent (`../talk/plate`). It is state rather than a ref because it is
   // drawn: the page a pane is on wears a dot for it, and so does a project that is not the one being
   // shown, which is how a turn nobody is looking at is knocked about at all (`AMB-T-3610`). The shell
   // above is told the one fact it draws — that somebody's turn has come somewhere behind this face.

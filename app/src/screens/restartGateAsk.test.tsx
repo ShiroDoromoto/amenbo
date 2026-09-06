@@ -6,9 +6,9 @@
 // So the panes of that session are still open behind the screen, and starting again ends every one of
 // them for good.
 //
-// It asks, and it does not name: what a session is holding is written where only the store can read
-// it (`session_work`), and the store is the one thing this screen cannot open. So the question here is
-// the plain one, and it is only raised when there is a terminal to lose.
+// It asks, and it does not name: what a way out of the app says is that a terminal is going, and
+// nothing about what any of them was doing (`AMB-D-858`). So the question is raised only when there
+// is a terminal to lose.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

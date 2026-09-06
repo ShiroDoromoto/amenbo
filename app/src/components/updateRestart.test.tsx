@@ -2,13 +2,11 @@
 // The restart that applies an update, and what it is about to take with it.
 //
 // Pressing it ends the process — every terminal running in it goes, and no session comes back on the
-// next run (`../talk/terminal`, `crate::pty`). That is the same loss the way out of the app names, so
-// the banner names it the same way (`../shell/HoldingAsk`): panes open and reservations held raises
-// the box that lists them by number, panes open and nothing held is the plain confirmation, and
-// nothing open says nothing at all.
+// next run (`../talk/terminal`, `crate::pty`). That is the same loss the way out of the app asks
+// about, so the banner asks it the same way (`../shell/openPanes`): panes open is the confirmation,
+// and nothing open says nothing at all.
 //
-// What is pinned here is that no answer but a yes ever reaches `restartApp`, and that the box which
-// names reservations moves none of them (`AMB-D-855`).
+// What is pinned here is that no answer but a yes ever reaches `restartApp`.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,19 +14,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const hoisted = vi.hoisted(() => ({
   /** The sessions the host says are open (`crate::pty::pty_sessions`). */
   running: [] as { session: string; startedAt: string; folder: string | null }[],
-  /** What the volatile area answers each of them is holding (`session_work`). */
-  holding: {} as Record<string, number[]>,
-  /** Whether that read is refused, which is what a store that cannot be opened does. */
-  workFails: false,
   /** How many times the process was asked to start again. */
   restarted: 0,
   /** Whether the person said yes to the plain confirmation. */
   agrees: true,
   /** How many times they were asked it. */
   asked: 0,
-  /** Any task the banner moved. Never anything: the box names reservations and writes none of them
-   *  (`AMB-D-855`), and this is what says so. */
-  moved: [] as Array<[number, string]>,
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -50,7 +41,6 @@ vi.mock("../core/mutations", async (importOriginal) => {
     openLatestInstaller: vi.fn(async () => {}),
     installUpdate: vi.fn(async () => true),
     restartApp: vi.fn(async () => { hoisted.restarted++; }),
-    setStatus: vi.fn(async (id: number, status: string) => { hoisted.moved.push([id, status]); }),
   };
 });
 vi.mock("../core/dialog", () => ({
@@ -60,19 +50,14 @@ vi.mock("../core/dialog", () => ({
   }),
 }));
 vi.mock("../core/ipc", () => ({
-  invoke: vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
+  invoke: vi.fn(async (cmd: string) => {
     if (cmd === "pty_sessions") return hoisted.running;
-    if (cmd === "session_work") {
-      if (hoisted.workFails) throw new Error("the store could not be opened");
-      return { holding: hoisted.holding[String(args?.session)] ?? [], finished: 0 };
-    }
     throw new Error(`unexpected command ${cmd}`);
   }),
 }));
 
 import { UpdateBanner } from "./UpdateBanner";
 import { t } from "../core/i18n";
-import { taskRef } from "../core/idref";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -101,12 +86,9 @@ const press = async (label: string) => {
 
 beforeEach(() => {
   hoisted.running = [];
-  hoisted.holding = {};
-  hoisted.workFails = false;
   hoisted.restarted = 0;
   hoisted.agrees = true;
   hoisted.asked = 0;
-  hoisted.moved = [];
   localStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -133,7 +115,7 @@ describe("the restart that applies the update", () => {
     expect(hoisted.restarted).toBe(1);
   });
 
-  it("asks once when terminals are open but nothing is reserved", async () => {
+  it("asks once when a terminal is open", async () => {
     open("a", "b");
     await offered();
     await press(t("update.restart"));
@@ -151,55 +133,5 @@ describe("the restart that applies the update", () => {
     expect(hoisted.restarted).toBe(0);
     // The banner is still standing, so the reader can press it again once they are ready.
     expect(container.textContent).toContain(t("update.ready"));
-  });
-
-  // A store that cannot be read says nothing about reservations, and a question raised on a guess
-  // would name tasks nobody is losing. The terminals are still open, so it still asks.
-  it("falls to the plain question when the reservations cannot be read", async () => {
-    open("a");
-    hoisted.workFails = true;
-    await offered();
-    await press(t("update.restart"));
-
-    expect(hoisted.asked).toBe(1);
-    expect(hoisted.restarted).toBe(1);
-  });
-});
-
-describe("the reservations the restart would leave standing", () => {
-  it("names them, rather than asking the plain question", async () => {
-    open("a", "b");
-    hoisted.holding = { a: [12], b: [3] };
-    await offered();
-    await press(t("update.restart"));
-
-    expect(hoisted.asked).toBe(0);
-    expect(hoisted.restarted).toBe(0);
-    expect(document.body.textContent).toContain(t("restart.holding"));
-    expect(document.body.textContent).toContain(taskRef(3));
-    expect(document.body.textContent).toContain(taskRef(12));
-  });
-
-  it("leaves every one of them standing on the way out", async () => {
-    open("a");
-    hoisted.holding = { a: [3, 12] };
-    await offered();
-    await press(t("update.restart"));
-    await press(t("restart.anyway"));
-
-    expect(hoisted.moved).toEqual([]);
-    expect(hoisted.restarted).toBe(1);
-  });
-
-  it("moves nothing and goes nowhere when the question is dropped", async () => {
-    open("a");
-    hoisted.holding = { a: [7] };
-    await offered();
-    await press(t("update.restart"));
-    await press(t("restart.cancel"));
-
-    expect(hoisted.moved).toEqual([]);
-    expect(hoisted.restarted).toBe(0);
-    expect(document.body.textContent).not.toContain(t("restart.holding"));
   });
 });

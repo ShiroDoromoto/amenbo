@@ -189,7 +189,6 @@ export const it: Translation = {
     "detail.unassign": "Togli il responsabile", "detail.assignAi": "Delega all'IA",
     "detail.assignee": "Responsabile", "detail.unassigned": "Senza responsabile",
     "detail.project": "Progetto", "detail.none": "Nessuno",
-    "detail.workingIn": "In lavorazione in", "detail.goToPane": "Vai a questo riquadro",
     "detail.blockedBy": "In attesa di", "detail.blockedByHint": "bloccata (dipendenza)",
     "detail.notStarted": "Comincia il",
     "detail.draft": "Creazione", "detail.finishCreating": "Completa la creazione",
@@ -338,9 +337,7 @@ export const it: Translation = {
     "restart.button": "Riavvia",
     "restart.failed": "Non è stato possibile riavviare. Chiudi Amenbo e riaprilo.",
     "restart.confirm": "Riavviare Amenbo? Tutti i terminali aperti terminano e nessuna sessione torna al prossimo avvio.",
-    "restart.holding": "Le sessioni in corso tengono ancora:",
-    "restart.anyway": "Riavvia così com'è",
-    "restart.cancel": "Annulla",
+
     "restart.stuck.title": "Se riavviare non basta",
     "restart.stuck.intro": "Allora l'Amenbo sul disco è ancora quello vecchio. Non c'è modo di tornare a una versione precedente — la strada di ritorno è il backup pre-migrazione lasciato dall'aggiornamento.",
     "restart.stuck.how": "O installi la versione più nuova (l'interfaccia e la riga di comando vengono distribuite insieme), o ripristini da quel backup da riga di comando:",
@@ -532,8 +529,7 @@ export const it: Translation = {
     "talk.shell": "Shell semplice",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "In conversazione", "talk.holding": "{n} attività",
-    "talk.finished": "{n} completate", "talk.premiseBroken": "Una premessa non regge più",
+
     "talk.quiet": "fermo da {n} min",
     "talk.unsent": "Non ancora inviato. Premi Invio per inviarlo.",
     "face.switch": "Che cosa mostra questa finestra",
@@ -545,9 +541,7 @@ export const it: Translation = {
     "face.drop": "Rimuovi questo riquadro",
     "face.dropConfirm": "Rimuovere questo riquadro? Il terminale al suo interno termina e il posto non torna al prossimo avvio.",
     "quit.confirm": "Uscire da Amenbo? Tutti i terminali aperti terminano e nessuna sessione torna al prossimo avvio.",
-    "quit.holding": "Le sessioni in corso tengono ancora:",
-    "quit.anyway": "Esci così com'è",
-    "quit.cancel": "Annulla",
+
     "face.turnTitle": "Amenbo — tocca a te",
     "face.turnBody": "Un terminale ti sta aspettando.",
     "face.ended": "Il programma di questo terminale è terminato.",

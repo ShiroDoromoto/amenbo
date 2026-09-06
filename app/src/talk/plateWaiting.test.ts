@@ -6,8 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionSaidDto } from "../bindings/bindings";
 
-// The two boundaries the plate reaches across. Neither has anything to say about a turn standing.
-vi.mock("../core/ipc", () => ({ invoke: async () => ({ holding: [], finished: 0 }) }));
+// The one boundary the plate reaches across. It has nothing to say about a turn standing.
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
 vi.mock("./frames", async (orig) => ({
   ...(await orig<typeof import("./frames")>()),

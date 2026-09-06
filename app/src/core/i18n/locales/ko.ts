@@ -186,7 +186,6 @@ export const ko: Translation = {
     "detail.unassign": "담당 해제", "detail.assignAi": "AI에게 맡기기",
     "detail.assignee": "담당", "detail.unassigned": "담당 없음",
     "detail.project": "프로젝트", "detail.none": "없음",
-    "detail.workingIn": "작업 중인 곳", "detail.goToPane": "이 페인으로 가기",
     "detail.blockedBy": "기다리는 대상", "detail.blockedByHint": "막힘(의존)",
     "detail.notStarted": "시작일",
     "detail.draft": "작성", "detail.finishCreating": "작성 마치기",
@@ -330,9 +329,7 @@ export const ko: Translation = {
     "restart.button": "다시 시작",
     "restart.failed": "다시 시작하지 못했습니다. Amenbo를 끝내고 다시 여세요.",
     "restart.confirm": "Amenbo를 다시 시작할까요? 열려 있는 터미널이 모두 끝나고, 다음에 켜도 세션은 돌아오지 않습니다.",
-    "restart.holding": "돌고 있는 세션이 아직 쥐고 있습니다:",
-    "restart.anyway": "그대로 다시 시작",
-    "restart.cancel": "그만두기",
+
     "restart.stuck.title": "다시 시작해도 안 된다면",
     "restart.stuck.intro": "그렇다면 디스크의 Amenbo가 아직 예전 것입니다. 되돌리는 길은 없고, 돌아가는 길은 업데이트가 남긴 이관 전 백업뿐입니다.",
     "restart.stuck.how": "새 버전을 설치하거나(GUI와 명령줄은 함께 배포됩니다), 명령줄에서 그 백업으로 복원하세요:",
@@ -510,8 +507,7 @@ export const ko: Translation = {
     "talk.shell": "일반 셸",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "상의 중", "talk.holding": "{n}건",
-    "talk.finished": "완료 {n}건", "talk.premiseBroken": "전제가 무너졌습니다",
+
     "talk.quiet": "{n}분째 조용함",
     "talk.unsent": "아직 보내지 않았습니다. Enter 를 누르면 보냅니다.",
     "face.switch": "이 창이 보여 주는 화면",
@@ -523,9 +519,7 @@ export const ko: Translation = {
     "face.drop": "이 페인 지우기",
     "face.dropConfirm": "이 페인을 지울까요? 안에서 돌던 터미널은 끝나고, 다음에 켜도 이 자리는 돌아오지 않습니다.",
     "quit.confirm": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝나고, 다음에 켜도 세션은 돌아오지 않습니다.",
-    "quit.holding": "돌고 있는 세션이 아직 쥐고 있습니다:",
-    "quit.anyway": "그대로 종료",
-    "quit.cancel": "그만두기",
+
     "face.turnTitle": "Amenbo — 당신 차례입니다",
     "face.turnBody": "터미널이 당신을 기다리고 있습니다.",
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",

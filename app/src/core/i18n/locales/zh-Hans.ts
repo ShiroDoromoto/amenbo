@@ -187,7 +187,6 @@ export const zhHans: Translation = {
     "detail.unassign": "取消分配", "detail.assignAi": "委派给 AI",
     "detail.assignee": "负责人", "detail.unassigned": "未分配",
     "detail.project": "项目", "detail.none": "无",
-    "detail.workingIn": "正在此处进行", "detail.goToPane": "前往此窗格",
     "detail.blockedBy": "等待", "detail.blockedByHint": "受阻（依赖）",
     "detail.notStarted": "开始于",
     "detail.draft": "创建", "detail.finishCreating": "完成创建",
@@ -331,9 +330,7 @@ export const zhHans: Translation = {
     "restart.button": "重新启动",
     "restart.failed": "无法重新启动。请退出 Amenbo 后再打开。",
     "restart.confirm": "要重新启动 Amenbo 吗？打开的终端都会结束，下次启动时会话不会回来。",
-    "restart.holding": "仍在运行的会话持有：",
-    "restart.anyway": "直接重新启动",
-    "restart.cancel": "取消",
+
     "restart.stuck.title": "如果重新启动也不管用",
     "restart.stuck.intro": "那说明磁盘上的 Amenbo 仍是旧的。没有降级这条路——回头路是更新时留下的迁移前备份。",
     "restart.stuck.how": "要么安装更新的版本（GUI 与命令行是一起发布的），要么在命令行从那份备份恢复：",
@@ -511,8 +508,7 @@ export const zhHans: Translation = {
     "talk.shell": "普通 Shell",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "商议中", "talk.holding": "{n} 项",
-    "talk.finished": "已完成 {n} 项", "talk.premiseBroken": "有一个前提不成立了",
+
     "talk.quiet": "已安静 {n} 分钟",
     "talk.unsent": "还没有发送。按 Enter 即可发送。",
     "face.switch": "此窗口显示的界面",
@@ -524,9 +520,7 @@ export const zhHans: Translation = {
     "face.drop": "移除此窗格",
     "face.dropConfirm": "要移除此窗格吗？里面的终端会结束，下次启动时这个位置不会回来。",
     "quit.confirm": "要退出 Amenbo 吗？打开的终端都会结束，下次启动时会话不会回来。",
-    "quit.holding": "仍在运行的会话持有：",
-    "quit.anyway": "直接退出",
-    "quit.cancel": "取消",
+
     "face.turnTitle": "Amenbo — 轮到你了",
     "face.turnBody": "有一个终端在等你。",
     "face.ended": "此终端中的程序已退出。",

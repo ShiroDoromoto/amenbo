@@ -917,13 +917,6 @@ impl Instructor {
             (Domain::Store, "menu-reads") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
-            // The pane's own name, on the row the task draws for it. A road names its own pane
-            // (`terminal name-pane`), so what the row carries is the road's own words and no part of
-            // the interface — which is what lets the absent half be read: a task with no such row has
-            // those words nowhere on it.
-            (Domain::Task, "pane") => {
-                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
-            }
             // The category's own name, which is what its control on the pane is labelled with. The
             // reader gave that name, so it is not a word of the interface's — and on the `present:
             // false` side its absence from the pane is the whole of the claim.
@@ -1626,11 +1619,15 @@ impl Instructor {
             }
             // The answer given to that question, and the step the app actually goes out on.
             //
-            // Which question is standing is the app's business and not the road's, so `answer` is what
-            // a road says about the one it expects: left out for the plain one a process holding no
-            // reservation gets, and naming one of the two otherwise. Each is said here by what it
-            // does rather than by what it reads: the words are the interface's own and the run's
-            // language is whatever the machine is set to.
+            // `answer` is which way, and it is left out for `leave` — the answer the question was
+            // raised on the way to. Each is said here by what it does rather than by what it reads:
+            // the words are the interface's own and the run's language is whatever the machine is set
+            // to.
+            //
+            // **What the question says is that a terminal is going, and nothing about what any of
+            // them was doing.** So there is nothing here to read against a road's own
+            // words — the reading is on the ledger, one step later, where a reservation left standing
+            // is a fact and not a screen's guess.
             //
             // Everything but `cancel` ends the app, and the line says so along with what the run does
             // next: the operator watches the app they were working in go, and the harness brings
@@ -1638,38 +1635,18 @@ impl Instructor {
             // has none.
             (Domain::Store, "answer-quit") => {
                 let back = " The run then brings Amenbo up again on the same store, so the window on the screen after that is a new one.";
-                match arg_str(with, "answer") {
-                    // Nothing held, so nothing to choose between. The plain question, and yes.
-                    None => format!(
-                        "The question standing on the board is the plain one — no session is holding anything. Read it, then answer it yes. Every terminal that was open ends with the app and none of them comes back.{back}"
+                let question = "The question standing on the board says every terminal open in Amenbo is about to end. Read it, and confirm it names no task and offers nothing to choose between beyond going and staying.";
+                match arg_str(with, "answer").unwrap_or("leave") {
+                    "leave" => format!(
+                        "{question} Answer it yes. Nothing on the ledger is moved: Amenbo ends with every terminal that was open in it, and every reservation one of them made is still held.{back}"
                     ),
-                    Some(answer) => {
-                        // The reading is half the step, and it is the half the question exists for:
-                        // one that named the wrong work, or named none, is the loss it stands in
-                        // front of.
-                        if !with.contains_key("target") {
-                            return Err(
-                                "action `answer-quit` answering the question that names reservations has to name the task it must name — give it a `target`"
-                                    .to_string(),
-                            );
-                        }
-                        let question = format!(
-                            "The question standing on the board names what the sessions still running are holding: read it, and confirm what it lists is the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — and no other. Two answers stand under it.",
-                            self.target_label(with)
-                        );
-                        match answer {
-                            "leave" => format!(
-                                "{question} Press the first of them — the one that goes. Nothing on the ledger is moved: Amenbo ends with every terminal that was open in it, and the task named is still held.{back}"
-                            ),
-                            "cancel" => format!(
-                                "{question} Press the second — the one that stays. Nothing happens at all: the question goes, Amenbo is still running, every pane is where it was, and the task named is still held."
-                            ),
-                            other => {
-                                return Err(format!(
-                                    "action `answer-quit` does not know the answer `{other}` — it is leave or cancel"
-                                ))
-                            }
-                        }
+                    "cancel" => format!(
+                        "{question} Answer it no. Nothing happens at all: the question goes, Amenbo is still running, and every pane is where it was."
+                    ),
+                    other => {
+                        return Err(format!(
+                            "action `answer-quit` does not know the answer `{other}` — it is leave or cancel"
+                        ))
                     }
                 }
             }
@@ -1913,21 +1890,6 @@ impl Instructor {
             // Which face the one window is showing. The segments are named by what each shows rather
             // than by the word drawn on them, since those words are the interface's own and the run's
             // language is whatever the machine is set to.
-            // The press that goes from a task to the pane its work is happening in. What it lands on
-            // is deliberately not promised here: the terminal face may be behind the other segment of
-            // this window or in a window of its own, and which of those is the run's business. So the
-            // step is the press and the reading of the row before it, and where it landed is read by
-            // the step after (`terminal label`).
-            //
-            // That reading is the row above the pane rather than the pane's own body, and a road
-            // whose reservation was made with `run` has no choice about it: `run` clears the screen
-            // before it types, so whatever line named the pane at the top of the road is in the
-            // scrollback by the time the press lands.
-            (Domain::Task, "go-to-pane") => format!(
-                "On the task \"{}\" standing open, press the row saying where the work is happening — the one carrying the pane's name \"{}\". The screen goes to the terminal, on the page that pane is on, with that pane the one being worked in. Nothing is typed into it: it is somebody's terminal, and being sent to it is not being given it.",
-                self.target_label(with),
-                req(with, "shows")?
-            ),
             (Domain::Terminal, "show-face") => match req(with, "face")? {
                 "tasks" => "In the pair of segments at the top of the window, press the one that shows the ledger — the tasks, the projects and the board."
                     .to_string(),
@@ -2985,24 +2947,6 @@ impl Instructor {
             // whatever row led here is carrying the title too — a hit, or the question the terminal face
             // puts — so a line read on it would pass over a press that opened nothing, and over one that
             // opened the wrong record just as quietly.
-            // The row that says where the work is happening. It is read on the task's own face, and
-            // what it carries is the pane's name rather than anything about the reservation — the
-            // status beside it already says that, and this says whose terminal it stands in.
-            //
-            // The absent half is not "no reservation". A move made outside a pane leaves no row, and a
-            // pane that has closed takes its row with it while the reservation stands — so the line says what is being looked for and never what it would mean.
-            (Domain::Task, "pane") => match present(with) {
-                true => format!(
-                    "On the ledger, open the task \"{}\" and confirm it draws a row saying where the work is happening, carrying the pane's own name \"{}\" — what that pane was named, which nothing else on this face says.",
-                    self.target_label(with),
-                    req(with, "shows")?
-                ),
-                false => format!(
-                    "On the ledger, open the task \"{}\" and confirm nothing on it says the work is happening in the pane \"{}\" — that row is not drawn at all. What the task says about itself otherwise is unchanged; this is about the row and nothing else.",
-                    self.target_label(with),
-                    req(with, "shows")?
-                ),
-            },
             (Domain::Task, "opened") => match present(with) {
                 true => format!(
                     "Confirm the record \"{}\" is the one standing open in the pane, showing \"{}\" — words the row that led here does not carry.",
@@ -5239,7 +5183,7 @@ fn ends_the_run(step: &Step) -> bool {
 /// It is asked of the step rather than declared in the scenario, for the reason [`ends_the_run`] is:
 /// an answer that takes the door takes it, and a road that could say otherwise would be reading a
 /// window nothing had left standing. Two steps do it — a `quit` nothing was asked about
-/// (`asks: false`), and an `answer-quit` answered anything but `cancel`, the plain yes among them.
+/// (`asks: false`), and an `answer-quit` answered anything but `cancel`, an omitted answer included.
 fn goes_out_the_door(step: &Step) -> bool {
     match step {
         Step::Action { domain: Domain::Store, op, with, .. } if op == "quit" => {
@@ -6081,20 +6025,15 @@ steps_gui:
 
     /// The way out of the app is two steps and the question stands between them, so each half has to
     /// hold on its own: the press says which door was taken and what came of it, and the answer says
-    /// which of the two was pressed and what it left behind. The three ways of writing it wrong — a
-    /// door nobody has, an answer nobody offers, and an answer with nothing named — are turned away
-    /// rather than rendered into a line an operator could not act on.
+    /// which of the two was pressed and what it left behind. The two ways of writing it wrong — a
+    /// door nobody has and an answer nobody offers — are turned away rather than rendered into a line
+    /// an operator could not act on.
     #[test]
     fn the_way_out_of_the_app_says_which_door_it_took_and_what_the_answer_left_behind() {
         let s = load(r#"
 id: x
 title: y
 steps_gui:
-  - type: action
-    domain: task
-    op: create
-    with: { title: Re-line the quench tank }
-    as: tank
   - type: action
     domain: store
     op: quit
@@ -6113,11 +6052,11 @@ steps_gui:
   - type: action
     domain: store
     op: answer-quit
-    with: { target: tank, answer: leave }
+    with: { answer: leave }
   - type: action
     domain: store
     op: answer-quit
-    with: { target: tank, answer: cancel }
+    with: { answer: cancel }
   - type: action
     domain: store
     op: quit
@@ -6125,54 +6064,41 @@ steps_gui:
   - type: action
     domain: store
     op: answer-quit
-    with: { target: tank, answer: think-about-it }
-  - type: action
-    domain: store
-    op: answer-quit
-    with: { answer: leave }
+    with: { answer: think-about-it }
 "#);
         let mut ins = Instructor::new();
         let steps = s.steps(Driver::Gui);
-        // The binding, so the answers below have a title to name.
-        ins.render(&steps[0]).expect("the world's task renders");
 
         // The doors are two, and said apart. Left out, it is the menu.
-        let menu = ins.render(&steps[1]).expect("renders");
+        let menu = ins.render(&steps[0]).expect("renders");
         assert!(menu.contains("from its own menu"), "got: {menu}");
         assert!(menu.contains("does not end"), "got: {menu}");
-        let window = ins.render(&steps[2]).expect("renders");
+        let window = ins.render(&steps[1]).expect("renders");
         assert!(window.contains("close at the corner"), "got: {window}");
 
         // Nothing open to lose: the app goes on the gesture, and the run brings another up.
-        let silent = ins.render(&steps[3]).expect("renders");
+        let silent = ins.render(&steps[2]).expect("renders");
         assert!(silent.contains("Nothing is asked"), "got: {silent}");
         assert!(silent.contains("brings another up"), "got: {silent}");
 
-        // Nothing held: the plain question, and nothing about a reservation on it.
-        let plain = ins.render(&steps[4]).expect("the plain question renders");
-        assert!(plain.contains("answer it yes"), "got: {plain}");
-        assert!(!plain.contains("Two answers"), "got: {plain}");
-
-        // Both name what stands to be lost, and then part company on the outcome.
-        for (i, step) in steps.iter().enumerate().take(7).skip(5) {
+        // The answer, whether it is said or left out. Both go, and neither names a task: what the
+        // question stands in front of is the terminals, and what any of them was doing was never a
+        // thing this box could say honestly.
+        for (i, step) in steps.iter().enumerate().take(5).skip(3) {
             let line = ins.render(step).unwrap_or_else(|e| panic!("step {i}: {e}"));
-            assert!(line.contains("Re-line the quench tank"), "step {i} got: {line}");
-            assert!(line.contains("and no other"), "step {i} got: {line}");
+            assert!(line.contains("names no task"), "step {i} got: {line}");
+            assert!(line.contains("Answer it yes"), "step {i} got: {line}");
+            assert!(line.contains("still held"), "step {i} got: {line}");
         }
-        // Going moves nothing: what it says about the task named is that it is still held.
-        let leave = ins.render(&steps[5]).expect("renders");
-        assert!(leave.contains("still held"), "got: {leave}");
         // The one answer the app survives says so, and says nothing about coming back.
-        let stay = ins.render(&steps[6]).expect("renders");
+        let stay = ins.render(&steps[5]).expect("renders");
         assert!(stay.contains("Amenbo is still running"), "got: {stay}");
         assert!(!stay.contains("brings Amenbo up again"), "got: {stay}");
 
-        let err = ins.render(&steps[7]).unwrap_err();
+        let err = ins.render(&steps[6]).unwrap_err();
         assert!(err.contains("does not know the way out `sideways`"), "got: {err}");
-        let err = ins.render(&steps[8]).unwrap_err();
+        let err = ins.render(&steps[7]).unwrap_err();
         assert!(err.contains("does not know the answer `think-about-it`"), "got: {err}");
-        let err = ins.render(&steps[9]).unwrap_err();
-        assert!(err.contains("give it a `target`"), "got: {err}");
     }
 
     /// The question about which folder a pane works in, on both of its halves. Neither is a reading:
@@ -9261,11 +9187,11 @@ steps_gui:
   - type: action
     domain: store
     op: answer-quit
-    with: { answer: cancel, target: seed }
+    with: { answer: cancel }
   - type: action
     domain: store
     op: answer-quit
-    with: { answer: leave, target: seed }
+    with: { answer: leave }
   - type: action
     domain: store
     op: quit

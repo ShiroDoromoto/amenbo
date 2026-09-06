@@ -200,7 +200,6 @@ const ui = {
   "detail.unassign": "Unassign", "detail.assignAi": "Delegate to AI",
   "detail.assignee": "Assignee", "detail.unassigned": "Unassigned",
   "detail.project": "Project", "detail.none": "None",
-  "detail.workingIn": "Worked in", "detail.goToPane": "Go to this pane",
   "detail.blockedBy": "Waiting on", "detail.blockedByHint": "blocked (dependency)",
   "detail.notStarted": "Starts on",
   // The fourth premise, and the move that ends it. Never "publish" or "approve": the one who created the
@@ -353,9 +352,6 @@ const ui = {
   "restart.button": "Restart",
   "restart.failed": "Could not restart. Quit Amenbo and open it again.",
   "restart.confirm": "Restart Amenbo? Every terminal open in it ends, and no session comes back on the next run.",
-  "restart.holding": "The sessions still running are holding:",
-  "restart.anyway": "Restart as it is",
-  "restart.cancel": "Cancel",
   "restart.stuck.title": "If restarting does not help",
   "restart.stuck.intro": "Then the Amenbo on disk is still the old one. There is no downgrade — the way back is the pre-migration backup the update left behind.",
   "restart.stuck.how": "Either install the newer version (the GUI and the CLI ship together), or restore from that backup on the command line:",
@@ -562,10 +558,8 @@ const ui = {
   // The pane's own prompt, with nothing started at it. It stands wherever the frame puts a choice,
   // so `talk.startWith` names what the row does rather than naming agents alone.
   "talk.shell": "Plain shell",
-  // The one line above a pane of the talk window: what its session is on, and the one thing
-  // worth saying about it. "{n}" is a count of tasks.
-  "talk.idle": "Talking it over", "talk.holding": "{n} tasks",
-  "talk.finished": "{n} done", "talk.premiseBroken": "A premise has broken",
+  // The one line above a pane of the talk window: how long it has been quiet, when there is nothing
+  // the agent said to put there instead. "{n}" is a count of whole minutes.
   "talk.quiet": "quiet for {n} min",
   // The sentence Amenbo opens an agent with, left sitting in the pane's input box. It names neither
   // the agent's product nor anything its screen says: what a program calls its input box is the
@@ -584,13 +578,12 @@ const ui = {
   "face.drop": "Remove this pane",
   "face.dropConfirm": "Remove this pane? The terminal in it ends, and the place does not come back on the next run.",
   // The way out of the whole app, which ends every terminal at once and is asked about for the same
-  // reason one pane is (`app/src/shell/HoldingAsk.tsx`, `crate::quit`). It is its own set of words
-  // rather than the pane's: what is being left behind is every session in the process, and a
-  // sentence about "this pane" would name the wrong thing at the moment it matters most.
+  // reason one pane is (`app/src/shell/openPanes.ts`, `crate::quit`). It is its own sentence rather
+  // than the pane's: what is being left behind is every session in the process, and one about "this
+  // pane" would name the wrong thing at the moment it matters most. It says a terminal is going and
+  // nothing about what any of them was doing — that was a key the world could rewrite behind the
+  // pane, and it is gone (`AMB-D-858`).
   "quit.confirm": "Quit Amenbo? Every terminal open in it ends, and no session comes back on the next run.",
-  "quit.holding": "The sessions still running are holding:",
-  "quit.anyway": "Quit as it is",
-  "quit.cancel": "Cancel",
   // The OS notification a pane raises when its turn has come and nobody is looking at the terminal
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.

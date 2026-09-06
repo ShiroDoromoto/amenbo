@@ -8,7 +8,6 @@
 // has no row at all — the face there is the invitation to choose a folder.
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../core/ipc", () => ({ invoke: async () => ({ holding: [], finished: 0 }) }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
 vi.mock("./frames", async (orig) => ({
   ...(await orig<typeof import("./frames")>()),

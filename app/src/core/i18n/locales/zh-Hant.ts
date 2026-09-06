@@ -187,7 +187,6 @@ export const zhHant: Translation = {
     "detail.unassign": "取消指派", "detail.assignAi": "委派給 AI",
     "detail.assignee": "負責人", "detail.unassigned": "未指派",
     "detail.project": "專案", "detail.none": "無",
-    "detail.workingIn": "正在此處進行", "detail.goToPane": "前往此窗格",
     "detail.blockedBy": "等待", "detail.blockedByHint": "受阻（相依）",
     "detail.notStarted": "開始於",
     "detail.draft": "建立", "detail.finishCreating": "完成建立",
@@ -331,9 +330,7 @@ export const zhHant: Translation = {
     "restart.button": "重新啟動",
     "restart.failed": "無法重新啟動。請結束 Amenbo 後再開啟。",
     "restart.confirm": "要重新啟動 Amenbo 嗎？開啟的終端機都會結束，下次啟動時工作階段不會回來。",
-    "restart.holding": "仍在執行的工作階段持有：",
-    "restart.anyway": "直接重新啟動",
-    "restart.cancel": "取消",
+
     "restart.stuck.title": "如果重新啟動也沒用",
     "restart.stuck.intro": "那表示磁碟上的 Amenbo 仍是舊的。沒有降版這條路——回頭路是更新時留下的遷移前備份。",
     "restart.stuck.how": "要麼安裝較新的版本（GUI 與命令列是一起發布的），要麼在命令列從那份備份還原：",
@@ -511,8 +508,7 @@ export const zhHant: Translation = {
     "talk.shell": "一般 Shell",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "商議中", "talk.holding": "{n} 項",
-    "talk.finished": "已完成 {n} 項", "talk.premiseBroken": "有一個前提不成立了",
+
     "talk.quiet": "已安靜 {n} 分鐘",
     "talk.unsent": "還沒有送出。按 Enter 即可送出。",
     "face.switch": "此視窗顯示的介面",
@@ -524,9 +520,7 @@ export const zhHant: Translation = {
     "face.drop": "移除此窗格",
     "face.dropConfirm": "要移除此窗格嗎？裡面的終端機會結束，下次啟動時這個位置不會回來。",
     "quit.confirm": "要結束 Amenbo 嗎？開啟的終端機都會結束，下次啟動時工作階段不會回來。",
-    "quit.holding": "仍在執行的工作階段持有：",
-    "quit.anyway": "直接結束",
-    "quit.cancel": "取消",
+
     "face.turnTitle": "Amenbo — 輪到你了",
     "face.turnBody": "有一個終端機在等你。",
     "face.ended": "此終端機中的程式已結束。",

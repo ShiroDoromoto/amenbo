@@ -189,7 +189,6 @@ export const th: Translation = {
     "detail.unassign": "ปลดผู้รับผิดชอบ", "detail.assignAi": "มอบให้ AI",
     "detail.assignee": "ผู้รับผิดชอบ", "detail.unassigned": "ยังไม่มอบหมาย",
     "detail.project": "โปรเจกต์", "detail.none": "ไม่มี",
-    "detail.workingIn": "กำลังทำงานใน", "detail.goToPane": "ไปที่บานหน้าต่างนี้",
     "detail.blockedBy": "กำลังรอ", "detail.blockedByHint": "ติดขัด (การพึ่งพา)",
     "detail.notStarted": "เริ่มวันที่",
     "detail.draft": "การสร้าง", "detail.finishCreating": "สร้างให้เสร็จ",
@@ -333,9 +332,7 @@ export const th: Translation = {
     "restart.button": "เริ่มใหม่",
     "restart.failed": "เริ่มใหม่ไม่ได้ ให้ปิด Amenbo แล้วเปิดอีกครั้ง",
     "restart.confirm": "เริ่ม Amenbo ใหม่ไหม เทอร์มินัลที่เปิดอยู่ทั้งหมดจะจบลง และเซสชันจะไม่กลับมาในการเปิดครั้งถัดไป",
-    "restart.holding": "เซสชันที่กำลังทำงานยังถืออยู่:",
-    "restart.anyway": "เริ่มใหม่ตามที่เป็น",
-    "restart.cancel": "ยกเลิก",
+
     "restart.stuck.title": "ถ้าเริ่มใหม่แล้วยังไม่หาย",
     "restart.stuck.intro": "แสดงว่า Amenbo บนดิสก์ยังเป็นตัวเก่า ไม่มีทางลดรุ่น — ทางกลับคือไฟล์สำรองก่อนย้ายข้อมูลที่การอัปเดตทิ้งไว้",
     "restart.stuck.how": "ไม่ติดตั้งรุ่นใหม่กว่า (GUI กับ CLI มาด้วยกัน) ก็กู้คืนจากไฟล์สำรองนั้นบนบรรทัดคำสั่ง:",
@@ -514,8 +511,7 @@ export const th: Translation = {
     "talk.shell": "เชลล์ธรรมดา",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "กำลังปรึกษากันอยู่", "talk.holding": "{n} งาน",
-    "talk.finished": "เสร็จ {n}", "talk.premiseBroken": "เงื่อนไขตั้งต้นไม่เป็นจริงแล้ว",
+
     "talk.quiet": "เงียบมา {n} นาที",
     "talk.unsent": "ยังไม่ได้ส่ง กด Enter เพื่อส่ง",
     "face.switch": "หน้าต่างนี้กำลังแสดงอะไร",
@@ -527,9 +523,7 @@ export const th: Translation = {
     "face.drop": "เอาบานหน้าต่างนี้ออก",
     "face.dropConfirm": "เอาบานหน้าต่างนี้ออกไหม เทอร์มินัลข้างในจะจบลง และที่ว่างนี้จะไม่กลับมาในการเปิดครั้งถัดไป",
     "quit.confirm": "ออกจาก Amenbo ไหม เทอร์มินัลที่เปิดอยู่ทั้งหมดจะจบลง และเซสชันจะไม่กลับมาในการเปิดครั้งถัดไป",
-    "quit.holding": "เซสชันที่กำลังทำงานยังถืออยู่:",
-    "quit.anyway": "ออกตามที่เป็น",
-    "quit.cancel": "ยกเลิก",
+
     "face.turnTitle": "Amenbo — ถึงตาคุณแล้ว",
     "face.turnBody": "มีเทอร์มินัลกำลังรอคุณอยู่",
     "face.ended": "โปรแกรมในเทอร์มินัลนี้จบการทำงานแล้ว",

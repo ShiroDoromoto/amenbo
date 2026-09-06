@@ -6,7 +6,6 @@ import { CommentRow } from "../components/CommentRow";
 import { useStore } from "../store/store";
 import { dataAdapter } from "../mock/adapter";
 import { getSnapshot, inTauri } from "../core/snapshot";
-import { invoke } from "../core/ipc";
 import { useTask } from "../core/reads";
 import { addComment as mutAddComment, editComment as mutEditComment, removeComment as mutRemoveComment, fetchTaskDimensions } from "../core/mutations";
 import { activityRowKey, loadTaskActivity } from "../core/activity";
@@ -21,7 +20,6 @@ import { axesFor } from "../core/appliesTo";
 import { DimensionField } from "../components/DimensionField";
 import type { DimensionDto } from "../bindings/bindings";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
-import type { TaskPaneDto } from "../bindings/bindings";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
 
@@ -106,42 +104,6 @@ export function TaskDetailPane({
       setDimValues(m);
     }).catch(() => {});
     return () => { alive = false; };
-  }, [taskId]);
-  /**
-   * The pane this task is being worked in, where it is being worked in one.
-   *
-   * **It is the way back.** A ref drawn in a pane reaches the task (`../talk/refLinks`); this is the
-   * same road travelled the other way, and without it the connection to the ledger only runs one way.
-   *
-   * Two things have to be true and both are read, never guessed (`AMB-D-758`): the volatile area says
-   * a session is holding this task, and the terminal face says that session is drawn in a pane. Where
-   * either is silent there is no row at all — and silence is **not** "nobody is working on this": a
-   * reservation made in somebody's own terminal, or on another machine, goes through the same path and
-   * leaves this off it.
-   *
-   * It is asked again on two events, because the answer moves for two different reasons: the ledger
-   * changing (`store-changed` — a reservation made or ended, in this pane or another), and the panes
-   * changing (`panes-changed` — the terminal that was holding it has closed).
-   */
-  const [pane, setPane] = useState<TaskPaneDto | null>(null);
-  useEffect(() => {
-    if (!inTauri()) { setPane(null); return; }
-    let alive = true;
-    const ask = () => {
-      void invoke<TaskPaneDto | null>("task_pane", { task: taskId })
-        .then((found) => { if (alive) setPane(found); })
-        .catch(() => {});
-    };
-    ask();
-    let unlisten: (() => void)[] = [];
-    void import("@tauri-apps/api/event")
-      .then(({ listen }) => Promise.all([listen("store-changed", ask), listen("panes-changed", ask)]))
-      .then((offs) => {
-        if (alive) unlisten = offs;
-        else offs.forEach((off) => off());
-      })
-      .catch(() => {});
-    return () => { alive = false; unlisten.forEach((off) => off()); };
   }, [taskId]);
 
   // What the field shows for one axis — every value the task carries on it. It is both how an
@@ -310,26 +272,6 @@ export function TaskDetailPane({
             <DueChip due={task.due} />
           </div>
 
-          {/* Where the work is happening, when it is happening in a pane of this app. It sits under
-              the status because it is the same fact carried one step further: the status says a
-              reservation stands, and this says whose terminal it stands in. Pressing takes the reader
-              there — the face, the page and the pane — and sends nothing into it: the pane is
-              somebody's terminal (`crate::windows::show_pane`). */}
-          {pane && (
-            <div className="detail__field">
-              <span className="detail__flabel">{t("detail.workingIn")}</span>
-              <span>
-                <button
-                  className="detail__pane"
-                  title={t("detail.goToPane")}
-                  onClick={() => { void invoke("show_pane", { session: pane.session }).catch(() => {}); }}
-                >
-                  <Icon name="chevronRight" size="sm" />
-                  {pane.label}
-                </button>
-              </span>
-            </div>
-          )}
           <div className="detail__field">
             <span className="detail__flabel">{t("detail.assignee")}</span>
             <span>

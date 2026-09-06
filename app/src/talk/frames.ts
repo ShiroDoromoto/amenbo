@@ -119,9 +119,9 @@ export async function keepLayout(layout: SavedLayout): Promise<void> {
  * no use for going to a pane. A name that repeats is left alone: two panes a person called the same
  * thing is a person's own business.
  *
- * It is here rather than in the rail because the rail is not the only place a pane is named any more:
- * the ledger names one on the task it is holding (`../screens/TaskDetailPane`), and the two saying
- * different things about the same pane would be two panes as far as the reader is concerned.
+ * It is here rather than in the rail because the rail is not the only place a pane is named: the row
+ * above the pane carries the same label (`./nameplate`), and the two saying different things about
+ * the same pane would be two panes as far as the reader is concerned.
  */
 export function paneLabels(
   panes: readonly Frame[],

@@ -186,7 +186,6 @@ export const tr: Translation = {
     "detail.unassign": "Sorumluyu kaldır", "detail.assignAi": "Yapay zekâya devret",
     "detail.assignee": "Sorumlu", "detail.unassigned": "Sorumlusuz",
     "detail.project": "Proje", "detail.none": "Yok",
-    "detail.workingIn": "Şurada çalışılıyor", "detail.goToPane": "Bu bölmeye git",
     "detail.blockedBy": "Şunu bekliyor", "detail.blockedByHint": "engelli (bağımlılık)",
     "detail.notStarted": "Başlangıç günü",
     "detail.draft": "Oluşturma", "detail.finishCreating": "Oluşturmayı bitir",
@@ -330,9 +329,7 @@ export const tr: Translation = {
     "restart.button": "Yeniden başlat",
     "restart.failed": "Yeniden başlatılamadı. Amenbo'dan çıkıp tekrar açın.",
     "restart.confirm": "Amenbo yeniden başlatılsın mı? Açık olan tüm terminaller sonlandırılır ve hiçbir oturum bir dahaki açılışta geri gelmez.",
-    "restart.holding": "Çalışan oturumlar hâlâ şunları tutuyor:",
-    "restart.anyway": "Olduğu gibi yeniden başlat",
-    "restart.cancel": "Vazgeç",
+
     "restart.stuck.title": "Yeniden başlatmak işe yaramazsa",
     "restart.stuck.intro": "O zaman diskteki Amenbo hâlâ eskisidir. Sürüm düşürme yolu yoktur — dönüş yolu, güncellemenin geride bıraktığı taşıma öncesi yedektir.",
     "restart.stuck.how": "Ya daha yeni sürümü kurun (GUI ve CLI birlikte gelir) ya da komut satırından o yedeği geri yükleyin:",
@@ -511,8 +508,7 @@ export const tr: Translation = {
     "talk.shell": "Düz kabuk",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "Konuşuluyor", "talk.holding": "{n} görev",
-    "talk.finished": "{n} tamamlandı", "talk.premiseBroken": "Bir ön koşul artık geçerli değil",
+
     "talk.quiet": "{n} dk sessiz",
     "talk.unsent": "Henüz gönderilmedi. Göndermek için Enter’a basın.",
     "face.switch": "Bu pencerenin gösterdiği",
@@ -524,9 +520,7 @@ export const tr: Translation = {
     "face.drop": "Bu bölmeyi kaldır",
     "face.dropConfirm": "Bu bölme kaldırılsın mı? İçindeki terminal sonlandırılır ve bu yer bir dahaki açılışta geri gelmez.",
     "quit.confirm": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır ve hiçbir oturum bir dahaki açılışta geri gelmez.",
-    "quit.holding": "Çalışan oturumlar hâlâ şunları tutuyor:",
-    "quit.anyway": "Olduğu gibi çık",
-    "quit.cancel": "Vazgeç",
+
     "face.turnTitle": "Amenbo — sıra sizde",
     "face.turnBody": "Bir terminal sizi bekliyor.",
     "face.ended": "Bu terminaldeki program sona erdi.",

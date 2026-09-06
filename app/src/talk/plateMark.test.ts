@@ -8,9 +8,9 @@ import { mountNameplate, type Plate } from "./nameplate";
 
 const DOT = { frame: "pane-1", face: "out" } as const;
 
-/** A row saying whatever is handed in, on a session holding nothing. */
-function plate(say: Plate["say"], now: Plate["now"] = { kind: "idle" }): Plate {
-  return { name: "the repo", dot: DOT, now, say };
+/** A row saying whatever is handed in. */
+function plate(say: Plate["say"]): Plate {
+  return { name: "the repo", dot: DOT, say };
 }
 
 const marks = (host: HTMLElement) =>
@@ -23,7 +23,7 @@ describe("the marks on a pane's row", () => {
     const draw = mountNameplate(host);
     draw(plate({ kind: "waiting", text: "which of the two" }), "en");
 
-    expect(marks(host)).toEqual([null, "pause"]);
+    expect(marks(host)).toEqual(["pause"]);
     // The whole of it is a drawing: a glyph left beside the icon would be the old mark surviving.
     expect(host.querySelector(".plate__mark--say")!.textContent).toBe("");
     expect(host.querySelector('.plate__mark--say svg')!.getAttribute("viewBox")).toBe("0 0 24 24");
@@ -36,7 +36,7 @@ describe("the marks on a pane's row", () => {
 
     // `:empty` is what takes the place out of the row, so nothing may be left standing in it.
     expect(host.querySelector(".plate__mark--say")!.childElementCount).toBe(0);
-    expect(marks(host)).toEqual([null, null]);
+    expect(marks(host)).toEqual([null]);
   });
 
   it("swaps the drawing when the mark changes, and leaves it alone when it does not", () => {
@@ -49,15 +49,7 @@ describe("the marks on a pane's row", () => {
     expect(host.querySelector(".plate__mark--say")!.firstElementChild, "the drawing was rebuilt")
       .toBe(first);
 
-    draw(plate({ kind: "premise" }), "en");
-    expect(marks(host)).toEqual([null, "warning"]);
-  });
-
-  it("marks a stopped task in the middle, where what it is about is said", () => {
-    const host = document.createElement("div");
-    const draw = mountNameplate(host);
-    draw(plate({ kind: "silent" }, { kind: "one", ref: "AMB-T-1", title: "a task", stopped: true }), "en");
-
-    expect(marks(host)).toEqual(["stop", null]);
+    draw(plate({ kind: "note", text: "reading the store" }), "en");
+    expect(marks(host)).toEqual([null]);
   });
 });

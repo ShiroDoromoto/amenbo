@@ -189,7 +189,6 @@ export const uk: Translation = {
     "detail.unassign": "Зняти відповідального", "detail.assignAi": "Передати ШІ",
     "detail.assignee": "Відповідальний", "detail.unassigned": "Без відповідального",
     "detail.project": "Проєкт", "detail.none": "Немає",
-    "detail.workingIn": "Робота триває в", "detail.goToPane": "Перейти до цієї панелі",
     "detail.blockedBy": "Чекає на", "detail.blockedByHint": "заблоковано (залежність)",
     "detail.notStarted": "Початок",
     "detail.draft": "Створення", "detail.finishCreating": "Завершити створення",
@@ -340,9 +339,7 @@ export const uk: Translation = {
     "restart.button": "Перезапустити",
     "restart.failed": "Перезапустити не вдалося. Закрийте Amenbo й відкрийте його знову.",
     "restart.confirm": "Перезапустити Amenbo? Усі відкриті термінали завершаться, і жодна сесія не повернеться під час наступного запуску.",
-    "restart.holding": "Робочі сесії досі тримають:",
-    "restart.anyway": "Перезапустити як є",
-    "restart.cancel": "Скасувати",
+
     "restart.stuck.title": "Якщо перезапуск не допомагає",
     "restart.stuck.intro": "Тоді Amenbo на диску досі старий. Шляху вниз немає — шлях назад це резервна копія до міграції, яку лишило оновлення.",
     "restart.stuck.how": "Або встановіть новішу версію (інтерфейс і командний рядок ідуть разом), або відновіть із тієї копії в командному рядку:",
@@ -537,8 +534,7 @@ export const uk: Translation = {
     "talk.shell": "Звичайна оболонка",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "Обговорення", "talk.holding": "завдань: {n}",
-    "talk.finished": "готово: {n}", "talk.premiseBroken": "Передумова перестала виконуватися",
+
     "talk.quiet": "тихо {n} хв",
     "talk.unsent": "Ще не надіслано. Натисніть Enter, щоб надіслати.",
     "face.switch": "Що показує це вікно",
@@ -550,9 +546,7 @@ export const uk: Translation = {
     "face.drop": "Прибрати цю панель",
     "face.dropConfirm": "Прибрати цю панель? Термінал у ній завершиться, і місце не повернеться під час наступного запуску.",
     "quit.confirm": "Завершити Amenbo? Усі відкриті термінали завершаться, і жодна сесія не повернеться під час наступного запуску.",
-    "quit.holding": "Робочі сесії досі тримають:",
-    "quit.anyway": "Вийти як є",
-    "quit.cancel": "Скасувати",
+
     "face.turnTitle": "Amenbo — ваша черга",
     "face.turnBody": "Термінал чекає на вас.",
     "face.ended": "Програму в цьому терміналі завершено.",

@@ -186,7 +186,6 @@ export const hi: Translation = {
     "detail.unassign": "ज़िम्मेदारी हटाएँ", "detail.assignAi": "AI को सौंपें",
     "detail.assignee": "ज़िम्मेदार", "detail.unassigned": "किसी को नहीं सौंपा",
     "detail.project": "प्रोजेक्ट", "detail.none": "कोई नहीं",
-    "detail.workingIn": "यहाँ काम हो रहा है", "detail.goToPane": "इस पैन पर जाएँ",
     "detail.blockedBy": "इसकी प्रतीक्षा", "detail.blockedByHint": "रुका हुआ (निर्भरता)",
     "detail.notStarted": "आरंभ",
     "detail.draft": "निर्माण", "detail.finishCreating": "बनाना पूरा करें",
@@ -330,9 +329,7 @@ export const hi: Translation = {
     "restart.button": "फिर से चलाएँ",
     "restart.failed": "फिर से नहीं चल सका। Amenbo बंद करके दोबारा खोलें।",
     "restart.confirm": "Amenbo फिर से चलाएँ? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे और अगली बार कोई सत्र वापस नहीं आएगा।",
-    "restart.holding": "चल रहे सत्र अब भी रोके हुए हैं:",
-    "restart.anyway": "जैसा है वैसा फिर से चलाएँ",
-    "restart.cancel": "रहने दें",
+
     "restart.stuck.title": "फिर से चलाने से भी काम न बने तो",
     "restart.stuck.intro": "तब डिस्क पर का Amenbo अब भी पुराना ही है। नीचे उतरने का रास्ता नहीं है — वापसी का रास्ता वह माइग्रेशन-पूर्व बैकअप है जो अपडेट ने पीछे छोड़ा।",
     "restart.stuck.how": "या तो नया संस्करण संस्थापित करें (GUI और CLI साथ ही आते हैं), या कमांड लाइन पर उस बैकअप से बहाल करें:",
@@ -511,8 +508,7 @@ export const hi: Translation = {
     "talk.shell": "सादा शेल",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "बातचीत जारी", "talk.holding": "{n} कार्य",
-    "talk.finished": "{n} पूरे", "talk.premiseBroken": "एक पूर्वशर्त टूट गई है",
+
     "talk.quiet": "{n} मिनट से शांत",
     "talk.unsent": "अभी भेजा नहीं गया। भेजने के लिए Enter दबाएँ।",
     "face.switch": "यह विंडो क्या दिखाती है",
@@ -524,9 +520,7 @@ export const hi: Translation = {
     "face.drop": "इस पैन को हटाएँ",
     "face.dropConfirm": "इस पैन को हटाएँ? इसमें चल रहा टर्मिनल समाप्त हो जाएगा और अगली बार यह जगह वापस नहीं आएगी।",
     "quit.confirm": "Amenbo छोड़ें? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे और अगली बार कोई सत्र वापस नहीं आएगा।",
-    "quit.holding": "चल रहे सत्र अब भी रोके हुए हैं:",
-    "quit.anyway": "जैसा है वैसा छोड़ें",
-    "quit.cancel": "रहने दें",
+
     "face.turnTitle": "Amenbo — अब आपकी बारी",
     "face.turnBody": "एक टर्मिनल आपका इंतज़ार कर रहा है।",
     "face.ended": "इस टर्मिनल का प्रोग्राम समाप्त हो गया।",

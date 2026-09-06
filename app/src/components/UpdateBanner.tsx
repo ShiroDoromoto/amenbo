@@ -6,7 +6,7 @@ import { t, tf } from "../core/i18n";
 import { openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
 import type { UpdateProgress } from "../core/mutations";
 import { DismissButton } from "./DismissButton";
-import { HoldingAsk, heldByAll, openPanes, restartWords } from "../shell/HoldingAsk";
+import { openPanes } from "../shell/openPanes";
 import { confirmDialog } from "../core/dialog";
 
 // One line for the phase the in-app update is in — the hint that replaces `update.hint` while it runs. A download with
@@ -38,9 +38,6 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
   const [dismissed, setDismissed] = useState<SessionDismiss>(undefined);
   const [stage, setStage] = useState<UpdateStage>("idle");
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
-  // The reservations the restart is about to leave standing, while the question about them is up
-  // (`../shell/HoldingAsk`). Null is no question up, and it is never an empty list.
-  const [restartAsking, setRestartAsking] = useState<readonly number[] | null>(null);
   useEffect(() => {
     if (recheck > 0) setDismissed(undefined); // a manual re-check surfaced an offer: drop the session dismissal
   }, [recheck]);
@@ -68,14 +65,12 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
   };
 
   // Applying the update means the process this is running in ends, and no session in it comes back —
-  // the same loss the way out of the app names, so it is named the same way (`../shell/HoldingAsk`).
-  // With no pane open there is nothing to say and the press restarts; with panes open but nothing
-  // reserved it is the plain confirmation, and the box only comes up to name reservations by number.
+  // the same loss the way out of the app asks about, so it asks the same way (`../shell/openPanes`).
+  // With no pane open there is nothing to say and the press restarts; with panes open it is the
+  // confirmation, which says a terminal is about to go and nothing about what it was doing.
   const onRestart = async () => {
     try {
       if (await openPanes() === 0) { await restartApp(); return; }
-      const holding = await heldByAll();
-      if (holding.length > 0) { setRestartAsking(holding); return; }
       if (!await confirmDialog(t("restart.confirm"))) return;
       await restartApp();
     } catch { /* the relaunch did not take; the banner stays up to retry */ }
@@ -113,14 +108,6 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
         <DismissButton
           onClick={() => { dismissUpdate(vs.newerVersion); setDismissed(vs.newerVersion); }}
           label={t("update.dismiss")}
-        />
-      )}
-      {restartAsking !== null && (
-        <HoldingAsk
-          holding={restartAsking}
-          words={restartWords()}
-          onLeave={async () => { await restartApp(); }}
-          onCancel={() => setRestartAsking(null)}
         />
       )}
     </div>

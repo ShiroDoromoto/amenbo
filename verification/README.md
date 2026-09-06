@@ -211,9 +211,9 @@ one is the operator's: the way out is pressed at the screen — `how: menu` is t
 the app, so a road that walked one proves half the gate. What comes of the press is what the step
 declares: `asks: true` is the question that stands where a terminal is still open, and `asks: false`
 is the app ending on the gesture because there was nothing to lose. `answer-quit` answers that
-question — left out for the plain one, or naming `leave` or `cancel` with the `target:` the box has
-to name. The box names reservations and moves none of them, so there is no answer that writes the
-ledger. Every answer but `cancel` ends the app, and the harness brings another up on the same store **after** the step is
+question — `leave` goes, `cancel` stays, and left out it is `leave`. The question says a terminal is
+about to go and names no task, so there is no answer that writes the ledger. Every
+answer but `cancel` ends the app, and the harness brings another up on the same store **after** the step is
 handed over rather than before it: the operator is the one who watched it go, and a shot is aimed at
 a pid, so there has to be a window again by the time the step is photographed.
 

@@ -186,7 +186,6 @@ export const nl: Translation = {
     "detail.unassign": "Toewijzing opheffen", "detail.assignAi": "Aan AI overdragen",
     "detail.assignee": "Verantwoordelijke", "detail.unassigned": "Niet toegewezen",
     "detail.project": "Project", "detail.none": "Geen",
-    "detail.workingIn": "Wordt gewerkt in", "detail.goToPane": "Naar dit deelvenster",
     "detail.blockedBy": "Wacht op", "detail.blockedByHint": "geblokkeerd (afhankelijkheid)",
     "detail.notStarted": "Begint op",
     "detail.draft": "Aanmaken", "detail.finishCreating": "Aanmaken afronden",
@@ -330,9 +329,7 @@ export const nl: Translation = {
     "restart.button": "Opnieuw starten",
     "restart.failed": "Opnieuw starten lukte niet. Sluit Amenbo af en open het opnieuw.",
     "restart.confirm": "Amenbo opnieuw starten? Alle geopende terminals worden beëindigd en geen enkele sessie komt bij de volgende start terug.",
-    "restart.holding": "De lopende sessies houden nog vast:",
-    "restart.anyway": "Zo opnieuw starten",
-    "restart.cancel": "Annuleren",
+
     "restart.stuck.title": "Als opnieuw starten niet helpt",
     "restart.stuck.intro": "Dan is de Amenbo op schijf nog steeds de oude. Terug naar een lagere versie kan niet — de weg terug is de back-up van vóór de migratie die de update heeft achtergelaten.",
     "restart.stuck.how": "Installeer de nieuwere versie (de interface en de opdrachtregel komen samen), of zet die back-up terug op de opdrachtregel:",
@@ -511,8 +508,7 @@ export const nl: Translation = {
     "talk.shell": "Gewone shell",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "In gesprek", "talk.holding": "{n} taken",
-    "talk.finished": "{n} klaar", "talk.premiseBroken": "Een aanname klopt niet meer",
+
     "talk.quiet": "{n} min stil",
     "talk.unsent": "Nog niet verzonden. Druk op Enter om te verzenden.",
     "face.switch": "Wat dit venster toont",
@@ -524,9 +520,7 @@ export const nl: Translation = {
     "face.drop": "Dit deelvenster verwijderen",
     "face.dropConfirm": "Dit deelvenster verwijderen? De terminal erin wordt beëindigd en de plek komt bij de volgende start niet terug.",
     "quit.confirm": "Amenbo stoppen? Alle geopende terminals worden beëindigd en geen enkele sessie komt bij de volgende start terug.",
-    "quit.holding": "De lopende sessies houden nog vast:",
-    "quit.anyway": "Zo stoppen",
-    "quit.cancel": "Annuleren",
+
     "face.turnTitle": "Amenbo — jij bent",
     "face.turnBody": "Een terminal wacht op je.",
     "face.ended": "Het programma in deze terminal is gestopt.",

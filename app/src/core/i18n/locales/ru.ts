@@ -189,7 +189,6 @@ export const ru: Translation = {
     "detail.unassign": "Снять ответственного", "detail.assignAi": "Передать ИИ",
     "detail.assignee": "Ответственный", "detail.unassigned": "Без ответственного",
     "detail.project": "Проект", "detail.none": "Нет",
-    "detail.workingIn": "Работа идёт в", "detail.goToPane": "Перейти к этой панели",
     "detail.blockedBy": "Ждёт", "detail.blockedByHint": "заблокировано (зависимость)",
     "detail.notStarted": "Начинается",
     "detail.draft": "Создание", "detail.finishCreating": "Завершить создание",
@@ -340,9 +339,7 @@ export const ru: Translation = {
     "restart.button": "Перезапустить",
     "restart.failed": "Не удалось перезапустить. Закройте Amenbo и откройте снова.",
     "restart.confirm": "Перезапустить Amenbo? Все открытые терминалы завершатся, и ни одна сессия не вернётся при следующем запуске.",
-    "restart.holding": "Работающие сессии всё ещё держат:",
-    "restart.anyway": "Перезапустить как есть",
-    "restart.cancel": "Отмена",
+
     "restart.stuck.title": "Если перезапуск не помогает",
     "restart.stuck.intro": "Значит, Amenbo на диске всё ещё прежний. Вернуться на старую версию нельзя — обратный путь лежит через резервную копию, сделанную перед миграцией.",
     "restart.stuck.how": "Либо установите более новую версию (интерфейс и командная строка поставляются вместе), либо восстановитесь из этой копии в командной строке:",
@@ -540,8 +537,7 @@ export const ru: Translation = {
     "talk.shell": "Обычная оболочка",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "Обсуждение", "talk.holding": "задач: {n}",
-    "talk.finished": "готово: {n}", "talk.premiseBroken": "Предпосылка перестала выполняться",
+
     "talk.quiet": "тихо {n} мин",
     "talk.unsent": "Ещё не отправлено. Нажмите Enter, чтобы отправить.",
     "face.switch": "Что показывает это окно",
@@ -553,9 +549,7 @@ export const ru: Translation = {
     "face.drop": "Убрать эту панель",
     "face.dropConfirm": "Убрать эту панель? Терминал в ней завершится, и место не вернётся при следующем запуске.",
     "quit.confirm": "Завершить Amenbo? Все открытые терминалы завершатся, и ни одна сессия не вернётся при следующем запуске.",
-    "quit.holding": "Работающие сессии всё ещё держат:",
-    "quit.anyway": "Выйти как есть",
-    "quit.cancel": "Отмена",
+
     "face.turnTitle": "Amenbo — ваш ход",
     "face.turnBody": "Терминал вас ждёт.",
     "face.ended": "Программа в этом терминале завершилась.",

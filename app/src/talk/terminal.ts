@@ -580,12 +580,30 @@ export async function mountTerminal(
   // Falling back to the words the paste carried is not a mishap — a file manager that puts a file on
   // and no path with it (`AMB-T-4220`) is exactly what the host is asked about, and if the host finds
   // nothing the reader still gets what they copied.
-  const stopPaste = takesPastedFiles(host, (paths, words) => {
-    const its = session;
-    if (its === null) return;
-    const text = paths.length > 0 ? quotedPaths(paths) : words;
-    if (text) void pasteIntoTerminal(its, text).catch(() => {});
-  });
+  //
+  // **An image is written down first, because a path is the only shape this pane can take one in.**
+  // A screenshot on the clipboard is bytes and no file, so there is nothing for the host to name
+  // until they are put somewhere — which the pane's own directory is for, and which is why the
+  // writing is asked for here rather than in the reading (`AMB-D-854`). What comes back is a path
+  // like any other, quoted the same way.
+  const stopPaste = takesPastedFiles(
+    host,
+    (paths, words) => {
+      const its = session;
+      if (its === null) return;
+      const text = paths.length > 0 ? quotedPaths(paths) : words;
+      if (text) void pasteIntoTerminal(its, text).catch(() => {});
+    },
+    async (bytes, mime) => {
+      const its = session;
+      if (its === null) return [];
+      // An image that could not be written down leaves the paste with the words it carried, which
+      // for an image is nothing — the same silence every other paste this pane cannot land ends in.
+      return await invoke<string>("pty_paste_image", { session: its, mime, bytes })
+        .then((path) => [path])
+        .catch(() => []);
+    },
+  );
 
   // **Shift-Enter, which is the one press the emulator cannot pass on.** What a terminal is given for
   // Enter is a carriage return, and it is given the same one whether or not Shift was held — so an

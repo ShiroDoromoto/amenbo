@@ -6,7 +6,7 @@
 // window cannot read a path out of — and the whole of the answer is that the host is asked and the
 // caller is handed what came back.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { holdsFiles, takesPastedFiles } from "./clipFiles";
+import { holdsFiles, imageIn, takesPastedFiles } from "./clipFiles";
 
 const hoisted = vi.hoisted(() => ({
   /** What the host says is on the clipboard, for a test to set. */
@@ -26,9 +26,18 @@ vi.mock("./ipc", () => ({
 }));
 
 /** A paste, with the three things this reads held down to what a test gives it. */
-function carrying(over: { files?: number; types?: string[]; words?: string } = {}): DataTransfer {
+function carrying(
+  over: { files?: number; image?: string; bytes?: string; types?: string[]; words?: string } = {},
+): DataTransfer {
+  const files: File[] = [];
+  for (let i = 0; i < (over.files ?? 0); i++) {
+    files.push(new File(["a note"], `note-${i}.md`, { type: "text/markdown" }));
+  }
+  if (over.image !== undefined) {
+    files.push(new File([over.bytes ?? "the image"], "pasted", { type: over.image }));
+  }
   return {
-    files: { length: over.files ?? 0 },
+    files,
     types: over.types ?? [],
     getData: (type: string) => (type === "text/plain" ? (over.words ?? "") : ""),
   } as unknown as DataTransfer;
@@ -53,6 +62,18 @@ describe("telling a paste carrying files from a paste of words", () => {
     expect(holdsFiles(carrying({ types: ["text/plain"] }))).toBe(false);
     expect(holdsFiles(carrying({ types: ["text/plain", "text/html"] }))).toBe(false);
     expect(holdsFiles(carrying())).toBe(false);
+  });
+});
+
+describe("finding the image a paste is carrying", () => {
+  it("is the one file on it that is an image", () => {
+    expect(imageIn(carrying({ image: "image/png" }))?.type).toBe("image/png");
+    expect(imageIn(carrying({ files: 2, image: "image/jpeg" }))?.type).toBe("image/jpeg");
+  });
+
+  it("is none where nothing on it is", () => {
+    expect(imageIn(carrying({ files: 2, types: ["Files"] }))).toBe(null);
+    expect(imageIn(carrying())).toBe(null);
   });
 });
 
@@ -130,6 +151,63 @@ describe("answering the pastes a box is given", () => {
     await vi.waitFor(() => expect(hoisted.asked).toEqual(["clip_files"]));
 
     expect(put).not.toHaveBeenCalled();
+  });
+
+  // A screenshot is bytes and no file, so `clip_files` has nothing to name and the words are empty
+  // too. What makes it pasteable is writing it down somewhere and handing back where that was.
+  it("writes down the image a paste is carrying, where the host names no file", async () => {
+    hoisted.paths = [];
+    const written = vi.fn(async () => ["/tmp/amenbo-pasted-aa/pasted-1234abcd.png"]);
+    stop();
+    stop = takesPastedFiles(host, put as (paths: string[], words: string) => void, written);
+
+    paste(box, carrying({ image: "image/png", bytes: "PNG", types: ["Files"] }));
+    await vi.waitFor(() => expect(put).toHaveBeenCalled());
+
+    const [bytes, mime] = written.mock.calls[0] as unknown as [Uint8Array, string];
+    expect(new TextDecoder().decode(bytes), "the bytes the paste was carrying").toBe("PNG");
+    expect(mime, "and the type they are in").toBe("image/png");
+    expect(put).toHaveBeenCalledWith(["/tmp/amenbo-pasted-aa/pasted-1234abcd.png"], "");
+  });
+
+  // A file manager's copy of a `.png` carries the file *and* the path to it. The path is the file
+  // itself; writing the bytes down again would hand the reader a copy of what they already have.
+  it("takes the host's paths over the image, where there are both", async () => {
+    hoisted.paths = ["/work/shot.png"];
+    const written = vi.fn(async () => ["/tmp/never.png"]);
+    stop();
+    stop = takesPastedFiles(host, put as (paths: string[], words: string) => void, written);
+
+    paste(box, carrying({ image: "image/png", types: ["Files"] }));
+    await vi.waitFor(() => expect(put).toHaveBeenCalled());
+
+    expect(written).not.toHaveBeenCalled();
+    expect(put).toHaveBeenCalledWith(["/work/shot.png"], "");
+  });
+
+  // A caller that said nothing about images takes none: the paste is answered the way it was before
+  // there was anywhere to put one.
+  it("leaves the image alone where the caller has nowhere to put it", async () => {
+    hoisted.paths = [];
+
+    paste(box, carrying({ image: "image/png", types: ["Files"], words: "" }));
+    await vi.waitFor(() => expect(put).toHaveBeenCalled());
+
+    expect(put).toHaveBeenCalledWith([], "");
+  });
+
+  // An image that could not be written down leaves the reader with the words, which for an image is
+  // nothing — rather than a path to a file that is not there.
+  it("hands over no path where the image could not be written down", async () => {
+    hoisted.paths = [];
+    const written = vi.fn(async () => []);
+    stop();
+    stop = takesPastedFiles(host, put as (paths: string[], words: string) => void, written);
+
+    paste(box, carrying({ image: "image/png", types: ["Files"] }));
+    await vi.waitFor(() => expect(put).toHaveBeenCalled());
+
+    expect(put).toHaveBeenCalledWith([], "");
   });
 
   it("stops listening when it is told to", () => {

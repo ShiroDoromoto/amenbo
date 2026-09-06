@@ -35,6 +35,16 @@ func runThrough(dir string, extraEnv []string, name string, args ...string) (int
 	return 0, nil
 }
 
+// cliBuildEnv is what a `cargo build -p amenbo-cli` from here has to carry. amenbo-core compiles
+// the app-data name in and keeps no default of its own, so a build told nothing does not fall
+// through to production — it fails to compile. The Makefile names the channel for every build it
+// starts; devtool starts its own, so it names one too.
+//
+// The name is the production channel's on purpose. What devtool builds is the CLI that seeds a task
+// instance's store, and it is pointed at that store by `AMENBO_HOME` at run time rather than by the
+// name it was compiled with (see taskcli.go).
+var cliBuildEnv = []string{"AMENBO_APP_NAME=amenbo"}
+
 // run executes a command in dir and returns its trimmed stdout. On failure the
 // error carries the captured stderr so callers can surface the real cause.
 func run(dir, name string, args ...string) (string, error) {

@@ -23,6 +23,11 @@ name: _scale-heavy
 on:
   workflow_call:
 
+# The channel the guard compiles against. amenbo-core has no app-data name of its own, so every
+# entrance names one; this reads production's code, the same as _ci does.
+env:
+  AMENBO_APP_NAME: amenbo
+
 jobs:
   scale-heavy:
     name: read scaling guard (full 10k)

@@ -120,6 +120,10 @@ if [ "$DEV_CHANNEL" = 1 ]; then
   export AMENBO_APP_NAME="$DEV_APP_NAME"
   echo "→ [container] dev channel: app-data $DEV_APP_NAME, config $DEV_CONFIG"
 fi
+# The production channel's name arrives from the make target instead (`-e`: a container inherits
+# nothing), and amenbo-core has none of its own — so neither channel may leave this unset, and the
+# compiler would only say so several minutes in.
+: "${AMENBO_APP_NAME:?AMENBO_APP_NAME (the app-data this build addresses) must be passed in}"
 
 [ "$SIGN_UPDATER" = 1 ] && sign_note=", signed updater artifact" || sign_note=""
 echo "→ [container] tauri build (appimage${sign_note})"

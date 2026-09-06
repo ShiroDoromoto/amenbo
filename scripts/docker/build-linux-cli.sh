@@ -23,8 +23,9 @@
 set -euo pipefail
 
 OUT_NAME="${OUT_NAME:?OUT_NAME (the dist file name, e.g. amenbo-linux-arm64) must be passed in}"
-# Optional, and empty means production: exporting it empty would make option_env! read back an empty
-# app name rather than fall through to the production default, so only a non-empty one is set.
+# Optional, and empty means production — in which case the app-data name is the AMENBO_APP_NAME the
+# make target passed in (`-e`: a container inherits nothing). A non-empty one is the dev channel's
+# and replaces it below; exporting it empty would compile in an empty app name.
 DEV_APP_NAME="${DEV_APP_NAME:-}"
 
 echo "→ [container] syncing source /src → /build (excluding target/node_modules/.git/dist)"
@@ -43,6 +44,9 @@ if [ -n "$DEV_APP_NAME" ]; then
   export AMENBO_APP_NAME="$DEV_APP_NAME"
   echo "→ [container] dev channel: app-data $DEV_APP_NAME"
 fi
+# amenbo-core has no app-data name of its own, so neither channel may leave this unset — and the
+# compiler would only say so several minutes into the build.
+: "${AMENBO_APP_NAME:?AMENBO_APP_NAME (the app-data this build addresses) must be passed in}"
 
 cargo build --release -p amenbo-cli
 mkdir -p /out

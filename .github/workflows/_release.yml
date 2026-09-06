@@ -34,6 +34,10 @@ permissions:
 # before users do.
 env:
   AMENBO_BUILD: release
+  # The app-data these artifacts address. amenbo-core has no default of its own: a build that is
+  # told nothing fails to compile instead of quietly being handed production, so the one workflow
+  # that builds what users install is where the production channel is named.
+  AMENBO_APP_NAME: amenbo
 
 jobs:
   macos:

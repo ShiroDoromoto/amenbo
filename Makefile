@@ -29,6 +29,13 @@ GUI_APP     := $(BUNDLE_DIR)/$(GUI_NAME).app
 # and `bundle.externalBin` both say it, and the dev channel says GUI_DEV_DATA in its place.
 CLI_NAME    := amenbo
 
+# Which app-data every build compiled here addresses. amenbo-core reads it at compile time and has
+# no default of its own: a build that is told nothing does not fall through to production, it fails
+# to compile. So this is where the production channel is named, once, and the dev shapes below
+# override it on their own recipe lines (dev-build, gui-dev) or pass it into the container that
+# compiles them (the docker targets — a container inherits nothing from here).
+export AMENBO_APP_NAME := $(CLI_NAME)
+
 # The dev GUI comes in three shapes, and two doors pick which one every dev-GUI target builds and
 # installs. Unset is the shared dev app: one permanent bundle, the place to keep a grown setup
 # (plugins, catalog, projects) that no task may delete. AMB-T-ID=<id> is a throwaway instance one
@@ -449,6 +456,7 @@ dist-gui-linux:
 	@# unsigned (no updater artifact).
 	docker run --rm --platform linux/$(LINUX_GUI_ARCH) \
 	  -e VERSION="$(VERSION)" -e TARGET_ARCH="$(LINUX_GUI_ARCH)" -e XDG_CACHE_HOME=/cache \
+	  -e AMENBO_APP_NAME="$(AMENBO_APP_NAME)" \
 	  -e TAURI_SIGNING_PRIVATE_KEY -e TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
 	  -v "amenbo-tauri-cache-$(LINUX_GUI_ARCH):/cache" \
 	  -v "$(CURDIR):/src:ro" \
@@ -471,6 +479,7 @@ dist-cli-linux:
 	@# which compiles the same workspace in the same image (in CI they are fresh every time).
 	docker run --rm --platform linux/$(LINUX_CLI_ARCH) \
 	  -e OUT_NAME=$(notdir $(CLI_LINUX_OUT)) \
+	  -e AMENBO_APP_NAME="$(AMENBO_APP_NAME)" \
 	  -e DEV_APP_NAME="$(CLI_LINUX_APP_NAME)" \
 	  -v "amenbo-lint-registry-$(LINUX_CLI_ARCH):/root/.cargo/registry" \
 	  -v "amenbo-lint-target-$(LINUX_CLI_ARCH):/build/target" \
@@ -581,7 +590,7 @@ verify-network-linux:
 	@command -v docker >/dev/null 2>&1 || { echo "✗ docker is required"; exit 1; }
 	docker build --platform linux/$(HOST_GUI_ARCH) -f scripts/docker/Dockerfile.linux-gui -t $(LINUX_GUI_IMAGE) scripts/docker/
 	docker run --rm --privileged --platform linux/$(HOST_GUI_ARCH) \
-	  -e CARGO_TARGET_DIR=/tmp/ctarget \
+	  -e CARGO_TARGET_DIR=/tmp/ctarget -e AMENBO_APP_NAME="$(AMENBO_APP_NAME)" \
 	  -v "$(CURDIR):/src" -w /src \
 	  $(LINUX_GUI_IMAGE) bash scripts/verify-network-watch.sh
 
@@ -773,6 +782,7 @@ lint-linux:
 	@command -v docker >/dev/null 2>&1 || { echo "✗ docker is required (the Linux-branch clippy runs in a container)"; exit 1; }
 	docker build --platform linux/$(HOST_GUI_ARCH) -f scripts/docker/Dockerfile.linux-gui -t $(LINUX_LINT_IMAGE) scripts/docker/
 	docker run --rm --platform linux/$(HOST_GUI_ARCH) \
+	  -e AMENBO_APP_NAME="$(AMENBO_APP_NAME)" \
 	  -v "amenbo-lint-registry-$(HOST_GUI_ARCH):/root/.cargo/registry" \
 	  -v "amenbo-lint-target-$(HOST_GUI_ARCH):/build/target" \
 	  -v "amenbo-lint-target-app-$(HOST_GUI_ARCH):/build/app/src-tauri/target" \

@@ -60,6 +60,10 @@ on:
 # recompiles only what moved.
 env:
   SAVE_CACHE: ${{ github.ref == 'refs/heads/main' }}
+  # Which app-data the code compiled here addresses. amenbo-core has no default of its own — a
+  # build told nothing fails to compile rather than falling through to production — so every
+  # entrance names its channel, and this one judges the production channel's code.
+  AMENBO_APP_NAME: amenbo
 
 jobs:
   # Path gate for the build/test jobs: run each only when a change can affect it.

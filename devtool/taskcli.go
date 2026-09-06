@@ -25,10 +25,10 @@ import (
 //
 // Two consequences of pointing a build at a store rather than building it for one, both deliberate:
 //
-//   - **The binary still introduces itself by its own channel.** It was not built with
-//     `AMENBO_APP_NAME`, so anything keyed to the channel rather than to the store — the command
-//     name guidance words, the perf log's default — reads as production. It writes the right store;
-//     it says the wrong name while doing it.
+//   - **The binary still introduces itself by its own channel.** Production is the
+//     `AMENBO_APP_NAME` devtool builds it with, so anything keyed to the channel rather than to the
+//     store — the command name guidance words, the perf log's default — reads as production. It
+//     writes the right store; it says the wrong name while doing it.
 //   - **It will migrate that store's format if the tree is ahead of it.** A store named by the
 //     environment is an isolated one, which is an arm of the gate that otherwise holds an unreleased
 //     build back from migrating. That is the wanted answer here: the task's own GUI is built from
@@ -101,7 +101,7 @@ func taskCLI(id string, noBuild bool, argv []string) (int, error) {
 		logf("  store   : %s was not there — this run starts it empty", store)
 	}
 	if !noBuild {
-		if _, err := run(worktree, "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
+		if _, err := runEnv(worktree, cliBuildEnv, "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
 			return 0, fmt.Errorf("build the task's CLI: %w", err)
 		}
 	}

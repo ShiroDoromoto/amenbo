@@ -130,8 +130,9 @@ steps_gui:
     domain: terminal
     op: open-shell
 
-  # The reader's own words, which is how every step below says *which* pane it means. Nothing else on
-  # the screen says them.
+  # The reader's own words, which is what the step below points at when it says which pane to name.
+  # Nothing else on the screen says them. They do not stay on the pane — the reservation clears it —
+  # so what carries them past that point is the name, and not this line.
   - type: action
     domain: terminal
     op: type-line
@@ -207,10 +208,16 @@ steps_gui:
       shows: SCENARIO the pane at the furnace
 
   # Where it landed. At one pane to a page this is the page that pane is on and no other, so finding
-  # its line is finding the page the press brought up.
+  # that pane is finding the page the press brought up.
+  #
+  # Read off the row above the pane and not out of the pane itself, because the pane itself no longer
+  # says it: the reservation was made with `run`, and `run` clears the screen before it types — which
+  # is what makes the ref it prints the only one on the pane, and which sends the line typed at the
+  # top of this road up into the scrollback where a shot does not reach. The name is on the row for
+  # good, put there by hand a step before the reservation, and a row is only drawn while its pane is.
   - type: assert
     domain: terminal
-    op: pane
+    op: label
     with:
       shows: SCENARIO the pane at the furnace
 

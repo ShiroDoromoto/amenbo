@@ -747,11 +747,10 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `answer` is which way, and it is left out where there is nothing to choose between: sessions
     // holding no reservation get the plain question, and answering that is saying yes. Where a
-    // session made one, the box names every task being left behind and offers three
-    // (`app/src/shell/HoldingAsk.tsx`): `hand-back` puts them all back to `todo` and then goes,
-    // `leave` goes and leaves them standing, `cancel` stays. They are the pane's own three, in the
-    // pane's own box — it is one loss at two sizes — and the middle one is no more a mistake here
-    // than it is there.
+    // session made one, the box names every task being left behind and offers two
+    // (`app/src/shell/HoldingAsk.tsx`): `leave` goes and leaves them standing, `cancel` stays. There
+    // is no third that moves the ledger — what the volatile area names may be a row the world has
+    // passed, and it is not a thing to write on.
     //
     // `target` is the task the question has to name, and it is what makes this step self-judging, the
     // way `remove-pane`'s is: the whole of what the box is for is naming what stands to be lost, and

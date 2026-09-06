@@ -3,7 +3,7 @@ import { getSnapshot, inTauri, subscribe } from "../core/snapshot";
 import { Icon } from "./Icon";
 import { dismissUpdate, isUpdateDismissed, sessionDismissCovers, type SessionDismiss } from "../core/updateDismissed";
 import { t, tf } from "../core/i18n";
-import { openLatestInstaller, installUpdate, restartApp, setStatus } from "../core/mutations";
+import { openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
 import type { UpdateProgress } from "../core/mutations";
 import { DismissButton } from "./DismissButton";
 import { HoldingAsk, heldByAll, openPanes, restartWords } from "../shell/HoldingAsk";
@@ -119,12 +119,6 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
         <HoldingAsk
           holding={restartAsking}
           words={restartWords()}
-          onHandBack={async () => {
-            // One at a time, so a refusal stops at the one it refused: the tasks after it are still
-            // held, and the box says so rather than restarting on top of them.
-            for (const id of restartAsking) await setStatus(id, "todo");
-            await restartApp();
-          }}
           onLeave={async () => { await restartApp(); }}
           onCancel={() => setRestartAsking(null)}
         />

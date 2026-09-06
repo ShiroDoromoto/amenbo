@@ -54,7 +54,8 @@ export function RestartGate() {
       // noticed long after startup, written by another process (`../core/formatAhead`) — and starting
       // again ends every one of them for good. Asked, not named: what a session is holding is written
       // where only the store can read it, and the store is the very thing this screen cannot open, so
-      // the reservations go unnamed here and there is nothing to hand back (`../shell/HoldingAsk`).
+      // the reservations go unnamed here — the plain confirmation is the whole of it
+      // (`../shell/HoldingAsk`).
       if (await openPanes() > 0 && !await confirmDialog(t("restart.confirm", lang))) return;
       await invoke("restart_app");
       setFailed(true);

@@ -429,8 +429,8 @@ input[type="color"] {
 }
 .slot__more:hover { color: var(--c-text); }
 
-/* The question a way out asks when the sessions behind it are still holding something — the `✕` on a
-   pane, and the end of the app (`../shell/HoldingAsk`). Its own block rather than a share of the
+/* The question a way out asks when the sessions behind it are still holding something — the end of
+   the app, and the restart that applies an update (`../shell/HoldingAsk`). Its own block rather than a share of the
    modals in `components.css`: a modal borrowing another feature's class names cannot be restyled
    without touching that feature. The backdrop is the one exception — it is `.modal__overlay` for
    every modal in the app, which is what `outsideClose` reads. */
@@ -443,9 +443,9 @@ input[type="color"] {
 .holdingask__failed { color: var(--c-stop); font-size: var(--fs-xs); margin: 0 0 var(--s-3); }
 .holdingask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 .holdingask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
-/* Handing the work back is the one of the three that loses nothing, so it is the one drawn as the
-   answer. The other two are not talked out of — leaving a reservation standing is a thing a person
-   has reasons for. */
+/* Going is the answer the question was raised on the way to, so it is the one drawn as the answer.
+   It leaves every reservation standing, and nothing here talks the reader out of that — where a
+   reservation goes next is the ledger's question, not this box's (`AMB-D-855`). */
 .holdingask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 .holdingask__action:disabled { opacity: 0.5; cursor: default; }
 .slot--focused .termface__pane { border-color: var(--c-accent); }

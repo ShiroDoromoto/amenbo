@@ -354,7 +354,6 @@ const ui = {
   "restart.failed": "Could not restart. Quit Amenbo and open it again.",
   "restart.confirm": "Restart Amenbo? Every terminal open in it ends, and no session comes back on the next run.",
   "restart.holding": "The sessions still running are holding:",
-  "restart.handBack": "Hand back and restart",
   "restart.anyway": "Restart as it is",
   "restart.cancel": "Cancel",
   "restart.stuck.title": "If restarting does not help",
@@ -590,7 +589,6 @@ const ui = {
   // sentence about "this pane" would name the wrong thing at the moment it matters most.
   "quit.confirm": "Quit Amenbo? Every terminal open in it ends, and no session comes back on the next run.",
   "quit.holding": "The sessions still running are holding:",
-  "quit.handBack": "Hand back and quit",
   "quit.anyway": "Quit as it is",
   "quit.cancel": "Cancel",
   // The OS notification a pane raises when its turn has come and nobody is looking at the terminal

@@ -37,7 +37,6 @@ import { badgeUp, knock, looked, NO_ATTENTION, turnCame } from "./terminalBadge"
 import { notifyTurn } from "../core/osNotify";
 import { invoke } from "../core/ipc";
 import { confirmDialog } from "../core/dialog";
-import { setStatus } from "../core/mutations";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sidebarWidth";
 import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollapsed";
@@ -799,12 +798,6 @@ export function AppShell() {
         <HoldingAsk
           holding={quitAsking}
           words={quitWords()}
-          onHandBack={async () => {
-            // One at a time, so a refusal stops at the one it refused: the tasks after it are still held, and
-            // saying otherwise is the mistake this whole box exists to prevent.
-            for (const id of quitAsking) await setStatus(id, "todo");
-            await invoke("app_quit");
-          }}
           onLeave={async () => { await invoke("app_quit"); }}
           onCancel={() => setQuitAsking(null)}
         />

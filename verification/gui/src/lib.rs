@@ -1820,6 +1820,16 @@ impl Instructor {
             // operator told only "choose the plain shell" would be hunting for a control that is not
             // on theirs.
             //
+            // **Which shape applies is said, and not left to whichever control is easiest to find.**
+            // A page with one pane on it draws an empty frame beside it, and that frame carries the
+            // same list of what to open with — so an operator reading the shapes as a menu takes the
+            // frame, and the road walks on with two panes where it asked for one. That is not a step
+            // that fails: it fails several steps later, where the page is full and there is no empty
+            // frame left for the step that wanted one (walked on v22.3.0,
+            // `stack-the-two-panes-so-each-keeps-the-whole-width` step 06). So the pane already
+            // standing is named as the one this opens in, and the empty frame is said to be for a
+            // face with no pane on it at all.
+            //
             // **The agent already running is ended by a press and not by a line typed at it.** The
             // first line a person sends into a pane nobody has named is what names it, and a naming
             // by typing never replaces one (`amenbo_core::frames`) — so a step that ended the agent
@@ -1829,7 +1839,7 @@ impl Instructor {
             // with a modifier is not part of a line at all (`app/src/talk/frames.ts`), so the naming
             // is still the road's to make. It is the same reason `run` clears by pressing.
             (Domain::Terminal, "open-shell") =>
-                "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first by holding control and pressing D, which is the end of input and not a line sent into the pane — do not type a command to end it, the first line typed into a pane being what names the pane and naming one never this step's to do. The row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. On an empty frame the same list is on the frame itself, above the press that opens it: choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane."
+                "Open a plain shell in the pane — the terminal with no agent started in it — and in the pane already standing on the page, never in a new one: a page with a pane on it draws an empty frame beside it carrying this same list, and opening a shell there would leave the road with two panes where it asked for one. Where that pane is already running an agent, end it first by holding control and pressing D, which is the end of input and not a line sent into the pane — do not type a command to end it, the first line typed into a pane being what names the pane and naming one never this step's to do. The row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. Only where no pane is standing at all is the frame the way in: the same list is on the frame itself, above the press that opens it, so choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane, and the page carries no pane this step was not asked for."
                     .to_string(),
             // Writing a command of the reader's own down on the frame. Two fields and a
             // press, and the reading that matters is taken before the press: what is registered runs
@@ -8195,8 +8205,17 @@ steps_gui:
             assert!(!line.contains("run: exit"), "step {i} still types the ending: {line}");
             assert!(line.contains("what names the pane"), "step {i} does not say why: {line}");
         }
-        // And the plain shell is still reached from all three shapes the face can be in.
-        assert!(lines[0].contains("On an empty frame") && lines[0].contains("offering several agents"), "got: {}", lines[0]);
+        // And the plain shell is still reached from all three shapes the face can be in, with which
+        // of them applies said rather than left to the operator: a page holding a pane draws an empty
+        // frame carrying the same list, and a shell opened there is the second pane that walked
+        // `stack-the-two-panes-so-each-keeps-the-whole-width` into a full page at step 06.
+        assert!(
+            lines[0].contains("in the pane already standing on the page, never in a new one")
+                && lines[0].contains("where no pane is standing at all is the frame the way in")
+                && lines[0].contains("offering several agents"),
+            "got: {}",
+            lines[0]
+        );
     }
 
     /// Running a command for its output, and pressing a ref out of what it drew. Three things are

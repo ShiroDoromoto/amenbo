@@ -3,8 +3,9 @@
 //
 // A dot on a page says "somebody is needed there". It goes up for the two things that say so — the
 // agent handing a turn over, and the sentence Amenbo opened it with still sitting unsent in the
-// input box — and for nothing else. **Silence must never raise it**: a pane that has said nothing for an hour is
-// a pane that has said nothing, and a dot over it would be Amenbo claiming a turn nobody declared.
+// input box — and for nothing else. **Silence must never raise it**: a pane that has said nothing
+// for an hour is a pane that has said nothing, and a dot over it would be Amenbo claiming a turn
+// nobody declared.
 //
 // What a reader does about a dot is press the mark on the pane's name plate, or the number of the page
 // it is on. Amenbo takes no key of its own for it: the pane below is a terminal, and a key Amenbo took
@@ -17,6 +18,19 @@ import type { PaneStart } from "../talk/terminal";
 const hoisted = vi.hoisted(() => ({
   /** Each pane's way of telling the face a turn is standing in it. */
   tell: [] as ((waiting: boolean) => void)[],
+  /** The sessions the panes opened, in the order they opened. */
+  opened: [] as string[],
+  /** The window's own way of hearing what an agent said, whichever pane it was said in. */
+  said: [] as ((payload: unknown) => void)[],
+}));
+
+// The host, stood in for: what a pane's agent says arrives as an event to the window, and this is the
+// door it comes in by (`../talk/spoken`).
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (name: string, on: (event: { payload: unknown }) => void) => {
+    if (name === "session://said") hoisted.said.push((payload) => on({ payload }));
+    return Promise.resolve(() => {});
+  },
 }));
 
 // The ledger's projects and the one folder this one is bound to, so opening a pane asks nothing.
@@ -38,7 +52,9 @@ vi.mock("../talk/agent", () => ({
     on: { opened: (s: string, at: string) => void },
     start: PaneStart = {},
   ) => {
-    on.opened(start.session ?? `s${hoisted.tell.length + 1}`, "2026-08-24T00:00:00Z");
+    const session = start.session ?? `s${hoisted.tell.length}`;
+    hoisted.opened.push(session);
+    on.opened(session, "2026-08-24T00:00:00Z");
     return Promise.resolve(() => {});
   },
 }));
@@ -84,6 +100,18 @@ const openPane = async () => {
 const turn = async (pane: number, standing: boolean) => {
   await act(async () => { hoisted.tell[pane]!(standing); });
 };
+/** The agent in a pane says something, the way the host carries it: to the window, whether or not the
+ *  pane it was said in is on the screen. */
+const says = async (pane: number, verb: "waiting" | "note", text: string) => {
+  const payload = {
+    session: hoisted.opened[pane]!,
+    verb,
+    at: "2026-08-24T00:01:00Z",
+    cwd: null,
+    text,
+  };
+  await act(async () => { for (const on of hoisted.said) on(payload); });
+};
 
 beforeEach(async () => {
   // The face measures the window to work out whether the columns beside the panes are columns at all
@@ -91,6 +119,8 @@ beforeEach(async () => {
   // columns — so a test about what is drawn beside the panes says it is on a wide screen.
   window.innerWidth = 1600;
   hoisted.tell = [];
+  hoisted.opened = [];
+  hoisted.said = [];
   told = [];
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -144,6 +174,23 @@ describe("a turn standing on a page", () => {
     await goPage(1);
     await turn(0, false);
     await goPage(2);
+    expect(q(".termface__needs")).toHaveLength(0);
+    expect(told).toEqual([true, false]);
+  });
+
+  it("wears a dot for a turn handed over while the page it is on was away", async () => {
+    await openPane();
+    await openPane();                 // page 1, full at two a page
+    await openPane();                 // and one on page 2, which is where the screen now is
+    await goPage(1);
+    // The pane on page 2 is not on the screen, so nothing of it is listening. What its agent says
+    // reaches the window all the same, and that is the whole of what the dot is read off.
+    await says(2, "waiting", "which of the two");
+    expect(q(".termface__needs")).toHaveLength(1);
+    expect(told).toEqual([true]);
+
+    // And the turn is taken back by the agent going back to work, on the page it was on or not.
+    await says(2, "note", "back at it");
     expect(q(".termface__needs")).toHaveLength(0);
     expect(told).toEqual([true, false]);
   });

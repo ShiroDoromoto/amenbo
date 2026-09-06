@@ -53,19 +53,17 @@ description: >
   a terminal is a way to the record, however it got onto the screen and wherever the fold fell.
 
 given:
+  # One project, bound to one folder, and the folder is named here rather than left to be added
+  # afterwards. Bound to exactly one, the press that opens a pane opens there and asks nothing —
+  # which of a project's folders a pane works in is a question only where it keeps several, and that
+  # question is `open-a-pane-where-a-project-keeps-more-than-one-folder`'s road.
   - type: action
     domain: project
     op: create
     with:
       name: Workshop
-    as: workshop
-
-  - type: action
-    domain: folder
-    op: bind
-    with:
       dir: workshop
-      project: workshop
+    as: workshop
 
   - type: action
     domain: task
@@ -118,14 +116,27 @@ steps_gui:
     with:
       face: terminal
 
+  # Which project's panes the face is drawing, pressed rather than assumed: what the face comes up on
+  # is the run's business, and the pane below has to be the one standing in this project's folder.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Workshop
+
   # The folder is already a project's, and the tasks below are that project's — which is what lets the
   # listing be run with nothing named on the command line: a terminal standing in a folder is standing
   # in the project it answers for.
+  #
+  # The frame and not the way in beside it. The way in is the face of a project with nowhere to run
+  # yet, and this one was bound where the world was stood up — so the press opens a pane in that
+  # folder and asks nothing, and a road that reached for the picker here would be hunting a control
+  # that is not on the screen.
   - type: action
     domain: terminal
-    op: open-folder
+    op: open-pane
     with:
-      dir: workshop
+      from: face
 
   - type: action
     domain: terminal

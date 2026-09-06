@@ -227,6 +227,10 @@ export function TerminalPane({
       // another page, which is exactly when they are not looking at it — saying the turn was over
       // because the page turned would erase the one fact the dot on that page exists to carry
       // (`AMB-T-3610`). What ends a turn is the pane saying so, or the session ending.
+      //
+      // Nothing here has to hold that open. The row above the pane goes with the pane and says so on
+      // its way out (`../talk/plate`), and what the dots and the badges are read off is kept above
+      // this — one map for the window, fed by the same statements (`../talk/spoken`).
     };
     // Only `running` is a reason to do any of this again. `start` and `frame` are what this pane *is*
     // — a change of either would be a different pane, and the face gives that one a different key.

@@ -292,6 +292,22 @@ steps_gui:
     with:
       text: SCENARIO the pane beside it
 
+  # And the same words again, on the row above it. A line in a terminal is a line that moves: the
+  # roads below leave three paths standing unsent on this pane's input line, and an input line four
+  # rows deep pushes what is above it off the top of the shot. The row does not move, and it is read
+  # off the tree rather than off the picture, so nothing the pane scrolls away or wraps reaches it.
+  # That is what lets the two steps at the end of this road say which pane the page is showing.
+  #
+  # The name is the words the pane is already carrying, because there is nothing else here to call
+  # it by: a pane nobody has named wears the folder it works in, and both panes on this road work in
+  # the one folder.
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      shows: SCENARIO the pane beside it
+      name: SCENARIO the pane beside it
+
   # Back to the first pane, which is what makes the reader's pane the one the landing is *not* in.
   # The paths standing on its line go off with the press, which is what a line typed under them
   # does — they have been read, and what this step is for is where the reader is standing.
@@ -380,10 +396,12 @@ steps_gui:
       page: 1
 
   # The pane the menu is about, off the screen. This is what the reading after the hand-over is
-  # measured against — without it, "the pane is there" would be said of a pane that never left.
+  # measured against — without it, "the pane is there" would be said of a pane that never left. A
+  # page that is not being shown draws neither the pane nor the row above it, so the row answers the
+  # same question — and it answers the other half of it, further down, where the pane cannot.
   - type: assert
     domain: terminal
-    op: pane
+    op: label
     with:
       shows: SCENARIO the pane beside it
       present: false
@@ -399,15 +417,17 @@ steps_gui:
     domain: files
     op: hand-to-pane
 
-  # And the pane comes up. What is read is the pane and not the line: the line here already holds
-  # this path from the road above, and a page that had stayed where it was would have put the file
-  # somewhere the reader cannot see.
+  # And the pane comes up. What is read is the row above it and not the line: the line here already
+  # holds this path from the road above, and a page that had stayed where it was would have put the
+  # file somewhere the reader cannot see. The row rather than the pane, because by now the pane has
+  # three paths standing on its input line and the words it printed have gone off the top of it —
+  # the row carries them still, which is the whole of why this road named it.
   #
   # It is not read for the keyboard either. The pane it names is the one being worked in and was
   # before the page turned — what the menu answers for is showing it, and where the keyboard stands
   # after a page comes back is the page turn's own business, not this hand-over's.
   - type: assert
     domain: terminal
-    op: pane
+    op: label
     with:
       shows: SCENARIO the pane beside it

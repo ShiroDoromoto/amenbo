@@ -340,6 +340,9 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
 /// | a catalog row | the program, with the instruction as its opening prompt | nothing |
 /// | a registered row | the line as the reader wrote it | the instruction, handed over in two stages |
 ///
+/// What the instruction is, either way, is [`amenbo_core::agents::pane_instruction`]: the sentence a
+/// session in a folder gets, and after it the one about the vocabulary only a pane has.
+///
 /// A registered line is not taken apart and not rebuilt. Amenbo does not know where in
 /// `claude --model opus` an opening instruction would go — before the flags, after them, behind a
 /// flag of its own — so it does not guess: the line is started as it stands and the sentence follows
@@ -355,7 +358,7 @@ fn started_as(agent: &str) -> Result<Started, CmdError> {
     if let Some(own) = config.custom_agent(agent) {
         return Ok(Started {
             line: own.line.clone(),
-            hand_over: Some(amenbo_core::agents::launch_instruction(cmd)),
+            hand_over: Some(amenbo_core::agents::pane_instruction(cmd)),
         });
     }
     Err(CmdError::coded(

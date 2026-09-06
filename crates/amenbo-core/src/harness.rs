@@ -349,9 +349,12 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 /// **Nothing here is quoted or escaped.** What comes back is an argument list, and the shell it will be
 /// written into belongs to the caller (`app/src-tauri/src/launch.rs`): a quoting rule chosen in core
 /// would be one written for a shell core cannot see.
+///
+/// What is said is [`crate::agents::pane_instruction`] rather than the launch instruction alone: this
+/// route opens panes and nothing else, and a pane is where the talk vocabulary can be used.
 pub fn opening(launch: &Launch, cmd: &str) -> Vec<String> {
     let mut args: Vec<String> = launch.prompt_flag.map(str::to_string).into_iter().collect();
-    args.push(crate::agents::launch_instruction(cmd));
+    args.push(crate::agents::pane_instruction(cmd));
     args
 }
 
@@ -787,14 +790,18 @@ mod tests {
     /// spells a flag puts that in front of it. This is the shape a new row has to hold to as much as the
     /// template is — a row that opened on nothing would start an agent that was never told where it is
     /// working, and nothing on the screen would look wrong.
+    ///
+    /// It is one argument and not two. A prompt flag takes the prompt after it, so a second argument
+    /// would be a second prompt — which is why the pane's two sentences travel as one string.
     #[test]
     fn every_row_opens_by_saying_the_launch_instruction() {
-        let instruction = crate::agents::launch_instruction("amenbo");
+        let said = crate::agents::pane_instruction("amenbo");
+        assert!(said.starts_with(&crate::agents::launch_instruction("amenbo")), "{said}");
         for launch in LAUNCHES {
             let args = opening(launch, "amenbo");
             assert_eq!(
                 args.last().map(String::as_str),
-                Some(instruction.as_str()),
+                Some(said.as_str()),
                 "{} says something else first",
                 launch.id
             );
@@ -802,7 +809,7 @@ mod tests {
                 None => assert_eq!(args.len(), 1, "{} passes an argument it never declared", launch.id),
                 Some(flag) => {
                     assert!(flag.starts_with('-'), "{}: {flag} is not a flag", launch.id);
-                    assert_eq!(args, vec![flag.to_string(), instruction.clone()], "{}", launch.id);
+                    assert_eq!(args, vec![flag.to_string(), said.clone()], "{}", launch.id);
                 }
             }
         }
@@ -816,6 +823,9 @@ mod tests {
         let said = opening(find_launch("claude-code").unwrap(), "amenbo-dev").pop().unwrap();
         assert!(said.contains("amenbo-dev agent --json"), "{said}");
         assert!(!said.contains("`amenbo agent"), "{said}");
+        // Both canons the pane names, and the second one for the same reason as the first.
+        assert!(said.contains("amenbo-dev talk --json"), "{said}");
+        assert!(!said.contains("`amenbo talk"), "{said}");
     }
 
     /// The two signs that an AI is worked with in a folder, each enough on its own (`AMB-D-680`) — and a

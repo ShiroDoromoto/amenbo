@@ -23,6 +23,9 @@ pub(crate) fn version_unbound(flags: &Flags) -> Result<i32, CliError> {
             "schema_version": agent::SCHEMA_VERSION,
             "channel": channel,
             "release_build": amenbo_core::build_stamp::is_release_build(),
+            // Build-time facts, so they are answerable with no store — and this is the path the release
+            // gate takes, since it asks a freshly built artifact from a directory nothing is bound in.
+            "latest_json_url": amenbo_core::update_check::LATEST_JSON_URL,
             // No store was opened, so claim no store-derived fact — do not pad these with 0 or false.
             "format_version": serde_json::Value::Null,
             "max_supported_format": amenbo_core::model::FORMAT_VERSION,

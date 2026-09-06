@@ -1233,6 +1233,12 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     "schema_version": agent::SCHEMA_VERSION,
                     "channel": channel,
                     "release_build": amenbo_core::build_stamp::is_release_build(),
+                    // The update endpoint compiled into this build. It is injected at build time and has
+                    // no default, so what a binary answers here is the one proof that the value reached
+                    // the artifact — the release workflow's per-OS gate reads exactly this field, and it
+                    // has to, because a build cannot check its own injection while it is still building
+                    // (`AMB-D-849`).
+                    "latest_json_url": amenbo_core::update_check::LATEST_JSON_URL,
                     "format_version": vs.format_version,
                     "max_supported_format": vs.max_supported_format,
                     "latest_version": vs.latest_version,

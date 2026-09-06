@@ -720,6 +720,43 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A CLI command is a run of its own that ends when it has printed, so a
     // terminal carries nothing across and there is no gap here for this op to be.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "run-again", required: &[], refs: &[], strings: &[], binds: false },
+    // The app asked to end. It is the gesture and not what comes of it: a process with a terminal
+    // open has something to lose and says so, and one with none goes on the press
+    // (`app/src-tauri/src/quit.rs`). Which of the two happened is the whole of what these roads read.
+    //
+    // `how` is which way out was taken, and the two are named rather than left to whoever is standing
+    // at the screen, because they arrive by different roads. `menu` is the item this app wrote for
+    // itself, which is what `⌘Q` reaches — the platform's predefined quit is wired to the operating
+    // system's own terminate and never offers this side a say (`app/src-tauri/src/menu.rs`).
+    // `last-window` is the close pressed on the app's one window, which passes no menu at all and is
+    // caught in the run loop instead (`app/src-tauri/src/lib.rs`). A road that walked one would leave
+    // the other's gate unproven. Left out, it is the menu — the way out that is pressed the most.
+    //
+    // `asks` is what the road says will come of it, and it is required because it is the reading:
+    // there is no default that would not be a road quietly agreeing with whatever the app did. It
+    // settles what becomes of the app besides — a quit nothing stood in front of is the app gone, and
+    // the harness brings another up in its place so there is still a window for the step to be shot
+    // against.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "quit", required: &["asks"], refs: &[], strings: &["how"], binds: false },
+    // The answer given to that question, and where the app actually goes. It is a step of its own
+    // rather than an arg on the one above, because the question stands between them: the app is still
+    // running with the box on its board, and what a road has there is a screen it can read. The way
+    // out of one pane folds its answer into the press for the opposite reason — there the `✕` and the
+    // question it raises are one gesture at one place, while this way out is pressed in a menu and
+    // answered on the board.
+    //
+    // `answer` is which way, and it is left out where there is nothing to choose between: sessions
+    // holding no reservation get the plain question, and answering that is saying yes. Where a
+    // session made one, the box names every task being left behind and offers three
+    // (`app/src/shell/HoldingAsk.tsx`): `hand-back` puts them all back to `todo` and then goes,
+    // `leave` goes and leaves them standing, `cancel` stays. They are the pane's own three, in the
+    // pane's own box — it is one loss at two sizes — and the middle one is no more a mistake here
+    // than it is there.
+    //
+    // `target` is the task the question has to name, and it is what makes this step self-judging, the
+    // way `remove-pane`'s is: the whole of what the box is for is naming what stands to be lost, and
+    // one that named nothing — or another pane's work — is the failure it exists to prevent.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "answer-quit", required: &[], refs: &["target"], strings: &["answer"], binds: false },
     // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
     // the driver places somewhere of its own, since a pointer is answered by where a folder sits.
     // `init` raises a project of its own and binds it (hence the binding), `bind` points a folder at
@@ -816,6 +853,16 @@ const REGISTRY: &[OpSpec] = &[
     // renames it to is that machine's own word in its own language. A road reading that name back
     // would be reading the file manager rather than Amenbo.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "paste-outside", required: &["path"], refs: &[], strings: &["path", "dir"], binds: false },
+    // The same hands, putting a **picture** on the clipboard rather than a file. It is a second op and
+    // not a flag on the one above, because what ends up on the clipboard is a different thing: a file
+    // manager's copy leaves a file the host can name (`clip_files`), and this leaves bytes nothing can
+    // name until they are written down. A road that could not tell the two apart would
+    // go green on the file road while the picture road was broken.
+    //
+    // So the step says how, and the how is the point: the file is **opened** in whatever this machine
+    // shows pictures in and copied from inside it. Copying the row in a file manager puts the file on,
+    // which is the other road.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-image-outside", required: &["path"], refs: &[], strings: &["path", "dir"], binds: false },
     // And a name in that folder that is a link rather than a file. `path` is the name, `to` is what
     // it points at, read in the run's own folder — which is outside every folder a `folder` step
     // binds, so the link a road makes is the one people really make: a file kept in one place and
@@ -2263,6 +2310,20 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `onto` is which pane, named the way `drop-in` names one. Left out, it is the page's one pane.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste", required: &[], refs: &[], strings: &["onto"], binds: false },
+    // A **picture** on the clipboard put into a pane, which is not the paste above with different
+    // contents: the press differs by machine. macOS and Windows carry the image on the paste event
+    // itself, so the ordinary paste key is the whole of it; WebKitGTK carries nothing there, so Linux
+    // reads the clipboard itself and the read has to be asked for by a press of its own
+    // (`Ctrl+Shift+V` — `app/src/core/clipFiles.ts`). One op naming both is what keeps a
+    // road walkable on all three machines without a road per machine.
+    //
+    // What lands is a path and never the picture: the bytes are written into the pane's own directory
+    // first, because a path is the only shape a terminal can take a picture in. It is quoted the way
+    // every other path put in front of an agent is, and it is left standing — nothing is
+    // sent, for the reason `paste` above sends nothing.
+    //
+    // `onto` is which pane, named the way `paste` names one. Left out, it is the page's one pane.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-image", required: &[], refs: &[], strings: &["onto"], binds: false },
     // What is standing in the pane's input line, **unsent**. It is not `pane` with a different
     // sentence: that one reads what a program printed, and this reads what nothing has run yet.
     //

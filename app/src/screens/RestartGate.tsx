@@ -18,6 +18,8 @@ import { currentLang, normalizeLang, t, tf } from "../core/i18n";
 import { inTauri } from "../core/snapshot";
 import { Icon } from "../components/Icon";
 import { NoCli } from "../components/NoCli";
+import { openPanes } from "../shell/HoldingAsk";
+import { confirmDialog } from "../core/dialog";
 
 /**
  * The gate that announces the overtaking — a store too new to open. When this is noticed at startup the snapshot
@@ -48,6 +50,12 @@ export function RestartGate() {
     setFailed(false);
     try {
       if (!inTauri()) throw new Error("not in tauri");
+      // The terminals this process opened are still running behind this screen — the overtaking can be
+      // noticed long after startup, written by another process (`../core/formatAhead`) — and starting
+      // again ends every one of them for good. Asked, not named: what a session is holding is written
+      // where only the store can read it, and the store is the very thing this screen cannot open, so
+      // the reservations go unnamed here and there is nothing to hand back (`../shell/HoldingAsk`).
+      if (await openPanes() > 0 && !await confirmDialog(t("restart.confirm", lang))) return;
       await invoke("restart_app");
       setFailed(true);
     } catch {

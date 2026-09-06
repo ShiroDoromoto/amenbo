@@ -28,7 +28,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type IBufferCell } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import type { PtyChunkDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
-import { takesPastedFiles, writesPastedImage } from "../core/clipFiles";
+import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
 import { hostOs, type HostOs } from "../core/platform";
@@ -586,6 +586,11 @@ export async function mountTerminal(
   // until they are put somewhere — which the pane's own directory is for, and which is why the
   // writing is asked for here rather than in the reading (`AMB-D-854`). What comes back is a path
   // like any other, quoted the same way.
+  const writeImage = async (bytes: Uint8Array, mime: string): Promise<string[]> => {
+    const its = session;
+    if (its === null) return [];
+    return await writesPastedImage(bytes, mime, its);
+  };
   const stopPaste = takesPastedFiles(
     host,
     (paths, words) => {
@@ -594,12 +599,17 @@ export async function mountTerminal(
       const text = paths.length > 0 ? quotedPaths(paths) : words;
       if (text) void pasteIntoTerminal(its, text).catch(() => {});
     },
-    async (bytes, mime) => {
-      const its = session;
-      if (its === null) return [];
-      return await writesPastedImage(bytes, mime, its);
-    },
+    writeImage,
   );
+
+  // **On Linux the same image arrives by a different door** — `Ctrl+Shift+V` rather than the paste,
+  // which carries nothing there (`../core/clipFiles`). What comes back is written and pasted the
+  // same way; only the reading differs.
+  const stopImagePress = takesPastedImages(host, writeImage, (paths) => {
+    const its = session;
+    if (its === null || paths.length === 0) return;
+    void pasteIntoTerminal(its, quotedPaths(paths)).catch(() => {});
+  });
 
   // **Shift-Enter, which is the one press the emulator cannot pass on.** What a terminal is given for
   // Enter is a carriage return, and it is given the same one whether or not Shift was held — so an
@@ -643,6 +653,7 @@ export async function mountTerminal(
     presses.dispose();
     textarea?.removeEventListener("compositionend", composed);
     stopPaste();
+    stopImagePress();
     void unlistenOutput();
     void unlistenClosed();
     void unlistenSaid();

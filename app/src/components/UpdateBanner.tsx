@@ -3,9 +3,11 @@ import { getSnapshot, inTauri, subscribe } from "../core/snapshot";
 import { Icon } from "./Icon";
 import { dismissUpdate, isUpdateDismissed, sessionDismissCovers, type SessionDismiss } from "../core/updateDismissed";
 import { t, tf } from "../core/i18n";
-import { openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
+import { openLatestInstaller, installUpdate, restartApp, setStatus } from "../core/mutations";
 import type { UpdateProgress } from "../core/mutations";
 import { DismissButton } from "./DismissButton";
+import { HoldingAsk, heldByAll, openPanes, restartWords } from "../shell/HoldingAsk";
+import { confirmDialog } from "../core/dialog";
 
 // One line for the phase the in-app update is in — the hint that replaces `update.hint` while it runs. A download with
 // a known size shows a percentage; without one (the manifest carried no length) it is just "Downloading…".
@@ -36,6 +38,9 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
   const [dismissed, setDismissed] = useState<SessionDismiss>(undefined);
   const [stage, setStage] = useState<UpdateStage>("idle");
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
+  // The reservations the restart is about to leave standing, while the question about them is up
+  // (`../shell/HoldingAsk`). Null is no question up, and it is never an empty list.
+  const [restartAsking, setRestartAsking] = useState<readonly number[] | null>(null);
   useEffect(() => {
     if (recheck > 0) setDismissed(undefined); // a manual re-check surfaced an offer: drop the session dismissal
   }, [recheck]);
@@ -62,8 +67,18 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
     }
   };
 
+  // Applying the update means the process this is running in ends, and no session in it comes back —
+  // the same loss the way out of the app names, so it is named the same way (`../shell/HoldingAsk`).
+  // With no pane open there is nothing to say and the press restarts; with panes open but nothing
+  // reserved it is the plain confirmation, and the box only comes up to name reservations by number.
   const onRestart = async () => {
-    try { await restartApp(); } catch { /* the relaunch did not take; the banner stays up to retry */ }
+    try {
+      if (await openPanes() === 0) { await restartApp(); return; }
+      const holding = await heldByAll();
+      if (holding.length > 0) { setRestartAsking(holding); return; }
+      if (!await confirmDialog(t("restart.confirm"))) return;
+      await restartApp();
+    } catch { /* the relaunch did not take; the banner stays up to retry */ }
   };
 
   const pct = stage === "working" && progress?.phase === "downloading" && progress.total
@@ -98,6 +113,20 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
         <DismissButton
           onClick={() => { dismissUpdate(vs.newerVersion); setDismissed(vs.newerVersion); }}
           label={t("update.dismiss")}
+        />
+      )}
+      {restartAsking !== null && (
+        <HoldingAsk
+          holding={restartAsking}
+          words={restartWords()}
+          onHandBack={async () => {
+            // One at a time, so a refusal stops at the one it refused: the tasks after it are still
+            // held, and the box says so rather than restarting on top of them.
+            for (const id of restartAsking) await setStatus(id, "todo");
+            await restartApp();
+          }}
+          onLeave={async () => { await restartApp(); }}
+          onCancel={() => setRestartAsking(null)}
         />
       )}
     </div>

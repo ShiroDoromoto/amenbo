@@ -138,10 +138,16 @@ steps_gui:
   # A pane puts a quote at both ends, so either end says the same thing — and finding neither of them
   # here is what says the quoting is the pane's own and not something this door does too.
   #
-  # Which end is read matters, because one of them is where the caret stands. A bar blinking at the
-  # end of what was just pasted is read as a closing quote often enough that this step went red on a
-  # screen that was right, and whether it did came down to which half of the blink the shot caught.
-  # Nothing blinks in front of the path, so the opening quote is the end a reading can trust.
+  # Which end is looked at matters, because one of them is where the caret stands. A bar blinking at
+  # the end of what was just pasted passes for a closing quote often enough that this step went red
+  # on a screen that was right, and whether it did came down to which half of the blink the shot
+  # caught. Nothing blinks in front of the path, so the opening quote is the end to look at.
+  #
+  # **An eye closes it, and no reading does.** What is looked for here is punctuation and nothing
+  # else, and the fold a reading is matched through keeps letters and digits and drops the rest — so
+  # `'/` reaches the match as the empty string, which every reading holds, and the step was red on
+  # every screen there is rather than on the wrong ones. The mark is drawn plainly, so a person
+  # reading the shot answers what a reading cannot.
   - type: assert
     domain: files
     op: reading
@@ -196,7 +202,8 @@ steps_gui:
     with:
       shows: ".png"
 
-  # The same reading, at the same end and for the same reason as on the page above.
+  # The same step, at the same end and for the same reason as on the page above — an eye's, not a
+  # reading's.
   - type: assert
     domain: files
     op: reading

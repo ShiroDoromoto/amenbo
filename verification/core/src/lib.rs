@@ -2351,7 +2351,7 @@ const REGISTRY: &[OpSpec] = &[
     // choose between: a pane whose session is holding nothing is asked the plain thing it has always
     // been asked, and answering that is saying yes. Where the session made a reservation from inside
     // the pane, the question names it and offers three, which are three different things to want
-    // (`app/src/shell/PaneDropAsk.tsx`): `hand-back` puts the work back to `todo` and then goes,
+    // (`app/src/shell/HoldingAsk.tsx`): `hand-back` puts the work back to `todo` and then goes,
     // `leave` goes and leaves the reservation standing, `cancel` stays. The middle one is not a
     // mistake — somebody stepping away for the night has every reason to leave a reservation where it
     // is — so a road that only ever walked the first would be proving two thirds of the question.

@@ -287,7 +287,7 @@ pub fn talk_raise(app: tauri::AppHandle) -> bool {
 /// Bring a window forward, spelled the way a notification click spells it (`crate::macos_notify`):
 /// a window that is merely unfocused and a window that is minimized both look, to the user, like the
 /// terminal not being there.
-fn raise_window(win: &WebviewWindow) {
+pub fn raise_window(win: &WebviewWindow) {
     let _ = win.unminimize();
     let _ = win.show();
     let _ = win.set_focus();

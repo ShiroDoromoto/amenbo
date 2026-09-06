@@ -22,6 +22,7 @@ import { SearchScreen } from "../screens/SearchScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { HookConsentModal } from "../screens/HookConsentModal";
+import { HoldingAsk, heldByAll, quitWords } from "./HoldingAsk";
 import { NudgeHost } from "../screens/NudgeHost";
 import { NewProjectScreen } from "../screens/NewProjectScreen";
 import { ProjectSettingsScreen } from "../screens/ProjectSettingsScreen";
@@ -36,6 +37,7 @@ import { badgeUp, knock, looked, NO_ATTENTION, turnCame } from "./terminalBadge"
 import { notifyTurn } from "../core/osNotify";
 import { invoke } from "../core/ipc";
 import { confirmDialog } from "../core/dialog";
+import { setStatus } from "../core/mutations";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sidebarWidth";
 import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollapsed";
@@ -103,6 +105,10 @@ export function AppShell() {
   // Bumped each time a manual check surfaces an offer, so the UpdateBanner can lift a session dismissal the user has
   // now explicitly overridden by asking again (its persistent dismissal is already cleared in `checkForUpdatesFresh`).
   const [updateRecheck, setUpdateRecheck] = useState(0);
+  // The tasks the running sessions are holding, while the question about ending the app is on the screen
+  // (`./HoldingAsk`). Null is no question up, and it is never an empty list: the host only asks when a terminal
+  // is open, and a set of them holding nothing is answered with the plain confirmation instead.
+  const [quitAsking, setQuitAsking] = useState<readonly number[] | null>(null);
 
   // The slot the project header (the board toolbar) renders into. grid-area:header is a row spanning the full width
   // of main plus the right pane; BoardScreen portals its toolbar in here and the right pane sits below it.
@@ -545,6 +551,37 @@ export function AppShell() {
     };
   }, []);
 
+  // The app was asked to end while terminals were still running (`crate::quit`). The host has already decided
+  // there is something to lose; what is decided here is how to say so. Reservations are named one by one, and a
+  // set of sessions holding none of them gets the plain confirmation — the same two shapes the way out of a
+  // single pane has (`./TerminalPane`), because they are the same loss at two sizes.
+  useEffect(() => {
+    if (!inTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen("quit://asked", () => {
+          void heldByAll().then(async (holding) => {
+            if (holding.length > 0) {
+              setQuitAsking(holding);
+              return;
+            }
+            if (!await confirmDialog(t("quit.confirm"))) return;
+            await invoke("app_quit");
+          });
+        }),
+      )
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   const isTaskScreen = nav.type === "project" || (nav.type === "view" && LIST_VIEWS.includes(nav.id));
   const isActivityScreen = nav.type === "view" && nav.id === "activity";
   // Search shows the pane for the same reason activity does: its rows name tasks and decisions both, and
@@ -755,6 +792,23 @@ export function AppShell() {
           Amenbo has been used, which is exactly what someone still being asked the first question has not
           done yet. `hooksAsked` is that turn being over, the same latch the setup banner waits on. */}
       {hooksAsked && <NudgeHost />}
+      {/* The way out of the app, asked about by the same box the way out of one pane raises. It is drawn here
+          rather than beside a pane because what it is about is every session at once, and the board is the
+          window the host raises to put it in front of (`crate::quit`). */}
+      {quitAsking !== null && (
+        <HoldingAsk
+          holding={quitAsking}
+          words={quitWords()}
+          onHandBack={async () => {
+            // One at a time, so a refusal stops at the one it refused: the tasks after it are still held, and
+            // saying otherwise is the mistake this whole box exists to prevent.
+            for (const id of quitAsking) await setStatus(id, "todo");
+            await invoke("app_quit");
+          }}
+          onLeave={async () => { await invoke("app_quit"); }}
+          onCancel={() => setQuitAsking(null)}
+        />
+      )}
     </div>
     </RefNavProvider>
   );

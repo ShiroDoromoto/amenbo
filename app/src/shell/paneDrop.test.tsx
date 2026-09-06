@@ -130,14 +130,14 @@ async function pane(autoStart = true): Promise<void> {
 }
 
 const wayOut = () => container.querySelector<HTMLButtonElement>(".slot__end");
-/** The question about what is being left behind, while it is on the screen (`./PaneDropAsk`). */
-const asked = () => document.querySelector(".panedrop__modal");
+/** The question about what is being left behind, while it is on the screen (`./HoldingAsk`). */
+const asked = () => document.querySelector(".holdingask__modal");
 /** What that question names, one ref to a line. */
 const named = () =>
-  Array.from(document.querySelectorAll(".panedrop__refs li"), (li) => li.textContent);
+  Array.from(document.querySelectorAll(".holdingask__refs li"), (li) => li.textContent);
 /** Press one of the question's three answers, and let what it sets off settle. */
 const answer = async (which: number) => {
-  const buttons = document.querySelectorAll<HTMLButtonElement>(".panedrop__action");
+  const buttons = document.querySelectorAll<HTMLButtonElement>(".holdingask__action");
   await act(async () => { buttons[which]?.click(); });
   await act(async () => { await Promise.resolve(); });
 };
@@ -247,7 +247,7 @@ describe("removing a pane", () => {
     await press();
     await answer(0);
 
-    expect(document.querySelector(".panedrop__failed")?.textContent).toBe("already reserved");
+    expect(document.querySelector(".holdingask__failed")?.textContent).toBe("already reserved");
     expect(dropped, "a refused hand-back took the place away anyway").toEqual([]);
     expect(hoisted.ended).toEqual([]);
   });

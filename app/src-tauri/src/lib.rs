@@ -83,6 +83,9 @@ mod plugin_dispatch;
 /// The pseudo-terminal a pane of the talk window is filled with: opening one, carrying its bytes
 /// both ways, and telling it how large the pane on screen is (`AMB-D-747`).
 mod pty;
+/// The way out of the app, and the question asked on the way: quitting ends every terminal in the
+/// process, and none of them comes back.
+mod quit;
 /// One process per store: what turns a second launch into the window that is already open, coming to
 /// the front. Desktop-only, because the claim it holds is an OS primitive with no shape elsewhere.
 #[cfg(desktop)]
@@ -252,6 +255,12 @@ pub fn run() {
       if event.id() == menu::CHECK_UPDATES_ID {
         use tauri::Emitter;
         let _ = app.emit(CHECK_UPDATES_EVENT, ());
+      }
+      // Quit is the app's own item rather than the platform's, so that this line exists at all
+      // (`quit`, `menu`). What happens next is a question or an exit, depending on whether anything
+      // is running in a pane.
+      if event.id() == quit::QUIT_ID {
+        quit::requested(app);
       }
     })
     .register_asynchronous_uri_scheme_protocol(BLOB_SCHEME, |_ctx, request, responder| {
@@ -584,9 +593,25 @@ pub fn run() {
       windows::talk_close,
       windows::talk_ready,
       windows::talk_raise,
+      quit::app_quit,
     ])
-    .run(context)
-    .expect("error while running tauri application");
+    .build(context)
+    .expect("error while building tauri application")
+    // Built rather than run, so the loop's own events can be read. The one that is read is the close
+    // pressed on the app's last window: it ends the process the way the menu's quit does, and it is
+    // the one way out that arrives without passing through a menu item of ours (`quit`).
+    .run(|app, event| {
+      if let tauri::RunEvent::WindowEvent {
+        label,
+        event: tauri::WindowEvent::CloseRequested { api, .. },
+        ..
+      } = &event
+      {
+        if quit::ask_before_this_close(app, label) {
+          api.prevent_close();
+        }
+      }
+    });
 }
 
 #[cfg(all(test, desktop))]

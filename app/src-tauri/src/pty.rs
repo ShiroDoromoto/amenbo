@@ -128,6 +128,17 @@ const CURSOR_ANSWER: &[u8] = b"\x1b[1;1R";
 #[derive(Default)]
 pub struct Terminals(Mutex<HashMap<String, Terminal>>);
 
+impl Terminals {
+    /// How many sessions are open right now.
+    ///
+    /// Asked by the way out of the app (`crate::quit`), where the only thing worth knowing is
+    /// whether there is anything to lose — a count is that, and it can be had without copying the
+    /// registry the way [`pty_sessions`] does.
+    pub fn open(&self) -> usize {
+        self.0.lock().expect("terminals lock").len()
+    }
+}
+
 /// Where a session's output is going, and what it has said lately.
 ///
 /// Both are held apart from [`Terminal`] because the thread draining the terminal reaches for them

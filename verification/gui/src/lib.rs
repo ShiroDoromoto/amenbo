@@ -1898,7 +1898,12 @@ impl Instructor {
             // is deliberately not promised here: the terminal face may be behind the other segment of
             // this window or in a window of its own, and which of those is the run's business. So the
             // step is the press and the reading of the row before it, and where it landed is read by
-            // the step after (`terminal pane`).
+            // the step after (`terminal label`).
+            //
+            // That reading is the row above the pane rather than the pane's own body, and a road
+            // whose reservation was made with `run` has no choice about it: `run` clears the screen
+            // before it types, so whatever line named the pane at the top of the road is in the
+            // scrollback by the time the press lands.
             (Domain::Task, "go-to-pane") => format!(
                 "On the task \"{}\" standing open, press the row saying where the work is happening — the one carrying the pane's name \"{}\". The screen goes to the terminal, on the page that pane is on, with that pane the one being worked in. Nothing is typed into it: it is somebody's terminal, and being sent to it is not being given it.",
                 self.target_label(with),

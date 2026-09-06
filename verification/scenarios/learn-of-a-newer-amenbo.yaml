@@ -2,17 +2,23 @@
 # capability whose subject is the shipped build itself, so it is also the one that cannot be
 # exercised anywhere but on a shipped build.
 #
+# ── Why nothing stands in for an address that was never read ─────────────────────────────────────
+# What a check that asked nothing knows about where this release is hosted is nothing, so the road
+# reads a null address and the reason beside it. An address here would have to be written into the
+# binary, and a binary that carries one carries it into every build that forgets to be pointed
+# anywhere — which is the shape of forgetting this whole release is about.
+#
 # The check is all of it. `--apply` downloads a new CLI and swaps the running binary, and `--rollback`
 # puts the kept one back: both replace a real file on the machine running the gate, whichever store
 # they are pointed at, so neither belongs in an unattended run.
 id: learn-of-a-newer-amenbo
-title: Asking about an update reports this build and hands back an installer address without opening anything
+title: Asking about an update reports this build, and with nothing asked upstream names the reason rather than an address
 description: >
   The run is hermetic — `AMENBO_UPDATE_CHECK=0` keeps the release manifest off the network — so what
-  this proves is the answer with nothing upstream to find: the check falls back to the releases page
-  rather than to an empty offer, reports no newer version instead of guessing at one, and opens
-  nothing. That last one is the point of `--print`, and the reason a gate can run this at all: a
-  check that launched a browser would take over the screen of whoever ran it.
+  this proves is the answer with nothing upstream asked: the check names the switch that stopped it,
+  claims no version and no address instead of guessing at either, and opens nothing. That last one is
+  the point of `--print`, and the reason a gate can run this at all: a check that launched a browser
+  would take over the screen of whoever ran it.
 steps_cli:
   # Nothing was opened. `--print` is the headless face of the command, and it has to stay one.
   - type: assert
@@ -38,11 +44,19 @@ steps_cli:
       field: update_available
       equals: false
 
-  # And the fallback address: with no manifest to resolve this platform's installer from, the user
-  # is still sent somewhere they can get one.
+  # And no address either. A build that was never handed a manifest does not know where this release
+  # is hosted, so naming a page to go and look on would be an address of the command's own invention
+  # rather than one it read. What the reader gets is the reason, which is the thing they can act on.
   - type: assert
     domain: store
     op: update
     with:
       field: url
-      equals: https://github.com/ShiroDoromoto/amenbo/releases/latest
+      equals: null
+
+  - type: assert
+    domain: store
+    op: update
+    with:
+      field: reason
+      equals: update_check_off

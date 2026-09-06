@@ -62,13 +62,6 @@ pub const LATEST_JSON_URL: &str = match option_env!("AMENBO_LATEST_JSON_URL") {
     ),
 };
 
-/// Where the "apply the update" affordance falls back to: the download page of the latest release.
-/// We land here whenever the unified-installer URL for the current OS cannot be read out of
-/// `latest.json` — the query failed, the asset is not listed, or the env var disabled the check —
-/// and the user can pick from the list by hand. This installer affordance only ever *opens* a page;
-/// the in-place swap is [`crate::self_update`]'s separate path (`amenbo update --apply`).
-pub const LATEST_RELEASE_PAGE: &str = "https://github.com/ShiroDoromoto/amenbo/releases/latest";
-
 /// Timeout on the query. We give up silently on failure, so keep it short enough that it never
 /// needlessly stalls an interactive command.
 const FETCH_TIMEOUT: Duration = Duration::from_secs(3);
@@ -123,19 +116,24 @@ impl LatestRelease {
 
     /// The URL the "apply the update" affordance should open: the current OS's unified installer if
     /// there is one — under its **update-download name** ([`update_named`]) — else the release-notes
-    /// page (`notes_url`), else the latest-release page ([`LATEST_RELEASE_PAGE`]). This is the
-    /// **installer** affordance — the CLI and GUI merely **open** this URL in the OS's default
-    /// browser; the standalone CLI's in-place swap is a separate path ([`crate::self_update`],
+    /// page (`notes_url`), and `None` when the manifest names neither. This is the **installer**
+    /// affordance — the CLI and GUI merely **open** this URL in the OS's default browser; the
+    /// standalone CLI's in-place swap is a separate path ([`crate::self_update`],
     /// `amenbo update --apply`).
     ///
+    /// **`None` is an answer, not a place to fall to.** What a manifest without either of them
+    /// describes is a release this machine has nothing to install from, and sending the reader to a
+    /// list of releases to pick out of by hand would be this code guessing at an address the
+    /// manifest did not give it (`AMB-D-849`). The caller says so instead.
+    ///
     /// Everyone who arrives here is updating, so the installer is taken from the update side
-    /// (`AMB-D-441`): whoever opens this already has amenbo. Only the installer is renamed — the two
-    /// fallbacks are pages, not assets, and carry no count to keep apart.
+    /// (`AMB-D-441`): whoever opens this already has amenbo. Only the installer is renamed — the
+    /// notes page is a page, not an asset, and carries no count to keep apart.
     #[must_use]
-    pub fn update_url(&self) -> String {
+    pub fn update_url(&self) -> Option<String> {
         self.installer_for_current_platform()
             .map(update_named)
-            .unwrap_or_else(|| self.notes_url.as_deref().unwrap_or(LATEST_RELEASE_PAGE).to_string())
+            .or_else(|| self.notes_url.clone())
     }
 }
 
@@ -271,11 +269,16 @@ pub(crate) fn update_named(url: &str) -> String {
 
 /// Resolve the update URL that an explicit user action (`amenbo update`, or the GUI's "open the
 /// installer") should open. We try regardless of the config toggle — the user asked for it, so we go
-/// and fetch — but the env kill switch (`AMENBO_UPDATE_CHECK=0`), and a failed query, both fall back
-/// to the latest-release page ([`LATEST_RELEASE_PAGE`]).
+/// and fetch — and `None` is what comes back when there is nothing to open: the env kill switch
+/// (`AMENBO_UPDATE_CHECK=0`) stopped the query, the query failed, or the manifest names no installer
+/// for this machine and no notes page ([`LatestRelease::update_url`]).
+///
+/// There is no address to fall back to. A build that cannot read its manifest does not know where
+/// this release is hosted, and the caller's business is to say that rather than to open a page
+/// picked out here (`AMB-D-849`).
 #[must_use]
-pub fn resolve_update_url() -> String {
-    check(true).map(|r| r.update_url()).unwrap_or_else(|| LATEST_RELEASE_PAGE.to_string())
+pub fn resolve_update_url() -> Option<String> {
+    check(true).and_then(|r| r.update_url())
 }
 
 /// The on-disk cache envelope: when we fetched, and what we got. It carries the fetch time so the
@@ -608,7 +611,7 @@ mod tests {
             notes_url: Some("https://example/releases".into()),
             assets,
         };
-        assert_eq!(r.update_url(), "https://example/installer-for-me-update.pkg");
+        assert_eq!(r.update_url().as_deref(), Some("https://example/installer-for-me-update.pkg"));
         assert_eq!(r.installer_for_current_platform(), Some("https://example/installer-for-me.pkg"));
 
         // With no installer for the current platform we go to notes_url — a CLI archive key alone is
@@ -620,16 +623,16 @@ mod tests {
             notes_url: Some("https://example/releases".into()),
             assets,
         };
-        assert_eq!(r.update_url(), "https://example/releases");
+        assert_eq!(r.update_url().as_deref(), Some("https://example/releases"));
         assert!(r.installer_for_current_platform().is_none(), "a CLI archive is not an installer");
 
-        // With no notes_url either, we go to the latest-release page.
+        // With no notes_url either there is nothing to open, and nothing is invented in its place.
         let r = LatestRelease {
             version: "1.0.0".into(),
             notes_url: None,
             assets: Default::default(),
         };
-        assert_eq!(r.update_url(), LATEST_RELEASE_PAGE);
+        assert_eq!(r.update_url(), None);
     }
 
     /// The update name of every asset the release publishes a second copy of, pinned as a table
@@ -661,7 +664,7 @@ mod tests {
         let Some(published) = r.installer_for_current_platform() else {
             return; // no installer for this OS/arch: the fallbacks are pages, covered elsewhere
         };
-        let opened = r.update_url();
+        let opened = r.update_url().expect("an installer for this OS is an address to open");
         assert_ne!(opened, published, "the first-install name is not what an update opens");
         assert!(opened.contains("-update."), "the update copy is what gets opened: {opened}");
     }

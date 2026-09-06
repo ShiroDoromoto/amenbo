@@ -109,11 +109,24 @@ steps_gui:
     with:
       shows: "pasted-"
 
-  # And the shape it arrived in: the extension the type it was handed decides, with the closing quote
-  # after it. The quote is the point of this reading — the clipboard was carrying bytes and no
-  # punctuation, so it can only have been put there on the way in.
+  # And the shape it arrived in: the extension the type it was handed decides.
   - type: assert
     domain: terminal
     op: in-the-box
     with:
-      shows: ".png'"
+      shows: ".png"
+
+  # And the quoting, which is this road's half of the pair — the clipboard was carrying bytes and no
+  # punctuation, so a quote on the line can only have been put there on the way in.
+  #
+  # **It is read at the head of the path, and by an eye.** At the head because nothing blinks in
+  # front of a paste, where a caret standing at the end of one passes for a closing quote — which is
+  # what the box's road went red on. By an eye because the fold a reading is matched through keeps
+  # letters and digits and drops the rest: `'/` reaches the match as the empty string, so no reading
+  # answers for it either way. Written the other way round, `.png'` folds to `png` and goes green on
+  # a line carrying no quote at all, which is what this step used to be.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: "'/"

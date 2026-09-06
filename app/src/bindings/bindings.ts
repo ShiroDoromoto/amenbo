@@ -774,7 +774,7 @@ export type FrameNameDto = {
 /**
  * The frame it is the name of. Names belong to frames, never to the session running in one.
  */
-frame: string, name: string, by: "typed" | "session" | "person", };
+frame: string, name: string, by: "session" | "person", };
 
 /**
  * One path git named inside the folder the file face is showing (`crate::folder_git`).

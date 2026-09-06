@@ -784,12 +784,11 @@ so `open-shell` takes the pane down to a plain prompt first, and every road that
 it. `run` is a command run there for its output: it clears the pane before it, so what a step after
 it presses is one place on the screen rather than one of several, and where the command needs a
 record's own number it carries `<ref>` and names the record beside it, a road having no way to spell
-a number the run will mint. **The clearing is a key press and not a typed `clear`**, because a pane
-is named by the first line typed into it and a naming by typing never replaces one — so a road that
-wants a pane called by words of its own types them before it runs anything there, and no step of the
-harness's own takes that name first. The same rule ends a program by a press: `open-shell` and
-`end-pane` both say control-D — the end of input, which is not a line — rather than a typed `exit`,
-which would have left every pane they walked through called `exit`.
+a number the run will mint. **The clearing is a key press and not a typed `clear`**, because the
+words on a pane are what every `shows` names it by — so a step of the harness's own that typed
+something there would be writing on the screen a road reads. The same rule ends a program by a press:
+`open-shell` and `end-pane` both say control-D — the end of input, which is not a line — rather than
+a typed `exit`, which would have put `exit` on every pane they walked through.
 `press-ref` is the press itself — the ref where the output
 drew it, naming the record rather than the characters — and `folded: true` asks for the same press on a ref
 the pane broke across two rows. That last one is the only place the two ways a ref becomes pressable
@@ -931,9 +930,10 @@ What a `pane` assert reads is deliberately the reader's own words rather than th
 other word on that face belongs to Amenbo, so a reading of one would hold the gate to whichever
 language the run's machine is set to — and, more to the point, a pane showing a fresh prompt looks
 exactly like a pane still drawing the session that was running until a line the road put there is on
-it. That line is also what names the pane's frame, and a named frame is what its window's title bar
-carries: it is how `window:` names a window by a word the road chose instead of one the interface
-wrote. `put-the-terminal-on-its-own-screen` is the road, and it folds the window back before it ends
+it. A window is named separately — `window:` matches on the title bar, which carries the frame's name
+where a pane has one and the app's own word where it has none. A road that needs a window told apart
+by a word of its own names its pane first (`name-pane`).
+`put-the-terminal-on-its-own-screen` is the road, and it folds the window back before it ends
 — the shape a machine was last used in belongs to the webview rather than to the throwaway store, so
 a run that walked away split would hand the next person two windows they never asked for.
 
@@ -953,8 +953,8 @@ nothing holds it to. One op covers the three shapes the face can come up in — 
 an agent, the offer of several, the notice that none was found — because a plain shell is reachable
 from every one of them, and which of the three is on screen is the run's machine's business rather
 than the road's. The agent it has to end first is ended by control-D and never by a typed `exit`, for
-the reason `run` clears by a press: a pane with no name takes the first line typed into it, and a road
-that ends an agent that way has spent the pane's name on the harness's own word.
+the reason `run` clears by a press: the words on a pane are what a road names it by, and a step that
+typed `exit` would have added the harness's own word to them.
 
 `face-badge` reads the one thing that crosses between the two faces: the mark the terminal's segment
 wears while a turn is standing behind it. It carries no number and no words, so a road says it is

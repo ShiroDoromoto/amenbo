@@ -130,18 +130,24 @@ steps_gui:
     domain: terminal
     op: open-shell
 
-  # The reader's own words, which are what names this pane — and so what the row on the task has to
-  # carry. Nothing else on the screen says them.
-  #
-  # **It comes before the command below, and the order is not a preference.** A pane is named by the
-  # first line typed into it, and a naming by typing never replaces one (`amenbo_core::frames`) — so
-  # a road that ran its command first would have the pane called after that command, with these
-  # words arriving too late to take the name.
+  # The reader's own words, which is how every step below says *which* pane it means. Nothing else on
+  # the screen says them.
   - type: action
     domain: terminal
     op: type-line
     with:
       text: SCENARIO the pane at the furnace
+
+  # And the pane's name, said outright. Typing into a pane does not name it — the folder it works in
+  # is what a pane nobody has named is called, and both panes on this road work in the same folder, so
+  # the row on the task would carry a label that names neither of them in particular. A person naming
+  # it is the only thing here that makes the row's label the road's own words.
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      shows: SCENARIO the pane at the furnace
+      name: SCENARIO the pane at the furnace
 
   - type: action
     domain: terminal

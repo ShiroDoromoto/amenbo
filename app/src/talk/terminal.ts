@@ -14,9 +14,8 @@
 // emulator produced for the key is what the program in the terminal is given, so arrow keys, Ctrl-C,
 // tab completion and bracketed paste all work because nothing tried to make them work.
 //
-// The one thing a pane reads out of a person's typing is the first line they send, which names the
-// frame — and it is read off their presses rather than off the stream, because the stream carries the
-// emulator's answers to the program as well and nothing there tells the two apart (`./frames`).
+// **Nothing is read out of a person's typing at all.** A pane's frame is named by the agent running
+// in it or by the person saying so, and by nothing else (`./frames`).
 //
 // Refs are read **after** all of that, off what was drawn rather than out of what crossed
 // (`./refLinks`), which is what keeps the line above true: the stream is still nobody's to read, and
@@ -32,7 +31,7 @@ import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
 import { hostOs, type HostOs } from "../core/platform";
-import { NOTHING_TYPED, pressedKey, typed, type NamedBy, type Pressed } from "./frames";
+import { type NamedBy } from "./frames";
 import { pathsOnRow, refFromUrl, refsOnRow, type Cell, type Rows } from "./refLinks";
 
 // The events the host sends this pane. Output is a chunk; closed is the program in the terminal
@@ -548,30 +547,6 @@ export async function mountTerminal(
       .catch(() => {});
   });
 
-  // The first line a person sends into this pane names its frame, so a pane is called something before
-  // anyone gets round to naming it. Only the first: the presses are followed until one line has been
-  // sent and then let alone, and whether the name takes at all is the store's to say (`./frames`).
-  //
-  // **It is read off their presses and not off the stream above**, which carries the emulator's own
-  // answers to the program — the colour it is drawn in, where its cursor is — beside the person's
-  // typing, with nothing to tell the two apart. Read there, an agent that asked what colour it was
-  // being drawn in named its own pane `10;rgb:ecec/e9e9/…` (`AMB-T-3668`, `AMB-D-748`).
-  let typing = NOTHING_TYPED;
-  const wrote = (did: Pressed | null) => {
-    if (typing.sent || did === null) return;
-    typing = typed(typing, did);
-    if (typing.sent && typing.line) on.name(typing.line, "typed");
-  };
-  const presses = term.onKey(({ domEvent }) => wrote(pressedKey(domEvent)));
-  // An input method is a line written a key at a time and settled all at once, so what a person wrote
-  // in one is taken where it is settled rather than while it is being guessed at. It is read off the
-  // box the emulator collects their typing in, which is where a composition happens.
-  const textarea = term.textarea;
-  const composed = (e: CompositionEvent) => {
-    if (e.data) wrote({ kind: "text", text: e.data });
-  };
-  textarea?.addEventListener("compositionend", composed);
-
   // **A paste carrying files is answered here; every other paste is the emulator's** — the reading
   // itself, and why it is taken on the way down, are `../core/clipFiles`. What is written is this
   // side's: pasted as they stand, a name with a space in it is two words to the shell, so the
@@ -655,8 +630,6 @@ export async function mountTerminal(
     resize.disconnect();
     links.dispose();
     stream.dispose();
-    presses.dispose();
-    textarea?.removeEventListener("compositionend", composed);
     stopPaste();
     stopImagePress();
     void unlistenOutput();

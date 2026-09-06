@@ -188,7 +188,6 @@ fn named(names: &std::collections::BTreeMap<String, FrameName>) -> Vec<FrameName
             frame: frame.clone(),
             name: named.name.clone(),
             by: match named.by {
-                NamedBy::Typed => "typed",
                 NamedBy::Session => "session",
                 NamedBy::Person => "person",
             },

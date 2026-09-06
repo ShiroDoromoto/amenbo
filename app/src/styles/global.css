@@ -178,6 +178,9 @@ input[type="color"] {
   background: var(--c-pane-bg);
   color-scheme: dark;
   overflow: hidden;
+  /* Only the ring below moves, and it fades rather than appears: what it is saying is "here", which a
+     mark that blinks on says less clearly than one the eye catches arriving. */
+  transition: box-shadow 160ms ease-out;
 }
 /* The controls that pick what is on screen: how many panes, and which page. Both are rows of every
    choice with the one in force marked, rather than a control that says the next step — which of them
@@ -446,6 +449,20 @@ input[type="color"] {
 .panedrop__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 .panedrop__action:disabled { opacity: 0.5; cursor: default; }
 .slot--focused .termface__pane { border-color: var(--c-accent); }
+/* Where a path just landed. The pane the row's menu hands a file to is the one being worked in, which
+   is not where the reader's eye is — they were in the panel, and the page may have turned since they
+   last looked at a pane — so the pane says the path arrived rather than leaving them to find it
+   (`../shell/TerminalFace`).
+   **It is a shadow and not a border**: this element is the box xterm measures, and its size is what
+   the program inside is told its number of columns from — so nothing that goes up here may take room.
+   A shadow takes none, and drawing it inset puts it on the pane's own dark ground rather than over
+   the gap between two panes. */
+.slot--landed .termface__pane { box-shadow: inset 0 0 0 2px var(--c-accent); }
+/* Motion turned down: the ring still goes up and comes down — it is what says where the path went —
+   and it does so at once rather than fading. */
+@media (prefers-reduced-motion: reduce) {
+  .termface__pane { transition: none; }
+}
 /* The empty frame: the dashed place a terminal is opened in, holding what it will be opened with
    and the one press that does it (`../shell/EmptySlot`). The box is the frame; the row and the
    button inside it are what is said in the room. */

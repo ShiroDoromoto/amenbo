@@ -23,12 +23,18 @@
 # so a fix made in it shows neither in git's diff nor on the rows the panel colours. A folder costs
 # the whole tree under it.
 #
-# ── Why five roads and not one ───────────────────────────────────────────────────────────────────
+# ── Why six roads and not one ────────────────────────────────────────────────────────────────────
 # A file dragged in from the machine, a hand full of them dragged in at once, a folder off a row of
-# the panel, a file off a row, and a row carried onto a pane by hand: five doors and one answer. The
-# drags go first, on a line with nothing else standing on it — that is the only moment the path can be
-# read for what is *not* in it, and a hand full is where a carry would show worst, taking every one of
-# them in.
+# the panel, a file off a row, a row carried onto a pane by hand, and the row's menu pressed for a
+# pane that is behind the page: six doors and one answer. The drags go first, on a line with nothing
+# else standing on it — that is the only moment the path can be read for what is *not* in it, and a
+# hand full is where a carry would show worst, taking every one of them in.
+#
+# ── Why the last road turns a page first ─────────────────────────────────────────────────────────
+# The menu hands the file to the pane being worked in, and turning a page moves what is drawn without
+# moving that — so the pane the item names is often one the reader cannot see, and a path pasted into
+# it would be a hand-over with nothing to read. The pane is put behind the page on purpose, and what
+# is read afterwards is that it came back.
 #
 # ── Why the last road needs a second pane ────────────────────────────────────────────────────────
 # The four above are walked on one pane, where "the pane it landed on" and "the pane the reader was
@@ -47,12 +53,14 @@
 id: hand-a-file-to-what-is-running-in-a-pane
 title: What is handed to the pane reaches it as the path it is already at
 description: >
-  Open a pane in the project's folder and get five things to what is running in it: a file dragged in
+  Open a pane in the project's folder and get six things to what is running in it: a file dragged in
   from the machine, a pair dragged in together, a folder off a row of the panel beside it, a file off
-  a row, and a row carried onto a pane of its own. Nothing is copied and nothing is moved — no dragged
-  path is under the project's folder afterwards, and no landing is made for any of them — and all five
-  put the whole path in the line the person types into, unsent, for them to send. The two that point
-  at a pane land in the one the pointer named, and leave it the pane being worked in.
+  a row, a row carried onto a pane of its own, and a row named from its menu to a pane the page turn
+  had taken away. Nothing is copied and nothing is moved — no dragged path is under the project's
+  folder afterwards, and no landing is made for any of them — and all six put the whole path in the
+  line the person types into, unsent, for them to send. The two that point at a pane land in the one
+  the pointer named, and leave it the pane being worked in; the one named from the menu brings its
+  pane back on the screen.
 
 given:
   - type: action
@@ -343,5 +351,53 @@ steps_gui:
   - type: assert
     domain: terminal
     op: worked-in
+    with:
+      shows: SCENARIO the pane beside it
+
+  # ── The sixth road: the same menu, to a pane that is not on the screen ────────────────────────
+  # A page turn moves what is drawn and not which pane is worked in, so the pane the menu hands to is
+  # often behind the page. One pane to a page is the plainest way to stand the two apart.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 1
+
+  - type: action
+    domain: terminal
+    op: go-page
+    with:
+      page: 1
+
+  # The pane the menu is about, off the screen. This is what the reading after the hand-over is
+  # measured against — without it, "the pane is there" would be said of a pane that never left.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane beside it
+      present: false
+
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: hand-to-pane
+
+  # And the pane comes up. What is read is the pane and not the line: the line here already holds
+  # this path from the road above, and a page that had stayed where it was would have put the file
+  # somewhere the reader cannot see.
+  #
+  # It is not read for the keyboard either. The pane it names is the one being worked in and was
+  # before the page turned — what the menu answers for is showing it, and where the keyboard stands
+  # after a page comes back is the page turn's own business, not this hand-over's.
+  - type: assert
+    domain: terminal
+    op: pane
     with:
       shows: SCENARIO the pane beside it

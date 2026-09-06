@@ -34,6 +34,11 @@ import { inTauri } from "../core/snapshot";
 import { errText, t, tf, tn } from "../core/i18n";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 
+/** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
+ *  panel to reach the pane, and short enough that what is left on the screen afterwards is the
+ *  ordinary mark of the pane being worked in. */
+const LANDED_MS = 900;
+
 /**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
  *
@@ -253,6 +258,15 @@ export function TerminalFace({
   // must not come down to be handed a fresh one.
   const tell = useRef(onWaiting);
   tell.current = onWaiting;
+
+  // The pane a path was just handed to, while it is saying so, and the clock that takes the word
+  // back. Nothing is remembered afterwards: what this is about is one act, and a pane that kept a
+  // mark of it would be saying something about a file the reader has long since sent.
+  const [landed, setLanded] = useState<string | null>(null);
+  const landedFor = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (landedFor.current !== null) clearTimeout(landedFor.current);
+  }, []);
 
   const paneWaiting = useCallback((frame: string, is: boolean) => {
     setNeedy((was) => {
@@ -488,6 +502,23 @@ export function TerminalFace({
   }, []);
 
   /**
+   * Say on the pane itself that a path arrived in it, for as long as `LANDED_MS`.
+   *
+   * The mark is the face's rather than the pane's because what it is about is the moment, not the
+   * pane: it goes up on one act and comes down by the clock, and there is one of them at a time. A
+   * second hand-over into the same pane while the ring is up puts the clock back rather than
+   * flashing twice — what the reader would see of two rings 200ms apart is one ring.
+   */
+  const landOn = useCallback((frame: string) => {
+    setLanded(frame);
+    if (landedFor.current !== null) clearTimeout(landedFor.current);
+    landedFor.current = setTimeout(() => {
+      landedFor.current = null;
+      setLanded(null);
+    }, LANDED_MS);
+  }, []);
+
+  /**
    * Hand a file the panel is showing to the pane the reader is working in — the reverse of
    * `pathClicked`, and the same pair of doors read the other way round.
    *
@@ -507,11 +538,22 @@ export function TerminalFace({
    * The paths are quoted, the same way a pane's own drop quotes them (`./TerminalPane`,
    * `AMB-D-801`): this is the same handover read the other way round, and a shell splits a name with
    * a space in it whichever door the path came through.
+   *
+   * **The pane is brought up, and says the path arrived.** Turning a page moves what is drawn and
+   * not which pane is worked in (`../talk/layout`), so the focused pane is often not on the screen —
+   * and a path pasted into a pane nobody can see is a hand-over the reader has no way to read. So the
+   * pane is shown (`focusOn` brings its page with it) and its ring goes up for a moment. The other
+   * road needs neither: a row carried onto a pane was let go while the reader was looking at it.
    */
   const handOver = useMemo(() => {
-    const session = sessionIn(layout.focus);
-    if (session === null) return undefined;
-    return (wholes: string[]) => { pasteInto(session, wholes); };
+    const frame = layout.focus;
+    const session = sessionIn(frame);
+    if (frame === null || session === null) return undefined;
+    return (wholes: string[]) => {
+      pasteInto(session, wholes);
+      setLayout((was) => focusOn(was, frame));
+      landOn(frame);
+    };
   }, [layout.focus, layout.frames]);
 
   /**
@@ -1115,6 +1157,7 @@ export function TerminalFace({
                     }}
                     autoStart={frame.session !== null || startNow.current.has(frame.id)}
                     focused={layout.focus === frame.id}
+                    landed={landed === frame.id}
                     offered={overFrame === frame.id}
                     onOpened={opened}
                     onPath={pathClicked}

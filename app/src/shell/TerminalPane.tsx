@@ -84,7 +84,7 @@ async function handOver(session: string, paths: string[]) {
  * running on the way out — a session whose place has gone is one nobody can reach.
  */
 export function TerminalPane({
-  frame, project, names, start, autoStart, focused, offered = false,
+  frame, project, names, start, autoStart, focused, landed = false, offered = false,
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onWaiting,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
@@ -100,6 +100,16 @@ export function TerminalPane({
    *  and the one a person has just pressed the way in on. */
   autoStart: boolean;
   focused: boolean;
+  /**
+   * Whether a path has just been handed to this pane from somewhere else on the face, for as long as
+   * the pane is saying so (`./TerminalFace`).
+   *
+   * **Told rather than kept here**, because what it is about is the act and not the pane: the face
+   * knows a hand-over happened and the pane only draws it. What is drawn takes no room — the box
+   * xterm measures is what the program inside is told its number of columns from, so a mark that
+   * changed that box would be resizing somebody's editor to say a file had arrived.
+   */
+  landed?: boolean;
   /**
    * Whether something being carried inside the window is hanging over this pane
    * (`../files/handDrag`).
@@ -311,7 +321,7 @@ export function TerminalPane({
 
   return (
     <div
-      className={`slot${focused ? " slot--focused" : ""}`}
+      className={`slot${focused ? " slot--focused" : ""}${landed ? " slot--landed" : ""}`}
       data-hand={frame}
       onMouseDown={() => onFocus(frame)}
     >

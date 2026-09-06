@@ -72,9 +72,10 @@ const hoisted = vi.hoisted(() => ({
   carried: { arrived: [] as string[], stopped: null } as FolderCarriedDto,
   /** What the host refuses a name with, where a test is about the refusal. */
   refuse: null as unknown,
-  /** Whether that refusal takes a moment to arrive — the ordering a real host has and a stand-in
-   *  that throws on the spot does not. */
-  slowRefusal: false,
+  /** Where a test holds that refusal back. The answer waits on this until the test lets it go, so
+   *  the ordering a real host has — the box blurring while the answer is still out — is arranged
+   *  rather than guessed at (`AMB-T-4481`). */
+  heldRefusal: null as null | Promise<void>,
   /** The way to tell the panel a person typed, as the stand-in editor took it. */
   typing: null as null | (() => void),
   /** Every save the panel asked for, and what it sent with it — the mark of what was read
@@ -203,7 +204,7 @@ vi.mock("./folder", () => ({
   folderMake: async (_projectId: number, root: string, path: string[], dir: boolean) => {
     hoisted.asked.push(`make:${root}:${path.join("/")}:${dir ? "dir" : "file"}`);
     if (hoisted.refuse === null) return;
-    if (hoisted.slowRefusal) await new Promise((r) => setTimeout(r, 5));
+    if (hoisted.heldRefusal !== null) await hoisted.heldRefusal;
     throw hoisted.refuse;
   },
   folderSave: async (
@@ -259,23 +260,23 @@ async function settle() {
 }
 
 /**
- * Wait until something the panel is still working on has landed.
+ * Hold the host's refusal of a name back, and hand over the way to let it arrive.
  *
- * Polled rather than slept through. A fixed wait is a guess about how busy the machine is, and the
- * machine running the whole suite at once — every file in its own worker, on however many cores it
- * has — is a great deal busier than the one running this file alone: the guess held on the second
- * and failed on the first, which is a red build that says nothing about the code (`AMB-T-3858`).
- *
- * The deadline is long because it is not a measurement. Nothing here waits it out when the panel is
- * working — the loop stops on the first look that holds — so its only job is to end a wait that is
- * never going to end, with a sentence saying what did not happen.
+ * The order of the two is the whole of what the refusal test is about: the box blurs while the
+ * answer is still on its way. A stand-in that sleeps a few milliseconds before throwing is guessing
+ * that the test reaches the blur inside those milliseconds — a guess that holds on a machine running
+ * this file alone and fails under the whole suite, where every file has a worker of its own and each
+ * step takes longer than the sleep. Then the answer lands first, the blur gives up on a name already
+ * refused, and the refusal leaves the screen with the box: a red build saying nothing about the code
+ * (`AMB-T-3858`, `AMB-T-4481`). Held rather than slept, there is no length to be wrong about.
  */
-async function until(held: () => boolean, missing: string) {
-  for (let look = 0; look < 400; look += 1) {
-    if (held()) return;
-    await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
-  }
-  throw new Error(`waited two seconds and ${missing}`);
+function holdRefusal() {
+  let letGo = () => {};
+  hoisted.heldRefusal = new Promise<void>((resolve) => { letGo = resolve; });
+  return async () => {
+    hoisted.heldRefusal = null;
+    await act(async () => { letGo(); await new Promise((r) => setTimeout(r, 0)); });
+  };
 }
 
 type Props = Parameters<typeof FilesPanel>[0] & Parameters<typeof FolderTree>[0] & {
@@ -541,7 +542,7 @@ beforeEach(() => {
   hoisted.apps = [];
   hoisted.encodings = ["UTF-8", "Shift_JIS", "EUC-JP", "windows-1252", "ISO-2022-JP"];
   hoisted.refuse = null;
-  hoisted.slowRefusal = false;
+  hoisted.heldRefusal = null;
   hoisted.takers = [];
   hoisted.perRoot = {};
   hoisted.git = {};
@@ -2914,10 +2915,10 @@ describe("a project bound to several folders", () => {
     };
     hoisted.entries = { "": [] };
     hoisted.refuse = refusal;
-    // The answer takes a moment, which is the whole of what this is about: a browser blurs the box
+    // The answer is held back, which is the whole of what this is about: a browser blurs the box
     // the instant anything about it changes under the reader's fingers, and that lands while the
     // refusal is still on its way.
-    hoisted.slowRefusal = true;
+    const refusalArrives = holdRefusal();
     await draw();
     await menuOn(button(t("files.tree")));
     await click(button(t("files.newFile")));
@@ -2929,10 +2930,8 @@ describe("a project bound to several folders", () => {
     // Left while the answer is out. A box that closed itself here would take the refusal with it,
     // and the reader would watch the name they typed vanish with nothing said.
     await leave(box);
-    await until(
-      () => container.textContent?.includes(errLabel(refusal)) === true,
-      "the refusal never reached the screen",
-    );
+    await refusalArrives();
+    expect(container.textContent).toContain(errLabel(refusal));
     // And said inside the box's own row, which is what carries it to a reader being read to. A tree
     // names what may be inside it, so a line drawn anywhere else is thrown out of what the machine
     // hands that reader: the words are on the screen and nowhere in the answer, which is a refusal

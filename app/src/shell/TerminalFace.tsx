@@ -33,6 +33,8 @@ import type { PaneDrawnDto, PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf, tn } from "../core/i18n";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
+import { watchSpoken } from "../talk/spoken";
+import { NO_SESSIONS, type Sessions } from "../talk/sessions";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
  *  panel to reach the pane, and short enough that what is left on the screen afterwards is the
@@ -252,12 +254,16 @@ export function TerminalFace({
   // it belongs in the arrangement that is kept (`../talk/layout`).
   const startWith = useRef(new Map<string, string>());
 
-  // Which panes have a turn standing in them — the agent said so, or the ledger says a task the pane
-  // is holding is no longer ready (`../talk/plate`). It is state rather than a ref because it is
-  // drawn: the page a pane is on wears a dot for it, and so does a project that is not the one being
-  // shown, which is how a turn nobody is looking at is knocked about at all (`AMB-T-3610`). The shell
-  // above is told the one fact it draws — that somebody's turn has come somewhere behind this face.
-  const [needy, setNeedy] = useState<ReadonlySet<string>>(new Set());
+  // What the panes being drawn say about themselves — the agent handed a turn over, or the ledger
+  // says a task the pane is holding is no longer ready (`../talk/plate`). It reaches only as far as
+  // the panes on the screen, because a pane is the only thing here that asks the ledger, and a pane
+  // goes down with its page.
+  const [reported, setReported] = useState<ReadonlySet<string>>(new Set());
+  // And what every session in this window has said, which no page turn takes away (`../talk/spoken`).
+  // It is the half that carries a turn handed over behind the reader's back; the half above is the
+  // one that carries the ledger's derivation. `needy` below is the two of them read together.
+  const [spoken, setSpoken] = useState<Sessions>(NO_SESSIONS);
+  useEffect(() => watchSpoken(setSpoken), []);
   // Read through a ref for the same reason the panes' callbacks are: the face is mounted once and
   // must not come down to be handed a fresh one.
   const tell = useRef(onWaiting);
@@ -273,17 +279,41 @@ export function TerminalFace({
   }, []);
 
   const paneWaiting = useCallback((frame: string, is: boolean) => {
-    setNeedy((was) => {
+    setReported((was) => {
       if (was.has(frame) === is) return was;
       const next = new Set(was);
       if (is) next.add(frame);
       else next.delete(frame);
-      // The shell is told the answer for the face as a whole, and only when it turns over: a second
-      // pane joining the first does not knock again.
-      if ((next.size > 0) !== (was.size > 0)) tell.current(next.size > 0);
       return next;
     });
   }, []);
+
+  /**
+   * Which panes of this face have a turn standing in them, drawn or not.
+   *
+   * **A pane that is not on the screen still has one**, and it is the whole reason the dots and the
+   * badges exist: a page turn is exactly when nobody is looking at that pane (`AMB-T-3610`). The
+   * drawn panes answer for themselves, because a pane is the only thing here that asks the ledger
+   * whether what it is holding is still ready; the rest is read off what their agents have said,
+   * which the window hears whether or not the pane is up (`../talk/spoken`).
+   */
+  const needy = useMemo(() => {
+    const all = new Set(reported);
+    for (const frame of layout.frames) {
+      if (frame.session !== null && spoken.get(frame.session)?.waiting) all.add(frame.id);
+    }
+    return all;
+  }, [reported, spoken, layout.frames]);
+
+  // The shell is told the answer for the face as a whole, and only when it turns over: a second pane
+  // joining the first does not knock again, and a face that opens with nothing standing says nothing.
+  const standing = needy.size > 0;
+  const toldStanding = useRef(false);
+  useEffect(() => {
+    if (toldStanding.current === standing) return;
+    toldStanding.current = standing;
+    tell.current(standing);
+  }, [standing]);
 
   /**
    * The pages of this project a turn is standing on, minus the one being shown.

@@ -6,6 +6,7 @@ import {
   mountNameplate,
   NO_CHANGEOVER,
   nowOf,
+  middleElide,
   nowText,
   peekLines,
   sayOf,
@@ -179,6 +180,37 @@ describe("the whole row, for a reader who asks for it", () => {
     expect(
       peekLines({ name: null, now: { kind: "idle" }, say: { kind: "silent" }, dot: STILL }, EN),
     ).toEqual(["Talking it over"]);
+  });
+});
+
+describe("a line too long for the place it is drawn in", () => {
+  /** Fits by character count — the row is not monospaced, but a test bench can be. */
+  const upTo = (columns: number) => (candidate: string) => candidate.length <= columns;
+
+  it("is left alone where it fits", () => {
+    expect(middleElide("#3598 the nameplate", upTo(40))).toBe("#3598 the nameplate");
+  });
+
+  it("keeps both ends and drops the middle, so two panes on one road read apart", () => {
+    const a = "#4423 walk read-a-file-with-the-tree from step 09";
+    const b = "#4423 walk read-a-file-with-the-tree from step 15";
+    const [cutA, cutB] = [middleElide(a, upTo(24)), middleElide(b, upTo(24))];
+    expect(cutA.length).toBeLessThanOrEqual(24);
+    expect(cutA.startsWith("#4423 ")).toBe(true);
+    expect(cutA.endsWith("09")).toBe(true);
+    expect(cutB.endsWith("15")).toBe(true);
+    // The whole of the point: cut at the end, both of these would be the same line.
+    expect(cutA).not.toBe(cutB);
+    expect(a.slice(0, 24)).toBe(b.slice(0, 24));
+  });
+
+  it("gives the head a little over half, since the ref it carries has to come out whole", () => {
+    // Ten columns for the line, one of them the mark that says it was cut: five before it, four after.
+    expect(middleElide("0123456789abcdef", upTo(10))).toBe("01234…cdef");
+  });
+
+  it("comes down to the mark alone where there is room for nothing else", () => {
+    expect(middleElide("#3598 the nameplate", upTo(1))).toBe("…");
   });
 });
 

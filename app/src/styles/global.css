@@ -1750,9 +1750,18 @@ body.dragging-row { user-select: none; }
 }
 
 /* What the session is on. It takes the room that is left, and gives it up to what is said on the right
-   rather than pushing that off the end. */
+   rather than pushing that off the end.
+
+   **The basis is 0 and not the words** (`../talk/nameplate`). What is drawn here is a cut of a line
+   with its middle dropped, and the cut is measured against the box — so a basis that grew with the
+   words would move the box every time the cut changed, and the two would chase each other. At 0 the
+   box is whatever the row has left over, and the cut is made to fit it.
+
+   The ellipsis stays as the floor: a cut is made from a measurement, and there is a moment before the
+   first one — and a box measured at no width at all — where what is drawn is the whole line. Cut at
+   the end is worse than cut in the middle, and better than cut with nothing to say it was. */
 .plate__now {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

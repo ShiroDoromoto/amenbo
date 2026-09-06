@@ -502,7 +502,8 @@ by hand, or with the screen tool's `click-named` / `drag` / `type` / `key` / `sc
 once the screen is standing where the step says it should. There is no flag for running it any other way.
 A step that names the key this machine copies or pastes with is `key 8 --cmd` and `key 9 --cmd`:
 the modifier is a flag on the press rather than a key held around it, so nothing stays down between
-steps.
+steps. A press is held the same way — a step that adds a row to a selection with the key this machine
+adds with is `click-named <pid> <name> --cmd`.
 
 **The hand-over comes before the step, the first one included.** That is what lets a road open with a
 check: a run starts on a store made for it a moment ago, so the screen a launch leaves behind is

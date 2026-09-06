@@ -27,6 +27,7 @@
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 51=Backspace / 121=Page Down)
 //                                                — held under `--cmd` / `--shift` / `--opt` / `--ctrl` when the press is a
 //                                                  shortcut: ⌘C is `key 8 --cmd`, ⌘V is `key 9 --cmd`
+//                                                  (the presses take the same four — see below)
 //   swift screen.swift scroll <pid> <dx> <dy>    turn a wheel over that app's window, in points (+dy is back
 //                                                toward the top) — over `--at <x> <y>` when what is to move is
 //                                                not what the middle of the window is on
@@ -54,6 +55,12 @@
 // prints, so it is read off the screen rather than remembered: `--role AXPopUpButton` reaches the
 // pane's own field where a filter's `AXCheckBox` carries the same word, and it is the way past the
 // refusal one name in two places otherwise ends in.
+//
+// `key` and the presses — `click` / `right-click` / `dblclick` and the three `-named` forms — take
+// `--cmd` / `--shift` / `--opt` / `--ctrl` anywhere in the line, for a press held under a modifier.
+// A list that adds to a selection with a held key has no other road to two rows at once, so
+// `click-named <pid> <name> --cmd` is how the second row is reached. The modifier rides on the
+// event's own flags and is never pressed as a key of its own, so nothing is left held afterwards.
 //
 // Reach for `click-named` over a point. A point costs two conversions a name costs neither of: a
 // shot's pixels are the window's points times the scale of *that* display, which is 2 on a built-in
@@ -583,25 +590,25 @@ func find(pid: Int, name: String?, role: String?, window: String?) {
 /// press lands on whatever is frontmost at that point, so anything that took the front — a sleeping
 /// display, a permission dialog — swallows the click and the run still exits 0. A shot says so by
 /// failing; a click cannot, so it is not asked to.
-func clickNamed(pid: Int, name: String, role: String?, window: String?) {
+func clickNamed(pid: Int, name: String, role: String?, window: String?, flags: CGEventFlags = []) {
     let p = pointOf(pid: pid, name: name, role: role, window: window)
-    click(x: p.x, y: p.y)
+    click(x: p.x, y: p.y, flags: flags)
 }
 
 /// The same, with the other button: what a row's own menu is opened by, and the only way to reach one
 /// from here. A menu drawn where the pointer is has no name to aim at until it is up.
-func rightClickNamed(pid: Int, name: String, role: String?, window: String?) {
+func rightClickNamed(pid: Int, name: String, role: String?, window: String?, flags: CGEventFlags = []) {
     let p = pointOf(pid: pid, name: name, role: role, window: window)
-    rightClick(x: p.x, y: p.y)
+    rightClick(x: p.x, y: p.y, flags: flags)
 }
 
 /// The same press counted twice, for a row a single press only selects. The point is arrived at by
 /// name for the reason the other two are, and the coordinate `dblclick` is no substitute here: it
 /// takes no pid, so it fronts nothing, and a press aimed at this app's row lands on whatever window
 /// took the front instead — silently, since a click cannot report what swallowed it.
-func doubleClickNamed(pid: Int, name: String, role: String?, window: String?) {
+func doubleClickNamed(pid: Int, name: String, role: String?, window: String?, flags: CGEventFlags = []) {
     let p = pointOf(pid: pid, name: name, role: role, window: window)
-    doubleClick(x: p.x, y: p.y)
+    doubleClick(x: p.x, y: p.y, flags: flags)
 }
 
 /// Where a name stands, with the app brought to the front — the arithmetic both named presses share,
@@ -663,25 +670,37 @@ func hover(_ p: CGPoint) {
 /// difference between two clicks and a double click: the events are otherwise identical, and what is
 /// listening reads the count off the field rather than timing the pair itself. A drag's events carry
 /// it too — a webview handed a `pointerdown` whose count is zero has been handed a press nobody made.
-func mouse(_ phase: CGEventType, at p: CGPoint, clickState: Int64 = 1, button: CGMouseButton = .left) {
+///
+/// **The modifiers ride on the event's own flags**, the way `key` sends its own, and are never
+/// pressed as keys around the press. Every event written here says what it is held under, empty
+/// included: one left with nothing written on it carries whatever the machine is holding at that
+/// moment, and a stray ⌘ turns an ordinary press into a shortcut nobody asked for.
+func mouse(
+    _ phase: CGEventType, at p: CGPoint, clickState: Int64 = 1, button: CGMouseButton = .left,
+    flags: CGEventFlags = []
+) {
     let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: button)
     e?.setIntegerValueField(.mouseEventClickState, value: clickState)
+    e?.flags = flags
     e?.post(tap: .cghidEventTap)
 }
 
-/// One down/up at a point.
-func press(at p: CGPoint, clickState: Int64) {
+/// One down/up at a point, under whatever modifiers were asked for.
+func press(at p: CGPoint, clickState: Int64, flags: CGEventFlags = []) {
     for phase in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
-        mouse(phase, at: p, clickState: clickState)
+        mouse(phase, at: p, clickState: clickState, flags: flags)
         usleep(60_000)
     }
 }
 
-func click(x: Double, y: Double) {
+/// A press at a point, under whatever modifiers were asked for. A row added to a selection rather
+/// than taken as the whole of one is that press held under a key — the machine's own key for it, so
+/// the caller says which — and a list that only adds this way has no other road to two rows at once.
+func click(x: Double, y: Double, flags: CGEventFlags = []) {
     let p = CGPoint(x: x, y: y)
     mustBeOnAScreen(p, "the click")
     hover(p)
-    press(at: p, clickState: 1)
+    press(at: p, clickState: 1, flags: flags)
 }
 
 /// The press a row's own menu comes up on. The button is the whole difference — the same move, the
@@ -689,14 +708,15 @@ func click(x: Double, y: Double) {
 /// reason every other press here is: what comes up has to come up the way it does for a person.
 ///
 /// **A control-click is not this.** macOS raises the same menu for one, and a webview is handed a
-/// `contextmenu` either way, but the modifier stays down for whatever is sent next unless it is let
-/// go of — and a run that failed between the two would leave the machine holding a key nobody pressed.
-func rightClick(x: Double, y: Double) {
+/// `contextmenu` either way, but `click --ctrl` is a left press with a flag on it: whatever reads
+/// which button was pressed reads the left one. The other button is sent as the other button, so
+/// nothing downstream is asked to tell the two apart.
+func rightClick(x: Double, y: Double, flags: CGEventFlags = []) {
     let p = CGPoint(x: x, y: y)
     mustBeOnAScreen(p, "the right-click")
     hover(p)
     for phase in [CGEventType.rightMouseDown, CGEventType.rightMouseUp] {
-        mouse(phase, at: p, button: .right)
+        mouse(phase, at: p, button: .right, flags: flags)
         usleep(60_000)
     }
 }
@@ -704,12 +724,12 @@ func rightClick(x: Double, y: Double) {
 /// A native open/save dialog opens the row you are pointing at on a double click and on nothing else
 /// — a single click only selects it, and Return does not reach that dialog from here at all. So
 /// picking a file out of one needs this.
-func doubleClick(x: Double, y: Double) {
+func doubleClick(x: Double, y: Double, flags: CGEventFlags = []) {
     let p = CGPoint(x: x, y: y)
     mustBeOnAScreen(p, "the double click")
     hover(p)
-    press(at: p, clickState: 1)
-    press(at: p, clickState: 2)
+    press(at: p, clickState: 1, flags: flags)
+    press(at: p, clickState: 2, flags: flags)
 }
 
 /// Press at one point, cross to another with the button held, and let go there.
@@ -955,8 +975,8 @@ func type(_ s: String) {
 ///
 /// **The modifiers ride on the event's own flags**, and are never pressed as keys of their own. A run
 /// that failed between pressing ⌘ and letting it go would leave the machine holding a key nobody
-/// pressed, and everything sent after it would arrive as a shortcut — the same reason `right-click`
-/// is the other button rather than a control-click.
+/// pressed, and everything sent after it would arrive as a shortcut. A press is sent the same way,
+/// so a ⌘-click leaves nothing held either.
 ///
 /// Not every key arrives. Return, Tab, Backspace and Page Down reach the webview; Page Up, Home, End
 /// and the arrows were posted the same way and nothing moved. So a key is not the way to walk a page:
@@ -992,9 +1012,9 @@ func takeOption(_ flag: String, _ argv: [String], needs: String) -> (value: Stri
     return (value, rest)
 }
 
-/// The modifiers a key is held under, pulled out of the line wherever the caller wrote them — the
-/// freedom `--window` and `--role` have, for the reason they have it. They carry no value of their
-/// own, so each is simply there or not, and several may be.
+/// The modifiers a key or a press is held under, pulled out of the line wherever the caller wrote
+/// them — the freedom `--window` and `--role` have, for the reason they have it. They carry no value
+/// of their own, so each is simply there or not, and several may be.
 func takeModifiers(_ argv: [String]) -> (flags: CGEventFlags, rest: [String]) {
     let known: [String: CGEventFlags] = [
         "--cmd": .maskCommand, "--shift": .maskShift, "--opt": .maskAlternate, "--ctrl": .maskControl,
@@ -1205,8 +1225,11 @@ guard args.count >= 2 else {
 if role != nil, !["find", "click-named", "right-click-named", "dblclick-named"].contains(args[1]) {
     fail("--role says which kind of element to reach, and only find / click-named / right-click-named / dblclick-named take one")
 }
-if !held.isEmpty, args[1] != "key" {
-    fail("--cmd / --shift / --opt / --ctrl say what a key is held under, and only key takes them")
+if !held.isEmpty,
+    !["key", "click", "right-click", "dblclick", "click-named", "right-click-named", "dblclick-named"]
+        .contains(args[1])
+{
+    fail("--cmd / --shift / --opt / --ctrl say what a key or a press is held under, and only key / click / right-click / dblclick / click-named / right-click-named / dblclick-named take them")
 }
 if at != nil, args[1] != "scroll" {
     fail("--at says where the finger stands for a wheel, and only scroll takes one")
@@ -1226,23 +1249,23 @@ case "find":
     guard args.count == 3 || args.count == 4, let pid = Int(args[2]) else { fail("usage: screen find <pid> [name] [--role <role>] [--window <title>]") }
     find(pid: pid, name: args.count == 4 ? args[3] : nil, role: role, window: window)
 case "click-named":
-    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen click-named <pid> <name> [--role <role>] [--window <title>]") }
-    clickNamed(pid: pid, name: args[3], role: role, window: window)
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen click-named <pid> <name> [--role <role>] [--cmd] [--shift] [--opt] [--ctrl] [--window <title>]") }
+    clickNamed(pid: pid, name: args[3], role: role, window: window, flags: held)
 case "right-click-named":
-    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen right-click-named <pid> <name> [--role <role>] [--window <title>]") }
-    rightClickNamed(pid: pid, name: args[3], role: role, window: window)
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen right-click-named <pid> <name> [--role <role>] [--cmd] [--shift] [--opt] [--ctrl] [--window <title>]") }
+    rightClickNamed(pid: pid, name: args[3], role: role, window: window, flags: held)
 case "dblclick-named":
-    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen dblclick-named <pid> <name> [--role <role>] [--window <title>]") }
-    doubleClickNamed(pid: pid, name: args[3], role: role, window: window)
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen dblclick-named <pid> <name> [--role <role>] [--cmd] [--shift] [--opt] [--ctrl] [--window <title>]") }
+    doubleClickNamed(pid: pid, name: args[3], role: role, window: window, flags: held)
 case "click":
-    guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen click <x> <y>") }
-    click(x: x, y: y)
+    guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen click <x> <y> [--cmd] [--shift] [--opt] [--ctrl]") }
+    click(x: x, y: y, flags: held)
 case "right-click":
-    guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen right-click <x> <y>") }
-    rightClick(x: x, y: y)
+    guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen right-click <x> <y> [--cmd] [--shift] [--opt] [--ctrl]") }
+    rightClick(x: x, y: y, flags: held)
 case "dblclick":
-    guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen dblclick <x> <y>") }
-    doubleClick(x: x, y: y)
+    guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen dblclick <x> <y> [--cmd] [--shift] [--opt] [--ctrl]") }
+    doubleClick(x: x, y: y, flags: held)
 case "drag":
     let dragUsage = "usage: screen drag <pid> <x1> <y1> <x2> <y2> [steps] [--window <title>]"
     guard args.count == 7 || args.count == 8, let pid = Int(args[2]),

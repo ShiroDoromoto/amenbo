@@ -18,6 +18,15 @@
 # gives the panes their width back, the second puts the column away. A road that pressed a pane
 # would be walking one of them and reading the other from somewhere else.
 #
+# ── Why the file is opened a second time before the key is read ──────────────────────────────────
+# What gives the panes their width back is any press outside the column, and not a press on a pane
+# alone: the rail is outside it too, so picking the second row is itself the width going back. The
+# picking is read for that — it is the rail's half of the same behaviour the road beside this one
+# (`go-back-to-the-work-without-closing-what-you-are-reading`) reads the panes' half of — and then
+# the file is opened again, because a key with two layers to peel cannot be read against one.
+# Walked on the shipped build without it, the first press closed the column outright and the three
+# readings after it were of a column that was no longer there.
+#
 # ── Why the file is still open at the narrow width ───────────────────────────────────────────────
 # Being finished with the room is not being finished with the file. So the reading after the first
 # press is of the file's own text, still there in a column a third the width it was.
@@ -31,8 +40,10 @@ description: >
   Raise a project bound to a folder of two files and open the reading column. In the tree beside the
   panes, open the first file with two presses: it is drawn on the far side of the panes and
   the column grows to read it in. The second file's row is still there in the rail — read it, and
-  pick it out — and then press the key that leaves things: the column goes back to the width the
-  panes are drawn beside with the file still open, and a second press puts the column away.
+  pick it out: the file stays where it is, and the room the reading was given goes back, the rail
+  being outside the column. Ask for that room again on the same file, and then press the key that
+  leaves things: the column goes back to the width the panes are drawn beside with the file still
+  open, and a second press puts the column away.
 
 given:
   - type: action
@@ -143,6 +154,25 @@ steps_gui:
     op: reading
     with:
       shows: SCENARIO the pears are pruned after the leaves fall
+
+  # And the width is back where the panes are drawn beside it, because the row that was picked is in
+  # the rail and the rail is outside the column. The file is untouched by that — it is the room the
+  # reading was given that went, and the row above says so still.
+  - type: assert
+    domain: terminal
+    op: side-width
+    with:
+      side: files
+      wider: false
+
+  # So the room is asked for again, on the file that is already up: what the key is read for is two
+  # layers peeled one press at a time, and there is only one of them standing here.
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: pruning.md
+      section: tree
 
   # One layer per press: the width first.
   - type: action

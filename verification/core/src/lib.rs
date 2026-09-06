@@ -2700,10 +2700,14 @@ const REGISTRY: &[OpSpec] = &[
     // in different places, and a road that named the wrong one would be pressing something else.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "hide-side", required: &["side"], refs: &[], strings: &["side"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "show-side", required: &["side"], refs: &[], strings: &["side"], binds: false },
-    // The edge a column shares with the panes, dragged. `toward` is which way — `wider` takes room
-    // from the panes, `narrower` gives it back — and both halves are walked, because a width that
-    // only ever grows is half a control and the half a reader is left with is the one that took
-    // their pane's room.
+    // A column's edge, dragged. `toward` is which way — `wider` takes room from the panes,
+    // `narrower` gives it back — and both halves are walked, because a width that only ever grows is
+    // half a control and the half a reader is left with is the one that took their pane's room.
+    //
+    // `side` is `rail` or `files` for the two columns beside the panes, and `tabs` for the projects
+    // at the edge of the face. The tabs' named width is dragged and kept the same way, for the
+    // device rather than for the project it was dragged in; their folded width is the mark's own and
+    // is not dragged, so a road that walks this one leaves the names drawn.
     //
     // `broad` is the third, and it is a place rather than a distance: drag until the column is about
     // as wide as the panes. It is here for the width a road has to be able to *recognise* later
@@ -2750,7 +2754,8 @@ const REGISTRY: &[OpSpec] = &[
     // shot — the panes, whose width is whatever the column left them.
     //
     // `span` is `thin` for a column the panes are plainly wider than, `broad` for one that has taken
-    // about their width or more. Two answers rather than a number, because what closes it is an eye
+    // about their width or more. It is the reading the tab column is dragged against too: the panes
+    // are the landmark on that shot as much as on any other, whichever columns stand between. Two answers rather than a number, because what closes it is an eye
     // at a picture and a person at the screen has no ruler. Which is also why `broad` is reached by
     // `drag-side toward: broad` and not by the finger's width the other direction moves: a difference
     // an eye is to swear to has to be a difference an eye can see.

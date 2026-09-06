@@ -1,0 +1,150 @@
+# The width the project tabs are drawn at is the person's, and it is kept for the device they
+# dragged it on. This is the road that says so: a column widened in one project is the widened one
+# in the next, and the widened one again on coming back.
+#
+# ── Why this width is the device's, where the reading column's is the project's ──────────────────
+# `find-the-reading-column-at-the-width-you-left-this-project-at` walks the opposite promise, and the
+# pair is the point. What the reading column holds is this project's work — how much there is to read
+# is not the same from one project to the next, so one answer for the device fights every project it
+# was not dragged in. What the tab column holds is one row per project, which is the same list
+# whichever project is on the screen: a person who widened it did so because their project names are
+# long, and a face that gave the width back on the next press would be asking them to say it again
+# in every project they own.
+#
+# ── Why the reading is against the panes ─────────────────────────────────────────────────────────
+# The tabs are at the edge and the panes are in the middle, with the folders between them on this
+# road. They are still the pair `side-span` divides: the width the tabs take is width the panes do
+# not get, whichever columns stand in between, and which of the two regions is the wider is what an
+# eye at one picture can say. It has to be read that way rather than against the shot before, because
+# a press on a project's tab redraws the whole face — "wider than it was" after a move between
+# projects would be a sentence about two faces rather than about one width.
+#
+# ── Why the shipped width is read before the drag ────────────────────────────────────────────────
+# The reading after the drag means nothing on its own: a face that drew the tabs broad from the start
+# would pass it. The pair is the road — thin, then broad — and each is read the same way, so nothing
+# in the middle can be a difference in how it was measured.
+#
+# ── Why a pane is opened in each project ─────────────────────────────────────────────────────────
+# The panes are what the column is read against, so there has to be one. A plain shell is enough and
+# nothing is typed into it: what this road is about is the width beside a pane, not the pane.
+#
+# ── Why the names are left drawn ─────────────────────────────────────────────────────────────────
+# Folded, the column is the mark and nothing else, and a mark is one size — there is no edge on it to
+# take hold of. So every step here is walked with the names drawn, which is the state the width this
+# road is about belongs to.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A width is a thing on a screen, and the binary is handed paths.
+id: find-the-project-tabs-at-the-width-you-left-them
+title: The project tabs are drawn at the width they were dragged to, and it is the device's — another project is drawn at the same width, not at the one the column shipped with
+description: >
+  Raise two projects, each with a folder of its own, and open a terminal in the first. Drag the outer
+  edge of the column of project tabs out until it has taken about the panes' width. Go to the second
+  project and open a terminal there: the tabs are still at the width they were dragged to, because
+  the drag was about this device and not about the project it was made in. Go back to the first and
+  they are there too.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face opens on is the run's business, so the road presses for the one it means
+  # to drag in rather than reading whichever was selected.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The width it shipped with, which is what the drag is about to move away from.
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: tabs
+      span: thin
+
+  - type: action
+    domain: terminal
+    op: drag-side
+    with:
+      side: tabs
+      toward: broad
+
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: tabs
+      span: broad
+
+  # The other project, which was never dragged in. This is the half a face keeping the width per
+  # project would fail: it would draw this project's tabs at the one the column ships with, and a
+  # reader whose project names do not fit would have to say so again in every project they own.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: tabs
+      span: broad
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # And it is still spent here. A face that held the width only while the project it was dragged in
+  # was shown would pass every reading above and fail this one.
+  - type: assert
+    domain: terminal
+    op: side-span
+    with:
+      side: tabs
+      span: broad

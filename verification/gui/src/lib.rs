@@ -2338,10 +2338,12 @@ impl Instructor {
             // `show-face`'s are: the words are the interface's own and the run's language is
             // whatever the machine is set to.
             (Domain::Terminal, "hide-side") => match side(with)? {
+                Side::Tabs => return Err(TABS_NEVER_CLOSED.to_string()),
                 Side::Rail => "At the top of the terminal face, press the control that folds the folders away — the small one just after the way out to a separate window. The column goes, and the panes take the width it was using. The tabs of the projects stay where they are: they are at the edge of the face and have no way to close them.".to_string(),
                 Side::Files => "On the panel beside the panes — whichever of its two halves is up — press the cross at the end of its own top row. The panel goes, and the panes take the width it was using.".to_string(),
             },
             (Domain::Terminal, "show-side") => match side(with)? {
+                Side::Tabs => return Err(TABS_NEVER_CLOSED.to_string()),
                 Side::Rail => "At the top of the terminal face, press that same control again. The folders come back where they were.".to_string(),
                 // One control, and it is a switch rather than a way in: the same press opens the
                 // panel and puts it away. So the step is written as the state to end in — a road
@@ -2374,8 +2376,8 @@ impl Instructor {
                     other => return Err(format!("action `drag-side` does not know the direction `{other}`")),
                 };
                 format!(
-                    "Put the pointer on the line between {} and the panes — the cursor turns into the one that says a thing can be dragged sideways — and drag it {}. The column follows the pointer while you hold it and stays where you let go.",
-                    which.phrase(),
+                    "Put the pointer on the line {} — the cursor turns into the one that says a thing can be dragged sideways — and drag it {}. The column follows the pointer while you hold it and stays where you let go.",
+                    which.edge(),
                     toward
                 )
             }
@@ -3876,6 +3878,9 @@ impl Instructor {
             // operator reading it knows a screen that merely drew the column narrower would be a fail.
             (Domain::Terminal, "side") => {
                 let which = side(with)?;
+                if let Side::Tabs = which {
+                    return Err(TABS_NEVER_CLOSED.to_string());
+                }
                 match present(with) {
                     true => format!(
                         "On the terminal face, confirm {} is beside the panes, taking width of its own.",
@@ -3901,7 +3906,7 @@ impl Instructor {
                     false => "narrower than it was on the shot before this one",
                 };
                 format!(
-                    "Confirm {} is {} — the edge between it and the panes moved, and nothing else on the face did.",
+                    "Confirm {} is {} — its own edge moved, and nothing else on the face did.",
                     which.phrase(),
                     moved
                 )
@@ -3914,7 +3919,7 @@ impl Instructor {
             // than for a number nobody can read off a screen.
             (Domain::Terminal, "side-span") => {
                 let which = side(with)?;
-                format!("On the terminal face, confirm {} is {}", which.phrase(), span(with)?)
+                format!("On the terminal face, confirm {} is {}", which.phrase(), span(with, which)?)
             }
             // And the reading that stands where that one cannot: the wide width, which lies over
             // the panes instead of dividing the width with them. What is asked for is whether any of
@@ -3923,6 +3928,9 @@ impl Instructor {
             // strip of the panes on the narrowest window the application opens, and one dragged to
             // the stop leaves none on the widest.
             (Domain::Terminal, "side-cover") => match side(with)? {
+                Side::Tabs => return Err(
+                    "assert `side-cover` is the reading column's — the project tabs are never drawn over the panes, and have nothing for this reading to be about".to_string()
+                ),
                 Side::Rail => return Err(
                     "assert `side-cover` is the reading column's — the rail has one width, is never drawn over the panes, and has nothing for this reading to be about".to_string()
                 ),
@@ -4450,13 +4458,18 @@ fn flag(with: &Args, key: &str) -> Result<bool, String> {
         .ok_or_else(|| format!("arg `{key}` must be true or false"))
 }
 
-/// Which of the two columns beside the panes a step is about.
+/// Which of the face's columns a step is about.
 ///
 /// They are named by what each holds rather than by any heading, for the reason the sections below
 /// are: what is written on them is the interface's own words, and the run's language is whatever the
 /// machine is set to.
+///
+/// **Two of the three are beside the panes and the third is not.** The tabs stand at the edge of the
+/// face, are never closed and are never drawn over the panes, so the readings about closing and
+/// covering turn them away by name rather than answering with a sentence that cannot be true.
 #[derive(Clone, Copy)]
 enum Side {
+    Tabs,
     Rail,
     Files,
 }
@@ -4465,11 +4478,35 @@ impl Side {
     /// The words an instruction is built around, written to fit after "confirm" and after "between".
     fn phrase(self) -> &'static str {
         match self {
+            Side::Tabs => "the column of project tabs at the edge of the face",
             Side::Rail => "the column of folders down one side",
             Side::Files => "the panel beside the panes",
         }
     }
+
+    /// Where the line a drag takes hold of runs, written to fit after "the line".
+    ///
+    /// For the two columns beside the panes it is the edge they share with them, which is the
+    /// landmark an operator finds it by. The tabs are at the very edge of the face, and what stands
+    /// on the other side of their line is whichever of the other columns is open — so theirs is
+    /// named by the column itself rather than by a neighbour that is not always there.
+    fn edge(self) -> &'static str {
+        match self {
+            Side::Tabs => "down the far edge of the column of project tabs, the side of it away from the window's own edge",
+            Side::Rail => "between the column of folders down one side and the panes",
+            Side::Files => "between the panel beside the panes and the panes",
+        }
+    }
 }
+
+/// What a step is turned away with when it asks the project tabs to close, or to be read as closed.
+///
+/// It is the one column on this face with no way to put it away, and that is what it buys: a turn
+/// standing in a project nobody is looking at is said by a dot on its tab, and a column that could
+/// be closed would be a way to stop being told. A road written against it is asking for a control
+/// that is deliberately not there, so it is refused where it is written rather than handed to an
+/// operator who would go looking for it.
+const TABS_NEVER_CLOSED: &str = "the project tabs are the one column with no way to close them — a road that folds a column means the folders or the reading panel";
 
 /// Which pane's row the lamp is read on, said the same way for all three faces.
 ///
@@ -4499,10 +4536,11 @@ fn face(with: &Args) -> Result<Face, String> {
 
 fn side(with: &Args) -> Result<Side, String> {
     match with.get("side").and_then(|v| v.as_str()) {
+        Some("tabs") => Ok(Side::Tabs),
         Some("rail") => Ok(Side::Rail),
         Some("files") => Ok(Side::Files),
-        Some(other) => Err(format!("`side` does not know `{other}` — it is rail or files")),
-        None => Err("arg `side` must say which of the two columns".to_string()),
+        Some(other) => Err(format!("`side` does not know `{other}` — it is tabs, rail or files")),
+        None => Err("arg `side` must say which of the columns".to_string()),
     }
 }
 
@@ -4511,10 +4549,24 @@ fn side(with: &Args) -> Result<Side, String> {
 /// Coarse on purpose. What closes this is an eye at a picture, and the two answers are the two a
 /// person can give without measuring anything: the panes are plainly the wider of the pair, or they
 /// are not. A third answer between them would be asking for a judgement nobody can make twice.
-fn span(with: &Args) -> Result<&'static str, String> {
+fn span(with: &Args, which: Side) -> Result<&'static str, String> {
+    // The landmark the two are read against is not the same for all three. A column beside the panes
+    // divides the width between the two columns with them, which is the region an eye at that shot
+    // is looking at; the tabs are outside that region, at the edge of the face, so naming it would
+    // have the operator comparing the column with a width it is not part of.
+    let (thin, broad) = match which {
+        Side::Tabs => (
+            "the narrower of the two by a plain margin — a strip at the edge of the face, with most of the width left to the panes in the middle.",
+            "as wide as what is left of the panes, or wider — the strip at the edge has become a column of about the panes' own width, rather than the band it started as.",
+        ),
+        Side::Rail | Side::Files => (
+            "the narrower of the two by a plain margin — a strip at the edge, with most of the width between the two columns left to the panes.",
+            "as wide as what is left of the panes, or wider — the width between the two columns split roughly in two, rather than the column standing as a strip at the edge of it.",
+        ),
+    };
     match with.get("span").and_then(|v| v.as_str()) {
-        Some("thin") => Ok("the narrower of the two by a plain margin — a strip at the edge, with most of the width between the two columns left to the panes."),
-        Some("broad") => Ok("as wide as what is left of the panes, or wider — the width between the two columns split roughly in two, rather than the column standing as a strip at the edge of it."),
+        Some("thin") => Ok(thin),
+        Some("broad") => Ok(broad),
         Some(other) => Err(format!("`span` does not know `{other}` — it is thin or broad")),
         None => Err("arg `span` must say how the column and the panes divide the width".to_string()),
     }

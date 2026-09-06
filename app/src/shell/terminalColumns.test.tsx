@@ -25,7 +25,9 @@ vi.mock("../core/boundFolders", () => ({
 }));
 
 import { TerminalFace } from "./TerminalFace";
-import { RAIL_DEFAULT, SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT, tabsWidth } from "../talk/columns";
+import {
+  RAIL_DEFAULT, SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT, TABS_COMPACT_WIDTH, TABS_DEFAULT,
+} from "../talk/columns";
 import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -82,16 +84,16 @@ describe("the columns beside the panes", () => {
   });
 });
 
-// The tab column is the one at the edge that is neither dragged nor closed (`AMB-D-838`). What it
-// buys is being told about a turn standing in a project nobody is looking at, and a way to close it
-// would be a way to stop being told.
+// The tab column is the one at the edge that is never closed (`AMB-D-838`). What it buys is being
+// told about a turn standing in a project nobody is looking at, and a way to close it would be a way
+// to stop being told. Its named width is dragged like the others' (`AMB-D-848`).
 describe("the project tabs", () => {
-  it("are drawn at the width the face keeps for them, with no edge to drag", async () => {
+  it("are drawn at the width the face keeps for them, with the edge that drags it", async () => {
     await mount();
     expect(q(".ptabs")).not.toBeNull();
     const style = (q(".termface") as HTMLElement).style;
-    expect(style.getPropertyValue("--tabs-w")).toBe(`${tabsWidth(false)}px`);
-    expect(q(".termface__grip--tabs")).toBeNull();
+    expect(style.getPropertyValue("--tabs-w")).toBe(`${TABS_DEFAULT}px`);
+    expect(q(".termface__grip--tabs")).not.toBeNull();
   });
 
   it("stay when both columns beside the panes are closed", async () => {
@@ -107,11 +109,28 @@ describe("the project tabs", () => {
     await mount();
     await click(q(".ptabs__fold"));
     const style = () => (q(".termface") as HTMLElement).style.getPropertyValue("--tabs-w");
-    expect(style()).toBe(`${tabsWidth(true)}px`);
+    expect(style()).toBe(`${TABS_COMPACT_WIDTH}px`);
     await act(async () => root.unmount());
     root = createRoot(container);
     await mount();
-    expect(style()).toBe(`${tabsWidth(true)}px`);
+    expect(style()).toBe(`${TABS_COMPACT_WIDTH}px`);
+  });
+
+  // Folded, what is left is the mark, and a mark is one size: an edge on it would be offering to drag
+  // the room around a 24px square.
+  it("lose the edge while they are folded, and have it back when the names are", async () => {
+    await mount();
+    await click(q(".ptabs__fold"));
+    expect(q(".termface__grip--tabs")).toBeNull();
+    await click(q(".ptabs__fold"));
+    expect(q(".termface__grip--tabs")).not.toBeNull();
+  });
+
+  // The width the drag left is the device's, not the run's.
+  it("come back at the width they were dragged to", async () => {
+    localStorage.setItem("amenbo.termface.tabsWidth", "200");
+    await mount();
+    expect((q(".termface") as HTMLElement).style.getPropertyValue("--tabs-w")).toBe("200px");
   });
 });
 

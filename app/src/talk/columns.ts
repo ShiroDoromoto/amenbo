@@ -23,21 +23,24 @@
 // between them are `AMB-T-4253`'s; what is here is where the two answers live.
 //
 // **A column is always a column, until the wide one is asked for.** The narrow widths never lie over
-// the panes, because the room for them is always there: the window's own floor is 960px, the three
-// floors together are 640px, and the tabs at their widest take 160 more — 800 on a 960px window — and
-// the ceilings below are what keep the middle from being dragged away (`AMB-D-816`). The wide width
+// the panes, because the room for them is always there: the window's own floor is 960px and the four
+// floors together are 760px — the tab column's own among them, now that it is dragged too — and the
+// ceilings below are what keep the middle from being dragged away (`AMB-D-816`). The wide width
 // is the one exception, and it is a chosen one: it covers the panes and stops at the rail and the
 // tabs, neither of which is ever covered (`AMB-D-835`, `AMB-D-838`).
 //
-// **Whether a column was asked for, which half of the file face is up, and whether the project tabs
-// are drawn compact, are kept for the device.** They are not among the answers the decision made per
-// project (`AMB-D-835`), and the reason is what each of them is: a width is how much room this
-// project's work wants, where a column being open at all is how the person likes to work, wherever
-// they are.
+// **Whether a column was asked for, which half of the file face is up, and how the project tabs are
+// drawn, are kept for the device.** They are not among the answers the decision made per project
+// (`AMB-D-835`), and the reason is what each of them is: a width is how much room this project's work
+// wants, where a column being open at all is how the person likes to work, wherever they are. The tab
+// column's own width goes with these rather than with the widths above, for the same reason: what it
+// draws is one row per project, the same list whichever project is on the screen, so how wide it wants
+// to be is not something any one project has an answer to (`AMB-D-848`).
 //
-// **The tab column is the one thing here that is neither dragged nor closed** (`AMB-D-838`). What is
-// kept of it is which of its two fixed widths it stands at, and what it takes off the window comes
-// out of the room before anything else is measured against it.
+// **The tab column is the one thing here that is never closed** (`AMB-D-838`). Its named width is
+// dragged and kept the way the others are (`AMB-D-848`); its compact width is not, being the mark and
+// no more. What it is standing at comes off the window before anything else is measured against it,
+// because it is the one column whose room no ceiling may count on getting back.
 
 /**
  * The least width a terminal is worth drawing in.
@@ -59,6 +62,7 @@ const RAIL_SHOWN = "amenbo.termface.railShown";
 const SIDE_SHOWN = "amenbo.termface.sideShown";
 const SIDE_TAB = "amenbo.termface.sideTab";
 const TABS_COMPACT = "amenbo.termface.tabsCompact";
+const TABS_WIDTH = "amenbo.termface.tabsWidth";
 
 /** The rail's floor and where it starts — the fixed width it shipped with, so nothing moves until
  *  somebody drags it. */
@@ -80,20 +84,29 @@ export const SIDE_NARROW_DEFAULT = 256;
 export const SIDE_WIDE_DEFAULT = 560;
 
 /**
- * The two widths the project tabs are drawn at, named and compact (`AMB-D-838`).
+ * The width the project tabs are drawn at folded — the mark and everything drawn around it: a colour
+ * and one character, the padding of the tab and of the list it is in (`styles/global.css`).
  *
- * **Neither is dragged and neither is closed.** The column is a fixed thing at the edge of the face:
- * what it holds is one row per project, and a person who could drag it would be dragging the width of
- * a name they can already turn off. The compact one is the mark and everything drawn around it — a
- * colour and one character, the padding of the tab and of the list it is in (`styles/global.css`) —
- * and the named one is the rail's own, because what it draws is a name of the same kind.
+ * **It is the one width on this face that is not dragged.** Folded, the column is the mark and nothing
+ * else, and a mark is one size — a drag would be moving the room around a 24px square. What the
+ * stylesheet still has to hold up is this leaving the mark that room.
+ */
+export const TABS_COMPACT_WIDTH = 46;
+
+/** The named column's floor and where it starts — the fixed width it shipped with, so nothing moves
+ *  until somebody drags it. The floor is the rail's own, because what it draws is a name of the same
+ *  kind. */
+export const TABS_MIN = 120;
+export const TABS_DEFAULT = 160;
+
+/**
+ * The width the column is drawn at, folded or named (`AMB-D-838`, `AMB-D-848`).
  *
- * The column is drawn at whichever of them this answers with: the face hands it to the stylesheet as
- * `--tabs-w`, so the width the middle's room is measured against and the width on the screen are one
- * number. What the stylesheet still has to hold up is the compact one leaving the mark its room.
+ * The face hands whichever it answers with to the stylesheet as `--tabs-w`, so the width the middle's
+ * room is measured against and the width on the screen are one number.
  */
 export function tabsWidth(compact: boolean): number {
-  return compact ? 46 : 160;
+  return compact ? TABS_COMPACT_WIDTH : getTabsWidth();
 }
 
 /**
@@ -139,17 +152,22 @@ function ceiling(other: number, floor: number): number {
   return Math.max(roomBeside() - other - PANE_MIN, floor);
 }
 
+/** The window's own width, or a stand-in where there is no window to ask. */
+function room(): number {
+  return typeof window === "undefined" ? 1280 : window.innerWidth;
+}
+
 /**
  * The width there is for the columns and the panes: the window, less the tab column.
  *
  * The tabs come out of the room before anything is measured against it, because they are the one
- * thing on this face that is never closed and never dragged (`AMB-D-838`). Left out of the sum, they
- * would take their width from the middle — a rail dragged to its ceiling would push the panes under
- * the floor they are drawn at by exactly the width of the tabs (`AMB-D-816`).
+ * thing on this face that is never closed (`AMB-D-838`). Left out of the sum, they would take their
+ * width from the middle — a rail dragged to its ceiling would push the panes under the floor they are
+ * drawn at by exactly the width of the tabs (`AMB-D-816`). Dragging the tabs is read the same way:
+ * widening that column narrows what the two beside the panes may be dragged to, and never the panes.
  */
 function roomBeside(): number {
-  const room = typeof window === "undefined" ? 1280 : window.innerWidth;
-  return room - tabsWidth(getTabsCompact());
+  return room() - tabsWidth(getTabsCompact());
 }
 
 export function railMax(side: number = SIDE_MIN): number {
@@ -183,6 +201,23 @@ export function clampSideNarrow(px: number, rail: number = RAIL_MIN): number {
 
 export function clampSideWide(px: number, rail: number = RAIL_MIN): number {
   return Math.min(Math.max(px, SIDE_MIN), sideWideMax(rail));
+}
+
+/**
+ * The most the tab column may take: whatever the window has left once both columns beside the panes
+ * and a pane's floor are out of it, and never less than its own floor.
+ *
+ * It is the one ceiling here measured against the window itself rather than against `roomBeside`, for
+ * the plain reason that the width being bounded is the one that sum takes out.
+ */
+export function tabsMax(rail: number = RAIL_MIN, side: number = SIDE_MIN): number {
+  return Math.max(room() - rail - side - PANE_MIN, TABS_MIN);
+}
+
+export function clampTabsWidth(
+  px: number, rail: number = RAIL_MIN, side: number = SIDE_MIN,
+): number {
+  return Math.min(Math.max(px, TABS_MIN), tabsMax(rail, side));
 }
 
 /** A width this project has kept, clamped, or where it starts when nothing has been kept. */
@@ -253,6 +288,29 @@ export function getSideShown(): boolean {
 
 export function setSideShown(want: boolean): boolean {
   return keepShown(SIDE_SHOWN, want);
+}
+
+/**
+ * The named width this device was left at, or where it starts when nothing has been kept.
+ *
+ * Clamped on the way out as well as on the way in, the way the widths beside the panes are: a column
+ * dragged wide on a 4K display must not come back on a laptop with no room left beside it
+ * (`AMB-D-312`).
+ */
+export function getTabsWidth(): number {
+  const raw = kept(TABS_WIDTH);
+  const px = raw === null ? NaN : Number(raw);
+  return Number.isFinite(px) ? clampTabsWidth(px) : TABS_DEFAULT;
+}
+
+/** Clamp, keep, and answer with the width actually taken — a width even where nothing can be kept, so
+ *  a drag still moves the column in a browser that refuses storage. */
+export function setTabsWidth(
+  px: number, rail: number = RAIL_MIN, side: number = SIDE_MIN,
+): number {
+  const taken = clampTabsWidth(px, rail, side);
+  keep(TABS_WIDTH, String(taken));
+  return taken;
 }
 
 /**

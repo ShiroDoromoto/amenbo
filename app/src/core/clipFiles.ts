@@ -130,7 +130,15 @@ export function takesPastedFiles(
 }
 
 /**
- * Answer the `Ctrl+Shift+V` a pane is given on Linux, where the paste itself says nothing.
+ * Where a press asking the clipboard for its image lands, which is what decides the press.
+ *
+ * A terminal is a program's, and a box a person writes in is nobody's but theirs. The two take
+ * different presses for the same move (`takesPastedImages`).
+ */
+export type PastePress = "terminal" | "textbox";
+
+/**
+ * Answer the press a place is given on Linux, where the paste itself says nothing.
  *
  * **WebKitGTK does not fill a paste's `clipboardData`** — measured empty on 2.50.4, 2.52.5 and
  * 2.52.6 (`AMB-T-4427`) — so the image never reaches `takesPastedFiles` and the press is what is
@@ -141,15 +149,17 @@ export function takesPastedFiles(
  * `NotAllowedError` on 2.52: what permits it is the gesture it is made in, and a gesture is over by
  * the time anything else runs.
  *
- * **`Ctrl+Shift+V`, which is the press that pastes into a terminal.** `Ctrl+V` is `^V` there — the
- * character that makes the next one literal — and it reaches the program whatever this does, because
- * a press cannot be taken back once the read it started has answered. Measured in the Linux room: a
- * path written after a `Ctrl+V` arrives with the bracketed-paste markers quoted into the line, and
- * the same path after a `Ctrl+Shift+V` arrives clean.
+ * **`press` says which press that is, and the two answers are not interchangeable.** In a terminal
+ * it is `Ctrl+Shift+V`: `Ctrl+V` is `^V` there — the character that makes the next one literal — and
+ * it reaches the program whatever this does, because a press cannot be taken back once the read it
+ * started has answered. Measured in the Linux room: a path written after a `Ctrl+V` arrives with the
+ * bracketed-paste markers quoted into the line, and the same path after a `Ctrl+Shift+V` arrives
+ * clean (`AMB-T-4444`). In a box a person writes in there is no program to hand a control character
+ * to, and `Ctrl+V` is the press they will make, so that is the one read there.
  *
- * **The press is taken away from nothing.** A clipboard holding an image has nothing for the
- * emulator to paste, so what the page does with the press on its own is nothing; a clipboard holding
- * words is pasted the way it always was, and the read below finds no image and says nothing.
+ * **The press is taken away from nothing.** A clipboard holding an image has nothing for the engine
+ * to paste, so what the page does with the press on its own is nothing; a clipboard holding words is
+ * pasted the way it always was, and the read below finds no image and says nothing.
  *
  * `os` is the machine, which is the whole of the reason this exists — the other two carry the image
  * on the paste, and asking for the clipboard there would be a second reading of what is already in
@@ -159,11 +169,13 @@ export function takesPastedImages(
   host: HTMLElement,
   writeImage: (bytes: Uint8Array, mime: string) => Promise<string[]>,
   put: (paths: string[]) => void,
+  press: PastePress,
   os: HostOs = hostOs(),
 ): () => void {
   if (os !== "other") return () => {};
   const pressed = (e: KeyboardEvent) => {
-    if (!e.ctrlKey || !e.shiftKey || e.altKey || e.metaKey) return;
+    if (!e.ctrlKey || e.altKey || e.metaKey) return;
+    if (e.shiftKey !== (press === "terminal")) return;
     if (e.key !== "v" && e.key !== "V") return;
     void readImage(writeImage)
       .then(put)

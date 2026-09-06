@@ -257,7 +257,7 @@ describe("answering the press, where the paste says nothing", () => {
   it("reads the image off the clipboard and writes it down", async () => {
     const written = vi.fn(async () => ["/tmp/amenbo-pasted-aa/pasted-1234abcd.png"]);
     const put = vi.fn();
-    takesPastedImages(host, written, put, "other");
+    takesPastedImages(host, written, put, "terminal", "other");
 
     press();
     await vi.waitFor(() => expect(put).toHaveBeenCalled());
@@ -271,7 +271,7 @@ describe("answering the press, where the paste says nothing", () => {
   // The other two machines carry the image on the paste itself, which is already in hand there.
   it("does not ask the clipboard on the machines that carry the image on the paste", () => {
     for (const os of ["macos", "windows"] as const) {
-      takesPastedImages(host, vi.fn(async () => []), vi.fn(), os);
+      takesPastedImages(host, vi.fn(async () => []), vi.fn(), "terminal", os);
     }
 
     press();
@@ -283,7 +283,7 @@ describe("answering the press, where the paste says nothing", () => {
     holding("text/plain");
     const written = vi.fn(async () => ["/tmp/never.png"]);
     const put = vi.fn();
-    takesPastedImages(host, written, put, "other");
+    takesPastedImages(host, written, put, "terminal", "other");
 
     press();
     await vi.waitFor(() => expect(put).toHaveBeenCalled());
@@ -293,7 +293,7 @@ describe("answering the press, where the paste says nothing", () => {
   });
 
   it("is that press and no other", () => {
-    takesPastedImages(host, vi.fn(async () => []), vi.fn(), "other");
+    takesPastedImages(host, vi.fn(async () => []), vi.fn(), "terminal", "other");
 
     press({ ctrlKey: false });
     // `Ctrl+V` without shift is `^V` to the program, and a path pasted after one arrives quoted.
@@ -304,8 +304,25 @@ describe("answering the press, where the paste says nothing", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
+  // **A box a person writes in takes the press they will actually make.** There is no program behind
+  // it to hand a control character to, so the reason a pane holds out for the shift does not reach
+  // here — and a draft that only answered `Ctrl+Shift+V` would answer a press nobody makes.
+  it("reads a text box's own press, and a pane's is not it", async () => {
+    const written = vi.fn(async () => ["/tmp/amenbo-pasted-page-aa/pasted-1234abcd.png"]);
+    const put = vi.fn();
+    takesPastedImages(host, written, put, "textbox", "other");
+
+    press({ shiftKey: true });
+    expect(read, "the pane's press is a press like any other here").not.toHaveBeenCalled();
+
+    press({ shiftKey: false });
+    await vi.waitFor(() => expect(put).toHaveBeenCalled());
+
+    expect(put).toHaveBeenCalledWith(["/tmp/amenbo-pasted-page-aa/pasted-1234abcd.png"]);
+  });
+
   it("stops listening when it is told to", () => {
-    const stop = takesPastedImages(host, vi.fn(async () => []), vi.fn(), "other");
+    const stop = takesPastedImages(host, vi.fn(async () => []), vi.fn(), "terminal", "other");
 
     stop();
     press();
@@ -321,7 +338,7 @@ describe("answering the press, where the paste says nothing", () => {
     });
     Object.defineProperty(navigator, "clipboard", { value: { read }, configurable: true });
     const put = vi.fn();
-    takesPastedImages(host, vi.fn(async () => []), put, "other");
+    takesPastedImages(host, vi.fn(async () => []), put, "terminal", "other");
 
     press();
     await vi.waitFor(() => expect(read).toHaveBeenCalled());

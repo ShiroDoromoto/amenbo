@@ -538,7 +538,26 @@ func vmExec(argv []string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	// Held for the whole command, because a driving line is two halves: it brings a window to the
+	// front and then presses coordinates on it. A front taken away in between leaves the press
+	// landing on somebody else's window, and the command still exits 0 (vmscreen.go).
+	release, err := vmHoldScreen(vmExecLabel(argv))
+	if err != nil {
+		return 0, err
+	}
+	defer release()
 	return runThrough("", nil, "ssh", sshArgs(ip, argv...)...)
+}
+
+// vmExecLabel is the line `vm exec` leaves for whoever is turned away or made to wait. The command
+// is folded onto one line and cut short: a driving line is a shell script several lines long, and
+// the claim file is read a line at a time.
+func vmExecLabel(argv []string) string {
+	one := strings.Join(strings.Fields(strings.Join(argv, " ")), " ")
+	if r := []rune(one); len(r) > 60 {
+		one = string(r[:60]) + "…"
+	}
+	return "`devtool vm exec -- " + one + "`"
 }
 
 // vmPushArgs splits `devtool vm push <local…> <remote>` into its two halves. The last word is the

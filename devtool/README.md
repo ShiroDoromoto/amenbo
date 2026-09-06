@@ -664,17 +664,28 @@ sent the way the screen tool is. It is not a verb on `scripts/screen.swift`
 because that one runs on a developer's own Mac as well, and something that
 reconfigures a display does not belong next to click and type there.
 
-### `devtool vm exec -- <command…>` / `devtool vm push <local…> <remote>`
+### `devtool vm exec -- <command…>` / `devtool vm push <local…> <remote>` / `devtool vm pull <remote…> <local>`
 
 Reach into the running clone. `exec` runs a command in there with this process's
 own stdio and **ends the way it ended**, so a step that failed in the guest does
 not read as green out here; `push` sends files, recursively, since what is
-usually sent is a `.app`.
+usually sent is a `.app`; `pull` is its mirror, and brings back what was made in
+the guest.
 
 ```sh
 devtool vm exec -- 'stat -f %Su /dev/console'
 devtool vm push "/Applications/amenbo (dev 3578).app" /Users/admin/
+devtool vm pull /Users/admin/shot.png .
 ```
+
+`pull` is what a chain run inside the guest leaves its result through. Pressing a
+button and shooting the screen in one `vm exec` is the only way to catch what is
+on screen right after the press — `devgui shot` goes around through the host and
+takes about two seconds — and the png it writes is in there.
+
+It takes any path. [`vm verify pull`](#devtool-vm-verify-seed--install--run--step--log--pull)
+is a different command: it knows the four paths a verification run writes and
+brings those out by name.
 
 Arguments to `exec` go after `--`, and quoting is the caller's the same way it is
 with `ssh` — what follows is joined and handed to the guest's shell.

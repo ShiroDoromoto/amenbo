@@ -131,6 +131,15 @@ func vmCmd(args []string) {
 			os.Exit(2)
 		}
 		fail(vmPush(locals, remote))
+	case "pull":
+		fs := flag.NewFlagSet("vm pull", flag.ExitOnError)
+		fs.Parse(args[1:])
+		remotes, local, err := vmPullArgs(fs.Args())
+		if err != nil {
+			logf("devtool: %v", err)
+			os.Exit(2)
+		}
+		fail(vmPull(remotes, local))
 	case "screen":
 		fs := flag.NewFlagSet("vm screen", flag.ExitOnError)
 		fs.Parse(args[1:])
@@ -589,6 +598,37 @@ func vmPush(locals []string, remote string) error {
 		return err
 	}
 	logf("✓ sent %s → %s:%s", strings.Join(locals, " "), vmCloneName, remote)
+	return nil
+}
+
+// vmPullArgs splits `devtool vm pull <remote…> <local>` the mirror way vmPushArgs splits its own:
+// the last word is where the files land out here.
+func vmPullArgs(args []string) (remotes []string, local string, err error) {
+	if len(args) < 2 {
+		return nil, "", fmt.Errorf("vm pull takes one or more guest paths and a local destination, e.g. `devtool vm pull /Users/%s/shot.png .`", vmUser)
+	}
+	return args[:len(args)-1], args[len(args)-1], nil
+}
+
+// vmPull brings files out of the guest — what was made in there by a chain of guest commands, which
+// is otherwise reachable only by encoding it through `vm exec`.
+//
+// Nothing is checked before the copy the way vmPush checks its sources: what is named lives in the
+// guest, and scp is what can say whether it is there.
+func vmPull(remotes []string, local string) error {
+	ip, err := vmIP()
+	if err != nil {
+		return err
+	}
+	args := append(sshOpts(), "-r")
+	for _, r := range remotes {
+		args = append(args, vmUser+"@"+ip+":"+r)
+	}
+	args = append(args, local)
+	if _, err := run("", "scp", args...); err != nil {
+		return err
+	}
+	logf("✓ brought %s:%s → %s", vmCloneName, strings.Join(remotes, " "), local)
 	return nil
 }
 

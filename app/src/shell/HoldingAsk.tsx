@@ -22,12 +22,13 @@ export type AskWords = {
 /**
  * What a way out asks when the sessions behind it are still holding something.
  *
- * **It names what is about to be lost, at the moment it is about to be lost.** Two roads end a
- * session and neither can be taken back: pressing `✕` on a pane (`./TerminalPane`) and ending the
- * app, which ends every pane at once (`./AppShell`, `crate::quit`). Either way a reservation that
- * session made stays `in_progress` with nothing left that could say whose it was — the volatile area
- * goes with the process (`AMB-D-758`). Nothing afterwards can notice that happened, so the only
- * place it can be said is here.
+ * **It names what is about to be lost, at the moment it is about to be lost.** Three roads end a
+ * session and none of them can be taken back: pressing `✕` on a pane (`./TerminalPane`), ending the
+ * app, which ends every pane at once (`./AppShell`, `crate::quit`), and starting it again to come
+ * back on a newer build, which ends them the same way (`../components/UpdateBanner`). However it
+ * goes, a reservation that session made stays `in_progress` with nothing left that could say whose
+ * it was — the volatile area goes with the process (`AMB-D-758`). Nothing afterwards can notice that
+ * happened, so the only place it can be said is here.
  *
  * **The three answers are three different things to want**, which is why this is a question and not a
  * confirmation: hand the work back and go, go and leave it standing, or stay. The middle one is not a
@@ -127,6 +128,26 @@ export function quitWords(): AskWords {
 }
 
 /**
+ * The words the restart that applies an update asks in (`../components/UpdateBanner`).
+ *
+ * Starting again is not a smaller thing than ending: the process it comes back as is a new one, and
+ * every session in the old one is gone the same way quitting loses them.
+ *
+ * The other restart — the one the overtaking gate offers (`../screens/RestartGate`) — raises no box
+ * and so has no words of its own beyond `restart.confirm`. It cannot read what a session is holding,
+ * because that answer comes through the store it is stuck on.
+ */
+export function restartWords(): AskWords {
+  return {
+    title: t("restart.confirm"),
+    held: t("restart.holding"),
+    handBack: t("restart.handBack"),
+    leave: t("restart.anyway"),
+    cancel: t("restart.cancel"),
+  };
+}
+
+/**
  * What the volatile area says a session is holding, asked at the moment a way out is pressed
  * (`commands.rs::session_work`).
  *
@@ -157,4 +178,17 @@ export async function heldByAll(): Promise<readonly number[]> {
   const open = await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]);
   const held = await Promise.all(open.map((one) => heldBy(one.session)));
   return [...new Set(held.flat())].sort((a, b) => a - b);
+}
+
+/**
+ * How many panes this process has open (`crate::pty::pty_sessions`) — whether a road that ends all
+ * of them at once has anything to end.
+ *
+ * It is asked separately from what they hold because the two answers fail apart. A store that cannot
+ * be opened takes `heldByAll` down to an empty list while the terminals are still running and still
+ * about to be lost, which is exactly the state the overtaking gate restarts out of
+ * (`../screens/RestartGate`). Counting the panes needs no store, so that road can still ask.
+ */
+export async function openPanes(): Promise<number> {
+  return invoke<PtySessionDto[]>("pty_sessions").then((open) => open.length).catch(() => 0);
 }

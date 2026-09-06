@@ -779,6 +779,35 @@ and put the field up only once somebody asks for one — `None` with an `Add` be
 it on the task pane, `No start date` / `Ongoing` on a dimension's value. Press that
 first, or `set-date` answers `no date field on screen is called <name>`.
 
+### `devtool vm dismiss`
+
+Takes down what the system is holding up over the guest's screen — a report of an
+app that quit, a prompt about letting one take connections, a notification set to
+stay until it is answered. It says which of the two it found, and holds the screen
+claim while it runs.
+
+**This is the one thing in the way that no evidence shows.** Such an alert is a
+window of its own above every app, and a press landing inside it never reaches the
+app underneath — which goes on being frontmost, and shows nothing in its log. A
+shot does not show it either: what is shot is the app's window, not the screen
+over it, so the picture is of an app that plainly ignored a press. Measured
+2026-09-07 in the clone: one 260x364 wide had been standing over a pane's own row
+for as long as anybody looked, swallowing every press on the row's menu and on the
+control beside it, while both answered `AXPress`.
+
+The screen tool no longer walks into it silently — a named press asks the system
+whose the point is and refuses one another process answers for, naming that
+process (`verification/README.md`). This is the answer to that refusal.
+
+**It is typed rather than taken on a schedule.** One screen is shared by every
+session on this machine, and what goes may be the machine saying something worth
+reading. Whoever types this has just been told what is in the way, and is the one
+who can decide it is not worth keeping.
+
+The everyday banner is not this and is never in the way: those are drawn by
+`NotificationCenter`, which keeps a window the size of the display up at all times
+and lets presses through it.
+
 ### `devtool vm golden [--refresh]`
 
 Reports on the image clones are cut from — is the base pulled, is the golden

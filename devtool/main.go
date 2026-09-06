@@ -81,6 +81,7 @@ Usage:
   devtool vm push          <local…> <remote>
   devtool vm pull          <remote…> <local>
   devtool vm screen
+  devtool vm dismiss
   devtool vm golden        [--refresh]
   devtool vm verify seed    [<path.pkg>] [--from-run <run id>] [--system-wide]
   devtool vm verify install [<path.pkg>] [--from-run <run id>]
@@ -179,7 +180,17 @@ vm           the throwaway macOS VM the GUI is verified in. Driving a screen
              over. 'exec' and 'push' reach in, 'pull' brings a file back out,
              'screen' compiles this tree's screen tool on the host and puts the
              binary in there, and 'golden' reports on the image clones are cut
-             from, or takes it again with --refresh. Host and guest macOS
+             from, or takes it again with --refresh.
+             'dismiss' takes down what the system is holding up over the guest's
+             screen — a report of an app that quit, a prompt about letting one
+             take connections, a notification set to stay until it is answered.
+             One of those is a window above every app: a press inside it never
+             reaches the app underneath, which stays in front and none the wiser,
+             and no shot shows it, because what is shot is the window and not the
+             screen over it. The screen tool refuses such a press and names the
+             process answering for the point; this is the answer to that. It is
+             typed rather than taken on a schedule: one screen is shared, and what
+             goes may be the machine saying something worth reading. Host and guest macOS
              versions are compared whenever the clone is reached; a drift is
              said and never stopped over.
 vm verify    walk a pre-distribution screen road inside that VM. The harness is

@@ -286,3 +286,30 @@ func TestTheAdminPromptIsTypedIntoWhereTheCaretIs(t *testing.T) {
 		t.Errorf("the answer is\n%s\nwant\n%s", got, want)
 	}
 }
+
+// TestDismissTellsAnEmptyScreenFromABrokenLink holds the one thing this command is for: saying which
+// of the two happened. `killall` ends non-zero both when there was nothing to end and when the
+// connection never landed, so the guest is asked to answer in words — and a word that never arrives
+// has to stay an error rather than being read as a screen that was already clear.
+func TestDismissTellsAnEmptyScreenFromABrokenLink(t *testing.T) {
+	cmd := vmDismissCommand()
+	if !strings.Contains(cmd, vmNotifier) {
+		t.Errorf("vmDismissCommand = %q; it has to name the process presenting the notifications", cmd)
+	}
+	for _, word := range []string{"standing", "none"} {
+		if !strings.Contains(cmd, word) {
+			t.Errorf("vmDismissCommand = %q; it has to answer %q on one of the two paths", cmd, word)
+		}
+	}
+	took := vmDismissSaid("standing\n")
+	none := vmDismissSaid("none\n")
+	if took == none {
+		t.Fatalf("both answers read the same: %q", took)
+	}
+	if !strings.Contains(took, "took down") {
+		t.Errorf("vmDismissSaid(standing) = %q; it has to say something was taken down", took)
+	}
+	if !strings.Contains(none, "nothing") {
+		t.Errorf("vmDismissSaid(none) = %q; it has to say the screen was already clear", none)
+	}
+}

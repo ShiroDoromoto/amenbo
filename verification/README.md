@@ -485,8 +485,9 @@ whole while the app under it is left with nothing, in front the whole time. Noth
 evidence: what is shot is the window, not the screen over it, so the picture is of an app that
 plainly ignored a press. So the named presses ask the system whose the point is before they aim, and
 refuse one another app answers for, naming that app. The refusal is the road's cue to get that window
-off the point — measured 2026-09-07 in the verification VM, where a notification 260x364 wide had
-been standing over the pane's own row and its two controls, which answered `AXPress` all the while.
+off the point — measured 2026-09-07 in the verification VM, where an alert 260x364 wide had been
+standing over the pane's own row and its two controls, which answered `AXPress` all the while. In the
+VM that is `devtool vm dismiss`, which takes down what the system is holding up over the screen.
 
 **A point is refused on the same ground, against whatever the subcommand knows.** `drag`, `drop-file`
 and `scroll --at` are handed a pid, so each end is held to that window. `click`, `dblclick` and

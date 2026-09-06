@@ -145,6 +145,11 @@ func vmCmd(args []string) {
 		fs.Parse(args[1:])
 		noArgs(fs)
 		fail(vmSendScreen())
+	case "dismiss":
+		fs := flag.NewFlagSet("vm dismiss", flag.ExitOnError)
+		fs.Parse(args[1:])
+		noArgs(fs)
+		fail(vmDismiss())
 	case "verify":
 		vmVerifyCmd(args[1:])
 	case "golden":
@@ -665,6 +670,66 @@ func vmSendScreen() error {
 	}
 	logf("  screen  : in %s at %s", vmCloneName, vmScreenPath)
 	fmt.Printf("%s\n", vmScreenPath)
+	return nil
+}
+
+// vmNotifier is the process the system puts its own alerts up through — a crash report, a prompt
+// about letting an app take connections, a notification set to stay until it is answered. Taking the
+// process down takes every one of them with it, and the system starts it again the next time it has
+// one to show. What it is not is the everyday banner: those are drawn by `NotificationCenter`, which
+// keeps a window the size of the display up at all times and lets presses through it, so it is never
+// what is in the way.
+const vmNotifier = "UserNotificationCenter"
+
+// vmDismissCommand is what the guest is asked, and it is asked to answer in words rather than in an
+// exit code. `killall` ends non-zero when there was nothing to end, which is the same shape a
+// connection that never landed comes back in — and reading those two as one would report a broken
+// link as a clean screen, which is the exact failure this command exists to clear up.
+func vmDismissCommand() string {
+	return "killall " + vmNotifier + " >/dev/null 2>&1 && echo standing || echo none"
+}
+
+// vmDismissSaid turns the guest's word into the line the caller reads.
+func vmDismissSaid(answer string) string {
+	if strings.TrimSpace(answer) == "standing" {
+		return "  screen  : took down what " + vmNotifier + " was holding up in " + vmCloneName
+	}
+	return "  screen  : nothing was standing on the screen in " + vmCloneName
+}
+
+// vmDismiss takes down whatever the system is holding up over the guest's screen.
+//
+// **It is the one thing in the way that no evidence shows.** An alert is a window of its own above
+// every app, and a press landing inside it never reaches the app underneath — which goes on being
+// frontmost and none the wiser. A shot cannot say so either: what is shot is the app's window, not
+// the screen over it, so the picture is of an app that plainly ignored a press. Measured 2026-09-07
+// in this clone: one of these, 260x364 wide, had been standing over a pane's own row for as long as
+// anybody looked, swallowing every press on the row's menu and on the control beside it. The screen
+// tool refuses such a press now and names the process answering for the point
+// (`scripts/screen.swift`); this is what that naming is answered with.
+//
+// **It is typed, never taken on a schedule.** One screen is shared by every session on this machine,
+// and what is taken down here may be the machine saying something worth reading — a report of an app
+// that quit, a question about letting one take connections. Whoever types this has just been told
+// what is in the way, and is the one who can decide it is not worth keeping.
+//
+// The screen claim is held while it runs, for the reason every driver holds it: this changes what is
+// on the screen, and a road shooting it in between would read a screen nobody meant to show it.
+func vmDismiss() error {
+	ip, err := vmIP()
+	if err != nil {
+		return err
+	}
+	release, err := vmHoldScreen("`devtool vm dismiss`")
+	if err != nil {
+		return err
+	}
+	defer release()
+	said, err := sshRun(ip, vmDismissCommand())
+	if err != nil {
+		return fmt.Errorf("clearing the screen in %s: %w", vmCloneName, err)
+	}
+	logf("%s", vmDismissSaid(said))
 	return nil
 }
 

@@ -245,6 +245,16 @@ what it read and hands back the unfolded reading as well; the harness folds its 
 the same rule and matches. The reading as it came back is written next to the shot (`NN-…​.txt`),
 which is what a person reads when a step comes out red.
 
+**The shot is read whole, and then again in quarters.** Vision finds the regions on an image before
+it reads any of them, and on a whole window's shot it misses small ones: a terminal pane half the
+window wide wrapped `admin@…workshop % SCENARIO still taking what is typed` over three rows, and the
+reading came back with the middle row's first half and the third row missing outright — not misread,
+absent, while the same rows off a crop of that pane were read in full. The quarters overlap, so a row
+the cut runs through stands complete in at least one of them, and what a cut did run through is
+dropped rather than read: the whole shot's own reading has that row entire. A line the whole reading
+already carries is not written twice, so the `.txt` beside the shot stays close to what one pass
+would have said.
+
 **One character inside those words is forgiven, and nothing more.** Vision reads the words on a
 screen well and the glyphs inside them not always — `day's` came back as `dav's` on a title that was
 otherwise perfect, and the fold keeps alphanumerics, so a verbatim search finds nothing. The

@@ -270,20 +270,15 @@ func fold(_ s: String) -> String {
     return out
 }
 
-/// Read the text off a screenshot and print it as JSON: `text` is the reading folded, `raw` is what
-/// Vision handed back — one line per region it recognized. Both, because the fold is what a caller
-/// matches on and the raw is what a person reads when a match fails. A region Vision cannot read is
-/// simply absent, which is the honest answer for an assert that expected words there.
-func readText(path: String) {
-    guard let data = FileManager.default.contents(atPath: path) else {
-        fail("could not read \(path)")
-    }
-    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-          let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
-    else {
-        fail("could not decode an image from \(path)")
-    }
-
+/// Hand one image to Vision and give back a line per region it read.
+///
+/// Every setting the reader has lives here, so the whole shot and each of its quarters
+/// ([`quarters`]) are read by one reader rather than two that could drift apart.
+///
+/// `cuts` are the sides this image was cut on rather than the sides the screen ends on. A row the
+/// cut ran through is half a row, and half a row is not something anybody typed: it is dropped
+/// rather than read, because the whole shot's own reading has that row entire.
+func recognize(_ image: CGImage, ignoringWhatRuns cuts: Set<Edge> = []) -> [String] {
     let request = VNRecognizeTextRequest()
     // Accurate over fast: the board's card titles are small, and a missed character turns a present
     // card into an absent verdict. Language correction stays off — the text under test is titles and
@@ -304,8 +299,106 @@ func readText(path: String) {
     } catch {
         fail("Vision could not run text recognition: \(error)")
     }
+    return (request.results ?? [])
+        .filter { observation in !cuts.contains(where: { $0.runs(through: observation.boundingBox) }) }
+        .compactMap { $0.topCandidates(1).first?.string }
+}
 
-    let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+/// A side a quarter was cut on. Vision hands a region back in the quarter's own coordinates, where
+/// the origin is bottom-left and the box is a share of the quarter — so a region touching the side
+/// is one the cut ran through.
+enum Edge {
+    case left, right, bottom, top
+
+    /// Whether this cut ran through `box`. The tolerance is a share of the quarter: a row that ends
+    /// where the cut is has nothing between it and the side, and a row that merely ends near it has
+    /// the space a character would take.
+    func runs(through box: CGRect) -> Bool {
+        let slack = 0.002
+        switch self {
+        case .left: return box.minX <= slack
+        case .right: return box.maxX >= 1 - slack
+        case .bottom: return box.minY <= slack
+        case .top: return box.maxY >= 1 - slack
+        }
+    }
+}
+
+/// How far each quarter reaches past its own edge, as a share of its width and height.
+///
+/// A quarter cut exactly on the middle would cut some row of the screen in half, and half a row is
+/// a row neither quarter reads whole. The margin is wide enough for the rows this app draws — a
+/// pane's line, a card's title — to stand complete inside at least one quarter wherever the cut
+/// happens to land.
+let quarterOverlap = 0.15
+
+/// The shot cut into four overlapping quarters ([`quarterOverlap`]), each with the sides it was cut
+/// on — the sides the screen itself ends on are not cuts, and what stands against them is whole.
+func quarters(of image: CGImage) -> [(CGImage, Set<Edge>)] {
+    let width = Double(image.width), height = Double(image.height)
+    let tileWidth = width / 2, tileHeight = height / 2
+    var out: [(CGImage, Set<Edge>)] = []
+    for column in 0..<2 {
+        for row in 0..<2 {
+            let x = max(0, Double(column) * tileWidth - tileWidth * quarterOverlap)
+            let y = max(0, Double(row) * tileHeight - tileHeight * quarterOverlap)
+            let rect = CGRect(
+                x: x,
+                y: y,
+                width: min(tileWidth * (1 + 2 * quarterOverlap), width - x),
+                height: min(tileHeight * (1 + 2 * quarterOverlap), height - y)
+            )
+            guard let tile = image.cropping(to: rect) else { continue }
+            var cuts: Set<Edge> = []
+            if rect.minX > 0 { cuts.insert(.left) }
+            if rect.maxX < width { cuts.insert(.right) }
+            // Vision counts from the bottom and `cropping` from the top, so the quarter's low edge
+            // in one is its high edge in the other.
+            if rect.minY > 0 { cuts.insert(.top) }
+            if rect.maxY < height { cuts.insert(.bottom) }
+            out.append((tile, cuts))
+        }
+    }
+    return out
+}
+
+/// Read the text off a screenshot and print it as JSON: `text` is the reading folded, `raw` is what
+/// Vision handed back — one line per region it recognized. Both, because the fold is what a caller
+/// matches on and the raw is what a person reads when a match fails. A region Vision cannot read is
+/// simply absent, which is the honest answer for an assert that expected words there.
+///
+/// **The shot is read whole, and then again in quarters, and the reading is what the five readings
+/// hold between them.** Vision finds the regions on an image before it reads any of them, and on a
+/// whole window's shot it misses small ones: a terminal pane half the window wide wrapped
+/// `admin@…workshop % SCENARIO still taking what is typed` over three rows, and the reading came
+/// back with the middle row's first half and the third row missing outright — not misread, absent,
+/// while the same rows off a crop of that pane were read in full (measured 2026-09-06 on
+/// `stack-the-two-panes-so-each-keeps-the-whole-width`). What the quarters change is how large those
+/// regions stand in the frame handed to the detector, and that is enough for it to find them.
+///
+/// A line the whole reading already carries verbatim is not added a second time, so the raw a person
+/// reads stays close to the reading it would have been. A line a quarter read differently — better,
+/// or worse — is kept beside it: which of the two a caller's expectation meets is the caller's
+/// question, and both were read off this shot.
+func readText(path: String) {
+    guard let data = FileManager.default.contents(atPath: path) else {
+        fail("could not read \(path)")
+    }
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+          let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+    else {
+        fail("could not decode an image from \(path)")
+    }
+
+    var lines = recognize(image)
+    var seen = Set(lines)
+    for (tile, cuts) in quarters(of: image) {
+        for line in recognize(tile, ignoringWhatRuns: cuts) where !seen.contains(line) {
+            seen.insert(line)
+            lines.append(line)
+        }
+    }
+
     let raw = lines.joined(separator: "\n")
     let json = ["text": fold(raw), "raw": raw]
     guard let out = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]) else {

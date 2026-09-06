@@ -770,6 +770,7 @@ export const ko: Translation = {
       "{url}이(가) 이제 보여 준 {agreed}가 아니라 {serving}을(를) 내놓습니다. 다시 등록하고 새 지문을 확인하세요.",
     pty_failed: "터미널을 시작할 수 없습니다: {reason}",
     pty_gone: "해당 터미널은 더 이상 열려 있지 않습니다.",
+    pty_paste_failed: "붙여넣은 이미지를 저장하지 못했습니다: {reason}",
     wake_unknown_agent: "Amenbo는 {agent}을(를) 실행하는 방법을 모릅니다.",
     wake_no_folder: "그 폴더를 읽을 수 없었습니다: {reason}",
     wake_no_config: "Amenbo가 자신의 파일을 찾지 못했습니다.",

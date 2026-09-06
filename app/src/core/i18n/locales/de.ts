@@ -785,6 +785,7 @@ export const de: Translation = {
       "{url} veröffentlicht jetzt {serving} statt des gezeigten {agreed}. Trage es erneut ein und prüfe den neuen Fingerabdruck.",
     pty_failed: "Das Terminal konnte nicht gestartet werden: {reason}",
     pty_gone: "Dieses Terminal ist nicht mehr geöffnet.",
+    pty_paste_failed: "Das eingefügte Bild konnte nicht gespeichert werden: {reason}",
     wake_unknown_agent: "Amenbo weiß nicht, wie {agent} gestartet wird.",
     wake_no_folder: "Dieser Ordner ließ sich nicht lesen: {reason}",
     wake_no_config: "Amenbo konnte seine eigenen Dateien nicht finden.",

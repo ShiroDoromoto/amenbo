@@ -286,9 +286,16 @@ pub struct Terminal {
 /// launch, so a write carrying `session=1` could have come from this run or from the one before it,
 /// and the pairing it exists to make would be wrong exactly when the app was restarted.
 fn new_session() -> String {
-    let mut bytes = [0u8; 16];
-    getrandom::fill(&mut bytes).expect("failed to draw OS randomness");
-    bytes.iter().fold(String::with_capacity(32), |mut s, b| {
+    random_hex(16)
+}
+
+/// That many bytes of OS randomness, written as lower-case hex — the shape both a session id and the
+/// name of a pasted file want, and the only one that is safe to put in a path without asking what is
+/// in it.
+fn random_hex(bytes: usize) -> String {
+    let mut drawn = vec![0u8; bytes];
+    getrandom::fill(&mut drawn).expect("failed to draw OS randomness");
+    drawn.iter().fold(String::with_capacity(bytes * 2), |mut s, b| {
         use std::fmt::Write as _;
         let _ = write!(s, "{b:02x}");
         s
@@ -615,9 +622,93 @@ fn answer_cursor(app: &tauri::AppHandle, session: &str, times: usize) {
 /// one that has been silent for a day has nothing in it worth keeping either way.
 const STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
 
-/// What a drop box's name begins with, which is how the sweep tells one from everything else sharing
-/// the temporary directory.
+/// What a drop box's name begins with, which is how it is told from everything else sharing the
+/// temporary directory ([`OUR_PREFIXES`]).
 const DROP_BOX_PREFIX: &str = "amenbo-session-";
+
+/// What a pane's pasted images are kept under. **A directory of its own rather than the drop box**,
+/// because the drop box is watched and everything put in it is read as a statement the agent made
+/// ([`listen`]) — an image left there would be read as one and thrown away for not parsing.
+const PASTE_BOX_PREFIX: &str = "amenbo-pasted-";
+
+/// The names the sweep answers for: every directory this process leaves in the temporary directory
+/// the whole machine shares, and nothing else.
+const OUR_PREFIXES: [&str; 2] = [DROP_BOX_PREFIX, PASTE_BOX_PREFIX];
+
+/// Where one pane's pasted images go. **Made on the first paste rather than with the terminal**: most
+/// panes never take an image, and a directory made for every one of them is a directory the sweep
+/// then has to come back for.
+fn paste_box(session: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("{PASTE_BOX_PREFIX}{session}"))
+}
+
+/// Write an image the webview was handed into the pane's own directory, and answer with the path it
+/// landed at.
+///
+/// **The bytes are read in the webview and nothing here decodes them** (`AMB-D-854`). The engine has
+/// already turned whatever the machine's clipboard was holding into a `File` whose type it names —
+/// macOS's TIFF and Windows' DIB both arrive as PNG — so this door writes what it is given under the
+/// name that type asks for.
+///
+/// **What it is for is that a pane can only be pasted into as text.** A terminal takes a line, so an
+/// image has to become a path before the paste can happen at all, and the pasting side puts the
+/// quoting on the path it gets back (`AMB-D-832`).
+///
+/// A session that names no open terminal is refused rather than written for: the directory is the
+/// pane's, and one made for a pane that is gone is one nothing will ever take away.
+#[tauri::command]
+pub fn pty_paste_image(
+    terminals: tauri::State<'_, Terminals>,
+    session: String,
+    mime: String,
+    bytes: Vec<u8>,
+) -> Result<String, CmdError> {
+    if !terminals.0.lock().expect("terminals lock").contains_key(&session) {
+        return Err(gone(&session));
+    }
+    let extension = extension_for(&mime)
+        .ok_or_else(|| paste_refused(format!("{mime} is not an image type a file can be named for")))?;
+    let dir = paste_box(&session);
+    std::fs::create_dir_all(&dir).map_err(paste_refused)?;
+    let path = dir.join(format!("pasted-{}.{extension}", random_hex(4)));
+    std::fs::write(&path, bytes).map_err(paste_refused)?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// The extension a file of this type is named with, or none where there is no naming it.
+///
+/// **A closed table rather than the subtype as it stands**, because the answer is composed into a
+/// path and the type is a string the webview handed over. Two rows are not their subtype: `jpeg` is
+/// written `.jpg` the way everything that makes one writes it, and `svg+xml` carries a `+` no file
+/// name wants.
+///
+/// Anything the engine hangs off the type — `image/png;charset=…` — is cut before the reading. What
+/// is being asked is which format it is, and a parameter never answers that.
+fn extension_for(mime: &str) -> Option<&'static str> {
+    let name = mime.split(';').next().unwrap_or_default().trim().to_ascii_lowercase();
+    Some(match name.as_str() {
+        "image/png" => "png",
+        "image/jpeg" => "jpg",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        "image/bmp" => "bmp",
+        "image/tiff" => "tiff",
+        "image/svg+xml" => "svg",
+        _ => return None,
+    })
+}
+
+/// The refusal for an image that could not be written down — a type no file can be named for, or the
+/// filesystem saying no. The pane meets both the same way: the paste does not happen, and the reader
+/// is told what stopped it.
+fn paste_refused(reason: impl std::fmt::Display) -> CmdError {
+    let reason = reason.to_string();
+    CmdError::coded(
+        "pty_paste_failed",
+        format!("The pasted image could not be saved: {reason}"),
+        serde_json::json!({ "reason": reason }),
+    )
+}
 
 /// Clear the drop boxes an earlier run left behind. Call it once, off the launch path.
 ///
@@ -641,7 +732,10 @@ fn sweep_in(dir: &std::path::Path, older_than: std::time::Duration) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     for entry in entries.filter_map(Result::ok) {
         let path = entry.path();
-        if !path.file_name().is_some_and(|n| n.to_string_lossy().starts_with(DROP_BOX_PREFIX)) {
+        let ours = path
+            .file_name()
+            .is_some_and(|n| OUR_PREFIXES.iter().any(|p| n.to_string_lossy().starts_with(p)));
+        if !ours {
             continue;
         }
         let stale = entry
@@ -698,6 +792,10 @@ fn listen(app: tauri::AppHandle, session: String, pane: Arc<Pane>, dir: std::pat
         // Nothing said about a session outlives the session. The window keeps what it needs in memory
         // (`AMB-D-749`), and what is left here is a directory of files nobody will ever read again.
         let _ = std::fs::remove_dir_all(&dir);
+        // And the images pasted into the pane, whose paths were pasted into a terminal that is now
+        // gone. There may never have been one — a pane that took no image has no directory — and
+        // taking away what was never there is the same nothing as taking away what was.
+        let _ = std::fs::remove_dir_all(paste_box(&session));
     });
 }
 
@@ -1151,25 +1249,59 @@ mod tests {
         );
     }
 
-    /// The sweep takes what a dead run left and nothing else. The temporary directory is shared with
-    /// every other program on the machine, so what it passes over matters as much as what it removes.
+    /// The sweep takes what a dead run left and nothing else — both the directories a pane makes, and
+    /// neither of them while it is in use. The temporary directory is shared with every other program
+    /// on the machine, so what it passes over matters as much as what it removes.
     #[test]
-    fn the_sweep_takes_the_drop_boxes_and_leaves_everything_else() {
+    fn the_sweep_takes_what_a_pane_leaves_and_nothing_else() {
         let dir = amenbo_scratch::scratch("pty-sweep");
         let box_one = dir.join(format!("{DROP_BOX_PREFIX}aaaa"));
+        let pasted = dir.join(format!("{PASTE_BOX_PREFIX}aaaa"));
         let not_ours = dir.join("some-other-programs-work");
-        for made in [&box_one, &not_ours] {
+        for made in [&box_one, &pasted, &not_ours] {
             std::fs::create_dir_all(made).expect("made");
         }
         std::fs::write(box_one.join("a-statement.json"), "{}").expect("written");
+        std::fs::write(pasted.join("pasted-0a0b0c0d.png"), [0u8]).expect("written");
 
         // Nothing is old enough yet: a box in use is a box that stays.
         sweep_in(&dir, std::time::Duration::from_secs(24 * 60 * 60));
         assert!(box_one.is_dir(), "a box written to a moment ago is still in use");
+        assert!(pasted.is_dir(), "and so is the directory its pasted images are in");
 
         sweep_in(&dir, std::time::Duration::ZERO);
         assert!(!box_one.exists(), "the drop box and the statements in it are gone");
+        assert!(!pasted.exists(), "and the pasted images with it");
         assert!(not_ours.is_dir(), "and what was never ours was not touched");
+    }
+
+    /// A pasted image is named for the type the webview gave it. The name is composed into a path, so
+    /// what is read is a closed table: a type with no row in it is refused rather than guessed at.
+    #[test]
+    fn a_pasted_image_is_named_for_its_type_and_nothing_else_is_named_at_all() {
+        assert_eq!(extension_for("image/png"), Some("png"));
+        // Not the subtype as it stands — a file of this type is written .jpg everywhere else too.
+        assert_eq!(extension_for("image/jpeg"), Some("jpg"));
+        // What the engine hangs off the type says nothing about which format it is.
+        assert_eq!(extension_for("image/png;charset=binary"), Some("png"));
+        assert_eq!(extension_for("IMAGE/PNG"), Some("png"));
+
+        assert_eq!(extension_for("text/plain"), None);
+        assert_eq!(extension_for("image/heic"), None);
+        assert_eq!(extension_for(""), None);
+    }
+
+    /// The two directories a pane makes are told apart by name. Nothing else keeps them apart: the
+    /// drop box is watched and reads everything in it as a statement, so an image put there would be
+    /// read as one and thrown away for not parsing.
+    #[test]
+    fn the_pasted_images_are_not_in_the_drop_box() {
+        let session = "aaaa";
+        let pasted = paste_box(session);
+        let drop_box = std::env::temp_dir().join(format!("{DROP_BOX_PREFIX}{session}"));
+        assert_ne!(pasted, drop_box);
+        assert!(!pasted.starts_with(&drop_box), "and neither is inside the other");
+        assert!(!drop_box.starts_with(&pasted));
     }
 
     /// The one statement a pane keeps for itself, taken off the same drop box the window reads.

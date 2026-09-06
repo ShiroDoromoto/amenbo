@@ -812,6 +812,7 @@ export const ru: Translation = {
       "{url} теперь выдаёт {serving}, а не показанный вам {agreed}. Зарегистрируйте его заново и сверьте новый отпечаток.",
     pty_failed: "Не удалось запустить терминал: {reason}",
     pty_gone: "Этот терминал больше не открыт.",
+    pty_paste_failed: "Не удалось сохранить вставленное изображение: {reason}",
     wake_unknown_agent: "Amenbo не знает, как запустить {agent}.",
     wake_no_folder: "Не удалось прочитать эту папку: {reason}",
     wake_no_config: "Amenbo не нашёл собственные файлы.",

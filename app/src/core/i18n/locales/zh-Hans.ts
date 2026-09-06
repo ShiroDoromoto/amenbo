@@ -771,6 +771,7 @@ export const zhHans: Translation = {
       "{url} 现在公布的是 {serving}，而不是给你看过的 {agreed}。请重新登记，并核对新的指纹。",
     pty_failed: "无法启动终端：{reason}",
     pty_gone: "该终端已经关闭。",
+    pty_paste_failed: "无法保存粘贴的图片：{reason}",
     wake_unknown_agent: "Amenbo 不知道如何启动 {agent}。",
     wake_no_folder: "读不到那个文件夹：{reason}",
     wake_no_config: "Amenbo 找不到自己的文件。",

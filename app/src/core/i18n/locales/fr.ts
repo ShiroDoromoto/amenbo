@@ -800,6 +800,7 @@ export const fr: Translation = {
       "{url} publie désormais {serving}, et non la {agreed} qui vous a été montrée. Enregistrez-le à nouveau et vérifiez la nouvelle empreinte.",
     pty_failed: "Le terminal n'a pas pu être démarré : {reason}",
     pty_gone: "Ce terminal n'est plus ouvert.",
+    pty_paste_failed: "L'image collée n'a pas pu être enregistrée : {reason}",
     wake_unknown_agent: "Amenbo ne sait pas comment lancer {agent}.",
     wake_no_folder: "Ce dossier n'a pas pu être lu : {reason}",
     wake_no_config: "Amenbo n'a pas pu trouver ses propres fichiers.",

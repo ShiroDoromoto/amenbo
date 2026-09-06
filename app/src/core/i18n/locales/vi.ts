@@ -774,6 +774,7 @@ export const vi: Translation = {
       "{url} giờ đưa ra {serving}, không phải {agreed} mà bạn đã được cho xem. Hãy đăng ký lại và đối chiếu vân tay mới.",
     pty_failed: "Không thể khởi động terminal: {reason}",
     pty_gone: "Terminal đó không còn mở.",
+    pty_paste_failed: "Không thể lưu hình ảnh đã dán: {reason}",
     wake_unknown_agent: "Amenbo không biết cách khởi chạy {agent}.",
     wake_no_folder: "Không đọc được thư mục đó: {reason}",
     wake_no_config: "Amenbo không tìm thấy tệp của chính nó.",

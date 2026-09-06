@@ -219,9 +219,10 @@ export const CORE_ERROR_CODES = [
  * the store (`migrate::gate()` — mid-migration the format is half-moved, and after a failure it is still old);
  * and the consent guard in `plugin_catalog_add_source`, where registering a catalog crosses a process
  * boundary between showing a fingerprint and agreeing to it, so the pin that is written has to be the one
- * that was on screen (`AMB-D-389`); and the two the terminal in a pane answers with, which are the
- * operating system refusing to open one (`pty_failed`) and a session whose terminal has already
- * closed (`pty_gone`); the two a window refuses with, which is the terminal being split out into a
+ * that was on screen (`AMB-D-389`); and the three the terminal in a pane answers with, which are the
+ * operating system refusing to open one (`pty_failed`), a session whose terminal has already
+ * closed (`pty_gone`), and an image pasted into it that could not be written down
+ * (`pty_paste_failed`); the two a window refuses with, which is the terminal being split out into a
  * window of its own and the platform not building it (`window_failed`) or the window it built never
  * drawing anything (`talk_blank`); and the ones settling which
  * agent a folder opens with (`crate::wake`) — a folder that cannot be read (`wake_no_folder`), an
@@ -260,6 +261,7 @@ export const TAURI_ERROR_CODES = [
   "pointer_other_store",
   "pty_failed",
   "pty_gone",
+  "pty_paste_failed",
   "talk_blank",
   "wake_no_config",
   "wake_no_folder",

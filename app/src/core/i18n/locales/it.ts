@@ -800,6 +800,7 @@ export const it: Translation = {
       "{url} ora pubblica {serving}, non la {agreed} che ti era stata mostrata. Registralo di nuovo e controlla la nuova impronta.",
     pty_failed: "Non è stato possibile avviare il terminale: {reason}",
     pty_gone: "Quel terminale non è più aperto.",
+    pty_paste_failed: "Non è stato possibile salvare l'immagine incollata: {reason}",
     wake_unknown_agent: "Amenbo non sa come avviare {agent}.",
     wake_no_folder: "Non è stato possibile leggere quella cartella: {reason}",
     wake_no_config: "Amenbo non ha trovato i propri file.",

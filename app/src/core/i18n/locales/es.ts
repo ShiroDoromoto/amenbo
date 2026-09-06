@@ -189,7 +189,6 @@ export const es: Translation = {
     "detail.unassign": "Quitar responsable", "detail.assignAi": "Delegar en la IA",
     "detail.assignee": "Responsable", "detail.unassigned": "Sin asignar",
     "detail.project": "Proyecto", "detail.none": "Ninguna",
-    "detail.workingIn": "Se trabaja en", "detail.goToPane": "Ir a este panel",
     "detail.blockedBy": "Esperando a", "detail.blockedByHint": "bloqueada (dependencia)",
     "detail.notStarted": "Empieza el",
     "detail.draft": "Creación", "detail.finishCreating": "Terminar de crear",
@@ -338,9 +337,7 @@ export const es: Translation = {
     "restart.button": "Reiniciar",
     "restart.failed": "No se pudo reiniciar. Cierra Amenbo y ábrelo otra vez.",
     "restart.confirm": "¿Reiniciar Amenbo? Todas las terminales abiertas se cierran y ninguna sesión vuelve en el próximo arranque.",
-    "restart.holding": "Las sesiones en marcha todavía tienen:",
-    "restart.anyway": "Reiniciar tal cual",
-    "restart.cancel": "Cancelar",
+
     "restart.stuck.title": "Si reiniciar no basta",
     "restart.stuck.intro": "Entonces el Amenbo del disco sigue siendo el anterior. No hay vuelta atrás de versión: el camino de regreso es la copia previa a la migración que dejó la actualización.",
     "restart.stuck.how": "O bien instalas la versión más nueva (la interfaz y la línea de comandos se distribuyen juntas), o bien restauras desde esa copia en la línea de comandos:",
@@ -532,8 +529,7 @@ export const es: Translation = {
     "talk.shell": "Shell simple",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "En conversación", "talk.holding": "{n} tareas",
-    "talk.finished": "{n} terminadas", "talk.premiseBroken": "Se ha roto una premisa",
+
     "talk.quiet": "{n} min sin actividad",
     "talk.unsent": "Aún sin enviar. Pulsa Intro para enviarlo.",
     "face.switch": "Qué muestra esta ventana",
@@ -545,9 +541,7 @@ export const es: Translation = {
     "face.drop": "Quitar este panel",
     "face.dropConfirm": "¿Quitar este panel? La terminal que hay en él se cierra y el sitio no vuelve en el próximo arranque.",
     "quit.confirm": "¿Salir de Amenbo? Todas las terminales abiertas se cierran y ninguna sesión vuelve en el próximo arranque.",
-    "quit.holding": "Las sesiones en marcha todavía tienen:",
-    "quit.anyway": "Salir tal cual",
-    "quit.cancel": "Cancelar",
+
     "face.turnTitle": "Amenbo — te toca",
     "face.turnBody": "Una terminal te está esperando.",
     "face.ended": "El programa de esta terminal ha terminado.",

@@ -40,7 +40,7 @@ vi.mock("../core/dialog", () => ({
   pickFolders: vi.fn(async () => []),
 }));
 vi.mock("../core/notice", () => ({ pushNotice: vi.fn() }));
-vi.mock("../core/ipc", () => ({ invoke: vi.fn(async () => ({ holding: [], finished: 0 })) }));
+vi.mock("../core/ipc", () => ({ invoke: vi.fn(async () => undefined) }));
 // The label above the pane is a live thing of its own; what it draws is not what this is about —
 // only that it is still there while the box stands in its place.
 vi.mock("../talk/plate", () => ({

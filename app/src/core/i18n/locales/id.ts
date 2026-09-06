@@ -189,7 +189,6 @@ export const id: Translation = {
     "detail.unassign": "Lepaskan penanggung jawab", "detail.assignAi": "Serahkan ke AI",
     "detail.assignee": "Penanggung jawab", "detail.unassigned": "Belum ada penanggung jawab",
     "detail.project": "Proyek", "detail.none": "Tidak ada",
-    "detail.workingIn": "Dikerjakan di", "detail.goToPane": "Buka panel ini",
     "detail.blockedBy": "Menunggu", "detail.blockedByHint": "terhambat (ketergantungan)",
     "detail.notStarted": "Mulai pada",
     "detail.draft": "Pembuatan", "detail.finishCreating": "Selesaikan pembuatan",
@@ -333,9 +332,7 @@ export const id: Translation = {
     "restart.button": "Mulai ulang",
     "restart.failed": "Tidak bisa memulai ulang. Tutup Amenbo lalu buka lagi.",
     "restart.confirm": "Mulai ulang Amenbo? Semua terminal yang terbuka berakhir, dan tidak ada sesi yang kembali saat dijalankan lagi.",
-    "restart.holding": "Sesi yang sedang berjalan masih memegang:",
-    "restart.anyway": "Mulai ulang apa adanya",
-    "restart.cancel": "Batal",
+
     "restart.stuck.title": "Kalau memulai ulang tidak menolong",
     "restart.stuck.intro": "Berarti Amenbo di disk masih yang lama. Tidak ada jalan turun versi — jalan kembalinya adalah cadangan pra-migrasi yang ditinggalkan pembaruan itu.",
     "restart.stuck.how": "Pasang versi yang lebih baru (GUI dan CLI datang bersama), atau pulihkan dari cadangan itu di baris perintah:",
@@ -514,8 +511,7 @@ export const id: Translation = {
     "talk.shell": "Shell biasa",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "Sedang berdiskusi", "talk.holding": "{n} tugas",
-    "talk.finished": "{n} selesai", "talk.premiseBroken": "Sebuah prasyarat sudah tidak berlaku",
+
     "talk.quiet": "hening {n} mnt",
     "talk.unsent": "Belum terkirim. Tekan Enter untuk mengirimnya.",
     "face.switch": "Yang ditampilkan jendela ini",
@@ -527,9 +523,7 @@ export const id: Translation = {
     "face.drop": "Hapus panel ini",
     "face.dropConfirm": "Hapus panel ini? Terminal di dalamnya berakhir, dan tempatnya tidak kembali saat dijalankan lagi.",
     "quit.confirm": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir, dan tidak ada sesi yang kembali saat dijalankan lagi.",
-    "quit.holding": "Sesi yang sedang berjalan masih memegang:",
-    "quit.anyway": "Keluar apa adanya",
-    "quit.cancel": "Batal",
+
     "face.turnTitle": "Amenbo — giliran Anda",
     "face.turnBody": "Sebuah terminal sedang menunggu Anda.",
     "face.ended": "Program di terminal ini telah berhenti.",

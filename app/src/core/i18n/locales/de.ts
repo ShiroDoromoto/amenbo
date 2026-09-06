@@ -186,7 +186,6 @@ export const de: Translation = {
     "detail.unassign": "Zuständigkeit aufheben", "detail.assignAi": "An die KI übergeben",
     "detail.assignee": "Zuständig", "detail.unassigned": "Niemand",
     "detail.project": "Projekt", "detail.none": "Keins",
-    "detail.workingIn": "Wird bearbeitet in", "detail.goToPane": "Zu diesem Bereich gehen",
     "detail.blockedBy": "Wartet auf", "detail.blockedByHint": "blockiert (Abhängigkeit)",
     "detail.notStarted": "Beginnt am",
     "detail.draft": "Erstellung", "detail.finishCreating": "Erstellung abschließen",
@@ -333,9 +332,7 @@ export const de: Translation = {
     "restart.button": "Neu starten",
     "restart.failed": "Neustart nicht möglich. Beende Amenbo und öffne es erneut.",
     "restart.confirm": "Amenbo neu starten? Alle offenen Terminals werden beendet, und keine Sitzung kommt beim nächsten Start zurück.",
-    "restart.holding": "Die laufenden Sitzungen halten noch:",
-    "restart.anyway": "So neu starten",
-    "restart.cancel": "Abbrechen",
+
     "restart.stuck.title": "Wenn ein Neustart nicht hilft",
     "restart.stuck.intro": "Dann ist das Amenbo auf der Platte noch das alte. Einen Weg zurück auf eine ältere Version gibt es nicht — der Rückweg ist die Sicherung von vor der Migration, die die Aktualisierung hinterlassen hat.",
     "restart.stuck.how": "Installiere entweder die neuere Version (Oberfläche und Kommandozeile werden zusammen ausgeliefert), oder stelle auf der Kommandozeile aus dieser Sicherung wieder her:",
@@ -521,8 +518,7 @@ export const de: Translation = {
     "talk.shell": "Einfache Shell",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "Im Gespräch", "talk.holding": "{n} Aufgaben",
-    "talk.finished": "{n} erledigt", "talk.premiseBroken": "Eine Voraussetzung ist weggefallen",
+
     "talk.quiet": "{n} Min. still",
     "talk.unsent": "Noch nicht gesendet. Zum Senden Enter drücken.",
     "face.switch": "Was dieses Fenster zeigt",
@@ -534,9 +530,7 @@ export const de: Translation = {
     "face.drop": "Diesen Bereich entfernen",
     "face.dropConfirm": "Diesen Bereich entfernen? Das Terminal darin wird beendet, und der Platz kommt beim nächsten Start nicht zurück.",
     "quit.confirm": "Amenbo beenden? Alle offenen Terminals werden beendet, und keine Sitzung kommt beim nächsten Start zurück.",
-    "quit.holding": "Die laufenden Sitzungen halten noch:",
-    "quit.anyway": "So beenden",
-    "quit.cancel": "Abbrechen",
+
     "face.turnTitle": "Amenbo — Sie sind dran",
     "face.turnBody": "Ein Terminal wartet auf Sie.",
     "face.ended": "Das Programm in diesem Terminal wurde beendet.",

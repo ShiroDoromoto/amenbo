@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-// Who gets knocked about, and what a knock is allowed to mean (`AMB-T-3610`, `AMB-D-748`).
+// Who gets knocked about, and what a knock is allowed to mean (`AMB-T-3610`, `AMB-D-858`).
 //
 // A dot on a page says "somebody is needed there". It goes up for the two things that say so — the
-// agent handing a turn over, and the ledger saying a task the pane is holding is no longer ready —
-// and for nothing else. **Silence must never raise it**: a pane that has said nothing for an hour is
-// a pane that has said nothing, and a dot over it would be Amenbo claiming a turn nobody declared.
+// agent handing a turn over, and the sentence Amenbo opened it with still sitting unsent in the
+// input box — and for nothing else. **Silence must never raise it**: a pane that has said nothing
+// for an hour is a pane that has said nothing, and a dot over it would be Amenbo claiming a turn
+// nobody declared.
 //
 // What a reader does about a dot is press the mark on the pane's name plate, or the number of the page
 // it is on. Amenbo takes no key of its own for it: the pane below is a terminal, and a key Amenbo took

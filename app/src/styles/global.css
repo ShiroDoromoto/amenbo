@@ -426,25 +426,6 @@ input[type="color"] {
 }
 .slot__more:hover { color: var(--c-text); }
 
-/* The question a way out asks when the sessions behind it are still holding something — the end of
-   the app, and the restart that applies an update (`../shell/HoldingAsk`). Its own block rather than a share of the
-   modals in `components.css`: a modal borrowing another feature's class names cannot be restyled
-   without touching that feature. The backdrop is the one exception — it is `.modal__overlay` for
-   every modal in the app, which is what `outsideClose` reads. */
-.holdingask__modal { width: min(460px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
-.holdingask__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-3); }
-.holdingask__holding { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
-/* The refs, one to a line. What is at stake is read one item at a time, and a run-on list of them is
-   the shape a reader skips. */
-.holdingask__refs { margin: 0 0 var(--s-4); padding-left: var(--s-5); font-variant-numeric: tabular-nums; }
-.holdingask__failed { color: var(--c-stop); font-size: var(--fs-xs); margin: 0 0 var(--s-3); }
-.holdingask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.holdingask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
-/* Going is the answer the question was raised on the way to, so it is the one drawn as the answer.
-   It leaves every reservation standing, and nothing here talks the reader out of that — where a
-   reservation goes next is the ledger's question, not this box's (`AMB-D-855`). */
-.holdingask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.holdingask__action:disabled { opacity: 0.5; cursor: default; }
 .slot--focused .termface__pane { border-color: var(--c-accent); }
 /* Where a path just landed. The pane the row's menu hands a file to is the one being worked in, which
    is not where the reader's eye is — they were in the panel, and the page may have turned since they
@@ -1709,9 +1690,9 @@ body.dragging-row { user-select: none; }
   white-space: pre-wrap;
 }
 
-/* The one line above a pane: what it is called, what its session is on, and the one thing worth saying
-   about it. One line and no more — a row that can grow is a row that pushes the terminal about every
-   time an agent says something long. */
+/* The one line above a pane: what it is called, and the one thing worth saying about it. One line and
+   no more — a row that can grow is a row that pushes the terminal about every time an agent says
+   something long. */
 .plate {
   display: flex;
   align-items: baseline;
@@ -1807,7 +1788,6 @@ body.dragging-row { user-select: none; }
   .plate__dot[data-face="calling"],
   .plate__dot[data-face="calling"]::after,
   .plate[data-say="waiting"] .plate__mark--say,
-  .plate[data-say="premise"] .plate__mark--say,
   .plate[data-say="unsent"] .plate__mark--say {
     animation: none;
   }
@@ -1817,33 +1797,15 @@ body.dragging-row { user-select: none; }
    the process in it does.
 
    **It is given a share of the row and not the room it asks for.** A name is bounded before it is
-   kept (`amenbo_core::frames`), and a bounded one is still long enough to push what the pane is doing
-   off the end — so what does not fit here is elided rather than taken out of the two places beside
-   it. `min-width: 0` is what lets a flex item shrink below its text at all. */
+   kept (`amenbo_core::frames`), and a bounded one is still long enough to push what the pane said
+   off the end — so what does not fit here is elided rather than taken out of the place beside it.
+   `min-width: 0` is what lets a flex item shrink below its text at all. */
 .plate__name {
   font-weight: 600;
   color: var(--c-text);
   flex: 0 1 auto;
   min-width: 0;
   max-width: 12em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* What the session is on. It takes the room that is left, and gives it up to what is said on the right
-   rather than pushing that off the end.
-
-   **The basis is 0 and not the words** (`../talk/nameplate`). What is drawn here is a cut of a line
-   with its middle dropped, and the cut is measured against the box — so a basis that grew with the
-   words would move the box every time the cut changed, and the two would chase each other. At 0 the
-   box is whatever the row has left over, and the cut is made to fit it.
-
-   The ellipsis stays as the floor: a cut is made from a measurement, and there is a moment before the
-   first one — and a box measured at no width at all — where what is drawn is the whole line. Cut at
-   the end is worse than cut in the middle, and better than cut with nothing to say it was. */
-.plate__now {
-  flex: 1 1 0;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1858,10 +1820,10 @@ body.dragging-row { user-select: none; }
   text-overflow: ellipsis;
 }
 
-/* The pause, the warning, the stop — each sits in front of the part it belongs to, and an empty one
-   takes no room. The mark is an icon and not a character (`../components/Icon.tsx`), so the place it
-   sits in is a box the size of the drawing rather than a slot of text: `:empty` is what folds it
-   away, and the drawing is the element's only child for exactly that reason.
+/* The pause sits in front of the words it belongs to, and an empty mark takes no room. The mark is an
+   icon and not a character (`../components/Icon.tsx`), so the place it sits in is a box the size of
+   the drawing rather than a slot of text: `:empty` is what folds it away, and the drawing is the
+   element's only child for exactly that reason.
 
    **It is centred against the row rather than left on its baseline.** The row aligns on the baseline,
    and a box is sat on that line by its bottom edge — so a drawing left to it rides up by the whole of
@@ -1877,9 +1839,8 @@ body.dragging-row { user-select: none; }
 }
 
 /* A person's turn has come. Nothing else on the row is asking for anything, so nothing else is drawn
-   to be noticed (`AMB-D-748`). */
+   to be noticed (`AMB-D-858`). */
 .plate[data-say="waiting"] .plate__say,
-.plate[data-say="premise"] .plate__say,
 .plate[data-say="unsent"] .plate__say {
   color: var(--c-text);
 }
@@ -1888,20 +1849,19 @@ body.dragging-row { user-select: none; }
    two. It is the mark and not the words: where the pane is narrow the words are not drawn at all, and
    what is left has to go on saying that somebody is needed (`../talk/nameplate.ts`). */
 .plate[data-say="waiting"] .plate__mark--say,
-.plate[data-say="premise"] .plate__mark--say,
 .plate[data-say="unsent"] .plate__mark--say {
   animation: plate-blink var(--blink) infinite;
   animation-delay: var(--phase, 0s);
 }
 
-/* A pane too narrow for three things drops them from the right, and the name and the ⏸ are what is
-   left (`AMB-T-3673`).
+/* A pane too narrow for both places drops the right one, and the name and the ⏸ are what is left
+   (`AMB-T-3673`).
 
-   **Three things all cut short is a row none of which can be read.** Above this width each place
-   still says something after the ellipsis; below it the middle has room for a ref and no title, and
-   what is said has room for nothing at all — so rather than share the little there is, the row gives
-   it to the two that carry on meaning something: which pane this is, and whether a person is needed
-   in it. The words that went are one hover away, on the mark that stayed (`../talk/nameplate.ts`).
+   **Two things both cut short is a row neither of which can be read.** Above this width each place
+   still says something after the ellipsis; below it what is said has room for nothing at all — so
+   rather than share the little there is, the row gives it to the two that carry on meaning something:
+   which pane this is, and whether a person is needed in it. The words that went are one hover away,
+   on the mark that stayed (`../talk/nameplate.ts`).
 
    The width is what is asked rather than the count, because a count does not name a width: two
    across and four across are the same width in this grid (`.termface__page-grid--*` above), six and
@@ -1909,8 +1869,6 @@ body.dragging-row { user-select: none; }
    for is settled at the other end — `talk waiting` refuses one past the length of a label
    (`amenbo_core::session::WAITING_LIMIT`), so this is the row's last resort rather than its plan. */
 @container (max-width: 360px) {
-  .plate__now,
-  .plate__mark--now,
   .plate__say {
     display: none;
   }

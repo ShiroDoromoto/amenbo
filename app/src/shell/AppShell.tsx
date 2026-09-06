@@ -22,7 +22,6 @@ import { SearchScreen } from "../screens/SearchScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
 import { HookConsentModal } from "../screens/HookConsentModal";
-import { HoldingAsk, heldByAll, quitWords } from "./HoldingAsk";
 import { NudgeHost } from "../screens/NudgeHost";
 import { NewProjectScreen } from "../screens/NewProjectScreen";
 import { ProjectSettingsScreen } from "../screens/ProjectSettingsScreen";
@@ -104,11 +103,6 @@ export function AppShell() {
   // Bumped each time a manual check surfaces an offer, so the UpdateBanner can lift a session dismissal the user has
   // now explicitly overridden by asking again (its persistent dismissal is already cleared in `checkForUpdatesFresh`).
   const [updateRecheck, setUpdateRecheck] = useState(0);
-  // The tasks the running sessions are holding, while the question about ending the app is on the screen
-  // (`./HoldingAsk`). Null is no question up, and it is never an empty list: the host only asks when a terminal
-  // is open, and a set of them holding nothing is answered with the plain confirmation instead.
-  const [quitAsking, setQuitAsking] = useState<readonly number[] | null>(null);
-
   // The slot the project header (the board toolbar) renders into. grid-area:header is a row spanning the full width
   // of main plus the right pane; BoardScreen portals its toolbar in here and the right pane sits below it.
   // A callback ref keeps the DOM node in state so the re-render after it settles can hand the portal target to the child.
@@ -552,9 +546,8 @@ export function AppShell() {
   }, []);
 
   // The app was asked to end while terminals were still running (`crate::quit`). The host has already decided
-  // there is something to lose; what is decided here is how to say so. Reservations are named one by one, and a
-  // set of sessions holding none of them gets the plain confirmation — the same two shapes the way out of a
-  // single pane has (`./TerminalPane`), because they are the same loss at two sizes.
+  // there is something to lose; what is said here is what that is — every terminal open in the process, and
+  // nothing about what any of them was doing (`AMB-D-858`).
   useEffect(() => {
     if (!inTauri()) return;
     let unlisten: (() => void) | undefined;
@@ -562,14 +555,10 @@ export function AppShell() {
     void import("@tauri-apps/api/event")
       .then(({ listen }) =>
         listen("quit://asked", () => {
-          void heldByAll().then(async (holding) => {
-            if (holding.length > 0) {
-              setQuitAsking(holding);
-              return;
-            }
+          void (async () => {
             if (!await confirmDialog(t("quit.confirm"))) return;
             await invoke("app_quit");
-          });
+          })();
         }),
       )
       .then((un) => {
@@ -800,17 +789,6 @@ export function AppShell() {
           Amenbo has been used, which is exactly what someone still being asked the first question has not
           done yet. `hooksAsked` is that turn being over, the same latch the setup banner waits on. */}
       {hooksAsked && <NudgeHost />}
-      {/* The way out of the app, asked about by the same box the way out of one pane raises. It is drawn here
-          rather than beside a pane because what it is about is every session at once, and the board is the
-          window the host raises to put it in front of (`crate::quit`). */}
-      {quitAsking !== null && (
-        <HoldingAsk
-          holding={quitAsking}
-          words={quitWords()}
-          onLeave={async () => { await invoke("app_quit"); }}
-          onCancel={() => setQuitAsking(null)}
-        />
-      )}
     </div>
     </RefNavProvider>
   );

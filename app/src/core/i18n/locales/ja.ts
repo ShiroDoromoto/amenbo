@@ -188,7 +188,6 @@ export const ja: Translation = {
     "detail.unassign": "委任を解除", "detail.assignAi": "に任せる",
     "detail.assignee": "担当", "detail.unassigned": "担当者なし",
     "detail.project": "プロジェクト", "detail.none": "なし",
-    "detail.workingIn": "作業", "detail.goToPane": "このペインへ行く",
     "detail.blockedBy": "待ち", "detail.blockedByHint": "着手不可（依存）",
     "detail.notStarted": "着手日待ち",
     "detail.draft": "作成", "detail.finishCreating": "作成を終える",
@@ -335,9 +334,7 @@ export const ja: Translation = {
     "restart.button": "再起動する",
     "restart.failed": "再起動できませんでした。Amenbo を手動で終了して開き直してください。",
     "restart.confirm": "Amenbo を再起動しますか？開いている端末はすべて終わり、次に起動してもセッションは戻りません。",
-    "restart.holding": "動いているセッションが持ったままです:",
-    "restart.anyway": "そのまま再起動",
-    "restart.cancel": "やめる",
+
     "restart.stuck.title": "再起動しても直らないときは",
     "restart.stuck.intro": "ディスク上の Amenbo がまだ古い、ということです。バージョンを下げる道はありません——戻すなら、更新時に残った移行前バックアップから復元します。",
     "restart.stuck.how": "新しいバージョンへ更新するか（GUI と CLI は一体配布です）、コマンドラインで移行前バックアップから復元してください:",
@@ -523,8 +520,7 @@ export const ja: Translation = {
     "talk.shell": "素のシェル",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "相談中", "talk.holding": "{n}件",
-    "talk.finished": "済 {n}件", "talk.premiseBroken": "前提が崩れています",
+
     "talk.quiet": "{n}分 動きなし",
     "talk.unsent": "まだ送られていません。Enter で送れます",
     "face.switch": "タスク／ターミナル",
@@ -536,9 +532,7 @@ export const ja: Translation = {
     "face.drop": "このペインを消す",
     "face.dropConfirm": "このペインを消しますか？中の端末は終わり、次に起動してもこの場所は戻りません。",
     "quit.confirm": "Amenbo を終了しますか？開いている端末はすべて終わり、次に起動してもセッションは戻りません。",
-    "quit.holding": "動いているセッションが持ったままです:",
-    "quit.anyway": "そのまま終了",
-    "quit.cancel": "やめる",
+
     "face.turnTitle": "Amenbo — あなたの番です",
     "face.turnBody": "端末があなたを待っています。",
     "face.ended": "この端末のプログラムは終了しました。",

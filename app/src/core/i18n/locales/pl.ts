@@ -189,7 +189,6 @@ export const pl: Translation = {
     "detail.unassign": "Zdejmij przypisanie", "detail.assignAi": "Przekaż SI",
     "detail.assignee": "Odpowiedzialny", "detail.unassigned": "Bez przypisania",
     "detail.project": "Projekt", "detail.none": "Brak",
-    "detail.workingIn": "Praca trwa w", "detail.goToPane": "Przejdź do tego panelu",
     "detail.blockedBy": "Czeka na", "detail.blockedByHint": "zablokowane (zależność)",
     "detail.notStarted": "Start",
     "detail.draft": "Tworzenie", "detail.finishCreating": "Zakończ tworzenie",
@@ -340,9 +339,7 @@ export const pl: Translation = {
     "restart.button": "Uruchom ponownie",
     "restart.failed": "Nie udało się uruchomić ponownie. Zamknij Amenbo i otwórz je jeszcze raz.",
     "restart.confirm": "Uruchomić Amenbo ponownie? Wszystkie otwarte terminale zostaną zakończone, a żadna sesja nie wróci przy następnym uruchomieniu.",
-    "restart.holding": "Trwające sesje wciąż trzymają:",
-    "restart.anyway": "Uruchom ponownie tak jak jest",
-    "restart.cancel": "Anuluj",
+
     "restart.stuck.title": "Jeśli ponowne uruchomienie nie pomoże",
     "restart.stuck.intro": "To znaczy, że Amenbo na dysku wciąż jest stare. Nie ma drogi w dół — drogą powrotną jest kopia sprzed migracji, którą zostawiła aktualizacja.",
     "restart.stuck.how": "Albo zainstaluj nowszą wersję (interfejs i wiersz poleceń idą razem), albo przywróć z tej kopii w wierszu poleceń:",
@@ -537,8 +534,7 @@ export const pl: Translation = {
     "talk.shell": "Zwykła powłoka",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "W rozmowie", "talk.holding": "zadania: {n}",
-    "talk.finished": "ukończone: {n}", "talk.premiseBroken": "Założenie przestało obowiązywać",
+
     "talk.quiet": "cisza od {n} min",
     "talk.unsent": "Jeszcze nie wysłano. Naciśnij Enter, aby wysłać.",
     "face.switch": "Co pokazuje to okno",
@@ -550,9 +546,7 @@ export const pl: Translation = {
     "face.drop": "Usuń ten panel",
     "face.dropConfirm": "Usunąć ten panel? Terminal w nim zostanie zakończony, a miejsce nie wróci przy następnym uruchomieniu.",
     "quit.confirm": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone, a żadna sesja nie wróci przy następnym uruchomieniu.",
-    "quit.holding": "Trwające sesje wciąż trzymają:",
-    "quit.anyway": "Zakończ tak jak jest",
-    "quit.cancel": "Anuluj",
+
     "face.turnTitle": "Amenbo — twoja kolej",
     "face.turnBody": "Terminal czeka na ciebie.",
     "face.ended": "Program w tym terminalu zakończył działanie.",

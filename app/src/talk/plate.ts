@@ -2,29 +2,17 @@
 //
 // A pane has two homes — the board's terminal face and the window it is split out into (`AMB-D-753`)
 // — and the same line belongs above it in both. What that line says is worked out in `./nameplate`;
-// this is everything around it: holding what the pane's session has said, asking the ledger what it is
-// holding, and putting the row up again whenever either changes.
+// this is everything around it: holding what the pane's session has said, measuring what the pane
+// itself is doing, and putting the row up again whenever either changes.
 //
-// **It listens for the store rather than being told.** A reservation is made by the agent in the pane
-// running the CLI, which is a write from outside the webview drawing it — so what says one happened is
-// the host noticing the store change on disk, exactly as it does for the board.
+// **Nothing here is read off the ledger** (`AMB-D-858`). What a row is drawn from is what the agent
+// in this pane declared and what this pane measured — both of which the webview already has, and
+// neither of which the world can rewrite behind it.
 
-import type { SessionSaidDto, SessionWorkDto, TaskCardDto } from "../bindings/bindings";
+import type { SessionSaidDto } from "../bindings/bindings";
 import { currentLang, type Lang } from "../core/i18n";
-import { invoke } from "../core/ipc";
 import { frameLabel, frameNames, ONLY_FRAME, type FrameNames } from "./frames";
-import {
-  faceOf,
-  FINISHED_HOLD_MS,
-  mountNameplate,
-  NO_CHANGEOVER,
-  nowOf,
-  sayOf,
-  standsAsTurn,
-  type Changeover,
-  type Held,
-  type Say,
-} from "./nameplate";
+import { faceOf, mountNameplate, sayOf, standsAsTurn, type Say } from "./nameplate";
 import { movingAt, quietFor, STILL_AFTER_MS } from "./moving";
 import {
   closed,
@@ -73,13 +61,13 @@ export type Plate = {
  * told which place it is takes the first of them.
  *
  * `onWaiting` is told whenever the answer to "is a turn standing in this pane" changes. **A turn
- * stands for two reasons and neither of them is silence** (`AMB-D-748`, `AMB-T-3610`): the agent said
- * so (`waiting`), or the ledger says something this session is holding is no longer ready — a
- * blocker opened, a premise came unsettled. Both are also what the row itself leads with
- * (`./nameplate`), so the badge and the label say the same thing about the same pane. What an agent
- * has *not* said is not one of them: a pane that has gone quiet is a pane that has gone quiet.
+ * stands for two reasons and neither of them is silence** (`AMB-D-858`, `AMB-T-3610`): the agent said
+ * so (`waiting`), or the sentence Amenbo opened it with is still sitting in the input box. Both are
+ * also what the row itself leads with (`./nameplate`), so the badge and the label say the same thing
+ * about the same pane. What an agent has *not* said is not one of them: a pane that has gone quiet is
+ * a pane that has gone quiet.
  *
- * It is said from here because the session map and what the ledger answered are both here, and the
+ * It is said from here because the session map is here, and the
  * callers who want it are the shell's: with the terminal behind the other face neither this label nor
  * the dot on its page can be seen at all, so the badge on the face switch and the dots on the pages
  * are drawn from this instead (`../shell/terminalBadge`, `../shell/TerminalFace`). The change is what
@@ -94,24 +82,20 @@ export function mountPlate(
 ): Plate {
   const draw = mountNameplate(host);
 
-  // What the pane's session has said, and what the ledger says it is holding. Both are gone when the
-  // pane is: a session has no existence outside the terminal it runs in (`AMB-D-749`).
+  // What the pane's session has said. It is gone when the pane is: a session has no existence outside
+  // the terminal it runs in (`AMB-D-749`).
   let sessions: Sessions = NO_SESSIONS;
   let names: FrameNames = new Map();
   // The folder this pane's terminal was started in. It is what the row is headed with until the frame
   // is named, and it is kept here rather than read back out of the arrangement: what the row says is
   // about the session in front of the reader, and a place is not one.
   let folder: string | null = null;
-  let held: Held[] = [];
-  let finished = 0;
-  let changeover: Changeover = NO_CHANGEOVER;
   let running: string | null = null;
   // Whether a terminal has ever run in this pane. It is not `running !== null` — a pane whose program
   // has exited still has a row, because what it just finished is the one thing worth saying at that
   // moment. What has no row is a pane that has never had a session: the face there is the invitation
   // to choose a folder (`./agent`), and a label about the session would be about nothing.
   let ran = false;
-  let expiry: ReturnType<typeof setTimeout> | undefined;
   let live = true;
   // What `onWaiting` was last told, so it hears the changes and not every statement.
   let waiting = false;
@@ -148,7 +132,7 @@ export function mountPlate(
   /** Say whether a turn is standing here, where that is not what was said last. */
   function tellWaiting(): void {
     // The same question the row leads with, asked once: declared, or derived (`./nameplate`).
-    const now = live && standsAsTurn(sayOf(held, running === null ? undefined : sessions.get(running)));
+    const now = live && standsAsTurn(sayOf(running === null ? undefined : sessions.get(running)));
     if (now === waiting) return;
     waiting = now;
     onWaiting(now);
@@ -157,7 +141,7 @@ export function mountPlate(
   /**
    * What the end of the row says.
    *
-   * The session's own words come first — a turn, a premise, a note — and how long it has been quiet
+   * The session's own words come first — a turn, a note — and how long it has been quiet
    * fills the slot only when they leave it empty. A measurement of silence is the least of what can be
    * said about a pane, and it must never stand where something that was actually said would.
    *
@@ -165,7 +149,7 @@ export function mountPlate(
    * some length of time, and a row of clocks is what a reader stops reading.
    */
   function saying(): Say {
-    const said = sayOf(held, running === null ? undefined : sessions.get(running));
+    const said = sayOf(running === null ? undefined : sessions.get(running));
     if (said.kind !== "silent" || !focused) return said;
     const minutes = quietFor(lastOutput, Date.now());
     return minutes === null ? said : { kind: "quiet", minutes };
@@ -173,8 +157,6 @@ export function mountPlate(
 
   function redraw(): void {
     if (!live) return;
-    const { now, changeover: next } = nowOf(held, finished, changeover, Date.now());
-    changeover = next;
     const name = frameLabel(names, frame, folder);
     // The lamp is read off the same answer the row's right is, so the two cannot come to say different
     // things about the same pane (`./nameplate`).
@@ -187,41 +169,12 @@ export function mountPlate(
       ran || names.has(frame)
         ? {
             name,
-            now,
             say,
             dot: { frame, face: faceOf(say, moving) },
           }
         : null,
       lang(),
     );
-    // "Just finished" comes down on its own, so something has to come back for it. Nothing else on the
-    // row expires, and a redraw that finds it already down does nothing.
-    clearTimeout(expiry);
-    if (now.kind === "finished" && next.shownAt !== null) {
-      expiry = setTimeout(redraw, next.shownAt + FINISHED_HOLD_MS - Date.now());
-    }
-  }
-
-  /** Ask what this pane's session is on, then draw it (`commands.rs::session_work`). */
-  function readWork(): void {
-    const session = running;
-    if (session === null) return;
-    void invoke<SessionWorkDto>("session_work", { session })
-      .then(async (work) => {
-        const tasks = work.holding.length
-          ? await invoke<TaskCardDto[]>("tasks_by_ids", { ids: work.holding })
-          : [];
-        // A pane that went away, or a session that ended, while the read was out: what came back is
-        // about a session that is no longer the one being drawn.
-        if (!live || running !== session) return;
-        held = tasks;
-        finished = work.finished;
-        // What came back can be the whole of the change: a blocker opened on a task this pane is
-        // holding while its agent said nothing at all.
-        tellWaiting();
-        redraw();
-      })
-      .catch(() => {});
   }
 
   void frameNames()
@@ -229,16 +182,6 @@ export function mountPlate(
       names = known;
       redraw();
     })
-    .catch(() => {});
-
-  let unlisten: (() => void) | null = null;
-  void import("@tauri-apps/api/event")
-    .then(({ listen }) => listen("store-changed", () => readWork()))
-    .then((off) => {
-      if (live) unlisten = off;
-      else off();
-    })
-    // Outside Tauri (`npm run dev` in a browser) nothing writes to a store and nothing announces one.
     .catch(() => {});
 
   redraw();
@@ -250,7 +193,7 @@ export function mountPlate(
       folder = where;
       ran = true;
       tellWaiting();
-      readWork();
+      redraw();
     },
     output: tookOutput,
     said: (statement) => {
@@ -279,7 +222,6 @@ export function mountPlate(
       lastOutput = null;
       sessions = closed(sessions, session);
       if (running === session) running = null;
-      held = [];
       tellWaiting();
       redraw();
     },
@@ -302,10 +244,8 @@ export function mountPlate(
       // The pane is going, and a turn standing in it is nobody's to be knocked about any more: the
       // badge is the shell's and outlives this, so it has to be told on the way out.
       tellWaiting();
-      clearTimeout(expiry);
       clearTimeout(settling);
       clearInterval(ticking);
-      unlisten?.();
       host.replaceChildren();
     },
   };

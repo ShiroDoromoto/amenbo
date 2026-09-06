@@ -71,7 +71,7 @@ vi.mock("../core/dialog", () => ({
 vi.mock("../core/notice", () => ({
   pushNotice: vi.fn((msg: string) => { hoisted.noticed.push(msg); }),
 }));
-vi.mock("../core/ipc", () => ({ invoke: vi.fn(async () => ({ holding: [], finished: 0 })) }));
+vi.mock("../core/ipc", () => ({ invoke: vi.fn(async () => undefined) }));
 // The label above the pane is a live thing of its own; what it draws is not what this is about.
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({

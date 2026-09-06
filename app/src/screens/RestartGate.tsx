@@ -18,7 +18,7 @@ import { currentLang, normalizeLang, t, tf } from "../core/i18n";
 import { inTauri } from "../core/snapshot";
 import { Icon } from "../components/Icon";
 import { NoCli } from "../components/NoCli";
-import { openPanes } from "../shell/HoldingAsk";
+import { openPanes } from "../shell/openPanes";
 import { confirmDialog } from "../core/dialog";
 
 /**
@@ -52,10 +52,8 @@ export function RestartGate() {
       if (!inTauri()) throw new Error("not in tauri");
       // The terminals this process opened are still running behind this screen — the overtaking can be
       // noticed long after startup, written by another process (`../core/formatAhead`) — and starting
-      // again ends every one of them for good. Asked, not named: what a session is holding is written
-      // where only the store can read it, and the store is the very thing this screen cannot open, so
-      // the reservations go unnamed here — the plain confirmation is the whole of it
-      // (`../shell/HoldingAsk`).
+      // again ends every one of them for good. So the confirmation, which is what every way out of the
+      // app asks and the whole of what any of them asks (`../shell/openPanes`).
       if (await openPanes() > 0 && !await confirmDialog(t("restart.confirm", lang))) return;
       await invoke("restart_app");
       setFailed(true);

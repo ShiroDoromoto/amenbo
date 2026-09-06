@@ -190,7 +190,6 @@ export const ptBR: Translation = {
     "detail.unassign": "Tirar o responsável", "detail.assignAi": "Delegar à IA",
     "detail.assignee": "Responsável", "detail.unassigned": "Sem responsável",
     "detail.project": "Projeto", "detail.none": "Nenhum",
-    "detail.workingIn": "Trabalhado em", "detail.goToPane": "Ir para este painel",
     "detail.blockedBy": "Esperando", "detail.blockedByHint": "bloqueada (dependência)",
     "detail.notStarted": "Começa em",
     "detail.draft": "Criação", "detail.finishCreating": "Terminar a criação",
@@ -339,9 +338,7 @@ export const ptBR: Translation = {
     "restart.button": "Reiniciar",
     "restart.failed": "Não foi possível reiniciar. Feche o Amenbo e abra de novo.",
     "restart.confirm": "Reiniciar o Amenbo? Todos os terminais abertos são encerrados, e nenhuma sessão volta na próxima execução.",
-    "restart.holding": "As sessões em andamento ainda têm:",
-    "restart.anyway": "Reiniciar assim mesmo",
-    "restart.cancel": "Cancelar",
+
     "restart.stuck.title": "Se reiniciar não resolver",
     "restart.stuck.intro": "Então o Amenbo no disco ainda é o antigo. Não há como voltar de versão — o caminho de volta é o backup pré-migração que a atualização deixou.",
     "restart.stuck.how": "Ou instale a versão mais nova (a interface e a linha de comando são distribuídas juntas), ou restaure daquele backup pela linha de comando:",
@@ -533,8 +530,7 @@ export const ptBR: Translation = {
     "talk.shell": "Shell simples",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
-    "talk.idle": "Em conversa", "talk.holding": "{n} tarefas",
-    "talk.finished": "{n} concluídas", "talk.premiseBroken": "Uma premissa deixou de valer",
+
     "talk.quiet": "quieto há {n} min",
     "talk.unsent": "Ainda não enviado. Pressione Enter para enviar.",
     "face.switch": "O que esta janela mostra",
@@ -546,9 +542,7 @@ export const ptBR: Translation = {
     "face.drop": "Remover este painel",
     "face.dropConfirm": "Remover este painel? O terminal nele é encerrado, e o lugar não volta na próxima execução.",
     "quit.confirm": "Encerrar o Amenbo? Todos os terminais abertos são encerrados, e nenhuma sessão volta na próxima execução.",
-    "quit.holding": "As sessões em andamento ainda têm:",
-    "quit.anyway": "Encerrar assim mesmo",
-    "quit.cancel": "Cancelar",
+
     "face.turnTitle": "Amenbo — é a sua vez",
     "face.turnBody": "Um terminal está esperando por você.",
     "face.ended": "O programa deste terminal foi encerrado.",

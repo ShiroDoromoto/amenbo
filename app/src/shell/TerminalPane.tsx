@@ -143,11 +143,11 @@ export function TerminalPane({
   /** Take the place away, once the person has said so. The terminal in it is ended first: a session
    *  whose pane has gone is one nobody can get back to.
    *
-   *  **The one question is the plain one, whatever the session is holding** (`AMB-D-855`). What the
-   *  volatile area says a pane reserved cannot be leant on to move the ledger: a task moved outside a
-   *  pane is not written there at all, so the newest row it can find is an older one that has come up
-   *  behind it. `face.dropConfirm` already says the place is not coming back, which is the loss this
-   *  press stands in front of. */
+   *  **The one question is the plain one, whatever the session was doing** (`AMB-D-858`). What tied a
+   *  pane to a task went through a key the world could rewrite behind the pane, so a question naming
+   *  what was about to be lost named as often work somebody had already finished elsewhere.
+   *  `face.dropConfirm` already says the place is not coming back, which is the loss this press
+   *  stands in front of. */
   const drop = async () => {
     if (!await confirmDialog(t("face.dropConfirm"))) return;
     if (live !== null) await endTerminal(live).catch(() => {});

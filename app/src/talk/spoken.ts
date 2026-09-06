@@ -9,9 +9,10 @@
 // heard once for the whole window, so what those two are read off outlives the pane.
 //
 // **`waiting` alone crosses.** What is kept here is the map (`./sessions`); what the face makes of it
-// is a turn an agent declared, and never the ledger's derivation nor a silence — the same rule the
-// badge on the face switch already reads by, and for the same reason (`../shell/terminalBadge`,
-// `AMB-D-748`). The derived turn belongs to the pane, which is the only thing that asks the ledger.
+// is a turn an agent declared, and never a silence — the same rule the badge on the face switch
+// already reads by, and for the same reason (`../shell/terminalBadge`, `AMB-D-748`). The other half
+// of a turn is the sentence left unsent, which belongs to the pane: it is the only thing here that
+// can see its own input box.
 //
 // Nothing here is remembered past the window: a session has no existence outside the terminal it runs
 // in (`AMB-D-749`), and a session that ends is dropped on the news of it ending.

@@ -427,14 +427,6 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. What a column is drawn at is a thing on a screen, and a terminal has no
     // column to fold.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "sidebar", required: &["names"], refs: &[], strings: &["names"], binds: false },
-    // Going from a task to the pane its work is happening in — the road out of the ledger, and the one
-    // the ledger has. The pane is named rather than pointed at: the row carries the
-    // pane's own name, so an operator pressing it can see it is the pane the road meant before the
-    // press moves the screen. What the press does after that is nowhere in the step: which window
-    // holds the terminal face is the run's, and the road reads where it landed with `terminal pane`.
-    //
-    // A screen road alone. A terminal has no pane to go to and no face to switch.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "go-to-pane", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
     // A card carried into one of the columns a cut board draws, which is the board's own way of filing
     // work: what it lands under is the value on the column's heading, so the move names the axis and
     // that value rather than anywhere on a screen. The card is named by `target`, the way every step
@@ -756,17 +748,14 @@ const REGISTRY: &[OpSpec] = &[
     // question it raises are one gesture at one place, while this way out is pressed in a menu and
     // answered on the board.
     //
-    // `answer` is which way, and it is left out where there is nothing to choose between: sessions
-    // holding no reservation get the plain question, and answering that is saying yes. Where a
-    // session made one, the box names every task being left behind and offers two
-    // (`app/src/shell/HoldingAsk.tsx`): `leave` goes and leaves them standing, `cancel` stays. There
-    // is no third that moves the ledger — what the volatile area names may be a row the world has
-    // passed, and it is not a thing to write on.
+    // `answer` is which way: `leave` goes and every terminal in the process ends with the app,
+    // `cancel` stays. Left out, it is `leave` — the answer the question was raised on the way to.
     //
-    // `target` is the task the question has to name, and it is what makes this step self-judging, the
-    // way `remove-pane`'s is: the whole of what the box is for is naming what stands to be lost, and
-    // one that named nothing — or another pane's work — is the failure it exists to prevent.
-    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "answer-quit", required: &[], refs: &["target"], strings: &["answer"], binds: false },
+    // **The question names nothing and moves nothing.** What it says is that a terminal
+    // is open and about to go; what any of those terminals was doing was read through a key the world
+    // could rewrite behind the pane, and it is gone. A reservation left standing is on the ledger,
+    // which is where a road reads it (`task field`).
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "answer-quit", required: &[], refs: &[], strings: &["answer"], binds: false },
     // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
     // the driver places somewhere of its own, since a pointer is answered by where a folder sits.
     // `init` raises a project of its own and binds it (hence the binding), `bind` points a folder at
@@ -1381,18 +1370,6 @@ const REGISTRY: &[OpSpec] = &[
     // its folders). `dir` names the folder the way every `folder` step does; `present: false` is the
     // other half and needs no name, since a task holding none has nothing to name.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "worked-in", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
-    // Whether the task names a pane its work is happening in, and which one. `shows` is the pane's own
-    // name — the line a road typed into it — because that is what the row carries and what tells one
-    // pane from another.
-    //
-    // **`present: false` is the half this exists for.** The row is drawn only where a session is
-    // holding the task *and* a pane is drawing that session, so it is absent for a reservation made in
-    // somebody's own terminal and absent again once the pane has closed — while the reservation itself
-    // stands. A road pairs the absent half with a reading of the status, which is what
-    // says the ledger is answering "no pane here" rather than "nobody".
-    //
-    // A screen road alone. The row is a way to press, and a terminal has nowhere to press it to.
-    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "pane", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
     // Which of a task's own controls the face draws, and which it does not. `opened` asks
     // *whose* record is standing there and answers it with a phrase off the record's face; this asks
     // what that face **offers to press**, which no phrase witnesses — a control that was taken away

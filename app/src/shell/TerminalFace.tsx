@@ -254,14 +254,14 @@ export function TerminalFace({
   // it belongs in the arrangement that is kept (`../talk/layout`).
   const startWith = useRef(new Map<string, string>());
 
-  // What the panes being drawn say about themselves — the agent handed a turn over, or the ledger
-  // says a task the pane is holding is no longer ready (`../talk/plate`). It reaches only as far as
-  // the panes on the screen, because a pane is the only thing here that asks the ledger, and a pane
-  // goes down with its page.
+  // What the panes being drawn say about themselves — the agent handed a turn over, or the sentence
+  // Amenbo opened it with is still sitting unsent in its input box (`../talk/plate`). It reaches only
+  // as far as the panes on the screen, because a pane is the only thing here that measures its own
+  // input box, and a pane goes down with its page.
   const [reported, setReported] = useState<ReadonlySet<string>>(new Set());
   // And what every session in this window has said, which no page turn takes away (`../talk/spoken`).
   // It is the half that carries a turn handed over behind the reader's back; the half above is the
-  // one that carries the ledger's derivation. `needy` below is the two of them read together.
+  // one that carries what the pane measured. `needy` below is the two of them read together.
   const [spoken, setSpoken] = useState<Sessions>(NO_SESSIONS);
   useEffect(() => watchSpoken(setSpoken), []);
   // Read through a ref for the same reason the panes' callbacks are: the face is mounted once and
@@ -293,8 +293,8 @@ export function TerminalFace({
    *
    * **A pane that is not on the screen still has one**, and it is the whole reason the dots and the
    * badges exist: a page turn is exactly when nobody is looking at that pane (`AMB-T-3610`). The
-   * drawn panes answer for themselves, because a pane is the only thing here that asks the ledger
-   * whether what it is holding is still ready; the rest is read off what their agents have said,
+   * drawn panes answer for themselves, because a pane is the only thing here that can see its own
+   * input box; the rest is read off what their agents have said,
    * which the window hears whether or not the pane is up (`../talk/spoken`).
    */
   const needy = useMemo(() => {

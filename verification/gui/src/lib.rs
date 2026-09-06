@@ -878,12 +878,29 @@ impl Instructor {
     /// reading on the other surface that draws either, and a `Review` for the same reason — the one
     /// letter a tab falls back to is a letter of the project's name, which the tab beside it is
     /// spelling out in full.
-    /// was given nor the colour it falls back to puts one there.
     ///
     /// `store avatar` is the same reading one face further in, and a `Review` for the same reason: a
     /// registered image and the pattern drawn in its place are both pictures, and a slot holding either
     /// puts no word on a shot.
+    ///
+    /// **And one that no op names — an expectation the fold leaves nothing of.** [`fold`] keeps
+    /// letters and digits and drops everything else, so an expectation written out of punctuation
+    /// alone — a quote, a bracket, an arrow — reaches the match as the empty string, which every
+    /// reading holds. Its `present: true` half would then pass on any screen at all and its
+    /// `present: false` half could never pass on one: a road reading a path for the quote a pane
+    /// puts round it and a box does not (`'/`) went red on a screen that was right, and no shot
+    /// could have made it green. The mark is drawn and an eye reads it, so the step is a `Review`
+    /// rather than a reading nobody can trust.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
+        let named = self.expectation_as_written(step)?;
+        if fold(&named.text).is_empty() {
+            return None;
+        }
+        Some(named)
+    }
+
+    /// The expectation an op names, before the question of whether a reading can answer it.
+    fn expectation_as_written(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with, .. } = step else { return None };
         match (*domain, op.as_str()) {
             // The two that read a task's own title off a card or a row, where a title that has ended
@@ -5947,6 +5964,39 @@ steps_gui:
         let mut ins = Instructor::new();
         ins.render(&s.steps(Driver::Gui)[0]).unwrap();
         assert!(ins.expectation(&s.steps(Driver::Gui)[1]).is_none(), "a field assert is not OCR-judged");
+    }
+
+    /// The quote a pane puts round a pasted path and a box does not. `fold` keeps letters and
+    /// digits, so `'/` reaches the match as nothing at all — a needle every reading holds, which
+    /// leaves the `present: false` half red on every screen there is. What carries a letter beside
+    /// the mark is read as ever.
+    #[test]
+    fn an_expectation_the_fold_leaves_nothing_of_is_the_eyes() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: files
+    op: reading
+    with: { shows: "'/", present: false }
+  - type: assert
+    domain: files
+    op: reading
+    with: { shows: ".png" }
+"#;
+        let s = load(yaml);
+        let ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        assert!(
+            ins.expectation(&steps[0]).is_none(),
+            "punctuation alone is not something a reading answers for"
+        );
+        assert_eq!(
+            ins.expectation(&steps[1]),
+            Some(Expectation { text: ".png".to_string(), present: true }),
+            "an expectation with letters in it stays the shot's"
+        );
     }
 
     /// The tick's band: each button is named by what pressing it leaves behind, the answer travels

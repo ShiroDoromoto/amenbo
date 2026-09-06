@@ -299,6 +299,14 @@ key is a monospace word of five or six characters, well under the floor, and `ch
 which no reading of a photograph could do anyway. A lowercase `i` is deliberately not in the set: the
 face this serves draws it with a dot, so folding it onto `l` would give away discrimination against a
 misreading this screen does not produce. A green earned this way carries `slipped` like any other.
+
+**An expectation the fold leaves nothing of is not a reading's to answer.** The fold keeps letters
+and digits and drops the rest, so a `shows` written out of punctuation alone — the quote a pane puts
+round a pasted path, where a box that is not a pane does not — reaches the match as the empty string,
+which every reading holds: its `present: true` half would pass on any screen at all and its `present:
+false` half on none of them. The harness leaves such a step for an eye, the way it does the ones
+below.
+
 An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`, unless it is
 one of the few read off the window's tree or off the store instead (below): its shot is kept for an
 AI/human eye and does not fail the run. A task's **title is one of those once the task

@@ -499,8 +499,8 @@ overwrites the destination machine's identity). The store itself is plaintext (s
 below), so an archive or snapshot is self-contained — recovery needs no key or
 passphrase on any machine.
 
-On every open Amenbo also runs a read-only integrity check of the store and prints a
-warning if anything looks off — it never repairs automatically (use `amenbo doctor --fix`
+At the start of every command Amenbo also runs a read-only integrity check of the store and
+prints a warning if anything looks off — it never repairs automatically (use `amenbo doctor --fix`
 for that, which also sweeps attachment rows whose record is gone and reclaims the files
 nothing references any more). Turn it off
 with `amenbo config set startup_integrity_check false`. The app warns on launch too, and

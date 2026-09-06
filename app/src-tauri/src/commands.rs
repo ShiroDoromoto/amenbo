@@ -102,24 +102,18 @@ fn emit(store: &mut Store, target_id: i64, event: serde_json::Value) {
 }
 
 impl StartupHealthDto {
-    /// Absorb the startup_check of an opened store. A read open (`open_read_at`) deliberately
-    /// **does not compute** the O(total) doctor pass (it keeps per-click reads inside their budget),
-    /// so we compute it here, and only when it is needed. A full open (`open_at`) already computed
-    /// it while opening, so that result is used. Does nothing when the startup integrity check is
-    /// disabled.
+    /// Absorb the startup integrity check of an opened store. **No open computes it** — neither the
+    /// read open (`open_read_at`) nor the write one (`AMB-D-857`) — because the doctor pass is
+    /// O(total) and per-click reads have to stay inside their budget. The snapshot is a whole-store
+    /// aggregate already, so it is the place that can afford to ask, and it asks here. Does nothing
+    /// when the startup integrity check is disabled.
     fn absorb(&mut self, store: &Store) {
-        let computed;
-        let h = match &store.startup_check {
-            Some(h) => h,
-            None if store.config.startup_integrity_check => {
-                let Ok(health) = store.compute_startup_health() else { return };
-                computed = health;
-                &computed
-            }
-            None => return,
-        };
+        if !store.config.startup_integrity_check {
+            return;
+        }
+        let Ok(health) = store.compute_startup_health() else { return };
         self.issues
-            .extend(h.doctor.issues.iter().map(DoctorIssueDto::from));
+            .extend(health.doctor.issues.iter().map(DoctorIssueDto::from));
     }
 }
 
@@ -8762,8 +8756,7 @@ mod tests {
         let mtime_after = std::fs::metadata(&store_file).and_then(|m| m.modified()).unwrap();
         assert_eq!(mtime_before, mtime_after, "read/full open must not rewrite the truth-source file");
 
-        let full_health =
-            serde_json::to_value(full.startup_check.as_ref().expect("write open computes health")).unwrap();
+        let full_health = serde_json::to_value(full.compute_startup_health().unwrap()).unwrap();
         let read_health = serde_json::to_value(read.compute_startup_health().unwrap()).unwrap();
         assert_eq!(full_health, read_health, "startup health diverged between full (doctor) and read (doctor) open");
 

@@ -46,6 +46,28 @@ export function imageIn(data: DataTransfer): File | null {
 }
 
 /**
+ * Write a pasted image down where the host keeps them, and answer with the path it landed at.
+ *
+ * **A pane names its session and everywhere else names none** — the draft page and the panel's
+ * editor are drawn once for the window and no session is theirs, so the host puts what they paste in
+ * a directory belonging to the run instead of to a pane (`AMB-T-4446`). Either way what comes back
+ * is a path, and how it is written into the text is the caller's (`AMB-D-832`).
+ *
+ * **An image that could not be written down answers with no path at all**, which leaves the paste
+ * with the words it carried — and an image carries none, so the press lands and nothing is put in.
+ * That is the same silence every other paste a place cannot take ends in.
+ */
+export async function writesPastedImage(
+  bytes: Uint8Array,
+  mime: string,
+  session: string | null,
+): Promise<string[]> {
+  return await invoke<string>("pty_paste_image", { session, mime, bytes })
+    .then((path) => [path])
+    .catch(() => []);
+}
+
+/**
  * Answer the pastes `host` is given that are carrying files, and leave every other paste alone.
  *
  * `put` is handed the paths the host read back, and the words the paste itself carried — which is

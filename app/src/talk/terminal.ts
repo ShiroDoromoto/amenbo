@@ -28,7 +28,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type IBufferCell } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import type { PtyChunkDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
-import { takesPastedFiles, takesPastedImages } from "../core/clipFiles";
+import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
 import { hostOs, type HostOs } from "../core/platform";
@@ -586,15 +586,10 @@ export async function mountTerminal(
   // until they are put somewhere — which the pane's own directory is for, and which is why the
   // writing is asked for here rather than in the reading (`AMB-D-854`). What comes back is a path
   // like any other, quoted the same way.
-  //
-  // An image that could not be written down leaves the paste with the words it carried, which for an
-  // image is nothing — the same silence every other paste this pane cannot land ends in.
   const writeImage = async (bytes: Uint8Array, mime: string): Promise<string[]> => {
     const its = session;
     if (its === null) return [];
-    return await invoke<string>("pty_paste_image", { session: its, mime, bytes })
-      .then((path) => [path])
-      .catch(() => []);
+    return await writesPastedImage(bytes, mime, its);
   };
   const stopPaste = takesPastedFiles(
     host,

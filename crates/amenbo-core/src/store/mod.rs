@@ -135,9 +135,6 @@ pub struct Store {
     pub identity: Identity,
     /// Whether this open re-bound `bound_hw` because it detected a clone (the CLI warns about it).
     pub forked: bool,
-    /// Result of the startup integrity check (`Some` only when `config.startup_integrity_check` is on).
-    /// The CLI/GUI surfaces any problem as a warning. Inspection only — nothing is repaired.
-    pub startup_check: Option<StartupHealth>,
     /// The store engine DB (`data_dir/store.sqlite`) that **is the truth source**. Reads and writes go
     /// straight here — ops' writes land through a transaction (`write_one` / `WriteTx`). It is opened
     /// even for a read-only open ([`Store::open_read_at`]); failing to open it fails the open itself (a

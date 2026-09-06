@@ -332,7 +332,6 @@ impl Store {
             paths,
             identity,
             forked,
-            startup_check: None,
             engine,
             reach: crate::reach::Reach::default(),
         };
@@ -340,11 +339,6 @@ impl Store {
         // left is the config — flush its genesis defaults to the file.
         if config_dirty {
             store.persist()?;
-        }
-        // The read-only integrity check at startup (on by default). Findings come back as warnings
-        // for the caller to display. Inspection only — it never repairs anything.
-        if store.config.startup_integrity_check {
-            store.startup_check = Some(store.compute_startup_health()?);
         }
         Ok(store)
     }
@@ -413,17 +407,16 @@ impl Store {
         }
         ensure_integer_keyed(&engine)?;
         // The startup integrity check (doctor) folds over everything — even against the read model it
-        // is a full-table aggregate, O(total) — so the read open does not compute it: paying that on
-        // every IPC read would blow the budget. Instead `build_snapshot`, which needs the health
-        // display and is itself a whole-store aggregate (and therefore outside the budget), calls
-        // `compute_startup_health` when it needs it. The writing `open_at` still computes it at open
-        // time and puts it on `startup_check`.
+        // is a full-table aggregate, O(total) — so **no open computes it**, this one or the writing
+        // one (`AMB-D-857`): paying that per open would blow the read budget, and a write open only
+        // two surfaces ever display the result of has nothing to gain from it either. Whoever needs
+        // it asks for it — `build_snapshot`, which is itself a whole-store aggregate and therefore
+        // outside the budget, and the CLI at startup.
         Ok(Store {
             config,
             paths,
             identity,
             forked: false,
-            startup_check: None,
             engine,
             reach: crate::reach::Reach::default(),
         })
@@ -449,11 +442,12 @@ impl Store {
 
     /// Compute the read-only startup integrity check: the internal consistency of the truth source
     /// (orphaned and dangling references, and so on). Pure inspection — no side effects, no automatic
-    /// repair — with every kind queried through the read model's indexed SQL (`doctor`). The writing
-    /// `open_at` calls this at open time and puts the result on `startup_check`; the read path cannot
-    /// afford a full-table aggregate on every IPC read, so `open_read_at` does not call it and
-    /// `build_snapshot` — which needs the health display — calls it on demand instead (the lazy entry
-    /// point). What it looks at is **the inside of the store only**: environment issues (the `.amenbo`
+    /// repair — with every kind queried through the read model's indexed SQL (`doctor`). **No open
+    /// calls it** (`AMB-D-857`): a full-table aggregate on every IPC read would blow the budget, and
+    /// an open has no way of knowing whether its caller is one of the two that display the result.
+    /// Those two ask here — `build_snapshot`, which is itself a whole-store aggregate and therefore
+    /// outside the budget, and the CLI at startup, before it narrows its reach.
+    /// What it looks at is **the inside of the store only**: environment issues (the `.amenbo`
     /// pointer and the managed block in bound folders, which [`crate::doctor::report`] gathers) are
     /// deliberately not included, because this runs on every snapshot — in the GUI, on every
     /// store-changed tick — and a filesystem walk per bound folder has no business there (the

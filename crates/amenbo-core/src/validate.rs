@@ -135,8 +135,8 @@ pub struct DoctorResult {
 /// Runs the integrity checks as **SQL straight against the read-model**: no full hydration of the store —
 /// self-referencing edges come out of a join, and `duplicate_order_key` out of a SQL aggregate per sibling
 /// set (folding the duplicates down to one issue). Every judgement about integrity goes through this one
-/// function: the read-side open (`open_read_at`, `compute_startup_health`) and the write path behind
-/// `doctor --fix` alike.
+/// function: the startup health check (`compute_startup_health`, which every surface asks for itself) and
+/// the write path behind `doctor --fix` alike.
 ///
 /// Deletion is physical, so an orphan means the referenced record does **not exist at all** — every check
 /// asks only whether the row it points at is there.
@@ -317,8 +317,9 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
 /// Bodies whose prose points at refs that resolve to nothing.
 ///
 /// **Not part of [`doctor`], deliberately** — [`crate::doctor::report`] chains it in alongside the
-/// environment checks instead. `doctor` is the cheap always-on half: it runs at every write open
-/// (`compute_startup_health`) and, in the GUI, on every store-changed tick. This check reads the bodies of
+/// environment checks instead. `doctor` is the cheap always-on half: it runs at the CLI's startup and,
+/// in the GUI, on every store-changed tick (`compute_startup_health`, which no open calls —
+/// `AMB-D-857`). This check reads the bodies of
 /// every outstanding task and proposed decision on the device and parses each as Markdown, which is the same
 /// reason the environment's filesystem walk is kept out of that path. It also answers a different question:
 /// `doctor`'s checks say a row is broken, and this one says a *sentence* has rotted while every row around it

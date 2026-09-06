@@ -338,10 +338,11 @@ fn a_short_page_says_there_is_more() {
     }
 }
 
-/// The bound holds for a **CLI-only store**, where the amortised trim never gets its chance: every
-/// command is a fresh process that writes a few rows and exits, so an in-process counter would sit far
-/// below its threshold forever while the feed grew without limit. Re-opening the store enforces the
-/// bound, so the shape of the client cannot decide whether the feed is bounded.
+/// The bound holds for a **CLI-only store**, where the amortised trim would never get its chance: every
+/// command is a fresh process that writes a few rows and exits, so a counter starting at zero would sit
+/// far below its threshold forever while the feed grew without limit. A fresh engine starts its counter
+/// already due, so the first write of each process cuts the feed — the shape of the client cannot decide
+/// whether the feed is bounded.
 #[test]
 fn the_bound_holds_when_every_write_is_a_new_process() {
     let base = amenbo_scratch::scratch("feed-cli");
@@ -365,7 +366,8 @@ fn the_bound_holds_when_every_write_is_a_new_process() {
             store.set_task_status(task, status, ActorKind::Ai).unwrap();
         }
     }
-    // A fresh process — one `amenbo task add` — finds the feed over its window and cuts it back.
+    // A fresh process — one `amenbo task add` — finds the feed over its window and cuts it back on the
+    // write.
     let mut store = Store::open_at(paths).unwrap();
     store.add_task(new_task("次のコマンド", project)).unwrap();
 
@@ -375,5 +377,74 @@ fn the_bound_holds_when_every_write_is_a_new_process() {
         .query_row("SELECT COUNT(*) FROM change_feed", [], |r| r.get(0))
         .unwrap();
     let ceiling = amenbo_core::store_engine::CHANGE_FEED_RETAIN + 500;
-    assert!(rows <= ceiling, "the open trimmed the feed back (held {rows}, ceiling {ceiling})");
+    assert!(rows <= ceiling, "the write trimmed the feed back (held {rows}, ceiling {ceiling})");
+}
+
+/// **A command that only reads writes nothing** (`AMB-D-857`). The feed's bound rides the first write of
+/// each process, not the open, because an open happens before the command it was opened for has said
+/// what it wants: a cut made there puts a `DELETE` and the write lock behind `amenbo task list`, on a
+/// store that command never changes. The cut still comes — one write later — and this pins that the
+/// reading open is not what makes it.
+#[test]
+fn a_reading_open_does_not_cut_the_feed() {
+    let base = amenbo_scratch::scratch("feed-read-only");
+    let paths = Paths::at(base);
+
+    let (project, task) = {
+        let mut store = Store::open_at(paths.clone()).unwrap();
+        let project = store.project_add(new_project("PJ")).unwrap().id;
+        let task = filed(&mut store, new_task("タスク", project));
+        (project, task)
+    };
+    {
+        let mut store = Store::open_at(paths.clone()).unwrap();
+        for i in 0..6_000 {
+            let status = if i % 2 == 0 {
+                amenbo_core::model::TaskStatus::InProgress
+            } else {
+                amenbo_core::model::TaskStatus::Todo
+            };
+            store.set_task_status(task, status, ActorKind::Ai).unwrap();
+        }
+    }
+    // Put the feed **over its window on purpose**, so a build that trimmed at open would have something
+    // to trim. The first of these writes cuts the feed back to exactly the retention; the two after it
+    // push past it again, and nothing trims until the next process writes.
+    {
+        let mut store = Store::open_at(paths.clone()).unwrap();
+        for n in 0..3 {
+            store.add_task(new_task(&format!("押し出す{n}"), project)).unwrap();
+        }
+    }
+    let span = |store: &Store| -> (i64, i64) {
+        let conn = store.read_model().conn();
+        let rows = conn.query_row("SELECT COUNT(*) FROM change_feed", [], |r| r.get(0)).unwrap();
+        let oldest = conn.query_row("SELECT MIN(id) FROM change_feed", [], |r| r.get(0)).unwrap();
+        (rows, oldest)
+    };
+    let before = {
+        let store = Store::open_read_at(paths.clone()).unwrap();
+        let seen = span(&store);
+        // Over by more than one row: an open-time trim reads the span as `MAX - MIN`, so a feed holding
+        // exactly one row past the retention would not move it either, and the reading below would go
+        // green over a build that trims at open.
+        assert!(
+            seen.0 > amenbo_core::store_engine::CHANGE_FEED_RETAIN + 1,
+            "the feed has to be over its window for this to be a test (held {})",
+            seen.0
+        );
+        seen
+    };
+
+    // The reading command: a full open, and not one write through it.
+    {
+        let store = Store::open_at(paths.clone()).unwrap();
+        let _ = store.read_model();
+    }
+
+    let after = {
+        let store = Store::open_read_at(paths).unwrap();
+        span(&store)
+    };
+    assert_eq!(before, after, "an open that read nothing but rows left the feed as it found it");
 }

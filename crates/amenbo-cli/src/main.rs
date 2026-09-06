@@ -971,6 +971,16 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
 
     let store = Store::open().map_err(CliError::from)?;
 
+    // The store-internal integrity check (`doctor`), **asked for here** rather than taken off the open:
+    // no open computes it (`AMB-D-857`), because the fold is O(total) and this is one of only two
+    // surfaces that display the answer. Taken **before the reach is narrowed below**, so the tally is the
+    // device's — which is what the reporting further down rests on. What is done with it is decided
+    // there, once the reach is fixed.
+    let startup_check = match store.config.startup_integrity_check {
+        true => Some(store.compute_startup_health().map_err(CliError::from)?),
+        false => None,
+    };
+
     // Clone detection: warn that this store may have been copied to another machine.
     if store.forked {
         eprintln!(
@@ -1079,11 +1089,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // automatically (repair is the explicit `amenbo doctor --fix`); the check itself has no side effects.
     // Turn it off with `amenbo config set startup_integrity_check false`.
     //
-    // Count only after the reach is fixed. The tally taken at open (`startup_check`) knows nothing of reach —
+    // Count only after the reach is fixed. The tally taken above (`startup_check`) knows nothing of reach —
     // it looks at the whole device — so reading it out inside a closed reach would tell an AI the number of
     // issues that `doctor` will not show it, and send it looking for something it cannot see. Only when we
     // know something is there do we count again, within the reach.
-    if store.startup_check.as_ref().is_some_and(|h| h.has_warnings()) {
+    if startup_check.as_ref().is_some_and(|h| h.has_warnings()) {
         let doctor = store.doctor().map_err(CliError::from)?;
         let n = doctor.issues.len();
         if n > 0 {

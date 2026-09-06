@@ -143,9 +143,13 @@ type ChangeBuffer = std::sync::Arc<std::sync::Mutex<Vec<RowChange>>>;
 pub struct StoreEngine {
     conn: Connection,
     changes: ChangeBuffer,
-    /// Feed rows written since the last trim — the counter behind the amortised bound. In memory, so a
-    /// fresh process starts at zero: at worst the first trim comes a little late, which costs a few
-    /// hundred rows, and nothing has to be persisted on the write path to avoid it.
+    /// Feed rows written since the last trim — the counter behind the amortised bound. In memory, and a
+    /// fresh engine starts it **at the threshold** ([`trim_due_at_once`]), so the first commit of the
+    /// process trims. That is what keeps the bound on a CLI-only store, where every command is a new
+    /// process that writes a handful of rows and exits: a counter starting at zero would never reach
+    /// the threshold there and the feed would grow without limit. The bound rides a write rather than
+    /// an open because an open is not a write (`AMB-D-857`): a command that goes on to read and
+    /// nothing else has no business leaving a `DELETE` behind.
     rows_since_trim: std::sync::atomic::AtomicU64,
 }
 
@@ -241,12 +245,11 @@ impl StoreEngine {
         }
         // Enforce the registry's `REFERENCES` for every write from here on.
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-        // Keep the feed inside its bound even for a CLI-only store, where no process lives long enough
-        // to trigger the amortised trim on the write path.
-        trim_change_feed_on_open(&conn)?;
         let changes: ChangeBuffer = ChangeBuffer::default();
         install_change_hook(&conn, &changes)?;
-        Ok(StoreEngine { conn, changes, rows_since_trim: Default::default() })
+        // Due from the start, so the first commit this engine makes trims — the bound a CLI-only store
+        // would otherwise never reach (`rows_since_trim`). An engine that never writes never pays it.
+        Ok(StoreEngine { conn, changes, rows_since_trim: trim_due_at_once() })
     }
 
     /// Borrow the read-model connection (for the read/query layer built on top of this engine).
@@ -256,7 +259,9 @@ impl StoreEngine {
 
     /// Trim the change feed back to [`CHANGE_FEED_RETAIN`] rows, but only once every
     /// [`CHANGE_FEED_TRIM_EVERY`] rows written, so no single commit carries the whole cost (`written` is
-    /// what this commit just appended). Runs **inside the caller's transaction**, so the delete and the
+    /// what this commit just appended) — and **on this engine's first commit**, which is where the bound
+    /// on a CLI-only store is enforced ([`trim_due_at_once`]). Runs **inside the caller's transaction**,
+    /// so the delete and the
     /// watermark that records it ([`META_FEED_TRUNCATED_THROUGH`]) land with the rows that displaced
     /// them, or not at all — a reader whose cursor is older than the watermark has lost changes it never
     /// saw, and an empty result would otherwise read as "nothing changed" and freeze a stale screen;
@@ -529,9 +534,9 @@ pub fn at_rest_status(db_path: &Path) -> AtRestStatus {
     }
 }
 
-/// Cut the change feed back to [`CHANGE_FEED_RETAIN`] rows and record how far the cut reached. Runs on
-/// the caller's connection — inside a transaction from the write path, in its own from the open path —
-/// so the delete and the watermark ([`META_FEED_TRUNCATED_THROUGH`]) are never separated: a reader whose
+/// Cut the change feed back to [`CHANGE_FEED_RETAIN`] rows and record how far the cut reached. Runs
+/// inside the caller's transaction — the one the write it rides on already opened — so the delete and
+/// the watermark ([`META_FEED_TRUNCATED_THROUGH`]) are never separated: a reader whose
 /// cursor is older than the watermark has lost changes it never saw, and an empty result would otherwise
 /// read as "nothing changed" and freeze a stale screen; recording the cut is what lets
 /// [`super::read::changes_since`] answer *"your cursor is gone, re-read the store"* instead.
@@ -557,31 +562,11 @@ fn trim_change_feed(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-/// Enforce the feed's bound on open, as well as amortised on the write path
-/// ([`StoreEngine::trim_change_feed_if_due`]). The in-process counter alone would never fire for a
-/// CLI-only user: every command is a fresh process that writes a handful of rows and exits, so the
-/// counter never reaches its threshold and the feed would grow without limit. Checking here costs one
-/// indexed `MAX(id)` per open (the feed's id is its primary key), and trims only when the feed has
-/// actually outgrown its window.
-fn trim_change_feed_on_open(conn: &Connection) -> Result<()> {
-    // The span the feed currently holds — its two ends, taken in one pass; whether that outgrows the
-    // window is arithmetic, and belongs here rather than in the statement.
-    let mut sel = Select::new();
-    let (newest, oldest) = (
-        sel.expr::<Option<i64>>(format!("MAX({})", FEED.id.to_sql())),
-        sel.expr::<Option<i64>>(format!("MIN({})", FEED.id.to_sql())),
-    );
-    let sql = Sql::from(&sel, FEED.table);
-    let span: Option<i64> = conn.query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| {
-        Ok(newest.get(r)?.zip(oldest.get(r)?).map(|(hi, lo)| hi - lo))
-    })?;
-    if span.is_none_or(|s| s <= CHANGE_FEED_RETAIN) {
-        return Ok(());
-    }
-    let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
-    trim_change_feed(&tx)?;
-    tx.commit()?;
-    Ok(())
+/// A [`StoreEngine::rows_since_trim`] that is already due, so the engine's first commit trims. Written
+/// as the threshold rather than as a flag because that is what the counter means: the rows this process
+/// has not accounted for are the ones the process before it left behind.
+fn trim_due_at_once() -> std::sync::atomic::AtomicU64 {
+    std::sync::atomic::AtomicU64::new(CHANGE_FEED_TRIM_EVERY)
 }
 
 /// Wire SQLite's `update_hook` to the change buffer: every row the connection touches is reported here,

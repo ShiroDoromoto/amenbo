@@ -773,6 +773,9 @@ gate-app-rust:
 	node app/scripts/prepare-cli-sidecar.mjs
 	cargo clippy --manifest-path app/src-tauri/Cargo.toml --all-targets -- -D warnings -D clippy::disallowed_methods
 	cargo test --manifest-path app/src-tauri/Cargo.toml
+	## Straight after the run that writes them: the tests above regenerate
+	## app/src/bindings/bindings.ts, and a file they moved is one the commit should have carried.
+	@guards/check-bindings-fresh.sh
 	$(MAKE) --no-print-directory doc-gate-app
 
 ## The front end stage: CI's `gui-web` job. The GUI tests are only the host-independent lightweight

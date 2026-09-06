@@ -860,6 +860,14 @@ jobs:
       - name: Test
         run: cargo test --manifest-path app/src-tauri/Cargo.toml
 
+      # The step above is what writes app/src/bindings/bindings.ts, so this is where a stale one
+      # shows: the file is committed rather than built on the way in — the front end typechecks
+      # against it with no Rust toolchain — and it is only worth committing while it says what the
+      # current Rust would. A DTO changed and not regenerated for is green everywhere else, and
+      # lands as a modified file in the working tree of whoever runs the tests next.
+      - name: Bindings are not behind the Rust
+        run: guards/check-bindings-fresh.sh
+
       # store_watch's network-FS test is #[ignore]d until something hands it a real
       # mount. Stand up NFS + SMB on the runner and give it one: `is_network_dir` reads
       # the statfs magic to choose polling over a

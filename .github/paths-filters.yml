@@ -25,6 +25,11 @@ rust:
   # The harness the app-rust job's network-FS step runs (it stands up the real NFS/SMB/9P
   # mounts): change it and nothing else, and the step that uses it would not re-run.
   - 'scripts/verify-network-watch.sh'
+  # The guard the same job runs on the generated bindings, for that reason — and the file it
+  # judges, for the other direction: `app/**` opens the gui gate, which does not regenerate
+  # anything, so a hand-edit of the generated text would otherwise be read by nothing.
+  - 'guards/check-bindings-fresh.sh'
+  - 'app/src/bindings/bindings.ts'
   # The README demo's script and the transcript it is held to (crates/amenbo-cli's
   # demo_tape suite reads both). CLI drift already opens this gate through crates/**;
   # these entries cover the other direction — a tape edited on its own.

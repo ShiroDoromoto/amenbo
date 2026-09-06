@@ -1,0 +1,328 @@
+# The way out of the app names the work its sessions are holding, and offers the same three answers
+# one pane's way out does.
+#
+# **Ending the app ends every terminal in it at once.** A session is the process's — not a window's
+# and not a pane's — so the gesture that ends Amenbo takes down every agent that was running, and none
+# of them comes back on the next launch (`app/src-tauri/src/quit.rs`). Pressing `✕` on one pane has
+# asked about that for a while; the way out that takes all of them had nothing in front of it at all.
+#
+# ── Why both doors are walked ────────────────────────────────────────────────────────────────────
+# There are two ways out and they arrive by different roads. The menu's item is one this app wrote,
+# which is what `⌘Q` reaches — the platform's own quit is wired to the operating system's terminate
+# and never offers this side a say. The close pressed on the last window passes no menu at all and is
+# caught in the run loop instead. One gate, two doors: a road that walked one would prove half of it.
+#
+# ── Why the question comes in two shapes ─────────────────────────────────────────────────────────
+# What a session is holding is what the box names, so a process holding nothing has nothing to list
+# and nothing to choose between: what comes up there is the plain confirmation. Both shapes are
+# walked, because a build that raised the three-way question over an empty list would be asking a
+# person to decide about nothing, and the road that only ever held something would never see it.
+#
+# ── Why the silent way out is on the road ────────────────────────────────────────────────────────
+# **No terminal open means no question.** That is a promise as much as the question is — a build that
+# asked every time would put a box in front of somebody with nothing to lose, and the road that only
+# ever walked the question would call that build green. So the last leg quits with no pane open and
+# reads that nothing stood in the way.
+#
+# ── Why the app comes back between the legs ──────────────────────────────────────────────────────
+# Every answer but `cancel` ends the app, and a road cannot walk on from there. The run brings another
+# up on the same store, which is the harness's move and not the operator's: the app has to come up
+# pointed at the run's own store and be namable by a pid. What the next leg opens on is therefore
+# whatever the last one left written down, which is exactly what the readings below are about.
+id: be-told-what-every-pane-is-holding-before-the-app-goes
+title: The way out of the app names the reservations its sessions are holding, and each of the three answers does what it says
+description: >
+  Reserve a task from a terminal running in a pane, then ask Amenbo to end. The question names that
+  task by its ref and offers three answers. Stay, and nothing has happened: the app is still running
+  and the task is still held. Ask again and go without handing anything back — the app ends and the
+  reservation is still standing when it comes back. Then do the same through the other door, the
+  close on the last window, and hand the work back: the task is waiting for somebody again. Then ask
+  again from a pane holding nothing, and the question is the plain one. Finally quit with no pane open
+  at all, and nothing is asked.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Foundry
+    as: foundry
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: forge
+      project: foundry
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Re-line the quench tank
+      project: foundry
+    as: tank
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: tank
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Sharpen the plate shears
+      project: foundry
+    as: shears
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: shears
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
+  # that read a screen it had not put itself on would be reading somebody else's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Foundry
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  # Down to a plain shell. What an agent does with a line typed at it is the agent's own, and the two
+  # commands below are the whole of what puts this road's reservation where the question reads it.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: run
+    with:
+      command: amenbo task list --actor ai
+
+  # The move that makes this pane's session the one holding something. It is made with the CLI from
+  # inside the pane because that is the only place it can be made from and still be seen here.
+  - type: action
+    domain: terminal
+    op: run
+    with:
+      command: amenbo task status <ref> in_progress --actor ai
+      target: tank
+
+  # ── Stay ────────────────────────────────────────────────────────────────────────────────────────
+  # The menu's door. The question is read for naming this session's reservation and no other, and then
+  # declined — and what follows is the whole of what "nothing happens" has to mean.
+  - type: action
+    domain: store
+    op: quit
+    with:
+      how: menu
+      asks: true
+
+  - type: action
+    domain: store
+    op: answer-quit
+    with:
+      target: tank
+      answer: cancel
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  # The half a screen could get wrong on its own: a box that tidied the ledger up on the way out would
+  # read the same on the question above and lose the fact here.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: tank
+      field: status
+      equals: in_progress
+
+  # ── Go, and leave it standing ───────────────────────────────────────────────────────────────────
+  # The answer that is not a mistake to be talked out of: somebody stepping away for the night has
+  # every reason to leave a reservation where it is. The app ends on it, and the run brings one back.
+  - type: action
+    domain: store
+    op: quit
+    with:
+      how: menu
+      asks: true
+
+  - type: action
+    domain: store
+    op: answer-quit
+    with:
+      target: tank
+      answer: leave
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Foundry
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  # Still held, across the very gap that could have unmade it. A person who meant to leave the
+  # reservation standing has been taken at their word.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: tank
+      field: status
+      equals: in_progress
+
+  # ── Hand it back, then go, through the other door ───────────────────────────────────────────────
+  # A fresh pane, on a run of the app that is itself fresh. The reservation is made the same way, and
+  # the way out this time is the close on the last window — no menu is passed on the way.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: run
+    with:
+      command: amenbo task list --actor ai
+
+  - type: action
+    domain: terminal
+    op: run
+    with:
+      command: amenbo task status <ref> in_progress --actor ai
+      target: shears
+
+  - type: action
+    domain: store
+    op: quit
+    with:
+      how: last-window
+      asks: true
+
+  - type: action
+    domain: store
+    op: answer-quit
+    with:
+      target: shears
+      answer: hand-back
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Foundry
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
+
+  # Waiting for somebody again, which is the whole of what that answer is for.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: shears
+      field: status
+      equals: todo
+
+  # And the one left standing two legs ago is still standing. The press could only ever reach what the
+  # sessions it was ending had written down.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: tank
+      field: status
+      equals: in_progress
+
+  # ── A pane that is holding nothing ──────────────────────────────────────────────────────────────
+  # The other question, and the one a build could most easily get wrong: something is open and stands
+  # to be lost, but no session made a reservation, so there is nothing to name and nothing to choose
+  # between. What comes up is the plain confirmation, and answering it is saying yes.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: store
+    op: quit
+    with:
+      how: menu
+      asks: true
+
+  - type: action
+    domain: store
+    op: answer-quit
+
+  # ── Nothing to lose ─────────────────────────────────────────────────────────────────────────────
+  # This run of the app was brought up by the run and nobody has opened a pane in it. There is nothing
+  # to be asked about, so nothing is asked — the gesture is the whole of it.
+  - type: action
+    domain: store
+    op: quit
+    with:
+      how: menu
+      asks: false

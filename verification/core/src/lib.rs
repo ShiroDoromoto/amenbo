@@ -720,6 +720,43 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A CLI command is a run of its own that ends when it has printed, so a
     // terminal carries nothing across and there is no gap here for this op to be.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "run-again", required: &[], refs: &[], strings: &[], binds: false },
+    // The app asked to end. It is the gesture and not what comes of it: a process with a terminal
+    // open has something to lose and says so, and one with none goes on the press
+    // (`app/src-tauri/src/quit.rs`). Which of the two happened is the whole of what these roads read.
+    //
+    // `how` is which way out was taken, and the two are named rather than left to whoever is standing
+    // at the screen, because they arrive by different roads. `menu` is the item this app wrote for
+    // itself, which is what `⌘Q` reaches — the platform's predefined quit is wired to the operating
+    // system's own terminate and never offers this side a say (`app/src-tauri/src/menu.rs`).
+    // `last-window` is the close pressed on the app's one window, which passes no menu at all and is
+    // caught in the run loop instead (`app/src-tauri/src/lib.rs`). A road that walked one would leave
+    // the other's gate unproven. Left out, it is the menu — the way out that is pressed the most.
+    //
+    // `asks` is what the road says will come of it, and it is required because it is the reading:
+    // there is no default that would not be a road quietly agreeing with whatever the app did. It
+    // settles what becomes of the app besides — a quit nothing stood in front of is the app gone, and
+    // the harness brings another up in its place so there is still a window for the step to be shot
+    // against.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "quit", required: &["asks"], refs: &[], strings: &["how"], binds: false },
+    // The answer given to that question, and where the app actually goes. It is a step of its own
+    // rather than an arg on the one above, because the question stands between them: the app is still
+    // running with the box on its board, and what a road has there is a screen it can read. The way
+    // out of one pane folds its answer into the press for the opposite reason — there the `✕` and the
+    // question it raises are one gesture at one place, while this way out is pressed in a menu and
+    // answered on the board.
+    //
+    // `answer` is which way, and it is left out where there is nothing to choose between: sessions
+    // holding no reservation get the plain question, and answering that is saying yes. Where a
+    // session made one, the box names every task being left behind and offers three
+    // (`app/src/shell/HoldingAsk.tsx`): `hand-back` puts them all back to `todo` and then goes,
+    // `leave` goes and leaves them standing, `cancel` stays. They are the pane's own three, in the
+    // pane's own box — it is one loss at two sizes — and the middle one is no more a mistake here
+    // than it is there.
+    //
+    // `target` is the task the question has to name, and it is what makes this step self-judging, the
+    // way `remove-pane`'s is: the whole of what the box is for is naming what stands to be lost, and
+    // one that named nothing — or another pane's work — is the failure it exists to prevent.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "answer-quit", required: &[], refs: &["target"], strings: &["answer"], binds: false },
     // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
     // the driver places somewhere of its own, since a pointer is answered by where a folder sits.
     // `init` raises a project of its own and binds it (hence the binding), `bind` points a folder at

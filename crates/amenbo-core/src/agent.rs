@@ -1773,9 +1773,12 @@ fn index(in_a_pane: bool) -> Value {
         // points at all fail, so teaching them there would be teaching a road that is closed — and the
         // reader could not tell that from a road they had simply not tried yet.
         if in_a_pane {
+            // How many of them are owed is counted off the canon rather than written down twice: a word
+            // that moves between `owed` and `offered` moves this sentence with it.
+            let owed = crate::session::spec()["owed"].as_array().map_or(0, |o| o.len());
             map.insert(
                 "talk".to_string(),
-                json!(format!("You are running in a pane of Amenbo's talk window, and there is a second vocabulary here: what you say about **this session** — the pane on the person's screen. It writes to no store and exists in this terminal alone, which is why `agent` does not carry it. Read `{cli} talk --json` and follow it; two of its words are owed, and the person sees only what you say.")),
+                json!(format!("You are running in a pane of Amenbo's talk window, and there is a second vocabulary here: what you say about **this session** — the pane on the person's screen. It writes to no store and exists in this terminal alone, which is why `agent` does not carry it. Read `{cli} talk --json` and follow it; {owed} of its words are owed, and the person sees only what you say.")),
             );
         }
     }

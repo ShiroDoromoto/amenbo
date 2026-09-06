@@ -198,7 +198,7 @@ fn the_canon_is_served_inside_the_window_and_names_what_is_owed() {
     assert_eq!(code, 0, "the canon is served inside the window: {stdout}");
     let spec: serde_json::Value = serde_json::from_str(&stdout).expect("the canon is JSON");
     let owed = spec["owed"].as_array().expect("what is owed is a list").len();
-    assert_eq!(owed, 2, "two statements are owed — waiting and finished — and no more: {spec}");
+    assert_eq!(owed, 3, "three statements are owed — name, waiting and finished — and no more: {spec}");
     assert!(
         statements(&dir).is_empty(),
         "reading the canon says nothing about the session, so nothing is left for the window",

@@ -849,6 +849,12 @@ impl Instructor {
     /// shot in both shapes and settle nothing, so the picture goes to an eye — which is all one is
     /// needed for, two boxes side by side and two stacked being as far apart as pictures get.
     ///
+    /// `task sidebar-drawn` is a `Review` for `side-span`'s reason, one face over: what it reads is
+    /// how much of the screen a column is taking and what is left drawn in it, which is a region and
+    /// not a word. The words it is about are on the shot at both widths in any case — a project's
+    /// name is over the board the moment it is opened, and a smart view's is on the listing its row
+    /// opens — so a reading would find them folded and unfolded alike and settle nothing.
+    ///
     /// `dimension key` is read, and it is the cleanest reading on these roads. A key is neither a word
     /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
     /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
@@ -1272,6 +1278,19 @@ impl Instructor {
             (Domain::Task, "open-view") => {
                 format!("In the sidebar, press {}.", view_row(req(with, "view")?)?)
             }
+            // The column at one of its two widths. The control is said by what it is drawn as
+            // rather than by a word, because it carries none: its label is on it for a reader who
+            // hovers and for a screen reader, and the sidebar is drawn in whichever language the app
+            // was started in.
+            //
+            // The press is left off where the column is already standing where the step wants it.
+            // Which width a run came up at is the device's business — it is kept between launches —
+            // so a line that pressed unconditionally would fold the column on the run that had it
+            // folded already.
+            (Domain::Task, "sidebar") => format!(
+                "Have the column down the left of the ledger standing {}. What moves it is at the column's own foot — under the rows, outside what scrolls — a control in a frame of its own, drawn as an arrow run into the window's edge. Press it where the column is at the other width, and leave it where it is already at this one: the same press is what moves it back.",
+                sidebar_width(with)?.wanted,
+            ),
             // The card carried across the board and let go in a column, which is how work is filed
             // where it is standing. The column is named by the value on its heading — a word the reader
             // gave — and the axis beside it says which cut of the board the operator is looking at, so a
@@ -3188,6 +3207,14 @@ impl Instructor {
                     ),
                 }
             }
+            // Which width the column is standing at. The marks are named as well as the words,
+            // because the reading is that folding took the one and not the other: a column that had
+            // dropped its marks with its names would be a column of empty rows, and an eye told only
+            // to look for the absence of words would pass it.
+            (Domain::Task, "sidebar-drawn") => format!(
+                "Confirm the column down the left of the ledger is standing {}",
+                sidebar_width(with)?.drawn,
+            ),
             // And what the press landed on. The view is named again rather than left to the step
             // before it: a shot of the wrong listing and a shot of the right one both hold rows, and
             // the line has to say which listing the eye is standing in front of.
@@ -4587,6 +4614,36 @@ fn cover(with: &Args) -> Result<&'static str, String> {
         Some("all") => Ok("lying over the panes with none of the work showing beside it — the column has taken the whole width the panes were drawn in, from the column at the other edge of the face right out to this one, and no part of a pane is anywhere in view."),
         Some(other) => Err(format!("`cover` does not know `{other}` — it is part or all")),
         None => Err("arg `cover` must say whether any of the panes is left showing beside the column".to_string()),
+    }
+}
+
+/// The two widths the ledger's own column is drawn at, said twice over: what an operator is to leave
+/// the column standing at, and what an eye is to find on the shot.
+///
+/// They are told apart by the names, because the names are the only thing folding takes. The marks
+/// and the icons are drawn at both widths, so a line written on those would read the same at either
+/// one — and the words beside them are the rows' own, which is what keeps this readable in whichever
+/// language the app was started in: a project's name is the reader's, and a smart view's row is
+/// pointed at by where it stands rather than by what it says (`view_row`).
+struct SidebarWidth {
+    /// Written to fit after "Have the column standing".
+    wanted: &'static str,
+    /// Written to fit after "Confirm the column down the left of the ledger is standing".
+    drawn: &'static str,
+}
+
+fn sidebar_width(with: &Args) -> Result<SidebarWidth, String> {
+    match with.get("names").and_then(|v| v.as_str()) {
+        Some("shown") => Ok(SidebarWidth {
+            wanted: "with its names, each row's words beside its mark",
+            drawn: "at its wide width: every row's words beside its mark, and a heading over each group of rows.",
+        }),
+        Some("hidden") => Ok(SidebarWidth {
+            wanted: "with its names away, the marks alone in a column about one mark wide",
+            drawn: "at its narrow width, about one mark wide: one mark to a row — a project's colour with a letter on it, or the image it was given, and a drawn icon for every other row — with no words beside any of them and no heading over any group.",
+        }),
+        Some(other) => Err(format!("`names` does not know `{other}` — it is shown or hidden")),
+        None => Err("arg `names` must say which of the column's two widths the step is about".to_string()),
     }
 }
 

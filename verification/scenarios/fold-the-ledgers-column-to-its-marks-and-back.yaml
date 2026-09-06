@@ -1,0 +1,100 @@
+# The column down the left of the ledger has two widths and no third: drawn with its names, or folded
+# to the marks alone. This is the road that walks between them.
+#
+# ── Why there is no width that takes it away ─────────────────────────────────────────────────────
+# A column that could be put out of sight needs a way back, and the way back cannot be in the column.
+# It goes to the bar over the window instead — which is over both of the app's faces, and says
+# nothing about which of the two it moves. Folded to its marks the column is still there, so the
+# control stays in it, and this road reads it at both widths for that reason: a control that folded
+# away with the names would leave a reader with a column they could not bring back.
+#
+# ── Why the marks are read as well as the absence of the words ───────────────────────────────────
+# What folding is for is the width, and what it must not cost is knowing which row is which. A build
+# that dropped the marks with the names would pass a reading that only asked for the words to be
+# gone, and would leave a column of empty rows. So the folded reading names what is still drawn.
+#
+# ── Why the width it ships with is read first ────────────────────────────────────────────────────
+# The reading after the press means nothing alone: a build that came up folded would pass it. The
+# pair is the road, and each half is read the same way so nothing in between is a difference in how
+# it was measured.
+#
+# ── Why a smart view is opened in the middle ─────────────────────────────────────────────────────
+# The fold is the device's and not the screen's — it is meant to outlive going somewhere else — and
+# a road that pressed the control and read the shot after it would pass a build that held the width
+# only until the next move. The smart view is the move that can be made folded: its row is pointed at
+# by what it stands for rather than by a word, so the press is walkable with the names away, which is
+# exactly the state being tested.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A width is a thing on a screen, and the binary is handed a filter.
+id: fold-the-ledgers-column-to-its-marks-and-back
+title: The ledger's own column folds to its marks and comes back from a control inside it, and the fold outlives going somewhere else
+description: >
+  Raise two projects and look at the ledger. The column down its left side is drawn with the names of
+  everything in it. Press the control at its foot and it narrows to one mark a row — the colour and
+  the letter that stand for each project, and an icon for every other row — with no words and no
+  headings. Open a smart view and it is still folded. Press the same control and the names are back.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+
+steps_gui:
+  # The width it ships with, read before anything is pressed. Nothing has been kept for this device
+  # yet, so this is the column as a first run draws it.
+  - type: assert
+    domain: task
+    op: sidebar-drawn
+    with:
+      names: shown
+
+  - type: action
+    domain: task
+    op: sidebar
+    with:
+      names: hidden
+
+  - type: assert
+    domain: task
+    op: sidebar-drawn
+    with:
+      names: hidden
+
+  # Somewhere else, and back to reading the column. The move is what says the fold is the device's
+  # rather than the screen's.
+  - type: action
+    domain: task
+    op: open-view
+    with:
+      view: inbox
+
+  - type: assert
+    domain: task
+    op: sidebar-drawn
+    with:
+      names: hidden
+
+  # And the way back, pressed on the folded column itself. This is the half the state that took the
+  # column away could not have: there would be nothing here to press.
+  - type: action
+    domain: task
+    op: sidebar
+    with:
+      names: shown
+
+  - type: assert
+    domain: task
+    op: sidebar-drawn
+    with:
+      names: shown

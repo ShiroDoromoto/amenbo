@@ -1463,6 +1463,15 @@ A terminal is only ever asked. It answers the same question about days when a re
 is what `task status-bucket` reads — but there is no row standing in front of it to carry a colour, and
 nothing to press through to a listing it has already printed.
 
+Folding that same column to its marks and reading which of its two widths it is standing at (`task
+sidebar` / `task sidebar-drawn`) are one road's for a plainer reason than its neighbours': a width is a
+thing on a screen, and a terminal has no column to fold. What the pair is for is that there is no third
+state — no width that takes the column away — which is what lets the control that moves it live at the
+column's own foot instead of in the bar over both faces, where it could say nothing about which of the
+two it moved. So both readings are taken at both widths, and the folded one names the marks that are
+still drawn as well as the words that are gone: a build that dropped both would pass a reading that
+only asked for the absence.
+
 Opening the fold that offers the other way in, and reading an app's row behind it (`repo mcp-open` /
 `mcp-app` / `mcp-road` / `mcp-road-shut`), are one road's for a reason of their own: what the fold is for
 is the reader whose AI cannot open a folder at all, and a terminal standing in that folder is the reader

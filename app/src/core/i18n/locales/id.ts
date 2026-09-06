@@ -774,6 +774,7 @@ export const id: Translation = {
       "{url} kini menyajikan {serving}, bukan {agreed} yang ditunjukkan kepada Anda. Daftarkan lagi dan periksa sidik jari yang baru.",
     pty_failed: "Terminal tidak dapat dijalankan: {reason}",
     pty_gone: "Terminal itu sudah tidak terbuka.",
+    pty_paste_failed: "Gambar yang ditempel tidak dapat disimpan: {reason}",
     wake_unknown_agent: "Amenbo tidak tahu cara menjalankan {agent}.",
     wake_no_folder: "Folder itu tidak bisa dibaca: {reason}",
     wake_no_config: "Amenbo tidak menemukan berkasnya sendiri.",

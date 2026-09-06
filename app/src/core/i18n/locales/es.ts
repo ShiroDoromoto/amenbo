@@ -800,6 +800,7 @@ export const es: Translation = {
       "{url} publica ahora {serving}, no la {agreed} que se te mostró. Regístralo otra vez y comprueba la huella nueva.",
     pty_failed: "No se pudo iniciar la terminal: {reason}",
     pty_gone: "Esa terminal ya no está abierta.",
+    pty_paste_failed: "No se pudo guardar la imagen pegada: {reason}",
     wake_unknown_agent: "Amenbo no sabe cómo iniciar {agent}.",
     wake_no_folder: "No se pudo leer esa carpeta: {reason}",
     wake_no_config: "Amenbo no pudo encontrar sus propios archivos.",

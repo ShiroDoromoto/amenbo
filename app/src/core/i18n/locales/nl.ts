@@ -772,6 +772,7 @@ export const nl: Translation = {
       "{url} publiceert nu {serving}, niet de {agreed} die je te zien kreeg. Registreer haar opnieuw en controleer de nieuwe vingerafdruk.",
     pty_failed: "De terminal kon niet worden gestart: {reason}",
     pty_gone: "Die terminal is niet meer open.",
+    pty_paste_failed: "De geplakte afbeelding kon niet worden opgeslagen: {reason}",
     wake_unknown_agent: "Amenbo weet niet hoe {agent} gestart moet worden.",
     wake_no_folder: "Die map kon niet gelezen worden: {reason}",
     wake_no_config: "Amenbo kon zijn eigen bestanden niet vinden.",

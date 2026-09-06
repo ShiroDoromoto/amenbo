@@ -771,6 +771,7 @@ export const zhHant: Translation = {
       "{url} 現在公布的是 {serving}，而不是給你看過的 {agreed}。請重新登錄，並核對新的指紋。",
     pty_failed: "無法啟動終端機：{reason}",
     pty_gone: "該終端機已經關閉。",
+    pty_paste_failed: "無法儲存貼上的圖片：{reason}",
     wake_unknown_agent: "Amenbo 不知道如何啟動 {agent}。",
     wake_no_folder: "讀不到那個資料夾：{reason}",
     wake_no_config: "Amenbo 找不到自己的檔案。",

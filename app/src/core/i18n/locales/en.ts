@@ -916,6 +916,7 @@ const err: Partial<Record<ErrorCode, string>> = {
     "{url} now publishes {serving}, not the {agreed} you were shown. Register it again and check the new fingerprint.",
   pty_failed: "The terminal could not be started: {reason}",
   pty_gone: "That terminal is no longer open.",
+  pty_paste_failed: "The pasted image could not be saved: {reason}",
   wake_unknown_agent: "Amenbo does not know how to start {agent}.",
   wake_no_folder: "That folder could not be read: {reason}",
   wake_no_config: "Amenbo could not find its own files.",

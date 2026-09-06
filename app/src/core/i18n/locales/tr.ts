@@ -772,6 +772,7 @@ export const tr: Translation = {
       "{url} artık size gösterilen {agreed} yerine {serving} sunuyor. Yeniden kaydedin ve yeni parmak izini karşılaştırın.",
     pty_failed: "Terminal başlatılamadı: {reason}",
     pty_gone: "O terminal artık açık değil.",
+    pty_paste_failed: "Yapıştırılan görsel kaydedilemedi: {reason}",
     wake_unknown_agent: "Amenbo {agent} uygulamasını nasıl başlatacağını bilmiyor.",
     wake_no_folder: "O klasör okunamadı: {reason}",
     wake_no_config: "Amenbo kendi dosyalarını bulamadı.",

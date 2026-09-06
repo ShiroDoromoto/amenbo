@@ -809,6 +809,7 @@ export const uk: Translation = {
       "{url} тепер видає {serving}, а не показаний вам {agreed}. Зареєструйте його заново й звірте новий відбиток.",
     pty_failed: "Не вдалося запустити термінал: {reason}",
     pty_gone: "Цей термінал більше не відкритий.",
+    pty_paste_failed: "Не вдалося зберегти вставлене зображення: {reason}",
     wake_unknown_agent: "Amenbo не знає, як запустити {agent}.",
     wake_no_folder: "Не вдалося прочитати цю теку: {reason}",
     wake_no_config: "Amenbo не знайшов власні файли.",

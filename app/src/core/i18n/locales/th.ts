@@ -774,6 +774,7 @@ export const th: Translation = {
       "{url} ตอนนี้ให้ {serving} ไม่ใช่ {agreed} ที่เคยแสดงให้คุณดู ให้ลงทะเบียนใหม่และตรวจลายนิ้วมืออันใหม่",
     pty_failed: "ไม่สามารถเริ่มเทอร์มินัลได้: {reason}",
     pty_gone: "เทอร์มินัลนี้ไม่ได้เปิดอยู่แล้ว",
+    pty_paste_failed: "ไม่สามารถบันทึกรูปภาพที่วางได้: {reason}",
     wake_unknown_agent: "Amenbo ไม่รู้วิธีเริ่ม {agent}",
     wake_no_folder: "อ่านโฟลเดอร์นั้นไม่ได้: {reason}",
     wake_no_config: "Amenbo หาไฟล์ของตัวเองไม่พบ",

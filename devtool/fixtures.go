@@ -207,7 +207,7 @@ func validatorBinary(chosen string) (string, error) {
 			return c, nil
 		}
 	}
-	return "", fmt.Errorf("no amenbo build to validate with (%s) — build one with 'cargo build -p amenbo-cli', or pass --amenbo",
+	return "", fmt.Errorf("no amenbo build to validate with (%s) — build one with 'make dev-build', or pass --amenbo",
 		strings.Join(candidates, ", "))
 }
 

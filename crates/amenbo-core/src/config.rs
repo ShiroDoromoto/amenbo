@@ -162,14 +162,26 @@ impl Paths {
     /// unreleased binary migrate anything (`AMB-D-378`).
     pub const PRODUCTION_APP_NAME: &'static str = "amenbo";
 
-    /// The app-data "app name". Substitutable **at build time** via `AMENBO_APP_NAME`, which is how
-    /// dev and prod are kept apart. The default is production
-    /// ([`PRODUCTION_APP_NAME`](Self::PRODUCTION_APP_NAME) — `~/Library/Application Support/work.amenbo.amenbo`);
-    /// a dev build sets `AMENBO_APP_NAME=amenbo-dev` and gets its own directory
-    /// (`…/work.amenbo.amenbo-dev`), so its identity and store never collide with production data.
+    /// The app-data "app name", named **at build time** by `AMENBO_APP_NAME` — which is how dev and
+    /// prod are kept apart. Production passes
+    /// [`PRODUCTION_APP_NAME`](Self::PRODUCTION_APP_NAME) (`~/Library/Application Support/work.amenbo.amenbo`)
+    /// and a dev build passes `amenbo-dev`, so its identity and store never collide with production
+    /// data.
+    ///
+    /// **There is no default** (`AMB-D-849`). A build that says nothing used to be handed production,
+    /// so a build entrance that forgot to pass anything wrote to the real store instead of failing:
+    /// on 2026-07-23 opening a locally built bundle once carried a production store from format v4 to
+    /// v7 (`crate::build_stamp`). Every entrance now names the channel it is building — the Makefile,
+    /// the release and preview workflows, and the container scripts — and one that forgets stops the
+    /// compiler here rather than at a user's data.
     pub const APP_NAME: &'static str = match option_env!("AMENBO_APP_NAME") {
-        Some(name) => name,
-        None => Self::PRODUCTION_APP_NAME,
+        Some(name) => {
+            // An entrance that exports the variable set to nothing has named no channel either, and
+            // it is the shape a shell reaches by accident (`-e AMENBO_APP_NAME="$UNSET"`).
+            assert!(!name.is_empty(), "AMENBO_APP_NAME is empty: every build names the app-data channel it addresses (AMB-D-849)");
+            name
+        }
+        None => panic!("AMENBO_APP_NAME is not set: every build names the app-data channel it addresses (AMB-D-849)"),
     };
 
     /// The app-data "app name" of the **development** channel — the shared dev build's own directory

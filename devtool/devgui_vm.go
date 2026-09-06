@@ -545,7 +545,7 @@ func vmSendCLI(ip, id, worktree string, noBuild bool) (string, error) {
 		return "", fmt.Errorf("no worktree for task %s (%s missing) — cut one with the `worktree` plugin first", id, worktree)
 	}
 	if !noBuild {
-		if _, err := run(worktree, "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
+		if _, err := runEnv(worktree, buildEnv(), "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
 			return "", fmt.Errorf("build the task's CLI: %w", err)
 		}
 	}

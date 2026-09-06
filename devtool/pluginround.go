@@ -197,7 +197,7 @@ func roundCLI(named string) (string, error) {
 		return named, nil
 	}
 	root := mustTreeRoot()
-	if _, err := run(root, "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
+	if _, err := runEnv(root, buildEnv(), "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {
 		return "", fmt.Errorf("build this checkout's CLI: %w", err)
 	}
 	bin := filepath.Join(root, "target", "debug", "amenbo")

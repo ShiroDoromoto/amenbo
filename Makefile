@@ -471,10 +471,14 @@ dist-gui-linux:
 	@# TAURI_SIGNING_* (release CI secret) flows through so the AppImage stage emits the signed
 	@# updater artifact (.AppImage.sig); unset for a local build, where the AppImage stays
 	@# unsigned (no updater artifact).
+	@# AMENBO_BUILD is the release stamp, and it goes over the same way: set in _release.yml's
+	@# environment and nowhere else, so a local build hands the container nothing and the AppImage
+	@# comes out unstamped, which is what a local build is. Left out, the stamp died at the
+	@# `docker run` boundary and the AppImage shipped unstamped from v2.0.0 on.
 	docker run --rm --platform linux/$(LINUX_GUI_ARCH) \
 	  -e VERSION="$(VERSION)" -e TARGET_ARCH="$(LINUX_GUI_ARCH)" -e XDG_CACHE_HOME=/cache \
 	  -e TAURI_SIGNING_PRIVATE_KEY -e TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
-	  -e AMENBO_APP_NAME -e AMENBO_LATEST_JSON_URL \
+	  -e AMENBO_APP_NAME -e AMENBO_LATEST_JSON_URL -e AMENBO_BUILD \
 	  -v "amenbo-tauri-cache-$(LINUX_GUI_ARCH):/cache" \
 	  -v "$(CURDIR):/src:ro" \
 	  -v "$(CURDIR)/$(DIST_DIR):/out" \
@@ -494,10 +498,14 @@ dist-cli-linux:
 	docker build --platform linux/$(LINUX_CLI_ARCH) -f scripts/docker/Dockerfile.linux-gui -t $(LINUX_CLI_IMAGE) scripts/docker/
 	@# Named volumes carry the crates.io cache and the target dir across runs — shared with lint-linux,
 	@# which compiles the same workspace in the same image (in CI they are fresh every time).
+	@# AMENBO_BUILD is the release stamp: set in _release.yml's environment and nowhere else, so a
+	@# local build and the preview channel below hand the container nothing and the CLI comes out
+	@# unstamped, which is what both of them are. Left out, the stamp died at the `docker run`
+	@# boundary and the Linux CLI shipped unstamped from v3.0.0 on.
 	docker run --rm --platform linux/$(LINUX_CLI_ARCH) \
 	  -e OUT_NAME=$(notdir $(CLI_LINUX_OUT)) \
 	  -e DEV_APP_NAME="$(CLI_LINUX_APP_NAME)" \
-	  -e AMENBO_APP_NAME -e AMENBO_LATEST_JSON_URL \
+	  -e AMENBO_APP_NAME -e AMENBO_LATEST_JSON_URL -e AMENBO_BUILD \
 	  -v "amenbo-lint-registry-$(LINUX_CLI_ARCH):/root/.cargo/registry" \
 	  -v "amenbo-lint-target-$(LINUX_CLI_ARCH):/build/target" \
 	  -v "$(CURDIR):/src:ro" \

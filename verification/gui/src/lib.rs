@@ -17,9 +17,9 @@
 //! An assert step is judged from that shot by asking the same tool to read it (macOS **Vision**
 //! behind it): the harness derives the text the step expects on screen and matches it against the
 //! reading, passing when it is present (or absent, for a `present: false` assert). What a screen
-//! draws **cut** — a row in a column narrower than the name it carries — is read off the window's
-//! accessibility tree instead, where the whole name stands, by asking the same tool to list what is
-//! on that window ([`reads_the_tree`]). What no screen draws at all is put to the store, through the
+//! draws **cut** — a name in a space narrower than itself — is read off the window's accessibility
+//! tree instead, where the whole name stands, by asking the same tool to list what is on that
+//! window ([`reads_the_tree`]). What no screen draws at all is put to the store, through the
 //! CLI the bundle ships — a short, closed table ([`reads_the_store`]). Both keep the shot: the
 //! reading moves, the evidence does not. An assert none of them can settle — a structured
 //! field value — is left as a `Review`: its shot is kept for an AI/human eye, the run is not failed
@@ -4627,20 +4627,28 @@ pub fn step_reads_the_store(step: &Step) -> bool {
 
 /// Whether an assert is read off the window's accessibility tree rather than off the shot.
 ///
-/// What is on this table is a name a screen **draws and elides**. The tree of a bound folder stands
-/// in a rail a person drags, and a row narrower than the name it carries is drawn cut, with the tail
-/// replaced by one glyph — `grafting.md` comes out `grafting…`. A reader returns what is drawn, so
-/// the step goes red against a build doing exactly what a file tree should.
+/// What is on this table is a name a screen **draws and elides**. A name is drawn in the space the
+/// element carrying it stands in, and a space narrower than the name is drawn cut, with the tail
+/// replaced by one glyph. Two of them are known:
 ///
-/// The eliding is the drawing and not the row: the tree carries the whole name. So the reading moves
-/// and nothing else does — the same window, the same expectation, the same match — and the shot is
-/// still taken and still filed, because the picture is what an eye reads the step back from.
+/// - `files listed` — the tree of a bound folder stands in a rail a person drags, and a row in a
+///   rail left narrow draws `grafting.md` as `grafting…`.
+/// - `terminal label` — the row above a pane is only as wide as the pane, so a second pane beside
+///   the first draws `SCENARIO named by hand` as `SCENARIO named by h.`.
+///
+/// A reader returns what is drawn, so either step goes red against a build doing exactly what it
+/// should — and widening the rail, or closing the other pane, before every run is not a road
+/// anybody walks.
+///
+/// The eliding is the drawing and not the element: the tree carries the whole name. So the reading
+/// moves and nothing else does — the same window, the same expectation, the same match — and the
+/// shot is still taken and still filed, because the picture is what an eye reads the step back from.
 ///
 /// The table is closed and stays short, for the reason [`reads_the_store`]'s is. An assert whose
 /// words a shot can be read for stays the shot's: a build asked what it drew is a build checked
 /// against itself, where a reading is the screen checked against the road.
 pub fn reads_the_tree(domain: Domain, op: &str) -> bool {
-    matches!((domain, op), (Domain::Files, "listed"))
+    matches!((domain, op), (Domain::Files, "listed") | (Domain::Terminal, "label"))
 }
 
 /// What one step left behind: its instruction, the screenshot proving the operator stood at it,
@@ -5108,7 +5116,7 @@ steps_gui:
         unreachable!("no step on this road is closed by reading the store")
     }
 
-    /// The same, for [`reads_the_tree`]: a road with no row on the file face is never to reach for
+    /// The same, for [`reads_the_tree`]: a road with no step on that table is never to reach for
     /// the accessibility tree, and a walk that did would be reading a screen off the wrong side.
     fn nothing_on_the_tree(_: Option<&str>) -> Result<Reading, String> {
         unreachable!("no step on this road is read off the accessibility tree")
@@ -9068,13 +9076,15 @@ steps_gui:
     with: { name: grafting.md, section: tree }
 "#;
 
-    /// The table is what decides where an assert is read, and it holds only what a column can draw
-    /// cut. Everything else stays the shot's — a name read off the tree where a picture would answer
-    /// is the build saying what it meant to draw.
+    /// The table is what decides where an assert is read, and it holds only a name the space around
+    /// it can draw cut. Everything else stays the shot's — a name read off the tree where a picture
+    /// would answer is the build saying what it meant to draw.
     #[test]
-    fn only_a_row_a_column_can_elide_is_read_off_the_tree() {
+    fn only_a_name_its_space_can_elide_is_read_off_the_tree() {
         assert!(reads_the_tree(Domain::Files, "listed"));
+        assert!(reads_the_tree(Domain::Terminal, "label"), "a row is as wide as the pane under it");
         assert!(!reads_the_tree(Domain::Files, "reading"), "what an open file draws is the shot's");
+        assert!(!reads_the_tree(Domain::Terminal, "pane"), "a session is drawn out in the pane body");
         assert!(!reads_the_tree(Domain::Task, "listed"), "a card is drawn with room for its title");
     }
 

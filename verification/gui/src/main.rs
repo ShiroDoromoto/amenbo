@@ -7,8 +7,8 @@
 //! step lands in an evidence directory, and each assert OCR can judge is decided from that shot.
 //!
 //! Four things can close an assert, and which one is on it follows from what the assert asks about.
-//! Words on the screen are OCR's. A name the screen draws **cut** — a row in a column narrower than
-//! the name it carries — is read off the window's own accessibility tree, where it stands whole;
+//! Words on the screen are OCR's. A name the screen draws **cut** — one standing in a space
+//! narrower than itself — is read off the window's own accessibility tree, where it stands whole;
 //! what is on that table is [`amenbo_verify_gui::reads_the_tree`]. State **no screen draws** — the
 //! original image an ingest kept — is read back out of the store the app is running against, through
 //! the CLI the same bundle ships; what is on that table is

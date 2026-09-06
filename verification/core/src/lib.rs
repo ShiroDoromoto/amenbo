@@ -416,6 +416,17 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A terminal has no standing selection to press — it writes the selection out
     // as a `--filter` each time it asks, which is what `listed` walks.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-view", required: &["view"], refs: &[], strings: &["view"], binds: false },
+    // The column down the left of the ledger, at one of its two widths: drawn with its names, or
+    // folded to the marks alone. There is no width that takes it away, which is what lets the control
+    // live at the column's own foot rather than in the bar over both faces.
+    //
+    // `names` is the width to end at rather than the press to make, for the reason `files show-as`
+    // is: the one control is a toggle, so a road saying "press it" would mean the other width on a
+    // face already standing where it wanted.
+    //
+    // A screen road alone. What a column is drawn at is a thing on a screen, and a terminal has no
+    // column to fold.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "sidebar", required: &["names"], refs: &[], strings: &["names"], binds: false },
     // Going from a task to the pane its work is happening in — the road out of the ledger, and the one
     // the ledger has. The pane is named rather than pointed at: the row carries the
     // pane's own name, so an operator pressing it can see it is the pane the road meant before the
@@ -1731,6 +1742,12 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. Being told without asking is the whole subject, and a terminal is only ever
     // asked; what it answers when asked is `status-bucket`'s.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "view-warns", required: &["view", "step", "count"], refs: &[], strings: &["view", "step"], binds: false },
+    // Which of the two widths that column is standing at. `names` is what tells them apart because
+    // it is the only thing folding takes: the marks and the icons are drawn at both widths, and the
+    // words beside them and the headings over them at one.
+    //
+    // A screen road alone, for the action's reason.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "sidebar-drawn", required: &["names"], refs: &[], strings: &["names"], binds: false },
     // And what that view holds once it is opened. Apart from `listed`, whose filter the road writes
     // out: a smart view carries a selection of its own, so what is under test is that selection
     // agreeing with the warning the row gave — never a filter the road could have spelled to match.

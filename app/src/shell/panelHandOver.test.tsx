@@ -113,6 +113,22 @@ async function focusPane(frame: string) {
   });
 }
 
+/** Go to a page by its digit — the one control that moves what is drawn without moving which pane is
+ *  being worked in, which is the whole of how the focused pane comes to be off the screen. */
+async function goPage(n: number) {
+  const digit = [...container.querySelectorAll<HTMLElement>(".termface__page")]
+    .find((one) => one.textContent?.startsWith(String(n)));
+  await act(async () => {
+    digit?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 0));
+  });
+}
+
+const shownPage = () => container.querySelector(".termface__page--on")?.textContent ?? null;
+/** Which pane is saying a path just landed in it, or none. */
+const landedPane = () =>
+  container.querySelector(".slot--landed")?.getAttribute("data-hand") ?? null;
+
 beforeEach(() => {
   window.innerWidth = 1600;
   hoisted.handOver = undefined;
@@ -182,5 +198,60 @@ describe("handing a file from the panel to a pane", () => {
     hoisted.running = [];
     await mount();
     expect(hoisted.handOver).toBeUndefined();
+  });
+
+  /** Turning a page moves what is drawn and not which pane is worked in (`../talk/layout`), so the
+   *  pane the menu hands a file to is often on another page. Pasting into one nobody can see is a
+   *  hand-over with nothing to read. */
+  it("brings the pane it handed the path to back on the screen", async () => {
+    // Four panes over two pages, so the pane being worked in can be off the one being shown.
+    hoisted.saved = {
+      count: 2,
+      nextId: 5,
+      project: 1,
+      frames: ["a", "b", "c", "d"].map((one, at) => ({
+        id: String(at + 1), project: 1, folder: `/work/${one}`,
+      })),
+    };
+    hoisted.running = ["a", "b", "c", "d"].map((one, at) => ({
+      session: `s-${one}`,
+      startedAt: `2026-08-25T00:00:0${at}Z`,
+      folder: `/work/${one}`,
+    }));
+    await mount();
+    await goPage(2);
+    await focusPane("3");
+    await goPage(1);
+    expect(shownPage()).toContain("1");
+
+    await act(async () => {
+      hoisted.handOver?.(["/work/a/notes.md"]);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(hoisted.pasted).toEqual([{ session: "s-c", text: "'/work/a/notes.md'" }]);
+    expect(shownPage()).toContain("2");
+    expect(landedPane()).toBe("3");
+  });
+
+  /** The mark is about the moment, so it comes down by the clock. What is left afterwards is the
+   *  ordinary border of the pane being worked in. */
+  it("takes the mark down once the moment is over", async () => {
+    await mount();
+    await focusPane("2");
+    // Real time still runs the awaits above and below; only the face's own clock is ours to move.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await act(async () => {
+        hoisted.handOver?.(["/work/a/notes.md"]);
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      expect(landedPane()).toBe("2");
+      await act(async () => { vi.advanceTimersByTime(2000); });
+      expect(landedPane()).toBeNull();
+      // And the pane is still the one being worked in — the ring was the moment, not the selection.
+      expect(container.querySelector(".slot--focused")?.getAttribute("data-hand")).toBe("2");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

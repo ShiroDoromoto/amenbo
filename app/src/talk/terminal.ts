@@ -37,12 +37,12 @@ import { pathsOnRow, refFromUrl, refsOnRow, type Cell, type Rows } from "./refLi
 // The events the host sends this pane. Output is a chunk; closed is the program in the terminal
 // having exited, which arrives once and is the last thing that session says.
 const OUTPUT_EVENT = "pty://output";
-const CLOSED_EVENT = "pty://closed";
+export const CLOSED_EVENT = "pty://closed";
 
 // What the agent in this pane says about its session, as the host reads it out of the drop box it was
 // given (`AMB-D-749`). It is the one thing crossing this seam that has been read rather than carried:
 // the surface layer is a vocabulary, and a verb of it is exactly as good as its word.
-const SAID_EVENT = "session://said";
+export const SAID_EVENT = "session://said";
 
 // The opening instruction was left in this pane's input box unsent (`crate::pty`). It arrives once,
 // only for the ending a person can finish, and it carries the session's id and nothing else.

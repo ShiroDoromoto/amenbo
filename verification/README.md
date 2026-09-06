@@ -479,6 +479,15 @@ pressed nothing — the same failure a road cannot see as a press on a label. `f
 the window` at the end of those lines, and `click-named` and its two siblings refuse them instead of
 aiming at them: scroll it into view first, then press it by name.
 
+**And what the window shows is not always what takes the press.** Another process can hold a window
+over one part of the app — a notification left standing is the everyday one — and it takes the press
+whole while the app under it is left with nothing, in front the whole time. Nothing about it is in the
+evidence: what is shot is the window, not the screen over it, so the picture is of an app that
+plainly ignored a press. So the named presses ask the system whose the point is before they aim, and
+refuse one another app answers for, naming that app. The refusal is the road's cue to get that window
+off the point — measured 2026-09-07 in the verification VM, where a notification 260x364 wide had
+been standing over the pane's own row and its two controls, which answered `AXPress` all the while.
+
 **A point is refused on the same ground, against whatever the subcommand knows.** `drag`, `drop-file`
 and `scroll --at` are handed a pid, so each end is held to that window. `click`, `dblclick` and
 `right-click` are not, so theirs is held to the displays instead — a point on none of them is a press

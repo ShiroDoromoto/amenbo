@@ -78,6 +78,12 @@
 // is a screen point like any other: one sent there lands on the desktop, or on whatever app is
 // under it, and comes back 0 for having pressed nothing.
 //
+// Being on the window is not being reachable either. Another process may hold a window over that one
+// point — a notification left standing is the everyday one — and it takes the press whole while the
+// app under it is left with nothing, in front the whole time and none the wiser. A shot of the window
+// cannot show it, since the window is what is shot. So the named presses ask the system whose the
+// point is before they aim, and refuse one that is not the app's.
+//
 // The points a caller works out are refused on the same ground, against whatever the subcommand
 // knows. `drag`, `drop-file` and `scroll --at` were handed a pid, so their points are held to that
 // window; `click`, `dblclick` and `right-click` were not, so theirs are held to the displays — a
@@ -724,6 +730,45 @@ func menuItems(under el: AXUIElement, depth: Int = 0) -> [String] {
     return found
 }
 
+/// Whose the point is, once everything on the screen is stacked over it.
+///
+/// **The window being in front is not the whole answer to where a press will land.** A window
+/// belonging to another process can stand over the app — a notification left up, a panel, another
+/// app's window — and it takes the press whole, leaving nothing behind in the app under it. None of
+/// that is in a shot: what is shot here is the window itself rather than the screen over it, so the
+/// picture the road reads is of an app that never saw the press, and the reading after it comes out
+/// red for a reason nobody looking at the evidence can see. (Measured 2026-09-07 in the verification
+/// VM: a `UserNotificationCenter` window 260x364 at 830,221, drawn over the app and absent from
+/// every shot, swallowed every press inside it — the pane row's own menu and the control beside it
+/// among them, while the same elements answered `AXPress`.)
+///
+/// **The system is asked, not the window list.** The list says which windows lie over a point and
+/// cannot say which of them takes a press: the Dock and Notification Center each keep a window the
+/// size of the display up at all times and let presses through. What is asked here is the one
+/// question the answer turns on — which element a press at that point reaches — and whose process it
+/// belongs to.
+///
+/// A point nothing answers for is refused on the same ground as a point another app owns. The tool
+/// reports a press as made; a point it cannot say the owner of is one it cannot report that about.
+///
+/// This is asked of the points *this file* works out, from a name and the tree. A point the caller
+/// worked out arrives through `click` / `dblclick` / `right-click`, which take no pid — what is in
+/// front is that caller's to know, and there is no app here to hold the point against.
+func mustBeTheAppsPoint(_ p: CGPoint, of pid: Int, _ what: String) {
+    var el: AXUIElement?
+    let err = AXUIElementCopyElementAtPosition(
+        AXUIElementCreateSystemWide(), Float(p.x), Float(p.y), &el)
+    let at = "\(Int(p.x)),\(Int(p.y))"
+    guard err == .success, let el else {
+        fail("nothing on this screen answers for \(what), at \(at) — so a press there cannot be said to have reached pid \(pid). Something is over the app that does not name itself: bring the window forward again, and see what is standing at that point")
+    }
+    var owner: pid_t = 0
+    AXUIElementGetPid(el, &owner)
+    guard Int(owner) != pid else { return }
+    let name = NSRunningApplication(processIdentifier: owner)?.localizedName ?? "process \(owner)"
+    fail("\(what) is under \(name) at \(at) — a press there goes to it and never reaches pid \(pid), which is why the app looks as though it ignored one. Get \(name) off that point — a notification left standing is the usual one — and aim again")
+}
+
 /// Click where that name is on screen.
 ///
 /// The click is a real one, at where the element stands now: what the name saves is the arithmetic,
@@ -732,8 +777,10 @@ func menuItems(under el: AXUIElement, depth: Int = 0) -> [String] {
 ///
 /// Which is also why the app is brought to the front first, rather than left to the caller: a real
 /// press lands on whatever is frontmost at that point, so anything that took the front — a sleeping
-/// display, a permission dialog — swallows the click and the run still exits 0. A shot says so by
-/// failing; a click cannot, so it is not asked to.
+/// display, a permission dialog — swallows the click. Being in front is not enough on its own, so the
+/// point is held to the app once more after it is worked out ([`mustBeTheAppsPoint`]): a window over
+/// that one point takes the press without taking the front, and a click that reported itself made
+/// would be the one silence this tool refuses everywhere else.
 func clickNamed(pid: Int, name: String, role: String?, window: String?, flags: CGEventFlags = []) {
     let p = pointOf(pid: pid, name: name, role: role, window: window)
     click(x: p.x, y: p.y, flags: flags)
@@ -814,6 +861,7 @@ func pointOf(pid: Int, name: String, role: String?, window: String?) -> CGPoint 
     }
     let p = CGPoint(x: overlap.midX, y: overlap.midY)
     mustBeOnTheWindow(p, frame, oneLine(first.name))
+    mustBeTheAppsPoint(p, of: pid, oneLine(first.name))
     return p
 }
 

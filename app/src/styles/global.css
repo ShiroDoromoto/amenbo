@@ -429,25 +429,6 @@ input[type="color"] {
 }
 .slot__more:hover { color: var(--c-text); }
 
-/* The question that control asks when the session in the pane is still holding something
-   (`../shell/PaneDropAsk`). Its own block rather than a share of the modals in `components.css`: this
-   one belongs to the terminal face, and a modal borrowing another feature's class names cannot be
-   restyled without touching that feature. The backdrop is the one exception — it is `.modal__overlay`
-   for every modal in the app, which is what `outsideClose` reads. */
-.panedrop__modal { width: min(460px, 100%); background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
-.panedrop__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); margin-bottom: var(--s-3); }
-.panedrop__holding { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-2); }
-/* The refs, one to a line. What is at stake is read one item at a time, and a run-on list of them is
-   the shape a reader skips. */
-.panedrop__refs { margin: 0 0 var(--s-4); padding-left: var(--s-5); font-variant-numeric: tabular-nums; }
-.panedrop__failed { color: var(--c-stop); font-size: var(--fs-xs); margin: 0 0 var(--s-3); }
-.panedrop__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
-.panedrop__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-edge); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); cursor: pointer; }
-/* Handing the work back is the one of the three that loses nothing, so it is the one drawn as the
-   answer. The other two are not talked out of — leaving a reservation standing is a thing a person
-   has reasons for. */
-.panedrop__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
-.panedrop__action:disabled { opacity: 0.5; cursor: default; }
 .slot--focused .termface__pane { border-color: var(--c-accent); }
 /* Where a path just landed. The pane the row's menu hands a file to is the one being worked in, which
    is not where the reader's eye is — they were in the panel, and the page may have turned since they

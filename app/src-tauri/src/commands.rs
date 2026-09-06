@@ -3888,6 +3888,12 @@ pub fn tick_banner_later() -> Result<(), CmdError> {
 /// **The window is the only reader of that area**, and this command is the door. Nothing in core asks
 /// it anything: a reservation, a `ready` and a `task list` answer the same on a machine that has never
 /// opened this window.
+///
+/// **What comes back is for a label, and for nothing that writes** (`AMB-D-855`). A move made outside
+/// a pane leaves no row, so the newest row the area still has about that task answers in its place —
+/// an older one, which may name a task the world has since finished. A screen that moved the ledger on
+/// the strength of this answer would be moving it on a row that has been overtaken; the one reader is
+/// the line above the pane, which says what this session did and claims nothing beyond it.
 #[tauri::command]
 pub fn session_work(session: String) -> Result<SessionWorkDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("session_work");

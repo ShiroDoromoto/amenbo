@@ -2081,59 +2081,14 @@ impl Instructor {
             // because an operator who did not know would have no way to tell an app that lost a pane
             // from one doing exactly as it said.
             //
-            // Which question comes up is the pane's own business and not the road's: a session holding
-            // a reservation is asked about it by name and offered three ways out, and one holding
-            // nothing is asked the plain thing. So `answer` is what a road says about the question it
-            // expects — left out for the plain one, and naming one of the three otherwise.
-            (Domain::Terminal, "remove-pane") => {
-                let press = format!(
-                    "On the pane showing \"{}\", press the cross at the end of its own row — the control beside what is said about that pane, and not the one on any other.",
-                    req(with, "shows")?
-                );
-                match arg_str(with, "answer") {
-                    // Nothing held, so nothing to choose between. The plain question, and yes.
-                    None => format!(
-                        "{press} A question comes up before anything happens: read it, then answer it yes. The terminal in that pane ends, the pane goes, and the page closes up behind it."
-                    ),
-                    Some(answer) => {
-                        // The reading is half the step here, and it is the half the three answers
-                        // exist for: a question that named the wrong pane's work, or named none, is
-                        // the loss it stands in front of. So the task is named before any of them is
-                        // pressed, and a step that forgot to name one would send the operator to read
-                        // a question against nothing.
-                        if !with.contains_key("target") {
-                            return Err(
-                                "action `remove-pane` answering the three-way question has to name the task the question must name — give it a `target`"
-                                    .to_string(),
-                            );
-                        }
-                        let question = format!(
-                            "{press} A question comes up before anything happens, and it names what this pane's session is holding: read it, and confirm what it lists is the ref of the task \"{}\" — the `AMB-T-…` it is drawn by — and no other. Three answers stand under it.",
-                            self.target_label(with)
-                        );
-                        // Each is said by what it does rather than by what it reads, the way
-                        // `show-face`'s presses are: the words are the interface's own and the run's
-                        // language is whatever the machine is set to. Where they stand is said too,
-                        // so an operator has two ways to find the one they were sent to.
-                        match answer {
-                            "hand-back" => format!(
-                                "{question} Press the first of them — the one that hands the work back before going. The task named goes back to waiting for somebody to take it, the terminal in that pane ends, the pane goes, and the page closes up behind it."
-                            ),
-                            "leave" => format!(
-                                "{question} Press the second — the one that goes and leaves the work where it is. Nothing on the ledger is moved: the terminal in that pane ends, the pane goes, the page closes up behind it, and the task named is still held."
-                            ),
-                            "cancel" => format!(
-                                "{question} Press the third — the one that stays. Nothing happens at all: the question goes, the pane is still there with what was on it, and the task named is still held."
-                            ),
-                            other => {
-                                return Err(format!(
-                                    "action `remove-pane` does not know the answer `{other}` — it is hand-back, leave or cancel"
-                                ))
-                            }
-                        }
-                    }
-                }
-            }
+            // **One question, whatever the session is holding.** The three-way that
+            // named a pane's reservations is gone: what the volatile area says a pane reserved is a
+            // label and not a fact the ledger may be moved on, so the plain confirmation is the whole
+            // of what stands here.
+            (Domain::Terminal, "remove-pane") => format!(
+                "On the pane showing \"{}\", press the cross at the end of its own row — the control beside what is said about that pane, and not the one on any other. A question comes up before anything happens: read it, then answer it yes. The terminal in that pane ends, the pane goes, and the page closes up behind it.",
+                req(with, "shows")?
+            ),
             // Moving the whole face to another project. The row is named by the project's own name,
             // and the step says where the press leaves the screen rather than what the press looks
             // like: the rail carries two lists, the projects and then the panes of the one being
@@ -5775,76 +5730,26 @@ steps_gui:
         assert!(err.contains("does not know the position `sideways`"), "got: {err}");
     }
 
-    /// The way out of a pane asks one of two questions, and which one is the pane's business: a
-    /// session holding a reservation is asked about it by name and offered three ways out, and one
-    /// holding nothing is asked the plain thing. So the plain instruction has to survive `answer`
-    /// being added, each of the three has to say a different outcome, and the two ways of writing
-    /// the step wrong — an answer nobody offers, and a three-way answer with nothing named — have to
-    /// be turned away rather than rendered into a line an operator could not act on.
+    /// The way out of a pane asks one question and only one, whatever its session is holding.
+    /// What has to survive is that the step still says what the press costs — the
+    /// terminal ends and the place does not come back — because an operator who was not told has no
+    /// way to tell an app that lost a pane from one doing exactly as it said.
     #[test]
-    fn the_way_out_of_a_pane_is_answered_by_name_and_reads_what_it_is_leaving() {
+    fn the_way_out_of_a_pane_says_what_the_press_costs() {
         let s = load(r#"
 id: x
 title: y
 steps_gui:
   - type: action
-    domain: task
-    op: create
-    with: { title: Re-line the quench tank }
-    as: tank
-  - type: action
     domain: terminal
     op: remove-pane
     with: { shows: SCENARIO the pane }
-  - type: action
-    domain: terminal
-    op: remove-pane
-    with: { shows: SCENARIO the pane, target: tank, answer: hand-back }
-  - type: action
-    domain: terminal
-    op: remove-pane
-    with: { shows: SCENARIO the pane, target: tank, answer: leave }
-  - type: action
-    domain: terminal
-    op: remove-pane
-    with: { shows: SCENARIO the pane, target: tank, answer: cancel }
-  - type: action
-    domain: terminal
-    op: remove-pane
-    with: { shows: SCENARIO the pane, target: tank, answer: think-about-it }
-  - type: action
-    domain: terminal
-    op: remove-pane
-    with: { shows: SCENARIO the pane, answer: hand-back }
 "#);
         let mut ins = Instructor::new();
-        let steps = s.steps(Driver::Gui);
-        // The binding, so the three answers below have a title to name.
-        ins.render(&steps[0]).expect("the world's task renders");
-
-        // Nothing held: the plain question, and nothing about a reservation on it.
-        let plain = ins.render(&steps[1]).expect("the plain question renders");
-        assert!(plain.contains("answer it yes"), "got: {plain}");
-        assert!(!plain.contains("Three answers"), "got: {plain}");
-
-        // Each of the three names what stands to be lost, and then parts company on the outcome.
-        for (i, step) in steps.iter().enumerate().take(5).skip(2) {
-            let line = ins.render(step).unwrap_or_else(|e| panic!("step {i}: {e}"));
-            assert!(line.contains("Re-line the quench tank"), "step {i} got: {line}");
-            assert!(line.contains("and no other"), "step {i} got: {line}");
-        }
-        let back = ins.render(&steps[2]).expect("renders");
-        assert!(back.contains("hands the work back"), "got: {back}");
-        let leave = ins.render(&steps[3]).expect("renders");
-        assert!(leave.contains("leaves the work where it is"), "got: {leave}");
-        assert!(leave.contains("still held"), "got: {leave}");
-        let stay = ins.render(&steps[4]).expect("renders");
-        assert!(stay.contains("the pane is still there"), "got: {stay}");
-
-        let err = ins.render(&steps[5]).unwrap_err();
-        assert!(err.contains("does not know the answer `think-about-it`"), "got: {err}");
-        let err = ins.render(&steps[6]).unwrap_err();
-        assert!(err.contains("give it a `target`"), "got: {err}");
+        let line = ins.render(&s.steps(Driver::Gui)[0]).expect("the question renders");
+        assert!(line.contains("SCENARIO the pane"), "got: {line}");
+        assert!(line.contains("answer it yes"), "got: {line}");
+        assert!(line.contains("the pane goes"), "got: {line}");
     }
 
     /// The question about which folder a pane works in, on both of its halves. Neither is a reading:

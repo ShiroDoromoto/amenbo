@@ -6,35 +6,12 @@ import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { pushNotice } from "../core/notice";
 import { Menu, MenuItem } from "../components/Menu";
-import { PaneDropAsk } from "./PaneDropAsk";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
-import type { SessionSaidDto, SessionWorkDto } from "../bindings/bindings";
+import type { SessionSaidDto } from "../bindings/bindings";
 import { currentLang, errText, t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
-import { invoke } from "../core/ipc";
-import { setStatus } from "../core/mutations";
 import { Icon } from "../components/Icon";
-
-/**
- * What the volatile area says this session is holding, asked at the moment the way out is pressed
- * (`commands.rs::session_work`).
- *
- * **Read at the press and not kept.** The answer is only worth having about the instant it is acted
- * on — a reservation made in this pane a second ago is exactly the one nobody would think to look
- * for.
- *
- * **Silence is no reservations, and that is the honest answer.** A pane with nothing running in it,
- * a window not running under Tauri, a read that failed: what none of them can say is that something
- * is being left behind, and a question raised on a guess would be a question about nothing
- * (`AMB-D-758` — a move made outside a pane is not written here at all, and may not be guessed back).
- */
-async function heldHere(session: string | null): Promise<readonly number[]> {
-  if (session === null) return [];
-  return invoke<SessionWorkDto>("session_work", { session })
-    .then((work) => work.holding)
-    .catch(() => []);
-}
 
 /**
  * Put the paths of what was dropped on a pane in front of whatever is running there (`AMB-D-820`).
@@ -145,10 +122,6 @@ export function TerminalPane({
   // The session running here, while one is. It is what the way out names, and it is null at exactly
   // the two moments there is nothing to end: before a terminal has opened, and after one has closed.
   const [live, setLive] = useState<string | null>(null);
-  // The reservations the way out is asking about, while it is asking. Null is nobody being asked
-  // anything — what is held is read at the press and not before, so there is nothing here to keep
-  // true between one and the next.
-  const [asking, setAsking] = useState<readonly number[] | null>(null);
   // Where the row's menu was opened, while it is open. It is placed at the press rather than under
   // the button for the reason every other menu in the app is (`../components/Menu`).
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -168,24 +141,17 @@ export function TerminalPane({
   on.current = { onOpened, onSaid, onPath, onClosed, onName, onWaiting, onFocus };
 
   /** Take the place away, once the person has said so. The terminal in it is ended first: a session
-   *  whose pane has gone is one nobody can get back to. */
-  const goDrop = async () => {
+   *  whose pane has gone is one nobody can get back to.
+   *
+   *  **The one question is the plain one, whatever the session is holding** (`AMB-D-855`). What the
+   *  volatile area says a pane reserved cannot be leant on to move the ledger: a task moved outside a
+   *  pane is not written there at all, so the newest row it can find is an older one that has come up
+   *  behind it. `face.dropConfirm` already says the place is not coming back, which is the loss this
+   *  press stands in front of. */
+  const drop = async () => {
+    if (!await confirmDialog(t("face.dropConfirm"))) return;
     if (live !== null) await endTerminal(live).catch(() => {});
     onDrop(frame);
-  };
-
-  /** The way out was pressed. What is asked depends on what stands to be lost: a pane holding
-   *  nothing is the plain confirmation it has always been, and one holding reservations is asked
-   *  about them by name (`./PaneDropAsk`). **Nothing is named where nothing is held** — a second
-   *  box over the same press, saying a session had no work on it, is a box about nothing. */
-  const drop = async () => {
-    const holding = await heldHere(live);
-    if (holding.length > 0) {
-      setAsking(holding);
-      return;
-    }
-    if (!await confirmDialog(t("face.dropConfirm"))) return;
-    await goDrop();
   };
 
   useEffect(() => {
@@ -434,19 +400,6 @@ export function TerminalPane({
           under the drag has to stay the pane, or the point being resolved would land on the surface
           itself and the highlight would flicker itself away. */}
       {(handing || offered) && <div className="slot__handing">{t("face.handHere")}</div>}
-      {asking !== null && (
-        <PaneDropAsk
-          holding={asking}
-          onHandBack={async () => {
-            // One at a time, so a refusal stops at the one it refused: the tasks after it are still
-            // held, and saying otherwise is the mistake this whole box exists to prevent.
-            for (const id of asking) await setStatus(id, "todo");
-            await goDrop();
-          }}
-          onLeave={goDrop}
-          onCancel={() => setAsking(null)}
-        />
-      )}
       {running
         ? (
           <>

@@ -2897,6 +2897,25 @@ const REGISTRY: &[OpSpec] = &[
     // plain path on the clipboard from a quoted one. This is where the plain half is read, with
     // `files reading`.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "paste-into-editor", required: &[], refs: &[], strings: &[], binds: false },
+    // The same box filled from a **picture** on the clipboard rather than from words, which is a
+    // second op for the reason `terminal paste-image` is one beside `terminal paste`: what the
+    // clipboard is holding decides what lands. Words land as themselves; a picture is written down
+    // first and what lands is where it went, so a road that could not tell the two apart would go
+    // green on the words while nothing was ever written.
+    //
+    // **The press is the same on all three machines**, which is where this parts company with the
+    // pane's. A box a person writes in has no program to hand a control character to, so Linux reads
+    // the clipboard on the plain paste key rather than on one of its own
+    // (`app/src/core/clipFiles.ts`).
+    //
+    // **What lands is bare**, and that is the half worth reading here. A pane quotes the path it is
+    // handed because a shell would otherwise read a name with a space in it as two words; a box a
+    // person writes in has no shell behind it and quotes nothing, so the same picture reaches these
+    // two places in two different shapes and only one of them can be read in a pane.
+    //
+    // It names no box: what is pasted into is whatever the column has open, the way `edit` and
+    // `reading` name none — the draft page reached by `tab`, a file by `open`.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "paste-image", required: &[], refs: &[], strings: &[], binds: false },
     // And the typing kept. It takes no args: what is saved is the file that is open, and where the
     // bytes go is not a road's to say.
     //
@@ -3837,7 +3856,7 @@ fn rendering_in_the_way(steps: &[Step]) -> Vec<(usize, &str)> {
                 as_source =
                     matches!(step.with().get("form").and_then(|v| v.as_str()), Some("source"));
             }
-            "edit" | "paste-into-editor" | "save" if holding_markdown && !as_source => {
+            "edit" | "paste-into-editor" | "paste-image" | "save" if holding_markdown && !as_source => {
                 found.push((i, step.op()));
             }
             _ => {}

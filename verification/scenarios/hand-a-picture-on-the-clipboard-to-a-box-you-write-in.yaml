@@ -1,0 +1,206 @@
+# A picture on the machine's clipboard put into the two boxes in Amenbo that are not a pane — the
+# draft page, and the editor a file opens in.
+#
+# A box a person writes in takes text and nothing else, so a screenshot has to become a **path** on
+# the way in here too: the bytes are written down and what lands on the line is where they went.
+# Nothing on the screen says that happened — the line reads like any other paste — so the writing is
+# the half a reader cannot check for themselves, and the half this road is for.
+#
+# ── Why this is not the pane's road with a different box named ───────────────────────────────────
+# The two places take the same picture and are handed two different shapes of the same fact. A pane
+# is given a **quoted** path, because a shell behind it would read a name with a space in it as two
+# words; these two have no shell behind them and are given the path bare. A build that wrote one
+# rule for both would pass whichever road was walked and be wrong in the other place, so the bare
+# half is read here and the quoted half is read in
+# `hand-a-picture-on-the-clipboard-to-a-pane`.
+#
+# ── Why both boxes are on one road ───────────────────────────────────────────────────────────────
+# They are one goal — put a picture where you are writing — reached at two doors, and they are wired
+# the same way at both. A road that walked only one would go green over a build that had wired that
+# door and left the other one taking nothing, which is the state this very road was written for: the
+# panes were done first and these two came after.
+#
+# ── Why the file it copies lies outside every folder the road binds ──────────────────────────────
+# The run's own folder is where nothing in Amenbo can reach, so a path appearing in a box afterwards
+# came through the clipboard and could not have come from the tree, from a drop, or from anything
+# the road typed.
+#
+# ── Why each box is read for the absence first ───────────────────────────────────────────────────
+# `pasted-` is a short word, and a step that only read it after the paste would go green on a box
+# that had been carrying it all along. Read once on a box with nothing of the sort in it, it is the
+# paste's doing and nothing else's — and the file is read that way too, because it opens with words
+# of its own and those words are not this.
+#
+# ── Why the picture is copied once ───────────────────────────────────────────────────────────────
+# Nothing between the two pastes touches the clipboard, so the second one is the same picture as the
+# first. Copying again would prove the same thing twice and give the operator a second chance to
+# copy the row instead of the image, which is the mistake this whole road is built to avoid.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. A clipboard is not a thing a shell holds, and the writing this proves
+# happens in the webview.
+id: hand-a-picture-on-the-clipboard-to-a-box-you-write-in
+title: A picture on the clipboard reaches the draft page and a file's editor as a bare path, written down on the way in
+description: >
+  Raise a project bound to a folder of one file and open the reading column. Copy a picture outside
+  Amenbo — the image itself, out of whatever shows pictures on this machine — and paste it on the
+  draft page: a path appears, naming a file the paste wrote, and it carries none of the quoting a
+  pane would have put on it. Then open the file from the tree and paste the same picture into its
+  editor, which takes it the same way.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+    as: orchard
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: orchard
+
+  # The file the second half is pasted into. Plain text, so it opens on an editor and there is no
+  # rendering to switch away from first — what this road is about is the paste and not the form.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard
+      path: watering.txt
+      content: "SCENARIO the seedlings are watered every second morning"
+
+  # The picture the operator copies. It is an image, which no line of YAML holds, and it is put in
+  # the run's own folder — outside every folder the road binds — so what reaches a box can only have
+  # come through the clipboard.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: image/scenario-icon.png
+      path: scenario-icon.png
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # ── the draft page ────────────────────────────────────────────────────────────────────────────
+  # The first tab, and the one with no cross on it: the page belongs to the project rather than to a
+  # reader who opened it, so it is always there to write in.
+  - type: action
+    domain: files
+    op: tab
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: "pasted-"
+      present: false
+
+  - type: action
+    domain: repo
+    op: copy-image-outside
+    with:
+      path: scenario-icon.png
+
+  - type: action
+    domain: files
+    op: paste-image
+
+  # What the paste wrote, named the way the build names one — and named in the box kept for the
+  # places that are not panes, which is what says this picture did not go to a pane's.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: "amenbo-pasted-page-"
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: ".png"
+
+  # And the half a pane would have had. The same reading taken with the quote on it finds nothing,
+  # which is what says the quoting is the pane's own and not something this door does too.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: ".png'"
+      present: false
+
+  # ── the editor a file opens in ────────────────────────────────────────────────────────────────
+  # The other door, in the same column. Opening the file draws over the page, so the reading below is
+  # of the file's own box and not of the one just written in.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.txt
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+
+  # The page is off the screen with its path on it, and the file has none of its own. Both halves of
+  # the reading below are the second paste's doing.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: "pasted-"
+      present: false
+
+  - type: action
+    domain: files
+    op: paste-image
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: "amenbo-pasted-page-"
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: ".png"
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: ".png'"
+      present: false
+
+  # And what the file already held, still there. A paste that had replaced the text instead of going
+  # in at the caret would pass every reading above and have thrown the file away.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning

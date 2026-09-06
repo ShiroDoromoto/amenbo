@@ -673,6 +673,57 @@ func find(pid: Int, name: String?, role: String?, window: String?) {
     if found.isEmpty { fail("nothing on screen is \(aimedAt(name, role))") }
 }
 
+/// Every name the app's own menu bar carries: each heading, and the items under it.
+///
+/// **It is a command of its own because the menu bar is not on the window** — `find` leaves it out
+/// on purpose ([`windowAndElements`]), since the bar belongs to whichever app is frontmost and its
+/// item names collide with the ones drawn inside a window. What is walked here is the bar of the app
+/// the pid names and nothing else, so neither of those is in play.
+///
+/// **The frame is not read, and that is the difference from every other listing.** A menu that has
+/// not been pulled down stands nowhere — its items have names and no position — so requiring one
+/// (`elements(under:)` does) would answer an app with a full menu bar as an app with none. Nothing
+/// here is ever aimed at, so nothing here needs a point.
+///
+/// Each item is printed under the heading it hangs from, because the same word appears under two of
+/// them often enough to matter: reading a line back, "which menu was that in" is the question.
+///
+/// **The first heading is dropped.** It is the Apple menu, which AppKit draws in every app's bar and
+/// fills with the system's own words — About This Mac, the applications this machine opened lately.
+/// None of that is the app's, and every word of it would be a word a reading could find while
+/// looking for the app's own.
+func menuBar(pid: Int) {
+    let app = AXUIElementCreateApplication(pid_t(pid))
+    openTree(app)
+    guard let bar = axAttribute(app, kAXMenuBarAttribute as String) as! AXUIElement? else {
+        fail("pid \(pid) draws no menu bar")
+    }
+    var said = false
+    for head in (axAttribute(bar, kAXChildrenAttribute as String) as? [AXUIElement] ?? []).dropFirst() {
+        guard let heading = axName(head) else { continue }
+        print("AXMenuBarItem\t\(heading)")
+        said = true
+        for item in menuItems(under: head) {
+            print("AXMenuItem\t\(heading)\t\(item)")
+        }
+    }
+    if !said { fail("pid \(pid) has a menu bar with nothing named on it") }
+}
+
+/// The names under one heading, submenus included, in the order the tree holds them.
+///
+/// A separator carries no name and is left out, which is what makes the listing a list of items
+/// rather than a drawing of one.
+func menuItems(under el: AXUIElement, depth: Int = 0) -> [String] {
+    guard depth < 20 else { return [] } // a menu deeper than this is a cycle, not a menu
+    var found: [String] = []
+    for child in axAttribute(el, kAXChildrenAttribute as String) as? [AXUIElement] ?? [] {
+        if let name = axName(child) { found.append(name) }
+        found += menuItems(under: child, depth: depth + 1)
+    }
+    return found
+}
+
 /// Click where that name is on screen.
 ///
 /// The click is a real one, at where the element stands now: what the name saves is the arithmetic,
@@ -1335,7 +1386,7 @@ let (role, afterRole) = takeOption("--role", afterWindow, needs: "the role find 
 let (at, afterAt) = takeAt(afterRole)
 let (held, args) = takeModifiers(afterAt)
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|right-click-named|dblclick-named|point-named|click|right-click|dblclick|point|drag|drop-file|type|key|scroll|set-date|trusted> … [--window <title>]")
+    fail("usage: screen <front|shot|read|find|menu|click-named|right-click-named|dblclick-named|point-named|click|right-click|dblclick|point|drag|drop-file|type|key|scroll|set-date|trusted> … [--window <title>]")
 }
 // Refused rather than ignored: a qualifier the subcommand never reads would narrow nothing and say so
 // nowhere, which is the silent miss every refusal in this file is written against.
@@ -1362,6 +1413,9 @@ case "shot":
 case "read":
     guard args.count == 3 else { fail("usage: screen read <image.png>") }
     readText(path: args[2])
+case "menu":
+    guard args.count == 3, let pid = Int(args[2]) else { fail("usage: screen menu <pid>") }
+    menuBar(pid: pid)
 case "find":
     guard args.count == 3 || args.count == 4, let pid = Int(args[2]) else { fail("usage: screen find <pid> [name] [--role <role>] [--window <title>]") }
     find(pid: pid, name: args.count == 4 ? args[3] : nil, role: role, window: window)

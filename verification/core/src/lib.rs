@@ -1450,6 +1450,21 @@ const REGISTRY: &[OpSpec] = &[
     // and it is what the reading is matched against: the id is the name the build declares the nudge
     // under, it never reaches a screen, and a line naming only that could not be judged from a shot.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "nudge", required: &["nudge", "present", "shows"], refs: &[], strings: &["nudge", "shows"], binds: false },
+    // What the app's own menu bar carries — a heading, or a word inside one of the menus under it.
+    // `shows` is that word and `present` says which way it is read, the same pair every reading takes.
+    //
+    // **A screen road alone, and one that names words of the interface on purpose.** Everywhere else
+    // a road stays off the interface's own wording, because which language a machine is in is not a
+    // road's to know; here the road has just said which language (`store set-language`), and what is
+    // under test is whether the bar followed. A word named without the language having been set would
+    // be the usual mistake, and the instruction says which language it is asking about.
+    //
+    // It is not read off a shot. The menu bar is not on the window a step is photographed at — it
+    // stands above every window and belongs to whichever app is frontmost — and a menu that has not
+    // been pulled down draws none of its items anywhere. So the reading is taken off the app's own
+    // menu tree instead (`amenbo_verify_gui::reads_the_menu`), and the shot beside it is the screen
+    // the operator stood at.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "menu-reads", required: &["shows"], refs: &[], strings: &["shows", "menu"], binds: false },
     // An attachment read back three ways: its own row, the owner's list it hangs in, and — for a
     // blob — the bytes coming out again, which is the only proof the ingest kept them.
     OpSpec { kind: Kind::Assert, domain: Domain::Attachment, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },

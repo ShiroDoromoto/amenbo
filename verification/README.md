@@ -369,6 +369,30 @@ What stays off that table is as much the point, for the reason the store's is. A
 a shot can be read for stays the shot's: a build asked what it drew is a build checked against
 itself, where a reading is the screen checked against the road.
 
+### The asserts no window holds — read off the menu bar
+
+Everything above is on the window a step is shot at. The bar across the top of the screen is not: it
+belongs to whichever app is frontmost rather than to any one of its windows, and a menu nobody has
+pulled down draws its items nowhere at all. So an assert about the words in it can be read off
+neither a picture nor the window's tree.
+
+It is Amenbo's own surface for all that. The bar is built by the app from the same dictionary its
+screens are drawn from, and a build that translated its windows and left its menus in English would
+pass every road here — which is what `store menu-reads` is for, and it is the whole of the third
+table (`amenbo_verify_gui::reads_the_menu`).
+
+The reading is `screen menu <pid>`: the app's own menu bar walked from its accessibility tree, each
+heading and the items under it, one to a line. Three things follow from where it is taken.
+
+- **The Apple menu is left out.** AppKit draws it in every app's bar and fills it with the system's
+  own words, none of which are the app's — and every one of them would be a word a reading could
+  find while looking for one that is.
+- **Nothing is pulled down.** The tree carries the items of a closed menu, so the operator is asked
+  to confirm a bar that is already standing there rather than to hold a menu open to be photographed.
+- **The step names words of the interface, which no other assert does.** A road reaches one only
+  after saying which language the interface is in (`store set-language`), so the word it names is one
+  it is entitled to know.
+
 The Linux container carries no toolchain, so it can't read the scenario itself. Its host launcher
 (`make verify-gui-linux`) resolves the scenario through the `emit` bin and passes the card — the
 `listed`/present title — into the container as `AMENBO_E2E_CARD`. tesseract reads the words but not

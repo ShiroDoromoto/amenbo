@@ -78,6 +78,31 @@ pub fn launch_instruction(cmd: &str) -> String {
     )
 }
 
+/// What a pane's agent is opened with: [`launch_instruction`], and after it the one sentence about
+/// the vocabulary that exists only inside the window.
+///
+/// **The pointer is said here because where it is written is too far in to count on.** `agent --json`
+/// carries the same one, under a key that sorts near the end of a document tens of thousands of
+/// characters long — an agent that read the top of it and started work never reaches the line.
+///
+/// **A pane and nowhere else.** The managed block and a session-start hook open sessions in folders,
+/// where every word `talk` names fails, so teaching them there would be teaching a road that is shut —
+/// and a reader could not tell that from one they had simply not walked yet (`AMB-D-749`). A pane is
+/// both the place those words work and the one opening Amenbo writes itself.
+///
+/// **One line.** It goes into an argument on one route and into a paste on the other, and a newline in
+/// a paste is a submit to any program that does not read bracketed paste (`crate::harness::opening`,
+/// `app/src-tauri/src/handover.rs`).
+pub fn pane_instruction(cmd: &str) -> String {
+    format!(
+        "{instruction} You are in a pane of Amenbo's talk window, where a second vocabulary applies: \
+         what you say about this session, which writes to no store and lives in this terminal alone. \
+         Read `{cmd} talk --json` and follow it — two of its words are owed, and the person sees only \
+         what you say.",
+        instruction = launch_instruction(cmd),
+    )
+}
+
 /// Body of the managed block (without the markers): English-based, plus the directive naming the
 /// language to talk to the human in. `cmd` is the launch command name
 /// ([`crate::config::Paths::command_name`] — `amenbo` in production, `amenbo-dev` on the dev
@@ -381,6 +406,29 @@ mod tests {
             "the block no longer carries the instruction the hooks inject:\n{}",
             body()
         );
+    }
+
+    /// What a pane opens with: the folder's sentence first, then the pane's own — and neither of them
+    /// where the other belongs. The block and a hook open sessions in folders, where the words `talk`
+    /// names cannot be run at all, so the pane's sentence must not have reached them.
+    #[test]
+    fn a_pane_is_opened_with_the_folder_s_sentence_and_then_its_own() {
+        let said = pane_instruction("amenbo");
+        assert!(said.starts_with(&launch_instruction("amenbo")), "{said}");
+        assert!(said.contains("`amenbo talk --json`"), "{said}");
+        assert!(!said.contains('\n'), "a newline in this is a submit on the paste route: {said}");
+
+        assert!(!launch_instruction("amenbo").contains("talk --json"));
+        assert!(!body().contains("talk --json"));
+    }
+
+    /// It names the binary this build is, both times — a dev-channel pane telling an agent to run
+    /// `amenbo` names a command the reader may not have.
+    #[test]
+    fn a_pane_names_the_running_command_for_both_canons() {
+        let said = pane_instruction("amenbo-dev");
+        assert!(said.contains("`amenbo-dev agent --json`"), "{said}");
+        assert!(said.contains("`amenbo-dev talk --json`"), "{said}");
     }
 
     #[test]

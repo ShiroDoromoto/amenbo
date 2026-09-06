@@ -3157,8 +3157,18 @@ fn write_facet_names(human: Option<&str>, ai: Option<&str>) -> Result<(), CmdErr
 /// AGENTS.md and CLAUDE.md in every bound directory — closing the gap where the GUI switched to
 /// English while the AI kept being told Japanese. That part is best-effort and re-syncs only the
 /// directories the registry knows about (unregistered ones fall into line at the next bind).
+///
+/// **The native menu is rebuilt here too** ([`crate::menu::build`]). It is assembled from the words
+/// Rust holds rather than from the webview's dictionary (`AMB-D-396`) and was built once, as the app
+/// came up — so a language changed afterwards left the menu bar in the language before it, on the one
+/// surface the reader cannot refresh. Rebuilding is best-effort for the same reason the managed
+/// blocks are: the language is already saved, and a menu that did not come back is a menu in the old
+/// words rather than a setting that failed.
+///
+/// **It is posted to the main thread**, where menu items may be made at all on macOS and Linux — a
+/// command runs on a worker.
 #[tauri::command]
-pub fn config_set_language(language: String) -> Result<WriteAck, CmdError> {
+pub fn config_set_language(app: tauri::AppHandle, language: String) -> Result<WriteAck, CmdError> {
     let paths = amenbo_core::config::Paths::resolve()?;
     let mut config = amenbo_core::config::Config::load(&paths.config_file);
     config
@@ -3173,6 +3183,20 @@ pub fn config_set_language(language: String) -> Result<WriteAck, CmdError> {
             lang_code,
             amenbo_core::config::Paths::command_name(),
         );
+    }
+    let handle = app.clone();
+    let posted = app.run_on_main_thread(move || match crate::menu::build(&handle) {
+        // `build` reads the language back off the config file that was just saved, so nothing has to
+        // be carried in here.
+        Ok(menu) => {
+            if let Err(e) = handle.set_menu(menu) {
+                tracing::warn!(error = %e, "the menu was rebuilt but not put up; it stays in the old language");
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "the menu was not rebuilt; it stays in the old language"),
+    });
+    if let Err(e) = posted {
+        tracing::warn!(error = %e, "the menu rebuild was not posted; it stays in the old language");
     }
     Ok(WriteAck::new(&[]))
 }

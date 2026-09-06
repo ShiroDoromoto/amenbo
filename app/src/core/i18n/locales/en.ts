@@ -583,6 +583,15 @@ const ui = {
   "face.dropHandBack": "Hand back and remove",
   "face.dropAnyway": "Remove as it is",
   "face.dropCancel": "Cancel",
+  // The way out of the whole app, which ends every terminal at once and is asked about for the same
+  // reason one pane is (`app/src/shell/HoldingAsk.tsx`, `crate::quit`). It is its own set of words
+  // rather than the pane's: what is being left behind is every session in the process, and a
+  // sentence about "this pane" would name the wrong thing at the moment it matters most.
+  "quit.confirm": "Quit Amenbo? Every terminal open in it ends, and no session comes back on the next run.",
+  "quit.holding": "The sessions still running are holding:",
+  "quit.handBack": "Hand back and quit",
+  "quit.anyway": "Quit as it is",
+  "quit.cancel": "Cancel",
   // The OS notification a pane raises when its turn has come and nobody is looking at the terminal
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.

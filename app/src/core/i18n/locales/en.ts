@@ -823,8 +823,6 @@ const ui = {
   "pane.discardConfirm": "You have unsaved input. Discard it and close?",
   "pane.resize": "Drag to resize",
   "sidebar.resize": "Drag to resize",
-  "sidebar.collapse": "Collapse sidebar",
-  "sidebar.expand": "Expand sidebar",
   "health.title": "Startup integrity check found problems",
   "health.hint": "Read-only check, no automatic repair. Settings > Integrity lists every problem and can repair them.",
   "health.dismiss": "Dismiss",

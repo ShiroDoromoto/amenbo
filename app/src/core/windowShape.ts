@@ -2,7 +2,7 @@
 // showing (`AMB-D-753`).
 //
 // The shape is a device-local, persisted UI setting, kept in localStorage the way the sidebar's and
-// the theme's are (core/sidebarCollapsed, core/theme): it is neither domain data — nobody else's
+// the theme's are (core/sidebarCompact, core/theme): it is neither domain data — nobody else's
 // Amenbo cares how many windows this one is in — nor ephemeral, because coming back to the shape you
 // left is the whole of "remember it". The default is one window, so nothing is split out until
 // somebody asks for it.

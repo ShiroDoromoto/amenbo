@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { dataAdapter } from "../mock/adapter";
 import { useInboxCount } from "../core/mailbox";
-import { dueBadges, type DueCounts } from "../core/due";
+import { dueBadges, type DueCounts, type DueStep } from "../core/due";
 import { useArchivedProjects, useDueCounts } from "../core/reads";
 import { useStore } from "../store/store";
 import { t } from "../core/i18n";
@@ -38,7 +38,15 @@ function rowId(row: HTMLElement): number | null {
  * stored `dropHint`: the hint is drawn a frame at a time and can be pointing at a row the pointer has already left,
  * and trusting it would make the release a silent no-op. The hint stays what it is — the visual indicator.
  */
-export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
+export function Sidebar({
+  nav, onNav, compact, onCompact,
+}: {
+  nav: Nav;
+  onNav: (n: Nav) => void;
+  /** Whether the column is drawn at its narrow width — the marks and the icons, without the names. */
+  compact: boolean;
+  onCompact: (compact: boolean) => void;
+}) {
   const store = useStore();
   const views = dataAdapter.smartViews();
   const projects = dataAdapter.listProjects();
@@ -169,140 +177,180 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
     onNav(n);
   };
 
+  const fold = t(compact ? "face.tabsNamed" : "face.tabsCompact");
+
   return (
-    <div className="sidebar">
-      <div className="sidebar__group">
-        <div className="sidebar__label">{t("side.smartViews")}</div>
-        {views.map((v) => {
-          const n: Nav = { type: "view", id: v.id };
-          return (
-            <button key={v.id} className={`navitem ${isActive(n) ? "navitem--active" : ""}`} onClick={() => onNav(n)}>
-              {VIEW_ICON[v.id] ? <Icon name={VIEW_ICON[v.id]} /> : null}
-              {t(`smartview.${v.id}`)}
-              <ViewBadges view={v} inboxCount={inboxCount} due={due} />
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="sidebar__group">
-        <div className="sidebar__label">{t("side.projects")}</div>
-        {projects.map((p) => {
-          const n: Nav = { type: "project", id: String(p.id) };
-          // The drop indicator: a line above or below the midline. The row being dragged is dimmed.
-          const hint = dropHint && dropHint.id === p.id ? dropHint.pos : null;
-          const cls = [
-            "navitem",
-            isActive(n) ? "navitem--active" : "",
-            canReorder ? "navitem--reorderable" : "",
-            dragId === p.id ? "navitem--dragging" : "",
-            hint === "before" ? "navitem--drop-before" : "",
-            hint === "after" ? "navitem--drop-after" : "",
-          ].filter(Boolean).join(" ");
-          return (
-            <button
-              key={p.id}
-              className={cls}
-              onClick={() => onRowClick(n)}
-              // What the hit test looks for, and what it reads the row's own id off. The pointer is somewhere in
-              // the document rather than on a React element, so the answer has to be written into the markup.
-              data-project-row=""
-              data-project-id={p.id}
-              onPointerDown={canReorder ? (e) => onRowPointerDown(e, p.id) : undefined}
-              onPointerMove={canReorder ? onRowPointerMove : undefined}
-              onPointerUp={canReorder ? onRowPointerUp : undefined}
-              onPointerCancel={canReorder ? onRowPointerCancel : undefined}
-            >
-              <ProjectMark color={p.color} name={p.name} icon={p.icon} />
-              {p.name}
-              {(() => {
-                const count = p.openCount + p.proposedDecisionCount;
-                return count ? <span className="navitem__count">{count}</span> : null;
-              })()}
-            </button>
-          );
-        })}
-        {(() => {
-          const n: Nav = { type: "view", id: "newProject" };
-          return (
-            <button className={`navitem navitem--muted ${isActive(n) ? "navitem--active" : ""}`} onClick={() => onNav(n)}>
-              <Icon name="plus" />
-              {t("side.newProject")}
-            </button>
-          );
-        })()}
-      </div>
-
-      {/* Plugins are a section of their own, not an item under "other" (`AMB-D-356`): finding one and
-          managing what is installed are two surfaces, and this is where the second one joins. */}
-      <div className="sidebar__group">
-        <div className="sidebar__label">{t("side.plugins")}</div>
-        {([
-          { id: "plugins", icon: "puzzle", label: t("plugins.market") },
-          { id: "pluginsInstalled", icon: "plug", label: t("plugins.installed") },
-        ] as const).map((item) => {
-          const n: Nav = { type: "view", id: item.id };
-          return (
-            <button
-              key={item.id}
-              className={`navitem ${isActive(n) ? "navitem--active" : ""}`}
-              onClick={() => onNav(n)}
-            >
-              <Icon name={item.icon} />
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="sidebar__group">
-        <div className="sidebar__label">{t("side.other")}</div>
-        {([
-          // Search sits here rather than among the smart views: a smart view is a standing selection of
-          // tasks, and this asks where a word is written across tasks and decisions both (`AMB-D-449`).
-          { id: "search", icon: "search", label: t("nav.search") },
-          // Connecting an AI is an app-level setting, not a project's (`AMB-D-681`), so it lives
-          // here rather than folded into each project's own screen.
-          { id: "mcp", icon: "link", label: t("nav.mcp") },
-          { id: "settings", icon: "gear", label: t("nav.settings") },
-          { id: "onboarding", icon: "goose", label: t("nav.onboarding") },
-        ] as const).map((it) => {
-          const n: Nav = { type: "view", id: it.id };
-          return (
-            <button key={it.id} className={`navitem ${isActive(n) ? "navitem--active" : ""}`} onClick={() => onNav(n)}>
-              <Icon name={it.icon} />{it.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {archived.length > 0 && (
+    <div className={`sidebar${compact ? " sidebar--compact" : ""}`}>
+      <div className="sidebar__list">
         <div className="sidebar__group">
-          <button
-            className="navitem navitem--muted"
-            aria-expanded={archivedOpen}
-            onClick={() => setArchivedOpen((v) => !v)}
-          >
-            <Icon name={archivedOpen ? "chevronDown" : "chevronRight"} />
-            {t("side.archived")}
-            <span className="navitem__count">{archived.length}</span>
-          </button>
-          {archivedOpen &&
-            archived.map((p) => {
-              const n: Nav = { type: "projectSettings", id: String(p.id) };
-              return (
-                <button
-                  key={p.id}
-                  className={`navitem navitem--muted ${isActive(n) ? "navitem--active" : ""}`}
-                  onClick={() => onNav(n)}
-                >
-                  <ProjectMark color={p.color} name={p.name} icon={null} />
-                  {p.name}
-                </button>
-              );
-            })}
+          {!compact && <div className="sidebar__label">{t("side.smartViews")}</div>}
+          {views.map((v) => {
+            const n: Nav = { type: "view", id: v.id };
+            const label = t(`smartview.${v.id}`);
+            return (
+              <button
+                key={v.id}
+                className={`navitem ${isActive(n) ? "navitem--active" : ""}`}
+                aria-label={label}
+                title={label}
+                onClick={() => onNav(n)}
+              >
+                {VIEW_ICON[v.id] ? <Icon name={VIEW_ICON[v.id]} /> : null}
+                {!compact && <span className="navitem__name">{label}</span>}
+                <ViewBadges view={v} inboxCount={inboxCount} due={due} compact={compact} />
+              </button>
+            );
+          })}
         </div>
-      )}
+
+        <div className="sidebar__group">
+          {!compact && <div className="sidebar__label">{t("side.projects")}</div>}
+          {projects.map((p) => {
+            const n: Nav = { type: "project", id: String(p.id) };
+            // The drop indicator: a line above or below the midline. The row being dragged is dimmed.
+            const hint = dropHint && dropHint.id === p.id ? dropHint.pos : null;
+            const cls = [
+              "navitem",
+              isActive(n) ? "navitem--active" : "",
+              canReorder ? "navitem--reorderable" : "",
+              dragId === p.id ? "navitem--dragging" : "",
+              hint === "before" ? "navitem--drop-before" : "",
+              hint === "after" ? "navitem--drop-after" : "",
+            ].filter(Boolean).join(" ");
+            const count = p.openCount + p.proposedDecisionCount;
+            return (
+              <button
+                key={p.id}
+                className={cls}
+                // The name is said whether or not it is drawn: compact, the mark is the only thing on
+                // the row, and a colour is not something a reader can be asked to read out.
+                aria-label={p.name}
+                title={p.name}
+                onClick={() => onRowClick(n)}
+                // What the hit test looks for, and what it reads the row's own id off. The pointer is somewhere in
+                // the document rather than on a React element, so the answer has to be written into the markup.
+                data-project-row=""
+                data-project-id={p.id}
+                onPointerDown={canReorder ? (e) => onRowPointerDown(e, p.id) : undefined}
+                onPointerMove={canReorder ? onRowPointerMove : undefined}
+                onPointerUp={canReorder ? onRowPointerUp : undefined}
+                onPointerCancel={canReorder ? onRowPointerCancel : undefined}
+              >
+                <ProjectMark color={p.color} name={p.name} icon={p.icon} />
+                {!compact && <span className="navitem__name">{p.name}</span>}
+                {count ? <span className="navitem__count">{count}</span> : null}
+              </button>
+            );
+          })}
+          {(() => {
+            const n: Nav = { type: "view", id: "newProject" };
+            const label = t("side.newProject");
+            return (
+              <button
+                className={`navitem navitem--muted ${isActive(n) ? "navitem--active" : ""}`}
+                aria-label={label}
+                title={label}
+                onClick={() => onNav(n)}
+              >
+                <Icon name="plus" />
+                {!compact && <span className="navitem__name">{label}</span>}
+              </button>
+            );
+          })()}
+        </div>
+
+        {/* Plugins are a section of their own, not an item under "other" (`AMB-D-356`): finding one and
+            managing what is installed are two surfaces, and this is where the second one joins. */}
+        <div className="sidebar__group">
+          {!compact && <div className="sidebar__label">{t("side.plugins")}</div>}
+          {([
+            { id: "plugins", icon: "puzzle", label: t("plugins.market") },
+            { id: "pluginsInstalled", icon: "plug", label: t("plugins.installed") },
+          ] as const).map((item) => {
+            const n: Nav = { type: "view", id: item.id };
+            return (
+              <button
+                key={item.id}
+                className={`navitem ${isActive(n) ? "navitem--active" : ""}`}
+                aria-label={item.label}
+                title={item.label}
+                onClick={() => onNav(n)}
+              >
+                <Icon name={item.icon} />
+                {!compact && <span className="navitem__name">{item.label}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="sidebar__group">
+          {!compact && <div className="sidebar__label">{t("side.other")}</div>}
+          {([
+            // Search sits here rather than among the smart views: a smart view is a standing selection of
+            // tasks, and this asks where a word is written across tasks and decisions both (`AMB-D-449`).
+            { id: "search", icon: "search", label: t("nav.search") },
+            // Connecting an AI is an app-level setting, not a project's (`AMB-D-681`), so it lives
+            // here rather than folded into each project's own screen.
+            { id: "mcp", icon: "link", label: t("nav.mcp") },
+            { id: "settings", icon: "gear", label: t("nav.settings") },
+            { id: "onboarding", icon: "goose", label: t("nav.onboarding") },
+          ] as const).map((it) => {
+            const n: Nav = { type: "view", id: it.id };
+            return (
+              <button
+                key={it.id}
+                className={`navitem ${isActive(n) ? "navitem--active" : ""}`}
+                aria-label={it.label}
+                title={it.label}
+                onClick={() => onNav(n)}
+              >
+                <Icon name={it.icon} />
+                {!compact && <span className="navitem__name">{it.label}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {archived.length > 0 && (
+          <div className="sidebar__group">
+            <button
+              className="navitem navitem--muted"
+              aria-expanded={archivedOpen}
+              aria-label={t("side.archived")}
+              title={t("side.archived")}
+              onClick={() => setArchivedOpen((v) => !v)}
+            >
+              <Icon name={archivedOpen ? "chevronDown" : "chevronRight"} />
+              {!compact && <span className="navitem__name">{t("side.archived")}</span>}
+              <span className="navitem__count">{archived.length}</span>
+            </button>
+            {archivedOpen &&
+              archived.map((p) => {
+                const n: Nav = { type: "projectSettings", id: String(p.id) };
+                return (
+                  <button
+                    key={p.id}
+                    className={`navitem navitem--muted ${isActive(n) ? "navitem--active" : ""}`}
+                    aria-label={p.name}
+                    title={p.name}
+                    onClick={() => onNav(n)}
+                  >
+                    <ProjectMark color={p.color} name={p.name} icon={null} />
+                    {!compact && <span className="navitem__name">{p.name}</span>}
+                  </button>
+                );
+              })}
+          </div>
+        )}
+      </div>
+      {/* The way between the two widths, at the foot of the column and outside what scrolls — the same
+          control the terminal face's tabs carry, in the same place and with the same words
+          (`AMB-D-848`, `./ProjectTabs`). It is in the column rather than in the bar over the window
+          because it is about this column alone: a control up there had to say which of the two faces
+          it moved before a reader could use it, and it never did. */}
+      <button className="sidebar__fold" aria-label={fold} title={fold} onClick={() => onCompact(!compact)}>
+        <Icon name={compact ? "foldRight" : "foldLeft"} />
+      </button>
     </div>
   );
 }
@@ -345,19 +393,37 @@ function ProjectMark({ color, name, icon }: { color: string; name: string; icon:
  * count, and the two ask different things of the reader. Each badge carries its own words, so the
  * colour is never the only thing that says which step it is. Any other view shows what the data says
  * it has, or nothing.
+ *
+ * **Compact, the two are added up and drawn as one** (`AMB-D-848`). There is no room beside a 24px
+ * mark for a second badge, and the corner it goes to holds one. What is kept is the sum and the more
+ * urgent of the two colours, which is the reading a badge in a folded column is for — that there is
+ * something here, and how soon. Which step each part of the sum stands on is on the badge's own
+ * words, and the whole of it is a press away.
  */
-function ViewBadges({ view, inboxCount, due }: { view: SmartView; inboxCount: number; due: DueCounts }) {
+function ViewBadges(
+  { view, inboxCount, due, compact }:
+  { view: SmartView; inboxCount: number; due: DueCounts; compact: boolean },
+) {
   if (view.id === "due") {
     const badges = dueBadges(due);
     if (badges.length === 0) return null;
+    const words = (step: DueStep) => (step === "stop" ? t("smartview.dueStop") : t("smartview.dueHeed"));
+    if (compact) {
+      // `dueBadges` answers most urgent first, so the head of it is the colour the sum is drawn in.
+      const total = badges.reduce((n, b) => n + b.count, 0);
+      return (
+        <span
+          className={`navitem__count navitem__count--${badges[0].step}`}
+          title={badges.map((b) => words(b.step)).join(" / ")}
+        >
+          {total}
+        </span>
+      );
+    }
     return (
       <span className="navitem__counts">
         {badges.map((b) => (
-          <span
-            key={b.step}
-            className={`navitem__count navitem__count--${b.step}`}
-            title={b.step === "stop" ? t("smartview.dueStop") : t("smartview.dueHeed")}
-          >
+          <span key={b.step} className={`navitem__count navitem__count--${b.step}`} title={words(b.step)}>
             {b.count}
           </span>
         ))}

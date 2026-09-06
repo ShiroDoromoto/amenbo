@@ -684,8 +684,6 @@ export const nl: Translation = {
     "pane.discardConfirm": "Je hebt niet-opgeslagen invoer. Weggooien en sluiten?",
     "pane.resize": "Sleep om het formaat te wijzigen",
     "sidebar.resize": "Sleep om het formaat te wijzigen",
-    "sidebar.collapse": "Zijbalk inklappen",
-    "sidebar.expand": "Zijbalk uitklappen",
     "health.title": "De integriteitscontrole bij het starten vond problemen",
     "health.hint": "Een controle die alleen leest, zonder automatisch herstel. Instellingen > Integriteit somt elk probleem op en kan ze herstellen.",
     "health.dismiss": "Sluiten",

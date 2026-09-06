@@ -50,7 +50,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(createElement(Sidebar, { nav: { type: "view", id: "inbox" }, onNav: () => {} }));
+    root.render(createElement(Sidebar, { nav: { type: "view", id: "inbox" }, onNav: () => {}, compact: false, onCompact: () => {} }));
   });
 });
 
@@ -88,7 +88,7 @@ describe("the mark on a project row", () => {
   it("marks an archived project with its colour and its letter", () => {
     act(() => {
       hoisted.archived = [{ id: 9, name: "greenhouse", color: "#101820" }];
-      root.render(createElement(Sidebar, { nav: { type: "view", id: "inbox" }, onNav: () => {} }));
+      root.render(createElement(Sidebar, { nav: { type: "view", id: "inbox" }, onNav: () => {}, compact: false, onCompact: () => {} }));
     });
     // The archived group opens closed — the rows are only drawn once it is unfolded.
     act(() => { container.querySelector<HTMLElement>("[aria-expanded]")!.click(); });

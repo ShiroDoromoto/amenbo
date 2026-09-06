@@ -38,8 +38,8 @@ import { notifyTurn } from "../core/osNotify";
 import { invoke } from "../core/ipc";
 import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
-import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sidebarWidth";
-import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollapsed";
+import { clampSidebarWidth, getSidebarWidth, setSidebarWidth, SIDEBAR_COMPACT } from "../core/sidebarWidth";
+import { getSidebarCompact, setSidebarCompact } from "../core/sidebarCompact";
 import { RefNavProvider } from "../core/refNav";
 import { currentLang, errLabel, t, type CmdError } from "../core/i18n";
 import { Icon } from "../components/Icon";
@@ -135,11 +135,12 @@ export function AppShell() {
     document.addEventListener("pointerup", onUp);
   }, []);
 
-  // Whether the sidebar is collapsed (hidden) — a device-local, persisted UI setting. Toggled from the TopBar so the
-  // control stays reachable even when the sidebar itself is hidden; core/sidebarCollapsed owns persistence.
-  const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => getSidebarCollapsed());
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsedState((c) => setSidebarCollapsed(!c));
+  // Whether the sidebar is drawn compact — a device-local, persisted UI setting. The control for it is
+  // at the foot of the column itself (`./Sidebar`), which is where it can be reached at either width;
+  // core/sidebarCompact owns persistence.
+  const [sidebarCompact, setSidebarCompactState] = useState(() => getSidebarCompact());
+  const onSidebarCompact = useCallback((want: boolean) => {
+    setSidebarCompactState(setSidebarCompact(want));
   }, []);
 
   // Which face this window is showing, and whether the terminal has a window of its own
@@ -610,8 +611,6 @@ export function AppShell() {
         onForward={goForward}
         canBack={canBack}
         canForward={canForward}
-        sidebarCollapsed={sidebarCollapsed}
-        onToggleSidebar={toggleSidebar}
         face={face}
         onSelectFace={selectFace}
         terminalBadge={badgeUp(attention)}
@@ -658,19 +657,29 @@ export function AppShell() {
         </div>
       )}
       <div
-        className={`shell__body ${showRight ? "" : "shell__body--no-right"}${sidebarCollapsed ? " shell__body--sidebar-collapsed" : ""}`}
+        className={`shell__body ${showRight ? "" : "shell__body--no-right"}`}
         hidden={face === "terminal"}
-        style={{ "--rightpane-w": `${rightWidth}px`, "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}
+        // Compact is one width and not a width anybody dragged, so the column is handed that number
+        // rather than the one the handle keeps: what was dragged is the named width, and it is still
+        // there to come back to (`../core/sidebarWidth`).
+        style={{
+          "--rightpane-w": `${rightWidth}px`,
+          "--sidebar-w": `${sidebarCompact ? SIDEBAR_COMPACT : sidebarWidth}px`,
+        } as CSSProperties}
       >
         <div className="sidebar-wrap">
-          <Sidebar nav={nav} onNav={navTo} />
-          <div
-            className="sidebar__resizer"
-            role="separator"
-            aria-orientation="vertical"
-            title={t("sidebar.resize")}
-            onPointerDown={startSidebarResize}
-          />
+          <Sidebar nav={nav} onNav={navTo} compact={sidebarCompact} onCompact={onSidebarCompact} />
+          {/* The handle is the named width's. Compact is not a width a drag can land on, so there is
+              nothing here to take hold of while the column is folded. */}
+          {!sidebarCompact && (
+            <div
+              className="sidebar__resizer"
+              role="separator"
+              aria-orientation="vertical"
+              title={t("sidebar.resize")}
+              onPointerDown={startSidebarResize}
+            />
+          )}
         </div>
 
         {/* The full-width slot for the project header (the board toolbar is portalled in here). */}

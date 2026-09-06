@@ -683,8 +683,6 @@ export const zhHant: Translation = {
     "pane.discardConfirm": "還有沒儲存的輸入。要捨棄並關閉嗎？",
     "pane.resize": "拖曳可調整大小",
     "sidebar.resize": "拖曳可調整寬度",
-    "sidebar.collapse": "收合側邊欄",
-    "sidebar.expand": "展開側邊欄",
     "health.title": "啟動時的完整性檢查發現了問題",
     "health.hint": "唯讀檢查，不會自動修復。設定 > 完整性會列出全部問題，並且能修復它們。",
     "health.dismiss": "知道了",

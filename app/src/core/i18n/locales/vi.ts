@@ -686,8 +686,6 @@ export const vi: Translation = {
     "pane.discardConfirm": "Bạn có nội dung chưa lưu. Bỏ nó và đóng?",
     "pane.resize": "Kéo để đổi kích thước",
     "sidebar.resize": "Kéo để đổi kích thước",
-    "sidebar.collapse": "Thu gọn thanh bên",
-    "sidebar.expand": "Mở rộng thanh bên",
     "health.title": "Kiểm tra toàn vẹn lúc khởi động phát hiện vấn đề",
     "health.hint": "Kiểm tra chỉ đọc, không tự sửa. Cài đặt > Toàn vẹn liệt kê mọi vấn đề và sửa được chúng.",
     "health.dismiss": "Bỏ qua",

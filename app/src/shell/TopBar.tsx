@@ -17,8 +17,6 @@ export function TopBar({
   onForward,
   canBack,
   canForward,
-  sidebarCollapsed,
-  onToggleSidebar,
   face,
   onSelectFace,
   terminalBadge,
@@ -27,8 +25,6 @@ export function TopBar({
   onForward: () => void;
   canBack: boolean;
   canForward: boolean;
-  sidebarCollapsed: boolean;
-  onToggleSidebar: () => void;
   face: Face;
   onSelectFace: (face: Face) => void;
   terminalBadge: boolean;
@@ -65,15 +61,6 @@ export function TopBar({
   }, []);
   return (
     <div className="topbar">
-      <button
-        className={`topbar__navbtn topbar__sidebartoggle${sidebarCollapsed ? " topbar__sidebartoggle--collapsed" : ""}`}
-        title={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
-        aria-label={sidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")}
-        aria-pressed={sidebarCollapsed}
-        onClick={onToggleSidebar}
-      >
-        <Icon name="menu" />
-      </button>
       <span className="topbar__nav">
         <button
           className="topbar__navbtn"

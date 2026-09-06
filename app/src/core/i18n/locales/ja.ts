@@ -696,8 +696,6 @@ export const ja: Translation = {
     "pane.discardConfirm": "未保存の入力があります。破棄して閉じますか？",
     "pane.resize": "ドラッグで幅を変更",
     "sidebar.resize": "ドラッグで幅を変更",
-    "sidebar.collapse": "サイドバーをたたむ",
-    "sidebar.expand": "サイドバーを開く",
     "health.title": "起動時の整合チェックで問題が見つかりました",
     "health.hint": "確認のみで自動修復はしません。設定 > 整合性で、すべての問題の確認と修復ができます。",
     "health.dismiss": "閉じる",

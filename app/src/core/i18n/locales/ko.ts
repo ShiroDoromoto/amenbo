@@ -682,8 +682,6 @@ export const ko: Translation = {
     "pane.discardConfirm": "저장하지 않은 입력이 있습니다. 버리고 닫을까요?",
     "pane.resize": "끌어서 크기 조절",
     "sidebar.resize": "끌어서 너비 조절",
-    "sidebar.collapse": "사이드바 접기",
-    "sidebar.expand": "사이드바 펼치기",
     "health.title": "시작할 때의 무결성 점검에서 문제를 찾았습니다",
     "health.hint": "읽기 전용 점검이며 자동으로 고치지 않습니다. 설정 > 무결성에 모든 문제가 나오고 거기서 고칠 수 있습니다.",
     "health.dismiss": "닫기",

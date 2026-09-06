@@ -694,8 +694,6 @@ export const de: Translation = {
     "pane.discardConfirm": "Du hast ungespeicherte Eingaben. Verwerfen und schließen?",
     "pane.resize": "Zum Ändern der Größe ziehen",
     "sidebar.resize": "Zum Ändern der Breite ziehen",
-    "sidebar.collapse": "Seitenleiste einklappen",
-    "sidebar.expand": "Seitenleiste ausklappen",
     "health.title": "Die Integritätsprüfung beim Start hat Probleme gefunden",
     "health.hint": "Nur lesende Prüfung, ohne automatische Reparatur. Einstellungen > Integrität listet alle Probleme auf und kann sie beheben.",
     "health.dismiss": "Ausblenden",

@@ -113,11 +113,6 @@ input[type="color"] {
     "sidebar header"
     "sidebar main";
 }
-/* Collapsed sidebar: the column drops to 0 and the sidebar (with its resize handle) is hidden entirely.
-   Re-expand from the TopBar toggle, which stays reachable while the sidebar is gone. */
-.shell__body--sidebar-collapsed { grid-template-columns: 0 1fr var(--rightpane-w); }
-.shell__body--sidebar-collapsed.shell__body--no-right { grid-template-columns: 0 1fr; }
-.shell__body--sidebar-collapsed .sidebar-wrap { display: none; }
 /* The project header (the board's toolbar) is portalled in here; BoardScreen renders it. */
 .shell__header { grid-area: header; min-width: 0; }
 
@@ -1447,15 +1442,32 @@ input[type="color"] {
 
 /* ---------- sidebar ---------- */
 /* The sidebar sits in a non-scrolling wrapper (grid-area: sidebar) so the resize handle on the
-   right edge can be positioned against it without scrolling; only the contents (.sidebar) scroll.
-   Its width is --sidebar-w, which AppShell overrides inline as the handle is dragged. */
+   right edge can be positioned against it without scrolling; what scrolls is the list inside it
+   (.sidebar__list). Its width is --sidebar-w, which AppShell overrides inline — the width the handle
+   was dragged to, or the one compact stands at (`app/src/core/sidebarWidth.ts`). */
 .sidebar-wrap { grid-area: sidebar; position: relative; display: flex; min-height: 0; min-width: 0; }
+/* The column is a list with a control under it, so what scrolls is the list alone (.sidebar__list):
+   the way between the two widths must not be pushed off the bottom by a machine with a project for
+   every folder it has ever opened. It is the terminal face's tab column, built the same way
+   (.ptabs, `AMB-D-848`). */
 .sidebar {
   flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
   background: var(--c-surface);
   border-right: 1px solid var(--c-rule);
-  overflow-y: auto; padding: var(--s-2) var(--s-2);
 }
+.sidebar__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--s-2); }
+/* The way between the two widths, at the foot of the column (`AMB-D-848`). Drawn as a faint mark on
+   the column's own ground it could not be found at all, so it is given the frame a control has — the
+   tabs' fold, to the rule (.ptabs__fold). */
+.sidebar__fold {
+  flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 var(--s-2) var(--s-2); padding: var(--s-1);
+  background: var(--c-sunken); border: 1px solid var(--c-rule); border-radius: var(--r-sm);
+  color: var(--c-text-muted);
+}
+.sidebar__fold:hover { background: var(--c-hover); color: var(--c-text); }
 /* The resize handle on the right edge: a thin hit area straddling the border, showing its line
    only on hover or drag. Mirrors .rightpane__resizer on the opposite edge. */
 .sidebar__resizer {
@@ -1473,12 +1485,17 @@ input[type="color"] {
   text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--c-text-muted); padding: 0 var(--s-2); margin-bottom: var(--s-2);
 }
+/* Positioned, because compact the count has nowhere in the row to sit and goes to the corner. */
 .navitem {
+  position: relative;
   display: flex; align-items: center; gap: var(--s-2);
   width: 100%; text-align: left; background: none; border: none;
   padding: var(--s-2) var(--s-2); border-radius: var(--r-sm);
   color: var(--c-text); font-size: var(--fs-md);
 }
+/* The name, which is what folding takes away. It gives before the mark and the icon do: a column
+   dragged narrow cuts the name short rather than squeezing what tells one row from another. */
+.navitem__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .navitem:hover { background: var(--c-hover); }
 .navitem--active { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
 /* The project's mark: the image it was given, or its colour with the first character of its name on
@@ -1530,6 +1547,20 @@ body.dragging-row { user-select: none; }
 .navitem--active .navitem__count--stop { background: var(--c-stop); color: var(--c-on-stop); }
 .navitem--active .navitem__count--heed { background: var(--c-heed); color: var(--c-on-heed); }
 .navitem--muted { color: var(--c-text-muted); font-size: var(--fs-md); cursor: pointer; }
+/* Compact: the mark or the icon alone, centred, with the count moved onto the corner — over the row
+   rather than beside it, because there is no beside left. The headings go with the names: a word over
+   a column of marks is a word with nothing under it to head (`AMB-D-848`). */
+.sidebar--compact .navitem { justify-content: center; padding: var(--s-1); }
+/* Smaller than the badge in the named column, and cut to the corner: at 46px the row is barely wider
+   than the mark, so a badge the size of the one beside a name would lie across the letter that tells
+   one project from another. The ring is the column's own ground, which is what keeps the number
+   readable over whatever it lands on. */
+.sidebar--compact .navitem__count {
+  position: absolute; top: 0; right: 0; margin-left: 0;
+  min-width: 0; padding: 0 3px;
+  font-size: 10px; line-height: 14px; border-radius: 7px;
+  box-shadow: 0 0 0 2px var(--c-surface);
+}
 
 /* ---------- main ---------- */
 .main { grid-area: main; overflow: auto; min-width: 0; display: flex; flex-direction: column; }

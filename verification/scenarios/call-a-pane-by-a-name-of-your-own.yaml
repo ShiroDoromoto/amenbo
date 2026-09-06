@@ -78,3 +78,20 @@ steps_gui:
     op: label
     with:
       shows: SCENARIO named by hand
+
+  # And the row's answer to being narrower than what it holds. A pointer resting on it drops a panel
+  # carrying the whole of the row, so the reader of a pane too narrow to draw its name has somewhere
+  # to read it. The name here is short enough for the row itself, and that is what makes it a reading
+  # of the panel rather than of a width: what is proved is that the panel comes up and says what the
+  # row says, on a road where both are the same words.
+  - type: action
+    domain: terminal
+    op: hold-label
+    with:
+      shows: SCENARIO the first line
+
+  - type: assert
+    domain: terminal
+    op: label-in-full
+    with:
+      shows: SCENARIO named by hand

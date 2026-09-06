@@ -383,8 +383,8 @@ one build produces alongside the app and one installer carries with it. The exec
 asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
 The screen tool is the input primitive too, called by whoever drives the screen between steps: its
-`find` / `click-named` / `right-click-named` / `dblclick-named` / `click` / `right-click` /
-`dblclick` / `drag` / `type` / `key` / `scroll` / `set-date` carry out the action steps the
+`find` / `click-named` / `right-click-named` / `dblclick-named` / `point-named` / `click` /
+`right-click` / `dblclick` / `point` / `drag` / `type` / `key` / `scroll` / `set-date` carry out the action steps the
 checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
 at all — the proof it waits for is a shot it throws away, since an app the system has taken up is
 not yet an app with a window, and a walk that started between the two would fail on its first step.
@@ -408,6 +408,11 @@ drawn where the pointer is: until it is up there is no name on the screen to aim
 `dblclick-named` is that press counted twice, for a row a single one only selects. The coordinate
 `dblclick` is not a substitute: it takes no pid, so it fronts nothing, and a press meant for the app
 under test lands on whatever window took the front — which no shot of the app says.
+`point-named` is the pointer arriving and stopping there, which is the one thing none of the others
+do: what it is for is a face that draws something for a pointer resting on it and takes it away when
+it leaves — a panel dropped under a row — and every verb that presses would take that away again.
+The shot the reading is made from is the one after it, so the road holds the pointer in a step of its
+own (`terminal hold-label`).
 The screen is a webview, so all three read it through the accessibility tree the app serves once
 asked. They read one window and not the app, and take the same `--window <title>` a road's step
 does — an app drawing two draws two screens, and a name reached on the wrong one is a check that

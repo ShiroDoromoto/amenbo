@@ -109,19 +109,22 @@ fn from_parts(session: Option<String>, dir: Option<std::ffi::OsString>) -> Optio
 
 /// What an AI says about the session it is in.
 ///
-/// Four of them are verbs of the spoken vocabulary — `amenbo talk <verb>`, one variant each. Only two
-/// of those are owed: [`Statement::Waiting`] and [`Statement::Finished`], which say the things nothing
-/// else can find out (`AMB-D-748`). The rest are offered — a name that is never set leaves a pane
-/// labelled by its folder, and nobody is misled.
+/// Four of them are verbs of the spoken vocabulary — `amenbo talk <verb>`, one variant each. Three of
+/// those are owed: [`Statement::Name`], [`Statement::Waiting`] and [`Statement::Finished`], which say
+/// the things nothing else can find out (`AMB-D-748`). A folder answers "where", never "which one" —
+/// several panes opened on the same folder wear the same label, and the one thing that tells them
+/// apart is what the AI in each calls itself. [`Statement::Note`] is offered: a pane nobody notes is a
+/// pane with an empty second line, which misleads no one.
 ///
 /// [`Statement::Briefed`] is the one that is not spoken. It says the same kind of thing about the same
 /// session and travels the same drop box, so it belongs to this vocabulary; what it does not have is a
 /// verb anyone types, because the act it reports is the typing of another command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Statement {
-    /// Name this pane. The name sticks to the frame, not to the process in it.
+    /// Name this pane. The name sticks to the frame, not to the process in it. Owed — the folder a
+    /// pane sits in is not a name for that pane (`AMB-D-748`).
     Name(String),
-    /// A line about what is being done now, for the pane's label.
+    /// A line about what is being done now, for the pane's label. Offered.
     Note(String),
     /// A person's turn has come, and why. Owed — the window cannot derive it (`AMB-D-748`).
     Waiting(String),
@@ -409,6 +412,10 @@ pub fn spec() -> Value {
                  screen and touches no store: nothing said here outlives this window, and none of it \
                  can be said from outside it.",
         "owed": [
+            "Say `name` early, and name the work rather than the place. Left unsaid, the pane is \
+             labelled by its folder — which answers where you are and never which of you: open three \
+             panes on one repository and the person reads the same label three times over, with no \
+             way to tell which one to look at.",
             "Say `waiting` the moment a person's turn has come, and why. Nobody can find this out by \
              watching — silence looks the same whether you are building, thinking, or waiting. The \
              reason goes on one line of the pane's label beside two other things, so it is bounded and \
@@ -417,8 +424,8 @@ pub fn spec() -> Value {
             "Say `finished` when the work is done, and what came of it."
         ],
         "offered": [
-            "`name` and `note` label the pane. Say nothing and it is labelled by its folder, which \
-             misleads no one."
+            "`note` puts what you are doing now beside the name. Say nothing and the pane carries its \
+             name alone, which misleads no one."
         ],
         "promises": "A statement is information, never a promise. Say what has happened, not what you \
                      will do — a person who believes a promise stops checking, and this layer cannot \
@@ -710,5 +717,24 @@ mod tests {
             spec["outside"].as_str().is_some_and(|s| s.contains("non-zero")),
             "the canon says outright that the layer fails outside the window",
         );
+    }
+
+    /// Which side of the line each verb sits on is the whole of what a reader takes from the canon, and
+    /// naming the pane is on the owed side: a folder says where a pane is and never which of several in
+    /// it this one is (`AMB-D-748`). A verb that slid to the offered side would still be documented and
+    /// still work, and nothing but this would notice.
+    #[test]
+    fn naming_the_pane_is_owed_and_the_note_is_offered() {
+        let spec = spec();
+        let side = |key: &str| -> String {
+            spec[key].as_array().into_iter().flatten().filter_map(|l| l.as_str()).collect()
+        };
+        let (owed, offered) = (side("owed"), side("offered"));
+        for verb in ["`name`", "`waiting`", "`finished`"] {
+            assert!(owed.contains(verb), "the canon owes {verb}: {owed}");
+            assert!(!offered.contains(verb), "and does not also offer it: {offered}");
+        }
+        assert!(offered.contains("`note`"), "the note is what is left to the speaker: {offered}");
+        assert!(!owed.contains("`note`"), "and is not owed as well: {owed}");
     }
 }

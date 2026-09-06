@@ -18,4 +18,4 @@ schemaVersion    3
 updateAvailable  5
 version          7
 TOTAL            44807
-TOTAL_IN_A_PANE  45183
+TOTAL_IN_A_PANE  45181

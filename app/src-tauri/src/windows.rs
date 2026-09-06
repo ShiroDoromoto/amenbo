@@ -114,6 +114,45 @@ fn failed(e: tauri::Error) -> CmdError {
     )
 }
 
+/// Answer the clipboard permission a pane's paste raises, and answer nothing else.
+///
+/// **Linux is the one place a pane reads the clipboard itself.** WebKitGTK leaves the paste event's
+/// `clipboardData` empty — measured on 2.50.4, 2.52.5 and 2.52.6 alike — so the image is fetched
+/// with `navigator.clipboard.read()` instead, where the other two operating systems get it as a
+/// `File` off the event (`AMB-D-854`, `AMB-T-4427`). That read is not something a page simply has:
+/// the engine asks the embedder first, and an ask nobody is listening for is a refusal. Without
+/// this the read never returns an image, on every window and every version.
+///
+/// **What is allowed is the clipboard alone.** The same signal carries geolocation, the camera, the
+/// microphone and desktop notifications, so a handler that said yes to whatever it was handed would
+/// give the page all of them. `webkit2gtk` 2.0.2 has no `ClipboardPermissionRequest` type to match
+/// on, so the one request that is answered is picked out by the GType name the engine gives it;
+/// everything else is left alone, and left alone is the refusal WebKit already defaults to.
+///
+/// Called for each window as it becomes one — the board in `setup` (`crate::run`), the talk window
+/// where it is built ([`talk_open`]) — because the signal belongs to a `WebKitWebView` rather than
+/// to the application, and the file panel and its panes are drawn in both.
+#[cfg(target_os = "linux")]
+pub fn allow_clipboard_read(win: &WebviewWindow) {
+    // The handler is put on the raw view, which is reached on the thread the view lives on; a
+    // failure to get there is a window whose panes will not paste an image, and nothing this side
+    // can retry, so it is written down rather than returned.
+    if let Err(e) = win.with_webview(|webview| {
+        use webkit2gtk::glib::prelude::ObjectExt;
+        use webkit2gtk::{PermissionRequestExt, WebViewExt};
+
+        webview.inner().connect_permission_request(|_, req| {
+            if req.type_().name() == "WebKitClipboardPermissionRequest" {
+                req.allow();
+                return true;
+            }
+            false
+        });
+    }) {
+        log::warn!("clipboard permission goes unanswered in this window: {e}");
+    }
+}
+
 /// Make sure the talk window exists, and — with `raise` — bring it to the front.
 ///
 /// Both are this one door because a window that is not there and a window that is behind other work
@@ -182,6 +221,10 @@ pub async fn talk_open(
         builder = builder.position(x, y);
     }
     let win = builder.build().map_err(failed)?;
+    // The panes drawn in here read the clipboard the same way the board's do, so this window is
+    // given the same answer to the same ask.
+    #[cfg(target_os = "linux")]
+    allow_clipboard_read(&win);
     // A window is put in front of the others as it is made, whether or not it was given the
     // keyboard — so the board is raised back over it. Without this, restoring the shape at launch
     // buries the ledger under a terminal nobody asked to look at.

@@ -111,6 +111,12 @@ tauri-plugin-single-instance = "2"
 # named here only so it can be called directly; `gio` comes with it as `gtk::gio`.
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+# The engine the webview is actually drawn by, named so the raw `WebKitWebView` that
+# `Webview::with_webview` hands down can be spoken to directly. One signal is taken on it: the
+# permission a pane's `navigator.clipboard.read()` raises, which nothing else answers and which is
+# refused unanswered (`crate::windows::allow_clipboard_read`). `tauri-runtime-wry` already puts
+# 2.0.2 in the lockfile, so naming it here adds no version to the build.
+webkit2gtk = "2.0"
 # The freedesktop bin, which is a format rather than a folder: a row put in it is a pair of files,
 # one of them a record of where the row came from, and putting the row back means deleting that
 # record with it (`crate::trash`). This crate owns both halves and is the only one of the three

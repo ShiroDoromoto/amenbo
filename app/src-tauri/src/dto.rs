@@ -2298,7 +2298,7 @@ pub struct FrameNameDto {
     /// The frame it is the name of. Names belong to frames, never to the session running in one.
     pub(crate) frame: String,
     pub(crate) name: String,
-    #[ts(type = "\"typed\" | \"session\" | \"person\"")]
+    #[ts(type = "\"session\" | \"person\"")]
     pub(crate) by: &'static str,
 }
 

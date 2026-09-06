@@ -891,9 +891,10 @@ impl Instructor {
             (Domain::Task, "opened") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
-            // The pane's own name, on the row the task draws for it. It is the line a road typed into
-            // that pane, so it is the road's own words and no part of the interface — which is what
-            // lets the absent half be read: a task with no such row has those words nowhere on it.
+            // The pane's own name, on the row the task draws for it. A road names its own pane
+            // (`terminal name-pane`), so what the row carries is the road's own words and no part of
+            // the interface — which is what lets the absent half be read: a task with no such row has
+            // those words nowhere on it.
             (Domain::Task, "pane") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
@@ -1926,7 +1927,7 @@ impl Instructor {
             // with a modifier is not part of a line at all (`app/src/talk/frames.ts`), so the naming
             // is still the road's to make. It is the same reason `run` clears by pressing.
             (Domain::Terminal, "open-shell") =>
-                "Open a plain shell in the pane — the terminal with no agent started in it — and in the pane already standing on the page, never in a new one: a page with a pane on it draws an empty frame beside it carrying this same list, and opening a shell there would leave the road with two panes where it asked for one. Where that pane is already running an agent, end it first by holding control and pressing D, which is the end of input and not a line sent into the pane — do not type a command to end it, the first line typed into a pane being what names the pane and naming one never this step's to do. The row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. Only where no pane is standing at all is the frame the way in: the same list is on the frame itself, above the press that opens it, so choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane, and the page carries no pane this step was not asked for."
+                "Open a plain shell in the pane — the terminal with no agent started in it — and in the pane already standing on the page, never in a new one: a page with a pane on it draws an empty frame beside it carrying this same list, and opening a shell there would leave the road with two panes where it asked for one. Where that pane is already running an agent, end it first by holding control and pressing D, which is the end of input and not a line sent into the pane — do not type a command to end it, the words on a pane being how every step below says which pane it means and never this step's to add to. The row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. Only where no pane is standing at all is the frame the way in: the same list is on the frame itself, above the press that opens it, so choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane, and the page carries no pane this step was not asked for."
                     .to_string(),
             // Writing a command of the reader's own down on the frame. Two fields and a
             // press, and the reading that matters is taken before the press: what is registered runs
@@ -1963,7 +1964,7 @@ impl Instructor {
                     None => "the pane the step before opened — the box on the page with a prompt and nothing else on it, not the empty frame beside it".to_string(),
                 };
                 format!(
-                    "Click into {pane} — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and, where the pane has not been named yet, being the name it takes.",
+                    "Click into {pane} — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, where it is how every step after it says which pane it means.",
                     req(with, "text")?
                 )
             }
@@ -2038,7 +2039,7 @@ impl Instructor {
                     false => String::new(),
                 };
                 format!(
-                    "Click into the pane and clear what is on it — hold control and press L, which clears the screen without sending a line — so nothing an earlier step left is still on the screen. Do not type a command to clear it: the first line typed into a pane is what names the pane, and naming one is never this step's to do. Then type `{}` and press return{standing_in}, and wait until it has finished and the prompt is back.",
+                    "Click into the pane and clear what is on it — hold control and press L, which clears the screen without sending a line — so nothing an earlier step left is still on the screen. Do not type a command to clear it: the words on a pane are how every step says which pane it means, and adding to them is never this step's to do. Then type `{}` and press return{standing_in}, and wait until it has finished and the prompt is back.",
                     req(with, "command")?
                 )
             }
@@ -2123,7 +2124,7 @@ impl Instructor {
             // would be the first line into a pane that has no name, and would take the name for
             // good. Control-D says the same thing to a shell and says it off the line.
             (Domain::Terminal, "end-pane") =>
-                "In the pane that has a terminal running in it, hold control and press D — the end of input, which ends the program. Do not type a command to end it: the first line typed into a pane is what names the pane, and naming one is never this step's to do. The pane stays where it is with what it printed still on it, and nothing is running in it any more."
+                "In the pane that has a terminal running in it, hold control and press D — the end of input, which ends the program. Do not type a command to end it: the words on a pane are how every step says which pane it means, and adding to them is never this step's to do. The pane stays where it is with what it printed still on it, and nothing is running in it any more."
                     .to_string(),
             // Naming the place, which is three presses and not one: the row's menu, the item in it,
             // and the key that takes the word. All three are said, and the last of them is said
@@ -2922,7 +2923,7 @@ impl Instructor {
             // pane that has closed takes its row with it while the reservation stands — so the line says what is being looked for and never what it would mean.
             (Domain::Task, "pane") => match present(with) {
                 true => format!(
-                    "On the ledger, open the task \"{}\" and confirm it draws a row saying where the work is happening, carrying the pane's own name \"{}\" — the line typed into that pane, which nothing else on this face says.",
+                    "On the ledger, open the task \"{}\" and confirm it draws a row saying where the work is happening, carrying the pane's own name \"{}\" — what that pane was named, which nothing else on this face says.",
                     self.target_label(with),
                     req(with, "shows")?
                 ),
@@ -8357,13 +8358,13 @@ steps_gui:
         );
     }
 
-    /// Ending a program, on the two steps that do it. Neither may say it with a line: a pane that has
-    /// no name takes the first one typed into it and never gives it back, so a step that ended an
-    /// agent by typing `exit` would name every pane it walked through after its own word, and the
-    /// line a road types afterwards to call the pane something would land on a frame already named.
-    /// Both say control-D instead, which is the end of input and no part of a line.
+    /// Ending a program, on the two steps that do it. Neither may say it with a line: the words on a
+    /// pane are what every `shows` names it by, so a step that ended an agent by typing `exit` would
+    /// put its own word on every pane it walked through, and a road that came back to one would be
+    /// reading a screen the harness had written on. Both say control-D instead, which is the end of
+    /// input and no part of a line.
     #[test]
-    fn a_program_is_ended_by_a_press_so_the_pane_keeps_its_name_for_the_road() {
+    fn a_program_is_ended_by_a_press_so_the_road_keeps_the_pane_to_itself() {
         let s = load(r#"
 id: x
 title: y
@@ -8385,7 +8386,7 @@ steps_gui:
                 "step {i} got: {line}"
             );
             assert!(!line.contains("run: exit"), "step {i} still types the ending: {line}");
-            assert!(line.contains("what names the pane"), "step {i} does not say why: {line}");
+            assert!(line.contains("which pane it means"), "step {i} does not say why: {line}");
         }
         // And the plain shell is still reached from all three shapes the face can be in, with which
         // of them applies said rather than left to the operator: a page holding a pane draws an empty

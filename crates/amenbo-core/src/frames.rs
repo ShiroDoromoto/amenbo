@@ -19,10 +19,10 @@
 //! tick's day marks in [`crate::overview`], and not in `config.json`, which a restore does not carry
 //! (`AMB-D-434`).
 //!
-//! **Three things name a frame, and they are ranked** ([`NamedBy`]). The first line a person types into
-//! a new pane names it, so a pane is not called "3" until somebody gets round to it; `talk name`
-//! from the agent running in it improves on that; and a person renaming it outranks both, for good —
-//! an agent that says `talk name` afterwards does not take a person's word back off the frame.
+//! **Two things name a frame, and they are ranked** ([`NamedBy`]). `talk name` from the agent running
+//! in the pane names it, and a person renaming it outranks that, for good — an agent that says
+//! `talk name` afterwards does not take a person's word back off the frame. A frame neither has
+//! named is drawn by the folder it works in, which the window decides and nothing here writes down.
 
 use std::collections::BTreeMap;
 
@@ -43,11 +43,11 @@ const RETIRED_NAMES_META: &str = "talk.frame_names";
 
 /// How long a frame's name may be, in characters.
 ///
-/// **A name is a label and not a sentence.** All three of the things that name a frame can run long —
-/// a first line typed at an agent is a request, and `talk name` is whatever the agent thought of —
-/// and the row it is drawn on has the rest of what is happening to fit on it beside the name. The
-/// bound is here rather than at the three doors because it is one rule about names, and the window
-/// gives what is left of a long one an ellipsis rather than the room.
+/// **A name is a label and not a sentence.** Both of the things that name a frame can run long —
+/// `talk name` is whatever the agent thought of, and a person may type anything — and the row it is
+/// drawn on has the rest of what is happening to fit on it beside the name. The bound is here rather
+/// than at the two doors because it is one rule about names, and the window gives what is left of a
+/// long one an ellipsis rather than the room.
 const NAME_LIMIT: usize = 80;
 
 /// Who named a frame. The order of the variants is the order of their authority: a naming may replace
@@ -55,10 +55,7 @@ const NAME_LIMIT: usize = 80;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NamedBy {
-    /// The first line the person typed into the pane. It names a frame that has none and never
-    /// replaces one — it is the *first* line, and a second is just more typing.
-    Typed,
-    /// The agent, through `talk name`. It knows what it is doing better than the first line did.
+    /// The agent, through `talk name` — the only thing that names a frame nobody has named.
     Session,
     /// The person, saying so. The last word, and it stays the last word.
     Person,
@@ -76,12 +73,11 @@ pub struct FrameName {
 
 /// Whether a naming by `by` may take the place of what is on the frame now.
 ///
-/// The whole rule, in one place: nothing outranks a person; the first line typed only ever names a
-/// frame that has no name at all; anything else replaces its own rank and below.
+/// The whole rule, in one place: nothing outranks a person, and anything else replaces its own rank
+/// and below.
 fn accepts(current: Option<&FrameName>, by: NamedBy) -> bool {
     match current {
         None => true,
-        Some(_) if by == NamedBy::Typed => false,
         Some(current) => by >= current.by,
     }
 }
@@ -199,15 +195,13 @@ pub fn save_layout(engine: &StoreEngine, layout: &SavedLayout) -> Result<()> {
 mod tests {
     use super::*;
 
-    use NamedBy::{Person, Session, Typed};
+    use NamedBy::{Person, Session};
 
     /// The ranking, as the one question it answers: may this naming take the place of that one?
     #[test]
-    fn the_first_line_names_a_frame_that_has_none_and_nothing_more() {
-        assert!(accepts(None, Typed), "a pane with no name is what the first line is for");
-        let typed = FrameName { name: "make verify".into(), by: Typed };
-        assert!(!accepts(Some(&typed), Typed), "the second line typed is just more typing");
-        assert!(accepts(Some(&typed), Session), "the agent knows better than the first line");
+    fn a_frame_with_no_name_takes_whatever_names_it() {
+        assert!(accepts(None, Session), "an agent may name a pane nobody has named");
+        assert!(accepts(None, Person), "and so may a person");
     }
 
     /// The ranking is what the map applies — not what the caller hoped. A refused naming answers with
@@ -216,10 +210,6 @@ mod tests {
     fn a_refused_naming_answers_with_the_name_that_stood() {
         let mut names = FrameNames::default();
         assert!(names.all().is_empty(), "no frame has been named yet");
-
-        names.name("1", "make verify", Typed);
-        names.name("1", "cargo test", Typed);
-        assert_eq!(names.all()["1"].name, "make verify", "the *first* line");
 
         names.name("1", "the migration", Session);
         names.name("1", "AMB-T-3597", Person);
@@ -332,7 +322,6 @@ mod tests {
     fn a_person_outranks_the_agent_and_keeps_outranking_it() {
         let person = FrameName { name: "the migration".into(), by: Person };
         assert!(!accepts(Some(&person), Session), "`talk name` does not take a person's word back");
-        assert!(!accepts(Some(&person), Typed));
         assert!(accepts(Some(&person), Person), "and a person may change their mind");
         let session = FrameName { name: "reading the store".into(), by: Session };
         assert!(accepts(Some(&session), Session), "an agent may say something newer than itself");

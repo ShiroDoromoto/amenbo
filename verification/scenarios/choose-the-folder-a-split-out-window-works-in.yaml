@@ -29,8 +29,8 @@ title: A terminal split into a window of its own with nothing running asks which
 description: >
   Split the terminal out of the board with nothing running in it. The window that opens does not
   reach for the machine's folder picker: it asks which of this project's folders its pane works in,
-  offering those and nothing else. Answer it, and the pane opens there — a plain shell, taking the
-  first line typed into it as the window's name.
+  offering those and nothing else. Answer it, and the pane opens there — a plain shell, carrying the
+  line the road typed into it.
 
 given:
   - type: action
@@ -100,9 +100,9 @@ steps_gui:
     op: open-shell
     window: "Amenbo — "
 
-  # The line names the pane's frame — the row above the pane is where it shows, the window keeping
-  # its own name throughout. It is typed for the reason every road that speaks in a pane types one:
-  # it is the reader's own words, and so readable on a screen in any language.
+  # The line is typed for the reason every road that speaks in a pane types one: it is the reader's
+  # own words, and so readable on a screen in any language — and it is how the reading below says it
+  # is looking at this window's pane and no other.
   - type: action
     domain: terminal
     op: type-line

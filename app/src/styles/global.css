@@ -377,8 +377,8 @@ input[type="color"] {
    pane, and what this panel says is which pane that is. */
 .slot__plate:hover .plate-peek:not([hidden]),
 .slot__bar:focus-within .plate-peek:not([hidden]) { display: block; }
-/* The name, which is the line the panel most often exists for: it is the first line the agent typed,
-   and the row gives it a share rather than the room it asks for (`.plate__name`). */
+/* The name, which is the line the panel most often exists for: it is whatever the session called
+   itself, and the row gives it a share rather than the room it asks for (`.plate__name`). */
 .plate-peek__name {
   display: block;
   color: var(--c-text);

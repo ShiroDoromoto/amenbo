@@ -2271,8 +2271,8 @@ const REGISTRY: &[OpSpec] = &[
     // A line typed into the pane and sent. `text` is the reader's own words rather than the
     // interface's, which is what makes it worth reading back: it is on the screen because a person
     // put it there, in whatever language the app is in, so a road can follow it from one window to
-    // the other. It also names the pane's frame — the first line sent into a frame is what it is
-    // called — which is how a road says *which* window it means once there are two.
+    // the other. It is also how a road says *which* window it means once there are two: the pane is
+    // named by it in every step that says `shows`.
     //
     // `shows` is which pane, named the way `remove-pane` names one: by the words a road typed into it
     // earlier. A pane just opened needs none — it is the only one on the page with nothing on it, and
@@ -2428,10 +2428,11 @@ const REGISTRY: &[OpSpec] = &[
     // operator crosses over before it lands, so the step ends on the ledger. How long they have is
     // the driver's to say and not the road's.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text"], binds: false },
-    // A name the person gives a pane, typed on that same row. The words the row carries are otherwise
-    // the session's own, said from inside the terminal, and this is the other hand on them: the last
-    // word on a frame is the person's, so a name typed here stands over whatever the session called
-    // itself (`app/src/talk/frames.ts`).
+    // A name the person gives a pane, typed on that same row. It and the session's own `talk name` are
+    // the only two things that name a frame, and this is the one that wins: the last word on a frame
+    // is the person's, so a name typed here stands over whatever the session called itself
+    // (`app/src/talk/frames.ts`). A pane neither has named is drawn by the folder it works in, which
+    // is a fact about the place and not a name — so a road that needs its pane named says so here.
     //
     // **The way in is the row's menu, and that menu is drawn only while a terminal is running**
     // (`app/src/shell/TerminalPane.tsx`). A frame nobody has opened anything in is a place there is

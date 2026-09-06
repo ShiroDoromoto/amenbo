@@ -194,3 +194,38 @@ fn a_project_nothing_has_written_starts_below_every_id_to_come() {
     let _ = filed(&mut store, new_task("最初の1件", project));
     assert!(version_of(&store, project) > 0, "the first write carried it forward");
 }
+
+/// **This device's own tables move nobody's version.** The bound folders, the lint opt-out and the
+/// harness answer are on the change feed, so a screen here can be told which scope to re-read — but the
+/// version is the number a reader *outside* asks (`AMB-D-582`), and none of the three travels on any road
+/// out. Moving it would send a carrier to re-read a window and hand it back exactly what it already held.
+///
+/// All three are exercised, because they arrive by two different doors: the registry save, and the two
+/// per-project answers.
+#[test]
+fn this_devices_own_tables_move_nobodys_version() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let _ = filed(&mut store, new_task("1件", project));
+    let settled = version_of(&store, project);
+    assert!(settled > 0, "there was a real write first, so this is not a version stuck at zero");
+
+    let mut reg = store.bindings();
+    reg.record_project_ref(project, "/work/こちら");
+    store.save_bindings(&reg).unwrap();
+    assert_eq!(version_of(&store, project), settled, "binding a folder moved nothing");
+
+    let bound = store.bound_folders().unwrap().into_iter().find(|b| b.project_id == project).unwrap();
+    store.repoint_binding(bound.id, project, "/work/移した先").unwrap().unwrap();
+    assert_eq!(version_of(&store, project), settled, "and neither did re-pointing it");
+
+    store.set_hook_optout(project, true).unwrap();
+    assert_eq!(version_of(&store, project), settled, "nor the lint opt-out");
+
+    store.set_harness_consent(project, amenbo_core::harness::Consent::answered(true)).unwrap();
+    assert_eq!(version_of(&store, project), settled, "nor the harness answer");
+
+    // And the door still opens for a record: what is held back is the device's own tables, not writes.
+    let _ = filed(&mut store, new_task("2件目", project));
+    assert!(version_of(&store, project) > settled, "a record still moves it");
+}

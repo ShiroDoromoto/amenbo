@@ -390,3 +390,25 @@ fn the_plugin_secrets_are_named_on_no_page_and_the_cursor_moves_past_them() {
     let (after, _) = drained(&store, project, moved_on);
     assert!(after.iter().any(|r| r.dataset == "task" && r.row_id == task), "{after:?}");
 }
+
+/// **This machine's own tables are on the feed and not on this road.** The opt-out, the harness answer and
+/// the bound folders are collected so that a screen here can be told which scope to re-read — and a
+/// carrier is told none of it: what they hold is this device's file paths and this device's answers, which
+/// mean nothing in a copy somewhere else.
+///
+/// So the page is empty and the cursor has moved: the row was there to withhold, which is the half that
+/// would pass unnoticed if the feed had simply never collected it. The read is through the **window**, so
+/// the cursor moving is also what says the row was stamped with this project — the scope a screen here
+/// re-reads (`AMB-D-856`).
+#[test]
+fn this_machines_own_tables_are_collected_and_still_never_named_on_a_page() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let cursor = caught_up(&store, project);
+
+    store.set_hook_optout(project, true).unwrap();
+
+    let (rows, moved_on) = drained(&store, project, cursor);
+    assert_eq!(rows, Vec::new(), "the opt-out is named on no page: {rows:?}");
+    assert!(moved_on > cursor, "and the feed did collect it — the page moved past the row it withheld");
+}

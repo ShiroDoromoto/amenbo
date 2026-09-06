@@ -4,16 +4,16 @@
 // rather than to the device, and a ceiling that leaves the middle its floor.
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  clampRailWidth, clampSideNarrow, clampSideWide, getRailShown, getRailWidth,
-  getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, PANE_MIN, RAIL_DEFAULT,
-  RAIL_MIN, setRailShown, setRailWidth, setSideNarrow, setSideShown, setSideTab, setSideWide,
-  setTabsCompact, tabsWidth, railMax, sideNarrowMax, sideWideMax, SIDE_MIN, SIDE_NARROW_DEFAULT,
-  SIDE_WIDE_DEFAULT,
+  clampRailWidth, clampSideNarrow, clampSideWide, clampTabsWidth, getRailShown, getRailWidth,
+  getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, getTabsWidth, PANE_MIN,
+  RAIL_DEFAULT, RAIL_MIN, setRailShown, setRailWidth, setSideNarrow, setSideShown, setSideTab,
+  setSideWide, setTabsCompact, setTabsWidth, tabsMax, tabsWidth, TABS_COMPACT_WIDTH, TABS_DEFAULT,
+  TABS_MIN, railMax, sideNarrowMax, sideWideMax, SIDE_MIN, SIDE_NARROW_DEFAULT, SIDE_WIDE_DEFAULT,
 } from "./columns";
 
-/** What the tab column is taking while nothing has been folded — it comes off the window before any
- *  of these are measured, so every ceiling below is written against it. */
-const TABS = tabsWidth(false);
+/** What the tab column is taking while nothing has been folded or dragged — it comes off the window
+ *  before any of these are measured, so every ceiling below is written against it. */
+const TABS = TABS_DEFAULT;
 
 /** Two projects, because most of what is kept here is kept for one of them and not the other. */
 const ONE = 1;
@@ -153,6 +153,64 @@ describe("whether the project tabs are compact", () => {
 
   it("takes less of the window folded than named", () => {
     expect(tabsWidth(true)).toBeLessThan(tabsWidth(false));
+  });
+});
+
+// The named width is dragged and kept for the device, the compact one is the mark's own and is not
+// (`AMB-D-848`).
+describe("the tab column's own width", () => {
+  // A window with room for the column and both of the ones beside it: what is under test here is
+  // what a person dragged, and a window too narrow for any of it answers with the floor whatever
+  // they did.
+  beforeEach(() => {
+    window.innerWidth = 1280;
+  });
+
+  it("starts at the width the column shipped with", () => {
+    expect(getTabsWidth()).toBe(TABS_DEFAULT);
+    expect(tabsWidth(false)).toBe(TABS_DEFAULT);
+  });
+
+  it("comes back as it was left, on whichever project is on the screen", () => {
+    setTabsWidth(200);
+    expect(getTabsWidth()).toBe(200);
+    expect(tabsWidth(false)).toBe(200);
+  });
+
+  it("leaves the folded width where it is, however far the named one was dragged", () => {
+    setTabsWidth(240);
+    expect(tabsWidth(true)).toBe(TABS_COMPACT_WIDTH);
+  });
+
+  it("never goes under the floor, however far the drag went", () => {
+    expect(setTabsWidth(0)).toBe(TABS_MIN);
+  });
+
+  it("is clamped on the way out too, so a width kept on a wider screen cannot come back whole", () => {
+    window.innerWidth = 960;
+    // Written straight into storage, the way a run on a 4K display would have left it.
+    localStorage.setItem("amenbo.termface.tabsWidth", "3000");
+    expect(getTabsWidth()).toBe(tabsMax());
+    expect(getTabsWidth()).toBeLessThan(3000);
+  });
+
+  it("falls back where what was kept is not a width at all", () => {
+    localStorage.setItem("amenbo.termface.tabsWidth", "wide");
+    expect(getTabsWidth()).toBe(TABS_DEFAULT);
+  });
+
+  // The tabs are measured against the window itself, because what they take is what `roomBeside`
+  // subtracts: dragged to the ceiling, the two columns beside the panes still have their floors and
+  // the middle still has its own.
+  it("leaves the middle and both columns beside it their floors", () => {
+    window.innerWidth = 960;
+    const tabs = clampTabsWidth(9999);
+    expect(960 - tabs - RAIL_MIN - SIDE_MIN).toBeGreaterThanOrEqual(PANE_MIN);
+  });
+
+  it("grows by what a column the person closed is no longer taking", () => {
+    window.innerWidth = 960;
+    expect(tabsMax(0, 0) - tabsMax()).toBe(RAIL_MIN + SIDE_MIN);
   });
 });
 

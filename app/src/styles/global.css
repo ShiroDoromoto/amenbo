@@ -250,6 +250,7 @@ input[type="color"] {
    with them, which is why it is a box of its own: the grip is drawn on the edge rather than in the
    flow, so it needs something to be positioned against. */
 .termface__column { position: relative; flex: 0 0 auto; min-height: 0; display: flex; }
+.termface__column--tabs { width: var(--tabs-w, 160px); }
 .termface__column--rail { width: var(--rail-w, 160px); }
 .termface__column--side { width: var(--side-w, 16rem); }
 /* The wide width lies over the panes rather than pushing them aside: a page that had to make room
@@ -267,6 +268,7 @@ input[type="color"] {
   position: absolute; top: 0; bottom: 0; width: 9px; z-index: 3;
   cursor: col-resize;
 }
+.termface__grip--tabs { right: -4px; }
 .termface__grip--rail { right: -4px; }
 .termface__grip--side { left: -4px; }
 .termface__grip:hover { background: var(--c-edge); }
@@ -659,11 +661,12 @@ input[type="color"] {
    band of chrome at the side of the window, and a column of a different colour between the window's
    edge and the rail would read as a thing lying on the face rather than as part of it.
 
-   Its width is the face's `--tabs-w`, which is one of two fixed numbers rather than anything a person
-   drags (`app/src/talk/columns.ts`). The list scrolls and the fold does not — a machine with many
-   projects must not push the way back to the names off the bottom. */
+   Its width is the column around it (`.termface__column--tabs`), which the face draws at `--tabs-w`:
+   the named width is dragged by the grip on that column's edge, and the compact one is the mark's own
+   and is not (`app/src/talk/columns.ts`, `AMB-D-848`). The list scrolls and the fold does not — a
+   machine with many projects must not push the way back to the names off the bottom. */
 .ptabs {
-  flex: 0 0 auto; width: var(--tabs-w, 160px); min-height: 0;
+  flex: 1 1 auto; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
   background: var(--c-surface);
   border-right: 1px solid var(--c-rule);

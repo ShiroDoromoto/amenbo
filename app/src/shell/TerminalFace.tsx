@@ -14,10 +14,10 @@ import {
   paneIn, panesOf, restored, roomOnPage, setCount, setOrient, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import {
-  clampRailWidth, clampSideNarrow, clampSideWide, getRailShown, getRailWidth, getSideNarrow,
-  getSideShown, getSideTab, getSideWide, getTabsCompact, setRailShown, setRailWidth, setSideNarrow,
-  setSideShown, setSideTab, setSideWide, setTabsCompact, tabsWidth,
-  type SideTab,
+  clampRailWidth, clampSideNarrow, clampSideWide, clampTabsWidth, getRailShown, getRailWidth,
+  getSideNarrow, getSideShown, getSideTab, getSideWide, getTabsCompact, getTabsWidth, setRailShown,
+  setRailWidth, setSideNarrow, setSideShown, setSideTab, setSideWide, setTabsCompact, setTabsWidth,
+  TABS_COMPACT_WIDTH, type SideTab,
 } from "../talk/columns";
 import { FilesPanel, openKey, type OpenFile } from "../files/FilesPanel";
 import { FolderTree } from "../files/FolderTree";
@@ -194,10 +194,12 @@ export function TerminalFace({
   // has no project until it is told which one it is on; the read below is what brings that project's
   // own answers in. What the file face is drawn at is its narrow width — the wide one is `AMB-T-4253`.
   const [railShown, setRailShownState] = useState(getRailShown);
-  // Whether the project tabs are drawn compact. The column itself is neither closed nor dragged
-  // (`./ProjectTabs`), so this is the whole of what the face keeps about it, and it is kept for the
-  // device the way the wishes above it are (`../talk/columns`).
+  // Whether the project tabs are drawn compact, and how wide they are while their names are drawn.
+  // The column itself is never closed (`./ProjectTabs`); both of these are kept for the device the way
+  // the wish above them is, because what the column draws is the same list of projects whichever one
+  // is on the screen (`AMB-D-848`, `../talk/columns`).
   const [tabsCompact, setTabsCompactState] = useState(getTabsCompact);
+  const [namedTabs, setNamedTabsState] = useState(getTabsWidth);
   const [sideShown, setSideShownState] = useState(getSideShown);
   const [railWidth, setRailWidthState] = useState(() => getRailWidth(null));
   const [narrowWidth, setNarrowWidthState] = useState(() => getSideNarrow(null));
@@ -208,6 +210,8 @@ export function TerminalFace({
   const [wide, setWideState] = useState(false);
   // What the column is actually drawn at, which is the one the face hands the stylesheet.
   const sideWidth = wide ? wideWidth : narrowWidth;
+  // The same for the tabs: folded, what they stand at is the mark's own width, which is not dragged.
+  const tabsW = tabsCompact ? TABS_COMPACT_WIDTH : namedTabs;
   // Which of the file face's two the panel shows. It is held here rather than there because the row
   // that switches between them is here: the panel is only on the screen while it is open, so a
   // switch living inside it could not be the one that opens it (`../files/FilesPanel`). What it
@@ -797,12 +801,28 @@ export function TerminalFace({
     [],
   );
 
+  // The tab column's edge. It stands at the face's own left, so its width is simply how far the
+  // pointer has come from there — there is nothing to its left to take off the sum.
+  const dragTabs = useMemo(
+    () => dragging(
+      (at) => clampTabsWidth(
+        at - (rootRef.current?.getBoundingClientRect().left ?? 0),
+        railShown ? railWidth : 0,
+        sideShown ? narrowWidth : 0,
+      ),
+      setNamedTabsState,
+      (px) => setTabsWidth(px, railShown ? railWidth : 0, sideShown ? narrowWidth : 0),
+    ),
+    // A column that is closed is taking nothing, so the tabs may have what it left (`../talk/columns`).
+    [dragging, railShown, railWidth, sideShown, narrowWidth],
+  );
+
   const dragRail = useMemo(
     () => dragging(
       // The rail's edge is its right one, and what is to its left is the tab column: the width is
       // how far the pointer is from the face's left, less what the tabs are taking.
       (at) => clampRailWidth(
-        at - (rootRef.current?.getBoundingClientRect().left ?? 0) - tabsWidth(tabsCompact),
+        at - (rootRef.current?.getBoundingClientRect().left ?? 0) - tabsW,
         sideShown ? narrowWidth : 0,
       ),
       setRailWidthState,
@@ -810,7 +830,7 @@ export function TerminalFace({
     ),
     // The narrow width and not the drawn one: the wide column lies over the panes rather than
     // pushing them aside, so it takes nothing the rail could have had (`AMB-D-835`).
-    [dragging, layout.project, sideShown, narrowWidth, tabsCompact],
+    [dragging, layout.project, sideShown, narrowWidth, tabsW],
   );
 
   // The edge of whichever width the column is standing on. Dragging the wide one leaves the narrow
@@ -965,7 +985,7 @@ export function TerminalFace({
       className="termface"
       ref={rootRef}
       style={{
-        "--tabs-w": `${tabsWidth(tabsCompact)}px`,
+        "--tabs-w": `${tabsW}px`,
         "--rail-w": `${railWidth}px`,
         "--side-w": `${sideWidth}px`,
       } as CSSProperties}
@@ -1102,15 +1122,28 @@ export function TerminalFace({
       <div className="termface__body">
         {/* The projects, at the edge of everything else because that is what they hold (`AMB-D-838`).
             It is drawn whatever the columns beside the panes are doing: it is the one column here
-            that cannot be put away. */}
-        <ProjectTabs
-          layout={layout}
-          projects={projects}
-          needy={needy}
-          compact={tabsCompact}
-          onCompact={wantCompact}
-          onProject={takeProject}
-        />
+            that cannot be put away. Its edge is dragged like theirs while the names are drawn; folded,
+            there is no edge to take hold of, because what is left is the mark and a mark is one size
+            (`AMB-D-848`). */}
+        <div className="termface__column termface__column--tabs">
+          <ProjectTabs
+            layout={layout}
+            projects={projects}
+            needy={needy}
+            compact={tabsCompact}
+            onCompact={wantCompact}
+            onProject={takeProject}
+          />
+          {!tabsCompact && (
+            <div
+              className="termface__grip termface__grip--tabs"
+              role="separator"
+              aria-orientation="vertical"
+              title={t("pane.resize")}
+              onPointerDown={dragTabs}
+            />
+          )}
+        </div>
         {/* The rail, with the panes beside it. The edge between the column and them is where its
             width is dragged. */}
         {railShown && (

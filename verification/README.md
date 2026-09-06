@@ -205,6 +205,18 @@ The app is killed rather than asked to quit, the way it is taken down at the end
 the app's name, and a name cannot pick out one instance. It happens before that step is handed over,
 so what the operator is asked to confirm is the window already in front of them.
 
+**A road can also walk the app out of its own door** (`store quit`, then `store answer-quit`). This
+one is the operator's: the way out is pressed at the screen — `how: menu` is the item `⌘Q` reaches,
+`how: last-window` the close on the app's one window, and the two arrive by different roads inside
+the app, so a road that walked one proves half the gate. What comes of the press is what the step
+declares: `asks: true` is the question that stands where a terminal is still open, and `asks: false`
+is the app ending on the gesture because there was nothing to lose. `answer-quit` answers that
+question — left out for the plain one, or naming one of `hand-back` / `leave` / `cancel` with the
+`target:` the box has to name, the same three the way out of a single pane offers. Every answer but
+`cancel` ends the app, and the harness brings another up on the same store **after** the step is
+handed over rather than before it: the operator is the one who watched it go, and a shot is aimed at
+a pid, so there has to be a window again by the time the step is photographed.
+
 The executable inside the bundle is started directly rather than the bundle being `open`ed, since
 the environment is what carries the store and `open` hands the launch to launchd with an
 environment of its own. `AMENBO_HOME` is the product's own override, so the build under test is not

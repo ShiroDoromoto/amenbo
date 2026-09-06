@@ -67,11 +67,19 @@ retired).
 ### Build and run
 
 ```bash
+export AMENBO_LATEST_JSON_URL=http://127.0.0.1:1/latest.json   # see below; every make target passes it for you
 cargo build
 cargo test                              # fast: unit + light integration suites
 cargo test --features scale,e2e         # full: also the scaling guard and the real-binary cli_e2e_* suites
 cargo run -p amenbo-cli -- agent --json   # the single source of truth for the CLI
 ```
+
+The update endpoint is injected into `amenbo-core` at build time and has no default, so a bare
+`cargo` invocation that does not carry `AMENBO_LATEST_JSON_URL` stops at a const-eval panic naming
+the variable — a default is what lets a forgotten variable ship as a wrong answer. The
+`make` targets, the Docker builds and CI all pass it; the address above is the non-production one
+they hand every unstamped build, and nothing ever queries it, because a build the release workflow
+did not stamp does not ask (`update_check`).
 
 The heaviest tests are gated behind cargo features so the everyday `cargo test`
 stays sub-second: the read-hotpath scaling guard behind `scale`, the real-binary
@@ -122,7 +130,8 @@ compiling won't do: the Tauri gtk/glib sys crates need their system deps at buil
 a real Linux is the only way to reach that code. It needs Docker and takes a few minutes,
 which is why it is not part of `make test` — reach for it when you touch an OS-gated branch.
 
-Plain `cargo test` still works everywhere; nextest is an optional accelerator.
+Plain `cargo test` still works everywhere, given the environment above; nextest is an
+optional accelerator.
 Thresholds and the `ci` profile live in `.config/nextest.toml`.
 
 Data is stored under the OS-standard location (on macOS,

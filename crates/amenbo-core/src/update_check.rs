@@ -34,18 +34,33 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// The default endpoint: Amenbo's own update service, answering with the manifest the release step
-/// publishes as `latest.json`. Asking here rather than at the release itself is what keeps where a
-/// version is announced apart from where the release is hosted (`AMB-D-717`).
+/// The endpoint this build queries: Amenbo's own update service, answering with the manifest the
+/// release step publishes as `latest.json`. Asking here rather than at the release itself is what
+/// keeps where a version is announced apart from where the release is hosted (`AMB-D-717`).
 ///
-/// The query string is part of the constant on purpose. One string is the whole address, so a change
-/// of server — or a move back to a file hanging off a release — is a change of this line and nothing
-/// else, rather than a base and its parameters kept in step by hand.
+/// The address is **injected at build time**, from `AMENBO_LATEST_JSON_URL`, and is nowhere in this
+/// source — writing it here publishes the production endpoint with every clone of a public
+/// repository. There is no default to fall back to: an unset variable stops the compile, because a
+/// default is what turns a forgotten variable into a wrong answer nobody sees, and a default that
+/// *is* production puts that answer straight into a shipped binary (`AMB-D-849`). An empty value
+/// stops it too — that is what an unset repository variable hands a workflow, so it is the same
+/// forgetting wearing a different shape.
 ///
-/// A shipped binary carries this URL baked in, so moving the endpoint strands every existing install
-/// on the old address until it updates once — which is why the release's own `latest.json` goes on
-/// being published.
-pub const LATEST_JSON_URL: &str = "https://update.amenbo.work/update-check/v1?client=amenbo";
+/// The query string is part of the injected value on purpose. One string is the whole address, so a
+/// change of server — or a move back to a file hanging off a release — is a change of what the build
+/// is handed and nothing else, rather than a base and its parameters kept in step by hand.
+///
+/// A shipped binary carries the address it was built with baked in, so moving the endpoint strands
+/// every existing install on the old one until it updates once — which is why the release's own
+/// `latest.json` goes on being published.
+pub const LATEST_JSON_URL: &str = match option_env!("AMENBO_LATEST_JSON_URL") {
+    Some(url) if !url.is_empty() => url,
+    _ => panic!(
+        "AMENBO_LATEST_JSON_URL must be set, and non-empty, when this crate is compiled: the \
+         update endpoint is injected at build time and has no default. Build through the Makefile, \
+         which passes it, or set it yourself."
+    ),
+};
 
 /// Where the "apply the update" affordance falls back to: the download page of the latest release.
 /// We land here whenever the unified-installer URL for the current OS cannot be read out of

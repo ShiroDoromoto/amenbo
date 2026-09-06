@@ -605,11 +605,16 @@ export async function mountTerminal(
   // **On Linux the same image arrives by a different door** — `Ctrl+Shift+V` rather than the paste,
   // which carries nothing there (`../core/clipFiles`). What comes back is written and pasted the
   // same way; only the reading differs.
-  const stopImagePress = takesPastedImages(host, writeImage, (paths) => {
-    const its = session;
-    if (its === null || paths.length === 0) return;
-    void pasteIntoTerminal(its, quotedPaths(paths)).catch(() => {});
-  });
+  const stopImagePress = takesPastedImages(
+    host,
+    writeImage,
+    (paths) => {
+      const its = session;
+      if (its === null || paths.length === 0) return;
+      void pasteIntoTerminal(its, quotedPaths(paths)).catch(() => {});
+    },
+    "terminal",
+  );
 
   // **Shift-Enter, which is the one press the emulator cannot pass on.** What a terminal is given for
   // Enter is a carriage return, and it is given the same one whether or not Shift was held — so an

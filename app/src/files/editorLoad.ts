@@ -7,7 +7,7 @@
 // editor whose layout does not run under jsdom.
 
 import type { Extension } from "@codemirror/state";
-import { takesPastedFiles, writesPastedImage } from "../core/clipFiles";
+import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import { langFor, type LangId } from "./grammars";
 
 /**
@@ -195,19 +195,27 @@ export async function mountEditor(
   //
   // ⚠ **The picture does not outlast the app**, so what is saved is a path that will stop reaching
   // it. That is the trade: it is for handing a screenshot to something running now.
+  //
+  // **On Linux the image comes in by the press rather than by the paste** — WebKitGTK hands a paste
+  // nothing at all, so the clipboard is asked when `Ctrl+V` is pressed (`../core/clipFiles`). The
+  // same writing and the same insert; on the other two machines the press listener is never put on.
+  const insert = (text: string) => {
+    if (!text) return;
+    editor.dispatch(editor.state.replaceSelection(text), {
+      scrollIntoView: true,
+      userEvent: "input.paste",
+    });
+  };
+  const writeImage = (bytes: Uint8Array, mime: string) => writesPastedImage(bytes, mime, null);
   const stopPaste = editable
     ? takesPastedFiles(
         parent,
-        (paths, words) => {
-          const text = paths.length > 0 ? paths.join("\n") : words;
-          if (!text) return;
-          editor.dispatch(editor.state.replaceSelection(text), {
-            scrollIntoView: true,
-            userEvent: "input.paste",
-          });
-        },
-        (bytes, mime) => writesPastedImage(bytes, mime, null),
+        (paths, words) => insert(paths.length > 0 ? paths.join("\n") : words),
+        writeImage,
       )
+    : () => {};
+  const stopImagePress = editable
+    ? takesPastedImages(parent, writeImage, (paths) => insert(paths.join("\n")), "textbox")
     : () => {};
 
   return {
@@ -223,6 +231,7 @@ export async function mountEditor(
     },
     close() {
       stopPaste();
+      stopImagePress();
       editor.destroy();
     },
   };

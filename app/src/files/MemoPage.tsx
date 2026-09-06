@@ -30,7 +30,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { takesPastedFiles, writesPastedImage } from "../core/clipFiles";
+import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import { t } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { projectMemo, setProjectMemo } from "./memo";
@@ -107,21 +107,40 @@ export function MemoPage({ projectId }: { projectId: number }) {
   // ⚠ **The picture does not outlast the app.** A draft kept over a restart keeps a path that
   // reaches nothing, which is the trade this door is: it is for a screenshot being handed to an
   // agent now, not for a draft that holds pictures.
+  //
+  // **On Linux the image comes in by the press rather than by the paste** — WebKitGTK hands a paste
+  // nothing at all, so the clipboard is asked when `Ctrl+V` is pressed (`../core/clipFiles`). It is
+  // the same writing and the same insert; only the reading differs, and on the other two machines
+  // the press listener is never put on.
   useEffect(() => {
     const field = box.current;
     if (field === null) return;
-    return takesPastedFiles(
+    // Where what arrived goes: at the caret, taking the selection with it, which is what every other
+    // paste into a text box does. The caret is read when the text lands rather than when the reading
+    // started — the press's answer comes back after it, and a person may have moved on.
+    const insert = (arrived: string) => {
+      if (arrived === "") return;
+      const from = field.selectionStart;
+      const to = field.selectionEnd;
+      typed(field.value.slice(0, from) + arrived + field.value.slice(to));
+      caret.current = from + arrived.length;
+    };
+    const writeImage = (bytes: Uint8Array, mime: string) => writesPastedImage(bytes, mime, null);
+    const stopPaste = takesPastedFiles(
       field,
-      (paths, words) => {
-        const arrived = paths.length > 0 ? paths.join("\n") : words;
-        if (arrived === "") return;
-        const from = field.selectionStart;
-        const to = field.selectionEnd;
-        typed(field.value.slice(0, from) + arrived + field.value.slice(to));
-        caret.current = from + arrived.length;
-      },
-      (bytes, mime) => writesPastedImage(bytes, mime, null),
+      (paths, words) => insert(paths.length > 0 ? paths.join("\n") : words),
+      writeImage,
     );
+    const stopPress = takesPastedImages(
+      field,
+      writeImage,
+      (paths) => insert(paths.join("\n")),
+      "textbox",
+    );
+    return () => {
+      stopPaste();
+      stopPress();
+    };
   }, [typed]);
 
   // And the caret put back, before the browser has drawn the field the state came down into.

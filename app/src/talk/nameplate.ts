@@ -12,6 +12,11 @@
 // end: a reason longer than a label is refused where it is said
 // (`amenbo_core::session::WAITING_LIMIT`).
 //
+// **A place too narrow for its line loses the middle of it, not the end** (`middleElide`). What
+// names a reservation stands at both ends — the ref at the head, the last words of the title at the
+// tail — so a line cut at the end draws two panes on the same road as the same line. The middle is
+// where the two are alike, and it is what goes.
+//
 // **What gives it back is a panel of the row's own, and not the machine's tooltips** (`peekLines`).
 // Three places each with a tooltip is three hovers to find and three shapes to read, and the one
 // place with no tooltip at all was the name — the part most often cut, and cut out of a line the
@@ -266,7 +271,7 @@ export function sayText(say: Say, lang: Lang): { mark: Mark; text: string } {
       // The pause, which is the mark for a person's turn: something that was running has stopped for
       // them. It is the same mark a handed-over turn gets, and deliberately — where the pane is too
       // narrow for words, what has to survive is "somebody is needed here", and which of the two
-      // reasons it was is the sentence a hover gives back.
+      // reasons it was is the sentence the panel gives back.
       return { mark: "pause", text: t("talk.unsent", lang) };
     case "note":
       return { mark: null, text: say.text };
@@ -305,6 +310,41 @@ export function peekLines(plate: Plate, lang: Lang): readonly string[] {
   const right = sayText(plate.say, lang);
   if (right.text) lines.push(right.text);
   return lines;
+}
+
+/** Where the head ends and the tail begins, as a share of what a cut line keeps. */
+const HEAD_SHARE = 0.55;
+
+/**
+ * The longest cut of `full` that fits, with the middle dropped rather than the end.
+ *
+ * **What identifies a reservation is at both ends.** The head is the ref and the tail is the last
+ * words of the title, and a line cut at the end keeps only the first of them — so two panes on the
+ * same road, at different steps of it, are drawn as the same line. Dropping the middle keeps enough
+ * of each to tell them apart.
+ *
+ * The head keeps a little over half, because the ref it carries is fixed-width and near the start:
+ * an even split would spend on the title's opening words the room the ref needs to be whole.
+ *
+ * Whether a candidate fits is asked of the caller, once per step of a binary search over how much to
+ * keep. It is a question about a box on a screen, and the answer is measured rather than reckoned in
+ * characters: the row is not monospaced.
+ */
+export function middleElide(full: string, fits: (candidate: string) => boolean): string {
+  if (fits(full)) return full;
+  const cut = (keep: number) => {
+    const head = Math.ceil(keep * HEAD_SHARE);
+    const tail = keep - head;
+    return `${full.slice(0, head)}…${tail > 0 ? full.slice(full.length - tail) : ""}`;
+  };
+  let lo = 0;
+  let hi = full.length;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi + 1) / 2);
+    if (fits(cut(mid))) lo = mid;
+    else hi = mid - 1;
+  }
+  return cut(lo);
 }
 
 /** Which mark stands in front of a part of the row, or nothing where the part asks for none. */
@@ -365,6 +405,21 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
   peek.append(peekName, peekRest);
   host.append(peek);
 
+  // The box the middle is drawn in changes width without its words changing — a pane opened beside
+  // it, a splitter dragged, the window resized — and a cut made for the old width is either short of
+  // what the new one holds or over it. So the fit is asked again whenever the box moves, off what is
+  // kept on the element rather than off a redraw nobody triggered.
+  //
+  // Guarded because the row is drawn in tests as well as in a window, and a test's document has no
+  // observer to give: what it costs there is a fit that stands at whatever the first one measured,
+  // which is what a box that never resizes would have anyway.
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(() => {
+      const full = now.dataset.full;
+      if (full !== undefined) fitMiddle(now, full);
+    }).observe(now);
+  }
+
   // Which face the lamp was on last time. Setting the phase again on a row that is already blinking
   // would start the turn over, which is the one thing the shared phase exists to prevent — so it is
   // written only where the answer has changed, which is also the only moment it can be out of step.
@@ -391,7 +446,7 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
     name.textContent = plate.name ?? "";
     const middle = nowText(plate.now, lang);
     drawMark(nowMark, middle.mark);
-    now.textContent = middle.text;
+    fitMiddle(now, middle.text);
     const right = sayText(plate.say, lang);
     drawMark(sayMark, right.mark);
     say.textContent = right.text;
@@ -406,6 +461,25 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
     // is the one thing drawn as more than grey text.
     row.dataset.say = plate.say.kind;
   };
+}
+
+/**
+ * Draw `text` into `el`, with the middle dropped where the box is too narrow to hold it.
+ *
+ * The whole of it is kept on the element, because what is drawn there is a cut of it and every later
+ * fit has to start from the words rather than from the last cut of them.
+ *
+ * **The measuring is done on the element itself**, one candidate at a time: what fits is a question
+ * about this font at this size in this box, and no count of characters answers it. `scrollWidth`
+ * against `clientWidth` is the reading, and setting the text before each reading is what makes the
+ * layout the browser measures the one being asked about.
+ */
+function fitMiddle(el: HTMLElement, text: string): void {
+  el.dataset.full = text;
+  el.textContent = middleElide(text, (candidate) => {
+    el.textContent = candidate;
+    return el.scrollWidth <= el.clientWidth;
+  });
 }
 
 /**

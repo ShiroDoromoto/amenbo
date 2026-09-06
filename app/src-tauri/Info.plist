@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  What the app says about itself to macOS, over and above what the bundler writes.
+
+  **macOS puts items into the Edit menu that this app never wrote** — Writing Tools, AutoFill, Start
+  Dictation…, Emoji & Symbols — and it writes them in whatever language the reader's machine and this
+  bundle have in common. A bundle naming no localizations has only its development region to offer,
+  so that language was English, and those items stood in English beside the ones Amenbo had already
+  drawn in the reader's own (`AMB-T-4464` measured it on four builds).
+
+  **Naming the nineteen is the whole of the fix** (`AMB-D-394`). Empty `.lproj` directories are not
+  needed for it: measured, the same items come out translated on the declaration alone, and a build
+  carrying both lists every language twice for nothing.
+
+  **This file is picked up because it sits beside `tauri.conf.json`.** `tauri-cli` merges what is
+  here into the Info.plist the bundler generates, and `tauri.conf.json` names it nowhere on purpose:
+  the Makefile injects `bundle.macOS.files` through `--config` on every build, and a second writer of
+  that object would put the merge order in play for no gain.
+
+  ⚠ **Which of the nineteen is still the machine's answer, not Amenbo's.** These items follow the
+  OS's `AppleLanguages`, and the language a reader picked in Amenbo does not enter into it — so a
+  macOS in English with an Amenbo in Japanese draws one menu in two languages. Closing that would
+  mean writing `AppleLanguages` into the app's own defaults, which is a decision and not a file.
+-->
+<plist version="1.0">
+<dict>
+  <!--
+    Where a reader whose language is not on the list below lands, which is where the dictionary drops
+    them too (`AMB-D-394`). Spelt `en` rather than the `English` the bundler defaults to: the two name
+    the same region, but one of them reads as the fallback it is.
+  -->
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <!--
+    The nineteen, in the order `AMB-D-394` sets them out: the two Amenbo began with, then the nine it
+    reaches most readers with, then the eight after those.
+  -->
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>ja</string>
+    <string>zh-Hans</string>
+    <string>zh-Hant</string>
+    <string>ko</string>
+    <string>es</string>
+    <string>pt-BR</string>
+    <string>fr</string>
+    <string>de</string>
+    <string>it</string>
+    <string>ru</string>
+    <string>hi</string>
+    <string>id</string>
+    <string>vi</string>
+    <string>th</string>
+    <string>tr</string>
+    <string>pl</string>
+    <string>nl</string>
+    <string>uk</string>
+  </array>
+</dict>
+</plist>

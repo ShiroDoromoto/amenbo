@@ -14,7 +14,7 @@
 //! goes by) and every write is a direct UPSERT/DELETE, wrapped in a transaction only where a caller
 //! needs several rows to land together.
 
-use rusqlite::{Connection, OptionalExtension, Transaction};
+use rusqlite::{Connection, OptionalExtension};
 
 use crate::binding::{BoundFolder, Registry, Repoint};
 use crate::error::Result;
@@ -22,6 +22,7 @@ use crate::harness::Consent;
 use crate::read_receipts::ReadReceipts;
 use crate::store_engine::schema::col;
 use crate::store_engine::sql::{Col, Delete, Insert, Int, Pred, Select, Sort, Sql, Table, Update};
+use crate::store_engine::write::WriteTx;
 use crate::store_engine::{StoreEngine, StoreEngineError};
 
 /// The plain tables this module owns, named through the generated column identifiers — so a column
@@ -71,14 +72,22 @@ pub fn load_bindings(conn: &Connection) -> Registry {
 /// task pointing at nothing. [`Registry`] is a value type that holds no ids ([`crate::binding::Registry`]),
 /// which is what keeps its whole test surface intact — so the ids are held here, by matching on the pair
 /// the row is identified by. One transaction still means a contended save cannot tear.
-pub fn write_bindings(tx: &Transaction<'_>, reg: &Registry) -> Result<()> {
-    let held = bound_folders(tx)?;
+///
+/// It takes a [`WriteTx`] rather than a bare transaction, for the reason [`set_harness_consent`] gives:
+/// `binding_project_dir` is one of the tables the change feed is being taught to collect (`AMB-D-856`),
+/// and a row written outside a declared window would be stamped with whatever window came next. Each
+/// project is declared as its own rows are reached, so a save that changes nothing moves nobody's
+/// version.
+pub fn write_bindings(tx: &WriteTx<'_>, reg: &Registry) -> Result<()> {
+    let held = bound_folders(tx.conn())?;
     for row in &held {
         if !reg.project_dirs.get(&row.project_id).is_some_and(|dirs| dirs.contains(&row.dir)) {
+            // Before the DELETE, while the row is still there to say whose it was.
+            tx.touches_project(row.project_id);
             Delete::from(BPD.table)
                 .filter(Pred::eq(BPD.id, row.id))
                 .sql()
-                .execute(tx)
+                .execute(tx.conn())
                 .map_err(StoreEngineError::from)?;
         }
     }
@@ -87,11 +96,12 @@ pub fn write_bindings(tx: &Transaction<'_>, reg: &Registry) -> Result<()> {
             if held.iter().any(|row| row.project_id == *project_id && row.dir == *dir) {
                 continue;
             }
+            tx.touches_project(*project_id);
             Insert::into(BPD.table)
                 .set(BPD.project_id, *project_id)
                 .set(BPD.dir, dir.as_str())
                 .sql()
-                .execute(tx)
+                .execute(tx.conn())
                 .map_err(StoreEngineError::from)?;
         }
     }
@@ -134,24 +144,31 @@ pub fn bound_folders(conn: &Connection) -> Result<Vec<BoundFolder>> {
 /// [`Registry::claim_project_ref`] makes on a plain bind (and matching the same way, so a differently
 /// spelled path — a trailing slash, a symlinked parent — is caught too). That is also what keeps the
 /// `UNIQUE (project_id, dir)` pair free for the row being re-pointed.
+///
+/// It takes a [`WriteTx`] for the reason [`write_bindings`] does, and declares **both** ends of the move:
+/// the project the row is leaving and the one it joins are two different windows when a re-point crosses
+/// projects, and a carrier watching the one it left would otherwise never hear the folder go.
 pub fn repoint_binding(
-    tx: &Transaction<'_>,
+    tx: &WriteTx<'_>,
     id: i64,
     project_id: i64,
     dir: &str,
 ) -> Result<Option<Repoint>> {
-    let held = bound_folders(tx)?;
+    let held = bound_folders(tx.conn())?;
     let Some(row) = held.iter().find(|r| r.id == id).cloned() else { return Ok(None) };
+    tx.touches_project(row.project_id);
+    tx.touches_project(project_id);
     let want = crate::binding::normalize_dir_for_match(dir);
     let mut retracted = Vec::new();
     for other in held.iter().filter(|r| r.id != id) {
         if crate::binding::normalize_dir_for_match(&other.dir) != want {
             continue;
         }
+        tx.touches_project(other.project_id);
         Delete::from(BPD.table)
             .filter(Pred::eq(BPD.id, other.id))
             .sql()
-            .execute(tx)
+            .execute(tx.conn())
             .map_err(StoreEngineError::from)?;
         retracted.push(other.clone());
     }
@@ -160,7 +177,7 @@ pub fn repoint_binding(
         .set_value(BPD.dir.name(), rusqlite::types::Value::Text(dir.to_string()))
         .filter(Pred::eq(BPD.id, id))
         .sql()
-        .execute(tx)
+        .execute(tx.conn())
         .map_err(StoreEngineError::from)?;
     Ok(Some(Repoint {
         id,
@@ -603,7 +620,7 @@ mod tests {
         reg.record_project_ref(7, "/work/a");
         reg.record_project_ref(7, "/work/b");
         {
-            let tx = engine.transaction().unwrap();
+            let tx = engine.write().unwrap();
             write_bindings(&tx, &reg).unwrap();
             tx.commit().unwrap();
         }
@@ -691,7 +708,7 @@ mod tests {
             rows.filter_map(|r| r.ok()).collect()
         };
         let save = |reg: &Registry| {
-            let tx = engine.transaction().unwrap();
+            let tx = engine.write().unwrap();
             write_bindings(&tx, reg).unwrap();
             tx.commit().unwrap();
         };
@@ -730,7 +747,7 @@ mod tests {
         let engine = StoreEngine::open_in_memory().unwrap();
         let rows = || bound_folders(engine.conn()).unwrap();
         let repoint = |id: i64, project: i64, dir: &str| {
-            let tx = engine.transaction().unwrap();
+            let tx = engine.write().unwrap();
             let done = repoint_binding(&tx, id, project, dir).unwrap();
             tx.commit().unwrap();
             done
@@ -740,7 +757,7 @@ mod tests {
         reg.record_project_ref(7, "/work/moved");
         reg.record_project_ref(7, "/work/still-there");
         {
-            let tx = engine.transaction().unwrap();
+            let tx = engine.write().unwrap();
             write_bindings(&tx, &reg).unwrap();
             tx.commit().unwrap();
         }

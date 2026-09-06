@@ -16,6 +16,11 @@
 /* The one mark that is a shape rather than a drawing: the priority disc says which priority by the
    colour it is filled with, so for it alone the outline convention is turned round. */
 .icon[data-icon="dot"] { fill: currentColor; stroke: none; }
+/* The fold marks are an arrow run into a bar, and the bar is the window's edge rather than another
+   stroke of the arrow (`AMB-D-848`). It is the first path of the three, and it alone is drawn heavier
+   than the convention: at 16px a bar of the arrow's own weight reads as part of the arrowhead. */
+.icon[data-icon="foldLeft"] > path:first-child,
+.icon[data-icon="foldRight"] > path:first-child { stroke-width: 3; }
 
 /* ---------- atoms ---------- */
 .facet { display: inline-flex; align-items: center; gap: var(--s-1); }

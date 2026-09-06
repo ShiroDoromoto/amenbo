@@ -96,9 +96,11 @@ export function ProjectTabs({
       </div>
       {/* Which way the arrow points is which way the column goes, and the words say the same thing:
           the control is small and is drawn where a reader is not looking, so what it does must be
-          readable without pressing it to find out. */}
+          readable without pressing it to find out. The mark is the arrow run into the window's edge
+          rather than a chevron (`AMB-D-848`) — a chevron is the disclosure pair and says a section is
+          folded, where what this does is move a column between two widths. */}
       <button className="ptabs__fold" aria-label={fold} title={fold} onClick={() => onCompact(!compact)}>
-        <Icon name={compact ? "chevronRight" : "chevronLeft"} />
+        <Icon name={compact ? "foldRight" : "foldLeft"} />
       </button>
     </nav>
   );

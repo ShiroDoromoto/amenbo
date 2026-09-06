@@ -7,11 +7,13 @@ import {
   NO_CHANGEOVER,
   nowOf,
   nowText,
+  peekLines,
   sayOf,
   sayText,
   type Dot,
   type Held, standsAsTurn,
 } from "./nameplate";
+import { statusLabel } from "../core/i18n";
 import { NO_SESSIONS, opened, said, unsent, type Sessions } from "./sessions";
 
 const AT = "2026-08-24T09:00:00Z";
@@ -39,11 +41,8 @@ describe("what the middle of the row says", () => {
     expect(now([])).toEqual({ kind: "idle" });
     expect(now([held()])).toMatchObject({ kind: "one", ref: "#3598", stopped: false });
     expect(now([held(), held({ ref: "#3599" })])).toMatchObject({ kind: "many", count: 2 });
-    // The breakdown is one hover away rather than stacked on a row that has one line.
-    expect(nowText(now([held(), held({ ref: "#3599" })]), EN)).toMatchObject({
-      text: "2 tasks",
-      title: "#3598\n#3599",
-    });
+    // The row counts them; which ones they are is in the panel a hover drops under it.
+    expect(nowText(now([held(), held({ ref: "#3599" })]), EN)).toMatchObject({ text: "2 tasks" });
   });
 
   it("marks a task that has stopped, and never as a turn being handed over", () => {
@@ -119,32 +118,69 @@ describe("the one thing said on the right", () => {
     // The mark is the pause: what is left where the row is too narrow for words is "somebody is
     // needed here", which is as true of this as of a turn handed over.
     expect(sayText({ kind: "unsent" }, EN).mark).toBe("pause");
-    // And the words are kept for a hover, since the row may have shown none of them.
-    expect(sayText({ kind: "unsent" }, EN).title).toBe(sayText({ kind: "unsent" }, EN).text);
   });
 
   it("says nothing where nothing was said", () => {
     // Silence is silence. It is not a claim that nothing needs a hand (`AMB-D-748`).
     expect(sayOf([], undefined)).toEqual({ kind: "silent" });
-    expect(sayText({ kind: "silent" }, EN)).toEqual({ mark: null, text: "", title: "" });
-  });
-
-  it("keeps the whole of what was said for a reader who asks, since the row may not have shown it", () => {
-    // The row gives this place what is left of one line, and a narrow pane leaves it nothing at all
-    // (`../styles/global.css`) — so the words are kept where a hover can reach them, the way the
-    // breakdown of several reservations is.
-    const reason = "which of the two, and the second one moves the store";
-    expect(sayText({ kind: "waiting", text: reason }, EN).title).toBe(reason);
-    expect(sayText({ kind: "note", text: "reading the store" }, EN).title).toBe("reading the store");
-    // Nothing the agent said, nothing to hold back: these two are the row's own words.
-    expect(sayText({ kind: "premise" }, EN).title).toBe("");
-    expect(sayText({ kind: "quiet", minutes: 7 }, EN).title).toBe("");
+    expect(sayText({ kind: "silent" }, EN)).toEqual({ mark: null, text: "" });
   });
 });
 
 /** The lamp in front of the name, at rest. These cases are about the words on the row; what the lamp
  *  does has its own (`./plateMoving.test`). */
 const STILL: Dot = { frame: "1", face: "out" };
+
+describe("the whole row, for a reader who asks for it", () => {
+  it("says every place in full, in the order the row reads", () => {
+    const reason = "which of the two, and the second one moves the store";
+    expect(
+      peekLines(
+        {
+          name: "the migration",
+          now: { kind: "one", ref: "#3598", title: "the nameplate", stopped: false },
+          say: { kind: "waiting", text: reason },
+          dot: STILL,
+        },
+        EN,
+      ),
+    ).toEqual(["#3598 the nameplate", reason]);
+  });
+
+  it("gives the two places that hold more than a line what a mark used to carry", () => {
+    // A task that has stopped says so in words, beside the ref it stopped on.
+    expect(
+      peekLines(
+        {
+          name: null,
+          now: { kind: "one", ref: "#3598", title: "the nameplate", stopped: true },
+          say: { kind: "silent" },
+          dot: STILL,
+        },
+        EN,
+      ),
+    ).toEqual([`#3598 the nameplate — ${statusLabel("blocked", EN)}`]);
+    // And several reservations are listed rather than counted.
+    expect(
+      peekLines(
+        {
+          name: null,
+          now: { kind: "many", count: 2, refs: ["#3598", "#3599"], stopped: 0 },
+          say: { kind: "silent" },
+          dot: STILL,
+        },
+        EN,
+      ),
+    ).toEqual(["2 tasks", "#3598", "#3599"]);
+  });
+
+  it("has no line for a place with nothing in it", () => {
+    // Silence contributes nothing, so a pane that is only idle has the one line the row does.
+    expect(
+      peekLines({ name: null, now: { kind: "idle" }, say: { kind: "silent" }, dot: STILL }, EN),
+    ).toEqual(["Talking it over"]);
+  });
+});
 
 describe("the row on the page", () => {
   it("is one line, and redraws in place", () => {
@@ -170,10 +206,13 @@ describe("the row on the page", () => {
     expect(host.querySelector(".plate__now")?.textContent).toBe("#3598 the nameplate");
     expect(host.querySelector(".plate__say")?.textContent).toBe("which of the two");
     expect(row?.getAttribute("data-say")).toBe("waiting");
-    // The mark keeps the whole of it too: where the pane is narrow the words are not drawn, and the
-    // mark is what is left to ask.
-    expect(host.querySelector(".plate__mark--say")?.getAttribute("title")).toBe("which of the two");
-    expect(host.querySelector(".plate__say")?.getAttribute("title")).toBe("which of the two");
+    // No place on the row carries a tooltip of its own: the whole of it is in the panel instead, and
+    // the machine's own tooltip over that panel would be the same sentence twice.
+    expect(host.querySelector(".plate__mark--say")?.getAttribute("title")).toBeNull();
+    expect(host.querySelector(".plate__say")?.getAttribute("title")).toBeNull();
+    expect(host.querySelector(".plate-peek__name")?.textContent).toBe("the migration");
+    expect(host.querySelector(".plate-peek")?.textContent)
+      .toContain("#3598 the nameplate\nwhich of the two");
   });
 
   it("comes down when there is nothing to label, and comes back with the same row", () => {

@@ -329,7 +329,51 @@ input[type="color"] {
    the pane narrows (see `.plate` below). The question is asked of this box rather than of the window:
    what decides whether the words are readable is the pane, and the same row is drawn in the split-out
    window, where the window's own width is the pane's. */
-.slot__plate { flex: 1; min-width: 0; container-type: inline-size; }
+.slot__plate {
+  flex: 1; min-width: 0; container-type: inline-size;
+  /* The box the panel under the row is measured against, and the one thing that decides whether the
+     panel is drawn over the terminal or under it. `container-type` already makes this the containing
+     block an absolute child is placed in; what it does not do is order this box against the pane
+     below, whose emulator puts up layers of its own. `1` is above those and below the surface a drag
+     is caught on (`.slot__handing`), which has to stay over everything while a file hangs on it. */
+  position: relative; z-index: 1;
+}
+/* The whole of the row, unelided, dropped under it while a pointer is on it (`../talk/nameplate`).
+   It is what the row cannot be: as many lines as the words take, wrapped, and breaking mid-word where
+   a word is a path with no spaces in it.
+
+   **It is bounded left and right by the pane and nowhere else.** A panel that grew to its content
+   would hang over the pane beside it and cover a terminal nobody is reading — so it takes the row's
+   own width and goes down instead, where what it covers is the pane it is about. And it takes no
+   pointer events, so the terminal under it goes on being pressed, selected and scrolled through the
+   panel as though it were not there — which also means the hover it is drawn by never ends by the
+   panel arriving under the pointer. */
+.plate-peek {
+  display: none;
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 1;
+  padding: var(--s-2);
+  border: 1px solid var(--c-rule); border-radius: var(--r-md);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-md);
+  color: var(--c-text-muted);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+/* A pane with nothing to say has an empty panel, and an empty box with a border on it reads as
+   something having gone wrong — so the hover asks, rather than the row being hidden after the fact:
+   `display: block` here is an author rule and would beat the user agent's `[hidden]`. */
+.slot__plate:hover .plate-peek:not([hidden]) { display: block; }
+/* The name, which is the line the panel most often exists for: it is the first line the agent typed,
+   and the row gives it a share rather than the room it asks for (`.plate__name`). */
+.plate-peek__name {
+  display: block;
+  color: var(--c-text);
+  font-weight: 600;
+}
+.plate-peek__name:empty { display: none; }
 /* The line while a name is being typed in its place. Out of sight and still on the page: what
    draws the row is mounted once and keeps drawing into this box, so taking it away would be taking
    the label down to type a name (`../talk/plate`). */

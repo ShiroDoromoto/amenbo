@@ -2280,6 +2280,11 @@ text?: string, };
  * The tasks come back as ids rather than rows: the pane draws one of them at most, and the same
  * [`crate::commands::tasks_by_ids`] every other screen hydrates with can say the rest. What is being
  * answered here is *whose* they are, which nothing but that area knows.
+ *
+ * **It goes on a label and nowhere else** (`AMB-D-855`). A move made outside a pane is not written to
+ * that area, so a task can come back in `holding` after the world has already finished it — the older
+ * row is the newest one left. Drawn beside the pane that is on it, that is a line that has fallen
+ * behind; used to move the ledger, it is a write on a fact that has gone.
  */
 export type SessionWorkDto = { 
 /**

@@ -1243,9 +1243,13 @@ use amenbo_core::read_receipts::ReadReceipts;
 
 /// Return this machine's read state (per-task last_seen plus the mailbox-wide last_seen). Read at
 /// GUI startup and when the inbox renders.
+///
+/// Opened read-only ([`open_store_read`]), the way every command that only reads is (`AMB-D-857`): a
+/// write open takes the write lock and lets the engine's start-up work run, and this asks for
+/// neither.
 #[tauri::command]
 pub fn read_receipts() -> Result<ReadReceipts, CmdError> {
-    Ok(open_store()?.read_receipts()?)
+    Ok(open_store_read()?.read_receipts()?)
 }
 
 /// Mark a task as seen (last viewed = now). Called when the detail pane opens. Returns the whole
@@ -1268,9 +1272,11 @@ pub fn mark_mailbox_seen() -> Result<ReadReceipts, CmdError> {
 
 /// Return the inbox items archived on this machine (a list of task_ids). The inbox reads it while
 /// rendering and leaves those items out of the list.
+///
+/// Read-only ([`open_store_read`]), for the reason [`read_receipts`] is.
 #[tauri::command]
 pub fn inbox_archived() -> Result<Vec<i64>, CmdError> {
-    Ok(open_store()?.inbox_archive_ids()?)
+    Ok(open_store_read()?.inbox_archive_ids()?)
 }
 
 /// Archive an inbox item (drop it from the list). Returns the full id list afterwards.
@@ -1292,9 +1298,11 @@ pub fn inbox_unarchive(task_id: i64) -> Result<Vec<i64>, CmdError> {
 /// Return the inbox items this machine has already raised an OS notification for (task_ids). The
 /// mailbox loads it once at startup as its "already announced" baseline, so an arrival notifies
 /// exactly once even across restarts.
+///
+/// Read-only ([`open_store_read`]), for the reason [`read_receipts`] is.
 #[tauri::command]
 pub fn mailbox_notified_ids() -> Result<Vec<i64>, CmdError> {
-    Ok(open_store()?.mailbox_notified_ids()?)
+    Ok(open_store_read()?.mailbox_notified_ids()?)
 }
 
 /// Record that these inbox items have now been notified. Idempotent and batched — the mailbox adds
@@ -3745,9 +3753,14 @@ fn hook_repairs_for(dir: &str) -> Vec<String> {
 /// The GUI calls it **once, at app startup**, for the reason [`pointer_issues`] is called there and not on
 /// the snapshot path: probing costs a `git` spawn per folder, and the environment does not change on a
 /// store tick. The same call is what carries an answer already given out to the folders bound since.
+///
+/// The store is opened read-only ([`open_store_read`]) — the sweep reads the bindings and each
+/// project's opt-out and writes nothing back to it (`AMB-D-857`). What it does write is on disk
+/// beside the repositories: the hook blocks it installs and heals, and the in-process log of what it
+/// restored ([`session_hook_repairs`]).
 #[tauri::command]
 pub fn hook_offer() -> Result<Option<HookOfferDto>, CmdError> {
-    let store = open_store()?;
+    let store = open_store_read()?;
     let live = sweep_bound_repos(&store, store.config.hook_consent, true);
     Ok(live.then(|| HookOfferDto { cmd: amenbo_core::config::Paths::command_name().to_string() }))
 }

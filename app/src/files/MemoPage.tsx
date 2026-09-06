@@ -35,7 +35,21 @@ import { t } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { projectMemo, setProjectMemo } from "./memo";
 
-/** How long the typing has to settle before it is written. */
+/**
+ * How long the typing has to settle before it is written.
+ *
+ * **It is no longer the cost of a write that sets this.** It was 600ms when every save was
+ * expensive: the store file moved, the watcher could not say what had changed, and every query on
+ * the screen was read again for it (`AMB-T-4439`). A page lands in `store_meta`, which the change
+ * feed carries no row for, so the wake-up a save causes now reads nothing at all (`AMB-D-856`).
+ * Measured against a copy of a real store, one save is 23ms of store open and 0.2ms of write, and
+ * the wake-up after it 3ms — none of it on the way to the screen (`AMB-T-4461`).
+ *
+ * **It is kept at 600ms for the two things that do set it.** The pauses inside a sentence are
+ * shorter than this, so a person thinking mid-line does not have the ring started and stopped at
+ * them; and the fill is the wait drawn at its own length, which has to stay long enough to watch
+ * beside the 500ms close that follows it (`../styles/global.css`).
+ */
 const SETTLE_MS = 600;
 
 /** Where the writing stands: nothing typed yet, typing in hand, or written. */

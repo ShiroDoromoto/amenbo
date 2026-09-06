@@ -72,7 +72,9 @@ export type IconName =
   | "stop"
   | "newWindow"
   | "paneAcross"
-  | "paneDown";
+  | "paneDown"
+  | "foldLeft"
+  | "foldRight";
 
 /**
  * The icons a call site outside React has to draw, as geometry rather than as elements.
@@ -413,6 +415,26 @@ const ART: Record<IconName, ReactNode> = {
     <>
       <rect x="3" y="4.5" width="18" height="15" rx="1.6" />
       <path d="M3 12h18" />
+    </>
+  ),
+  // An arrow run into a bar and stopped there — the way between a column's two widths
+  // (`AMB-D-848`). The bar is the edge of the window the column is pinned to and the arrow is the
+  // column moving, so the pair say which way the press goes: left to fold the names away, right to
+  // bring them back. The bar is the one stroke drawn heavier than the convention
+  // (`./components.css`) — at 16px a bar of the arrow's own weight reads as a third line of the
+  // arrowhead rather than as a thing the arrow arrives at.
+  foldLeft: (
+    <>
+      <path d="M5 4.4v15.2" />
+      <path d="M20.4 12H7" />
+      <path d="M11.2 7.8 7 12l4.2 4.2" />
+    </>
+  ),
+  foldRight: (
+    <>
+      <path d="M19 4.4v15.2" />
+      <path d="M3.6 12H17" />
+      <path d="M12.8 7.8 17 12l-4.2 4.2" />
     </>
   ),
 };

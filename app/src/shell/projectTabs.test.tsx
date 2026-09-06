@@ -137,12 +137,15 @@ describe("the project tabs", () => {
     await draw();
     const fold = container.querySelector<HTMLElement>(".ptabs__fold")!;
     expect(fold.getAttribute("aria-label")).toBe(t("face.tabsCompact"));
+    // The arrow points the way the column is about to go, which is the whole of what the mark says.
+    expect(fold.querySelector("svg")!.getAttribute("data-icon")).toBe("foldLeft");
     await act(async () => { fold.click(); });
     expect(folded).toHaveBeenCalledWith(true);
 
     await draw(true);
     const back = container.querySelector<HTMLElement>(".ptabs__fold")!;
     expect(back.getAttribute("aria-label")).toBe(t("face.tabsNamed"));
+    expect(back.querySelector("svg")!.getAttribute("data-icon")).toBe("foldRight");
     await act(async () => { back.click(); });
     expect(folded).toHaveBeenLastCalledWith(false);
   });

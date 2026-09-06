@@ -726,16 +726,19 @@ input[type="color"] {
   position: absolute; top: 0; right: 0;
   box-shadow: 0 0 0 2px var(--c-surface);
 }
-/* The way between the two widths. Quiet and small: it is pressed once and left, where the tabs above
-   it are pressed all day (`AMB-D-838`). */
+/* The way between the two widths (`AMB-D-838`). It is pressed once and left, where the tabs above it
+   are pressed all day — but drawn as a faint mark on the column's own ground it could not be found at
+   all, so it is given the frame a control has (`AMB-D-848`): a sunken ground with a rule round it,
+   which is what tells a reader there is something here to press before they have gone looking for it.
+   Its place is unchanged — the foot of the column, below what scrolls. */
 .ptabs__fold {
   flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   margin: 0 var(--s-2) var(--s-2); padding: var(--s-1);
-  background: transparent; border: 1px solid transparent; border-radius: var(--r-sm);
-  color: var(--c-text-faint);
+  background: var(--c-sunken); border: 1px solid var(--c-rule); border-radius: var(--r-sm);
+  color: var(--c-text-muted);
 }
-.ptabs__fold:hover { background: var(--c-surface); color: var(--c-text); }
+.ptabs__fold:hover { background: var(--c-hover); color: var(--c-text); }
 
 /* The rail: the folders of the project being shown, under its name (`app/src/shell/FolderRail.tsx`,
    `AMB-D-838`).

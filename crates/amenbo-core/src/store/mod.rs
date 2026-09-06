@@ -427,7 +427,6 @@ impl Store {
     }
 
     /// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it
-    /// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it
     /// ([`crate::hooks`])? It says what was explicitly asked for here, never what `.git/hooks` currently
     /// holds. The *answer* to the hook question is not per project and does not live here: it is
     /// [`crate::config::Config::hook_consent`].

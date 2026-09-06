@@ -446,7 +446,12 @@ pub fn hook_opted_out(engine: &StoreEngine, project_id: i64) -> Result<bool> {
 /// it: both are explicit acts on one repository, and each undoes what the other said. Setting it twice is
 /// setting it once (the UPSERT is a no-op), and clearing one that was never there is the asked-for state
 /// rather than an error.
+///
+/// It writes through [`StoreEngine::write`] for the reason [`set_harness_consent`] gives, and declares the
+/// project it is about for the same one.
 pub fn set_hook_optout(engine: &StoreEngine, project_id: i64, opted_out: bool) -> Result<()> {
+    let tx = engine.write()?;
+    tx.touches_project(project_id);
     if opted_out {
         // The row is its own whole content — presence is the veto — so a repeat is a no-op, not an upsert
         // onto other columns (there are none). This mirrors `inbox_archive`, the other set-shaped table.
@@ -454,16 +459,16 @@ pub fn set_hook_optout(engine: &StoreEngine, project_id: i64, opted_out: bool) -
             .set(HO.project_id, project_id)
             .on_conflict_do_nothing(HO.project_id)
             .sql()
-            .execute(engine.conn())
+            .execute(tx.conn())
             .map_err(StoreEngineError::from)?;
     } else {
         Delete::from(HO.table)
             .filter(Pred::eq(HO.project_id, project_id))
             .sql()
-            .execute(engine.conn())
+            .execute(tx.conn())
             .map_err(StoreEngineError::from)?;
     }
-    Ok(())
+    Ok(tx.commit()?)
 }
 
 // ───────────────────────── AI-harness consent ─────────────────────────
@@ -495,16 +500,25 @@ pub fn harness_consent(engine: &StoreEngine, project_id: i64) -> Result<Option<C
 /// Record this project's answer, replacing whatever it said before. The answer to the question as first
 /// put is [`Consent::answered`]; the answer to the one re-ask is [`Consent::answered_again`], which is
 /// what spends it.
+///
+/// It writes through [`StoreEngine::write`] rather than straight onto the connection. SQLite reports a
+/// write to the `update_hook` whether or not a transaction is open, so a row written outside one — once
+/// its table is one the feed collects — sits in the engine's buffer until the next transaction drains it,
+/// and is then written to `change_feed` stamped with **that** operation's window, which is another
+/// project's or none (`AMB-D-856`). Opening the transaction here is what keeps this write in its own
+/// window, and `touches_project` says which window that is.
 pub fn set_harness_consent(engine: &StoreEngine, project_id: i64, consent: Consent) -> Result<()> {
+    let tx = engine.write()?;
+    tx.touches_project(project_id);
     Insert::into(HC.table)
         .set(HC.project_id, project_id)
         .set(HC.allowed, i64::from(consent.allowed))
         .set(HC.asked_again, i64::from(consent.asked_again))
         .on_conflict_update(HC.project_id)
         .sql()
-        .execute(engine.conn())
+        .execute(tx.conn())
         .map_err(StoreEngineError::from)?;
-    Ok(())
+    Ok(tx.commit()?)
 }
 
 /// Take the answer off the record, putting this project back to never having been asked (`AMB-D-459`).
@@ -513,13 +527,18 @@ pub fn set_harness_consent(engine: &StoreEngine, project_id: i64, consent: Conse
 /// there is no longer one.
 ///
 /// Clearing what was never answered is the asked-for state rather than an error, as with the opt-out.
+///
+/// It writes through [`StoreEngine::write`] for the reason [`set_harness_consent`] gives, and declares the
+/// project it is about for the same one.
 pub fn clear_harness_consent(engine: &StoreEngine, project_id: i64) -> Result<()> {
+    let tx = engine.write()?;
+    tx.touches_project(project_id);
     Delete::from(HC.table)
         .filter(Pred::eq(HC.project_id, project_id))
         .sql()
-        .execute(engine.conn())
+        .execute(tx.conn())
         .map_err(StoreEngineError::from)?;
-    Ok(())
+    Ok(tx.commit()?)
 }
 
 /// Prune the rows of a `task_id`-keyed overview table down to the ids `keep` accepts, in one

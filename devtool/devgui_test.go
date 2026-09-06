@@ -115,6 +115,9 @@ func TestInstanceNamesRoundTrip(t *testing.T) {
 		if got := taskIDFromAppDataName(appDataDirName(taskDevAppData(id))); got != id {
 			t.Errorf("app-data name of %s reads back as %q", id, got)
 		}
+		if got := taskIDFromCLIName(taskDevCLI(id)); got != id {
+			t.Errorf("CLI name of %s reads back as %q", id, got)
+		}
 	}
 	// What must NOT read as an instance. The shared dev app is permanent, and a name carrying
 	// anything but digits is someone's own build — the sweep deletes what it recognises, so
@@ -126,6 +129,13 @@ func TestInstanceNamesRoundTrip(t *testing.T) {
 	}
 	for _, name := range []string{"work.amenbo.amenbo", "work.amenbo.amenbo-dev", "work.amenbo.amenbo-dev-wip", "com.other.app"} {
 		if got := taskIDFromAppDataName(name); got != "" {
+			t.Errorf("%q was read as instance %q", name, got)
+		}
+	}
+	// The home a CLI copy lands in is somebody's home: the prod CLI, and anything else named
+	// after it, is not an instance to reclaim.
+	for _, name := range []string{"amenbo", "amenbo-cli", "amenbo-cli-wip", "Documents"} {
+		if got := taskIDFromCLIName(name); got != "" {
 			t.Errorf("%q was read as instance %q", name, got)
 		}
 	}

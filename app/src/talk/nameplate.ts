@@ -8,19 +8,22 @@
 // **The three places are ranked on the way out as well as on the way in.** A pane too narrow for all
 // of them drops them from the right, and what is left is the name and the mark saying a person is
 // needed (`../styles/global.css`) — the reason being unreadable does not stop "your turn" from being
-// read. Whatever went is one hover away. What keeps that a last resort is the other end: a reason
-// longer than a label is refused where it is said (`amenbo_core::session::WAITING_LIMIT`).
+// read. Whatever went is a pointer or the keyboard away. What keeps that a last resort is the other
+// end: a reason longer than a label is refused where it is said
+// (`amenbo_core::session::WAITING_LIMIT`).
 //
 // **A place too narrow for its line loses the middle of it, not the end** (`middleElide`). What
 // names a reservation stands at both ends — the ref at the head, the last words of the title at the
 // tail — so a line cut at the end draws two panes on the same road as the same line. The middle is
 // where the two are alike, and it is what goes.
 //
-// **The hover is a panel of the row's own, and not the machine's tooltips** (`peekLines`). Three
-// places each with a tooltip is three hovers to find and three shapes to read, and the one place
-// with no tooltip at all was the name — the part most often cut, and cut out of a line the agent
-// typed. So the whole row is read in one place instead: it drops under the header, wraps inside the
-// pane's own width, and takes no pointer events, so what is under it goes on being a terminal.
+// **What gives it back is a panel of the row's own, and not the machine's tooltips** (`peekLines`).
+// Three places each with a tooltip is three hovers to find and three shapes to read, and the one
+// place with no tooltip at all was the name — the part most often cut, and cut out of a line the
+// agent typed. So the whole row is read in one place instead: it drops under the header, wraps
+// inside the pane's own width, and takes no pointer events, so what is under it goes on being a
+// terminal. It is dropped by a pointer resting on the row and by the keyboard reaching the controls
+// beside it — the row itself is no tab stop (`../styles/global.css`).
 //
 // In front of the three is the lamp the pane is known by (`./moving`). It is not a fourth place and
 // takes no words, and it has three faces: **lit** while output is arriving, **blinking** while a
@@ -230,8 +233,8 @@ export function standsAsTurn(say: Say): boolean {
  * and says nothing about whose turn it is, which it does not.
  *
  * What a reader gets on asking is not here. The row is one line, so a stopped task's word for it and
- * a list of several refs are both more than this place holds — and both are in the panel a hover
- * drops under the header instead (`peekLines`), where the rest of the row is too.
+ * a list of several refs are both more than this place holds — and both are in the panel that drops
+ * under the header instead (`peekLines`), where the rest of the row is too.
  */
 export function nowText(now: Now, lang: Lang): { mark: Mark; text: string } {
   const stopped = (yes: boolean) => (yes ? "stop" : null) as Mark;
@@ -255,7 +258,8 @@ export function nowText(now: Now, lang: Lang): { mark: Mark; text: string } {
  * The row is one line and gives this place what is left of it, so what is said here is elided where
  * the pane is narrow and dropped altogether where it is narrower still — the mark stays either way,
  * because "a person is needed here" survives the reason being unreadable (`AMB-T-3673`). The whole of
- * it is one hover away instead (`peekLines`), the same way the breakdown of several reservations is.
+ * it is in the panel under the header instead (`peekLines`), the same way the breakdown of several
+ * reservations is.
  */
 export function sayText(say: Say, lang: Lang): { mark: Mark; text: string } {
   switch (say.kind) {
@@ -267,7 +271,7 @@ export function sayText(say: Say, lang: Lang): { mark: Mark; text: string } {
       // The pause, which is the mark for a person's turn: something that was running has stopped for
       // them. It is the same mark a handed-over turn gets, and deliberately — where the pane is too
       // narrow for words, what has to survive is "somebody is needed here", and which of the two
-      // reasons it was is the sentence a hover gives back.
+      // reasons it was is the sentence the panel gives back.
       return { mark: "pause", text: t("talk.unsent", lang) };
     case "note":
       return { mark: null, text: say.text };
@@ -423,7 +427,14 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
 
   return (plate: Plate | null, lang: Lang) => {
     row.hidden = plate === null;
-    if (plate === null) return;
+    if (plate === null) {
+      // The panel comes down with the row it belongs to. It is said here as well as below because the
+      // row being taken away is the one path that never reaches the lines, and a panel left up is an
+      // empty box with a border on it — dropped, on a pane that has never had a session, by a pointer
+      // resting on the row's place or by the keyboard reaching the button that removes the pane.
+      peek.hidden = true;
+      return;
+    }
     dot.style.setProperty("--dot-hue", String(hueOf(plate.dot.frame)));
     if (plate.dot.face !== face) {
       face = plate.dot.face;
@@ -439,7 +450,7 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
     const right = sayText(plate.say, lang);
     drawMark(sayMark, right.mark);
     say.textContent = right.text;
-    // And the same words again, unelided, in the panel a hover drops under the header. **No part of
+    // And the same words again, unelided, in the panel that drops under the header. **No part of
     // the row carries a tooltip of its own**: the machine draws one wherever the pointer happens to
     // stop, and two of them over the panel is the same sentence twice in two shapes.
     peekName.textContent = plate.name ?? "";

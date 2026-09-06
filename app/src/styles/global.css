@@ -363,9 +363,17 @@ input[type="color"] {
   pointer-events: none;
 }
 /* A pane with nothing to say has an empty panel, and an empty box with a border on it reads as
-   something having gone wrong — so the hover asks, rather than the row being hidden after the fact:
-   `display: block` here is an author rule and would beat the user agent's `[hidden]`. */
-.slot__plate:hover .plate-peek:not([hidden]) { display: block; }
+   something having gone wrong — so the two ask, rather than the row being hidden after the fact:
+   `display: block` here is an author rule and would beat the user agent's `[hidden]`.
+
+   **The second way in is the keyboard, and it is the controls beside the row rather than the row
+   itself.** The row is not a tab stop and must not become one: a stop of its own in front of every
+   pane would stand between a reader and the terminal they are heading for, and there is nothing on
+   the row to press. The controls at the end of the bar are already where the keyboard lands here,
+   and landing there is where the panel is most worth having — one of the two buttons removes the
+   pane, and what this panel says is which pane that is. */
+.slot__plate:hover .plate-peek:not([hidden]),
+.slot__bar:focus-within .plate-peek:not([hidden]) { display: block; }
 /* The name, which is the line the panel most often exists for: it is the first line the agent typed,
    and the row gives it a share rather than the room it asks for (`.plate__name`). */
 .plate-peek__name {

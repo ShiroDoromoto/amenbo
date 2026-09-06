@@ -255,6 +255,13 @@ describe("the row on the page", () => {
     const row = host.querySelector(".plate");
     expect(row, "the row was removed rather than hidden").toBeTruthy();
     expect((row as HTMLElement).hidden, "a pane with no session was labelled anyway").toBe(true);
+    // The panel goes with the row. A pane that has never had a session has nothing to put in it, and
+    // a panel left up would be an empty box with a border on it — dropped by a pointer on the row's
+    // place, or by the keyboard reaching the button beside it.
+    expect(
+      (host.querySelector(".plate-peek") as HTMLElement).hidden,
+      "a pane with no session kept an empty panel",
+    ).toBe(true);
 
     draw({ name: null, now: { kind: "idle" }, say: { kind: "silent" }, dot: STILL }, EN);
     expect(host.querySelector(".plate")).toBe(row);

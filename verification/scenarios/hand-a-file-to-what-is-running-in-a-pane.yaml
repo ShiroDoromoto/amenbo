@@ -72,19 +72,18 @@ description: >
   pane back on the screen.
 
 given:
+  # One project, bound to one folder, and the folder is named here rather than left to be added
+  # afterwards. Both halves are what the first step below stands on: the way in that opens a picker is
+  # the face of a project that has nowhere to run yet, and a project bound to several would put the
+  # question of which folder in front of every press that opens a pane. Bound to exactly one, the
+  # press opens there and asks nothing, which is what the six roads below need standing before them.
   - type: action
     domain: project
     op: create
     with:
       name: Workshop
-    as: workshop
-
-  - type: action
-    domain: folder
-    op: bind
-    with:
       dir: workshop
-      project: workshop
+    as: workshop
 
   # The file the third road hands over, and the folder the second one does — one write makes both,
   # since the folder is the one the file is written into.
@@ -104,13 +103,27 @@ steps_gui:
     with:
       face: terminal
 
-  # The pane every step below is about. A plain shell rather than an agent: what is under test is
-  # where the path lands and that nothing sent it, and an agent would answer the line on its own.
+  # Which project's panes the face is drawing, pressed rather than assumed: what the face comes up on
+  # is the run's business, and every reading below — the folders down the panel, the rows handed over
+  # — is this project's.
   - type: action
     domain: terminal
-    op: open-folder
+    op: go-project
     with:
-      dir: workshop
+      project: Workshop
+
+  # The pane every step below is about. A plain shell rather than an agent: what is under test is
+  # where the path lands and that nothing sent it, and an agent would answer the line on its own.
+  #
+  # The frame and not the picker. The picker is the face of a project with nowhere to run yet, and
+  # this one was bound where the world was stood up — so the press opens a pane in that folder and
+  # asks nothing, and a road that reached for the way in here would be hunting a control that is not
+  # on the screen.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
 
   - type: action
     domain: terminal

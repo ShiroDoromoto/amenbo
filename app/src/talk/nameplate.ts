@@ -11,6 +11,12 @@
 // read. Whatever went is one hover away. What keeps that a last resort is the other end: a reason
 // longer than a label is refused where it is said (`amenbo_core::session::WAITING_LIMIT`).
 //
+// **The hover is a panel of the row's own, and not the machine's tooltips** (`peekLines`). Three
+// places each with a tooltip is three hovers to find and three shapes to read, and the one place
+// with no tooltip at all was the name — the part most often cut, and cut out of a line the agent
+// typed. So the whole row is read in one place instead: it drops under the header, wraps inside the
+// pane's own width, and takes no pointer events, so what is under it goes on being a terminal.
+//
 // In front of the three is the lamp the pane is known by (`./moving`). It is not a fourth place and
 // takes no words, and it has three faces: **lit** while output is arriving, **blinking** while a
 // person's turn is standing, and **out** the rest of the time. All three are read at a glance and none
@@ -213,62 +219,88 @@ export function standsAsTurn(say: Say): boolean {
 }
 
 /**
- * The words the middle is drawn with, the mark in front of them, and what a reader gets on asking.
+ * The words the middle is drawn with, and the mark in front of them.
  *
  * The mark for a stopped task is not the pause: it says the task has stopped, which the ledger holds,
  * and says nothing about whose turn it is, which it does not.
+ *
+ * What a reader gets on asking is not here. The row is one line, so a stopped task's word for it and
+ * a list of several refs are both more than this place holds — and both are in the panel a hover
+ * drops under the header instead (`peekLines`), where the rest of the row is too.
  */
-export function nowText(now: Now, lang: Lang): { mark: Mark; text: string; title: string } {
+export function nowText(now: Now, lang: Lang): { mark: Mark; text: string } {
   const stopped = (yes: boolean) => (yes ? "stop" : null) as Mark;
   switch (now.kind) {
     case "idle":
-      return { mark: null, text: t("talk.idle", lang), title: "" };
+      return { mark: null, text: t("talk.idle", lang) };
     case "one":
-      return {
-        mark: stopped(now.stopped),
-        text: `${now.ref} ${now.title}`,
-        title: now.stopped ? statusLabel("blocked", lang) : "",
-      };
+      return { mark: stopped(now.stopped), text: `${now.ref} ${now.title}` };
     case "many":
       // The breakdown is not stacked on the pane: the row is one line, and a list of refs would push
-      // out the thing it is there to say. It is one hover away instead.
-      return {
-        mark: stopped(now.stopped > 0),
-        text: tf("talk.holding", { n: now.count }, lang),
-        title: now.refs.join("\n"),
-      };
+      // out the thing it is there to say.
+      return { mark: stopped(now.stopped > 0), text: tf("talk.holding", { n: now.count }, lang) };
     case "finished":
-      return { mark: null, text: tf("talk.finished", { n: now.count }, lang), title: "" };
+      return { mark: null, text: tf("talk.finished", { n: now.count }, lang) };
   }
 }
 
 /**
- * The words the right is drawn with, the mark in front of them, and what a reader gets on asking.
+ * The words the right is drawn with, and the mark in front of them.
  *
  * The row is one line and gives this place what is left of it, so what is said here is elided where
  * the pane is narrow and dropped altogether where it is narrower still — the mark stays either way,
  * because "a person is needed here" survives the reason being unreadable (`AMB-T-3673`). The whole of
- * it is one hover away instead, the same way the breakdown of several reservations is.
+ * it is one hover away instead (`peekLines`), the same way the breakdown of several reservations is.
  */
-export function sayText(say: Say, lang: Lang): { mark: Mark; text: string; title: string } {
+export function sayText(say: Say, lang: Lang): { mark: Mark; text: string } {
   switch (say.kind) {
     case "waiting":
-      return { mark: "pause", text: say.text, title: say.text };
+      return { mark: "pause", text: say.text };
     case "premise":
-      return { mark: "warning", text: t("talk.premiseBroken", lang), title: "" };
+      return { mark: "warning", text: t("talk.premiseBroken", lang) };
     case "unsent":
       // The pause, which is the mark for a person's turn: something that was running has stopped for
       // them. It is the same mark a handed-over turn gets, and deliberately — where the pane is too
       // narrow for words, what has to survive is "somebody is needed here", and which of the two
       // reasons it was is the sentence a hover gives back.
-      return { mark: "pause", text: t("talk.unsent", lang), title: t("talk.unsent", lang) };
+      return { mark: "pause", text: t("talk.unsent", lang) };
     case "note":
-      return { mark: null, text: say.text, title: say.text };
+      return { mark: null, text: say.text };
     case "quiet":
-      return { mark: null, text: tf("talk.quiet", { n: say.minutes }, lang), title: "" };
+      return { mark: null, text: tf("talk.quiet", { n: say.minutes }, lang) };
     case "silent":
-      return { mark: null, text: "", title: "" };
+      return { mark: null, text: "" };
   }
+}
+
+/**
+ * The whole row, unelided, in the order the row reads — the lines the panel under the header is drawn
+ * from.
+ *
+ * **It is the row and not a second reading of it.** Every line here is a place on the row, said in
+ * full: what the pane is called, what its session is on, and the one thing it said. Nothing is
+ * fetched for the panel that the row did not already have, so a reader who opens it never finds it
+ * disagreeing with the line above it.
+ *
+ * Two of the places have more to give than a line holds, and it is given here rather than behind a
+ * mark of its own: a task that has stopped says so in words beside its ref, and several reservations
+ * are listed by ref instead of counted. Both were what a tooltip on the mark used to carry.
+ *
+ * A place with nothing in it contributes no line. The panel of a pane that is idle and silent and
+ * unnamed is empty, and an empty panel is not drawn at all (`mountNameplate`).
+ */
+export function peekLines(plate: Plate, lang: Lang): readonly string[] {
+  const lines: string[] = [];
+  const middle = nowText(plate.now, lang);
+  if (middle.text) {
+    lines.push(
+      middle.mark === "stop" ? `${middle.text} — ${statusLabel("blocked", lang)}` : middle.text,
+    );
+  }
+  if (plate.now.kind === "many") lines.push(...plate.now.refs);
+  const right = sayText(plate.say, lang);
+  if (right.text) lines.push(right.text);
+  return lines;
 }
 
 /** Which mark stands in front of a part of the row, or nothing where the part asks for none. */
@@ -315,6 +347,20 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
   const say = part("say");
   host.append(row);
 
+  // The panel the row is read in full in. It is a sibling of the row rather than a child of it,
+  // because the row is one line by construction (`../styles/global.css`) and a box that dropped out
+  // of it would be a second thing that line had to hold. Made once, like everything else here: what
+  // changes on a redraw is the words in these two, and neither moves out from under a pointer that
+  // is on the panel while it changes.
+  const peek = document.createElement("div");
+  peek.className = "plate-peek";
+  peek.setAttribute("aria-hidden", "true");
+  const peekName = document.createElement("b");
+  peekName.className = "plate-peek__name";
+  const peekRest = document.createElement("span");
+  peek.append(peekName, peekRest);
+  host.append(peek);
+
   // Which face the lamp was on last time. Setting the phase again on a row that is already blinking
   // would start the turn over, which is the one thing the shared phase exists to prevent — so it is
   // written only where the answer has changed, which is also the only moment it can be out of step.
@@ -334,16 +380,17 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
     name.textContent = plate.name ?? "";
     const middle = nowText(plate.now, lang);
     drawMark(nowMark, middle.mark);
-    nowMark.title = middle.title;
     now.textContent = middle.text;
-    now.title = middle.title;
     const right = sayText(plate.say, lang);
     drawMark(sayMark, right.mark);
-    // The mark carries the whole of it too: where the row is narrow the words beside it are not drawn
-    // at all, and a hover has to have something left to land on.
-    sayMark.title = right.title;
     say.textContent = right.text;
-    say.title = right.title;
+    // And the same words again, unelided, in the panel a hover drops under the header. **No part of
+    // the row carries a tooltip of its own**: the machine draws one wherever the pointer happens to
+    // stop, and two of them over the panel is the same sentence twice in two shapes.
+    peekName.textContent = plate.name ?? "";
+    const lines = peekLines(plate, lang);
+    peekRest.textContent = lines.join("\n");
+    peek.hidden = !plate.name && lines.length === 0;
     // A turn that has been handed over is the one thing on this row a person is meant to act on, so it
     // is the one thing drawn as more than grey text.
     row.dataset.say = plate.say.kind;

@@ -14,9 +14,18 @@
 # ── Why "nothing was written" is read three times ────────────────────────────────────────────────
 # The whole of what this face promises is a thing *not* happening, and a thing not happening is only
 # a reading where the screen could have shown it. So the tree is read before anything is handed over
-# and again after the drag, and the path itself is read for the project's own folder not being in it.
-# A copy keeps the name it came with, so the name alone says the same thing either way; only the path
-# tells a hand-over from a carry.
+# and again after the drag, and the path itself is read for the landing a carry would have made not
+# being in it. A copy keeps the name it came with, so the name alone says the same thing either way;
+# only the path tells a hand-over from a carry.
+#
+# ── Why the path is read for the road's word and not the folder's ────────────────────────────────
+# Which folder is bound is the operator's to pick; the road only says what to call the one they
+# picked. So its real name is theirs, and it is drawn on the pane's prompt, on the project's tab and
+# over the column of files besides — a reading taken of the whole shot finds that name on every
+# screen here, carry or no carry, and the step goes red on a screen that is right. `.amenbo-inbox` is
+# the name this road gives the landing a carry would make. It is the road's own word, it is nowhere
+# in the interface, and it is on the shot only where a carry put it — which is what the tree is read
+# for on either side of the drag, and what the line is read for here.
 #
 # What a copy costs is why it is worth all three. Two of the same file, and the copy is the one
 # nobody ever sees change — a landing Amenbo makes under the project's folder is ignored wholesale,
@@ -56,8 +65,8 @@ description: >
   Open a pane in the project's folder and get six things to what is running in it: a file dragged in
   from the machine, a pair dragged in together, a folder off a row of the panel beside it, a file off
   a row, a row carried onto a pane of its own, and a row named from its menu to a pane the page turn
-  had taken away. Nothing is copied and nothing is moved — no dragged path is under the project's
-  folder afterwards, and no landing is made for any of them — and all six put the whole path in the
+  had taken away. Nothing is copied and nothing is moved — no landing is made for any of them, on the
+  tree under the project's folder or in the path handed over — and all six put the whole path in the
   line the person types into, unsent, for them to send. The two that point at a pane land in the one
   the pointer named, and leave it the pane being worked in; the one named from the menu brings its
   pane back on the screen.
@@ -155,13 +164,14 @@ steps_gui:
       shows: handed.txt
 
   # And the whole of what changed, read off the one line that can carry it: the path is the one the
-  # file is at on the operator's own disk, so the project's folder is not in it. A carry puts it
-  # there under the same name, which is what makes this the reading that tells the two apart.
+  # file is at on the operator's own disk, so the landing a carry makes is nowhere in it. A carry
+  # puts the file there under the same name, which is what makes the path the reading that tells the
+  # two apart — the name alone would say the same thing either way.
   - type: assert
     domain: terminal
     op: in-the-box
     with:
-      shows: workshop
+      shows: .amenbo-inbox
       present: false
 
   # Nothing was made to hold it either — not a copy, and not the folder a copy would land in. The
@@ -196,13 +206,13 @@ steps_gui:
     with:
       shows: labels.txt
 
-  # And still nothing under the project's folder, which is the reading a hand full could break where
-  # one thing did not: a carry that took the pair in would have put both under it.
+  # And still no landing on the line, which is the reading a hand full could break where one thing
+  # did not: a carry that took the pair in would have put both of them there.
   - type: assert
     domain: terminal
     op: in-the-box
     with:
-      shows: workshop
+      shows: .amenbo-inbox
       present: false
 
   # The second road: a folder, named the same way a file is. Nothing is carried, so the tree under it

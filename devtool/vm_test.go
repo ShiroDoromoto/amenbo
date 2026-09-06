@@ -83,6 +83,24 @@ func TestVMPushArgsTakesTheLastWordAsTheDestination(t *testing.T) {
 	}
 }
 
+// TestVMPullArgsTakesTheLastWordAsTheDestination reads the mirror of that list. The halves swap
+// sides — the guest paths come first — but the last word is still where the files land.
+func TestVMPullArgsTakesTheLastWordAsTheDestination(t *testing.T) {
+	remotes, local, err := vmPullArgs([]string{"/Users/admin/a.png", "/Users/admin/b.png", "shots"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(remotes, " ") != "/Users/admin/a.png /Users/admin/b.png" || local != "shots" {
+		t.Errorf("vmPullArgs = %v, %q", remotes, local)
+	}
+	if _, _, err := vmPullArgs([]string{"/Users/admin/a.png"}); err == nil {
+		t.Error("vmPullArgs with one word returned no error; a lone path is not a pull")
+	}
+	if _, _, err := vmPullArgs(nil); err == nil {
+		t.Error("vmPullArgs with nothing returned no error")
+	}
+}
+
 // TestSSHArgsNeitherChecksNorRemembersTheHostKey pins the one option set that would otherwise be
 // re-derived at each call site. A clone is cut fresh from the golden and carries a new host key
 // every time, so a remembered entry refuses the next clone instead of catching anything.

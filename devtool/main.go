@@ -79,6 +79,7 @@ Usage:
   devtool vm up | rm | status
   devtool vm exec          -- <command…>
   devtool vm push          <local…> <remote>
+  devtool vm pull          <remote…> <local>
   devtool vm screen
   devtool vm golden        [--refresh]
   devtool vm verify seed    [<path.pkg>] [--from-run <run id>] [--system-wide]
@@ -175,11 +176,12 @@ vm           the throwaway macOS VM the GUI is verified in. Driving a screen
              the host's stays free. 'up' raises a clone of the golden (using the
              one already running if there is one) and prints its address; 'rm'
              throws it away — nothing here decides on its own that a session is
-             over. 'exec' and 'push' reach in, 'screen' compiles this tree's
-             screen tool on the host and puts the binary in there, and 'golden'
-             reports on the image clones are cut from, or takes it again with
-             --refresh. Host and guest macOS versions are compared whenever the
-             clone is reached; a drift is said and never stopped over.
+             over. 'exec' and 'push' reach in, 'pull' brings a file back out,
+             'screen' compiles this tree's screen tool on the host and puts the
+             binary in there, and 'golden' reports on the image clones are cut
+             from, or takes it again with --refresh. Host and guest macOS
+             versions are compared whenever the clone is reached; a drift is
+             said and never stopped over.
 vm verify    walk a pre-distribution screen road inside that VM. The harness is
              not changed and nothing here repeats what it does — it still
              launches the shipped bundle, holds that pid, stands up the world

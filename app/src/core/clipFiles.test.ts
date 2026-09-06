@@ -6,7 +6,7 @@
 // window cannot read a path out of — and the whole of the answer is that the host is asked and the
 // caller is handed what came back.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { holdsFiles, imageIn, takesPastedFiles } from "./clipFiles";
+import { holdsFiles, imageIn, takesPastedFiles, takesPastedImages } from "./clipFiles";
 
 const hoisted = vi.hoisted(() => ({
   /** What the host says is on the clipboard, for a test to set. */
@@ -217,5 +217,115 @@ describe("answering the pastes a box is given", () => {
 
     expect(e.defaultPrevented).toBe(false);
     expect(hoisted.asked).toEqual([]);
+  });
+});
+
+// Linux carries a pasted image on neither the paste nor the words: WebKitGTK leaves `clipboardData`
+// empty (`AMB-T-4427`), so the press is read instead and the machine's clipboard is asked directly.
+// The press is `Ctrl+Shift+V`, which is what pastes into a terminal; `Ctrl+V` is `^V` there.
+describe("answering the press, where the paste says nothing", () => {
+  let host: HTMLElement;
+  let box: HTMLElement;
+  let read: ReturnType<typeof vi.fn>;
+
+  /** The machine's clipboard, holding what a test names. */
+  function holding(...types: string[]): void {
+    read = vi.fn(async () => [
+      {
+        types,
+        getType: async (type: string) => new Blob(["the image"], { type }),
+      },
+    ]);
+    Object.defineProperty(navigator, "clipboard", { value: { read }, configurable: true });
+  }
+
+  /** A press, on the box inside the host — which is where a real one lands. */
+  function press(over: Partial<KeyboardEventInit> = {}): void {
+    box.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "v", ctrlKey: true, shiftKey: true, bubbles: true, ...over }),
+    );
+  }
+
+  beforeEach(() => {
+    host = document.createElement("div");
+    box = document.createElement("div");
+    host.append(box);
+    document.body.append(host);
+    holding("image/png");
+  });
+
+  it("reads the image off the clipboard and writes it down", async () => {
+    const written = vi.fn(async () => ["/tmp/amenbo-pasted-aa/pasted-1234abcd.png"]);
+    const put = vi.fn();
+    takesPastedImages(host, written, put, "other");
+
+    press();
+    await vi.waitFor(() => expect(put).toHaveBeenCalled());
+
+    const [bytes, mime] = written.mock.calls[0] as unknown as [Uint8Array, string];
+    expect(new TextDecoder().decode(bytes)).toBe("the image");
+    expect(mime).toBe("image/png");
+    expect(put).toHaveBeenCalledWith(["/tmp/amenbo-pasted-aa/pasted-1234abcd.png"]);
+  });
+
+  // The other two machines carry the image on the paste itself, which is already in hand there.
+  it("does not ask the clipboard on the machines that carry the image on the paste", () => {
+    for (const os of ["macos", "windows"] as const) {
+      takesPastedImages(host, vi.fn(async () => []), vi.fn(), os);
+    }
+
+    press();
+
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing down where the clipboard holds no image", async () => {
+    holding("text/plain");
+    const written = vi.fn(async () => ["/tmp/never.png"]);
+    const put = vi.fn();
+    takesPastedImages(host, written, put, "other");
+
+    press();
+    await vi.waitFor(() => expect(put).toHaveBeenCalled());
+
+    expect(written).not.toHaveBeenCalled();
+    expect(put).toHaveBeenCalledWith([]);
+  });
+
+  it("is that press and no other", () => {
+    takesPastedImages(host, vi.fn(async () => []), vi.fn(), "other");
+
+    press({ ctrlKey: false });
+    // `Ctrl+V` without shift is `^V` to the program, and a path pasted after one arrives quoted.
+    press({ shiftKey: false });
+    press({ altKey: true });
+    press({ key: "c" });
+
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("stops listening when it is told to", () => {
+    const stop = takesPastedImages(host, vi.fn(async () => []), vi.fn(), "other");
+
+    stop();
+    press();
+
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  // A clipboard that will not answer — a permission that was not given, a version that refuses the
+  // call — leaves the press where it was rather than an error nobody in a pane can act on.
+  it("says nothing where the clipboard will not answer", async () => {
+    read = vi.fn(async () => {
+      throw new Error("NotAllowedError");
+    });
+    Object.defineProperty(navigator, "clipboard", { value: { read }, configurable: true });
+    const put = vi.fn();
+    takesPastedImages(host, vi.fn(async () => []), put, "other");
+
+    press();
+    await vi.waitFor(() => expect(read).toHaveBeenCalled());
+
+    expect(put).not.toHaveBeenCalled();
   });
 });

@@ -343,6 +343,17 @@ pub fn run() {
       tick::reconcile();
       #[cfg(target_os = "macos")]
       macos_notify::init(app.handle().clone());
+      // The board is declared in `tauri.conf.json`, so it is already a window by the time this runs —
+      // which is the one moment its webview can be spoken to before a pane in it asks to read the
+      // clipboard (`windows::allow_clipboard_read`). The talk window is given the same answer where
+      // it is built, because the ask is a window's and not the application's.
+      #[cfg(target_os = "linux")]
+      {
+        use tauri::Manager;
+        if let Some(board) = app.get_webview_window(windows::BOARD) {
+          windows::allow_clipboard_read(&board);
+        }
+      }
       let handle = app.handle().clone();
       if migrate::is_pending() {
         migrate::begin(); // set before the window mounts, so the first `migration_status` says `running`.

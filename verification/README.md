@@ -320,17 +320,23 @@ against what a reader sees.
 
 ### The asserts a screen draws cut — read off the accessibility tree
 
-A row is drawn in the column it stands in, and a name longer than that column is drawn cut, the tail
-replaced by one glyph: `grafting.md` comes out `grafting…` in the rail a bound folder's tree stands
-in. The reader returns what is drawn, so `files listed` went red against a build doing exactly what a
-file tree should — and widening the column by hand before every run is not a road anybody walks.
+A name is drawn in the space the element carrying it stands in, and a name longer than that space is
+drawn cut, the tail replaced by one glyph. Two of them are known, and both went red against a build
+doing exactly what it should:
 
-The eliding is the drawing and not the row: the window's accessibility tree carries the whole name.
-So a second short, closed table — `amenbo_verify_gui::reads_the_tree`, which holds `files listed` and
-nothing else yet — takes its reading off that tree instead, by asking the screen tool to list every
-named element under the window the step was shot at (`screen find <pid>`). The listing is not parsed:
-what the assert asks is whether the name is on that window at all, which is the same search a shot's
-reading is put to, so it goes through the same fold and the same match. A step on this table comes
+| assert | the space | drawn | read |
+|---|---|---|---|
+| `files listed` | the rail a bound folder's tree stands in, whose width a person drags | `grafting…` | `grafting.md` |
+| `terminal label` | the row above a pane, which is only as wide as the pane | `SCENARIO named by h.` | `SCENARIO named by hand` |
+
+Widening the rail, or closing the second pane, before every run is not a road anybody walks.
+
+The eliding is the drawing and not the element: the window's accessibility tree carries the whole
+name. So a second short, closed table — `amenbo_verify_gui::reads_the_tree`, which holds those two
+and nothing else yet — takes its reading off that tree instead, by asking the screen tool to list
+every named element under the window the step was shot at (`screen find <pid>`). The listing is not
+parsed: what the assert asks is whether the name is on that window at all, which is the same search
+a shot's reading is put to, so it goes through the same fold and the same match. A step on this table comes
 out `pass`/`fail` like any other, and the listing is filed beside the shot the way a reading is.
 
 **The shot is still taken and still filed.** The reading moves; the evidence does not — the picture
@@ -502,7 +508,8 @@ by hand, or with the screen tool's `click-named` / `drag` / `type` / `key` / `sc
 once the screen is standing where the step says it should. There is no flag for running it any other way.
 A step that names the key this machine copies or pastes with is `key 8 --cmd` and `key 9 --cmd`:
 the modifier is a flag on the press rather than a key held around it, so nothing stays down between
-steps.
+steps. A press is held the same way — a step that adds a row to a selection with the key this machine
+adds with is `click-named <pid> <name> --cmd`.
 
 **The hand-over comes before the step, the first one included.** That is what lets a road open with a
 check: a run starts on a store made for it a moment ago, so the screen a launch leaves behind is

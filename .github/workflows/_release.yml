@@ -34,10 +34,16 @@ permissions:
 # before users do.
 env:
   AMENBO_BUILD: release
-  # The app-data these artifacts address. amenbo-core has no default of its own: a build that is
-  # told nothing fails to compile instead of quietly being handed production, so the one workflow
-  # that builds what users install is where the production channel is named.
+  # The pair amenbo-core keeps no default for, so an unset one stops the compile rather than falling
+  # back to a value nobody chose. They live here for the same reason the stamp above does: a working
+  # tree cannot say them, so nothing built outside this workflow can pass itself off as carrying
+  # production's app-data or production's update endpoint. The Makefile names a non-production pair
+  # for every other build, and being set here is what puts these in front of it.
+  #
+  # A job that builds through `docker run` does not inherit them; the Makefile's recipes forward both
+  # explicitly, which is the boundary the stamp above is still lost at.
   AMENBO_APP_NAME: amenbo
+  AMENBO_LATEST_JSON_URL: https://update.amenbo.work/update-check/v1?client=amenbo
 
 jobs:
   macos:

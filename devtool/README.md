@@ -679,6 +679,12 @@ devtool vm push "/Applications/amenbo (dev 3578).app" /Users/admin/
 Arguments to `exec` go after `--`, and quoting is the caller's the same way it is
 with `ssh` — what follows is joined and handed to the guest's shell.
 
+`exec` **holds the screen claim for as long as the guest command runs**, and
+waits its turn when somebody else is holding, naming them on the way in. A
+driving line fronts a window and then presses it; a front taken away in between
+lands the press on the wrong window and still exits 0. See
+[one screen, two roles](#one-screen-two-roles).
+
 The host key is deliberately **neither checked nor remembered**: a clone is cut
 fresh from the golden and carries a new one each time, so a pinned entry would
 refuse the next clone rather than catch anything. What is reached is a VM on this
@@ -706,8 +712,14 @@ after, so a road can read the window it was dropped on straight away.
 **A shortcut is one press: `key <keycode> --cmd`.** ⌘C is `key 8 --cmd` and ⌘V is
 `key 9 --cmd`. The modifier rides on the event's flags and is never held as a key
 of its own, so nothing is left pressed if the run stops between the two.
-`--shift` / `--opt` / `--ctrl` are there the same way, and a subcommand other than
-`key` refuses them rather than ignoring them.
+`--shift` / `--opt` / `--ctrl` are there the same way.
+
+**A press takes the same four.** `click` / `right-click` / `dblclick` and the
+three `-named` forms are held under a modifier the way `key` is, on the event's
+own flags: a list that adds to a selection with a held key is reached by
+`click-named $PID <name> --cmd`, and a second row cannot be reached any other
+way. Everything else — `drag`, `type`, `scroll` — refuses them rather than
+ignoring them.
 
 **`find`/`click-named` read one window, not the app.** They take the same
 `--window <title>`, and with two windows up they refuse without it — a name
@@ -772,26 +784,38 @@ Two claims settle it, because the two roles are held by different things.
 
 - **A command on this machine** holds the screen for as long as it runs:
   `vm verify seed`, `vm verify install`, `vm verify run`, `devgui install --vm`,
-  and a `devgui pid` / `devgui shot` that fronts a window. The claim is a lock on
-  this side (`~/Library/Caches/amenbo-vm-screen.lock`), the flock form the dev
-  GUI build lock uses and for the reason that one gives: the kernel drops it when
-  the last descriptor closes, so a session killed part-way leaves nothing a later
-  one has to break by hand. A second caller is **turned away naming the first**,
-  never queued behind it — queuing is what the collision looked like from the
-  outside.
+  a `devgui pid` / `devgui shot` that fronts a window, and `vm exec`. The claim is
+  a lock on this side (`~/Library/Caches/amenbo-vm-screen.lock`), the flock form
+  the dev GUI build lock uses and for the reason that one gives: the kernel drops
+  it when the last descriptor closes, so a session killed part-way leaves nothing
+  a later one has to break by hand.
 - **A road being walked** holds it for as long as the run lasts, which outlives
   the command that started it: a road is walked from separate commands with
   nothing alive between them. Nothing is written for this one — the harness
   process in the guest *is* the claim, and it clears itself by ending.
 
-**The two are read asymmetrically, on purpose.** A road being walked turns a dev
-GUI away, and does not turn away the road's own next command: `vm verify run`
-already takes a stopped run's app down and starts over, and whoever types it is
-the one walking that road.
+The command claim is taken two ways, and which one a command takes follows from
+how long it holds.
 
-What this does not cover: opening an instance already in there
-(`devtool vm exec -- open -a …`) is a plain command in the guest and is not
-claimed against. Placing one is the checkpoint.
+- **Turned away naming the holder** is for a command that holds for minutes — a
+  dev GUI placed in the guest, a road's own seed/install/run. Queuing behind one
+  of those is indistinguishable from a hang, which is what the collision looked
+  like from the outside.
+- **Waited for, naming the holder on the way in**, is for `vm exec`, which is how
+  the screen is driven at all: one line brings a window to the front and presses
+  it, and the whole of it is under a second. What that line has to be protected
+  from is another driver fronting something in between — a press that lands on
+  the wrong window and still exits 0. Turning a driver away there would break the
+  very command the lock exists to let through.
+
+**The road and the dev GUI are read asymmetrically, on purpose.** A road being
+walked turns a dev GUI away, and does not turn away the road's own next command:
+`vm verify run` already takes a stopped run's app down and starts over, and
+whoever types it is the one walking that road.
+
+What this does not cover: a window brought to the front by something that is not
+a `devtool` command at all — a `.app` opened by hand in the guest's own Finder,
+say. Every command out here that fronts or presses goes through the claim.
 
 ### `devtool vm verify seed | install | run | step | log | pull`
 

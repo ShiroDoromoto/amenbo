@@ -41,19 +41,17 @@ description: >
   work standing: the row goes and the reservation does not.
 
 given:
+  # One folder, which is the one creating a project links to it. A second would stand the question of
+  # which folder a new pane works in in front of both presses below, and that question is
+  # `open-a-pane-where-a-project-keeps-more-than-one-folder`'s road and not this one's. Here it is the
+  # quiet half of the same rule: bound to one folder the face asks nothing, and both panes work in
+  # that folder because there is no other to work in.
   - type: action
     domain: project
     op: create
     with:
       name: Foundry
     as: foundry
-
-  - type: action
-    domain: folder
-    op: bind
-    with:
-      dir: castings
-      project: foundry
 
   # The task the pane takes. It is reserved from inside the pane below rather than here, because
   # where the move is made is the whole of what this road is about.

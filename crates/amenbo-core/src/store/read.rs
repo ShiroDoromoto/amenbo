@@ -14,9 +14,12 @@ pub enum SyncChanges {
     /// The changes since the cursor, **oldest first** — the order they were committed in, which is the
     /// order a copy outside has to apply them in.
     Changes {
-        /// One instruction per record that moved: the dataset, the record's id, and the `op`.
+        /// One instruction per record that moved: the dataset, the record's id, and the `op`. A withheld
+        /// dataset's rows are not among them ([`withheld`]).
         rows: Vec<FeedRow>,
-        /// The cursor to come back with — the last row's id, or the one that came in on an empty page.
+        /// The cursor to come back with — the last id the page reached, or the one that came in on an
+        /// empty page. It is the page's own id, so it also passes the withheld rows that were dropped
+        /// out of `rows`; coming back with it is how they stay behind.
         cursor: i64,
         /// The `limit` cut this page short and there is more waiting; come straight back with `cursor`.
         more: bool,
@@ -28,6 +31,16 @@ pub enum SyncChanges {
     /// window again (`AMB-D-583`); that snapshot names the position it was taken at, which is the cursor
     /// to resume from.
     Gap,
+}
+
+/// Whether a dataset is one the feed keeps to itself — the same line every road out of this store is
+/// drawn by ([`crate::export::WITHHELD_ON_THE_WAY_OUT`]), not a second one beside it.
+///
+/// The feed names a record without carrying it, so what escapes here is not a value but a shape: how many
+/// secrets there are, and when each one was written. That is answer enough to a question nobody outside
+/// gets to ask, and the snapshot and the export already refuse it.
+fn withheld(dataset: &str) -> bool {
+    crate::export::WITHHELD_ON_THE_WAY_OUT.contains(&dataset)
 }
 
 impl Store {
@@ -316,10 +329,18 @@ impl Store {
     /// record next door is not named, not counted, and not hinted at by a hole in the cursor. Through
     /// `All` it is the device's whole feed.
     ///
+    /// **It withholds what no road out carries.** Rows naming a withheld dataset ([`withheld`]) are
+    /// dropped from the page, whatever the reach: a window narrows *whose* changes are named, and the
+    /// plugin secrets are nobody's to be handed. The line is a dataset's and not a reach's on purpose —
+    /// the GUI reads this same page at [`Reach::All`], so a rule written in reaches would either leak
+    /// here or blind the screen there.
+    ///
     /// `limit` bounds one read: a carrier that has been away pages through with the cursor it is handed
-    /// back, and `more` says another page is waiting. The cursor to come back with is the last row's id,
-    /// or the one that came in when the page is empty — so an unread-nothing read costs one indexed seek
-    /// and hands back what it was given.
+    /// back, and `more` says another page is waiting. Both are the page's, counted before anything is
+    /// withheld — the cursor is the last id the page reached, or the one that came in when the page is
+    /// empty, so an unread-nothing read costs one indexed seek and hands back what it was given. A page
+    /// that was nothing but withheld rows therefore comes back empty and moved on, which is what it is:
+    /// nothing this reader has to do.
     ///
     /// [`SyncChanges::Gap`] is the honest answer when the cursor has fallen out of the feed's window: the
     /// changes between are gone, and saying nothing would be indistinguishable from nothing having
@@ -331,11 +352,14 @@ impl Store {
         let slice = crate::store_engine::read::changes_since(conn, after, limit, self.reach.project())
             .map_err(crate::error::engine_on(conn))?;
         Ok(match slice {
-            FeedSlice::Changes { rows, more } => SyncChanges::Changes {
-                cursor: rows.last().map(|r| r.id).unwrap_or(after),
-                rows,
-                more,
-            },
+            FeedSlice::Changes { rows, more } => {
+                // The cursor is the page's last id, taken **before** the withheld rows go. Reading it off
+                // what survived would hand back a position in front of them, and every read after would
+                // fetch and drop the same rows forever.
+                let cursor = rows.last().map(|r| r.id).unwrap_or(after);
+                let rows = rows.into_iter().filter(|r| !withheld(&r.dataset)).collect();
+                SyncChanges::Changes { rows, cursor, more }
+            }
             FeedSlice::Gap => SyncChanges::Gap,
         })
     }

@@ -204,10 +204,12 @@ jobs:
       # versions of the Linux build. So both are asked, and the AppImage's own CLI out of the AppImage
       # rather than off the staging directory: the repository goes into that container read-only, so
       # nothing the GUI build staged exists on this runner. `--appimage-extract` unpacks without FUSE.
+      # The exec bit is not set here: the container sets it on the way out
+      # (`scripts/docker/build-linux-gui.sh`), and it writes `dist/` as root through the mount, so a
+      # `chmod` on this runner is refused for not owning the file rather than fixing anything.
       - name: Gate — the Linux amd64 artifacts carry what this workflow injected
         run: |
           work="$(mktemp -d)"
-          chmod +x dist/amenbo-app-linux-x86_64.AppImage
           (cd "$work" && "$GITHUB_WORKSPACE/dist/amenbo-app-linux-x86_64.AppImage" --appimage-extract >/dev/null)
           node scripts/check-shipped-build.mjs \
             dist/amenbo-linux-amd64 \
@@ -254,7 +256,6 @@ jobs:
       - name: Gate — the Linux arm64 artifacts carry what this workflow injected
         run: |
           work="$(mktemp -d)"
-          chmod +x dist/amenbo-app-linux-aarch64.AppImage
           (cd "$work" && "$GITHUB_WORKSPACE/dist/amenbo-app-linux-aarch64.AppImage" --appimage-extract >/dev/null)
           node scripts/check-shipped-build.mjs \
             dist/amenbo-linux-arm64 \

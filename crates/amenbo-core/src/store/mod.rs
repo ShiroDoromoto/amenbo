@@ -175,10 +175,9 @@ impl Store {
     /// pairs the registry has dropped go, the pairs it has gained arrive, and a folder that is still
     /// bound keeps the row — and the id — it already had ([`crate::overview::write_bindings`]).
     pub fn save_bindings(&self, reg: &crate::binding::Registry) -> Result<()> {
-        let tx = self.engine.transaction()?;
+        let tx = self.engine.write()?;
         crate::overview::write_bindings(&tx, reg)?;
-        tx.commit().map_err(crate::store_engine::StoreEngineError::from)?;
-        Ok(())
+        Ok(tx.commit()?)
     }
 
     /// The bindings as rows, **id included** ([`crate::binding::BoundFolder`]) — what
@@ -204,9 +203,9 @@ impl Store {
         project_id: i64,
         dir: &str,
     ) -> Result<Option<crate::binding::Repoint>> {
-        let tx = self.engine.transaction()?;
+        let tx = self.engine.write()?;
         let done = crate::overview::repoint_binding(&tx, id, project_id, dir)?;
-        tx.commit().map_err(crate::store_engine::StoreEngineError::from)?;
+        tx.commit()?;
         Ok(done)
     }
 

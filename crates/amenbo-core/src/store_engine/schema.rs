@@ -838,13 +838,40 @@ datasets! {
     }
 }
 
-/// Look up a dataset by name — which is also the whitelist the change feed's `update_hook` filters on:
-/// SQLite reports every row the connection touches, which includes `sqlite_sequence`, `store_meta` and
-/// the feed table itself. None of those are records a reader can re-read by id, and the feed table would
-/// feed on its own writes. Only the registry's tables pass, and one lookup answers both questions
-/// because a dataset's key and its table are the same word (`AMB-D-807`).
+/// Look up a dataset by name. A dataset's key and its table are the same word (`AMB-D-807`), so this
+/// also answers "is this table a record's?".
 pub fn dataset(name: &str) -> Option<&'static Dataset> {
     DATASETS.iter().find(|d| d.name == name)
+}
+
+/// The plain tables the change feed carries **besides** the records ([`DATASETS`]).
+///
+/// All three are written by the CLI and drawn on the screen, so a screen that cannot hear them change has
+/// only one move left: re-read everything, every time, because it cannot tell what happened
+/// (`AMB-D-856`). Naming them here rather than making them datasets is the whole point — [`DATASETS`] is
+/// shared by the change feed, the sync snapshot and the export, and these are device-local: what
+/// `binding_project_dir` holds is this machine's file paths, and the other two are answers this machine
+/// gave, not any project's work. They belong on the feed and on no road out
+/// ([`crate::export::WITHHELD_ON_THE_WAY_OUT`], which names them too).
+pub const FEED_PLAIN_TABLES: &[&str] = &["binding_project_dir", "hook_optout", "harness_consent"];
+
+/// **The change feed's whitelist**: the name the feed knows `table` by, or `None` for a table it does not
+/// collect. This is what the `update_hook` filters on — SQLite reports every row the connection touches,
+/// which includes `sqlite_sequence`, `store_meta` and the feed table itself. None of those are rows a
+/// reader can re-read by id, and the feed table would feed on its own writes.
+///
+/// It is a list of its own rather than [`DATASETS`] because those two questions are different ones: what
+/// a record *is* decides what travels off this device, and what the feed carries decides what a reader
+/// here can be told changed. A plain table passes only by being named in [`FEED_PLAIN_TABLES`], so a
+/// table added to the schema tomorrow is still silent until somebody says otherwise.
+pub fn feed_table(table: &str) -> Option<&'static str> {
+    if let Some(d) = dataset(table) {
+        return Some(d.name);
+    }
+    // Answered off `PLAIN_TABLES` rather than off the name handed in: the feed's `dataset` column is a
+    // `&'static str`, and taking it from the declaration is also what keeps a typo in the list above
+    // from quietly naming a table that does not exist.
+    PLAIN_TABLES.iter().find(|t| FEED_PLAIN_TABLES.contains(&t.name) && t.name == table).map(|t| t.name)
 }
 
 plain_tables! {
@@ -1451,6 +1478,22 @@ pub fn table_content_is_empty(conn: &rusqlite::Connection) -> rusqlite::Result<b
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every name in [`FEED_PLAIN_TABLES`] is a table that exists, and none of them is a record's. A name
+    /// nothing answers to would be silently inert — the feed would go on not collecting the table, and the
+    /// screen would go on re-reading everything, with the list saying otherwise. And a record's name here
+    /// would be the duplicate the two lists were split to avoid.
+    #[test]
+    fn every_plain_table_the_feed_carries_is_a_plain_table_that_exists() {
+        for name in FEED_PLAIN_TABLES {
+            assert!(PLAIN_TABLES.iter().any(|t| &t.name == name), "`{name}` is no plain table");
+            assert!(dataset(name).is_none(), "`{name}` is a record's — it is on the feed already");
+            assert_eq!(feed_table(name), Some(*name), "and the whitelist answers for it");
+        }
+        // The other side of the door: a plain table nobody named is not collected.
+        assert_eq!(feed_table("nudge_fired"), None, "a plain table nobody named stays silent");
+        assert_eq!(feed_table("change_feed"), None, "and the feed does not feed on itself");
+    }
 
     /// What a store is born from is run in two pieces, and the second is wrapped in a transaction
     /// ([`genesis_sql`]). A statement that cannot live in one has to be in the first piece. `PRAGMA` is

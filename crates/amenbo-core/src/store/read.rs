@@ -33,12 +33,13 @@ pub enum SyncChanges {
     Gap,
 }
 
-/// Whether a dataset is one the feed keeps to itself — the same line every road out of this store is
+/// Whether a dataset is one this road keeps to itself — the same line every road out of this store is
 /// drawn by ([`crate::export::WITHHELD_ON_THE_WAY_OUT`]), not a second one beside it.
 ///
 /// The feed names a record without carrying it, so what escapes here is not a value but a shape: how many
-/// secrets there are, and when each one was written. That is answer enough to a question nobody outside
-/// gets to ask, and the snapshot and the export already refuse it.
+/// secrets there are and when each one was written, which folders on this machine were bound and when.
+/// That is answer enough to a question nobody outside gets to ask, and the snapshot and the export
+/// already refuse it.
 fn withheld(dataset: &str) -> bool {
     crate::export::WITHHELD_ON_THE_WAY_OUT.contains(&dataset)
 }
@@ -330,10 +331,12 @@ impl Store {
     /// `All` it is the device's whole feed.
     ///
     /// **It withholds what no road out carries.** Rows naming a withheld dataset ([`withheld`]) are
-    /// dropped from the page, whatever the reach: a window narrows *whose* changes are named, and the
-    /// plugin secrets are nobody's to be handed. The line is a dataset's and not a reach's on purpose —
-    /// the GUI reads this same page at [`Reach::All`], so a rule written in reaches would either leak
-    /// here or blind the screen there.
+    /// dropped from the page, whatever the reach: a window narrows *whose* changes are named, and a
+    /// plugin's secrets — or this machine's own bound folders — are nobody's to be handed. The line is a
+    /// dataset's and not a reach's because it is not about who is asking: the open reach is the device's
+    /// whole feed, and withholding by reach would mean the same table travelling or not by who held the
+    /// store. What is withheld here is still on the feed, for a reader **on this device** that reads the
+    /// ledger itself rather than this carrier's road.
     ///
     /// `limit` bounds one read: a carrier that has been away pages through with the cursor it is handed
     /// back, and `more` says another page is waiting. Both are the page's, counted before anything is

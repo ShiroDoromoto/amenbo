@@ -570,7 +570,7 @@ fn trim_due_at_once() -> std::sync::atomic::AtomicU64 {
 }
 
 /// Wire SQLite's `update_hook` to the change buffer: every row the connection touches is reported here,
-/// and the record rows among them are what the feed carries. The hook, rather than an emit at each write
+/// and the whitelist ([`schema::feed_table`]) says which of them the feed carries. The hook, rather than an emit at each write
 /// site, because only SQLite knows what a statement really touched: a row a constraint took (`plugin_config`
 /// and `plugin_enable` still ride the project's `CASCADE`) is named by no ops code at all, and even where
 /// the delete op does sweep its children itself, a write nobody remembered to instrument still reports. The callback
@@ -580,10 +580,11 @@ fn trim_due_at_once() -> std::sync::atomic::AtomicU64 {
 fn install_change_hook(conn: &Connection, changes: &ChangeBuffer) -> Result<()> {
     let sink = changes.clone();
     conn.update_hook(Some(move |action: rusqlite::hooks::Action, _db: &str, table: &str, row_id: i64| {
-        // The whitelist: SQLite also reports `sqlite_sequence`, `store_meta` and `change_feed` itself.
-        // None of them are rows a reader re-reads by id, and the feed table would otherwise feed on its
-        // own writes.
-        let Some(dataset) = schema::dataset(table).map(|d| d.name) else { return };
+        // The whitelist (`schema::feed_table`): SQLite also reports `sqlite_sequence`, `store_meta` and
+        // `change_feed` itself. None of them are rows a reader re-reads by id, and the feed table would
+        // otherwise feed on its own writes. It is the records plus the few device-local tables a screen
+        // here has to hear about — not the same list as what leaves the device.
+        let Some(dataset) = schema::feed_table(table) else { return };
         let op = match action {
             rusqlite::hooks::Action::SQLITE_INSERT => "insert",
             rusqlite::hooks::Action::SQLITE_UPDATE => "update",

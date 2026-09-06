@@ -39,6 +39,7 @@ use rusqlite::Connection;
 use crate::model::AttachmentTarget;
 
 use super::engine::{Result, StoreEngine, StoreEngineError};
+use super::schema;
 use super::schema::col;
 use super::sql::Insert;
 
@@ -247,7 +248,12 @@ impl<'a> WriteTx<'a> {
                 rows += 1;
             }
         }
-        self.stamp_project_versions()?;
+        // The version is the carrier's number, so only a record moves it: a transaction that touched
+        // nothing but this device's own tables is on the feed for the screen here and is nothing a copy
+        // outside could re-read (`AMB-D-856`).
+        if changes.iter().any(|c| schema::dataset(c.dataset).is_some()) {
+            self.stamp_project_versions()?;
+        }
         self.engine.trim_change_feed_if_due(&self.tx, rows)
     }
 
@@ -257,8 +263,11 @@ impl<'a> WriteTx<'a> {
     ///
     /// Called from the drain, and so **only when the batch actually wrote a record row**: an operation
     /// that changed nothing leaves the version where it was, which is the whole of "no write, no move".
-    /// Taking the feed's own head rather than counting is what keeps the number from ever rewinding, and
-    /// keeps a project's version below the store's.
+    /// A batch that wrote only this device's own tables leaves it too — those rows are on the feed for a
+    /// reader here and travel on no road out ([`super::schema::FEED_PLAIN_TABLES`]), so a carrier sent to
+    /// re-read its window would come back holding exactly what it already had. Taking the feed's own head
+    /// rather than counting is what keeps the number from ever rewinding, and keeps a project's version
+    /// below the store's.
     ///
     /// A project the batch has just deleted is skipped rather than stamped: the row would have no project
     /// to reference, and a version is an answer about a project that is still there. Whoever was watching

@@ -67,19 +67,25 @@ retired).
 ### Build and run
 
 ```bash
-export AMENBO_LATEST_JSON_URL=http://127.0.0.1:1/latest.json   # see below; every make target passes it for you
+export AMENBO_APP_NAME=amenbo                                  # the pair below; every make
+export AMENBO_LATEST_JSON_URL=http://127.0.0.1:1/latest.json   # target passes them for you
 cargo build
 cargo test                              # fast: unit + light integration suites
 cargo test --features scale,e2e         # full: also the scaling guard and the real-binary cli_e2e_* suites
 cargo run -p amenbo-cli -- agent --json   # the single source of truth for the CLI
 ```
 
-The update endpoint is injected into `amenbo-core` at build time and has no default, so a bare
-`cargo` invocation that does not carry `AMENBO_LATEST_JSON_URL` stops at a const-eval panic naming
-the variable — a default is what lets a forgotten variable ship as a wrong answer. The
-`make` targets, the Docker builds and CI all pass it; the address above is the non-production one
-they hand every unstamped build, and nothing ever queries it, because a build the release workflow
-did not stamp does not ask (`update_check`).
+The app-data name and the update endpoint are both injected into `amenbo-core` at compile time, and
+neither has a default, so a bare `cargo` invocation that carries neither stops at the constant that
+wants it, naming the variable. A default is what lets a forgotten variable ship as a wrong answer,
+and a default that names production is that answer landing on real data. The `make` targets, the
+Docker builds and CI pass the pair above: the production app-data name, because that is the channel
+the suite is compiled on, and an endpoint on a loopback port nothing listens on, which nothing ever
+queries because a build the release workflow did not stamp does not ask (`update_check`).
+
+A CLI you build that way and then *run* opens the production store. For a build you mean to use,
+pass `AMENBO_APP_NAME=amenbo-dev` — the dev channel, which is what `make install-dev` builds — or
+point `AMENBO_HOME` at a directory of its own.
 
 The heaviest tests are gated behind cargo features so the everyday `cargo test`
 stays sub-second: the read-hotpath scaling guard behind `scale`, the real-binary
@@ -137,7 +143,8 @@ Thresholds and the `ci` profile live in `.config/nextest.toml`.
 Data is stored under the OS-standard location (on macOS,
 `~/Library/Application Support/work.amenbo.amenbo/store.sqlite`). The directory
 name comes from the build-time `AMENBO_APP_NAME`, which is what keeps a dev build's
-data (`work.amenbo.amenbo-dev`) off the production store. `amenbo config` prints the
+data (`work.amenbo.amenbo-dev`) off the production store — every build entrance names it,
+and one that says nothing does not compile (above). `amenbo config` prints the
 path this build actually opened on its first line. Set `AMENBO_HOME` to override the
 location (useful for tests and explicit setups).
 

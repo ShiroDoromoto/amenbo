@@ -12,8 +12,6 @@
 //   - no cursor, or the feed cannot be read (just after startup, or a failed IPC). This round returns gap, but
 //     the position is re-established — losing it for good would retire the feed and turn every wake into a full
 //     re-read.
-//   - the store changed yet the feed holds no rows (a whole-file swap such as `fold`, `stage_and_swap` or a
-//     `backup` restore — writes that do not pass through `WriteTx`)
 //   - an unknown dataset (a new table with nowhere to fold into)
 //   - too much has piled up (a full re-read is cheaper than draining the pages)
 // The caller (`watchStore`) reads this and falls to `reconcile("gap")`.
@@ -67,6 +65,12 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   plugin_enable: ["plugins"],
   plugin_config: ["plugins"],
   plugin_secret: ["plugins"],
+  // This device's own tables (`AMB-D-856`). None of them travels anywhere, and all three are written by
+  // the CLI and drawn here: the folders a project is bound to, and the two answers given for it. They
+  // fold to the project they are about, which is the surface each of them is on.
+  binding_project_dir: ["projects"],
+  hook_optout: ["projects"],
+  harness_consent: ["projects"],
 };
 
 /**
@@ -150,9 +154,12 @@ export async function drainChanges(): Promise<DrainedChanges> {
     for (const s of folded.scopes) scopes.add(s);
     if (!res.more) {
       cursor = at;
-      // Not a single row, yet the signature moved: a write that never reaches the feed — a whole-file
-      // swap, or config.json, which is not in the database at all. Both want the full re-read a gap asks for.
-      return scopes.size === 0 ? GAP() : { scopes, gap: false };
+      // An empty set of scopes is an answer, not a failure: the feed spoke, and it named nothing — a
+      // commit of the store's own bookkeeping, which no dataset covers (the plugin dispatcher draining
+      // its outbox, a `store_meta` scalar). The two writes that reach no row at all — a whole-file swap,
+      // and `config.json` — are told apart by the caller off the signature's own legs (`AMB-D-856`), so
+      // they are no longer guessed at from here.
+      return { scopes, gap: false };
     }
   }
   cursor = at;

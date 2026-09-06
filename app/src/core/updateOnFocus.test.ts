@@ -45,7 +45,8 @@ beforeEach(async () => {
   invoke.mockImplementation((cmd: string) => {
     switch (cmd) {
       case "snapshot": return Promise.resolve(SNAPSHOT);
-      case "store_signature": return Promise.resolve("sig-0"); // never moves: a read-only session.
+      // Never moves: a read-only session.
+      case "store_signature": return Promise.resolve({ file: "file-0", config: "config-0", version: "1" });
       case "version_status": return upstream instanceof Error ? Promise.reject(upstream) : Promise.resolve(upstream);
       default: return Promise.resolve(null);
     }

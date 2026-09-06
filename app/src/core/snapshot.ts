@@ -19,6 +19,7 @@ import type {
   DecisionDto,
   DoctorIssueDto,
   StartupHealthDto,
+  StoreSignatureDto,
   VersionStatusDto,
   Snapshot as SnapshotDto,
 } from "../bindings/bindings";
@@ -90,8 +91,8 @@ const reflectionListeners = new Set<(r: StoreChangeReflected) => void>();
 /**
  * Subscribes to the moment an outside write (AI or CLI) lands in the GUI — the substrate every
  * visual effect builds on. It fires **only for outside writes**: `watchStore` has already filtered
- * our own via `sig === lastSignature`. Outside Tauri `watchStore` is a no-op, so nothing ever
- * fires. The returned function unsubscribes.
+ * our own (every leg of the signature unchanged) and the commits that touch nothing this screen draws.
+ * Outside Tauri `watchStore` is a no-op, so nothing ever fires. The returned function unsubscribes.
  */
 export function subscribeStoreChangeReflected(fn: (r: StoreChangeReflected) => void): () => void {
   reflectionListeners.add(fn);
@@ -185,42 +186,71 @@ export function notifyInboxChanged(): void {
   for (const l of listeners) l();
 }
 
-// The store mtime signature this device saw last (what the store_signature command returns),
-// refreshed on every loadSnapshot. When a store-changed arrives and the signature still matches,
-// the mtime moved because *we* wrote — the result is already on screen — and the refetch is
-// suppressed. This is the watcher's dedup of our own writes.
-let lastSignature: string | null = null;
+// The store signature this device saw last (what the store_signature command returns), refreshed on
+// every loadSnapshot. When a store-changed arrives and all three legs still match, the file moved
+// because *we* wrote — the result is already on screen — and the refetch is suppressed. This is the
+// watcher's dedup of our own writes. Which leg moved is the other half: see `watchStore`.
+let lastSignature: StoreSignatureDto | null = null;
+
+/** Whether two signatures say the same thing. All three legs, since any one of them moving is a change. */
+function sameSignature(a: StoreSignatureDto, b: StoreSignatureDto): boolean {
+  return a.file === b.file && a.config === b.config && a.version === b.version;
+}
+
+/** Read the signature, or `null` when there is none to have (outside Tauri, or a failed IPC). */
+async function readSignature(): Promise<StoreSignatureDto | null> {
+  if (!inTauri()) return null;
+  try {
+    return await invoke<StoreSignatureDto>("store_signature");
+  } catch {
+    return null; // no signature: fall to the safe side and re-read.
+  }
+}
 
 /**
- * Store subscription: when core emits `store-changed` — another process (AI, CLI) wrote — **read the
- * change feed from the cursor onward only**, fold the changed rows' datasets into scopes, and
- * refetch just the queries that touch those scopes. The read is O(changes): `store-changed` is
- * nothing but a wake-up saying *something* moved, and **what moved is the feed's word** (it is never
- * in the event payload). When the feed cannot say — it has expired, the file was replaced wholesale,
- * a dataset does not fold — fall back to the full re-read of `reconcile("gap")`: an invalidation
- * signal is not truth, and when in doubt reconcile from the source of truth (see `drainChanges`).
- * Changes caused by our own writes — signature identical to the last load — are filtered out here:
- * the write's ack already put the result on screen, and the `loadSnapshot` at the end of that ack
- * has already advanced the cursor past our own rows in the feed. Inbox membership only ever moves on
- * the task side, so the generation is bumped only when `tasks` is among the scopes — an outside
- * write touching decisions or attachments alone must not trigger a mailbox recompute. Outside Tauri
- * this does nothing. The returned function unsubscribes.
+ * Store subscription: when core emits `store-changed` — another process (AI, CLI) wrote — decide what to
+ * re-read from **which leg of the signature moved** (`AMB-D-856`), because `store-changed` is nothing but
+ * a wake-up saying *something* did, and the payload never says what:
+ *
+ * - **nothing moved** … our own write. The ack already put the result on screen, and the `loadSnapshot`
+ *   at the end of it has already carried the cursor past our own rows. Read nothing.
+ * - **the store file's identity moved** … it was swapped out from under us (`fold`, `stage_and_swap`, a
+ *   restore, a migration). Nothing the feed held survives that, so re-read everything.
+ * - **`config.json`'s identity moved** … that file is not in the database, so no row will ever speak for
+ *   it. Re-read everything.
+ * - **only `data_version` moved** … somebody committed, and the feed can say what: fold the changed rows'
+ *   datasets into scopes and refetch just the queries touching them. A feed that **cannot** say — expired,
+ *   a dataset that does not fold, too much piled up — falls back to the full re-read of
+ *   `reconcile("gap")`: an invalidation signal is not truth (see `drainChanges`).
+ * - **an empty page** … a commit the feed collects no row for: the plugin dispatcher draining its outbox
+ *   onto the queues, a `store_meta` scalar, the feed's own truncation. Read nothing, and announce
+ *   nothing — nothing landed on the screen.
+ *
+ * Inbox membership only ever moves on the task side, so the generation is bumped only when `tasks` is
+ * among the scopes — an outside write touching decisions or attachments alone must not trigger a mailbox
+ * recompute. Outside Tauri this does nothing. The returned function unsubscribes.
  */
 export async function watchStore(): Promise<() => void> {
   if (!inTauri()) return () => {};
   const { listen } = await import("@tauri-apps/api/event");
   return listen("store-changed", async () => {
-    let sig: string | null = null;
-    try {
-      sig = await invoke<string>("store_signature");
-    } catch {
-      sig = null; // no signature: fall to the safe side and refetch.
-    }
-    if (sig !== null && sig === lastSignature) return; // our own write, already on screen.
-    const { scopes, gap } = await drainChanges();
-    if (gap) {
+    const sig = await readSignature();
+    const full = async () => {
       await reconcile("gap");
       notifyStoreChangeReflected({ reason: "gap", at: Date.now() });
+    };
+    // No signature at all, or nothing to compare against: we cannot say which leg moved, so re-read.
+    if (sig === null || lastSignature === null) return await full();
+    if (sameSignature(sig, lastSignature)) return; // our own write, already on screen.
+    // The two legs the feed structurally cannot speak for.
+    if (sig.file !== lastSignature.file || sig.config !== lastSignature.config) return await full();
+    const { scopes, gap } = await drainChanges();
+    if (gap) return await full();
+    if (scopes.size === 0) {
+      // The feed answered, and it named nothing: a commit of the store's own bookkeeping. Nothing
+      // lands, so nothing is announced — but the signature is carried forward, or the next wake would
+      // be compared against a store two commits old and re-read everything for it.
+      lastSignature = sig;
       return;
     }
     await loadSnapshot({ inboxAffected: scopes.has("tasks") });
@@ -300,15 +330,8 @@ export async function reconcile(reason: ReconcileReason): Promise<void> {
  * Outside Tauri there is no signature, so this always re-reads everything.
  */
 async function focusCatchUp(): Promise<void> {
-  let cur: string | null = null;
-  if (inTauri()) {
-    try {
-      cur = await invoke<string>("store_signature");
-    } catch {
-      cur = null; // no signature: fall to the safe side and re-read everything.
-    }
-  }
-  if (cur !== null && lastSignature !== null && cur === lastSignature) {
+  const cur = await readSignature();
+  if (cur !== null && lastSignature !== null && sameSignature(cur, lastSignature)) {
     // Nothing moved on disk, so there is no snapshot to re-read — but "is there a newer release" does not live in
     // the store, and this is the one moment we get to ask it: the user just came back to the app. Someone who only
     // reads never moves the signature, and would otherwise never be told about an update again after launch.
@@ -406,11 +429,7 @@ export function installReconcileTriggers(): () => void {
 /** Re-reads the store mtime signature from core and keeps it — this is what dedup compares against. */
 async function refreshSignature(): Promise<void> {
   if (!inTauri()) return;
-  try {
-    lastSignature = await invoke<string>("store_signature");
-  } catch {
-    lastSignature = null;
-  }
+  lastSignature = await readSignature();
 }
 
 /** Granularity of a `loadSnapshot`. By default it counts as inbox-affecting — a wholesale re-read. */

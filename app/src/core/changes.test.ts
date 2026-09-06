@@ -56,6 +56,19 @@ describe("foldScopes — folding datasets into invalidation scopes", () => {
     expect([...scopes]).toEqual(["plugins"]);
   });
 
+  // The three tables this device keeps to itself. They are on the feed so a screen here hears them
+  // change, and each is about a project — so that is the scope they fold to, rather than falling to the
+  // full re-read an unknown dataset asks for.
+  it("this device's own tables fold to the project they are about", () => {
+    const { scopes, unknown } = foldScopes([
+      row("binding_project_dir"),
+      row("hook_optout"),
+      row("harness_consent"),
+    ]);
+    expect(unknown).toBe(false);
+    expect([...scopes]).toEqual(["projects"]);
+  });
+
   it("no changes means no scopes", () => {
     expect(foldScopes([])).toEqual({ scopes: new Set(), unknown: false });
   });
@@ -109,10 +122,10 @@ describe("drainChanges — draining everything past the cursor and folding into 
     expect(invoke).toHaveBeenLastCalledWith("changes_since", { cursor: 900, limit: null });
   });
 
-  it("the store changed but the feed is empty = a write that never lands on the feed (whole-file replacement, etc.) → gap", async () => {
+  it("an empty feed is an answer, not a gap: a commit the feed collects no row for touches nothing to re-read", async () => {
     await startAt(5);
     invoke.mockResolvedValueOnce(page([], 5));
-    expect(await drainChanges()).toEqual({ scopes: new Set(), gap: true });
+    expect(await drainChanges()).toEqual({ scopes: new Set(), gap: false });
   });
 
   it("an unfoldable dataset yields a gap (do not partially invalidate and mistake it for \"reflected\")", async () => {

@@ -31,7 +31,9 @@ permissions:
 # local `cargo build`, so a working-tree build cannot pass itself off as a distributed one
 # and carry real user data past what the released app can open. Losing this line ships
 # artifacts that refuse to migrate — the release rehearsal walks that path, so it surfaces
-# before users do.
+# before users do. Each build job below ends by asking its own artifacts what they carry
+# (scripts/check-shipped-build.mjs), which is the only place the loss is visible: a build cannot
+# check its own injection while the material to check with is what went missing.
 env:
   AMENBO_BUILD: release
   # The pair amenbo-core keeps no default for, so an unset one stops the compile rather than falling
@@ -124,6 +126,17 @@ jobs:
           make dist-gui-mac MAC_GUI_ARCH=arm64
           make dist-gui-mac MAC_GUI_ARCH=amd64
 
+      # Ask the binaries what they carry, before they are uploaded. Two are asked per leg: the
+      # standalone CLI, and the sidecar CLI staged into the bundle — the one the installer ships and
+      # the only binary inside it that answers questions without the installer being unpacked. The
+      # arm64 slice is the one asked here because this runner can run it; the x86_64 slice differs
+      # only by `--target`, and the environment a compile reads is per process, not per target.
+      - name: Gate — the mac artifacts carry what this workflow injected
+        run: |
+          node scripts/check-shipped-build.mjs \
+            dist/amenbo-darwin-arm64 \
+            "app/src-tauri/binaries/$AMENBO_APP_NAME-aarch64-apple-darwin"
+
       - uses: actions/upload-artifact@v7
         with:
           name: dist-macos
@@ -186,6 +199,20 @@ jobs:
           path: dist/gui-e2e/*.png
           if-no-files-found: warn
 
+      # Both Linux halves are built through `docker run`, and each `docker run` is its own boundary a
+      # variable can be lost at — which is where the stamp was in fact lost, unnoticed, for twenty
+      # versions of the Linux build. So both are asked, and the AppImage's own CLI out of the AppImage
+      # rather than off the staging directory: the repository goes into that container read-only, so
+      # nothing the GUI build staged exists on this runner. `--appimage-extract` unpacks without FUSE.
+      - name: Gate — the Linux amd64 artifacts carry what this workflow injected
+        run: |
+          work="$(mktemp -d)"
+          chmod +x dist/amenbo-app-linux-x86_64.AppImage
+          (cd "$work" && "$GITHUB_WORKSPACE/dist/amenbo-app-linux-x86_64.AppImage" --appimage-extract >/dev/null)
+          node scripts/check-shipped-build.mjs \
+            dist/amenbo-linux-amd64 \
+            "$work/squashfs-root/usr/bin/$AMENBO_APP_NAME"
+
       - uses: actions/upload-artifact@v7
         with:
           name: dist-linux
@@ -222,6 +249,16 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: make dist-gui-linux LINUX_GUI_ARCH=arm64
+
+      # The amd64 leg's gate, on this architecture's own artifacts — two container boundaries here too.
+      - name: Gate — the Linux arm64 artifacts carry what this workflow injected
+        run: |
+          work="$(mktemp -d)"
+          chmod +x dist/amenbo-app-linux-aarch64.AppImage
+          (cd "$work" && "$GITHUB_WORKSPACE/dist/amenbo-app-linux-aarch64.AppImage" --appimage-extract >/dev/null)
+          node scripts/check-shipped-build.mjs \
+            dist/amenbo-linux-arm64 \
+            "$work/squashfs-root/usr/bin/$AMENBO_APP_NAME"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -299,6 +336,15 @@ jobs:
           cp app/src-tauri/target/release/bundle/nsis/*setup.exe dist/amenbo-app-windows-x64-setup.exe
           cp app/src-tauri/target/release/bundle/nsis/*setup.exe.sig dist/amenbo-app-windows-x64-setup.exe.sig
 
+      # Standalone CLI and the installer's sidecar CLI, as on mac. Both are this runner's own
+      # architecture, so both can simply be run.
+      - name: Gate — the Windows artifacts carry what this workflow injected
+        shell: bash
+        run: |
+          node scripts/check-shipped-build.mjs \
+            dist/amenbo-windows-amd64.exe \
+            "app/src-tauri/binaries/$AMENBO_APP_NAME-x86_64-pc-windows-msvc.exe"
+
       - uses: actions/upload-artifact@v7
         with:
           name: dist-windows
@@ -361,6 +407,13 @@ jobs:
         run: |
           cp app/src-tauri/target/release/bundle/nsis/*setup.exe dist/amenbo-app-windows-arm64-setup.exe
           cp app/src-tauri/target/release/bundle/nsis/*setup.exe.sig dist/amenbo-app-windows-arm64-setup.exe.sig
+
+      - name: Gate — the Windows arm64 artifacts carry what this workflow injected
+        shell: bash
+        run: |
+          node scripts/check-shipped-build.mjs \
+            dist/amenbo-windows-arm64.exe \
+            "app/src-tauri/binaries/$AMENBO_APP_NAME-aarch64-pc-windows-msvc.exe"
 
       - uses: actions/upload-artifact@v7
         with:

@@ -24,7 +24,9 @@
 //! construction, rather than by every spawn remembering to set `AMENBO_UPDATE_CHECK=0`: a forgotten
 //! one now falls to *not asking*. An unstamped build that was pointed somewhere else to ask
 //! (`AMENBO_UPDATE_JSON_URL`) is not withheld — that override is how a test drives the query against
-//! a manifest of its own, and it never names the production endpoint.
+//! a manifest of its own, and it never names the production endpoint. **A stamped build does not read
+//! that variable at all** ([`override_url`]): what a shipped binary asks is the address it was built
+//! with, and nothing in an environment moves it.
 //!
 //! The module does nothing but query and fetch. Comparing the fetched version against the running
 //! binary to derive `update_available` is the caller's job (it is folded into
@@ -312,6 +314,23 @@ fn withheld_from_build(release_build: bool, url_overridden: bool) -> bool {
     !release_build && !url_overridden
 }
 
+/// Where a build may be pointed at run time: the `AMENBO_UPDATE_JSON_URL` it was handed, unless the
+/// release workflow stamped it, in which case nowhere (`AMB-D-849`).
+///
+/// A shipped binary that its environment can re-aim has no update path worth the name left. The CLI's
+/// self-update carries no signature check — the whole of what it trusts is TLS to the address it was
+/// built with ([`crate::self_update`]) — so an environment naming a different address is naming what
+/// gets installed over the running binary. The variable is there for tests and development, which is
+/// where an unstamped build is, and that is the only place it is read.
+fn override_url(release_build: bool, named: Option<String>) -> Option<String> {
+    if release_build { None } else { named }
+}
+
+/// [`override_url`] against this build and this process's environment.
+fn url_override() -> Option<String> {
+    override_url(crate::build_stamp::is_release_build(), crate::env::update_json_url())
+}
+
 /// Whether the query is disabled, effectively — the channel, the release stamp, the config toggle and
 /// the env override combined.
 pub fn is_disabled(enabled: bool) -> bool {
@@ -320,7 +339,7 @@ pub fn is_disabled(enabled: bool) -> bool {
         crate::env::update_check_disabled(),
         crate::config::Paths::is_dev_channel(),
         crate::build_stamp::is_release_build(),
-        crate::env::update_json_url().is_some(),
+        url_override().is_some(),
     )
 }
 
@@ -330,10 +349,7 @@ pub fn is_disabled(enabled: bool) -> bool {
 /// names the same stamp, for migrations).
 #[must_use]
 pub fn is_withheld_from_build() -> bool {
-    withheld_from_build(
-        crate::build_stamp::is_release_build(),
-        crate::env::update_json_url().is_some(),
-    )
+    withheld_from_build(crate::build_stamp::is_release_build(), url_override().is_some())
 }
 
 /// Whether a cache entry is fresh: it is, while less than [`CACHE_TTL_SECS`] has passed since the
@@ -349,10 +365,10 @@ fn now_unix() -> i64 {
     chrono::Utc::now().timestamp()
 }
 
-/// The URL to query: [`LATEST_JSON_URL`] in production, overridable through the
-/// `AMENBO_UPDATE_JSON_URL` env var.
+/// The URL to query: [`LATEST_JSON_URL`], the address this build was compiled with, unless an
+/// unstamped build was pointed elsewhere ([`override_url`]).
 fn latest_json_url() -> String {
-    crate::env::update_json_url().unwrap_or_else(|| LATEST_JSON_URL.to_string())
+    url_override().unwrap_or_else(|| LATEST_JSON_URL.to_string())
 }
 
 /// Path of the cache file, under the app-data cache dir — one per channel, so dev and prod never mix.
@@ -697,6 +713,17 @@ mod tests {
         // And the channel outranks the override too — a dev build has no manifest to be measured
         // against whatever it is pointed at.
         assert!(disabled(true, false, true, false, true), "a dev build stays disabled when pointed elsewhere");
+    }
+
+    /// A shipped build asks the address it was compiled with, whatever its environment names. The
+    /// override is read by the builds it is for — the unstamped ones — and by nothing that shipped.
+    #[test]
+    fn a_stamped_build_does_not_read_the_endpoint_it_is_pointed_at() {
+        let named = || Some("http://127.0.0.1:9/latest.json".to_string());
+        assert_eq!(override_url(true, named()), None, "a shipped build ignores what it was pointed at");
+        assert_eq!(override_url(true, None), None, "and has nothing to ignore when nothing was named");
+        assert_eq!(override_url(false, named()), named(), "an unstamped build takes it");
+        assert_eq!(override_url(false, None), None, "and has none when none was named");
     }
 
     /// The predicate the CLI words its refusal from is the stamp arm alone — not the channel, not the

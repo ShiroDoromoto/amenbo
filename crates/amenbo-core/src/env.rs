@@ -182,6 +182,11 @@ pub fn update_check_disabled() -> bool {
 
 /// `AMENBO_UPDATE_JSON_URL` — override the manifest URL we query, pointing tests and development at
 /// something other than the production endpoint.
+///
+/// **Read it through [`crate::update_check`], not here.** What this returns is only what the
+/// environment says; whether the build may act on it is the update check's to decide, and a build the
+/// release workflow stamped may not — a shipped binary that its environment can re-aim is one whose
+/// self-update installs whatever that address answers.
 pub fn update_json_url() -> Option<String> {
     var("AMENBO_UPDATE_JSON_URL")
 }

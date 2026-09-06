@@ -27,8 +27,11 @@
 //! the one scenario source to its own world.
 //!
 //! The screen tool is the input primitive too, called by whoever drives the screen between steps:
-//! its `find` / `click-named` / `right-click-named` / `dblclick-named` / `click` / `right-click` /
-//! `dblclick` / `drag` / `type` / `key` / `scroll` carry out the action steps the checklist names.
+//! its `find` / `click-named` / `right-click-named` / `dblclick-named` / `point-named` / `click` /
+//! `right-click` / `dblclick` / `point` / `drag` / `type` / `key` / `scroll` carry out the action
+//! steps the checklist names. The two that point rather than press are what a face drawing something
+//! for a resting pointer is read through: they arrive and stop, and the shot after them is of a
+//! screen the step is holding open.
 //!
 //! One step is nobody's to carry out at the screen: `store run-again` ends this run of the app and
 //! brings another up on the same store ([`launch::Gui::run_again`]), which is how a road reads what
@@ -992,6 +995,9 @@ impl Instructor {
             // words that are not on the shot.
             (Domain::Terminal, "pane")
             | (Domain::Terminal, "label")
+            // The whole of that row, in the panel it drops under itself. It is the row's own words
+            // again, so a reading finds them there and nowhere in the interface around them.
+            | (Domain::Terminal, "label-in-full")
             // What is standing in the input line is on the same screen as what a program printed:
             // one shot, one reading, and the sentence is where the difference between them lives.
             | (Domain::Terminal, "in-the-box") => {
@@ -2047,6 +2053,23 @@ impl Instructor {
                 format!(
                     "On the row above {pane}, press the control that opens what else the row can do, and choose the item that names the pane — the one set apart, below the two that hand the terminal something. A box takes the label's place with the name as it stands in it, already selected. Type \"{}\" straight over it and press Enter. The row carries that name afterwards. Press nothing else and click nowhere else in between: leaving the box, by any means, is the way this is taken back rather than kept.",
                     req(with, "name")?
+                )
+            }
+            // Holding the pointer on the row so the row says the whole of itself. It is a step of its
+            // own because the panel is up only while the pointer is there: the reading after it is
+            // made from a shot of a screen this step is holding open, and an operator who moved on
+            // before it was taken would have it read a row with nothing under it.
+            //
+            // **Nothing is pressed**, and it is said twice, because the row has presses on it — the
+            // control that opens what else it can do, the one that ends the pane — and a press is
+            // what a hand on a pointing device does without being asked.
+            (Domain::Terminal, "hold-label") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Put the pointer on the row above {pane} — on the words, away from the two controls at its right end — and leave it there without pressing anything. A panel comes up under the row. Keep the pointer where it is: the panel is drawn only while it is there, and the next step reads what is on it."
                 )
             }
             // Getting rid of the place. The pane is named by the words the road typed into it, since
@@ -3621,6 +3644,13 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // And the same words in the panel the row drops under itself, which is where they are
+            // whole. The row cuts what it cannot fit; the panel wraps instead, so what is looked for
+            // here is the run of words rather than a line of them.
+            (Domain::Terminal, "label-in-full") => format!(
+                "In the panel standing under the row above the pane — the one the previous step brought up, and which is gone the moment the pointer leaves — confirm \"{}\" is written out whole, over as many lines as it takes and with nothing dropped out of the middle of it.",
+                req(with, "shows")?
+            ),
             // The dot on the terminal's own segment. It is read from the ledger, which is the only
             // face it is ever drawn on, and it carries nothing to quote: a road says it is there, or
             // that crossing over has spent it.

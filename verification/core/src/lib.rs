@@ -2398,6 +2398,21 @@ const REGISTRY: &[OpSpec] = &[
     // the interface around it. It reads a name a person typed (`name-pane`) the same way and for the
     // same reason — those words are the operator's own too, and are drawn on the row and nowhere else.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "label", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // The row's own answer to being unreadable: a pointer held on it drops a panel under it carrying
+    // the whole of what the row holds, wrapped, with nothing cut out (`app/src/talk/nameplate.ts`).
+    //
+    // **Two ops and not one**, because the panel is up only while the pointer is on the row: an
+    // assert that placed the pointer itself would be an assert that changed the screen, and one that
+    // did not would read a panel that was never drawn. So the road holds the pointer in a step of its
+    // own, and the shot the reading is made from is the one taken after it.
+    //
+    // A screen road alone, both of them. What the row cuts and what a hover gives back are things a
+    // box on a screen does; the binary is handed none of it.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "hold-label", required: &[], refs: &[], strings: &["shows"], binds: false },
+    // And what that panel carries. It is read off the shot rather than off the tree, the way almost
+    // everything is: the panel is drawn for an eye and marked as the row said twice, so the tree does
+    // not carry it at all.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "label-in-full", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // The mark the terminal's own segment wears while a turn is standing behind it. It is the whole
     // of what crosses the switch — a dot, with no number and no words — so there is nothing to name
     // in it and nothing to read out: what a road says here is that it is there, or that it is not.

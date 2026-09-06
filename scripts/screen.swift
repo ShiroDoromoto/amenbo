@@ -695,6 +695,21 @@ func rightClickNamed(pid: Int, name: String, role: String?, window: String?, fla
     rightClick(x: p.x, y: p.y, flags: flags)
 }
 
+/// Put the pointer where that name is, and stop there.
+///
+/// **It is the pointer arriving and nothing else.** What it is for is the states a face draws for a
+/// pointer resting on something and takes away when it leaves — a panel dropped under a row, a
+/// control coming out of hiding — and every other verb here that arrives at a point goes on to press
+/// it, which is the one thing that would take such a panel away again.
+///
+/// The app is brought to the front for the reason a press is: a pointer over a window that is not
+/// frontmost is over that window all the same, but what is drawn under it is whatever is in front,
+/// and a shot taken after this would be of the wrong screen.
+func pointNamed(pid: Int, name: String, role: String?, window: String?) {
+    let p = pointOf(pid: pid, name: name, role: role, window: window)
+    hover(p)
+}
+
 /// The same press counted twice, for a row a single press only selects. The point is arrived at by
 /// name for the reason the other two are, and the coordinate `dblclick` is no substitute here: it
 /// takes no pid, so it fronts nothing, and a press aimed at this app's row lands on whatever window
@@ -794,6 +809,15 @@ func click(x: Double, y: Double, flags: CGEventFlags = []) {
     mustBeOnAScreen(p, "the click")
     hover(p)
     press(at: p, clickState: 1, flags: flags)
+}
+
+/// The pointer moved to a point and left there, the coordinate half of `point-named`. It is for the
+/// same states, and it is what a caller reaches for when what draws them is a region rather than
+/// anything the tree gives a name to — the blank part of a row, say.
+func point(x: Double, y: Double) {
+    let p = CGPoint(x: x, y: y)
+    mustBeOnAScreen(p, "the pointer")
+    hover(p)
 }
 
 /// The press a row's own menu comes up on. The button is the whole difference — the same move, the
@@ -1311,12 +1335,12 @@ let (role, afterRole) = takeOption("--role", afterWindow, needs: "the role find 
 let (at, afterAt) = takeAt(afterRole)
 let (held, args) = takeModifiers(afterAt)
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|right-click-named|dblclick-named|click|right-click|dblclick|drag|drop-file|type|key|scroll|set-date|trusted> … [--window <title>]")
+    fail("usage: screen <front|shot|read|find|click-named|right-click-named|dblclick-named|point-named|click|right-click|dblclick|point|drag|drop-file|type|key|scroll|set-date|trusted> … [--window <title>]")
 }
 // Refused rather than ignored: a qualifier the subcommand never reads would narrow nothing and say so
 // nowhere, which is the silent miss every refusal in this file is written against.
-if role != nil, !["find", "click-named", "right-click-named", "dblclick-named"].contains(args[1]) {
-    fail("--role says which kind of element to reach, and only find / click-named / right-click-named / dblclick-named take one")
+if role != nil, !["find", "click-named", "right-click-named", "dblclick-named", "point-named"].contains(args[1]) {
+    fail("--role says which kind of element to reach, and only find / click-named / right-click-named / dblclick-named / point-named take one")
 }
 if !held.isEmpty,
     !["key", "click", "right-click", "dblclick", "click-named", "right-click-named", "dblclick-named"]
@@ -1350,6 +1374,12 @@ case "right-click-named":
 case "dblclick-named":
     guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen dblclick-named <pid> <name> [--role <role>] [--cmd] [--shift] [--opt] [--ctrl] [--window <title>]") }
     doubleClickNamed(pid: pid, name: args[3], role: role, window: window, flags: held)
+case "point-named":
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen point-named <pid> <name> [--role <role>] [--window <title>]") }
+    pointNamed(pid: pid, name: args[3], role: role, window: window)
+case "point":
+    guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen point <x> <y>") }
+    point(x: x, y: y)
 case "click":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen click <x> <y> [--cmd] [--shift] [--opt] [--ctrl]") }
     click(x: x, y: y, flags: held)

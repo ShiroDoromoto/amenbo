@@ -1923,6 +1923,18 @@ impl Instructor {
                     "Click into {pane}, then press the key this machine pastes with. What the last copy put on the clipboard appears in that pane's input line — leave it there, and press nothing else."
                 )
             }
+            // The same line reached with a picture on the clipboard, which is a different press on one
+            // of the three machines. Both are said, because the operator is on one machine and the
+            // road is walked on all of them — and the reading afterwards is the same either way.
+            (Domain::Terminal, "paste-image") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Click into {pane}. On macOS and Windows, press the key this machine pastes with; on Linux, hold Ctrl and Shift and press V. A quoted path appears in that pane's input line, and the picture itself does not — leave the line there, and press nothing else."
+                )
+            }
             // A command run for its output, which is what the steps after it read. The clearing is
             // said first because it is what makes "the ref" a place on the screen rather than one of
             // several, and the waiting is said last because a press on a half-drawn line is a press
@@ -2352,6 +2364,20 @@ impl Instructor {
                 // it is outside every folder the road binds, which is the point of a file kept there.
                 None => format!(
                     "Outside Amenbo — in a file manager — copy the file \"{}\" from the folder this run works in, the way that machine copies a file, so it is on the clipboard. The run said where that folder is before the first step.",
+                    req(with, "path")?
+                ),
+            },
+            // The picture road's own copy. What is named is the file and the folder as the road calls
+            // them, and the how is said in full: opened and copied from inside whatever shows
+            // pictures on this machine, so the clipboard holds the image rather than the file.
+            (Domain::Repo, "copy-image-outside") => match with.get("dir").and_then(|v| v.as_str()) {
+                Some(dir) => format!(
+                    "Outside Amenbo, open the file \"{}\" inside the folder the road calls \"{dir}\" in whatever this machine shows pictures in, and copy the picture from inside that — select all, then press the key this machine copies with. The clipboard is now holding the image itself and not the file.",
+                    req(with, "path")?
+                ),
+                // No folder named is the run's own, the way `copy-outside` reads one.
+                None => format!(
+                    "Outside Amenbo, open the file \"{}\" from the folder this run works in — the run said where that folder is before the first step — in whatever this machine shows pictures in, and copy the picture from inside that: select all, then press the key this machine copies with. The clipboard is now holding the image itself and not the file.",
                     req(with, "path")?
                 ),
             },

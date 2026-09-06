@@ -30,12 +30,32 @@ export function holdsFiles(data: DataTransfer): boolean {
 }
 
 /**
+ * The image a paste is carrying, or none.
+ *
+ * **A pasted screenshot is a file to the engine and to nothing else.** Whatever the machine's
+ * clipboard was holding — macOS's TIFF, Windows' `CF_DIB` — arrives here as a `File` the engine has
+ * already turned into PNG, and `clip_files` finds nothing to answer with because there is no file on
+ * disk for it to name (`AMB-D-854`).
+ *
+ * The first one is taken. A paste carries one image where a person copied one, and where several
+ * arrived they came from a file manager — which puts the paths on too, and those are read first.
+ */
+export function imageIn(data: DataTransfer): File | null {
+  return Array.from(data.files).find((file) => file.type.startsWith("image/")) ?? null;
+}
+
+/**
  * Answer the pastes `host` is given that are carrying files, and leave every other paste alone.
  *
  * `put` is handed the paths the host read back, and the words the paste itself carried — which is
  * what is left when the clipboard holds files this machine will not name, and nothing at all when
  * it holds neither. Writing them is the caller's, because how a path is written depends on where it
  * is going (`AMB-D-832`).
+ *
+ * `writeImage` is how a caller that can take an image says where one goes. It is reached only where
+ * the host named no paths and the paste is carrying one, and it answers with the paths it was
+ * written to — none where it could not be written, which leaves the reader with the words. A caller
+ * that passes nothing takes no images, and the paste is answered as it was before.
  *
  * ⚠ **It is caught on the way down, on `host` rather than on the box the typing lands in.** The
  * listener that would otherwise answer this paste — the emulator's, or the editor's own — sits on
@@ -58,6 +78,7 @@ export function holdsFiles(data: DataTransfer): boolean {
 export function takesPastedFiles(
   host: HTMLElement,
   put: (paths: string[], words: string) => void,
+  writeImage?: (bytes: Uint8Array, mime: string) => Promise<string[]>,
 ): () => void {
   const pasted = (e: ClipboardEvent) => {
     const carried = e.clipboardData;
@@ -65,8 +86,20 @@ export function takesPastedFiles(
     e.preventDefault();
     e.stopPropagation();
     const words = carried.getData("text/plain");
+    // The image is taken hold of here, and read here, for the same reason the words are: what a
+    // paste is carrying is carrying it for the length of this handler, and the host's answer comes
+    // back after that. A file manager's copy comes through this too — it carries a `.png` as well as
+    // the path to it — and the read is thrown away below, where the paths win.
+    const image = writeImage === undefined ? null : imageIn(carried);
+    const read = image === null ? null : image.arrayBuffer();
     void invoke<string[]>("clip_files", {})
-      .then((paths) => put(paths, words))
+      .then(async (paths) => {
+        if (paths.length > 0 || image === null || read === null || writeImage === undefined) {
+          put(paths, words);
+          return;
+        }
+        put(await writeImage(new Uint8Array(await read), image.type), words);
+      })
       .catch(() => {});
   };
   host.addEventListener("paste", pasted, true);

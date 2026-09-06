@@ -1478,7 +1478,26 @@ input[type="color"] {
 }
 .navitem:hover { background: var(--c-hover); }
 .navitem--active { background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-medium); }
-.navitem__dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+/* The project's mark: the image it was given, or its colour with the first character of its name on
+   it (`app/src/shell/projectMark.ts`). It is the terminal face's tab mark at the same 24px, so one
+   project reads the same on both faces (`AMB-D-848`) — the rail drew an 8px square of colour before
+   this, and no letter. The ground is the colour the person gave the project and the ink is worked out
+   from it; a colour that could not be read leaves the surface underneath and the face's own text
+   colour. `uppercase` is the stylesheet's rather than the character's: what is in the mark is the
+   name's own first character, cased here for the same reason a heading is. */
+.navitem__mark {
+  flex: none;
+  width: 24px; height: 24px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--c-sunken);
+  font-size: var(--fs-md); font-weight: 700; line-height: 1;
+  text-transform: uppercase;
+  overflow: hidden;
+}
+/* The image fills the mark and is cut to its corners. It is baked square before it is ever stored
+   (`app/src/core/mutations.ts`), so `cover` is not cropping anything a person would miss — it is what
+   keeps a stored image from an older bake from stretching. */
+.navitem__icon { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* Drag-and-drop reordering of projects. The row being held fades, and the drop target
    takes an accent line above or below its midline. */
 .navitem--reorderable { cursor: grab; }

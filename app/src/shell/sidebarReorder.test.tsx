@@ -28,9 +28,9 @@ vi.mock("../mock/adapter", () => ({
   dataAdapter: {
     smartViews: () => [],
     listProjects: () => [
-      { id: 1, name: "Greenhouse", color: "#0a0", openCount: 0, proposedDecisionCount: 0 },
-      { id: 2, name: "Orchard", color: "#00a", openCount: 0, proposedDecisionCount: 0 },
-      { id: 3, name: "Vineyard", color: "#a00", openCount: 0, proposedDecisionCount: 0 },
+      { id: 1, name: "Greenhouse", color: "#0a0", icon: null, openCount: 0, proposedDecisionCount: 0 },
+      { id: 2, name: "Orchard", color: "#00a", icon: null, openCount: 0, proposedDecisionCount: 0 },
+      { id: 3, name: "Vineyard", color: "#a00", icon: null, openCount: 0, proposedDecisionCount: 0 },
     ],
   },
 }));

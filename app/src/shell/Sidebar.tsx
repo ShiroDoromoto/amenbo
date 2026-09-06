@@ -11,6 +11,7 @@ import { Icon, type IconName } from "../components/Icon";
 import type { SmartView } from "../mock/types";
 import type { Nav } from "./AppShell";
 import { landing } from "./rowDrag";
+import { inkOn, initialOf } from "./projectMark";
 
 // Which icon each smart view is drawn with. The views arrive as ids alone, so the drawing
 // is decided here rather than travelling with the data (`AMB-D-689`).
@@ -212,7 +213,7 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
               onPointerUp={canReorder ? onRowPointerUp : undefined}
               onPointerCancel={canReorder ? onRowPointerCancel : undefined}
             >
-              <span className="navitem__dot" style={{ background: p.color }} />
+              <ProjectMark color={p.color} name={p.name} icon={p.icon} />
               {p.name}
               {(() => {
                 const count = p.openCount + p.proposedDecisionCount;
@@ -295,7 +296,7 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
                   className={`navitem navitem--muted ${isActive(n) ? "navitem--active" : ""}`}
                   onClick={() => onNav(n)}
                 >
-                  <span className="navitem__dot" style={{ background: p.color }} />
+                  <ProjectMark color={p.color} name={p.name} icon={null} />
                   {p.name}
                 </button>
               );
@@ -303,6 +304,35 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A project's mark in the rail: the image it was given, or the colour a person gave it with the first
+ * character of its name written on it (`./projectMark`).
+ *
+ * It is the terminal face's tab mark, at the same 24px (`AMB-D-848`). Before this the rail drew an
+ * 8px square of colour and no letter, so the same project arrived one way on one face and another on
+ * the other, and the image a person had registered was shown on neither.
+ *
+ * **The image is the caller's to hand over.** An archived project is fetched over its own read path
+ * and that shape carries the colour and the name alone, so those rows pass `null` rather than having
+ * an image looked up for them here.
+ */
+function ProjectMark({ color, name, icon }: { color: string; name: string; icon: string | null }) {
+  // A project whose colour cannot be read has no ink either: the mark keeps the rail's own surface
+  // and the face's text colour, which is readable in both themes.
+  const ink = color ? inkOn(color) : null;
+  return (
+    <span
+      className="navitem__mark"
+      // The image fills the mark, so the colour is left off underneath it — it would only show
+      // through the corners of the picture.
+      style={icon === null ? { background: color, ...(ink === null ? {} : { color: ink }) } : undefined}
+      aria-hidden="true"
+    >
+      {icon === null ? initialOf(name) : <img className="navitem__icon" src={icon} alt="" />}
+    </span>
   );
 }
 

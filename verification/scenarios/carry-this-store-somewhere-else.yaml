@@ -134,6 +134,26 @@ steps_cli:
     with:
       name: worktree
 
+  # A credential is filled in before either road is walked. A plugin's secrets are on no road out of
+  # this store, and there are two here to hold to that: the picture carries no value, and the ledger
+  # does not even name the table — how many secrets there are and when each was written is the same
+  # answer by another route.
+  - type: action
+    domain: plugin
+    op: declare-secret
+    with:
+      name: worktree
+      key: token
+      label: API token
+
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: token
+      value: amb_scenario_secret_4f81c62b9ae70d35
+
   # The cheap question, asked with no actor anywhere — a read declares none, and the window has already
   # settled how far it gets. What comes back names the window it answered for, which is the only thing
   # that tells two carriers on one device whose number each is holding.
@@ -173,6 +193,15 @@ steps_cli:
       contains: filed where the carrier cannot see it
       present: false
 
+  # Nor did the credential. A picture goes wherever a carrier plugin puts it, and it is the one thing
+  # in this store that is a password in the clear.
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: amb_scenario_secret_4f81c62b9ae70d35
+      present: false
+
   # And the road that follows the picture. Having sent the whole once, a carrier never sends it again: it
   # reads on from the position the picture named and re-reads only the records that moved. This is the
   # call it makes on every pass, so what it has to be is unambiguous — it names the window it answered
@@ -197,6 +226,16 @@ steps_cli:
     op: returned
     with:
       contains: project_id
+
+  # And the secret written a moment ago is not on the page — not its value, which the ledger never
+  # carries anyway, and not the table it lives in. A carrier reading this every few seconds would
+  # otherwise be told each time a credential was touched.
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: plugin_secret
+      present: false
 
   # The case a copy outside is silently ruined by: a cursor the ledger cannot speak for. Answered with an
   # empty page it reads as "nothing changed", and the carrier stays confident and stale for as long as

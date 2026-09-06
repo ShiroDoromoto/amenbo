@@ -936,7 +936,8 @@ pub enum SyncCmd {
     ///
     /// What comes back is which records moved and how (`insert` / `update` / `delete`), not what they now
     /// hold: read a changed record back by name, and drop a deleted one. The cursor to start from is the
-    /// one a `sync snapshot` names in its header; each answer names the next.
+    /// one a `sync snapshot` names in its header; each answer names the next. A plugin's secrets stay
+    /// home here too — the tables a snapshot leaves behind are not named on a page either (`AMB-D-434`).
     ///
     /// A page is bounded, and says when it cut one short — come straight back with the cursor it handed
     /// you. When the cursor has fallen out of the ledger's window the answer is a **gap**

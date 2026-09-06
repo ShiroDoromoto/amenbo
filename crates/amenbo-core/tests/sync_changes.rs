@@ -356,3 +356,37 @@ fn the_open_reach_reads_every_window_at_once() {
         );
     }
 }
+
+/// **The plugin secrets are named on no page.** The feed names a record without carrying it, but naming
+/// is enough here: how many secrets there are, and when each one was written, is an answer the export and
+/// the snapshot already refuse (`AMB-D-434`), and it must not be readable off the ledger instead.
+///
+/// The cursor is the other half of it. A page that was nothing but withheld rows comes back empty and
+/// **moved on** — a cursor left standing in front of them would offer the same rows to drop on every pass,
+/// for as long as the reader ran.
+#[test]
+fn the_plugin_secrets_are_named_on_no_page_and_the_cursor_moves_past_them() {
+    let mut store = temp_store();
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let cursor = caught_up(&store, project);
+
+    store.set_plugin_secret(Some(project), "slack", "token", Some("s3cret")).unwrap();
+
+    let (rows, moved_on) = drained(&store, project, cursor);
+    assert_eq!(rows, Vec::new(), "the secret is named on no page: {rows:?}");
+    assert!(moved_on > cursor, "and the page moved past it instead of offering it again");
+
+    // The device's own reach — the human's, the GUI's — is held to the same line: what is withheld is a
+    // dataset, not one reach's view of one.
+    match store.sync_changes(cursor, 10_000).unwrap() {
+        SyncChanges::Changes { rows, .. } => {
+            assert!(!rows.iter().any(|r| r.dataset == "plugin_secret"), "the open reach sees it too: {rows:?}")
+        }
+        SyncChanges::Gap => panic!("a fresh store has trimmed nothing"),
+    }
+
+    // And what stands beside a withheld row still arrives, exactly once.
+    let task = filed(&mut store, new_task("タスク", project));
+    let (after, _) = drained(&store, project, moved_on);
+    assert!(after.iter().any(|r| r.dataset == "task" && r.row_id == task), "{after:?}");
+}

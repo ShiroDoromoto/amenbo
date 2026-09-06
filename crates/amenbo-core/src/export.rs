@@ -263,8 +263,12 @@ const CANCEL_POLL_ROWS: u64 = 256;
 /// A plugin's secrets are the one thing here that is a credential in plain text, and every road out is
 /// one-way: the export lands in another tool's hands and stays there, and the sync snapshot
 /// ([`crate::sync_snapshot`]) lands wherever a carrier plugin puts it. So the whole table stays home on
-/// both. Table-level and not row-level on purpose — a rule that has to judge each row is a rule that can
-/// be got wrong once; a table nobody streams cannot leak the row nobody remembered.
+/// all of them. Table-level and not row-level on purpose — a rule that has to judge each row is a rule
+/// that can be got wrong once; a table nobody streams cannot leak the row nobody remembered.
+///
+/// **The change feed is held to the same list** ([`crate::store::Store::sync_changes`]). It carries no
+/// values at all, so nothing here is a credential on that road — but naming the table is itself an
+/// answer: how many secrets there are, and when each one was written.
 ///
 /// `backup` carries them, and must: that road leads back to the same person's own store, and dropping
 /// them there would mean typing every credential in again after each restore. It copies the database

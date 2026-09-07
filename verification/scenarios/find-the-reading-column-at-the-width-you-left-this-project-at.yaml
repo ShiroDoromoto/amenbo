@@ -34,8 +34,17 @@
 # What does not move with it is whether any of the work is showing. The wide width lies over the
 # panes and stops at the rail: the shipped one leaves a strip of them in view on the narrowest window
 # there is, and one dragged to the stop leaves none on the widest. So the wide leg is read with
-# `side-cover`, and its pair is the same shape as the narrow leg's — part, then all, then part again
-# in the other project, and all once more on coming back to the one it was dragged in.
+# `side-cover`: part at the width it shipped with, part again once the narrow width has been dragged
+# out from under it, all after the drag — and part in the other project, and all once more on coming
+# back to the one it was dragged in.
+#
+# ── Why the pane is pressed before the wide width is dragged ─────────────────────────────────────
+# Pressing a pane is what puts the column back on its narrow step, and a column dragged to the stop
+# has left no pane to press: the work is behind it, which is the whole of what `all` says. So the
+# press is walked while the column is still at the width it shipped with, and what takes the face off
+# the covered width at the end of the leg is the move to the other project — a project is arrived at
+# on its narrow step. A road that pressed after the drag would be pointing an operator at a place
+# that is not on the screen.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # A width is a thing on a screen, and the binary is handed paths.
@@ -43,11 +52,11 @@ id: find-the-reading-column-at-the-width-you-left-this-project-at
 title: The reading column's two widths are kept for the project they were dragged in, so another project is drawn at its own and the first is drawn at the dragged ones on coming back
 description: >
   Raise two projects, each with a folder of its own, and open a terminal in each. In the first, open a
-  file — the column comes over the panes at its wide width — and drag that width on until the work is
-  gone behind it; then go back to the panes and drag the narrow width out until the column has taken
-  about the panes' width. Go to the second project: both of its widths are the ones they shipped with,
-  the drags having been about the first project and not about this device. Go back to the first: both
-  are the widths they were left at.
+  file — the column comes over the panes at its wide width — go back to the panes and drag the narrow
+  width out until the column has taken about the panes' width, then ask for the file again and drag
+  the wide width on until the work is gone behind it. Go to the second project: both of its widths
+  are the ones they shipped with, the drags having been about the first project and not about this
+  device. Go back to the first: both are the widths they were left at.
 
 given:
   - type: action
@@ -148,23 +157,9 @@ steps_gui:
       side: files
       cover: part
 
-  - type: action
-    domain: terminal
-    op: drag-side
-    with:
-      side: files
-      toward: cover
-
-  - type: assert
-    domain: terminal
-    op: side-cover
-    with:
-      side: files
-      cover: all
-
-  # Back to the panes, which puts the column on its narrow step without letting the file go. The
-  # reading after it is the half a build keeping one width for both steps would fail: the drag above
-  # was of the wide one, and this one is still where it shipped.
+  # Back to the panes, which puts the column on its narrow step without letting the file go. It is
+  # pressed here, where the work is still showing beside the column, and not after the drag below —
+  # the reason is at the top of this road.
   - type: action
     domain: terminal
     op: press-pane
@@ -190,8 +185,48 @@ steps_gui:
       side: files
       span: broad
 
+  # The file again, because the press above put the column back on its narrow step. What it comes up
+  # at is the reading a build keeping one width for both steps would fail: the narrow one has just
+  # been dragged out, and the wide one is still where it shipped.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: seedlings.md
+      section: tree
+
+  - type: assert
+    domain: terminal
+    op: side-cover
+    with:
+      side: files
+      cover: part
+
+  - type: action
+    domain: terminal
+    op: drag-side
+    with:
+      side: files
+      toward: cover
+
+  - type: assert
+    domain: terminal
+    op: side-cover
+    with:
+      side: files
+      cover: all
+
   # The other project, which was never dragged in. The column is up here because being open at all is
   # how this reader likes to work, wherever they are — it is the *width* that belongs to the project.
+  #
+  # This is also what takes the face off the covered width: a project is arrived at on its narrow
+  # step, so nothing has to be pressed to leave a column with the work behind it.
   - type: action
     domain: terminal
     op: go-project

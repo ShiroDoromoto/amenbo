@@ -29,12 +29,12 @@
 # and no turn standing wears nothing, and the project being looked at wears nothing either — its pane
 # is right there to be read, so a mark on its own tab would be saying what the pane already says.
 #
-# ── Why the mark is spent by the work resuming, and not by looking ───────────────────────────────
-# Pressing the greenhouse's tab takes the mark off it, the project's panes being on the screen
-# afterwards. That is not the mark being spent: the turn is still standing, and pressing back would
-# raise it again. What takes it down for good is the session going back to work — `talk note`, the
-# same word that clears the lamp on the pane's own row. The road walks that, because a mark with no
-# way down is a light a reader learns to ignore.
+# ── Why the mark is spent by the reader reaching the pane ───────────────────────────────────────
+# Pressing the greenhouse's tab puts its panes on the screen, and that is the mark being spent: a
+# turn is put down by the person who was asked for it, and the session has no word for putting one
+# down. Pressing back to the boathouse afterwards raises nothing, because the turn it was about has
+# been answered. The road walks that, because a mark with no way down is a light a reader learns to
+# ignore.
 #
 # The world raises the two projects and nothing else: a terminal is not a record, and what the panes
 # run is the reader's own shell.
@@ -43,9 +43,9 @@ title: A turn comes up in another project's pane, and that project's tab says so
 description: >
   Raise two projects with a folder each and open a pane in both. Hand the turn over from inside the
   greenhouse's pane and press to the boathouse before the word lands: the greenhouse's tab is wearing
-  a mark, and the boathouse's — the project being looked at, pane and all — is bare. Go back and say
-  the work has resumed, and the greenhouse's tab is bare too: the mark follows the turn, not the
-  looking.
+  a mark, and the boathouse's — the project being looked at, pane and all — is bare. Press to the
+  greenhouse, where the pane is, and back: its tab is bare too — the mark followed the turn, and the
+  turn was answered.
 
 given:
   - type: action
@@ -142,8 +142,9 @@ steps_gui:
       project: Boathouse
       present: false
 
-  # Back to the pane, to say the work has resumed. This is said standing at the pane rather than armed
-  # — nothing is being raised behind anybody's back, and what is under test is the mark coming down.
+  # To the project the tab was about, which is the whole of answering it: its pane is on the screen and
+  # the person asked for is looking at it. Nothing is said here, the session having no word for
+  # putting a turn down — the reader arriving is the whole of it coming down.
   - type: action
     domain: terminal
     op: go-project
@@ -152,20 +153,13 @@ steps_gui:
 
   - type: action
     domain: terminal
-    op: say
-    with:
-      verb: note
-      text: SCENARIO back at work
-
-  - type: action
-    domain: terminal
     op: go-project
     with:
       project: Boathouse
 
-  # Spent by the turn ending, which is the half that keeps the tabs worth reading. A mark still up
-  # after the session went back to work would be one a reader has to dismiss, and the whole of this is
-  # that they never do.
+  # Spent by the turn being answered, which is the half that keeps the tabs worth reading. A mark
+  # still up after the reader has been to the pane would be one they have to dismiss, and the whole of
+  # this is that they never do.
   - type: assert
     domain: terminal
     op: tab-mark

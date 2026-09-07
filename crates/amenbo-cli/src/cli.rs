@@ -1001,8 +1001,8 @@ pub enum HardEraseCmd {
     },
 }
 
-/// The verbs of the surface layer (`talk`). Two are owed — `waiting` and `finished` say the things
-/// nothing outside the pane can find out (`AMB-D-748`) — and the rest are offered.
+/// The verbs of the surface layer (`talk`). Both are owed: they say the two things nothing outside the
+/// pane can find out — which pane this is, and whether a person is needed (`AMB-D-859`).
 #[derive(Subcommand, Debug)]
 pub enum TalkCmd {
     /// Name this pane. The name sticks to the frame rather than to what runs in it
@@ -1010,19 +1010,9 @@ pub enum TalkCmd {
         /// the name to show on the pane
         text: String,
     },
-    /// A line about what you are doing now, shown on the pane's label
-    Note {
-        /// the line to show
-        text: String,
-    },
     /// A person's turn has come. Say why in the same breath — the reason is what they read
     Waiting {
         /// why their turn has come
-        text: String,
-    },
-    /// The work is done. Say what came of it
-    Finished {
-        /// what came of it
         text: String,
     },
 }

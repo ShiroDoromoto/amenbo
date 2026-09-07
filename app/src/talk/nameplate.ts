@@ -53,8 +53,6 @@ export type Say =
   /** The sentence Amenbo opens an agent with is sitting in the pane's input box, unsent — and one
    *  Enter is the whole of what it is waiting for (`crate::pty`, `AMB-D-805`). */
   | { readonly kind: "unsent" }
-  /** What the agent last said it was doing. */
-  | { readonly kind: "note"; readonly text: string }
   /** Nothing has been said and nothing has come out for a while — how long, in whole minutes. It is
    *  last because it is what fills the slot when there is nothing better in it: anything the session
    *  actually said outranks a measurement of its silence (`./moving`). */
@@ -104,11 +102,11 @@ export type Plate = {
 };
 
 /**
- * The right of the row: the first of four that applies.
+ * The right of the row: the first of three that applies.
  *
- * The order is the order a person is needed in. A turn that has been handed over is the only thing that
- * cannot wait; a sentence left in the input box is a person needed for a keypress; a note is the agent
- * talking about its own work; and below that there is nothing, which is not a claim that all is well.
+ * The order is the order a person is needed in. A turn that has been handed over is the only thing
+ * that cannot wait; a sentence left in the input box is a person needed for a keypress; and below
+ * that there is nothing, which is not a claim that all is well.
  *
  * **The unsent sentence goes below the turn the agent handed over, and not above it.** What it says is
  * that the agent in this pane never got told where it is working — which is only ever news while the
@@ -121,7 +119,6 @@ export type Plate = {
 export function sayOf(session: Session | undefined): Say {
   if (turnStands(session)) return { kind: "waiting", text: session!.waiting! };
   if (session?.unsent) return { kind: "unsent" };
-  if (session?.note) return { kind: "note", text: session.note };
   return { kind: "silent" };
 }
 
@@ -129,11 +126,10 @@ export function sayOf(session: Session | undefined): Say {
  * Whether what the row leads with is a person's turn standing.
  *
  * The two that are: the agent handing one over, and the opening sentence sitting in the input box —
- * where nothing at all will happen in the pane until a person presses Enter. The two that are not:
- * what the agent last said it was doing, and silence — which is not a claim about anything
- * (`AMB-D-858`). It is one line and it is here rather than at the two places that draw it, so the dot
- * on a page and the badge on the face switch cannot come to mean something the row does not
- * (`AMB-T-3610`).
+ * where nothing at all will happen in the pane until a person presses Enter. The one that is not:
+ * silence, which is not a claim about anything (`AMB-D-858`). It is one line and it is here rather
+ * than at the two places that draw it, so the dot on a page and the badge on the face switch cannot
+ * come to mean something the row does not (`AMB-T-3610`).
  */
 export function standsAsTurn(say: Say): boolean {
   return say.kind === "waiting" || say.kind === "unsent";
@@ -157,8 +153,6 @@ export function sayText(say: Say, lang: Lang): { mark: Mark; text: string } {
       // narrow for words, what has to survive is "somebody is needed here", and which of the two
       // reasons it was is the sentence the panel gives back.
       return { mark: "pause", text: t("talk.unsent", lang) };
-    case "note":
-      return { mark: null, text: say.text };
     case "quiet":
       return { mark: null, text: tf("talk.quiet", { n: say.minutes }, lang) };
     case "silent":

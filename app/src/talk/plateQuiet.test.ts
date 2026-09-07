@@ -72,9 +72,9 @@ describe("saying how long a pane has been quiet", () => {
     plate.focused(true);
     wentQuiet();
     expect(say()).toContain("quiet for");
-    // A note is the agent talking about its own work, and it outranks a measurement of its silence.
-    plate.said({ session: "pane-1", verb: "note", at: AT, text: "reading the migration" } as never);
-    expect(say()).toBe("reading the migration");
+    // A turn handed over is the session speaking, and it outranks a measurement of its silence.
+    plate.said({ session: "pane-1", verb: "waiting", at: AT, text: "which of the two" } as never);
+    expect(say()).toBe("which of the two");
   });
 
   it("keeps its reading true as the minutes pass, which nothing else would notice", () => {

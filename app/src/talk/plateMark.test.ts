@@ -32,7 +32,7 @@ describe("the marks on a pane's row", () => {
   it("leaves the place empty where the part has no mark, so the row closes over it", () => {
     const host = document.createElement("div");
     const draw = mountNameplate(host);
-    draw(plate({ kind: "note", text: "reading the store" }), "en");
+    draw(plate({ kind: "quiet", minutes: 12 }), "en");
 
     // `:empty` is what takes the place out of the row, so nothing may be left standing in it.
     expect(host.querySelector(".plate__mark--say")!.childElementCount).toBe(0);
@@ -49,7 +49,7 @@ describe("the marks on a pane's row", () => {
     expect(host.querySelector(".plate__mark--say")!.firstElementChild, "the drawing was rebuilt")
       .toBe(first);
 
-    draw(plate({ kind: "note", text: "reading the store" }), "en");
+    draw(plate({ kind: "quiet", minutes: 12 }), "en");
     expect(marks(host)).toEqual([null]);
   });
 });

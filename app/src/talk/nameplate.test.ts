@@ -14,7 +14,7 @@ import { NO_SESSIONS, opened, said, seen, unsent, type Sessions } from "./sessio
 const AT = "2026-08-24T09:00:00Z";
 
 /** A session with one statement made in it. */
-function sessionWith(verb: "note" | "waiting", text: string): Sessions {
+function sessionWith(verb: "name" | "waiting", text: string): Sessions {
   return said(opened(NO_SESSIONS, { session: "pane-1", startedAt: AT }), {
     session: "pane-1",
     at: AT,
@@ -28,7 +28,7 @@ const EN = "en" as const;
 
 describe("the one thing said on the right", () => {
   it("puts a turn being handed over above everything else", () => {
-    const sessions = said(sessionWith("note", "reading the store"), {
+    const sessions = said(sessionWith("name", "the migration"), {
       session: "pane-1",
       at: AT,
       verb: "waiting",
@@ -39,9 +39,9 @@ describe("the one thing said on the right", () => {
     expect(sayText(say, EN).mark).toBe("pause");
   });
 
-  it("repeats what the agent was doing where it said nothing better", () => {
-    const sessions = sessionWith("note", "reading the store");
-    expect(sayOf(sessions.get("pane-1"))).toEqual({ kind: "note", text: "reading the store" });
+  it("says nothing for a name, which is the frame's and not the session's", () => {
+    const sessions = sessionWith("name", "the migration");
+    expect(sayOf(sessions.get("pane-1"))).toEqual({ kind: "silent" });
   });
 
   it("says the opening sentence is unsent, under the turn the agent handed over", () => {
@@ -56,17 +56,18 @@ describe("the one thing said on the right", () => {
     expect(sayText({ kind: "unsent" }, EN).mark).toBe("pause");
   });
 
-  it("stops leading with a turn the person has come to, and keeps what was said", () => {
+  it("stops leading with a turn the person has come to, and stands again on the next one", () => {
     const called = sessionWith("waiting", "which of the two");
     expect(sayOf(called.get("pane-1"))).toEqual({ kind: "waiting", text: "which of the two" });
 
-    // They went to the pane. The mark is for a pane nobody is at, so it comes down — and the row
-    // falls through to whatever else the session has said (`AMB-D-859`).
+    // They went to the pane. The mark is for a pane nobody is at, so it comes down and the row has
+    // nothing left to lead with (`AMB-D-859`).
     const answered = seen(called, "pane-1", "2026-08-24T09:01:00Z");
     expect(sayOf(answered.get("pane-1"))).toEqual({ kind: "silent" });
 
-    const noted = said(answered, { session: "pane-1", at: AT, verb: "note", text: "on it" });
-    expect(sayOf(noted.get("pane-1"))).toEqual({ kind: "note", text: "on it" });
+    // A second turn is a second call, and the row leads with it again.
+    const again = said(answered, { session: "pane-1", at: AT, verb: "waiting", text: "and now this" });
+    expect(sayOf(again.get("pane-1"))).toEqual({ kind: "waiting", text: "and now this" });
   });
 
   it("says nothing where nothing was said", () => {
@@ -154,8 +155,9 @@ describe("what counts as a turn standing", () => {
     // Nothing at all happens in a pane whose opening sentence is still sitting in its input box, and
     // one keypress is the whole of what it is waiting for.
     expect(standsAsTurn({ kind: "unsent" })).toBe(true);
-    // The two that are not. Silence least of all: it is not a claim about anything (`AMB-D-858`).
-    expect(standsAsTurn({ kind: "note", text: "running the tests" })).toBe(false);
+    // The two that are not, and both are measurements. Silence least of all: it is not a claim about
+    // anything (`AMB-D-858`).
+    expect(standsAsTurn({ kind: "quiet", minutes: 12 })).toBe(false);
     expect(standsAsTurn({ kind: "silent" })).toBe(false);
   });
 });
@@ -166,9 +168,8 @@ describe("which face the lamp is on", () => {
     expect(faceOf({ kind: "silent" }, false)).toBe("out");
   });
 
-  it("does not light for what the agent merely said it was doing", () => {
-    // A note is the session talking about its own work. Nothing is being asked of anybody.
-    expect(faceOf({ kind: "note", text: "running the tests" }, false)).toBe("out");
+  it("does not light for how long the pane has been quiet", () => {
+    // A measurement of silence is nobody being asked for anything (`AMB-D-858`).
     expect(faceOf({ kind: "quiet", minutes: 12 }, false)).toBe("out");
   });
 

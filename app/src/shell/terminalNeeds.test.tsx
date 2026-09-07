@@ -117,7 +117,7 @@ const openPane = async () => {
   await click(q(".slot--empty .slot__open")[0]!);
 };
 /** Go to a pane the way a person does: press it. Which pane is being worked in is what says they
- *  came to it rather than merely had it on the screen (`../talk/spoken`). */
+ *  came to it rather than merely had it on the screen (`../talk/standing`). */
 const pressPane = async (nth: number) => {
   await act(async () => {
     q(".slot")[nth]!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
@@ -130,9 +130,9 @@ const turn = async (pane: number, standing: boolean) => {
 /** The agent in a pane says something, the way the host carries it: the turn it leaves standing goes
  *  into what `pty_sessions` answers with, and the window is told that something was said — whether or
  *  not the pane it was said in is on the screen. */
-const says = async (pane: number, verb: "waiting" | "note", text: string) => {
+const says = async (pane: number, verb: "waiting" | "name", text: string) => {
   const session = hoisted.opened[pane]!;
-  hoisted.waiting.set(session, verb === "waiting" ? text : null);
+  if (verb === "waiting") hoisted.waiting.set(session, text);
   const payload = { session, verb, at: "2026-08-24T00:01:00Z", cwd: null, text };
   await act(async () => { for (const on of hoisted.said) on(payload); });
   // The face reads the host back before it can answer, and that read is a round trip.
@@ -164,7 +164,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   // The window's record of what its sessions said outlives every pane drawing them, which is the
-  // whole of why it is kept where it is (`../talk/spoken`) — and it outlives a test the same way. So
+  // whole of why it is kept where it is (`../talk/standing`) — and it outlives a test the same way. So
   // each one ends its own sessions, the way the host does when their terminals exit.
   await act(async () => {
     for (const session of hoisted.opened) for (const end of hoisted.ended) end(session);
@@ -223,10 +223,11 @@ describe("a turn standing on a page", () => {
     expect(q(".termface__needs")).toHaveLength(1);
     expect(told).toEqual([true]);
 
-    // And the turn is taken back by the agent going back to work, on the page it was on or not.
-    await says(2, "note", "back at it");
-    expect(q(".termface__needs")).toHaveLength(0);
-    expect(told).toEqual([true, false]);
+    // And nothing the agent says takes it back (`AMB-D-859`) — the person going to that pane does,
+    // which is the case below.
+    await says(2, "name", "the migration");
+    expect(q(".termface__needs")).toHaveLength(1);
+    expect(told).toEqual([true]);
   });
 
   it("takes the turn down once the person comes to the pane, and leaves it up for the others", async () => {

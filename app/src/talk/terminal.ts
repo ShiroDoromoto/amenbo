@@ -26,7 +26,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type IBufferCell } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import type { PtyChunkDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
+import type { PtyChunkDto, PtyReplayDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
@@ -290,20 +290,24 @@ async function draw(
       : undefined;
   if (want) {
     try {
-      const replay = await invoke<string>("pty_attach", { session: want.session });
-      // **The tail is read at the width it was written at, and only then is the pane's own width
+      const replay = await invoke<PtyReplayDto[]>("pty_attach", { session: want.session });
+      // **Every run is read at the width it was written at, and only then is the pane's own width
       // put back.** The bytes are a terminal's output, not lines: where one of them ended is
       // already decided, and an emulator told a narrower screen folds it somewhere else — which
       // for a program that draws by moving the cursor about leaves parts of old frames standing
       // (`AMB-T-4514`). Reading them at the width they were written at and reflowing afterwards
       // keeps the logical lines, so the same reflow that would have broken them fixes them.
       //
-      // Whose width it was is the host's answer: the pane was not there while it changed, so
-      // nothing sent the size along and the program went on writing to the last one it was told.
-      if (want.cols > 0 && want.rows > 0) term.resize(want.cols, want.rows);
-      // Written before the measuring, and awaited so it really is: `write` queues, and a resize
-      // landing in front of the bytes it is meant to follow would be the same wrong fold again.
-      if (replay) await new Promise<void>((wrote) => term.write(decode(replay), wrote));
+      // The tail comes in runs because a terminal resized while nobody was drawing it wrote part of
+      // its tail at each width, and one width for the whole of it fixes the newest part and leaves
+      // the rest folded wrong (`AMB-T-4516`). Whose width each is is the host's answer: the pane was
+      // not there while it changed, so nothing sent the size along.
+      for (const run of replay) {
+        if (run.cols > 0 && run.rows > 0) term.resize(run.cols, run.rows);
+        // Awaited so the resize really is in front of the bytes it belongs to: `write` queues, and a
+        // resize landing in front of bytes it is meant to follow would be the same wrong fold again.
+        if (run.base64) await new Promise<void>((wrote) => term.write(decode(run.base64), wrote));
+      }
       refit(fit, host);
       // The program is told last, because until now it was writing to the old width and its next
       // line has to arrive at the new one.

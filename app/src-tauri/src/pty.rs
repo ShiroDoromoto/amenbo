@@ -42,7 +42,7 @@ use base64::Engine as _;
 use portable_pty::{native_pty_system, ChildKiller, MasterPty, PtySize};
 use tauri::{Emitter, Manager};
 
-use crate::dto::{PtyChunkDto, PtySessionDto, SessionSaidDto};
+use crate::dto::{PtyChunkDto, PtyReplayDto, PtySessionDto, SessionSaidDto};
 use crate::error::CmdError;
 use crate::launch;
 
@@ -110,6 +110,78 @@ const CHUNK: usize = 8 * 1024;
 /// rather than the buffer growing without bound under a program that never stops writing.
 const RECENT: usize = 256 * 1024;
 
+/// The tail of what a terminal has written, cut into the runs it was written at.
+///
+/// **The size is kept with the bytes because it cannot be worked out from them.** Where a line
+/// ended was decided when it was written, and an emulator told a different width folds it somewhere
+/// else — which for a program that draws by moving the cursor about leaves parts of old frames
+/// standing (`AMB-T-4514`). Reading the whole tail at the size the terminal happens to be at now
+/// fixes the newest of it and leaves everything written before the last change folded wrong
+/// (`AMB-T-4516`); read run by run, each at its own size, all of it is folded where it was written.
+///
+/// The cap is on the tail rather than on a run, so a terminal resized a hundred times keeps the
+/// same quarter of a megabyte a terminal never resized does.
+struct Recent {
+    /// The runs, oldest first. A run ends where the size changed.
+    runs: VecDeque<Run>,
+    /// Bytes across every run, so the cap is a count rather than a walk.
+    len: usize,
+    /// The size in force, which whatever is written next belongs to.
+    at: Size,
+}
+
+/// As much of the tail as was written at one size.
+struct Run {
+    at: Size,
+    bytes: VecDeque<u8>,
+}
+
+/// A terminal's size in characters — width, then height.
+type Size = (u16, u16);
+
+impl Recent {
+    fn new(at: Size) -> Self {
+        Self {
+            runs: VecDeque::new(),
+            len: 0,
+            at,
+        }
+    }
+
+    /// Take in a chunk at the size in force, dropping the oldest bytes once the tail is over the cap.
+    fn push(&mut self, bytes: &[u8]) {
+        match self.runs.back_mut() {
+            Some(run) if run.at == self.at => run.bytes.extend(bytes),
+            _ => self.runs.push_back(Run {
+                at: self.at,
+                bytes: bytes.iter().copied().collect(),
+            }),
+        }
+        self.len += bytes.len();
+        let mut over = self.len.saturating_sub(RECENT);
+        // The oldest run goes first and whole runs fall away with it, which is what keeps a run's
+        // size attached to bytes that are still there to be read at it.
+        while over > 0 {
+            let Some(front) = self.runs.front_mut() else { break };
+            let dropped = over.min(front.bytes.len());
+            front.bytes.drain(..dropped);
+            self.len -= dropped;
+            over -= dropped;
+            if front.bytes.is_empty() {
+                self.runs.pop_front();
+            }
+        }
+    }
+
+    /// Every byte kept, in the order it was written — for a reader with no size to honour.
+    fn bytes(&self) -> Vec<u8> {
+        self.runs
+            .iter()
+            .flat_map(|run| run.bytes.iter().copied())
+            .collect()
+    }
+}
+
 /// The terminal being asked where its cursor is, and the answer.
 ///
 /// ConPTY asks this of the terminal as it starts, and **holds the program it was given until an
@@ -148,8 +220,9 @@ struct Pane {
     /// The label of the window drawing this session. It moves when the pane does, and the chunks
     /// follow it — which is what lets a terminal change windows without being restarted.
     target: Mutex<String>,
-    /// The tail of what the terminal has written, for whatever pane draws it next ([`RECENT`]).
-    recent: Mutex<VecDeque<u8>>,
+    /// The tail of what the terminal has written, for whatever pane draws it next ([`Recent`],
+    /// capped at [`RECENT`]).
+    recent: Mutex<Recent>,
     /// Whether the agent in this pane has read Amenbo's canon — whether it ran `amenbo agent` here
     /// (`AMB-D-805`).
     ///
@@ -185,10 +258,10 @@ struct Pane {
 }
 
 impl Pane {
-    fn new(target: &str) -> Self {
+    fn new(target: &str, at: Size) -> Self {
         Self {
             target: Mutex::new(target.to_owned()),
-            recent: Mutex::new(VecDeque::new()),
+            recent: Mutex::new(Recent::new(at)),
             briefed: AtomicBool::new(false),
             unsent: Mutex::new(None),
             waiting: Mutex::new(None),
@@ -268,11 +341,18 @@ impl Pane {
     /// as an event, and would draw it twice; taking the same two locks in the same order in both
     /// places is what leaves the chunk on exactly one side of the handover.
     fn keep(&self, bytes: &[u8]) -> String {
-        let mut recent = self.recent.lock().expect("pane recent lock");
-        recent.extend(bytes);
-        let over = recent.len().saturating_sub(RECENT);
-        recent.drain(..over);
+        self.recent.lock().expect("pane recent lock").push(bytes);
         self.target()
+    }
+
+    /// Say what size the terminal is now, so what it writes from here is kept apart from what it
+    /// wrote before.
+    ///
+    /// Said only where the terminal took the size ([`pty_resize`]): a resize that failed left the
+    /// program writing to the width it already had, and a run opened for a size nothing is being
+    /// written at would hand the next pane a fold that never happened.
+    fn resized(&self, at: Size) {
+        self.recent.lock().expect("pane recent lock").at = at;
     }
 
     /// The tail as it stands — what the pane has drawn lately, for a reader that is not a pane.
@@ -282,18 +362,28 @@ impl Pane {
     /// the same copy a pane adopting the session is given, rather than a window onto the buffer, so
     /// nothing holds this lock while it searches.
     fn screen(&self) -> Vec<u8> {
-        self.recent.lock().expect("pane recent lock").iter().copied().collect()
+        self.recent.lock().expect("pane recent lock").bytes()
     }
 
-    /// Send what follows to this window, and answer with the tail as it stood at that moment.
+    /// Send what follows to this window, and answer with the tail as it stood at that moment — in
+    /// the runs it was written in, each carrying the size it belongs to ([`Recent`]).
     ///
     /// After an overflow the tail begins wherever the cap fell, which can be part-way through an
     /// escape sequence — so a pane adopting a long-running session can open with a few characters
     /// of noise at the very top. The alternative is holding every byte a terminal ever wrote.
-    fn adopt(&self, label: &str) -> Vec<u8> {
+    fn adopt(&self, label: &str) -> Vec<PtyReplayDto> {
         let recent = self.recent.lock().expect("pane recent lock");
         self.point_at(label);
-        recent.iter().copied().collect()
+        recent
+            .runs
+            .iter()
+            .map(|run| PtyReplayDto {
+                cols: run.at.0,
+                rows: run.at.1,
+                base64: base64::engine::general_purpose::STANDARD
+                    .encode(run.bytes.iter().copied().collect::<Vec<u8>>()),
+            })
+            .collect()
     }
 }
 
@@ -326,14 +416,6 @@ pub struct Terminal {
     /// is drawn and thrown away as the session moves windows, and only what outlives the window can
     /// still say when the work began.
     started_at: String,
-    /// The size the terminal was last told, in characters — what [`pty_open`] opened it at, moved by
-    /// every [`pty_resize`] since.
-    ///
-    /// The master holds this too, and will not say it back, which is the reason for keeping it here:
-    /// the size is the width the tail was written at, and the pane adopting the session is asking
-    /// for exactly that (`crate::dto::PtySessionDto`).
-    cols: u16,
-    rows: u16,
 }
 
 /// A session id: sixteen bytes of the operating system's randomness, in hex.
@@ -580,7 +662,7 @@ pub fn pty_open(
     // The chunks go to whichever window asked for the terminal. Nothing here decides which that is:
     // the pane that called is the pane that draws, and if the user later moves it to the other
     // window, `pty_attach` moves this along with it.
-    let pane = Arc::new(Pane::new(window.label()));
+    let pane = Arc::new(Pane::new(window.label(), (cols, rows)));
 
     let opened_in = folder.as_ref().map(|f| f.to_string_lossy().into_owned());
 
@@ -593,8 +675,6 @@ pub fn pty_open(
             killer,
             pane: Arc::clone(&pane),
             started_at: started_at.clone(),
-            cols,
-            rows,
         },
     );
 
@@ -627,8 +707,6 @@ pub fn pty_open(
         folder: opened_in,
         // Nothing has been said in a terminal that has just started.
         waiting: None,
-        cols,
-        rows,
     })
 }
 
@@ -1004,8 +1082,6 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
                 started_at: terminal.started_at.clone(),
                 folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
                 waiting: terminal.pane.waiting(),
-                cols: terminal.cols,
-                rows: terminal.rows,
             })
             .collect(),
     )
@@ -1028,17 +1104,20 @@ fn in_open_order(mut open: Vec<PtySessionDto>) -> Vec<PtySessionDto> {
 /// Nothing about the terminal moves — the program inside it is never told that the window it is
 /// drawn in changed, and never stops running for it.
 ///
-/// What comes back is base64, the way a chunk is, and for the same reason: these are bytes rather
-/// than text. See [`Pane::adopt`] for what the oldest of them can look like.
+/// What comes back is the tail in the runs it was written in ([`Recent`]), each carrying the size
+/// it belongs to and its bytes base64-encoded — the way a chunk is, and for the same reason: these
+/// are bytes rather than text. The pane reads them back run by run at the size on each, which is
+/// what keeps a tail written across a resize folded where it was written. See [`Pane::adopt`] for
+/// what the oldest of them can look like.
 #[tauri::command]
 pub fn pty_attach(
     window: tauri::Window,
     terminals: tauri::State<'_, Terminals>,
     session: String,
-) -> Result<String, CmdError> {
+) -> Result<Vec<PtyReplayDto>, CmdError> {
     let open = terminals.0.lock().expect("terminals lock");
     let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
-    Ok(base64::engine::general_purpose::STANDARD.encode(terminal.pane.adopt(window.label())))
+    Ok(terminal.pane.adopt(window.label()))
 }
 
 /// End the program in a terminal, and forget the session.
@@ -1157,8 +1236,8 @@ pub fn pty_resize(
     cols: u16,
     rows: u16,
 ) -> Result<(), CmdError> {
-    let mut open = terminals.0.lock().expect("terminals lock");
-    let terminal = open.get_mut(&session).ok_or_else(|| gone(&session))?;
+    let open = terminals.0.lock().expect("terminals lock");
+    let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
     terminal
         .master
         .resize(PtySize {
@@ -1168,10 +1247,9 @@ pub fn pty_resize(
             pixel_height: 0,
         })
         .map_err(failed)?;
-    // Kept only once the terminal took it. What the next pane to adopt this session is told has to be
-    // the width the program is actually writing to, and a resize that failed left that where it was.
-    terminal.cols = cols;
-    terminal.rows = rows;
+    // Said only once the terminal took it. What follows is kept as a run of its own, and a run opened
+    // for a size the program is not writing to would hand the next pane a fold that never happened.
+    terminal.pane.resized((cols, rows));
     Ok(())
 }
 
@@ -1182,28 +1260,104 @@ mod tests {
     #[cfg(unix)]
     use portable_pty::CommandBuilder;
 
+    /// The size a pane opens a terminal at, for a test that is not about the size.
+    const OPENED_AT: Size = (80, 24);
+
+    /// The bytes of every run a pane was handed, back in one piece — for the tests that are asking
+    /// what was kept rather than how it was cut.
+    fn run_bytes(replay: &[PtyReplayDto]) -> Vec<u8> {
+        replay
+            .iter()
+            .flat_map(|run| {
+                base64::engine::general_purpose::STANDARD
+                    .decode(&run.base64)
+                    .expect("a run this process encoded")
+            })
+            .collect()
+    }
+
     /// The tail a pane adopting a session is given never outgrows its cap, however much the
     /// program in the terminal writes — a `yes` left running is the case, and a buffer that grew
     /// with it would be this process's memory going with it.
     #[test]
     fn what_is_kept_for_the_next_pane_stops_at_the_cap() {
-        let pane = Pane::new("main");
+        let pane = Pane::new("main", OPENED_AT);
         for _ in 0..8 {
             pane.keep(&vec![b'x'; RECENT / 2]);
         }
-        assert_eq!(pane.adopt("main").len(), RECENT);
+        assert_eq!(run_bytes(&pane.adopt("main")).len(), RECENT);
     }
 
     /// And what it keeps is the *end* of the output, not the start: what a pane has to draw is
     /// where the terminal is now, and the prompt it is sitting on is the last thing written.
     #[test]
     fn what_is_kept_is_the_end_of_the_output() {
-        let pane = Pane::new("main");
+        let pane = Pane::new("main", OPENED_AT);
         pane.keep(&vec![b'o'; RECENT]);
         pane.keep(b"$ ");
+        let kept = run_bytes(&pane.adopt("main"));
+        assert_eq!(kept.len(), RECENT);
+        assert_eq!(&kept[kept.len() - 2..], b"$ ");
+    }
+
+    /// The tail is handed over in the runs it was written in, each carrying the size it was written
+    /// at. A pane reading the whole of it at one size would fold everything written before the last
+    /// resize in the wrong places (`AMB-T-4516`).
+    #[test]
+    fn the_tail_is_cut_where_the_size_changed() {
+        let pane = Pane::new("main", (110, 30));
+        pane.keep(b"wide");
+        pane.resized((26, 30));
+        pane.keep(b"narrow");
+
         let replay = pane.adopt("main");
-        assert_eq!(replay.len(), RECENT);
-        assert_eq!(&replay[replay.len() - 2..], b"$ ");
+        assert_eq!(
+            replay
+                .iter()
+                .map(|run| (run.cols, run.rows, run_bytes(std::slice::from_ref(run))))
+                .collect::<Vec<_>>(),
+            vec![
+                (110, 30, b"wide".to_vec()),
+                (26, 30, b"narrow".to_vec()),
+            ]
+        );
+    }
+
+    /// A size the terminal is already at opens no run. Chunks arrive by the hundred and a resize is
+    /// rare, so the common tail is one run and stays one.
+    #[test]
+    fn writing_on_at_the_same_size_stays_one_run() {
+        let pane = Pane::new("main", OPENED_AT);
+        pane.keep(b"one");
+        pane.resized(OPENED_AT);
+        pane.keep(b"two");
+        let replay = pane.adopt("main");
+        assert_eq!(replay.len(), 1);
+        assert_eq!(run_bytes(&replay), b"onetwo".to_vec());
+    }
+
+    /// The cap falls on the tail rather than on a run: the oldest run goes first and whole runs fall
+    /// away with it, so a terminal resized often keeps the same quarter of a megabyte as one never
+    /// resized. What is left is still each at the size it was written at.
+    #[test]
+    fn the_cap_drops_the_oldest_runs_first() {
+        let pane = Pane::new("main", (110, 30));
+        pane.keep(&vec![b'o'; RECENT]);
+        pane.resized((26, 30));
+        pane.keep(&vec![b'n'; RECENT]);
+
+        let replay = pane.adopt("main");
+        assert_eq!(replay.len(), 1, "the wide run is wholly out of the tail");
+        assert_eq!((replay[0].cols, replay[0].rows), (26, 30));
+        assert_eq!(run_bytes(&replay).len(), RECENT);
+    }
+
+    /// A terminal nobody has written in yet hands over nothing at all — there is no run to read and
+    /// no size to read it at, and a pane opens on the size it measures for itself.
+    #[test]
+    fn a_terminal_that_has_written_nothing_hands_over_no_runs() {
+        let pane = Pane::new("main", OPENED_AT);
+        assert!(pane.adopt("main").is_empty());
     }
 
     /// A pane put back in its place is put there by folder and by nothing else, so two terminals
@@ -1217,8 +1371,6 @@ mod tests {
             started_at: started_at.into(),
             folder: Some("/work/repo".into()),
             waiting: None,
-            cols: 80,
-            rows: 24,
         };
         let order = |open: Vec<PtySessionDto>| {
             in_open_order(open).into_iter().map(|one| one.session).collect::<Vec<_>>()
@@ -1243,9 +1395,9 @@ mod tests {
     /// terminal changes windows without being restarted.
     #[test]
     fn adopting_a_session_sends_what_follows_to_the_new_window() {
-        let pane = Pane::new(crate::windows::BOARD);
+        let pane = Pane::new(crate::windows::BOARD, OPENED_AT);
         assert_eq!(pane.keep(b"before"), crate::windows::BOARD);
-        assert_eq!(pane.adopt(crate::windows::TALK), b"before");
+        assert_eq!(run_bytes(&pane.adopt(crate::windows::TALK)), b"before".to_vec());
         assert_eq!(pane.keep(b"after"), crate::windows::TALK);
     }
 
@@ -1449,7 +1601,7 @@ mod tests {
 
         let dir = amenbo_scratch::scratch("pty-briefed");
         let surface = Surface { session: "a-session".into(), dir: dir.clone() };
-        let pane = Pane::new("main");
+        let pane = Pane::new("main", OPENED_AT);
 
         for spoken in [
             Statement::Name("the top fix".into()),
@@ -1482,7 +1634,7 @@ mod tests {
 
         let dir = amenbo_scratch::scratch("pty-waiting");
         let surface = Surface { session: "a-session".into(), dir: dir.clone() };
-        let pane = Pane::new("main");
+        let pane = Pane::new("main", OPENED_AT);
         let mut last: Option<String> = None;
         let carry = |pane: &Pane, last: &mut Option<String>| {
             for said in amenbo_core::session::said_after(&dir, last.as_deref()).expect("read") {
@@ -1527,7 +1679,7 @@ mod tests {
     /// sentence still there.
     #[test]
     fn the_sentence_a_pane_was_left_holding_goes_out_once() {
-        let pane = Pane::new("main");
+        let pane = Pane::new("main", OPENED_AT);
         assert!(pane.take_unsent().is_none(), "a pane the hand-over got through to is owed nothing");
 
         pane.leave("Before you act on any request".into());

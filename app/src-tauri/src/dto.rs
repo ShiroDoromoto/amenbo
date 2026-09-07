@@ -898,6 +898,30 @@ pub struct RefTargetDto {
     pub(crate) id: i64,
 }
 
+/// A folder to work in and the project it belongs to — the first loop's one press, on its way from
+/// the ledger to the terminal face (`app/src/components/FirstLoop.tsx`).
+///
+/// It travels only when the two faces are in two windows: the press is made on the board and the
+/// face is in the other window, so it goes out to the host and comes back as the `terminal-open-in`
+/// event (`crate::windows::talk_raise`). In one window the same pair is handed down the tree and
+/// never comes here.
+///
+/// **Both halves travel, and neither is filled in at the far end.** A pane belongs to a project and
+/// can never be moved to another, so a folder that arrived without its project is one the face would
+/// have to guess at — and that guess put a pane under the wrong project for good (`AMB-T-3708`).
+// Clone because Tauri's `emit` takes the payload by value and may hand it to more than one listener.
+#[derive(Clone, Deserialize, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct OpenInDto {
+    /// The project the pane will belong to, named by the screen the press was made on.
+    #[ts(type = "number")]
+    pub(crate) project: i64,
+    /// The folder to work in. The face checks it against that project's bindings before a pane is
+    /// made, and opens nothing where the pair does not hold (`app/src/shell/TerminalFace.tsx`).
+    pub(crate) dir: String,
+}
+
 /// One permanent comment on a decision record, for the GUI. Task comments ride in the per-task
 /// `task_activity` (kind=comment), but decisions have no activity path, so they get a read DTO of
 /// their own. The author's facet is resolved to a display name from config; the times are sent as

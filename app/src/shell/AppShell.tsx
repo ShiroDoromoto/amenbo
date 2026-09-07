@@ -182,9 +182,13 @@ export function AppShell() {
    * means the belief was wrong and there is no window: the reader is put back on the face here
    * rather than left pressing at nothing, which is what a raise of a window that is not there
    * silently was (`crate::windows::talk_raise`).
+   *
+   * `openIn` is what the press was carrying, where it carried anything: the folder to work in and
+   * whose project it is, handed on to the window that has the face. Raising without it would put the
+   * reader in front of the terminal with nothing opened, which is not what they pressed.
    */
-  const goToTalkWindow = useCallback((instead: () => void) => {
-    void invoke<boolean>("talk_raise")
+  const goToTalkWindow = useCallback((instead: () => void, openIn?: { project: number; dir: string }) => {
+    void invoke<boolean>("talk_raise", { openIn: openIn ?? null })
       .then((there) => { if (!there) instead(); })
       .catch(instead);
   }, []);
@@ -256,8 +260,11 @@ export function AppShell() {
    * "Start in the terminal" — the one move the first loop offers (`../components/FirstLoop`).
    *
    * With the terminal split out into a window of its own, this window has no face to hand the folder
-   * to. What the press does then is raise that window: the terminal is where the reader is being sent
-   * either way, and the folder is asked for there rather than promised here (`AMB-D-749`).
+   * to — so the pair goes out to the host, which raises that window and hands it on
+   * (`crate::windows::talk_raise`). **The press does the same thing in either shape**: a pane opens
+   * in the folder that was pressed for. Raising the window and leaving the folder behind was a
+   * button that did one thing in one window and another in two, with nothing on the screen to say
+   * which (`AMB-T-4507`).
    *
    * **The project comes from the screen that was pressed on, and is not worked out here.** A pane
    * belongs to a project (`../talk/layout`), and the screens the button is on each know which one
@@ -274,7 +281,7 @@ export function AppShell() {
     if (shape === "two") {
       // And where that window turns out not to exist, the folder is not dropped along with the
       // belief: the reader asked to work in it, and this window can now host the face that does.
-      goToTalkWindow(() => { foldBackToTerminal(null); here(); });
+      goToTalkWindow(() => { foldBackToTerminal(null); here(); }, { project, dir });
       return;
     }
     here();

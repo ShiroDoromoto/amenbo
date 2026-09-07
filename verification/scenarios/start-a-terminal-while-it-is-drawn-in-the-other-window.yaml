@@ -1,0 +1,130 @@
+# The first loop's one press, made while the terminal is in a window of its own.
+#
+# `start-a-terminal-in-the-project-whose-loop-was-pressed` walks this press in the shape the app is by
+# default — one window, two faces — and reads which project the pane lands under. It cannot reach this
+# question, because in that shape the press has a face to hand the folder to and here it has none: the
+# ledger is in this window and the terminal is in the other one.
+#
+# The wrong answer is the quiet one. Raising the other window is half of what the press means, and a
+# window that comes forward looks exactly like a press that worked — until the reader looks for the
+# pane and there is none, on a screen where nothing says the folder was dropped on the way over. The
+# same button then does two different things depending on how many windows the app is in, and how
+# many windows it is in is supposed to change nothing but where the terminal is drawn.
+#
+# ── Why a terminal is already running when the split is made ─────────────────────────────────────
+# A window split out with nothing to adopt chooses a folder for itself, and that question is
+# `choose-the-folder-a-split-out-window-works-in`'s. Here it would stand between the split and the
+# press this road is about. Splitting with a session running takes it up without asking, which is the
+# quiet way into the shape this needs.
+#
+# ── Why the pane that moved is read again at the end ─────────────────────────────────────────────
+# A pane in the other window is not yet an answer: the one that moved there is also a pane, and a
+# press that opened nothing would leave it on the screen looking like a press that landed. The face
+# draws one project's panes, so the pane that moved being **gone** from it is the new one being
+# somewhere else — under the project whose loop was pressed, which is the only other place a pane can
+# be.
+#
+# ── How the two windows are told apart ───────────────────────────────────────────────────────────
+# The board keeps the product's name alone; the other carries it with a dash and a word after it, and
+# that word is in the run's own language — so `window:` names it by the part of its title every
+# language keeps.
+#
+# It folds back at the end for the reason `put-the-terminal-on-its-own-screen` does: the shape a
+# machine last used the app in is remembered where a throwaway store does not reach, and a road that
+# walked away split would hand whoever owns the machine two windows they never asked for.
+id: start-a-terminal-while-it-is-drawn-in-the-other-window
+title: The press that starts a terminal opens its pane in the window the terminal was split out into, rather than raising that window empty-handed
+description: >
+  With a session running, split the terminal out into a window of its own. Back on the board, raise a
+  project and press the one move its first loop offers. The pane opens over there, in the folder the
+  card named — the same thing the press does when both faces share one window — and the terminal that
+  moved out is no longer on that screen, the face having gone to the project the press was made in.
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The way in, and the session the split takes up. Choosing a folder is what raises the project it
+  # belongs to, so this is also how the road makes the world it walks away from.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell, for the reason every road that speaks in a pane does it: what an agent does
+  # with a line typed at it is the agent's own, and this line has to sit where it was put.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the terminal that moved out
+
+  # Out into a window of its own. From here every step names the window it is in, there being two.
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+
+  - type: assert
+    domain: terminal
+    op: pane
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO the terminal that moved out
+
+  # And back on the board, which is the window the press is made in. What it is showing from here is a
+  # view and not a project at all, so the folder the press carries cannot be worked out from it — it
+  # travels with the press or it is lost.
+  - type: action
+    domain: project
+    op: create
+    window: Amenbo
+    with:
+      name: Seedbed
+
+  - type: action
+    domain: folder
+    op: start-terminal
+    window: Amenbo
+
+  - type: action
+    domain: terminal
+    op: open-shell
+    window: "Amenbo — "
+
+  - type: action
+    domain: terminal
+    op: type-line
+    window: "Amenbo — "
+    with:
+      text: SCENARIO the terminal the loop opened
+
+  - type: assert
+    domain: terminal
+    op: pane
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO the terminal the loop opened
+
+  # The other half: the face went to the project the press was made in, so the pane that moved out is
+  # not on this screen. A press that opened nothing would leave it standing here.
+  - type: assert
+    domain: terminal
+    op: pane
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO the terminal that moved out
+      present: false
+
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: "Amenbo — "

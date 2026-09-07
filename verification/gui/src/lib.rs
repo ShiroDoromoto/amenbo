@@ -1340,12 +1340,17 @@ impl Instructor {
             // which one to expect could not tell a card that named the wrong one from a card that
             // named the right one.
             //
-            // What follows the press is said, because it is the press landing: the screen goes to the
-            // terminal by itself and a pane is already open there. An operator left to find the
-            // terminal for themselves would walk a road that passed whether or not the press did
-            // anything at all.
+            // What follows the press is said, because it is the press landing: the terminal comes up
+            // by itself and a pane is already open there. An operator left to find the terminal for
+            // themselves would walk a road that passed whether or not the press did anything at all.
+            //
+            // **Where the terminal comes up is not the same in both shapes**, so neither is named:
+            // one window switches to the terminal face, and two brings the window the terminal was
+            // split out into forward (`app/src-tauri/src/windows.rs`). A line that named the face
+            // alone would read as a failure on the road walked in two windows, where the press does
+            // land and the board is not where it lands.
             (Domain::Folder, "start-terminal") => {
-                "In the first loop, press the one move it offers — the one that starts a terminal in the folder the card names above it. The screen goes to the terminal face on its own, with a pane already open there and nothing asked."
+                "In the first loop, press the one move it offers — the one that starts a terminal in the folder the card names above it. The terminal comes up on its own — the face here where the app is one window, and the window the terminal was split out into where it is two — with a pane already open in it and nothing asked."
                     .to_string()
             }
             // Two ops the CLI drives as one command apiece, and the screen as one form apiece. They

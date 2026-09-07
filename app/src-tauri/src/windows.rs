@@ -40,7 +40,7 @@ use std::time::Duration;
 
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
-use crate::dto::RefTargetDto;
+use crate::dto::{OpenInDto, RefTargetDto};
 use crate::error::CmdError;
 
 /// The window the ledger is read in — the app as it was before the second one existed, which is why
@@ -267,21 +267,42 @@ pub fn talk_ready(drawn: tauri::State<'_, TalkDrawn>) {
     }
 }
 
-/// Bring the talk window forward, and say whether there was one to bring.
+/// The event the terminal face opens a folder on, when the press that asked for it was made in the
+/// other window.
+const OPEN_IN_EVENT: &str = "terminal-open-in";
+
+/// Bring the talk window forward, hand it whatever the press was carrying, and say whether there was
+/// a window to bring.
 ///
 /// The board asks this instead of [`talk_open`] when it already believes it is two windows: what it
 /// wants then is the window it thinks it has, and building a second one behind a belief that turned
 /// out to be wrong would open a window nobody pressed for. `false` is the board's cue to fold itself
 /// back and put the terminal on a face of its own, which is where the reader was trying to get.
+///
+/// **`open_in` is the press that carried a folder** — "start in the terminal", made on a screen the
+/// board holds while the face is over there (`app/src/components/FirstLoop.tsx`). Raising alone
+/// would drop it, and the reader would be left in front of a terminal that opened nothing, having
+/// pressed a button that opens a pane in one window. So the pair goes with the raise, and the far
+/// side does with it what the near side does in one window: [`OPEN_IN_EVENT`] is the same ask the
+/// board hands straight down its own tree. Nothing travels where the press carried nothing — the
+/// segment above the ledger is a reader asking to *see* the terminal, not to work anywhere in
+/// particular.
+///
+/// It is emitted to [`TALK`] and not broadcast: the board has a face of its own and would open a
+/// second pane on the same ask.
 #[tauri::command]
-pub fn talk_raise(app: tauri::AppHandle) -> bool {
-    match app.get_webview_window(TALK) {
-        Some(win) => {
-            raise_window(&win);
-            true
+pub fn talk_raise(app: tauri::AppHandle, open_in: Option<OpenInDto>) -> bool {
+    let Some(win) = app.get_webview_window(TALK) else { return false };
+    raise_window(&win);
+    if let Some(open_in) = open_in {
+        // Logged rather than returned, as `show_ref` does with the same call: the answer this hands
+        // back is whether there was a window, and the board has already been told that by the time
+        // an emit to it could fail.
+        if let Err(e) = app.emit_to(TALK, OPEN_IN_EVENT, open_in) {
+            log::warn!("failed to emit {OPEN_IN_EVENT}: {e}");
         }
-        None => false,
     }
+    true
 }
 
 /// Bring a window forward, spelled the way a notification click spells it (`crate::macos_notify`):

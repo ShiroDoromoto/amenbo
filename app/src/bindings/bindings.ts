@@ -1066,6 +1066,30 @@ report: MigrationDoneDto | null,
 error: { code: string; message_en: string; fields: Record<string, unknown> | null } | null, };
 
 /**
+ * A folder to work in and the project it belongs to — the first loop's one press, on its way from
+ * the ledger to the terminal face (`app/src/components/FirstLoop.tsx`).
+ *
+ * It travels only when the two faces are in two windows: the press is made on the board and the
+ * face is in the other window, so it goes out to the host and comes back as the `terminal-open-in`
+ * event (`crate::windows::talk_raise`). In one window the same pair is handed down the tree and
+ * never comes here.
+ *
+ * **Both halves travel, and neither is filled in at the far end.** A pane belongs to a project and
+ * can never be moved to another, so a folder that arrived without its project is one the face would
+ * have to guess at — and that guess put a pane under the wrong project for good (`AMB-T-3708`).
+ */
+export type OpenInDto = { 
+/**
+ * The project the pane will belong to, named by the screen the press was made on.
+ */
+project: number, 
+/**
+ * The folder to work in. The face checks it against that project's bindings before a pane is
+ * made, and opens nothing where the pair does not hold (`app/src/shell/TerminalFace.tsx`).
+ */
+dir: string, };
+
+/**
  * Which way the two panes of a two-pane page sit ([`amenbo_core::frames::Orient`]).
  *
  * It crosses because it is the person's answer rather than a measurement: what a page is laid out

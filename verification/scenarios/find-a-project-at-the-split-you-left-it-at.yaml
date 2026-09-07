@@ -1,0 +1,159 @@
+# How many panes a page is cut into is the person's answer about one project, and every other project
+# keeps its own. This is the road that says so: a page cut in one project is drawn in the next at the
+# cut a project nobody has answered for gets, and at the cut one again on coming back.
+#
+# ── Why a split is kept per project at all ───────────────────────────────────────────────────────
+# How many terminals a piece of work wants open at once is not the same from one project to the next,
+# so one answer for the whole face fits whichever project it was set in and fights every other. Worse
+# than fitting badly: with one answer, arriving somewhere rewrites the cut the reader set there, and
+# they never pressed anything. What this road promises instead is that the press was a thing they said
+# once, about this project, and going somewhere else does not spend it. It is the unit the reading
+# column's two widths are already kept in, and the road that walks those is
+# `find-the-reading-column-at-the-width-you-left-this-project-at`.
+#
+# ── How a split is read at all ───────────────────────────────────────────────────────────────────
+# The count is not written anywhere on the screen, and a page with nothing on it draws its one way in
+# whatever the count is — so a page a reader has not opened a pane in cannot say which cut it is at.
+# The road opens one and reads what stands beside it, the way
+# `open-the-app-again-on-the-split-you-set-and-no-panes` does: at one to a page there is no room left
+# and no empty frame at all; at two, that same pane has a way in next to it. One pane, one reading,
+# and the two cuts are told apart.
+#
+# ── Why the unanswered cut is read before the press ──────────────────────────────────────────────
+# The reading after the press means nothing on its own: a face that drew a way in beside every pane
+# would pass it. The pair is the road — one, then two, then one again in the other project — and each
+# leg is read the same way, so nothing in the middle can be a difference in how it was measured.
+#
+# ── Why the middle leg is the one that goes red on a face keeping one answer ─────────────────────
+# It is also the leg that catches a face which never moved. A build keeping one cut for the whole face
+# draws the second project at the two set in the first, and a face that swallowed the press on the tab
+# would be reading the first project's page again — both come out as a way in beside the pane, where
+# this road wants none. The last leg is the other half, and no build fails only it: a face that kept
+# the cut while the project was shown, and dropped it on leaving, passes everything above and fails
+# here, which is the half a reader is actually promised.
+#
+# ── Why the pane opened in each project is left standing ─────────────────────────────────────────
+# Panes do not move between projects — a pane belongs to the one it was opened in — so the one opened
+# in the first project is still there on coming back, and the last leg needs nothing pressed to read
+# against. That is also why the count set here is two rather than four: at four the reading is the
+# same way in beside the same one pane, and two is the cut a reader would actually press for.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A cut is a thing on a screen. The binary is handed no page and has nothing to say here.
+id: find-a-project-at-the-split-you-left-it-at
+title: How many panes a page is cut into is kept for the project it was set in, so another project is drawn at the cut nobody has answered for and the first is drawn at the set one on coming back
+description: >
+  Raise two projects, each with a folder of its own. In the first, open a terminal — it stands alone,
+  with no room left beside it, which is the cut a project nobody has answered for is drawn at — then
+  set the page to two panes and see a way in appear next to it. Go to the second project and open a
+  terminal there: it stands alone too, the press having been about the first project and not about
+  this face. Go back to the first: the way in is still beside its pane.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face opens on is the run's business, so the road presses for the one it means to
+  # set the cut in rather than reading whichever was selected.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  # Down to a plain shell, which is what a pane is when nothing is being asked of it. Nothing is typed:
+  # what this road is about is how the page is cut, not what is running in the cut.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The cut a project nobody has answered for is drawn at, which is what the press is about to move
+  # away from. One pane fills it, so there is no way in beside it.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 1
+      empty: 0
+
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  # And the press has landed: the same one pane, with room beside it now.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 1
+      empty: 1
+
+  # The other project, which was never pressed in.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The half a face keeping one answer for the whole of itself would fail, and the half a face that
+  # swallowed the press on the tab would fail with it — the reason is at the top of this road.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 1
+      empty: 0
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # And the press is still spent here. The pane opened in this project never went anywhere, so there is
+  # nothing to press before reading — a face that kept the cut only while the project was shown would
+  # pass every reading above and fail this one.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 1
+      empty: 1

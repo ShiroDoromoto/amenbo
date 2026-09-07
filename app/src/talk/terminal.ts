@@ -265,6 +265,35 @@ function refit(fit: FitAddon, host: HTMLElement): boolean {
   return true;
 }
 
+/** As much of a terminal as one size can be read at — what `replayTail` takes a list of. */
+type Replay = Pick<Terminal, "resize" | "write">;
+
+/**
+ * Read a session's tail back into a terminal: every run at the size it was written at, in order.
+ *
+ * **The bytes are a terminal's output, not lines.** Where one of them ended is already decided, and
+ * an emulator told a narrower screen folds it somewhere else — which for a program that draws by
+ * moving the cursor about leaves parts of old frames standing (`AMB-T-4514`). Read at the size they
+ * were written at and reflowed afterwards, the logical lines keep, so the same reflow that would
+ * have broken them fixes them.
+ *
+ * **It arrives in runs because a terminal resized while nobody was drawing it wrote part of its tail
+ * at each size.** One size for the whole of it fixes the newest part and leaves the rest folded
+ * wrong (`AMB-T-4516`). Which size each run is is the host's answer: the pane was not there while it
+ * changed, so nothing sent the size along (`crate::pty::Recent`).
+ *
+ * **Each write is awaited.** `write` queues, so a resize let go in front of the bytes it is meant to
+ * follow would land on them instead — the same wrong fold, put back by the thing that reads it.
+ */
+export async function replayTail(term: Replay, runs: PtyReplayDto[]): Promise<void> {
+  for (const run of runs) {
+    // A size of nothing is a run no size ever reached. Resizing to it would throw, and the run's
+    // bytes are still worth having at whatever size the terminal is already at.
+    if (run.cols > 0 && run.rows > 0) term.resize(run.cols, run.rows);
+    if (run.base64) await new Promise<void>((wrote) => term.write(decode(run.base64), wrote));
+  }
+}
+
 /**
  * Which terminal this pane is to draw, as the thing putting it up knows it.
  *
@@ -291,23 +320,7 @@ async function draw(
   if (want) {
     try {
       const replay = await invoke<PtyReplayDto[]>("pty_attach", { session: want.session });
-      // **Every run is read at the width it was written at, and only then is the pane's own width
-      // put back.** The bytes are a terminal's output, not lines: where one of them ended is
-      // already decided, and an emulator told a narrower screen folds it somewhere else — which
-      // for a program that draws by moving the cursor about leaves parts of old frames standing
-      // (`AMB-T-4514`). Reading them at the width they were written at and reflowing afterwards
-      // keeps the logical lines, so the same reflow that would have broken them fixes them.
-      //
-      // The tail comes in runs because a terminal resized while nobody was drawing it wrote part of
-      // its tail at each width, and one width for the whole of it fixes the newest part and leaves
-      // the rest folded wrong (`AMB-T-4516`). Whose width each is is the host's answer: the pane was
-      // not there while it changed, so nothing sent the size along.
-      for (const run of replay) {
-        if (run.cols > 0 && run.rows > 0) term.resize(run.cols, run.rows);
-        // Awaited so the resize really is in front of the bytes it belongs to: `write` queues, and a
-        // resize landing in front of bytes it is meant to follow would be the same wrong fold again.
-        if (run.base64) await new Promise<void>((wrote) => term.write(decode(run.base64), wrote));
-      }
+      await replayTail(term, replay);
       refit(fit, host);
       // The program is told last, because until now it was writing to the old width and its next
       // line has to arrive at the new one.

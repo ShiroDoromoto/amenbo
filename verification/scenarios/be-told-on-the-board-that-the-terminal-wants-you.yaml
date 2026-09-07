@@ -67,9 +67,8 @@ steps_gui:
     domain: terminal
     op: open-shell
 
-  # Armed, and left behind. This is the one step on these roads that ends somewhere other than where
-  # it started: the word is said in the pane and the person is on the board when it arrives, which is
-  # the only shape that raises anything.
+  # Armed, and left behind. The word is said in the pane and the person is on the board when it
+  # arrives, which is the only shape that raises anything.
   - type: action
     domain: terminal
     op: say
@@ -77,6 +76,14 @@ steps_gui:
       verb: waiting
       text: SCENARIO the migration needs a decision
       away: true
+
+  # And the leaving, which is a step of its own because it is where the road goes and not what the
+  # word does. This is the press the armed seconds are for.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: tasks
 
   # The whole of what crossed. It is read on the segment and not on the board, because the board is
   # the ledger's and has nothing to say about a session.

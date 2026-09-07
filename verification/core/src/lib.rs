@@ -2430,11 +2430,12 @@ const REGISTRY: &[OpSpec] = &[
     // — said anywhere else it is refused — so there is no way to reach it except the one an agent
     // reaches it by, and a road that stood it up some other way would prove a path nobody walks.
     //
-    // `away` is for the one thing that has to be said from behind the face that reads it: what the
-    // segment wears is raised only by a turn arriving while the ledger is up, and the layer is only
-    // ever spoken inside a pane, which is on the other face. With it the word is armed and the
-    // operator crosses over before it lands, so the step ends on the ledger. How long they have is
-    // the driver's to say and not the road's.
+    // `away` is for the thing that has to be said from behind whatever is going to read it: every
+    // mark outside a pane — the face's segment, a page digit, a project's tab — is raised by a turn
+    // arriving while that pane is off the screen, and the layer is only ever spoken inside the pane.
+    // With it the word is armed and the operator leaves before it lands. **Where they go is the next
+    // step's**, there being three ways off a pane and a mark of its own on each; how long they have
+    // is the driver's to say and not the road's.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text"], binds: false },
     // A name the person gives a pane, typed on that same row. It and the session's own `talk name` are
     // the only two things that name a frame, and this is the one that wins: the last word on a frame
@@ -2482,6 +2483,26 @@ const REGISTRY: &[OpSpec] = &[
     // spent by crossing to it: a badge still up after the person has looked would be a light saying
     // "something is standing" rather than a knock saying "something came up while you were away".
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "face-badge", required: &[], refs: &[], strings: &[], binds: false },
+    // The mark a page digit wears while a turn is standing on that page. `page` is the digit, counted
+    // from 1 the way `go-page`'s is, and it is the page a reader is *not* on: a turn on the page in
+    // front of them is on a pane they are looking at, and the digit for it says nothing they were not
+    // already told.
+    //
+    // It carries a number where the segment's mark carries none, and `count` is what a road reads it
+    // by. The two are different signals rather than the same one drawn twice: the segment is asked
+    // whether to cross a switch, which one turn settles as well as four, while a digit is somewhere to
+    // go — and how many are waiting there is what a reader decides with. A road that read only the dot
+    // would pass on a page that raised its mark and left the number off.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "page-mark", required: &["page"], refs: &[], strings: &[], binds: false },
+    // And the mark a project's tab wears for the same reason, `project` naming the tab as
+    // `tab-icon`'s does. It is read on a project the face is not drawing: a pane belongs to a project
+    // and every other project's is off the screen, so the tab is the only place a turn standing in one
+    // of them can be said at all.
+    //
+    // It carries no number, and that is the shape rather than a gap in it. The digits are one
+    // project's pages and a reader counts what is on them; a tab is a whole project away, where the
+    // move is going there and the number would be answering a question nobody is at.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "tab-mark", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // Which project's panes the face is drawing. The tabs down the edge of the face are not a
     // grouping laid over a list of panes: a pane belongs to a project and can work in no folder
     // outside it, so pressing a project is the division itself being moved. What is beside the panes

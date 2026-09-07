@@ -1002,9 +1002,22 @@ typed `exit` would have added the harness's own word to them.
 wears while a turn is standing behind it. It carries no number and no words, so a road says it is
 there or that it is not — and the absent half is half the goal, since being on the terminal face is
 being told and crossing over spends the mark. Raising one takes `say` with `away:`, the only word on
-these roads said from behind the face that reads it: the layer is spoken inside a pane and the mark
-is drawn on the other side of the switch, so the operator arms the word and crosses over before it
-lands. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
+these roads said from behind whatever reads it: the layer is spoken inside a pane, and every mark
+outside one is raised by a turn arriving while that pane is off the screen — so the operator arms the
+word and leaves before it lands. Where they go is the *next* step's to say, there being three ways off
+a pane and a mark of its own on each. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
+
+`page-mark` and `tab-mark` are the other two, read on the terminal face itself while the pane is
+somewhere the reader is not. **`page-mark`** is the mark a page digit wears, and it is the one of the
+three that carries a number: a page is somewhere to go, and what a reader buys by going there is
+answering one thing or four, so `count:` is read beside the mark rather than the dot alone.
+**`tab-mark`** is the same mark on a project's tab, and it carries none — a project is a whole face
+away, where the question is whether to leave this one at all.
+`be-told-which-page-a-turn-came-up-on` and `be-told-which-project-a-turn-came-up-in` are the roads,
+and both walk the mark down again: neither is spent by looking, the way the segment's is. Going to the
+page or the project tells the reader, but the turn is still standing until the session says otherwise
+— so what takes the mark down is `say` with `note:`, the same word that clears the lamp on the pane's
+own row.
 
 `tab-icon` is the other reading on this face that answers with no words at all: what the tab of a
 project named is drawn with, the image registered for it or the colour and the letter it falls back to.

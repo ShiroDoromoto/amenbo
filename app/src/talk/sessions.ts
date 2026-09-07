@@ -33,8 +33,6 @@ export type Session = {
   readonly agent: string | null;
   /** When the session began (RFC3339 UTC). */
   readonly startedAt: string;
-  /** The last line the agent said about what it is doing. */
-  readonly note: string | null;
   /** Why a person's turn has come, said by the agent — the one thing nothing can find out by watching
    *  (`AMB-D-748`). Null once the agent goes back to work. */
   readonly waiting: string | null;
@@ -85,7 +83,6 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
     project: open.project ?? null,
     agent: open.agent ?? null,
     startedAt: open.startedAt,
-    note: null,
     waiting: open.waiting ?? null,
     seen: null,
     unsent: false,
@@ -100,11 +97,14 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
  *
  * `name` is not here: a name belongs to the frame, not to the session running in it (`./frames`).
  *
- * **A turn is taken back by working, and by the person arriving** (`AMB-D-859`). There is no word for
- * taking one back: an agent that has stopped waiting is an agent that has gone back to doing
- * something, and saying what it is doing is a word it already has. What a word could not carry is the
- * turn an agent forgets to end, so the last say is not the agent's at all — a person coming to the
- * pane takes it down (`seen`, `turnStands`), and that is a thing nobody has to remember. */
+ * **A turn is taken back by the person arriving, and by nothing an agent says** (`AMB-D-859`). There
+ * is no word for taking one back, and there is no word left for the agent to end one with either:
+ * what a word could never carry is the turn an agent forgets to end. So the last say is not the
+ * agent's at all — a person coming to the pane takes it down (`seen`, `turnStands`), and that is a
+ * thing nobody has to remember.
+ *
+ * **A verb this does not know is passed over.** The vocabulary has shrunk before and will again, and
+ * a CLI from before a word went away still posts it into a newer window's drop box (`AMB-D-859`). */
 export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
   const known = sessions.get(statement.session);
   const entry: Session = known ?? {
@@ -113,7 +113,6 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
     project: null,
     agent: null,
     startedAt: statement.at,
-    note: null,
     waiting: null,
     seen: null,
     unsent: false,
@@ -121,29 +120,19 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
   // The folder moves with the agent, so the newest statement's is the current one.
   const folder = statement.cwd ?? entry.folder;
   // **An agent that has spoken at all has the sentence.** Every verb of this layer is a word of
-  // Amenbo's own, said by running Amenbo's command in this pane — so a statement of any kind, from a
-  // note to a name, is an agent that knows where it is working. That is the one thing a sentence left
-  // in the input box says is missing, and it is taken back the way a turn is: by working, not by a
+  // Amenbo's own, said by running Amenbo's command in this pane — so a statement of any kind, a name
+  // as much as a turn, is an agent that knows where it is working. That is the one thing a sentence
+  // left in the input box says is missing, and it is taken back by the agent working rather than by a
   // word for taking it back.
   const spoke: Session = { ...entry, folder, unsent: false };
-  switch (statement.verb) {
-    case "note":
-      // Saying what it is doing now is the agent back at work: whatever it was waiting for, it is not
-      // waiting any more. Nothing else is read into a note.
-      return withEntry(sessions, { ...spoke, note: statement.text ?? null, waiting: null });
-    case "waiting":
-      // A turn nobody has looked at yet: what `seen` answers is whether the person has been back since
-      // the pane last spoke, so a new turn puts that question back.
-      return withEntry(sessions, { ...spoke, waiting: statement.text ?? null, seen: null });
-    case "finished":
-      // What came of the work is the last thing the session has to say about what it is doing, and it
-      // is nobody's turn any more.
-      return withEntry(sessions, { ...spoke, note: statement.text ?? null, waiting: null });
-    default:
-      // `name` moves the frame's name, which is nothing about the session — but it still says where
-      // the agent is.
-      return withEntry(sessions, spoke);
+  if (statement.verb !== "waiting") {
+    // `name` moves the frame's name, which is nothing about the session — but it still says where the
+    // agent is. So does a word this build has never heard of.
+    return withEntry(sessions, spoke);
   }
+  // A turn nobody has come to yet: what `seen` answers is whether the person has been back since the
+  // turn was handed over, so a new one puts that question back.
+  return withEntry(sessions, { ...spoke, waiting: statement.text ?? null, seen: null });
 }
 
 /**
@@ -175,7 +164,7 @@ export function sent(sessions: Sessions, session: string): Sessions {
   return known ? withEntry(sessions, { ...known, unsent: false }) : sessions;
 }
 
-/** Record that a person has come to this pane (`./spoken`). */
+/** Record that a person has come to this pane (`./standing`). */
 export function seen(sessions: Sessions, session: string, at: string): Sessions {
   const known = sessions.get(session);
   if (!known || known.seen !== null) return sessions;

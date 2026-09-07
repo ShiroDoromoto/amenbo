@@ -14,32 +14,41 @@ describe("the sessions the window is running", () => {
       .get("pane-1");
     expect(one).toMatchObject({ folder: "/work/a", agent: "claude-code", startedAt: AT });
     // The rest is not guessed at — it waits to be said.
-    expect(one).toMatchObject({ note: null, waiting: null, seen: null, project: null });
+    expect(one).toMatchObject({ waiting: null, seen: null, project: null });
     expect(one).not.toHaveProperty("confidence");
   });
 
-  it("takes a turn from the agent and gives it back when the agent goes back to work", () => {
+  it("takes a turn from the agent, and takes the newer reason when a second one comes", () => {
     let map = opened(NO_SESSIONS, { session: "pane-1", startedAt: AT });
     map = said(map, statement({ verb: "waiting", text: "the migration needs a decision" }));
     expect(map.get("pane-1")?.waiting).toBe("the migration needs a decision");
 
-    map = said(map, statement({ verb: "note", text: "reading the store" }));
-    expect(map.get("pane-1")).toMatchObject({ waiting: null, note: "reading the store" });
+    // Nothing an agent says ends a turn — the person coming to the pane does (`AMB-D-859`). A name
+    // leaves the reason exactly where it is.
+    map = said(map, statement({ verb: "name", text: "the migration" }));
+    expect(map.get("pane-1")?.waiting).toBe("the migration needs a decision");
 
     map = said(map, statement({ verb: "waiting", text: "which of the two" }));
-    map = said(map, statement({ verb: "finished", text: "it landed" }));
-    expect(map.get("pane-1")).toMatchObject({ waiting: null, note: "it landed" });
+    expect(map.get("pane-1")?.waiting).toBe("which of the two");
   });
 
   it("follows the agent's folder, and hears about a session it has not been told of", () => {
     // The host emits a statement the moment it is written, which can be before the pane that opened the
     // terminal has finished registering it. Dropping it would lose the first thing the agent said.
-    let map = said(NO_SESSIONS, statement({ verb: "note", text: "started", cwd: "/work/a" }));
-    expect(map.get("pane-1")).toMatchObject({ folder: "/work/a", startedAt: AT, note: "started" });
+    let map = said(NO_SESSIONS, statement({ verb: "waiting", text: "which of the two", cwd: "/work/a" }));
+    expect(map.get("pane-1")).toMatchObject({ folder: "/work/a", startedAt: AT, waiting: "which of the two" });
 
-    // `name` moves the folder and nothing else: it says where the agent is, not what it is doing.
+    // `name` moves the folder and nothing else: it says where the agent is, not whose turn it is.
     map = said(map, statement({ verb: "name", text: "the top fix", cwd: "/work/b" }));
-    expect(map.get("pane-1")).toMatchObject({ folder: "/work/b", note: "started" });
+    expect(map.get("pane-1")).toMatchObject({ folder: "/work/b", waiting: "which of the two" });
+  });
+
+  it("passes over a word this build has never heard of", () => {
+    // The vocabulary has shrunk before, and a CLI from before that still posts the old words into a
+    // newer window's drop box (`AMB-D-859`). What arrives says where the agent is and nothing else.
+    let map = opened(NO_SESSIONS, { session: "pane-1", startedAt: AT });
+    map = said(map, statement({ verb: "note", text: "reading the store", cwd: "/work/a" }));
+    expect(map.get("pane-1")).toMatchObject({ folder: "/work/a", waiting: null });
   });
 
   it("puts the question of having looked back when a new turn comes", () => {
@@ -52,24 +61,23 @@ describe("the sessions the window is running", () => {
     expect(map.get("pane-1")?.seen).toBeNull();
   });
 
-  it("holds a turn against the pane that said it, and lets it go when that pane goes back to work", () => {
+  it("holds a turn against the pane that said it, and against no other", () => {
     let map = opened(NO_SESSIONS, { session: "pane-1", startedAt: AT });
     map = opened(map, { session: "pane-2", startedAt: AT });
-    const waiting = () => [...map.values()].filter((one) => one.waiting !== null).length;
-    expect(waiting()).toBe(0);
-
-    // A pane hard at work says a great deal. None of it is a turn.
-    map = said(map, statement({ verb: "note", text: "running the tests" }));
-    expect(waiting()).toBe(0);
+    const standing = () => [...map.values()].filter(turnStands).length;
+    expect(standing()).toBe(0);
 
     map = said(map, statement({ session: "pane-2", verb: "waiting", text: "which of the two" }));
     expect(map.get("pane-2")?.waiting).toBe("which of the two");
-    // The other pane going back to work does not answer pane-2's turn.
-    map = said(map, statement({ verb: "finished", text: "green" }));
-    expect(map.get("pane-2")?.waiting).toBe("which of the two");
+    // The other pane speaking is not an answer to pane-2's turn, whatever it says.
+    map = said(map, statement({ verb: "name", text: "the tests" }));
+    expect(standing()).toBe(1);
 
-    map = said(map, statement({ session: "pane-2", verb: "note", text: "on it" }));
-    expect(waiting()).toBe(0);
+    // Nor is coming to it. What takes a turn down is arriving at the pane it stands in.
+    map = seen(map, "pane-1", "2026-08-24T09:01:00Z");
+    expect(standing()).toBe(1);
+    map = seen(map, "pane-2", "2026-08-24T09:02:00Z");
+    expect(standing()).toBe(0);
   });
 
   it("holds the sentence left in the input box, and lets it go the moment the pane speaks", () => {
@@ -80,7 +88,7 @@ describe("the sessions the window is running", () => {
 
     // Every verb of this layer is Amenbo's own command, run in this pane. An agent that says a word
     // of it has plainly been told where it is working — including the one that only names the frame.
-    for (const verb of ["name", "note", "waiting", "finished"] as const) {
+    for (const verb of ["name", "waiting"] as const) {
       const spoke = said(unsent(map, "pane-1"), statement({ verb, text: "anything" }));
       expect(spoke.get("pane-1")?.unsent).toBe(false);
     }
@@ -93,8 +101,8 @@ describe("the sessions the window is running", () => {
     let map = unsent(opened(NO_SESSIONS, { session: "pane-1", startedAt: AT }), "pane-1");
     map = sent(map, "pane-1");
     expect(map.get("pane-1")?.unsent).toBe(false);
-    // And what the pane has said about its work is untouched: this is one field's news.
-    expect(map.get("pane-1")).toMatchObject({ note: null, waiting: null });
+    // And whose turn it is stays untouched: this is one field's news.
+    expect(map.get("pane-1")).toMatchObject({ waiting: null });
   });
 
   it("says nothing about a pane it is not holding", () => {

@@ -2112,15 +2112,15 @@ impl Instructor {
             // literally what an agent types — and because the layer refuses to be said anywhere else,
             // so an operator improvising it from a description would be turned away.
             //
-            // The layer's four verbs are the four accepted here. An unknown word is refused loudly.
+            // The layer's two verbs are the two accepted here. An unknown word is refused loudly —
+            // a road that asked for one would hand the operator a line the CLI turns away, and a
+            // step nobody can carry out is worse than one that was never written.
             (Domain::Terminal, "say") => {
                 let text = req(with, "text")?;
                 let verb = req(with, "verb")?;
                 let (command, what) = match verb {
                     "name" => ("name", "the agent naming the pane it is running in"),
-                    "note" => ("note", "the agent saying what it is doing now"),
                     "waiting" => ("waiting", "the agent handing the turn over, and saying why"),
-                    "finished" => ("finished", "the agent saying what came of the work"),
                     other => return Err(format!("action `say` does not know the verb `{other}`")),
                 };
                 // Said and stood at, or said and walked away from. The second is the only way to a

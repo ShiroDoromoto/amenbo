@@ -153,9 +153,9 @@ export function mountPlate(
   /**
    * What the end of the row says.
    *
-   * The session's own words come first — a turn, a note — and how long it has been quiet
-   * fills the slot only when they leave it empty. A measurement of silence is the least of what can be
-   * said about a pane, and it must never stand where something that was actually said would.
+   * The session's own word comes first — a turn standing — and how long it has been quiet fills the
+   * slot only when that leaves it empty. A measurement of silence is the least of what can be said
+   * about a pane, and it must never stand where something that was actually said would.
    *
    * It is said in the pane being worked in and nowhere else. Every pane on a screen has been quiet for
    * some length of time, and a row of clocks is what a reader stops reading.

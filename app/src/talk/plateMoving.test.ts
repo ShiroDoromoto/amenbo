@@ -80,15 +80,19 @@ describe("the lamp follows the stream and reads nothing else into it", () => {
 });
 
 describe("the lamp calls when a turn is standing, over whatever the stream is doing", () => {
-  it("blinks on the turn and goes back to the stream when the agent does", () => {
+  it("blinks on the turn and goes back to the stream when the terminal ends", () => {
     plate.output();
     expect(dot()).toBe("lit");
 
     plate.said(said({ verb: "waiting", text: "which of the two" }));
     expect(dot(), "a turn was standing and the lamp still reported the stream").toBe("calling");
 
-    plate.said(said({ verb: "note", text: "on it" }));
-    expect(dot()).toBe("lit");
+    // Nothing an agent says takes a turn down (`AMB-D-859`): a name leaves the lamp calling, and what
+    // ends this one here is the program in the pane ending.
+    plate.said(said({ verb: "name", text: "the migration" }));
+    expect(dot()).toBe("calling");
+    plate.closed("pane-1");
+    expect(dot()).toBe("out");
   });
 
   it("calls on a pane that has printed nothing at all", () => {

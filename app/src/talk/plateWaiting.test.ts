@@ -28,20 +28,22 @@ beforeEach(() => {
 });
 
 describe("what the plate says about a turn standing in its pane", () => {
-  it("says it once, and says it is over when the agent goes back to work", () => {
+  it("says it once, and goes on saying it whatever the agent says next", () => {
     plate.opened("pane-1", AT, null);
-    plate.said(say({ verb: "note", text: "running the tests" }));
-    expect(told, "a pane merely working was reported as a turn").toEqual([]);
+    plate.said(say({ verb: "name", text: "the migration" }));
+    expect(told, "a pane merely naming itself was reported as a turn").toEqual([]);
 
     plate.said(say({ verb: "waiting", text: "which of the two" }));
     expect(told).toEqual([true]);
 
-    // The turn stands while nobody has answered it, and the pane keeps talking.
+    // The turn stands while nobody has come to the pane, and the pane keeps talking.
     plate.said(say({ verb: "waiting", text: "still which of the two" }));
     expect(told, "the same turn was reported twice").toEqual([true]);
 
-    plate.said(say({ verb: "note", text: "on it" }));
-    expect(told).toEqual([true, false]);
+    // **No word takes it back** (`AMB-D-859`). What ends one is the person arriving, which the window
+    // sees and says (`./standing`).
+    plate.said(say({ verb: "name", text: "still the migration" }));
+    expect(told).toEqual([true]);
   });
 
   it("takes the turn away when the program in the terminal exits", () => {
@@ -65,7 +67,7 @@ describe("what the plate says about a turn standing in its pane", () => {
     plate.unsent("pane-1");
     expect(told).toEqual([true]);
 
-    plate.said(say({ verb: "note", text: "reading the store" }));
+    plate.said(say({ verb: "name", text: "the migration" }));
     expect(told, "the agent spoke Amenbo's own words and was still called unsent").toEqual([true, false]);
   });
 
@@ -88,13 +90,13 @@ describe("what the plate says about a turn standing in its pane", () => {
     plate.opened("pane-1", AT, null, "which of the two");
     expect(told).toEqual([true]);
 
-    plate.said(say({ verb: "note", text: "on it" }));
+    plate.closed("pane-1");
     expect(told).toEqual([true, false]);
   });
 
   it("says nothing at all to a pane nobody is waiting on", () => {
     plate.opened("pane-1", AT, null);
-    plate.said(say({ verb: "finished", text: "it landed" }));
+    plate.said(say({ verb: "name", text: "the migration" }));
     plate.closed("pane-1");
     plate.stop();
     expect(told).toEqual([]);

@@ -82,7 +82,6 @@ vi.mock("../core/ipc", async (importOriginal) => {
     ...real,
     invoke: async (cmd: string, args?: Record<string, unknown>) => {
       if (cmd === "pty_sessions") return hoisted.running;
-      if (cmd === "panes_drawn") return undefined;
       return real.invoke(cmd, args);
     },
   };
@@ -98,7 +97,7 @@ let root: Root;
 async function mount() {
   await act(async () => {
     root.render(createElement(TerminalFace, {
-      onWindow: () => {}, note: null, onWaiting: () => {}, goPane: null,
+      onWindow: () => {}, note: null, onWaiting: () => {},
     }));
     await new Promise((r) => setTimeout(r, 0));
   });

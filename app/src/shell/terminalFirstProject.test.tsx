@@ -27,11 +27,11 @@ vi.mock("../talk/agent", () => ({
   mountAgentFrame: (
     _host: HTMLElement,
     _lang: string,
-    on: { opened: (s: string, at: string, where?: string) => void },
+    on: { opened: (s: string, where?: string) => void },
     start: PaneStart = {},
   ) => {
     hoisted.mounts.push(start.cwd ?? undefined);
-    on.opened(`s${hoisted.mounts.length}`, "2026-09-05T00:00:00Z", start.cwd ?? undefined);
+    on.opened(`s${hoisted.mounts.length}`, start.cwd ?? undefined);
     return Promise.resolve(() => {});
   },
 }));

@@ -33,11 +33,11 @@ vi.mock("../talk/agent", () => ({
   mountAgentFrame: (
     _host: HTMLElement,
     _lang: string,
-    on: { opened: (s: string, at: string) => void },
+    on: { opened: (s: string) => void },
     start: PaneStart = {},
   ) => {
     hoisted.mounts.push({ start });
-    on.opened(start.session ?? `s${hoisted.mounts.length}`, "2026-08-24T00:00:00Z");
+    on.opened(start.session ?? `s${hoisted.mounts.length}`);
     return Promise.resolve(() => {});
   },
 }));

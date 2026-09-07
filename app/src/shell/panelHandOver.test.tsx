@@ -26,10 +26,10 @@ vi.mock("../talk/agent", () => ({
   mountAgentFrame: (
     _host: HTMLElement,
     _lang: string,
-    on: { opened: (s: string, at: string) => void },
+    on: { opened: (s: string) => void },
     start: PaneStart = {},
   ) => {
-    on.opened(start.session ?? "unasked", "2026-08-25T00:00:00Z");
+    on.opened(start.session ?? "unasked");
     return Promise.resolve(() => {});
   },
 }));

@@ -82,11 +82,7 @@ vi.mock("./terminal", () => ({
       // the pane took up is where that one was started, not the folder this pane was handed.
       const took = start.adopt !== false ? hoisted.running[0] : undefined;
       const session = took?.session ?? "session-1";
-      on.opened(
-        session,
-        took?.startedAt ?? "2026-01-01T00:00:00Z",
-        took?.folder ?? start.cwd ?? null,
-      );
+      on.opened(session, took?.folder ?? start.cwd ?? null);
       hoisted.end = () => on.closed(session);
       host.textContent = "(a terminal)";
       return () => {};

@@ -12,6 +12,11 @@
 // it names. There is no confidence, no likelihood and no inference, because the one attempt to infer a
 // session from its folder and its time was right in none of fifteen cases (`AMB-T-3549`). Where neither
 // source has spoken, the field is null and the window says nothing.
+//
+// A pane taking up a session that was already running is handed what the host kept of it — the turn
+// standing in it (`AMB-D-860`). That is the same second source read back rather than a third one: the
+// host holds it because it heard the agent say it, and a pane comes and goes while the session does
+// not.
 
 import type { SessionSaidDto } from "../bindings/bindings";
 
@@ -52,6 +57,11 @@ export type Opened = {
   folder?: string | null;
   project?: number | null;
   agent?: string | null;
+  /** A turn already standing in this session, as the host holds it (`crate::pty::Pane`). It is here
+   *  for the pane that comes **back** up: a session outlives the pane drawing it, so one that handed
+   *  its turn over while the reader was on another page still has it when they turn back
+   *  (`AMB-D-860`). A terminal this pane just started has none. */
+  waiting?: string | null;
 };
 
 export const NO_SESSIONS: Sessions = new Map<string, Session>();
@@ -63,9 +73,11 @@ function withEntry(sessions: Sessions, entry: Session): Sessions {
   return next;
 }
 
-/** Record a session the window has just started. What it was started with is known exactly; the rest
- *  waits to be said. Re-opening an id that is already there replaces it: an id is drawn fresh per
- *  terminal, so the same one twice is the same session being described again. */
+/** Record a session this pane has just put a terminal in — one it started, or one it took up that was
+ *  already running. What it was started with is known exactly, and a turn already standing in it comes
+ *  from the host along with that (`crate::pty::pty_sessions`); the rest waits to be said. Re-opening an
+ *  id that is already there replaces it: an id is drawn fresh per terminal, so the same one twice is
+ *  the same session being described again. */
 export function opened(sessions: Sessions, open: Opened): Sessions {
   return withEntry(sessions, {
     session: open.session,
@@ -74,7 +86,7 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
     agent: open.agent ?? null,
     startedAt: open.startedAt,
     note: null,
-    waiting: null,
+    waiting: open.waiting ?? null,
     seen: null,
     unsent: false,
   });

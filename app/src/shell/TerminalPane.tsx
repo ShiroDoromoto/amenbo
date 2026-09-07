@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import { endTerminal, focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
-import { sawPane } from "../talk/spoken";
+import { sawPane } from "../talk/standing";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { pushNotice } from "../core/notice";
@@ -173,11 +173,14 @@ export function TerminalPane({
     );
     plateRef.current = plate;
     void mountAgentFrame(host, currentLang(), {
-      opened: (session, startedAt, where) => {
+      opened: (session, startedAt, where, waiting) => {
         // The folder is what the row above the pane calls it until something names the frame
         // (`../talk/frames`), and it is the one the terminal actually runs in — which is not always
         // the one this slot was handed.
-        plate.opened(session, startedAt, where ?? start.cwd ?? null);
+        //
+        // A turn already standing in that session comes with it, so a row coming back up says what it
+        // was saying when the page turned away from it (`AMB-D-860`).
+        plate.opened(session, startedAt, where ?? start.cwd ?? null, waiting);
         setLive(session);
         // Where the terminal actually runs, which is not always the folder this slot was handed: a
         // pane that took one up learns it from the session (`../talk/layout`).
@@ -230,8 +233,8 @@ export function TerminalPane({
       // (`AMB-T-3610`). What ends a turn is the pane saying so, or the session ending.
       //
       // Nothing here has to hold that open. The row above the pane goes with the pane and says so on
-      // its way out (`../talk/plate`), and what the dots and the badges are read off is kept above
-      // this — one map for the window, fed by the same statements (`../talk/spoken`).
+      // its way out (`../talk/plate`), and what the dots and the badges are read off is kept by the
+      // host, which outlives every pane drawing the session (`../talk/standing`, `AMB-D-860`).
     };
     // Only `running` is a reason to do any of this again. `start` and `frame` are what this pane *is*
     // — a change of either would be a different pane, and the face gives that one a different key.
@@ -299,7 +302,7 @@ export function TerminalPane({
         // **The press is what ends a turn** (`AMB-D-859`): the hand goes up by declaration and comes
         // down by measurement, and a person going to the pane is the measurement. It is said to the
         // window rather than to the row above this pane, because the dots on the pages are read off
-        // the same record and the two must not come apart (`../talk/spoken`).
+        // the same record and the two must not come apart (`../talk/standing`).
         //
         // **Going to the pane, and not looking at the face it is on.** Bringing the terminal forward
         // is how a person answers the call — a turn taken down by that would be gone before they

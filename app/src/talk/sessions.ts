@@ -33,7 +33,9 @@ export type Session = {
   /** Why a person's turn has come, said by the agent — the one thing nothing can find out by watching
    *  (`AMB-D-748`). Null once the agent goes back to work. */
   readonly waiting: string | null;
-  /** When a person last looked at this pane (RFC3339 UTC), or null if they have not since it spoke. */
+  /** When a person last came to this pane (RFC3339 UTC), or null if they have not since it spoke.
+   *  It is what takes a turn down (`turnStands`, `AMB-D-859`), so the text above outlives the turn
+   *  it was the reason for — which is what lets a reader ask why they were called after answering. */
   readonly seen: string | null;
   /** Whether the sentence Amenbo opens an agent with is sitting in this pane's input box, unsent.
    *  It is the window's own doing and not a guess: the host handed the sentence over itself and says
@@ -86,12 +88,11 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
  *
  * `name` is not here: a name belongs to the frame, not to the session running in it (`./frames`).
  *
- * **A turn is taken back by working, not by a word for taking it back.** There is no way to say "never
- * mind" — the layer has no such verb — because an agent that has stopped waiting is an agent that has
- * gone back to doing something, and saying what it is doing is a word it already has. Two things end a
- * turn: a note, and the work being finished. A third word would be one an agent could forget while
- * still remembering to say the other two, and a turn nobody took back is the one thing this must never
- * leave standing. */
+ * **A turn is taken back by working, and by the person arriving** (`AMB-D-859`). There is no word for
+ * taking one back: an agent that has stopped waiting is an agent that has gone back to doing
+ * something, and saying what it is doing is a word it already has. What a word could not carry is the
+ * turn an agent forgets to end, so the last say is not the agent's at all — a person coming to the
+ * pane takes it down (`seen`, `turnStands`), and that is a thing nobody has to remember. */
 export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
   const known = sessions.get(statement.session);
   const entry: Session = known ?? {
@@ -162,10 +163,22 @@ export function sent(sessions: Sessions, session: string): Sessions {
   return known ? withEntry(sessions, { ...known, unsent: false }) : sessions;
 }
 
-/** Record that a person has looked at this pane. */
+/** Record that a person has come to this pane (`./spoken`). */
 export function seen(sessions: Sessions, session: string, at: string): Sessions {
   const known = sessions.get(session);
-  return known ? withEntry(sessions, { ...known, seen: at }) : sessions;
+  if (!known || known.seen !== null) return sessions;
+  return withEntry(sessions, { ...known, seen: at });
+}
+
+/**
+ * Whether a turn the agent handed over is still standing: said, and not gone to since.
+ *
+ * **It is the one question both readers ask**, so they cannot come to disagree — the row above the
+ * pane and the dots on the pages are the same turn drawn in two places (`./nameplate`,
+ * `../shell/TerminalFace`).
+ */
+export function turnStands(session: Session | undefined): boolean {
+  return session?.waiting != null && session.seen === null;
 }
 
 /** Forget a session whose terminal has closed. **Nothing running is kept**: the process is gone, and a

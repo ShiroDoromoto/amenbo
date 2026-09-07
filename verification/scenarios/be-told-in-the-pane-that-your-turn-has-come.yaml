@@ -29,6 +29,17 @@
 # would have the pane called `amenbo talk waiting …` for the rest of its life. Naming it first is
 # also the smaller half of the same seam, read on the same row.
 #
+# ── Why the turn is walked down as well as up ────────────────────────────────────────────────────
+# The hand goes up by declaration and comes down by measurement: what ends a turn is the person
+# arriving at the pane, and no word from the agent. So the road walks both halves — a build that drew
+# the reason and never took it away would leave every pane that ever called still calling, and one
+# that took it away too early would answer a call nobody had heard.
+#
+# **The arriving is a press on the pane, and not the face being brought forward.** Bringing the
+# terminal up is how a person answers the call, so a turn taken down by that would be gone before they
+# could read what it was for — and the reason is half of what the word says. What is left is the
+# gesture that is unambiguously going to *that* pane, which is also how they answer it.
+#
 # The world is empty on purpose. What the label says here is the session's, not the ledger's: a
 # pane holding no task is exactly the state this road is about, and standing tasks up would put words
 # on the row that came from somewhere else. The folder the road chooses is not furniture either:
@@ -42,7 +53,8 @@ description: >
   hand the turn over with the reason in the same breath. Both arrive on the label above the pane, in
   the agent's own words. What is under test is the whole seam — a word said with the CLI inside a
   terminal, read out of the drop box by the app, and drawn where somebody looking at the screen will
-  see that it is their turn and why.
+  see that it is their turn and why. Then press the pane: going to it is what takes the turn down, and
+  the reason goes with it while the pane's name stays.
 
 steps_gui:
   - type: action
@@ -97,3 +109,25 @@ steps_gui:
     op: label
     with:
       shows: SCENARIO the ledger migration needs a decision
+
+  # ── And the person goes to the pane ─────────────────────────────────────────────────────────────
+  # One press, and nothing typed. The pane was standing there the whole time; what changed is that
+  # somebody went to it, which is the one thing that ends a turn nobody said anything more about.
+  - type: action
+    domain: terminal
+    op: press-pane
+
+  # The reason is gone: the call was answered by being answered. Read with the name below, because
+  # "the row says less" and "the row is not being drawn" are the same reading otherwise.
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the ledger migration needs a decision
+      present: false
+
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the migration

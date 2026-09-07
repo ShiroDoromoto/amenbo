@@ -34,7 +34,7 @@ import { inTauri } from "../core/snapshot";
 import { errText, t, tf, tn } from "../core/i18n";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 import { watchSpoken } from "../talk/spoken";
-import { NO_SESSIONS, type Sessions } from "../talk/sessions";
+import { NO_SESSIONS, turnStands, type Sessions } from "../talk/sessions";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
  *  panel to reach the pane, and short enough that what is left on the screen afterwards is the
@@ -294,13 +294,13 @@ export function TerminalFace({
    * **A pane that is not on the screen still has one**, and it is the whole reason the dots and the
    * badges exist: a page turn is exactly when nobody is looking at that pane (`AMB-T-3610`). The
    * drawn panes answer for themselves, because a pane is the only thing here that can see its own
-   * input box; the rest is read off what their agents have said,
-   * which the window hears whether or not the pane is up (`../talk/spoken`).
+   * input box; the rest is read off what their agents have said and which of those turns the person
+   * has been to, which the window hears whether or not the pane is up (`../talk/spoken`).
    */
   const needy = useMemo(() => {
     const all = new Set(reported);
     for (const frame of layout.frames) {
-      if (frame.session !== null && spoken.get(frame.session)?.waiting) all.add(frame.id);
+      if (frame.session !== null && turnStands(spoken.get(frame.session))) all.add(frame.id);
     }
     return all;
   }, [reported, spoken, layout.frames]);

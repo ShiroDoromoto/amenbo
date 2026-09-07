@@ -521,8 +521,6 @@ export const ja: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "{n}分 動きなし",
-    "talk.unsent": "まだ送られていません。Enter で送れます",
     "face.switch": "タスク／ターミナル",
     "face.tasks": "タスク",
     "face.terminal": "ターミナル",

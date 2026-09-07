@@ -531,8 +531,6 @@ export const ptBR: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "quieto há {n} min",
-    "talk.unsent": "Ainda não enviado. Pressione Enter para enviar.",
     "face.switch": "O que esta janela mostra",
     "face.tasks": "Tarefas",
     "face.terminal": "Terminal",

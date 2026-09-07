@@ -512,8 +512,6 @@ export const vi: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "yên {n} phút",
-    "talk.unsent": "Chưa được gửi. Nhấn Enter để gửi.",
     "face.switch": "Cửa sổ này đang hiển thị gì",
     "face.tasks": "Công việc",
     "face.terminal": "Terminal",

@@ -3,11 +3,10 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { acrossIn, movedWithin, pageShape, type Frame, type Layout } from "../talk/layout";
 import { frameLabel, type FrameNames } from "../talk/frames";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
-import { faceOf, sayText, type Plate as Row, type Say } from "../talk/nameplate";
-import { BLINK_MS, hueOf, phaseDelay } from "../talk/moving";
+import { faceOf, type Plate as Row } from "../talk/nameplate";
+import { hueOf } from "../talk/moving";
 import { sideOfBox } from "./rowDrag";
-import { Icon } from "../components/Icon";
-import { currentLang, t, tf } from "../core/i18n";
+import { t, tf } from "../core/i18n";
 
 /**
  * Where the panes of one project are put in order (`AMB-D-853`).
@@ -44,24 +43,21 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
   onOrder: (order: readonly Frame[]) => void;
 }) {
   const [order, setOrder] = useState<readonly Frame[]>(panes);
-  const lang = currentLang();
   /**
    * The row of one pane, as it stood when this opened.
    *
-   * **A pane that is drawn is read; one that is not says nothing.** Only the page on the screen has
-   * panes mounted on it, so what is known about a pane — output arriving, a sentence left unsent, how
-   * long the silence has run — exists for those and for no others. The rest is left unsaid rather
-   * than filled in: silence is silence (`AMB-D-858`).
+   * **A pane that is drawn is read; one that is not has its lamp out.** Only the page on the screen
+   * has panes mounted on it, so the one thing a row measures — whether output is arriving — is known
+   * for those and for no others. It is left unsaid rather than filled in: a lamp out is a lamp out
+   * (`AMB-D-858`).
    */
   function rowOf(frame: Frame): Row {
     const read = rows.get(frame.id);
     const drawn = read?.() ?? null;
     if (drawn !== null) return drawn;
-    const say: Say = { kind: "silent" };
     return {
       name: frameLabel(names, frame.id, frame.folder),
-      say,
-      dot: { frame: frame.id, face: faceOf(say, false) },
+      dot: { frame: frame.id, face: faceOf(false) },
     };
   }
   // Read once, as the modal opens. What is drawn in here is a proposal about an arrangement, not a
@@ -172,10 +168,6 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
         role="dialog"
         aria-modal="true"
         aria-label={t("face.orderTitle")}
-        // The beat and the phase a calling lamp blinks to, which are the row's own
-        // (`../talk/moving`): a card and the pane it stands for have to fall together, or the one
-        // signal reads as two things being asked.
-        style={{ "--blink": `${BLINK_MS}ms`, "--phase": phaseDelay(Date.now()) } as CSSProperties}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="paneorder__head">{t("face.orderTitle")}</div>
@@ -190,17 +182,11 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
                 {slots.map((frame) => {
                   const row = plates.get(frame.id);
                   const name = row?.name ?? t("face.orderNoName");
-                  const said = row === undefined
-                    ? { mark: null, text: "" }
-                    : sayText(row.say, lang);
                   const was = from.get(frame.id);
                   return (
                     <div
                       key={frame.id}
                       className={`paneorder__card${held === frame.id ? " paneorder__card--held" : ""}`}
-                      // The same attribute the label reads by, so a card asking for a person is drawn
-                      // the way the row above that pane is (`../styles/global.css`).
-                      data-say={row?.say.kind}
                       data-pane-card={frame.id}
                       onPointerDown={(e) => onCardDown(e, frame.id)}
                     >
@@ -216,15 +202,6 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
                         />
                         <span className="paneorder__name" title={name}>{name}</span>
                       </div>
-                      {/* The one thing the pane said, at the rank the row says it at. A card is not
-                          the row's one line, so nothing is dropped for width — what does not fit is
-                          elided and given back in full by the machine. */}
-                      {said.text !== "" && (
-                        <span className="paneorder__say" title={said.text}>
-                          {said.mark !== null && <Icon name={said.mark} />}
-                          {said.text}
-                        </span>
-                      )}
                       {frame.folder !== null && (
                         <span className="paneorder__folder" title={frame.folder}>{frame.folder}</span>
                       )}

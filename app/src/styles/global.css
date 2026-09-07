@@ -329,19 +329,10 @@ input[type="color"] {
    the two are read together the way they are on the row above the pane itself (`.plate`). */
 .paneorder__head-row { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .paneorder__name { font-weight: var(--fw-medium); color: var(--c-text); flex: 0 1 auto; }
-/* The one thing the pane said, with the mark that stands in front of it. Unlike the row above a pane
-   this is never dropped for width — a card has lines to give it, so what does not fit is elided and
-   the whole of it is a hover away. */
-.paneorder__say { display: flex; align-items: center; gap: var(--s-1); color: var(--c-text-muted); }
-.paneorder__say > svg { flex: 0 0 auto; }
-/* A person's turn is standing in this pane. It is the one thing on a card anybody is meant to act on,
-   so it is the one thing drawn as more than grey (`.plate[data-say]`). */
-.paneorder__card[data-say="waiting"] .paneorder__say,
-.paneorder__card[data-say="unsent"] .paneorder__say { color: var(--c-text); }
 .paneorder__folder, .paneorder__from, .paneorder__ended {
   color: var(--c-text-muted); font-size: var(--fs-xs);
 }
-.paneorder__name, .paneorder__folder, .paneorder__from, .paneorder__ended, .paneorder__say {
+.paneorder__name, .paneorder__folder, .paneorder__from, .paneorder__ended {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -1719,17 +1710,15 @@ body.dragging-row { user-select: none; }
   white-space: nowrap;
 }
 /* Spelled out for the same reason the two faces are (see the top of this file): `display: flex` above
-   is an author rule and beats the user agent's `[hidden]`, so a row with nothing to say would be
-   hidden in the markup and drawn on the screen. It showed as an empty line until the mark went in
-   front of the words, and then as a dot on a pane that had not started. */
+   is an author rule and beats the user agent's `[hidden]`, so a row with nothing to label would be
+   hidden in the markup and drawn on the screen — a dot on a pane that had not started. */
 .plate[hidden] { display: none; }
 
-/* The lamp the pane is known by, on one of three faces (see ../talk/nameplate.ts).
+/* The lamp the pane is known by, on one of two faces (see ../talk/nameplate.ts).
 
-   **Hue says which pane; the face says what is happening in it.** Two readings on one mark only work
-   while they cannot be mistaken for each other, so the colour never changes with what is happening —
-   with the one exception that proves it, the calling face, which drops the pane's hue for the warning
-   colour precisely because it has stopped saying which pane this is and started saying come here.
+   **Hue says which pane; the face says whether anything is coming out of it.** Two readings on one
+   mark only work while they cannot be mistaken for each other, so the colour never changes with what
+   the stream is doing.
 
    **Out is not away.** A pane that has quietened keeps its lamp at the resting step: it is still that
    pane, and a mark that vanished would read as the pane having gone.
@@ -1785,46 +1774,14 @@ body.dragging-row { user-select: none; }
    The beat and the phase are both the row's — `BLINK_MS` and `phaseDelay` (../talk/moving.ts) — so
    that this and the mark at the other end of the row fall together rather than reading as two things
    being asked. */
-.plate__dot[data-face="calling"] {
-  color: var(--c-heed);
-  animation: plate-blink var(--blink) infinite;
-  animation-delay: var(--phase, 0s);
-}
-.plate__dot[data-face="calling"]::after {
-  opacity: 0.7;
-  animation: plate-blink-glow var(--blink) infinite;
-  animation-delay: var(--phase, 0s);
-}
-@keyframes plate-blink { 50% { opacity: 0.25; } }
-@keyframes plate-blink-glow { 50% { opacity: 0.12; } }
+/* The pane's name, which is the whole of what the row says (`AMB-D-862`). It belongs to the frame, so
+   it is the one part of the row that does not move when the process in it does.
 
-/* Motion turned down: the calling face held at its brightest. What the blink carried was "come here",
-   and the warning colour on a lamp that is otherwise the pane's own carries it without the movement. */
-@media (prefers-reduced-motion: reduce) {
-  .plate__dot[data-face="calling"],
-  .plate__dot[data-face="calling"]::after,
-  .plate[data-say="waiting"] .plate__mark--say,
-  .plate[data-say="unsent"] .plate__mark--say {
-    animation: none;
-  }
-}
-
-/* The pane's name. It belongs to the frame, so it is the one part of the row that does not move when
-   the process in it does.
-
-   **It takes the room the row has spare, and that is what holds the other place at the far end.**
-   There is nothing between the two places to do it any more (`AMB-T-4532`), so a name shorter than
-   the row is drawn whole and the slack left behind it stands between the two — which is where what
-   the pane said was read from before. A name longer than the row is elided rather than taken out of
-   the place beside it: a name is bounded before it is kept (`amenbo_core::frames`), and a bounded one
-   is still long enough to push what the pane said off the end. `min-width: 0` is what lets a flex
-   item shrink below its text at all.
-
-   **Where both are too long, both give way rather than one of them going.** A name is kept to 80
-   characters and a reason to 60 columns (`amenbo_core::frames`, `amenbo_core::session`), so the
-   longer of the two gives up the more room and neither is left with nothing — and the row that is
-   too narrow for two places to say anything at all has its own answer further down, which is to drop
-   the right one outright. Both in full are one hover away on the panel (`.plate-peek`). */
+   **It takes the whole of the room the row has.** There is nothing beside it to be held off any more,
+   so a name shorter than the row is drawn whole and a longer one is elided — a name is bounded before
+   it is kept (`amenbo_core::frames`), and a bounded one is still long enough to run past a narrow
+   pane. `min-width: 0` is what lets a flex item shrink below its text at all, and the whole of the
+   name is one hover away on the panel (`.plate-peek`). */
 .plate__name {
   font-weight: 600;
   color: var(--c-text);
@@ -1832,68 +1789,4 @@ body.dragging-row { user-select: none; }
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* The one thing said, on the right. The sentence itself is bounded at the door it comes in by
-   (`amenbo_core::session::WAITING_LIMIT`), so what is left for the row is the difference between a
-   label's line and this pane's share of it. */
-.plate__say {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* The pause sits in front of the words it belongs to, and an empty mark takes no room. The mark is an
-   icon and not a character (`../components/Icon.tsx`), so the place it sits in is a box the size of
-   the drawing rather than a slot of text: `:empty` is what folds it away, and the drawing is the
-   element's only child for exactly that reason.
-
-   **It is centred against the row rather than left on its baseline.** The row aligns on the baseline,
-   and a box is sat on that line by its bottom edge — so a drawing left to it rides up by the whole of
-   the descender space beneath the words it stands in front of. The lamp at the other end of the row is
-   taken off the baseline for the same reason. */
-.plate__mark {
-  flex: 0 0 auto;
-  align-self: center;
-  display: inline-flex; align-items: center;
-}
-.plate__mark:empty {
-  display: none;
-}
-
-/* A person's turn has come. Nothing else on the row is asking for anything, so nothing else is drawn
-   to be noticed (`AMB-D-858`). */
-.plate[data-say="waiting"] .plate__say,
-.plate[data-say="unsent"] .plate__say {
-  color: var(--c-text);
-}
-/* The mark in front of those words blinks, to the same beat and the same faintness as the lamp at the
-   far end of the row — the two are one signal drawn twice, and drawn to two rhythms they would read as
-   two. It is the mark and not the words: where the pane is narrow the words are not drawn at all, and
-   what is left has to go on saying that somebody is needed (`../talk/nameplate.ts`). */
-.plate[data-say="waiting"] .plate__mark--say,
-.plate[data-say="unsent"] .plate__mark--say {
-  animation: plate-blink var(--blink) infinite;
-  animation-delay: var(--phase, 0s);
-}
-
-/* A pane too narrow for both places drops the right one, and the name and the ⏸ are what is left
-   (`AMB-T-3673`).
-
-   **Two things both cut short is a row neither of which can be read.** Above this width each place
-   still says something after the ellipsis; below it what is said has room for nothing at all — so
-   rather than share the little there is, the row gives it to the two that carry on meaning something:
-   which pane this is, and whether a person is needed in it. The words that went are one hover away,
-   on the mark that stayed (`../talk/nameplate.ts`).
-
-   The width is what is asked rather than the count, because a count does not name a width: two
-   across and four across are the same width in this grid (`.termface__page-grid--*` above), six and
-   eight are narrower again, and the split-out window is one pane at whatever size its window is. What a reason has to be short enough
-   for is settled at the other end — `talk waiting` refuses one past the length of a label
-   (`amenbo_core::session::WAITING_LIMIT`), so this is the row's last resort rather than its plan. */
-@container (max-width: 360px) {
-  .plate__say {
-    display: none;
-  }
 }

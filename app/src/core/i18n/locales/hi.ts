@@ -509,8 +509,6 @@ export const hi: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "{n} मिनट से शांत",
-    "talk.unsent": "अभी भेजा नहीं गया। भेजने के लिए Enter दबाएँ।",
     "face.switch": "यह विंडो क्या दिखाती है",
     "face.tasks": "कार्य",
     "face.terminal": "टर्मिनल",

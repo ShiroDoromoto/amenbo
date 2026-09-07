@@ -194,29 +194,22 @@ describe("carrying a card", () => {
 
 describe("what a card says about its pane", () => {
   it("carries the row the pane's own label is drawn from, rather than working one out", () => {
-    // The lamp's face and the one thing said are the pane's own answers (`../talk/plate`), so a card
-    // and the row above that pane can never come to disagree.
+    // The name and the lamp's face are the pane's own answers (`../talk/plate`), so a card and the
+    // row above that pane can never come to disagree.
     draw(faceOf(2, 2), new Map(), new Map([
-      reads("1", {
-        name: "builder",
-        say: { kind: "waiting", text: "which branch?" },
-        dot: { frame: "1", face: "calling" },
-      }),
+      reads("1", { name: "builder", dot: { frame: "1", face: "lit" } }),
     ]));
     expect(cardOf("1").querySelector(".paneorder__name")!.textContent).toBe("builder");
-    expect(cardOf("1").querySelector(".paneorder__say")!.textContent).toContain("which branch?");
-    expect(cardOf("1").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("calling");
-    expect(cardOf("1").dataset.say).toBe("waiting");
+    expect(cardOf("1").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("lit");
   });
 
-  it("says nothing about a pane that is not drawn, there being nothing measuring one", () => {
+  it("leaves the lamp out on a pane that is not drawn, there being nothing measuring one", () => {
     // Only the page on the screen has panes mounted on it, and what a card carries is what that
-    // pane's own row was measuring. A pane on another page is measured by nothing, so its card says
-    // nothing rather than something worked out on its behalf.
+    // pane's own row was measuring. A pane on another page is measured by nothing, so its lamp is
+    // out rather than something worked out on its behalf.
     let layout = faceOf(2, 2);
     layout = openedIn(layout, "2", "s-2", "/work/2");
     draw(layout);
-    expect(cardOf("2").querySelector(".paneorder__say")).toBeNull();
     expect(cardOf("2").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("out");
   });
 

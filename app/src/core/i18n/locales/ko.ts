@@ -508,8 +508,6 @@ export const ko: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "{n}분째 조용함",
-    "talk.unsent": "아직 보내지 않았습니다. Enter 를 누르면 보냅니다.",
     "face.switch": "이 창이 보여 주는 화면",
     "face.tasks": "작업",
     "face.terminal": "터미널",

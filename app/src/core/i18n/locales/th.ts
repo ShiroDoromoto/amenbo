@@ -512,8 +512,6 @@ export const th: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "เงียบมา {n} นาที",
-    "talk.unsent": "ยังไม่ได้ส่ง กด Enter เพื่อส่ง",
     "face.switch": "หน้าต่างนี้กำลังแสดงอะไร",
     "face.tasks": "งาน",
     "face.terminal": "เทอร์มินัล",

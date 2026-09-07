@@ -560,11 +560,9 @@ const ui = {
   "talk.shell": "Plain shell",
   // The one line above a pane of the talk window: how long it has been quiet, when there is nothing
   // the agent said to put there instead. "{n}" is a count of whole minutes.
-  "talk.quiet": "quiet for {n} min",
   // The sentence Amenbo opens an agent with, left sitting in the pane's input box. It names neither
   // the agent's product nor anything its screen says: what a program calls its input box is the
   // program's business and changes under us (`AMB-D-805`).
-  "talk.unsent": "Not sent yet. Press Enter to send it.",
   // The two faces of the one window, and the moves between one window and two (`AMB-D-753`).
   "face.switch": "Tasks or terminal",
   "face.tasks": "Tasks",

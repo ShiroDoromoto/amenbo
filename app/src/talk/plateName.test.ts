@@ -30,7 +30,7 @@ const heading = () => host.querySelector<HTMLElement>(".plate:not([hidden]) .pla
 
 beforeEach(() => {
   host = document.createElement("div");
-  plate = mountPlate(host, () => "en");
+  plate = mountPlate(host);
 });
 
 afterEach(() => plate.stop());

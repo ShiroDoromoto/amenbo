@@ -509,8 +509,6 @@ export const nl: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "{n} min stil",
-    "talk.unsent": "Nog niet verzonden. Druk op Enter om te verzenden.",
     "face.switch": "Wat dit venster toont",
     "face.tasks": "Taken",
     "face.terminal": "Terminal",

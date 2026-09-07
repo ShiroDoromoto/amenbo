@@ -541,6 +541,7 @@ export const tr: Translation = {
     "face.orderCancel": "Vazgeç",
     "face.orderFrom": "{n}. sayfadan",
     "face.orderNoName": "Bu bölme",
+    "face.orderEnded": "Sona erdi",
     "face.whichStart": "Bu bölme neyle açılsın?",
     "face.open": "Burada bir terminal aç",
     "face.openPick": "Birini seçin",

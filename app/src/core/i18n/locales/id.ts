@@ -544,6 +544,7 @@ export const id: Translation = {
     "face.orderCancel": "Batal",
     "face.orderFrom": "Dari halaman {n}",
     "face.orderNoName": "Panel ini",
+    "face.orderEnded": "Berakhir",
     "face.whichStart": "Buka panel ini dengan apa?",
     "face.open": "Buka terminal di sini",
     "face.openPick": "Pilih satu",

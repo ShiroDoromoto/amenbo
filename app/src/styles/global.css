@@ -323,10 +323,11 @@ input[type="color"] {
 .paneorder__pagename { color: var(--c-text-muted); font-size: var(--fs-xs); }
 /* The face's own grid, given a height here: on the face a page takes what is left of the window, and
    in here every page has to sit under the one above it. Two rows get twice the room of one, so a
-   card is the same shape at either. */
-.paneorder__grid { flex: none; padding: 0; margin-top: var(--s-1); height: 172px; }
+   card is the same shape at either — and the room a card gets is what its most crowded reading needs,
+   a pane that is named, saying something, working in a folder, finished, and off another page. */
+.paneorder__grid { flex: none; padding: 0; margin-top: var(--s-1); height: 212px; }
 .termface__page-grid--1.paneorder__grid,
-.termface__page-grid--2.paneorder__grid { height: 86px; }
+.termface__page-grid--2.paneorder__grid { height: 106px; }
 /* A card, and the whole of where a drop lands: the halves of it decide before and after, so there is
    no empty box anywhere in here for one to be aimed at (`AMB-D-853`). `touch-action` is what keeps a
    drag from scrolling the pages out from under the hand holding one. */
@@ -340,9 +341,23 @@ input[type="color"] {
 .paneorder__card--held {
   border-color: var(--c-accent); background: var(--c-accent-weak); cursor: grabbing;
 }
-.paneorder__name { font-weight: var(--fw-medium); }
-.paneorder__folder, .paneorder__from { color: var(--c-text-muted); font-size: var(--fs-xs); }
-.paneorder__name, .paneorder__folder, .paneorder__from {
+/* The lamp and the name, on one line: the lamp says which pane and the name what it is called, and
+   the two are read together the way they are on the row above the pane itself (`.plate`). */
+.paneorder__head-row { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.paneorder__name { font-weight: var(--fw-medium); color: var(--c-text); flex: 0 1 auto; }
+/* The one thing the pane said, with the mark that stands in front of it. Unlike the row above a pane
+   this is never dropped for width — a card has lines to give it, so what does not fit is elided and
+   the whole of it is a hover away. */
+.paneorder__say { display: flex; align-items: center; gap: var(--s-1); color: var(--c-text-muted); }
+.paneorder__say > svg { flex: 0 0 auto; }
+/* A person's turn is standing in this pane. It is the one thing on a card anybody is meant to act on,
+   so it is the one thing drawn as more than grey (`.plate[data-say]`). */
+.paneorder__card[data-say="waiting"] .paneorder__say,
+.paneorder__card[data-say="unsent"] .paneorder__say { color: var(--c-text); }
+.paneorder__folder, .paneorder__from, .paneorder__ended {
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+}
+.paneorder__name, .paneorder__folder, .paneorder__from, .paneorder__ended, .paneorder__say {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 

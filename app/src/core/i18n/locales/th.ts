@@ -544,6 +544,7 @@ export const th: Translation = {
     "face.orderCancel": "ยกเลิก",
     "face.orderFrom": "จากหน้า {n}",
     "face.orderNoName": "บานหน้าต่างนี้",
+    "face.orderEnded": "สิ้นสุดแล้ว",
     "face.whichStart": "จะเปิดแผงนี้ด้วยอะไร",
     "face.open": "เปิดเทอร์มินัลที่นี่",
     "face.openPick": "เลือกสักอย่าง",

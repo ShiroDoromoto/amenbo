@@ -570,6 +570,7 @@ export const ru: Translation = {
     "face.orderCancel": "Отмена",
     "face.orderFrom": "Со страницы {n}",
     "face.orderNoName": "Эта панель",
+    "face.orderEnded": "Завершено",
     "face.whichStart": "Чем открыть эту панель?",
     "face.open": "Открыть здесь терминал",
     "face.openPick": "Выберите один",

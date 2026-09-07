@@ -625,6 +625,7 @@ const ui = {
   "face.orderCancel": "Cancel",
   "face.orderFrom": "From page {n}",
   "face.orderNoName": "This pane",
+  "face.orderEnded": "Ended",
   // The line over the row of things a terminal can be opened with (`app/src/shell/EmptySlot.tsx`).
   // The pills say by their shape that they can be pressed; this says it in words, because a row read
   // as a caption is not something anybody tries. It does not say "choose an AI" — the plain shell is

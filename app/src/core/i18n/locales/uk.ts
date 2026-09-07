@@ -567,6 +567,7 @@ export const uk: Translation = {
     "face.orderCancel": "Скасувати",
     "face.orderFrom": "Зі сторінки {n}",
     "face.orderNoName": "Ця панель",
+    "face.orderEnded": "Завершено",
     "face.whichStart": "Чим відкрити цю панель?",
     "face.open": "Відкрити тут термінал",
     "face.openPick": "Виберіть один",

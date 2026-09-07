@@ -29,12 +29,16 @@
 # and no turn standing wears nothing, and the project being looked at wears nothing either — its pane
 # is right there to be read, so a mark on its own tab would be saying what the pane already says.
 #
-# ── Why the mark is spent by the reader reaching the pane ───────────────────────────────────────
-# Pressing the greenhouse's tab puts its panes on the screen, and that is the mark being spent: a
-# turn is put down by the person who was asked for it, and the session has no word for putting one
-# down. Pressing back to the boathouse afterwards raises nothing, because the turn it was about has
-# been answered. The road walks that, because a mark with no way down is a light a reader learns to
-# ignore.
+# ── Why the mark is spent by a press on the pane, and not by the tab ────────────────────────────
+# A turn is put down by the person who was asked for it, the session having no word for putting one
+# down — and what counts as their answering it is a press on the pane itself. Pressing the tab is not
+# that: it puts the greenhouse's panes on the screen, and what is on the screen is a page of them. A
+# reader who crossed to this project may be here for any one of them, so taking the turn down on
+# arrival would put it down on behalf of somebody who has not read it yet.
+#
+# So the road presses the tab and then the pane, and only then goes back. Pressing back to the
+# boathouse afterwards raises nothing, because the turn it was about has been answered. The road
+# walks that, because a mark with no way down is a light a reader learns to ignore.
 #
 # The world raises the two projects and nothing else: a terminal is not a record, and what the panes
 # run is the reader's own shell.
@@ -44,8 +48,8 @@ description: >
   Raise two projects with a folder each and open a pane in both. Hand the turn over from inside the
   greenhouse's pane and press to the boathouse before the word lands: the greenhouse's tab is wearing
   a mark, and the boathouse's — the project being looked at, pane and all — is bare. Press to the
-  greenhouse, where the pane is, and back: its tab is bare too — the mark followed the turn, and the
-  turn was answered.
+  greenhouse, press the pane the turn is standing in, and come back: its tab is bare too — the mark
+  followed the turn, and the turn was answered.
 
 given:
   - type: action
@@ -142,14 +146,20 @@ steps_gui:
       project: Boathouse
       present: false
 
-  # To the project the tab was about, which is the whole of answering it: its pane is on the screen and
-  # the person asked for is looking at it. Nothing is said here, the session having no word for
-  # putting a turn down — the reader arriving is the whole of it coming down.
+  # To the project the tab was about. This is the crossing and not yet the answer: what is on the
+  # screen now is every pane of this project, and the one the turn is standing in has not been read
+  # by anybody yet.
   - type: action
     domain: terminal
     op: go-project
     with:
       project: Greenhouse
+
+  # And the answer, which is one press and nothing typed. Nothing is said here, the session having no
+  # word for putting a turn down — the reader going to that pane is the whole of it coming down.
+  - type: action
+    domain: terminal
+    op: press-pane
 
   - type: action
     domain: terminal

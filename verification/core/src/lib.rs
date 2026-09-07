@@ -2691,6 +2691,27 @@ const REGISTRY: &[OpSpec] = &[
     // moves no pane anywhere and turns no page. A road that said both in one step would be asking for
     // a re-cut it did not want, and could not tell which of the two had done what came out.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "set-orient", required: &["orient"], refs: &[], strings: &["orient"], binds: false },
+    // The panes put in an order the person asked for. It is four ops and not one,
+    // because what is being defended is that they are four separate moments: the modal is opened,
+    // cards are carried about inside it, and then the arrangement is either taken or thrown away. A
+    // road that said all of it in one step could not tell a build that reordered on the drag from one
+    // that reordered on the press — and the whole promise here is that a pane a person is reading
+    // does not move until they say so.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "reorder-panes", required: &[], refs: &[], strings: &[], binds: false },
+    // One card carried onto another. Both are named by what their pane is called, because that is
+    // what the operator can see: the cards are the panes, and a road that said "the second one" would
+    // be naming a position that the previous step of the same road has just changed.
+    //
+    // `side` is which half of the card it was let go over — `before` or `after` — since that is the
+    // whole of what decides where it lands. There is no empty box to aim at anywhere in the modal.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "carry-pane", required: &["pane", "onto", "side"], refs: &[], strings: &["pane", "onto", "side"], binds: false },
+    // The press that makes the order the real one. Nothing about the arrangement moves before it.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "keep-order", required: &[], refs: &[], strings: &[], binds: false },
+    // And leaving without it. `how` is which way out was taken — `button`, `escape` or `backdrop` —
+    // because the three arrive by different roads inside the app and a road that walked one proves a
+    // third of the gate. What every one of them owes is the same: the panes are where they were,
+    // however much was dragged about in there.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drop-order", required: &["how"], refs: &[], strings: &["how"], binds: false },
     // And the shape the page came out in, read off the panes themselves. It is the whole of what the
     // press is for: `down` is asked for so that each pane keeps the window's whole width, and a build
     // that lit the control without re-laying the grid under it would draw exactly the screen the

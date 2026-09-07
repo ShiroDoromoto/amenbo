@@ -862,6 +862,17 @@ says which way they sit — side by side, or one above the other — and every f
 was on. Two is where it is asked because two is where the face's rule turns around: width is spent
 before height everywhere else, and two across halves a pane's columns, which on a window with a
 column beside it is under the eighty a TUI wants.
+The order the panes themselves stand in is four ops of its own — `reorder-panes` opens the panel of
+cards, `carry-pane` moves one card onto the half of another, and `keep-order` / `drop-order` are the
+two ways out of it. They are four because the four moments are what is being defended: a pane is a
+terminal somebody is reading, so nothing about the arrangement may move until the press that takes it,
+and from the far side of that press a build that reordered on the drag reads identically to one that
+reordered on the press.
+`put-the-open-panes-in-the-order-you-want` is the road, and it walks the leaving before the taking for
+exactly that reason. It keeps its two panes one to a page and names each of them: the order is read by
+turning to a page and reading the one row on it, and two panes opened in the same folder carry the same
+words on their rows until somebody's own name is put over them.
+
 `stack-the-two-panes-so-each-keeps-the-whole-width` is the road, and what `panes-sit` reads there is
 the width rather than the arrangement — a build that shuffled the boxes about without handing either
 of them more room would have honoured the press and missed what it was for. Both shapes are walked,

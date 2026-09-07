@@ -376,9 +376,9 @@ pub struct Terminal {
     /// Which window is drawing this session, and what it has written lately. Shared with the thread
     /// draining it, and the one part of a terminal a pane may move.
     pane: Arc<Pane>,
-    /// When the terminal was started (RFC3339 UTC). Kept here because the pane cannot keep it: a pane
-    /// is drawn and thrown away as the session moves windows, and only what outlives the window can
-    /// still say when the work began.
+    /// When the terminal was started (RFC3339 UTC). It stays in the registry and is never handed to a
+    /// pane: the one thing it settles is the order [`pty_sessions`] answers in, and a pane is drawn
+    /// and thrown away as the session moves windows, so it could not keep it anyway.
     started_at: String,
 }
 
@@ -638,7 +638,7 @@ pub fn pty_open(
             writer,
             killer,
             pane: Arc::clone(&pane),
-            started_at: started_at.clone(),
+            started_at,
         },
     );
 
@@ -667,7 +667,6 @@ pub fn pty_open(
 
     Ok(PtySessionDto {
         session,
-        started_at,
         folder: opened_in,
     })
 }
@@ -1039,10 +1038,14 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
             .lock()
             .expect("terminals lock")
             .iter()
-            .map(|(session, terminal)| PtySessionDto {
-                session: session.clone(),
-                started_at: terminal.started_at.clone(),
-                folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
+            .map(|(session, terminal)| {
+                (
+                    terminal.started_at.clone(),
+                    PtySessionDto {
+                        session: session.clone(),
+                        folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
+                    },
+                )
             })
             .collect(),
     )
@@ -1051,10 +1054,12 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
 /// The sessions as [`pty_sessions`] answers with them: oldest first, ties settled by the session's
 /// own id so the same set always comes back in the same order.
 ///
-/// `started_at` is RFC 3339 with a fixed offset, so the text sorts the way the instants do.
-fn in_open_order(mut open: Vec<PtySessionDto>) -> Vec<PtySessionDto> {
-    open.sort_by(|a, b| (&a.started_at, &a.session).cmp(&(&b.started_at, &b.session)));
-    open
+/// Each session comes in paired with when it started, which is the registry's to keep and not part
+/// of the answer: the order is settled here, and a pane is handed it already in that order. The
+/// timestamp is RFC 3339 with a fixed offset, so the text sorts the way the instants do.
+fn in_open_order(mut open: Vec<(String, PtySessionDto)>) -> Vec<PtySessionDto> {
+    open.sort_by(|(a_at, a), (b_at, b)| (a_at, &a.session).cmp(&(b_at, &b.session)));
+    open.into_iter().map(|(_, one)| one).collect()
 }
 
 /// Draw an already-open terminal in the pane that is asking, and hand back what it has said lately.
@@ -1303,12 +1308,13 @@ mod tests {
     /// contents at some splits and not others, and each would then be drawn under the other's name.
     #[test]
     fn the_sessions_come_back_in_the_order_they_were_started() {
-        let at = |session: &str, started_at: &str| PtySessionDto {
-            session: session.into(),
-            started_at: started_at.into(),
-            folder: Some("/work/repo".into()),
+        let at = |session: &str, started_at: &str| {
+            (
+                started_at.to_owned(),
+                PtySessionDto { session: session.into(), folder: Some("/work/repo".into()) },
+            )
         };
-        let order = |open: Vec<PtySessionDto>| {
+        let order = |open: Vec<(String, PtySessionDto)>| {
             in_open_order(open).into_iter().map(|one| one.session).collect::<Vec<_>>()
         };
 

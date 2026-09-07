@@ -23,7 +23,7 @@ const hoisted = vi.hoisted(() => ({
   saved: null as unknown,
   /** The terminals the host says are running, as it answers: oldest first
    *  (`crate::pty::pty_sessions`). */
-  running: [] as { session: string; startedAt: string; folder: string | null }[],
+  running: [] as { session: string; folder: string | null }[],
   /** Which session each pane was put up to draw, in the order the panes were built. */
   drawn: [] as (string | null | undefined)[],
 }));
@@ -185,8 +185,8 @@ describe("the terminals that were running in the face it left", () => {
       splitOut: "1",
     };
     hoisted.running = [
-      { session: "older", startedAt: "2026-08-24T00:00:00Z", folder: "/work/a" },
-      { session: "newer", startedAt: "2026-08-24T00:00:09Z", folder: "/work/a" },
+      { session: "older", folder: "/work/a" },
+      { session: "newer", folder: "/work/a" },
     ];
     await mount(true);
     expect(hoisted.drawn).toEqual(["older", "newer"]);

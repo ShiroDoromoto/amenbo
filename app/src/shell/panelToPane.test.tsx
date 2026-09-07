@@ -17,7 +17,7 @@ import type { PaneStart } from "../talk/terminal";
 
 const hoisted = vi.hoisted(() => ({
   saved: null as unknown,
-  running: [] as { session: string; startedAt: string; folder: string | null }[],
+  running: [] as { session: string; folder: string | null }[],
   /** The gesture the face handed the panel, which every row of it would put on its press. */
   carry: undefined as undefined | ((wholes: string[], event: RowPress<HTMLElement>) => void),
   /** Every paste the face asked for: the session it named, and the text. */
@@ -175,9 +175,8 @@ beforeEach(() => {
       { id: "2", project: 1, folder: "/work/b" },
     ],
   };
-  hoisted.running = ["a", "b"].map((one, at) => ({
+  hoisted.running = ["a", "b"].map((one) => ({
     session: `s-${one}`,
-    startedAt: `2026-08-25T00:00:0${at}Z`,
     folder: `/work/${one}`,
   }));
   Element.prototype.setPointerCapture = () => {};

@@ -15,7 +15,7 @@ import { openPanes } from "./openPanes";
 
 const hoisted = vi.hoisted(() => ({
   /** The sessions the host says are open (`crate::pty::pty_sessions`). */
-  running: [] as { session: string; startedAt: string; folder: string | null }[],
+  running: [] as { session: string; folder: string | null }[],
   /** Whether that read is refused. */
   refuse: false,
 }));
@@ -31,11 +31,7 @@ vi.mock("../core/ipc", () => ({
 }));
 
 function open(...sessions: string[]) {
-  hoisted.running = sessions.map((session) => ({
-    session,
-    startedAt: "2026-09-06T00:00:00Z",
-    folder: null,
-  }));
+  hoisted.running = sessions.map((session) => ({ session, folder: null }));
 }
 
 afterEach(() => {

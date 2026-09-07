@@ -15,7 +15,7 @@ import type { PaneStart } from "../talk/terminal";
 
 const hoisted = vi.hoisted(() => ({
   saved: null as unknown,
-  running: [] as { session: string; startedAt: string; folder: string | null }[],
+  running: [] as { session: string; folder: string | null }[],
   /** What the face handed the panel, or nothing where it handed it none. */
   handOver: undefined as ((wholes: string[]) => void) | undefined,
   /** Every paste the face asked for: the session it named, and the text. */
@@ -141,9 +141,8 @@ beforeEach(() => {
       { id: "2", project: 1, folder: "/work/b" },
     ],
   };
-  hoisted.running = ["a", "b"].map((one, at) => ({
+  hoisted.running = ["a", "b"].map((one) => ({
     session: `s-${one}`,
-    startedAt: `2026-08-25T00:00:0${at}Z`,
     folder: `/work/${one}`,
   }));
   container = document.createElement("div");
@@ -212,9 +211,8 @@ describe("handing a file from the panel to a pane", () => {
         id: String(at + 1), project: 1, folder: `/work/${one}`,
       })),
     };
-    hoisted.running = ["a", "b", "c", "d"].map((one, at) => ({
+    hoisted.running = ["a", "b", "c", "d"].map((one) => ({
       session: `s-${one}`,
-      startedAt: `2026-08-25T00:00:0${at}Z`,
       folder: `/work/${one}`,
     }));
     await mount();

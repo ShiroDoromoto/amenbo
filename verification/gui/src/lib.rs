@@ -2709,8 +2709,12 @@ impl Instructor {
                 section(with)?,
                 req(with, "name")?
             ),
+            // The tree and nowhere else. The bin belongs to the section the rows are in, and the
+            // column beside it leaves the key to whoever is writing there — the draft page and the
+            // editor undo words with it. So the line says where to stand before it says what to
+            // press, the way copy and paste do.
             (Domain::Files, "undo") =>
-                "With the file column in front of you — click once on an empty part of it if something else has the keyboard — press the key this machine undoes with."
+                "In the folder's own section, click once on an empty part of it so the keyboard is standing there, then press the key this machine undoes with."
                     .to_string(),
             // A file brought in from outside and let go over a folder's row. The instruction names where it
             // is dragged from as loosely as it can — anywhere on the machine that is not this folder —

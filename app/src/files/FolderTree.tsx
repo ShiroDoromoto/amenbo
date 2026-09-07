@@ -378,17 +378,25 @@ export function FolderTree({
    * other column, and the copy key there is the editor's — it copies the words somebody selected. So
    * neither key is taken unless the keyboard is standing on the tree, and the press falls through
    * untouched when it is not.
+   *
+   * **Undo is the same, and it was not.** A row being named is a box of words, and the box answers
+   * to `⌘Z` itself — a press taken here would put the letters back untouched and lift a file out of
+   * the bin nobody asked about (`AMB-T-4523`).
    */
   const onKey = (e: ReactKeyboardEvent) => {
     if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
     const pressed = e.key.toLowerCase();
+    const on = e.target as HTMLElement;
+    // Where the press landed rather than what it says: a box of words takes back its own letters,
+    // whether it is the name on a row or an editor drawn inside one.
+    const writing = on.isContentEditable || on.closest("input, textarea") !== null;
     if (pressed === "z") {
+      if (writing) return;
       e.preventDefault();
       trash.undo();
       return;
     }
     if (projectId === null) return;
-    const on = e.target as HTMLElement;
 
     // The rows the copy is about, found from the row the keyboard is on: the ones picked out where
     // it is one of them, and that row alone where it is not (`actOn`).

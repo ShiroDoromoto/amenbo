@@ -1,10 +1,14 @@
 import { useEffect, useState, useRef } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { acrossIn, movedWithin, pageShape, type Frame, type Layout } from "../talk/layout";
 import { frameLabel, type FrameNames } from "../talk/frames";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
+import { faceOf, sayText, type Plate as Row, type Say } from "../talk/nameplate";
+import { BLINK_MS, hueOf, phaseDelay } from "../talk/moving";
+import { type Turns } from "../talk/standing";
 import { sideOfBox } from "./rowDrag";
-import { t, tf } from "../core/i18n";
+import { Icon } from "../components/Icon";
+import { currentLang, t, tf } from "../core/i18n";
 
 /**
  * Where the panes of one project are put in order (`AMB-D-853`).
@@ -23,17 +27,52 @@ import { t, tf } from "../core/i18n";
  *
  * The gaps a page has are not drawn. What is being ordered is the panes, and an empty box in here
  * would read as somewhere to drop one — a place, when the only places are the cards themselves.
+ *
+ * **A card carries what the pane's own label carries** (`../talk/nameplate`), because three panes
+ * open on one repository are three cards reading `repo` otherwise — and which of them a person wants
+ * moved is exactly what the lamp and the one thing said tell them apart by. It is the row itself,
+ * read off the pane rather than worked out again, so a pane is never described two ways at once.
  */
-export function PaneOrder({ layout, panes, names, onClose, onOrder }: {
+export function PaneOrder({ layout, panes, names, rows, turns, onClose, onOrder }: {
   layout: Layout;
   /** The panes of the project on the screen, in the order they stand in now. */
   panes: readonly Frame[];
   names: FrameNames;
+  /** How to read the row of each pane that is drawn, by frame (`../talk/plate`). */
+  rows: ReadonlyMap<string, () => Row | null>;
+  /** Whose turn it is, as the host answers for every session in this window (`../talk/standing`). */
+  turns: Turns;
   onClose: () => void;
   /** The order the reader pressed for. Nothing is written until they do. */
   onOrder: (order: readonly Frame[]) => void;
 }) {
   const [order, setOrder] = useState<readonly Frame[]>(panes);
+  const lang = currentLang();
+  /**
+   * The row of one pane, as it stood when this opened.
+   *
+   * **A pane that is drawn is read; one that is not is asked about.** Only the page on the screen has
+   * panes mounted on it, so the measurements — output arriving, a sentence left unsent, how long the
+   * silence has run — exist for those and for no others. What every pane has either way is the turn
+   * the host is keeping for its session, which is the one thing here a person is meant to act on.
+   * The rest is left unsaid rather than filled in: silence is silence (`AMB-D-858`).
+   */
+  function rowOf(frame: Frame): Row {
+    const read = rows.get(frame.id);
+    const drawn = read?.() ?? null;
+    if (drawn !== null) return drawn;
+    const standing = frame.session === null ? null : turns.get(frame.session) ?? null;
+    const say: Say = standing === null ? { kind: "silent" } : { kind: "waiting", text: standing };
+    return {
+      name: frameLabel(names, frame.id, frame.folder),
+      say,
+      dot: { frame: frame.id, face: faceOf(say, false) },
+    };
+  }
+  // Read once, as the modal opens. What is drawn in here is a proposal about an arrangement, not a
+  // second screen for watching the panes on: a card that moved under the hand carrying it would be
+  // the reader's own drag fighting a redraw.
+  const [plates] = useState(() => new Map(panes.map((one) => [one.id, rowOf(one)] as const)));
   // The page each pane sat on when this was opened, so a card that has moved off it can say so. It is
   // read once: the answer is about where the reader left things, and one recomputed as they drag
   // would go on agreeing with wherever the card is now and never say anything.
@@ -138,6 +177,10 @@ export function PaneOrder({ layout, panes, names, onClose, onOrder }: {
         role="dialog"
         aria-modal="true"
         aria-label={t("face.orderTitle")}
+        // The beat and the phase a calling lamp blinks to, which are the row's own
+        // (`../talk/moving`): a card and the pane it stands for have to fall together, or the one
+        // signal reads as two things being asked.
+        style={{ "--blink": `${BLINK_MS}ms`, "--phase": phaseDelay(Date.now()) } as CSSProperties}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="paneorder__head">{t("face.orderTitle")}</div>
@@ -150,18 +193,52 @@ export function PaneOrder({ layout, panes, names, onClose, onOrder }: {
                   pageShape(layout.count, layout.orient)} paneorder__grid`}
               >
                 {slots.map((frame) => {
-                  const name = frameLabel(names, frame.id, frame.folder) ?? t("face.orderNoName");
+                  const row = plates.get(frame.id);
+                  const name = row?.name ?? t("face.orderNoName");
+                  const said = row === undefined
+                    ? { mark: null, text: "" }
+                    : sayText(row.say, lang);
                   const was = from.get(frame.id);
                   return (
                     <div
                       key={frame.id}
                       className={`paneorder__card${held === frame.id ? " paneorder__card--held" : ""}`}
+                      // The same attribute the label reads by, so a card asking for a person is drawn
+                      // the way the row above that pane is (`../styles/global.css`).
+                      data-say={row?.say.kind}
                       data-pane-card={frame.id}
                       onPointerDown={(e) => onCardDown(e, frame.id)}
                     >
-                      <span className="paneorder__name" title={name}>{name}</span>
+                      <div className="paneorder__head-row">
+                        {/* The lamp the pane is known by, drawn from the same two answers the row
+                            above it is: the hue says which pane, the face what is happening in it
+                            (`../talk/nameplate`). */}
+                        <span
+                          className="plate__dot"
+                          aria-hidden="true"
+                          data-face={row?.dot.face ?? "out"}
+                          style={{ "--dot-hue": String(hueOf(frame.id)) } as CSSProperties}
+                        />
+                        <span className="paneorder__name" title={name}>{name}</span>
+                      </div>
+                      {/* The one thing the pane said, at the rank the row says it at. A card is not
+                          the row's one line, so nothing is dropped for width — what does not fit is
+                          elided and given back in full by the machine. */}
+                      {said.text !== "" && (
+                        <span className="paneorder__say" title={said.text}>
+                          {said.mark !== null && <Icon name={said.mark} />}
+                          {said.text}
+                        </span>
+                      )}
                       {frame.folder !== null && (
                         <span className="paneorder__folder" title={frame.folder}>{frame.folder}</span>
+                      )}
+                      {/* Nothing is running here any more. The screen cannot show it — what a
+                          finished shell leaves behind looks exactly like one waiting to be typed at
+                          — and a person putting the panes in order is deciding which of them to keep
+                          in front of them. */}
+                      {frame.session === null && (
+                        <span className="paneorder__ended">{t("face.orderEnded")}</span>
                       )}
                       {was !== undefined && was !== at + 1 && (
                         <span className="paneorder__from">{tf("face.orderFrom", { n: was })}</span>

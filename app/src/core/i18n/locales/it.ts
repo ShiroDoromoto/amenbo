@@ -562,6 +562,7 @@ export const it: Translation = {
     "face.orderCancel": "Annulla",
     "face.orderFrom": "Dalla pagina {n}",
     "face.orderNoName": "Questo riquadro",
+    "face.orderEnded": "Terminato",
     "face.whichStart": "Con che cosa si apre questo riquadro?",
     "face.open": "Apri un terminale qui",
     "face.openPick": "Scegline uno",

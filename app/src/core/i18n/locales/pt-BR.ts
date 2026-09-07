@@ -563,6 +563,7 @@ export const ptBR: Translation = {
     "face.orderCancel": "Cancelar",
     "face.orderFrom": "Da página {n}",
     "face.orderNoName": "Este painel",
+    "face.orderEnded": "Encerrado",
     "face.whichStart": "Com o que este painel abre?",
     "face.open": "Abrir um terminal aqui",
     "face.openPick": "Escolha um",

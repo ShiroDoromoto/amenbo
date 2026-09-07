@@ -8,7 +8,9 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { EMPTY_LAYOUT, openedFrame, panesOf, setCount, type Count, type Frame, type Layout } from "../talk/layout";
+import { EMPTY_LAYOUT, openedFrame, openedIn, panesOf, setCount, type Count, type Frame, type Layout } from "../talk/layout";
+import type { Plate as Row } from "../talk/nameplate";
+import { NO_TURNS, type Turns } from "../talk/standing";
 import { PaneOrder } from "./PaneOrder";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -38,16 +40,28 @@ afterEach(() => {
   host.remove();
 });
 
-function draw(layout: Layout, names: ReadonlyMap<string, string> = new Map()) {
+function draw(
+  layout: Layout,
+  names: ReadonlyMap<string, string> = new Map(),
+  rows: ReadonlyMap<string, () => Row | null> = new Map(),
+  turns: Turns = NO_TURNS,
+) {
   act(() => {
     root.render(createElement(PaneOrder, {
       layout,
       panes: panesOf(layout, layout.project),
       names,
+      rows,
+      turns,
       onClose: () => { closed += 1; },
       onOrder: (order: readonly Frame[]) => { taken.push([...order]); },
     }));
   });
+}
+
+/** A pane that is drawn, answering with the row its own label is drawn from. */
+function reads(frame: string, row: Row): [string, () => Row | null] {
+  return [frame, () => row];
 }
 
 const cards = () => [...host.querySelectorAll<HTMLElement>(".paneorder__card")];
@@ -178,5 +192,51 @@ describe("carrying a card", () => {
     // Two pixels from where it went down, which is inside the slop every gesture here shares.
     await carry("3", cardOf("1"), { x: 502, y: 25 });
     expect(ids()).toEqual(["1", "2", "3"]);
+  });
+});
+
+describe("what a card says about its pane", () => {
+  it("carries the row the pane's own label is drawn from, rather than working one out", () => {
+    // The lamp's face and the one thing said are the pane's own answers (`../talk/plate`), so a card
+    // and the row above that pane can never come to disagree.
+    draw(faceOf(2, 2), new Map(), new Map([
+      reads("1", {
+        name: "builder",
+        say: { kind: "waiting", text: "which branch?" },
+        dot: { frame: "1", face: "calling" },
+      }),
+    ]));
+    expect(cardOf("1").querySelector(".paneorder__name")!.textContent).toBe("builder");
+    expect(cardOf("1").querySelector(".paneorder__say")!.textContent).toContain("which branch?");
+    expect(cardOf("1").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("calling");
+    expect(cardOf("1").dataset.say).toBe("waiting");
+  });
+
+  it("asks the host about a pane that is not drawn, and says nothing it cannot measure", () => {
+    // Only the page on the screen has panes mounted on it. A turn is the host's answer and is there
+    // for every session in the window; how long a pane has been quiet is a measurement, and nothing
+    // is measuring one that is not drawn.
+    let layout = faceOf(2, 2);
+    layout = openedIn(layout, "2", "s-2", "/work/2");
+    draw(layout, new Map(), new Map(), new Map([["s-2", "your turn"]]));
+    expect(cardOf("2").querySelector(".paneorder__say")!.textContent).toContain("your turn");
+    expect(cardOf("2").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("calling");
+    // The pane beside it has no session at all, so there is nothing for the host to be keeping.
+    expect(cardOf("1").querySelector(".paneorder__say")).toBeNull();
+    expect(cardOf("1").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("out");
+  });
+
+  it("says a pane has ended, which its screen cannot", () => {
+    // What a finished shell leaves behind looks exactly like one waiting to be typed at.
+    let layout = faceOf(2, 2);
+    layout = openedIn(layout, "1", "s-1", "/work/1");
+    draw(layout);
+    expect(cardOf("1").querySelector(".paneorder__ended")).toBeNull();
+    expect(cardOf("2").querySelector(".paneorder__ended")).not.toBeNull();
+  });
+
+  it("carries the folder the pane works in, beside the name that may be nothing else", () => {
+    draw(faceOf(1, 2));
+    expect(cardOf("1").querySelector(".paneorder__folder")!.textContent).toBe("/work/1");
   });
 });

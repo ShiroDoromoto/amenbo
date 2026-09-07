@@ -21,9 +21,9 @@
 # ── How a split is read at all ───────────────────────────────────────────────────────────────────
 # A count is not on the screen until there is something to lay out: a page with no panes draws its one
 # way in whatever the count is, so the screen the run came back on cannot say which split it is at. So
-# the road opens a pane and reads what stands beside it. At one to a page there is no room left and no
-# empty frame at all; at the two a face that had forgotten would come up on, that pane would have a
-# way in beside it. One pane, one reading, and the kept split is told from the default.
+# the road opens a pane and reads what stands beside it. At two to a page that pane has a way in next
+# to it; at the one a project nobody has answered for is drawn at, the page is full and there is no
+# empty frame at all. One pane, one reading, and the kept split is told from the default.
 #
 # ── Why two projects, and why the pane is asked where it is ──────────────────────────────────────
 # A project that is the only one comes back by having nowhere else to be. The road raises two and
@@ -43,12 +43,12 @@
 id: open-the-app-again-on-the-split-you-set-and-no-panes
 title: A run of the app keeps the split a reader set and the project they were looking at, and brings none of the places back
 description: >
-  Raise two projects, go to the second, cut its page to one pane and open a terminal in it. End the
+  Raise two projects, go to the second, cut its page to two panes and open a terminal in it. End the
   run and open the app again on the same store: the page comes back with no pane on it at all, one way
-  in and nothing else — the place that had a terminal in it is not there. Open a pane, and it stands
-  alone with no empty frame beside it, which is the split the reader set and not the two a fresh face
-  offers; ask it where it is running, and it answers with the folder of the project they were looking
-  at.
+  in and nothing else — the place that had a terminal in it is not there. Open a pane, and a way in
+  stands beside it, which is the split the reader set and not the one pane a project nobody has
+  answered for is drawn at; ask it where it is running, and it answers with the folder of the project
+  they were looking at.
 
 given:
   - type: action
@@ -102,14 +102,14 @@ steps_gui:
     with:
       project: Boathouse
 
-  # The split the reader set, which is one of the two things a run keeps. One to a page is the one
-  # worth setting here: it is not what a face comes up on, so a split that was forgotten and a split
-  # that was kept draw different screens.
+  # The split the reader set, which is one of the two things a run keeps. Two to a page is worth
+  # setting here: it is not what a project nobody has answered for is drawn at, so a split that was
+  # forgotten and a split that was kept draw different screens.
   - type: action
     domain: terminal
     op: set-panes
     with:
-      count: 1
+      count: 2
 
   # Nothing is open in this project, so the face has one empty frame on it. The folder is the
   # project's own and it is the only one, which is why this press is a press and nothing else.
@@ -138,14 +138,14 @@ steps_gui:
     with:
       shows: SCENARIO the terminal of the run before
 
-  # The page as the reader leaves it: one pane, and the split holding it so tightly that there is no
-  # room for a way in beside it. It is the picture the reading after the run is taken against.
+  # The page as the reader leaves it: one pane, with the room the split left for a second one drawn
+  # as the way in beside it. It is the picture the reading after the run is taken against.
   - type: assert
     domain: terminal
     op: frames
     with:
       count: 1
-      empty: 0
+      empty: 1
 
   # The run ends here and another comes up on the same store. Nothing is pressed for it — the app is
   # the run's own, and ending it is the harness's — and what the operator confirms is the window that
@@ -178,15 +178,16 @@ steps_gui:
     with:
       from: face
 
-  # The split, read the only way a split can be read: by what the page does with a pane. Standing
-  # alone with nothing beside it is a page full at one. Had the count gone back to the two a device
-  # starts on, this pane would have a way in next to it, and the screen would otherwise look the same.
+  # The split, read the only way a split can be read: by what the page does with a pane. A way in
+  # standing beside it is a page with room on it at two. Had the count gone back to the one a project
+  # nobody has answered for is drawn at, this pane would be alone on a full page, and the screen would
+  # otherwise look the same.
   - type: assert
     domain: terminal
     op: frames
     with:
       count: 1
-      empty: 0
+      empty: 1
 
   - type: action
     domain: terminal

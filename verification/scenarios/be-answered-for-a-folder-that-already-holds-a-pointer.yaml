@@ -131,11 +131,16 @@ steps_gui:
   # And the project knows where it is. A folder taken but never recorded as the project's leaves the
   # next press asking where to work all over again, which reads on the screen as a binding that came
   # undone.
+  #
+  # Pressed from the strip rather than from an empty frame: a project nobody has answered for is
+  # drawn at one pane, so the page is full and the strip beside the panes is what a reader has to
+  # press for another. Which control it is does not matter here — what is under test is what the
+  # press does not ask.
   - type: action
     domain: terminal
     op: open-pane
     with:
-      from: face
+      from: strip
 
   - type: assert
     domain: terminal

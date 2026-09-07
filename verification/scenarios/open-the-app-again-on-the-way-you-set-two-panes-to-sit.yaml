@@ -20,12 +20,13 @@
 # definite one: what a folder starts a pane with is the operator's own machine, and a plain shell is
 # the one state every machine can be put in.
 #
-# ── Why the count is never pressed ───────────────────────────────────────────────────────────────
-# Two is where a fresh run comes up and the one count this arrangement is asked at, so there is
-# nothing to set. It also keeps the two halves apart: a road that set the split as well would come
-# back on a screen that could be right for one reason and wrong for the other, and `frames` and
-# `panes-sit` would be answering the same question twice.
-# Whether the split itself comes back is `open-the-app-again-on-the-split-you-set-and-no-panes`.
+# ── Why the count is pressed as well ─────────────────────────────────────────────────────────────
+# Two is the one count this arrangement is asked at, and a project nobody has answered for is drawn
+# at one — so the road has to ask for two before there is a way to sit them. The two readings stay
+# apart all the same: `frames` says both panes are standing, which is what makes an arrangement of
+# two something there is to look at, and `panes-sit` says which way they went. Whether the split
+# itself comes back is `open-the-app-again-on-the-split-you-set-and-no-panes`; what is under test here
+# is the answer riding home beside it.
 #
 # The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
 # what the pane runs is the reader's own shell. Choosing the folder is what raises the project it
@@ -33,11 +34,11 @@
 id: open-the-app-again-on-the-way-you-set-two-panes-to-sit
 title: A run of the app keeps the way a reader set two panes to sit, and the next run lays its panes out that way
 description: >
-  Open the terminal face, choose the folder it runs in, and get the pane down to a plain shell. Ask
-  for the two panes of a page to sit one above the other. End the run and open the app again on the
-  same store: the page comes back with nothing on it, so open two panes there. They are stacked, each
-  taking the whole width between the columns — the arrangement the reader set, and not the side by
-  side a fresh device starts on.
+  Open the terminal face, choose the folder it runs in, and get the pane down to a plain shell. Cut
+  the page to two panes and ask for them to sit one above the other. End the run and open the app
+  again on the same store: the page comes back with nothing on it, so open two panes there. They are
+  stacked, each taking the whole width between the columns — the arrangement the reader set, and not
+  the side by side a page that was never answered for would draw.
 
 steps_gui:
   - type: action
@@ -60,6 +61,14 @@ steps_gui:
   - type: action
     domain: terminal
     op: open-shell
+
+  # Two to a page, which is the count the question about sitting is asked at — a project nobody has
+  # answered for is drawn at one, and one pane has nothing to arrange.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
 
   # What the reader set, and the whole of what this road is about. The control is on the row whether
   # or not there are panes to lay out — it belongs to the page rather than to what is standing on it.

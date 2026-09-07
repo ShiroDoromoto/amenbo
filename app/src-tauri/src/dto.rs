@@ -2264,17 +2264,13 @@ pub struct FrameNameDto {
 /// A terminal this process has open, as a pane putting itself up is told about it.
 ///
 /// It answers both of the pane's ways in: the terminal it just started, and the one it found already
-/// running and adopted (`crate::pty::pty_sessions`). `started_at` is here because a pane cannot work
-/// it out — a session that changed windows started when it started, and the moment the pane went up
-/// says nothing about it.
+/// running and adopted (`crate::pty::pty_sessions`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct PtySessionDto {
     /// The id the terminal was opened under.
     pub(crate) session: String,
-    /// When the terminal was started (RFC3339 UTC).
-    pub(crate) started_at: String,
     /// The folder the terminal is running in, as the filesystem spells it — `None` for one opened
     /// without any.
     ///

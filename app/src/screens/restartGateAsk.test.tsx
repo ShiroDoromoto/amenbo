@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
   /** The sessions the host says are open (`crate::pty::pty_sessions`). */
-  running: [] as { session: string; startedAt: string; folder: string | null }[],
+  running: [] as { session: string; folder: string | null }[],
   /** How many times the process was asked to start again. */
   restarted: 0,
   /** Whether the person said yes. */
@@ -53,11 +53,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 function open(...sessions: string[]) {
-  hoisted.running = sessions.map((session) => ({
-    session,
-    startedAt: "2026-09-06T00:00:00Z",
-    folder: null,
-  }));
+  hoisted.running = sessions.map((session) => ({ session, folder: null }));
 }
 
 const press = async (label: string) => {

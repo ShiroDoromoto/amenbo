@@ -7,7 +7,7 @@
 // all. So the hit test takes the document as a parameter and these tests answer for it, which is also what lets a
 // row be placed exactly where a case needs it.
 import { describe, expect, it } from "vitest";
-import { landing, sideOfRow } from "./rowDrag";
+import { landing, sideOfBox, sideOfRow } from "./rowDrag";
 
 /** A row of the given height at the given top, answering for its own rectangle. */
 function row(id: number, top: number, height = 40): HTMLElement {
@@ -33,6 +33,22 @@ describe("which side of a row the pointer is on", () => {
     expect(sideOfRow(119, rect)).toBe("before");
     expect(sideOfRow(120, rect)).toBe("after");
     expect(sideOfRow(139, rect)).toBe("after");
+  });
+});
+
+describe("which half of a box the pointer is in", () => {
+  const rect = { top: 100, height: 40, left: 300, width: 80 };
+
+  it("reads down the screen where the boxes are stacked, as a list is", () => {
+    expect(sideOfBox({ x: 999, y: 119 }, rect, "down")).toBe("before");
+    expect(sideOfBox({ x: 999, y: 120 }, rect, "down")).toBe("after");
+  });
+
+  it("reads across it where they are side by side, as a page of panes is", () => {
+    // The other axis is not read at all: a grid decides before and after across the row, and a
+    // pointer high or low in the same box is in the same half of it (`./PaneOrder`).
+    expect(sideOfBox({ x: 339, y: 999 }, rect, "across")).toBe("before");
+    expect(sideOfBox({ x: 340, y: 999 }, rect, "across")).toBe("after");
   });
 });
 

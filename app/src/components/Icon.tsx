@@ -74,7 +74,8 @@ export type IconName =
   | "paneAcross"
   | "paneDown"
   | "foldLeft"
-  | "foldRight";
+  | "foldRight"
+  | "reorder";
 
 /**
  * The icons a call site outside React has to draw, as geometry rather than as elements.
@@ -435,6 +436,19 @@ const ART: Record<IconName, ReactNode> = {
       <path d="M19 4.4v15.2" />
       <path d="M3.6 12H17" />
       <path d="M12.8 7.8 17 12l-4.2 4.2" />
+    </>
+  ),
+  // Two panes trading places (`../shell/PaneOrder`). They are boxes and not rows, because what is
+  // put in order here is the grid a page is drawn as; the pair of arrows say the move is a swap and
+  // not a list scrolling past.
+  reorder: (
+    <>
+      <rect x="3.2" y="3.4" width="7.2" height="7.2" rx="1.4" />
+      <rect x="13.6" y="13.4" width="7.2" height="7.2" rx="1.4" />
+      <path d="M13.8 7h5.4" />
+      <path d="M16.6 4.2 19.4 7l-2.8 2.8" />
+      <path d="M10.2 17H4.8" />
+      <path d="M7.4 19.8 4.6 17l2.8-2.8" />
     </>
   ),
 };

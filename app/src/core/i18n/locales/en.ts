@@ -613,6 +613,18 @@ const ui = {
   "face.panes.one": "{n} pane", "face.panes.other": "{n} panes",
   "face.pages": "Pages",
   "face.page": "Page {n}",
+  // The reorder (`app/src/shell/PaneOrder.tsx`). The button carries only an icon, so what it opens is
+  // said here and nowhere else. "Use this order" rather than "Save": nothing about the arrangement is
+  // written down, and the word has to say that the press is what makes the order the real one.
+  // "From page {n}" is worn by a card that has ended up on a page other than the one it began on —
+  // the grid cannot show that, and it is the whole reason a drag across pages reads as one move.
+  // The pane with neither a name nor a folder is one nothing has been opened in yet.
+  "face.order": "Put the panes in order",
+  "face.orderTitle": "Pane order",
+  "face.orderApply": "Use this order",
+  "face.orderCancel": "Cancel",
+  "face.orderFrom": "From page {n}",
+  "face.orderNoName": "This pane",
   // The line over the row of things a terminal can be opened with (`app/src/shell/EmptySlot.tsx`).
   // The pills say by their shape that they can be pressed; this says it in words, because a row read
   // as a caption is not something anybody tries. It does not say "choose an AI" — the plain shell is

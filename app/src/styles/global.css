@@ -307,6 +307,45 @@ input[type="color"] {
 .termface__page-grid--6 { grid-template: 1fr 1fr / 1fr 1fr 1fr; }
 .termface__page-grid--8 { grid-template: 1fr 1fr / 1fr 1fr 1fr 1fr; }
 
+/* Putting the panes in order (`../shell/PaneOrder`). The pages are drawn one under another at the
+   same grid the face lays them out at, so what is being arranged has the shape of what comes back.
+   It is wider than a modal's usual card because eight across is what the widest split draws, and
+   eight boxes squeezed into 440px are not the boxes the reader is arranging. */
+.paneorder {
+  width: min(880px, 100%); max-height: 84vh;
+  display: flex; flex-direction: column; gap: var(--s-3);
+}
+.paneorder__head { font-weight: var(--fw-bold); }
+.paneorder__pages {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--s-4);
+}
+.paneorder__pagename { color: var(--c-text-muted); font-size: var(--fs-xs); }
+/* The face's own grid, given a height here: on the face a page takes what is left of the window, and
+   in here every page has to sit under the one above it. Two rows get twice the room of one, so a
+   card is the same shape at either. */
+.paneorder__grid { flex: none; padding: 0; margin-top: var(--s-1); height: 172px; }
+.termface__page-grid--1.paneorder__grid,
+.termface__page-grid--2.paneorder__grid { height: 86px; }
+/* A card, and the whole of where a drop lands: the halves of it decide before and after, so there is
+   no empty box anywhere in here for one to be aimed at (`AMB-D-853`). `touch-action` is what keeps a
+   drag from scrolling the pages out from under the hand holding one. */
+.paneorder__card {
+  min-width: 0; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  padding: var(--s-2);
+  border: 1px solid var(--c-rule); border-radius: var(--r-md);
+  background: var(--c-sunken); cursor: grab; touch-action: none;
+}
+.paneorder__card--held {
+  border-color: var(--c-accent); background: var(--c-accent-weak); cursor: grabbing;
+}
+.paneorder__name { font-weight: var(--fw-medium); }
+.paneorder__folder, .paneorder__from { color: var(--c-text-muted); font-size: var(--fs-xs); }
+.paneorder__name, .paneorder__folder, .paneorder__from {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* One slot. It holds the label row and the pane under it. There is one per pane and no more — what is
    not open is not a box on the screen (`../talk/layout`). */
 .slot { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--s-1); }

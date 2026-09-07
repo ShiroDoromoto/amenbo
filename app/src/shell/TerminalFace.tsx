@@ -4,6 +4,7 @@ import { EmptySlot } from "./EmptySlot";
 import { FolderChoice } from "./FolderChoice";
 import { TerminalPane } from "./TerminalPane";
 import { FolderRail } from "./FolderRail";
+import { PaneOrder } from "./PaneOrder";
 import { ProjectTabs } from "./ProjectTabs";
 import {
   frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
@@ -11,7 +12,8 @@ import {
 import {
   addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject,
   laidOut, movedTo, openedFrame, openedIn, ORIENTS, orientable, pageCount, pageOfFrame, pageShape,
-  paneIn, restored, roomOnPage, setCount, setOrient, slotsOf, type Count, type Layout,
+  paneIn, panesOf, reordered, restored, roomOnPage, setCount, setOrient, slotsOf,
+  type Count, type Layout,
 } from "../talk/layout";
 import {
   clampRailWidth, clampSideNarrow, clampSideWide, clampTabsWidth, getRailShown, getRailWidth,
@@ -269,6 +271,9 @@ export function TerminalFace({
   // back. Nothing is remembered afterwards: what this is about is one act, and a pane that kept a
   // mark of it would be saying something about a file the reader has long since sent.
   const [landed, setLanded] = useState<string | null>(null);
+  // Whether the panes are being put in order (`./PaneOrder`). Nothing about the arrangement moves
+  // while it is up: what the modal holds is a proposal until the reader presses for it.
+  const [ordering, setOrdering] = useState(false);
   const landedFor = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (landedFor.current !== null) clearTimeout(landedFor.current);
@@ -882,6 +887,9 @@ export function TerminalFace({
   const page = layout.page;
   const slots = slotsOf(layout, page);
   const pages = pageCount(layout);
+  // The panes of this project as one list, which is what the reorder is about — the pages are that
+  // list cut at the count, so the modal is handed the list and not the page (`../talk/layout`).
+  const panes = panesOf(layout, layout.project);
   // The one empty frame this page draws, where it has a gap to draw it in (`../talk/layout`). The
   // question about where a pane works stands in its place while it is up, because that is where the
   // answer appears: a question drawn anywhere else is one the reader has to go and find.
@@ -1062,6 +1070,21 @@ export function TerminalFace({
               </button>
             ))}
           </div>
+        )}
+        {/* The way to putting the panes in order (`./PaneOrder`). It is beside the pages because
+            both are about where a pane is, and it is drawn from two panes up: with one there is
+            nothing to put in an order, and a control saying so would be a press to find that out.
+            **It does not follow the row of pages**, which goes away at one page — two panes on one
+            page are an order somebody can want changed. */}
+        {panes.length > 1 && (
+          <button
+            className="termface__action"
+            onClick={() => { setAsking(null); setOrdering(true); }}
+            aria-label={t("face.order")}
+            title={t("face.order")}
+          >
+            <Icon name="reorder" />
+          </button>
         )}
         {/* The pages of this project, as a row of the digits that reach them. **A project with one
             page draws none of it**: a single page nobody can go anywhere from is a control that says
@@ -1289,6 +1312,22 @@ export function TerminalFace({
           </div>
         )}
       </div>
+      {/* Putting the panes in order, over the face rather than on it: what is dragged in here is a
+          proposal, and the panes on the page behind go on running untouched until it is pressed for
+          (`AMB-D-853`). It is drawn from the list as it stands each time it opens, so a modal backed
+          out of leaves nothing behind. */}
+      {ordering && (
+        <PaneOrder
+          layout={layout}
+          panes={panes}
+          names={names}
+          onClose={() => setOrdering(false)}
+          onOrder={(order) => {
+            setLayout((was) => reordered(was, order));
+            setOrdering(false);
+          }}
+        />
+      )}
     </div>
   );
 }

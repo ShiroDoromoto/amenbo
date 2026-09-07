@@ -2,9 +2,9 @@
 import { describe, expect, it } from "vitest";
 import {
   ACROSS, acrossIn, addPane, closedFrame, closedIn, COUNTS, DEFAULT_COUNT, DEFAULT_ORIENT,
-  EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo, openedFrame, openedIn, ORIENTS,
-  orientable, pageCount, pageOfFrame, pageShape, paneIn, panesOf, restored, roomOnPage, setCount,
-  setOrient, slotsOf, type Layout,
+  EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo, movedWithin, openedFrame, openedIn,
+  ORIENTS, orientable, pageCount, pageOfFrame, pageShape, paneIn, panesOf, reordered, restored,
+  roomOnPage, setCount, setOrient, slotsOf, type Layout,
 } from "./layout";
 
 /** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one.
@@ -473,5 +473,74 @@ describe("a folder handed in from the ledger", () => {
   it("is nothing to go to where nothing of this project is in it", () => {
     const open = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/work/other").layout;
     expect(paneIn(open, 1, "/work/repo")).toBeNull();
+  });
+});
+
+describe("putting the panes in order", () => {
+  /** The ids of one project's panes, in the order they stand in. */
+  const idsOf = (layout: Layout, project = 1) => panesOf(layout, project).map((one) => one.id);
+
+  it("puts a pane before the one it was dropped on the near half of", () => {
+    const panes = panesOf(withPanes(4), 1);
+    expect(movedWithin(panes, "4", "2", "before").map((one) => one.id)).toEqual(["1", "4", "2", "3"]);
+  });
+
+  it("puts it after the one it was dropped on the far half of", () => {
+    const panes = panesOf(withPanes(4), 1);
+    expect(movedWithin(panes, "1", "3", "after").map((one) => one.id)).toEqual(["2", "3", "1", "4"]);
+  });
+
+  it("crosses a page the same way it crosses a pane — the pages are the list cut at the count", () => {
+    // Four panes at two a page: the last pane of page two onto the first of page one is one move,
+    // and there is no second operation for the page it left.
+    const four = withPanes(4, 2);
+    const moved = reordered(four, movedWithin(panesOf(four, 1), "4", "1", "before"));
+    expect(slotsOf(moved, 1).map((one) => one.id)).toEqual(["4", "1"]);
+    expect(slotsOf(moved, 2).map((one) => one.id)).toEqual(["2", "3"]);
+  });
+
+  it("is the list unchanged where a pane was dropped on itself", () => {
+    const panes = panesOf(withPanes(3), 1);
+    expect(movedWithin(panes, "2", "2", "before")).toBe(panes);
+  });
+
+  it("is the list unchanged for an id no pane in it has", () => {
+    const panes = panesOf(withPanes(3), 1);
+    expect(movedWithin(panes, "9", "1", "before")).toBe(panes);
+    expect(movedWithin(panes, "1", "9", "before")).toBe(panes);
+  });
+
+  it("moves the panes of the project it is on, and leaves every other project where it was", () => {
+    let mixed: Layout = { ...EMPTY_LAYOUT, project: 1 };
+    mixed = openedFrame(mixed, 1, "/a").layout;
+    mixed = openedFrame(mixed, 2, "/b").layout;
+    mixed = openedFrame(mixed, 1, "/c").layout;
+    mixed = goProject(mixed, 1);
+    const moved = reordered(mixed, movedWithin(panesOf(mixed, 1), "3", "1", "before"));
+    expect(idsOf(moved)).toEqual(["3", "1"]);
+    // The other project's pane is still the one in the middle of the whole list.
+    expect(moved.frames.map((one) => one.id)).toEqual(["3", "2", "1"]);
+    expect(idsOf(moved, 2)).toEqual(["2"]);
+  });
+
+  it("leaves the page and the pane being worked in where they are", () => {
+    // The pane being worked in is on page one and is carried to page two. It is still the pane the
+    // person is in, and the face is still on the page they were reading (`AMB-D-853`).
+    const four = goPage(focusOn(withPanes(4, 2), "1"), 1);
+    const moved = reordered(four, movedWithin(panesOf(four, 1), "1", "4", "after"));
+    expect(moved.focus).toBe("1");
+    expect(moved.page).toBe(1);
+    expect(pageOfFrame(moved, "1")).toBe(2);
+  });
+
+  it("refuses an order that is not this project's panes, rather than writing part of one", () => {
+    const three = withPanes(3);
+    const panes = panesOf(three, 1);
+    expect(reordered(three, panes.slice(1))).toBe(three);
+    expect(reordered(three, [...panes, panes[0]!])).toBe(three);
+    // The right number of panes, one of which belongs to another project.
+    const beside = openedFrame(three, 2, "/b");
+    const mixed = goProject(beside.layout, 1);
+    expect(reordered(mixed, [panes[0]!, panes[1]!, beside.frame])).toBe(mixed);
   });
 });

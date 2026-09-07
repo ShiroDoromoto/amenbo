@@ -2359,6 +2359,19 @@ tickRemovalLeavesARow: boolean,
 defaultView: "list" | "board" | "calendar" | "timeline", };
 
 /**
+ * How one project's page is split ([`amenbo_core::frames::Split`]).
+ */
+export type SplitDto = { 
+/**
+ * How many panes to a page.
+ */
+count: number, 
+/**
+ * Which way a two-pane page sits, absent where it sits the way every other count does.
+ */
+orient?: OrientDto, };
+
+/**
  * One bound folder whose managed block is out of date. `version` is the version of that folder's
  * block; `current` is this binary's version ([`amenbo_core::agents::MANAGED_BLOCK_VERSION`]).
  */
@@ -2445,12 +2458,12 @@ folder?: string, };
  * one were still in it would be the window saying something untrue (`AMB-T-3607`).
  *
  * It is what the two windows hand the face between themselves with, and it lives as long as the app
- * does. Only `count` and `project` outlive that (`amenbo_core::frames::SavedLayout`), so an
+ * does. Only the splits and `project` outlive that (`amenbo_core::frames::SavedLayout`), so an
  * arrangement read at the start of a run has no frames in it (`AMB-T-3687`).
  */
 export type TalkLayoutDto = { 
 /**
- * How many panes to a page.
+ * How many panes to a page, on the project the face is showing.
  */
 count: number, 
 /**
@@ -2458,6 +2471,19 @@ count: number,
  * ([`amenbo_core::frames::Orient`]).
  */
 orient?: OrientDto, 
+/**
+ * How each project's page is split, by project — the same answer the store keeps
+ * ([`amenbo_core::frames::SavedLayout`]).
+ *
+ * **The two above are this set read at `project`.** They are here as well because the face
+ * reads them on every render and a lookup per render is a lookup that can be got wrong; the set
+ * is what crosses to the other window, so a reader that switches projects over there has the
+ * answers without a trip to the store.
+ *
+ * Absent from a window that has not been told of the shape yet, which is the whole of what the
+ * host then falls back on `count` for.
+ */
+splits?: Record<string, SplitDto>, 
 /**
  * The next frame id to hand out — ids are never reused within a run, so a name stays on its own
  * frame. It is not kept: a run starts its ids at the first (`crate::frames`).

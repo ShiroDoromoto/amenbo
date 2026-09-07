@@ -475,11 +475,18 @@ const rowFor = (name: string) =>
   [...container.querySelectorAll<HTMLElement>('[role="treeitem"]')]
     .find((row) => row.textContent?.includes(name));
 
-/** Press undo where the panel hears it: on the panel, not on the window (`AMB-D-780`). */
+/** Press undo where it is heard: on the tree in the rail, not on the window (`AMB-D-780`). The rail
+ *  is drawn first, so the first `.files` in the container is the tree's (`Columns`). */
 const undo = () => act(async () => {
   container.querySelector(".files")!.dispatchEvent(
     new KeyboardEvent("keydown", { key: "z", metaKey: true, bubbles: true }),
   );
+  await new Promise((r) => setTimeout(r, 0));
+});
+
+/** The same press, made where the reader's hands are rather than on the panel around them. */
+const undoOn = (el: Element) => act(async () => {
+  el.dispatchEvent(new KeyboardEvent("keydown", { key: "z", metaKey: true, bubbles: true }));
   await new Promise((r) => setTimeout(r, 0));
 });
 
@@ -2702,6 +2709,22 @@ describe("the file face", () => {
     await drawOpen();
     await undo();
     expect(hoisted.asked).toContain("untrash");
+  });
+
+  // The bin is the tree's, and the tree is in the rail — so the column beside it has no press to
+  // take, and the one it was taking belonged to whoever was writing there (`AMB-T-4523`).
+  it("leaves undo to the draft page, where there is no tree to put anything back into", async () => {
+    await draw({ tab: "memo" });
+    await undoOn(container.querySelector("textarea")!);
+    expect(hoisted.asked).not.toContain("untrash");
+  });
+
+  it("leaves undo to the box a name is being typed into", async () => {
+    await drawOpen();
+    await press(rows()[0]!, "F2");
+    await settle();
+    await undoOn(namebox()!);
+    expect(hoisted.asked).not.toContain("untrash");
   });
 
   it("says what the machine said about a row that would not go", async () => {

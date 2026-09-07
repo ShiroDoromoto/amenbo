@@ -6,6 +6,11 @@
 // needs is the question before it, the line a refusal left, and the way back — and writing that out
 // on each side would be two answers to one question, drifting apart at the first change.
 //
+// **The way back is pressed in the rail alone.** Both columns can bin, but the key that undoes it is
+// heard on the tree: the column beside it draws a page and an editor, and `⌘Z` there belongs to
+// whoever is writing in them (`AMB-T-4523`). The host holds the presses, not either column, so a
+// press made over a file being read is still the one the tree puts back.
+//
 // **The question is drawn where the press was made.** Each column mounts its own, so a reader who
 // pressed the bin on a row in the rail is asked in the rail, and one who pressed it on the file they
 // are reading is asked over the file. What is shared is the behaviour, not one question standing in
@@ -20,7 +25,7 @@ import { TrashAsk } from "./TrashAsk";
 export type Trash = {
   /** Put rows in the bin, asking first unless this reader has said not to (`./askBeforeTrash`). */
   askTrash: (root: string, paths: string[][]) => void;
-  /** The last press of the bin, undone. */
+  /** The last press of the bin, undone — whichever column made it (`folderUntrash`). */
   undo: () => void;
   /** Whether a question is standing. A column reads it to leave Escape to the question rather than
    *  taking a layer of its own off. */

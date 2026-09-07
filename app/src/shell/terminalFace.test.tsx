@@ -52,14 +52,14 @@ function HiddenShell({ face }: { face: "tasks" | "terminal" }) {
   return createElement(
     "div",
     { hidden: face !== "terminal" },
-    createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} }),
+    createElement(TerminalFace, { onWindow: () => {}, note: null }),
   );
 }
 
 // The control: the same face, rendered only while it is the one showing.
 function ConditionalShell({ face }: { face: "tasks" | "terminal" }) {
   return face === "terminal"
-    ? createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} })
+    ? createElement(TerminalFace, { onWindow: () => {}, note: null })
     : null;
 }
 

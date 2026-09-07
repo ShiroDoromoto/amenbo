@@ -119,8 +119,7 @@ async function pane(autoStart = true): Promise<void> {
       onDrop: () => {},
       onName: () => {},
       onFocus: (id: string) => { hoisted.focused.push(id); },
-      onWaiting: () => {},
-    }));
+      }));
   });
 }
 

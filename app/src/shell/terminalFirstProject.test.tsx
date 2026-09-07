@@ -64,7 +64,7 @@ let root: Root;
 
 const draw = () =>
   act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} }));
+    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
   });
 
 const pressOpen = () =>

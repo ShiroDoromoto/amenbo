@@ -68,8 +68,8 @@ const (
 	vmVerifyInstallStatus = vmGuestHome + "/install-in-session.status"
 )
 
-// vmVerifyCmd dispatches `vm verify`: one command to put a build in there, and four to walk a road
-// with it.
+// vmVerifyCmd dispatches `vm verify`: two commands to put a build in there, and five to walk a road
+// with it and be done with it.
 func vmVerifyCmd(args []string) {
 	if len(args) == 0 {
 		usage()
@@ -126,6 +126,10 @@ func vmVerifyCmd(args []string) {
 		out := fs.String("out", "", "where the evidence lands (default: a fresh dir under the temp tree)")
 		fs.Parse(args[1:])
 		fail(vmVerifyPull(*out))
+	case "stop":
+		fs := flag.NewFlagSet("vm verify stop", flag.ExitOnError)
+		fs.Parse(args[1:])
+		fail(vmVerifyStop())
 	default:
 		logf("devtool: unknown vm verify subcommand %q", sub)
 		usage()
@@ -701,5 +705,45 @@ func vmVerifyPull(out string) error {
 	}
 	logf("  verify  : evidence out of %s", vmCloneName)
 	fmt.Printf("%s\n", out)
+	return nil
+}
+
+// vmVerifyStop ends a road. The harness in the guest is the claim a walking road holds, and a road
+// abandoned part-way holds it until somebody takes the process down — so until this existed, a run
+// walked away from turned every `devgui install --vm` away and the only ways past it were to walk
+// the same road again or to throw the whole machine out.
+//
+// **A verdict is not an ending.** The harness goes on holding after it has said red or green: it is
+// still on stdin, waiting for a line that is not coming. What says a road is over is its process,
+// and that is what a person retreating from one has no other way to end.
+//
+// The two it takes down are the two `run` takes down before it starts: the harness, and the app the
+// road opened. **The evidence and the log stay** — why a road was abandoned is read afterwards, and
+// `pull` is still the way it comes out.
+//
+// A road that is not walking is not an error. The command is typed to be sure there is none, as
+// often as to end one.
+func vmVerifyStop() error {
+	// Waited for rather than turned away, the short-line side of the claim: this is one ssh round
+	// trip, and what it has to not land in the middle of is somebody else's front-then-press. Taking
+	// a window off the screen between those two halves is the same collision from the other end.
+	release, err := vmHoldScreen("`devtool vm verify stop`")
+	if err != nil {
+		return err
+	}
+	defer release()
+	ip, err := vmIP()
+	if err != nil {
+		return err
+	}
+	walking := vmRoadWalking(ip)
+	if _, err := sshRun(ip, "pkill -f "+vmVerifyBin+" || true; pkill -f "+vmGuestApp+" || true"); err != nil {
+		return fmt.Errorf("taking the road down: %w", err)
+	}
+	if !walking {
+		logf("  verify  : no road was walking in %s", vmCloneName)
+		return nil
+	}
+	logf("  verify  : the road in %s is over — its evidence is still there (`devtool vm verify pull`)", vmCloneName)
 	return nil
 }

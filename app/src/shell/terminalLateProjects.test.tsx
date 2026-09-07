@@ -76,7 +76,7 @@ let root: Root;
 const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
 
 const face = () =>
-  createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} });
+  createElement(TerminalFace, { onWindow: () => {}, note: null });
 
 beforeEach(async () => {
   window.innerWidth = 1600;

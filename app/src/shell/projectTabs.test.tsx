@@ -37,12 +37,11 @@ function twoProjects(): Layout {
   return goProject(layout, 1);
 }
 
-async function draw(compact = false, needy: string[] = [], projects: Project[] = PROJECTS) {
+async function draw(compact = false, projects: Project[] = PROJECTS) {
   await act(async () => {
     root.render(createElement(ProjectTabs, {
       layout: twoProjects(),
       projects,
-      needy: new Set(needy),
       compact,
       onCompact: folded,
       onProject: project,
@@ -90,28 +89,10 @@ describe("the project tabs", () => {
     expect(tabs().map((one) => one.getAttribute("aria-label"))).toEqual(["amenbo", "the site"]);
   });
 
-  // The whole of what the column being uncloseable buys: the dot is on a project the reader is not in.
-  it("wears a dot for a turn standing in a project that is not the one being shown", async () => {
-    await draw(false, ["2"]);
-    expect(tabs()[0].querySelector(".ptabs__needs")).toBeNull();
-    expect(tabs()[1].querySelector(".ptabs__needs")).not.toBeNull();
-  });
-
-  // The panes of the project being shown say whose turn it is for themselves.
-  it("wears none for a turn standing in the project being shown", async () => {
-    await draw(false, ["1"]);
-    expect(container.querySelector(".ptabs__needs")).toBeNull();
-  });
-
-  it("still wears it once the names are folded away", async () => {
-    await draw(true, ["2"]);
-    expect(tabs()[1].querySelector(".ptabs__needs")).not.toBeNull();
-  });
-
   // What a project shows for itself, where somebody gave it one (`AMB-D-838`). It stands in the mark's
   // place rather than beside it — that place is the whole of a compact tab.
   it("draws the image a project was given in place of its colour and its letter", async () => {
-    await draw(false, [], MARKED);
+    await draw(false, MARKED);
     expect(marks()).toEqual(["a", ""]);
     const image = tabs()[1].querySelector<HTMLImageElement>(".ptabs__icon");
     expect(image?.getAttribute("src")).toBe("data:image/png;base64,LOGO");
@@ -121,14 +102,14 @@ describe("the project tabs", () => {
 
   // Registering one is a thing a person does, and most never will.
   it("keeps the colour and the letter for a project with no image", async () => {
-    await draw(false, [], MARKED);
+    await draw(false, MARKED);
     expect(tabs()[0].querySelector(".ptabs__icon")).toBeNull();
     expect(tabs()[0].querySelector<HTMLElement>(".ptabs__mark")!.style.background).not.toBe("");
   });
 
   // Folding takes the names, and the mark is what is left — an image the same as a letter.
   it("still draws it once the names are folded away", async () => {
-    await draw(true, [], MARKED);
+    await draw(true, MARKED);
     expect(tabs()[1].querySelector(".ptabs__icon")).not.toBeNull();
     expect(tabs()[1].getAttribute("aria-label")).toBe("the site");
   });

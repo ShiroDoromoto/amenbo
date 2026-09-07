@@ -587,8 +587,6 @@ const ui = {
   // The OS notification a pane raises when its turn has come and nobody is looking at the terminal
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.
-  "face.turnTitle": "Amenbo — your turn",
-  "face.turnBody": "A terminal is waiting on you.",
   "face.ended": "The program in this terminal has exited.",
   "face.projects": "Projects",
   // The rail's two halves: the lists, and the folder tree that moved there off the other side of the
@@ -625,6 +623,7 @@ const ui = {
   "face.orderCancel": "Cancel",
   "face.orderFrom": "From page {n}",
   "face.orderNoName": "This pane",
+  "face.orderEnded": "Ended",
   // The line over the row of things a terminal can be opened with (`app/src/shell/EmptySlot.tsx`).
   // The pills say by their shape that they can be pressed; this says it in words, because a row read
   // as a caption is not something anybody tries. It does not say "choose an AI" — the plain shell is
@@ -659,7 +658,6 @@ const ui = {
   "face.openHere": "Room for another pane in this project",
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",
-  "face.needsYou": "waiting on you",
   "face.handHere": "Drop to paste the path",
   "face.more": "More",
   // The file face beside the terminal's pane: the project's folder, folded, with what git says

@@ -62,7 +62,7 @@ const sides = () =>
 
 const mount = async () => {
   await act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} }));
+    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
   });
 };
 

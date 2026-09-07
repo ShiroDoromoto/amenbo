@@ -65,7 +65,7 @@ let root: Root;
 const draw = (openIn: { project: number; dir: string; nth: number } | null) =>
   act(async () => {
     root.render(createElement(TerminalFace, {
-      onWindow: () => {}, note: null, onWaiting: () => {}, openIn,
+      onWindow: () => {}, note: null, openIn,
     }));
   });
 

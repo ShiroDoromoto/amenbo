@@ -1,4 +1,4 @@
-import { panesOf, type Layout } from "../talk/layout";
+import { type Layout } from "../talk/layout";
 import { inkOn, initialOf } from "./projectMark";
 import type { Project } from "../mock/types";
 import { Icon } from "../components/Icon";
@@ -14,9 +14,9 @@ import { t } from "../core/i18n";
  * column is at the edge, everything else is inside it, and moving is one press.
  *
  * **It cannot be put away.** The two columns beside the panes each carry a way to close them, because
- * each is taking width from the thing the face is for. This one does not, and that is the whole of
- * what it buys: a turn standing in a project nobody is looking at is knocked about by a dot on its
- * tab, and a column that could be closed would be a way to stop being told (`AMB-T-3610`).
+ * each is taking width from the thing the face is for. This one does not: a project is what every
+ * other column here is about, so closing it would leave a reader with no way to say which project
+ * they are in.
  *
  * **Compact is where the names go, not the tabs.** The tabs stay whatever happens; what folds away is
  * the width the names take, leaving the mark: the image the project was given, or the colour a person
@@ -37,15 +37,12 @@ import { t } from "../core/i18n";
  * and is the price of the column being one press wide.
  */
 export function ProjectTabs({
-  layout, projects, needy, compact, onCompact, onProject,
+  layout, projects, compact, onCompact, onProject,
 }: {
-  /** Which project is being shown, and which panes are in each — the dots are read off it. */
+  /** Which project is being shown, and which panes are in each. */
   layout: Layout;
   /** The projects this machine knows, in the order the ledger keeps them. */
   projects: readonly Project[];
-  /** The frames a turn is standing in. What is drawn from it here is the dot on a project that is
-   *  not the one being shown — the panes of the one that is say it for themselves. */
-  needy: ReadonlySet<string>;
   compact: boolean;
   onCompact: (compact: boolean) => void;
   onProject: (project: number) => void;
@@ -85,11 +82,6 @@ export function ProjectTabs({
                 {icon === null ? initialOf(project.name) : <img className="ptabs__icon" src={icon} alt="" />}
               </span>
               {!compact && <span className="ptabs__name">{project.name}</span>}
-              {/* Only for a project the reader is not looking at: the panes of the one they are each
-                  say whose turn it is for themselves (`../talk/nameplate`). */}
-              {!shown && panesOf(layout, project.id).some((pane) => needy.has(pane.id)) && (
-                <span className="ptabs__needs" title={t("face.needsYou")} aria-hidden="true" />
-              )}
             </button>
           );
         })}

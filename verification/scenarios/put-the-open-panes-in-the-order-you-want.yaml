@@ -1,0 +1,163 @@
+# The panes were opened in the order the work arrived in, and the reader wants them in another one.
+#
+# ── Why the order is changed off the face ────────────────────────────────────────────────────────
+# A pane is a terminal somebody is reading and typing into, so a drag across the face itself would
+# move what is under their eyes and their paste while a program is running in it. The order is
+# changed in a panel of cards instead, and the panes go on standing where they are until the press
+# that takes it. That is the whole of what this road defends, and it is why the two
+# halves below are walked rather than one: a build that reordered on the drag and one that reordered
+# on the press look identical from the far side of the press.
+#
+# ── Why two panes and one to a page ──────────────────────────────────────────────────────────────
+# Two is the fewest that has an order at all — with one there is nothing to put anywhere, and the way
+# in is not even drawn. One pane to a page is what makes the order readable: the row above a pane
+# says which pane it is, and a page holding two would have this road reading two rows and saying
+# which was which by where it sat on the screen. At one to a page the panes are on pages of their
+# own, so the order is read by turning to a page and reading the one row on it.
+#
+# The panes are named because nothing else tells them apart: both are opened in the same folder, so
+# both rows would otherwise carry that folder's name and the reader of this road would be looking at
+# the same words twice. The names are the road's own words, which is how every step below says which
+# card and which row it means.
+#
+# ── Why the leaving is walked first ──────────────────────────────────────────────────────────────
+# Backing out is the case a build gets wrong quietly. A panel that wrote as it was dragged would come
+# out of Escape looking exactly like one that wrote on the press, and the reader would only find out
+# by turning to a page and finding the wrong pane on it — which is what this road does, on a panel
+# that was dragged about and then thrown away, before it walks the press that keeps one.
+#
+# The world is empty on purpose, as on every road on this face: a terminal is not a record, and what
+# the panes run is the reader's own shell. Choosing the folder is what raises the project the panes
+# belong to, so the road makes what it needs by walking in.
+id: put-the-open-panes-in-the-order-you-want
+title: The open panes are put in the order the reader asked for, and in no other
+description: >
+  Open two panes, one to a page, and give each a name of its own. Open the panel that puts them in
+  order, carry the second card in front of the first, and leave without taking it — the pages are as
+  they were. Do it again and press for it, and the order has changed: the second pane is on the first
+  page and the first is on the second, while the page being read and the pane being worked in stay
+  where they were.
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The way in, and what binds the folder to the project the face is on. The pane after this one is
+  # opened in the same folder with nothing asked, which is what leaves the two rows saying the same
+  # thing until they are named.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell. What an agent draws on its own screen is the agent's, and the rows this
+  # road reads have to be the road's own words.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO the pane opened first
+
+  # The second pane. The page holds one and one is on it, so the way in is the strip beside it: the
+  # screen goes to the page brought into being for the pane, and the pane opens there.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: strip
+      asks: false
+
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO the pane opened second
+
+  # Where the two of them stand before anything is asked of the order: the second is on the page it
+  # was opened onto, which is the page the screen is on.
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the pane opened second
+
+  # ── Carried about, and thrown away ──────────────────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: reorder-panes
+
+  - type: action
+    domain: terminal
+    op: carry-pane
+    with:
+      pane: SCENARIO the pane opened second
+      onto: SCENARIO the pane opened first
+      side: before
+
+  - type: action
+    domain: terminal
+    op: drop-order
+    with:
+      how: escape
+
+  # And nothing was written. The first page still holds the pane that was opened first, which is the
+  # reading a panel that reordered as the card moved could not give.
+  - type: action
+    domain: terminal
+    op: go-page
+    with:
+      page: 1
+
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the pane opened first
+
+  # ── Carried about, and taken ────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: reorder-panes
+
+  - type: action
+    domain: terminal
+    op: carry-pane
+    with:
+      pane: SCENARIO the pane opened second
+      onto: SCENARIO the pane opened first
+      side: before
+
+  - type: action
+    domain: terminal
+    op: keep-order
+
+  # The order changed under a screen that did not move. The reader is on the page they turned to, and
+  # what is on it now is the pane they carried to the front — the panes are one list cut into pages,
+  # so putting one at the front of the list is what puts it on the first page.
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the pane opened second
+
+  # And the one it was carried past is on the page the other came off, still running: a reorder moves
+  # the places panes are drawn in and ends nothing.
+  - type: action
+    domain: terminal
+    op: go-page
+    with:
+      page: 2
+
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the pane opened first

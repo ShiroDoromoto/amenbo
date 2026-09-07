@@ -39,7 +39,6 @@ import type { OpenInDto } from "./bindings/bindings";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { currentLang, errText, t, tf } from "./core/i18n";
 import { invoke } from "./core/ipc";
-import { notifyTurn } from "./core/osNotify";
 import { RefNavProvider, type RefNav } from "./core/refNav";
 import { loadSnapshot, subscribe, watchStore } from "./core/snapshot";
 import { initTheme } from "./core/theme";
@@ -139,12 +138,6 @@ function TalkWindow() {
           // Nothing here is the shell's to say about the face — the window that could not be built
           // is the board's news, and this is the window that was.
           note={null}
-          // This window *is* the terminal, so there is no face to be behind: what says the person is
-          // not looking is the window not having the keyboard. A turn that comes up while they are
-          // here is one they are already being shown, on the label above the pane (`AMB-D-753`).
-          onWaiting={(waiting) => {
-            if (waiting && !document.hasFocus()) void notifyTurn();
-          }}
           openIn={openIn}
         />
       </div>

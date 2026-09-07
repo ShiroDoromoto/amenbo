@@ -542,8 +542,6 @@ export const es: Translation = {
     "face.dropConfirm": "¿Quitar este panel? La terminal que hay en él se cierra y el sitio no vuelve en el próximo arranque.",
     "quit.confirm": "¿Salir de Amenbo? Todas las terminales abiertas se cierran y ninguna sesión vuelve en el próximo arranque.",
 
-    "face.turnTitle": "Amenbo — te toca",
-    "face.turnBody": "Una terminal te está esperando.",
     "face.ended": "El programa de esta terminal ha terminado.",
     "face.projects": "Proyectos",
     "face.railFolders": "Carpetas",
@@ -583,7 +581,6 @@ export const es: Translation = {
     "face.openHere": "Sitio para otro panel en este proyecto",
     "face.whichFolder": "¿En qué carpeta trabaja este panel?",
     "face.rename": "Cambiar el nombre de este panel",
-    "face.needsYou": "te está esperando",
     "face.handHere": "Suelta para pegar la ruta",
     "face.more": "Más",
     "files.side": "Página y archivos",

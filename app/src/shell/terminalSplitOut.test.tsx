@@ -100,7 +100,7 @@ const worked = () => container.querySelector(".slot--focused")?.getAttribute("da
 async function mount(ownWindow: boolean) {
   await act(async () => {
     root.render(createElement(TerminalFace, {
-      onWindow: pressed, ownWindow, note: null, onWaiting: () => {},
+      onWindow: pressed, ownWindow, note: null,
     }));
     await new Promise((r) => setTimeout(r, 0));
   });

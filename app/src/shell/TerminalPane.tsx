@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import { endTerminal, focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
-import { sawPane } from "../talk/standing";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { pushNotice } from "../core/notice";
@@ -63,7 +62,7 @@ async function handOver(session: string, paths: string[]) {
  */
 export function TerminalPane({
   frame, project, names, start, autoStart, focused, landed = false, offered = false,
-  onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onWaiting,
+  onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
@@ -107,9 +106,6 @@ export function TerminalPane({
   onDrop: (frame: string) => void;
   onName: (frame: string, name: string, by: NamedBy) => void;
   onFocus: (frame: string) => void;
-  /** Whether a turn is standing in this pane. The face gathers them: behind the ledger no label can
-   *  be seen at all, so what the shell badges is the face and not a pane (`./terminalBadge`). */
-  onWaiting: (frame: string, waiting: boolean) => void;
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
@@ -138,8 +134,8 @@ export function TerminalPane({
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
   // callback — that would take the terminal down to learn something it could have been told.
-  const on = useRef({ onOpened, onSaid, onPath, onClosed, onName, onWaiting, onFocus });
-  on.current = { onOpened, onSaid, onPath, onClosed, onName, onWaiting, onFocus };
+  const on = useRef({ onOpened, onSaid, onPath, onClosed, onName, onFocus });
+  on.current = { onOpened, onSaid, onPath, onClosed, onName, onFocus };
 
   /** Take the place away, once the person has said so. The terminal in it is ended first: a session
    *  whose pane has gone is one nobody can get back to.
@@ -165,12 +161,9 @@ export function TerminalPane({
     setEnded(false);
     // The line above the pane. It holds what is known about the session running there for as long as
     // it runs (`../talk/plate.ts`).
-    const plate = mountPlate(
-      label,
-      currentLang,
-      (waiting) => on.current.onWaiting(frame, waiting),
-      frame,
-    );
+    // Nothing is heard back from the row: what it says about a turn goes nowhere on this face any
+    // more, the badges and dots that read it having been taken away (`AMB-D-862`).
+    const plate = mountPlate(label, currentLang, undefined, frame);
     plateRef.current = plate;
     void mountAgentFrame(host, currentLang(), {
       opened: (session, startedAt, where, waiting) => {
@@ -229,12 +222,10 @@ export function TerminalPane({
       plateRef.current = null;
       // **The turn is not taken down with the pane.** A pane goes away when the person turns to
       // another page, which is exactly when they are not looking at it — saying the turn was over
-      // because the page turned would erase the one fact the dot on that page exists to carry
-      // (`AMB-T-3610`). What ends a turn is the pane saying so, or the session ending.
+      // because the page turned. What ends a turn is the pane saying so, or the session ending.
       //
       // Nothing here has to hold that open. The row above the pane goes with the pane and says so on
-      // its way out (`../talk/plate`), and what the dots and the badges are read off is kept by the
-      // host, which outlives every pane drawing the session (`../talk/standing`, `AMB-D-860`).
+      // its way out (`../talk/plate`).
     };
     // Only `running` is a reason to do any of this again. `start` and `frame` are what this pane *is*
     // — a change of either would be a different pane, and the face gives that one a different key.
@@ -297,19 +288,7 @@ export function TerminalPane({
     <div
       className={`slot${focused ? " slot--focused" : ""}${landed ? " slot--landed" : ""}`}
       data-hand={frame}
-      onMouseDown={() => {
-        onFocus(frame);
-        // **The press is what ends a turn** (`AMB-D-859`): the hand goes up by declaration and comes
-        // down by measurement, and a person going to the pane is the measurement. It is said to the
-        // window rather than to the row above this pane, because the dots on the pages are read off
-        // the same record and the two must not come apart (`../talk/standing`).
-        //
-        // **Going to the pane, and not looking at the face it is on.** Bringing the terminal forward
-        // is how a person answers the call — a turn taken down by that would be gone before they
-        // could read what it was for, and the reason is half of what the word says (`AMB-D-748`).
-        // So the mark stands until they press the pane it is above, which is also how they answer it.
-        if (live !== null) sawPane(live);
-      }}
+      onMouseDown={() => onFocus(frame)}
     >
       {/* What is said about this terminal, and the one control the place has. They share the row
           because the row is what is said about this pane, and removing it is the last thing there is

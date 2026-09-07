@@ -521,8 +521,6 @@ export const zhHant: Translation = {
     "face.dropConfirm": "要移除此窗格嗎？裡面的終端機會結束，下次啟動時這個位置不會回來。",
     "quit.confirm": "要結束 Amenbo 嗎？開啟的終端機都會結束，下次啟動時工作階段不會回來。",
 
-    "face.turnTitle": "Amenbo — 輪到你了",
-    "face.turnBody": "有一個終端機在等你。",
     "face.ended": "此終端機中的程式已結束。",
     "face.projects": "專案",
     "face.railFolders": "資料夾",
@@ -562,7 +560,6 @@ export const zhHant: Translation = {
     "face.openHere": "在這個專案裡給下一個窗格騰出位置",
     "face.whichFolder": "這個窗格在哪個資料夾中工作？",
     "face.rename": "重新命名此窗格",
-    "face.needsYou": "在等你",
     "face.handHere": "放開即可貼上路徑",
     "face.more": "更多",
     "files.side": "便箋與檔案",

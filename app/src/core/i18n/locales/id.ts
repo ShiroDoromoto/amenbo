@@ -524,8 +524,6 @@ export const id: Translation = {
     "face.dropConfirm": "Hapus panel ini? Terminal di dalamnya berakhir, dan tempatnya tidak kembali saat dijalankan lagi.",
     "quit.confirm": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir, dan tidak ada sesi yang kembali saat dijalankan lagi.",
 
-    "face.turnTitle": "Amenbo — giliran Anda",
-    "face.turnBody": "Sebuah terminal sedang menunggu Anda.",
     "face.ended": "Program di terminal ini telah berhenti.",
     "face.projects": "Proyek",
     "face.railFolders": "Folder",
@@ -565,7 +563,6 @@ export const id: Translation = {
     "face.openHere": "Tempat untuk satu panel lagi di proyek ini",
     "face.whichFolder": "Panel ini bekerja di folder yang mana?",
     "face.rename": "Ganti nama panel ini",
-    "face.needsYou": "menunggu Anda",
     "face.handHere": "Lepaskan untuk menempelkan jalurnya",
     "face.more": "Lainnya",
     "files.side": "Halaman dan berkas",

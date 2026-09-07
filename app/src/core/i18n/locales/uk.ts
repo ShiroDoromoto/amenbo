@@ -547,8 +547,6 @@ export const uk: Translation = {
     "face.dropConfirm": "Прибрати цю панель? Термінал у ній завершиться, і місце не повернеться під час наступного запуску.",
     "quit.confirm": "Завершити Amenbo? Усі відкриті термінали завершаться, і жодна сесія не повернеться під час наступного запуску.",
 
-    "face.turnTitle": "Amenbo — ваша черга",
-    "face.turnBody": "Термінал чекає на вас.",
     "face.ended": "Програму в цьому терміналі завершено.",
     "face.projects": "Проєкти",
     "face.railFolders": "Теки",
@@ -588,7 +586,6 @@ export const uk: Translation = {
     "face.openHere": "Місце для ще однієї панелі в цьому проєкті",
     "face.whichFolder": "У якій теці працює ця панель?",
     "face.rename": "Перейменувати цю панель",
-    "face.needsYou": "чекає на вас",
     "face.handHere": "Відпустіть, щоб вставити шлях",
     "face.more": "Ще",
     "files.side": "Сторінка і файли",

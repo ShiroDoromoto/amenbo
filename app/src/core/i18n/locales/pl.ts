@@ -547,8 +547,6 @@ export const pl: Translation = {
     "face.dropConfirm": "Usunąć ten panel? Terminal w nim zostanie zakończony, a miejsce nie wróci przy następnym uruchomieniu.",
     "quit.confirm": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone, a żadna sesja nie wróci przy następnym uruchomieniu.",
 
-    "face.turnTitle": "Amenbo — twoja kolej",
-    "face.turnBody": "Terminal czeka na ciebie.",
     "face.ended": "Program w tym terminalu zakończył działanie.",
     "face.projects": "Projekty",
     "face.railFolders": "Foldery",
@@ -588,7 +586,6 @@ export const pl: Translation = {
     "face.openHere": "Miejsce na kolejny panel w tym projekcie",
     "face.whichFolder": "W którym folderze pracuje ten panel?",
     "face.rename": "Zmień nazwę tego panelu",
-    "face.needsYou": "czeka na Ciebie",
     "face.handHere": "Upuść, aby wkleić ścieżkę",
     "face.more": "Więcej",
     "files.side": "Strona i pliki",

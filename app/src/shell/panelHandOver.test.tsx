@@ -97,7 +97,7 @@ let root: Root;
 async function mount() {
   await act(async () => {
     root.render(createElement(TerminalFace, {
-      onWindow: () => {}, note: null, onWaiting: () => {},
+      onWindow: () => {}, note: null,
     }));
     await new Promise((r) => setTimeout(r, 0));
   });

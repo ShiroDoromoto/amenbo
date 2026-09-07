@@ -542,8 +542,6 @@ export const it: Translation = {
     "face.dropConfirm": "Rimuovere questo riquadro? Il terminale al suo interno termina e il posto non torna al prossimo avvio.",
     "quit.confirm": "Uscire da Amenbo? Tutti i terminali aperti terminano e nessuna sessione torna al prossimo avvio.",
 
-    "face.turnTitle": "Amenbo — tocca a te",
-    "face.turnBody": "Un terminale ti sta aspettando.",
     "face.ended": "Il programma di questo terminale è terminato.",
     "face.projects": "Progetti",
     "face.railFolders": "Cartelle",
@@ -583,7 +581,6 @@ export const it: Translation = {
     "face.openHere": "Spazio per un altro riquadro in questo progetto",
     "face.whichFolder": "In quale cartella lavora questo riquadro?",
     "face.rename": "Rinomina questo riquadro",
-    "face.needsYou": "ti sta aspettando",
     "face.handHere": "Rilascia per incollare il percorso",
     "face.more": "Altro",
     "files.side": "Pagina e file",

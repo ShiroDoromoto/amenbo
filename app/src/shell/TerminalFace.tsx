@@ -11,7 +11,7 @@ import {
 } from "../talk/frames";
 import {
   addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject,
-  laidOut, movedTo, openedFrame, openedIn, ORIENTS, orientable, pageCount, pageOfFrame, pageShape,
+  laidOut, movedTo, openedFrame, openedIn, ORIENTS, orientable, pageCount, pageShape,
   paneIn, panesOf, reordered, restored, roomOnPage, setCount, setOrient, slotsOf,
   type Count, type Layout,
 } from "../talk/layout";
@@ -35,7 +35,6 @@ import type { PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf, tn } from "../core/i18n";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
-import { NO_TURNS, watchStanding, type Turns } from "../talk/standing";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
  *  panel to reach the pane, and short enough that what is left on the screen afterwards is the
@@ -92,21 +91,15 @@ const LANDED_MS = 900;
  * `note` is what the shell has to say about this face that the pane cannot — a window that could not
  * be split out, which is the press of the button here having come to nothing.
  *
- * `onWaiting` is the one thing this face says back to the shell: whether **any** pane on it is
- * waiting on a person. Behind the other face no label above a pane can be seen at all, so the shell
- * puts a badge on the face switch instead (`./terminalBadge`) — and it is told the fact, not what to
- * do about it. Which pane it was is the rail's to show, and a badge that counted would be a number a
- * reader has to go and check.
- *
  * `openIn` is the ledger asking for a folder to be worked in — the first loop's one button
  * (`app/src/components/FirstLoop.tsx`). It is where to work and whose project that is, and not what
  * to do about it: whether a pane is made or an open one reached for is this face's own
  * (`../talk/layout`).
  *
  * **The tabs are the one column that stays.** They are drawn at the edge of everything else because a
- * project holds everything else, and they cannot be closed: a turn standing in a project nobody is
- * looking at is knocked about there, and a way to close them would be a way to stop being told
- * (`./ProjectTabs`, `AMB-D-838`). What folds is the width their names take, and that is kept.
+ * project holds everything else, and they cannot be closed: a project is what every other column here
+ * is about, so a way to close them would be a way to have no project (`./ProjectTabs`, `AMB-D-838`).
+ * What folds is the width their names take, and that is kept.
  *
  * **Both columns beside the panes can be put away, and each carries the way back.** The rail's is on
  * the top row and the file face's is on the panel itself, opened again from the same row; either can
@@ -128,7 +121,6 @@ export function TerminalFace({
   onWindow,
   ownWindow,
   note,
-  onWaiting,
   projectId,
   onOpenLedger,
   openIn,
@@ -149,7 +141,6 @@ export function TerminalFace({
    */
   ownWindow?: boolean;
   note: string | null;
-  onWaiting: (waiting: boolean) => void;
   /** The project the face opens on, where the window has one to say — a reader who went to a project
    *  and came to the terminal from it. Nothing where there was no such move: the window the terminal
    *  was split out into has no ledger to have been on, and the board's launch lands on a project
@@ -251,22 +242,6 @@ export function TerminalFace({
   // it belongs in the arrangement that is kept (`../talk/layout`).
   const startWith = useRef(new Map<string, string>());
 
-  // What the panes being drawn say about themselves — the agent handed a turn over, or the sentence
-  // Amenbo opened it with is still sitting unsent in its input box (`../talk/plate`). It reaches only
-  // as far as the panes on the screen, because a pane is the only thing here that measures its own
-  // input box, and a pane goes down with its page.
-  const [reported, setReported] = useState<ReadonlySet<string>>(new Set());
-  // And which sessions have a turn standing in them, which no page turn takes away
-  // (`../talk/standing`). It is the half that carries a turn handed over behind the reader's back;
-  // the half above is the one that carries what the pane measured. `needy` below is the two of them
-  // read together.
-  const [turns, setTurns] = useState<Turns>(NO_TURNS);
-  useEffect(() => watchStanding(setTurns), []);
-  // Read through a ref for the same reason the panes' callbacks are: the face is mounted once and
-  // must not come down to be handed a fresh one.
-  const tell = useRef(onWaiting);
-  tell.current = onWaiting;
-
   // The pane a path was just handed to, while it is saying so, and the clock that takes the word
   // back. Nothing is remembered afterwards: what this is about is one act, and a pane that kept a
   // mark of it would be saying something about a file the reader has long since sent.
@@ -278,61 +253,6 @@ export function TerminalFace({
   useEffect(() => () => {
     if (landedFor.current !== null) clearTimeout(landedFor.current);
   }, []);
-
-  const paneWaiting = useCallback((frame: string, is: boolean) => {
-    setReported((was) => {
-      if (was.has(frame) === is) return was;
-      const next = new Set(was);
-      if (is) next.add(frame);
-      else next.delete(frame);
-      return next;
-    });
-  }, []);
-
-  /**
-   * Which panes of this face have a turn standing in them, drawn or not.
-   *
-   * **A pane that is not on the screen still has one**, and it is the whole reason the dots and the
-   * badges exist: a page turn is exactly when nobody is looking at that pane (`AMB-T-3610`). The
-   * drawn panes answer for themselves, because a pane is the only thing here that can see its own
-   * input box; the rest is the turns the window is holding — declared to the host and not gone to
-   * since — which stand whether or not a pane is up (`../talk/standing`).
-   */
-  const needy = useMemo(() => {
-    const all = new Set(reported);
-    for (const frame of layout.frames) {
-      if (frame.session !== null && turns.has(frame.session)) all.add(frame.id);
-    }
-    return all;
-  }, [reported, turns, layout.frames]);
-
-  // The shell is told the answer for the face as a whole, and only when it turns over: a second pane
-  // joining the first does not knock again, and a face that opens with nothing standing says nothing.
-  const standing = needy.size > 0;
-  const toldStanding = useRef(false);
-  useEffect(() => {
-    if (toldStanding.current === standing) return;
-    toldStanding.current = standing;
-    tell.current(standing);
-  }, [standing]);
-
-  /**
-   * The pages of this project a turn is standing on, minus the one being shown.
-   *
-   * The page in front of the reader needs no dot: the panes on it are drawn, and each says for
-   * itself whose turn it is (`../talk/nameplate`). A dot there would be the face telling somebody
-   * about what they are looking at. A turn in **another project** is the rail's to show, for the same
-   * reason: the digits are this project's pages and nothing else's.
-   */
-  const needyPages = useMemo(() => {
-    const pages = new Map<number, number>();
-    for (const frame of needy) {
-      if (layout.frames.find((one) => one.id === frame)?.project !== layout.project) continue;
-      const page = pageOfFrame(layout, frame);
-      if (page !== null && page !== layout.page) pages.set(page, (pages.get(page) ?? 0) + 1);
-    }
-    return pages;
-  }, [needy, layout]);
 
   useEffect(() => {
     let alive = true;
@@ -1094,22 +1014,13 @@ export function TerminalFace({
             {Array.from({ length: pages }, (_, i) => i + 1).map((one) => (
               <button
                 key={one}
-                className={`termface__page${page === one ? " termface__page--on" : ""}${
-                  needyPages.has(one) ? " termface__page--needs" : ""}`}
+                className={`termface__page${page === one ? " termface__page--on" : ""}`}
                 // Going to a page, not turning something on: the one showing is the current page.
                 aria-current={page === one ? "page" : undefined}
-                title={needyPages.has(one) ? t("face.needsYou") : tf("face.page", { n: one })}
+                title={tf("face.page", { n: one })}
                 onClick={() => { setAsking(null); setLayout((was) => goPage(was, one)); }}
               >
                 {one}
-                {/* How many turns are standing on that page, and nothing at all where none are. It
-                    counts because a page is somewhere to go: what the number buys is knowing whether
-                    going there answers one thing or four, which the badge on the face switch cannot
-                    say and must not try to (`./terminalBadge`). A pane that finished wears nothing:
-                    what is over is not something a person is needed for (`AMB-T-3610`). */}
-                {needyPages.has(one) && (
-                  <span className="termface__needs">{needyPages.get(one)}</span>
-                )}
               </button>
             ))}
           </nav>
@@ -1146,7 +1057,6 @@ export function TerminalFace({
           <ProjectTabs
             layout={layout}
             projects={projects}
-            needy={needy}
             compact={tabsCompact}
             onCompact={wantCompact}
             onProject={takeProject}
@@ -1216,23 +1126,14 @@ export function TerminalFace({
                         setLayout((was) => movedTo(was, statement.session, statement.cwd!));
                       }
                     }}
-                    onClosed={(session) => {
-                      setLayout((was) => closedIn(was, session));
-                      // A session that has ended is not a turn anybody can take: what is over is not
-                      // something a person is needed for (`AMB-T-3610`).
-                      paneWaiting(frame.id, false);
-                    }}
+                    onClosed={(session) => setLayout((was) => closedIn(was, session))}
                     onDrop={(id) => {
                       setLayout((was) => closedFrame(was, id));
-                      // Nothing is owed to a place that has gone — a turn standing in it was standing
-                      // on the page it was on, and the badge above must stop counting it.
-                      paneWaiting(id, false);
                       startNow.current.delete(id);
                       startWith.current.delete(id);
                     }}
                     onName={named}
                     onFocus={(id) => setLayout((was) => focusOn(was, id))}
-                    onWaiting={paneWaiting}
                   />
                 ))}
                 {asking !== null && (

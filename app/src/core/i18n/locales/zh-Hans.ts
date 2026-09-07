@@ -521,8 +521,6 @@ export const zhHans: Translation = {
     "face.dropConfirm": "要移除此窗格吗？里面的终端会结束，下次启动时这个位置不会回来。",
     "quit.confirm": "要退出 Amenbo 吗？打开的终端都会结束，下次启动时会话不会回来。",
 
-    "face.turnTitle": "Amenbo — 轮到你了",
-    "face.turnBody": "有一个终端在等你。",
     "face.ended": "此终端中的程序已退出。",
     "face.projects": "项目",
     "face.railFolders": "文件夹",
@@ -562,7 +560,6 @@ export const zhHans: Translation = {
     "face.openHere": "在这个项目里给下一个窗格腾出位置",
     "face.whichFolder": "这个窗格在哪个文件夹里工作？",
     "face.rename": "重命名此窗格",
-    "face.needsYou": "在等你",
     "face.handHere": "松开即可粘贴路径",
     "face.more": "更多",
     "files.side": "便笺与文件",

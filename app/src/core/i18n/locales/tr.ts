@@ -521,8 +521,6 @@ export const tr: Translation = {
     "face.dropConfirm": "Bu bölme kaldırılsın mı? İçindeki terminal sonlandırılır ve bu yer bir dahaki açılışta geri gelmez.",
     "quit.confirm": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır ve hiçbir oturum bir dahaki açılışta geri gelmez.",
 
-    "face.turnTitle": "Amenbo — sıra sizde",
-    "face.turnBody": "Bir terminal sizi bekliyor.",
     "face.ended": "Bu terminaldeki program sona erdi.",
     "face.projects": "Projeler",
     "face.railFolders": "Klasörler",
@@ -562,7 +560,6 @@ export const tr: Translation = {
     "face.openHere": "Bu projede bir bölme daha için yer",
     "face.whichFolder": "Bu bölme hangi klasörde çalışıyor?",
     "face.rename": "Bu bölmeyi yeniden adlandır",
-    "face.needsYou": "sizi bekliyor",
     "face.handHere": "Yolu yapıştırmak için bırakın",
     "face.more": "Daha fazla",
     "files.side": "Sayfa ve dosyalar",

@@ -20,9 +20,10 @@ import { pushNotice } from "./notice";
 /**
  * What a toast is about, which is what decides where a click on it lands.
  *
- * Two, because Amenbo speaks up for two reasons and they are answered in different places: something
- * arrived in the inbox, which is a record on the board, and a pane handed the turn over, which is a
- * terminal that may be in a window of its own (`AMB-D-753`).
+ * Two, because that is what the host knows how to route (`crate::notify`). Only the inbox raises one
+ * now — a record on the board. Nothing says a turn is standing any more: whether one is standing was
+ * an agent's own word about itself, and a toast made of that was a knock the app could not stand
+ * behind (`AMB-D-862`).
  */
 export type NotifyKind = "arrival" | "turn";
 
@@ -41,20 +42,4 @@ export async function notifyOs(kind: NotifyKind, title: string, body: string): P
       pushNotice(t("mailbox.notifyFailed"));
     }
   }
-}
-
-/**
- * A pane has handed the turn over, and the person is not looking at the terminal.
- *
- * **It is the only thing the terminal knocks for.** A turn is by definition the one state that does
- * not move until somebody comes — everything else the face has to say waits without cost, and a
- * notification nobody needed is what makes the next one ignored. So a finished session and a premise
- * that came unsettled both stay on the screen and off the OS.
- *
- * It says a turn is standing and not whose. Which pane it was is drawn where it happened — the rail,
- * the pages, the label above the pane — and a toast that named one would be answering a question the
- * screen answers better, in the one place a person cannot act on it.
- */
-export async function notifyTurn(): Promise<void> {
-  await notifyOs("turn", t("face.turnTitle"), t("face.turnBody"));
 }

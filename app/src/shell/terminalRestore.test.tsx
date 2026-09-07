@@ -117,7 +117,7 @@ async function mount() {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} }));
+    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
   });
 }
 

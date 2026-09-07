@@ -550,8 +550,6 @@ export const ru: Translation = {
     "face.dropConfirm": "Убрать эту панель? Терминал в ней завершится, и место не вернётся при следующем запуске.",
     "quit.confirm": "Завершить Amenbo? Все открытые терминалы завершатся, и ни одна сессия не вернётся при следующем запуске.",
 
-    "face.turnTitle": "Amenbo — ваш ход",
-    "face.turnBody": "Терминал вас ждёт.",
     "face.ended": "Программа в этом терминале завершилась.",
     "face.projects": "Проекты",
     "face.railFolders": "Папки",
@@ -591,7 +589,6 @@ export const ru: Translation = {
     "face.openHere": "Место для ещё одной панели в этом проекте",
     "face.whichFolder": "В какой папке работает эта панель?",
     "face.rename": "Переименовать эту панель",
-    "face.needsYou": "ждёт вас",
     "face.handHere": "Отпустите, чтобы вставить путь",
     "face.more": "Ещё",
     "files.side": "Страница и файлы",

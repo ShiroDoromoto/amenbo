@@ -2223,29 +2223,6 @@ pub struct SessionSaidDto {
     pub(crate) text: Option<String>,
 }
 
-/// One session, and the place the talk window's face is drawing it in — as the face says it
-/// ([`crate::frames::panes_drawn`]).
-///
-/// **The face is the only thing that knows this pairing.** A session belongs to the process
-/// (`crate::pty`) and a place belongs to the arrangement, which lives in whichever window is drawing
-/// the face — so the host is told rather than working it out. It is held for the length of the run and
-/// no longer: what it pairs are two things that both go when the app does (`crate::frames`).
-///
-/// `label` is what that pane is called on the screen, worked out where the naming rules are
-/// (`app/src/talk/frames.ts`) rather than rebuilt here — so a pane reads the same on the rail, above
-/// its own terminal, and on the task it is holding.
-#[derive(Clone, Deserialize, Serialize, TS)]
-#[ts(export, export_to = "../../src/bindings/bindings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct PaneDrawnDto {
-    /// The terminal running in it — the id it was opened under.
-    pub(crate) session: String,
-    /// The place it is drawn in (`FrameNameDto`).
-    pub(crate) frame: String,
-    /// What that place is called on the screen.
-    pub(crate) label: String,
-}
-
 /// What one frame of the talk window is called, and who called it that — which is what says whether
 /// the next naming may replace it ([`amenbo_core::frames`]). It is this run's: a name is about a
 /// place, and the places go when the app does (`crate::frames`).

@@ -585,14 +585,6 @@ body.is-dragging { user-select: none; }
    of them is the six-character Japanese word for project, the longest label this pane puts here. A
    language whose word runs longer wraps, which it already did at the 64px this replaces. */
 .detail__flabel { width: 6em; flex: none; color: var(--c-text-muted); font-size: var(--fs-md); }
-/* The pane a task is being worked in: the way back from the ledger to the terminal, drawn as a link
-   rather than a control because what it does is go somewhere. */
-.detail__pane {
-  display: inline-flex; align-items: center; gap: var(--s-1);
-  border: 0; background: none; padding: 0; cursor: pointer;
-  color: var(--c-accent-text); font-size: inherit; text-align: left;
-}
-.detail__pane:hover { text-decoration: underline; }
 .detail__sep { height: 1px; background: var(--c-rule); }
 .detail__section-h { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--c-text-muted); }
 

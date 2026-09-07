@@ -7,11 +7,6 @@
 //! nothing in the window can do. What outlives the run is what the person *set* rather than what they
 //! opened: the split and the project ([`amenbo_core::frames::SavedLayout`], in the store's device row).
 //!
-//! **Which place each running terminal is drawn in is held here too**
-//! ([`panes_drawn`](crate::frames::panes_drawn)), and for the
-//! same reason: it pairs a session, which belongs to the process, with a place, which belongs to the
-//! arrangement — and the one thing that can see both is whichever window is drawing the face.
-//!
 //! **It is held here, and not in either window, because the face moves between them.** The board and
 //! the window a terminal is split out into are two webviews of one process: the arrangement is written
 //! by whichever is drawing the face and read by the other as it comes up, which is how the second
@@ -21,12 +16,10 @@
 
 use std::sync::Mutex;
 
-use tauri::Emitter;
-
 use amenbo_core::frames::{FrameName, FrameNames, NamedBy, Orient, SavedLayout};
 
 use crate::commands::{open_store, open_store_read};
-use crate::dto::{FrameNameDto, PaneDrawnDto, TalkLayoutDto};
+use crate::dto::{FrameNameDto, TalkLayoutDto};
 use crate::error::CmdError;
 
 /// The face as this run has it: the arrangement both windows read, and the names on its frames.
@@ -40,12 +33,6 @@ pub struct TalkFace {
     /// The arrangement as the window drawing the face last had it, or nothing before either window
     /// has laid one out in this run.
     layout: Mutex<Option<TalkLayoutDto>>,
-    /// Which place each running session is drawn in, as the face last said ([`panes_drawn`]). It is
-    /// held apart from the arrangement above rather than inside it, because the two are different
-    /// kinds of thing: the arrangement is a shape the windows hand between themselves, and a shape
-    /// with a session written into it would say a terminal is running in a place the other window has
-    /// not drawn yet (`app/src/talk/layout.ts`).
-    panes: Mutex<Vec<PaneDrawnDto>>,
 }
 
 /// What this run calls the talk window's frames — the whole of it, since the window draws every frame
@@ -125,28 +112,6 @@ pub fn save_talk_layout(
 fn orient_of(layout: &TalkLayoutDto) -> Orient {
     layout.orient.map_or(Orient::default(), Into::into)
 }
-
-/// Which place each running session is drawn in, as the face has it now.
-///
-/// **The whole set, every time**, the way the arrangement is written ([`save_talk_layout`]): what the
-/// face is saying is where its terminals are, and a set that arrived one pairing at a time would leave
-/// the host holding a pane that closed while nobody was listening.
-///
-/// **Nothing reads the set any more.** What it was held for was the row on a task naming the pane its
-/// work was happening in, and that row is gone — the key it joined on was one the world could rewrite
-/// behind the pane. What is left here is the supply side of a road with no other end, and it goes
-/// whole rather than in pieces.
-#[tauri::command]
-pub fn panes_drawn(app: tauri::AppHandle, face: tauri::State<'_, TalkFace>, panes: Vec<PaneDrawnDto>) {
-    *face.panes.lock().expect("panes lock") = panes;
-    if let Err(e) = app.emit_to(crate::windows::BOARD, PANES_EVENT, ()) {
-        log::warn!("failed to emit {PANES_EVENT}: {e}");
-    }
-}
-
-/// Told to the board when the panes the face is drawing have changed. It carries nothing, and nothing
-/// listens for it any more — it goes with the set above.
-pub const PANES_EVENT: &str = "panes-changed";
 
 /// The frame names in the shape the webview reads them: a list, in frame order, rather than a map —
 /// the window draws them in a row, and a map's order is the caller's to rebuild.

@@ -118,7 +118,7 @@ const openPane = async () => {
 };
 /** Go to a pane the way a person does: press it. Which pane is being worked in is what says they
  *  came to it rather than merely had it on the screen (`../talk/spoken`). */
-const goPane = async (nth: number) => {
+const pressPane = async (nth: number) => {
   await act(async () => {
     q(".slot")[nth]!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
   });
@@ -241,7 +241,7 @@ describe("a turn standing on a page", () => {
     // standing, because nobody has been to that pane.
     expect(q(".termface__needs")).toHaveLength(1);
 
-    await goPane(0);
+    await pressPane(0);
     await goPage(1);
     // Being at the pane on page 2 is what ended its turn (`AMB-D-859`). Page 2 has nothing to say
     // any more, and the pane the person never went to is untouched.

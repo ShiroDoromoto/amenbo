@@ -1136,16 +1136,13 @@ pub fn pty_write(
 /// - nothing is left to send, because the hand-over got through, the sentence rode in on the command
 ///   line, or an earlier press already sent it ([`Pane::take_unsent`]).
 ///
-/// **A pane that has merely spoken is not one that has been briefed.** The row above it stops saying
-/// the sentence is unsent as soon as the agent says anything at all (`app/src/talk/sessions.ts`) —
-/// that is a notice about a person's turn, and it is right to take it back on any word. What is owed
-/// is a narrower question, and only the one verb answers it.
+/// **A pane that has merely spoken is not one that has been briefed.** An agent saying anything at
+/// all is not the answer — what is owed is a narrower question, and only the one verb settles it.
 ///
-/// **What it answers is whether the sentence went**, which is the one thing only this side knows and
-/// the row above the pane has to be told: while a sentence is sitting in an input box the row says so
-/// and says that Enter sends it, and a row still saying that after the sending is a person being
-/// pointed at a keypress that now does nothing. It is taken back on the sending rather than on the
-/// agent's first word — that word may never come, and the notice is about the box, not the agent.
+/// **What it answers is whether the sentence went**, which is the one thing only this side knows: the
+/// press belongs to the pane drawing the terminal, and the sending happens here. Nothing reads the
+/// answer — the row above the pane says the pane's name and nothing else (`AMB-D-862`), and the caller
+/// drops the value (`app/src/talk/terminal.ts`).
 ///
 /// `false` is the answer for a pane with nothing owed: a press that turned out to need nothing is not
 /// a failure, and there is nothing for a reader to do about it. Only a terminal that is not there at

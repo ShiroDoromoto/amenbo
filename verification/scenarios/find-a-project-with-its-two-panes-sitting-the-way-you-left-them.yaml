@@ -1,0 +1,188 @@
+# Which way the two panes of a page sit is the person's answer about one project, and every other
+# project keeps its own. This is the road that says so: a page stacked in one project is drawn side by
+# side in the next, and stacked again on coming back.
+#
+# ── Why the arrangement is kept per project at all ───────────────────────────────────────────────
+# The press is about the width a pane is left with: two across halves the columns of each, and two
+# down leaves them whole and takes the lines instead — which is the whole of what
+# `stack-the-two-panes-so-each-keeps-the-whole-width` reads. What a reader wants there is not the same
+# from one project to the next, because what they run in the panes is not: a project worked in a TUI
+# that wants its eighty columns and a project worked in two short shells pull opposite ways. With one
+# answer for the whole face, arriving somewhere would re-lay the page the reader set there, and they
+# never pressed anything. It is the unit the split beside it is kept in
+# (`find-a-project-at-the-split-you-left-it-at`), and the unit the reading column's two widths are.
+#
+# ── Why each project is cut to two before anything is read ───────────────────────────────────────
+# The control is drawn at two panes and at no other count — everywhere else the rows are already
+# spent and there is nothing left to arrange — and a project nobody has answered for is drawn at one.
+# So the cut is asked for in both projects, and the panes to fill it opened. That the second project
+# has to be cut as well is the split's own road and not this one's: what is being read here is where
+# the two boxes sit once there are two of them.
+#
+# ── Why the arrangement is read before the press ─────────────────────────────────────────────────
+# The reading after the press means nothing on its own: a face stuck in the stack would pass it. The
+# pair is the road — across, then down, then across again in the other project — and each leg is read
+# the same way, so nothing in the middle can be a difference in how it was measured.
+#
+# ── Why the middle leg is the one that goes red on a face keeping one answer ─────────────────────
+# It is also the leg that catches a face which never moved. A build keeping one arrangement for the
+# whole of itself draws the second project stacked, and a face that swallowed the press on the tab
+# would be reading the first project's page again — both come out stacked, where this road wants them
+# side by side. The last leg is the other half, and no build fails only it: a face that kept the
+# arrangement while the project was shown, and dropped it on leaving, passes everything above and
+# fails here, which is the half a reader is actually promised.
+#
+# ── Why nothing is typed in any of the panes ─────────────────────────────────────────────────────
+# What a press across projects can get wrong here is where the boxes are drawn, and the boxes are
+# what the reading is taken off. Whether the terminals inside them come through a re-shape is the
+# other road's question, asked where the re-shape happens — in one project, with a line typed before
+# it and a second one after. Asking it again in four panes would put three steps on an operator for
+# a reading already held somewhere else.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# An arrangement is a thing on a screen. The binary is handed no page and has nothing to say here.
+id: find-a-project-with-its-two-panes-sitting-the-way-you-left-them
+title: Which way two panes sit is kept for the project they were arranged in, so another project draws its own side by side and the first is drawn stacked on coming back
+description: >
+  Raise two projects, each with a folder of its own. In the first, cut the page to two and open both
+  panes: they sit side by side, which is how a page nobody has answered about is drawn. Ask for them
+  one above the other. Go to the second project, cut its page to two and open both panes there: they
+  sit side by side, the press having been about the first project and not about this face. Go back to
+  the first: its two are still stacked.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face opens on is the run's business, so the road presses for the one it means to
+  # arrange in rather than reading whichever was selected.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # Room for two, which is the one count this arrangement is asked at.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  # And the page is full, which is the same thing as saying both panes are standing. A page still
+  # offering a way in would be a page with one pane on it, and there would be nothing to arrange.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 2
+      empty: 0
+
+  # Where a page nobody has answered about sits, read before the press so that the press has something
+  # to have changed.
+  - type: assert
+    domain: terminal
+    op: panes-sit
+    with:
+      orient: across
+
+  - type: action
+    domain: terminal
+    op: set-orient
+    with:
+      orient: down
+
+  - type: assert
+    domain: terminal
+    op: panes-sit
+    with:
+      orient: down
+
+  # The other project, which was never arranged in.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  # Cut to two here as well: the split is kept per project too, so this project is standing at the one
+  # pane nobody has answered for and has no room for a second.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 2
+      empty: 0
+
+  # The half a face keeping one answer for the whole of itself would fail, and the half a face that
+  # swallowed the press on the tab would fail with it — the reason is at the top of this road.
+  - type: assert
+    domain: terminal
+    op: panes-sit
+    with:
+      orient: across
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # And the press is still spent here. The panes opened in this project never went anywhere, so there
+  # is nothing to press before reading — a face that kept the arrangement only while the project was
+  # shown would pass every reading above and fail this one.
+  - type: assert
+    domain: terminal
+    op: panes-sit
+    with:
+      orient: down

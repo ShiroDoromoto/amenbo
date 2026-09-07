@@ -395,7 +395,11 @@ export function TerminalFace({
           // It answers only where nothing came back to say it: an arrangement with panes in it names
           // the project of every one of them, and this is the machine that has never had any.
           if (ownWindow && next.frames.length === 0 && saved?.project != null) {
-            next = { ...next, project: saved.project };
+            // Through `goProject` rather than by writing the project in, so the face comes up at the
+            // split that project was left at: the answers came back with the arrangement, and a
+            // window that set the project by hand would draw it at whichever project's shape the
+            // restore had landed on (`../talk/layout`).
+            next = goProject(next, saved.project);
           }
           for (const session of running) {
             const free = next.frames.find(

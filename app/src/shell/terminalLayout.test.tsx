@@ -75,6 +75,11 @@ const openPaneIn = async (host: HTMLElement) => {
   await click([...host.querySelectorAll<HTMLElement>(".slot--empty .slot__open")][0]!);
 };
 const openPane = () => openPaneIn(container);
+/** Press for a split. A project nobody has answered for is drawn at one pane (`../talk/layout`), so
+ *  a road about pages, gaps and the strip beside them says how many it wants first. */
+const atCount = async (count: 1 | 2 | 4 | 6 | 8) => {
+  await click(q(".termface__count")[[1, 2, 4, 6, 8].indexOf(count)]!);
+};
 /** Put the face up. It is not in `beforeEach` because what the project is bound to is set per test,
  *  and the face reads it as it comes up. */
 const mount = async () => {
@@ -150,7 +155,7 @@ describe("a pane works in a folder of its project", () => {
     await openPane();
     // Asking for a different split, like going to a pane or a project, is a person doing something
     // else: the question goes with it.
-    await click(q(".termface__count")[0]!);
+    await atCount(2);
     expect(q(".slot--asking")).toHaveLength(0);
     expect(q(".slot--empty"), "a place was left where nothing was opened").toHaveLength(1);
   });
@@ -159,6 +164,7 @@ describe("a pane works in a folder of its project", () => {
 describe("turning a page", () => {
   it("takes the panes down and picks the same terminals up again — never starts a second", async () => {
     await mount();
+    await atCount(2);
     await openPane();
     await openPane();
     await openPane();               // a third pane, which is page 2 at two a page
@@ -179,6 +185,7 @@ describe("turning a page", () => {
 describe("the empty frame", () => {
   it("is one on a page with room, and none on a full one", async () => {
     await mount();
+    await atCount(2);
     await openPane();
     // One pane at two a page: the page has a gap, and one frame says so.
     expect(q(".slot--empty")).toHaveLength(1);
@@ -189,6 +196,7 @@ describe("the empty frame", () => {
 
   it("is on the page the strip goes to, which it brings into being when every page is full", async () => {
     await mount();
+    await atCount(2);
     await openPane();
     await openPane();                              // page 1 full at two a page
     await click(q(".termface__addstrip")[0]!);
@@ -203,6 +211,7 @@ describe("the empty frame", () => {
 describe("taking a pane away", () => {
   it("takes the place off the face and closes the page up", async () => {
     await mount();
+    await atCount(2);
     await openPane();
     await openPane();
     await openPane();                              // three panes, so two pages at two a page
@@ -220,9 +229,10 @@ describe("taking a pane away", () => {
 describe("how many panes", () => {
   it("carries the pane being worked in over to the page it is on at the new count", async () => {
     await mount();
+    await atCount(2);
     await openPane();
     await openPane();                              // two panes, both on page 1 at two a page
-    await click(q(".termface__count")[0]!);        // one pane a page
+    await atCount(1);
 
     // At one a page the second pane is page 2, and that is where the screen is: a person who asks for
     // one pane means the one they were looking at.
@@ -233,6 +243,7 @@ describe("how many panes", () => {
 
   it("puts the way in beside the panes once the page is full, and nowhere else", async () => {
     await mount();
+    await atCount(2);
     await openPane();
     // A page with a gap draws the empty frame, and that frame is the way in. A second one beside it
     // would be the same offer twice.
@@ -262,7 +273,11 @@ describe("how many panes", () => {
   it("asks which way two panes sit, and asks it of no other count", async () => {
     await mount();
     await openPane();
-    // Two a page is where a run comes up, so the question is on the row from the start.
+    // One is where a project nobody has answered for comes up, and one has nothing to arrange — the
+    // question appears with the count it is about.
+    expect(q(".termface__count--glyph")).toHaveLength(0);
+
+    await atCount(2);
     expect(q(".termface__page-grid--2")).toHaveLength(1);
     expect(q(".termface__count--glyph")).toHaveLength(2);
 

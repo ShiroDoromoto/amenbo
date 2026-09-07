@@ -1010,11 +1010,6 @@ pub enum TalkCmd {
         /// the name to show on the pane
         text: String,
     },
-    /// A person's turn has come. Say why in the same breath — the reason is what they read
-    Waiting {
-        /// why their turn has come
-        text: String,
-    },
 }
 
 #[derive(Subcommand, Debug)]

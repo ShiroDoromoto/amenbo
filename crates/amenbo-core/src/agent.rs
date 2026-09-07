@@ -1780,11 +1780,17 @@ fn index(in_a_pane: bool) -> Value {
         // only a reader of this document has.
         if in_a_pane {
             // How many of them are owed is counted off the canon rather than written down twice: a word
-            // that moves between `owed` and `offered` moves this sentence with it.
+            // that moves between `owed` and `offered` moves this sentence with it — and the vocabulary
+            // has been down to one word before, so the sentence reads at one as well as at several.
             let owed = crate::session::spec()["owed"].as_array().map_or(0, |o| o.len());
+            let owes = if owed == 1 {
+                "one of its words is owed".to_string()
+            } else {
+                format!("{owed} of its words are owed")
+            };
             map.insert(
                 "talk".to_string(),
-                json!(format!("You are running in a pane of Amenbo's talk window, and there is a second vocabulary here: what you say about **this session** — the pane on the person's screen. It writes to no store and exists in this terminal alone, which is why `agent` does not carry it. Read `{cli} talk --json` and follow it; {owed} of its words are owed, and the person sees only what you say. Do not go looking for work until the person speaks: step 1 is for when you have decided to, and an agent opened into an empty pane has not.")),
+                json!(format!("You are running in a pane of Amenbo's talk window, and there is a second vocabulary here: what you say about **this session** — the pane on the person's screen. It writes to no store and exists in this terminal alone, which is why `agent` does not carry it. Read `{cli} talk --json` and follow it; {owes}, and the person sees only what you say. Do not go looking for work until the person speaks: step 1 is for when you have decided to, and an agent opened into an empty pane has not.")),
             );
         }
     }

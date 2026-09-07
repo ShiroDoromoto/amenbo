@@ -92,7 +92,7 @@ async function pane(names: Map<string, string> = new Map()): Promise<void> {
 /** The host opens a terminal in the pane, which is what puts the row's menu up. */
 async function opened(): Promise<void> {
   await act(async () => {
-    hoisted.events?.opened("session-7", "2026-09-03T00:00:00Z", "/work/here", null);
+    hoisted.events?.opened("session-7", "2026-09-03T00:00:00Z", "/work/here");
   });
   await act(async () => { await Promise.resolve(); });
 }

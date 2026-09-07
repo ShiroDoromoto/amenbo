@@ -75,10 +75,6 @@ pub enum CliErrorCode {
     /// speaks about does not exist (`AMB-D-749`). It is a code of its own, and non-zero, because the
     /// alternative — a quiet success — would leave the caller believing it had spoken.
     TalkOutsideSurface,
-    /// The reason handed to `talk waiting` runs past what the pane's label holds
-    /// ([`amenbo_core::session::WAITING_LIMIT`]). Refused rather than cut: the row has three things on
-    /// it, and a reason that overran would push the other two into ellipses.
-    TalkReasonTooLong,
 }
 
 impl CliErrorCode {
@@ -100,7 +96,6 @@ impl CliErrorCode {
             CliErrorCode::SyncGap => "sync_gap",
             CliErrorCode::SyncError => "sync_error",
             CliErrorCode::TalkOutsideSurface => "talk_outside_surface",
-            CliErrorCode::TalkReasonTooLong => "talk_reason_too_long",
         }
     }
 
@@ -123,7 +118,6 @@ impl CliErrorCode {
         CliErrorCode::SyncGap,
         CliErrorCode::SyncError,
         CliErrorCode::TalkOutsideSurface,
-        CliErrorCode::TalkReasonTooLong,
     ];
 }
 
@@ -375,28 +369,6 @@ impl CliError {
         }
     }
 
-    /// A reason for a person's turn that will not fit on the pane's label, refused at the door.
-    ///
-    /// **The row holds one line and three things on it** — what the pane is called, what its session is
-    /// on, and this — so a reason written past its share does not get more room, it takes the other
-    /// two's (`AMB-T-3673`). Cutting it here would be the same loss one step later, and quietly: the
-    /// agent would believe the person had been told the whole of it.
-    ///
-    /// So it is refused, and the refusal says what to write instead. One rewrite is the whole cost, and
-    /// what it buys is the sentence that belongs on a label rather than the paragraph that does not.
-    pub fn talk_reason_too_long(over: amenbo_core::session::Overlong) -> CliError {
-        CliError {
-            code: CliErrorCode::TalkReasonTooLong.as_str(),
-            message: format!(
-                "A person's turn is announced on one line of the pane's label, beside what the pane is called and what it is holding. This reason takes {} columns of it and the line holds {} — counted as a terminal counts them, so a character drawn double-width takes two. Nothing was recorded.",
-                over.got, over.limit,
-            ),
-            hint: Some(
-                "Say the one thing they have to decide, in a sentence. What led up to it belongs where it will still be true tomorrow — a comment on the task — rather than on a label that is gone with the window.".to_string()
-            ),
-            exit: 1,
-        }
-    }
 
     /// Nested-worktree guard: the CWD sits in a git worktree cut **inside** an Amenbo-managed folder, so it
     /// inherited that folder's binding by the upward walk. The worktree is throwaway; the store it would
@@ -840,7 +812,6 @@ mod tests {
             "sync_gap",
             "sync_error",
             "talk_outside_surface",
-            "talk_reason_too_long",
         ]);
         let actual = set(CliErrorCode::ALL.iter().map(|c| c.as_str()));
         assert_eq!(actual, expected, "the full set of CLI error codes does not match the contract");

@@ -15,7 +15,6 @@ import { faceOf, mountNameplate, type Plate as Row } from "./nameplate";
 import { movingAt, STILL_AFTER_MS } from "./moving";
 import {
   closed,
-  declared,
   NO_SESSIONS,
   opened,
   said,
@@ -27,13 +26,8 @@ import {
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
   /** A terminal has started in the pane, under this session id, in `folder`. The folder is what the
-   *  row calls the pane until something names it (`./frames`).
-   *
-   *  `waiting` is a turn already standing in that session, which the host hands over with the rest
-   *  of it (`crate::pty::pty_sessions`). It is not nothing for a pane that has just gone up: the
-   *  reader turning back to a page is a pane coming up on a session that handed its turn over while
-   *  they were away, and a row that started empty would be the one place saying so (`AMB-D-860`). */
-  opened(session: string, startedAt: string, folder: string | null, waiting?: string | null): void;
+   *  row calls the pane until something names it (`./frames`). */
+  opened(session: string, startedAt: string, folder: string | null): void;
   /** Something came out of the terminal. Said per chunk and read as a time, never as a quantity: what
    *  it turns into is a fixed rhythm rather than a meter (`./moving`). */
   output(): void;
@@ -141,8 +135,8 @@ export function mountPlate(host: HTMLElement, frame: string = ONLY_FRAME): Plate
   redraw();
 
   return {
-    opened: (session, startedAt, where, standing = null) => {
-      sessions = opened(sessions, { session, startedAt, waiting: standing });
+    opened: (session, startedAt, where) => {
+      sessions = opened(sessions, { session, startedAt });
       running = session;
       folder = where;
       ran = true;
@@ -151,15 +145,6 @@ export function mountPlate(host: HTMLElement, frame: string = ONLY_FRAME): Plate
     output: tookOutput,
     said: (statement) => {
       sessions = said(sessions, statement);
-      // The turn comes off the pane's own word about itself. The window used to keep one record of
-      // every session's, so that the dots on the pages and this row were drawn from one answer and
-      // could not disagree — there are no dots any more, and this row is the only reader left
-      // (`AMB-D-862`).
-      if (statement.verb === "waiting") {
-        sessions = declared(sessions, statement.session, statement.text ?? null);
-      } else if (statement.verb === "note" || statement.verb === "finished") {
-        sessions = declared(sessions, statement.session, null);
-      }
       redraw();
     },
     unsent: (session) => {

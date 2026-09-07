@@ -93,11 +93,13 @@ pub fn launch_instruction(cmd: &str) -> String {
 /// **What the words are for, not what layer they sit in.** `talk --json` describes itself at length —
 /// that it writes to no store, that it fails outside this terminal, that it promises nothing — so
 /// saying any of that here is saying it twice, and the second time in the more expensive place. What
-/// does not survive the trip is the reason to say anything at all: silence reads the same whatever
-/// the session is doing, so the person learns nothing from it.
+/// does not survive the trip is why a pane wants naming at all: what the reader sees of a session is
+/// the label over it, and every pane opened on one folder wears the same one until somebody says
+/// otherwise.
 ///
-/// **No number of words.** `owed` is a list that has already lost an entry (`AMB-D-859`), and a count
-/// written out here follows nothing — the reader is being sent to read the list anyway.
+/// **No number of words.** `owed` is a list that has lost entries twice over (`AMB-D-859`,
+/// `AMB-D-862`), and a count written out here follows nothing — the reader is being sent to read the
+/// list anyway.
 ///
 /// **Until the person speaks.** An agent opened into an empty pane holds no request, and the state of
 /// holding none is named nowhere in `agent --json` (`AMB-T-4521`) — so the cycle's step 1, whose
@@ -111,9 +113,9 @@ pub fn launch_instruction(cmd: &str) -> String {
 pub fn pane_instruction(cmd: &str) -> String {
     format!(
         "{instruction} You are in a pane of Amenbo's talk window, which has a vocabulary of its own. \
-         Read `{cmd} talk --json` and follow it — it names the words that are owed, and the person \
-         sees only what you say: silence looks the same whether you are working, thinking, or \
-         waiting. Do not go looking for work until the person speaks.",
+         Read `{cmd} talk --json` and follow it — it names the words that are owed, and what the \
+         person sees of this session is the label over it. Do not go looking for work until the \
+         person speaks.",
         instruction = launch_instruction(cmd),
     )
 }

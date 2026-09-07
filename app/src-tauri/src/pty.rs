@@ -242,19 +242,6 @@ struct Pane {
     /// once however many times a person presses Enter. `None` is a pane with nothing owed: one whose
     /// sentence rode in on the command line, one the hand-over got through to, or one already sent.
     unsent: Mutex<Option<String>>,
-    /// Why a person's turn has come here, as the agent last said it — `None` once it went back to
-    /// work (`AMB-D-860`).
-    ///
-    /// **It is kept here because a session outlives the pane drawing it.** A turn is handed over
-    /// exactly when nobody is looking, and the reader is somewhere else because the pane came down
-    /// with the page they turned away from. Held in the webview it would be held by the one thing
-    /// that goes away; held here it is still there for the dots on the pages, for the badges on the
-    /// project tabs, and for the row of a pane that comes back up.
-    ///
-    /// A [`Mutex`] where `briefed` is one bit, because what is kept is the sentence and not the fact:
-    /// the row says *why* the turn came, which is the one thing nothing else can find out
-    /// (`AMB-D-748`).
-    waiting: Mutex<Option<String>>,
 }
 
 impl Pane {
@@ -264,43 +251,20 @@ impl Pane {
             recent: Mutex::new(Recent::new(at)),
             briefed: AtomicBool::new(false),
             unsent: Mutex::new(None),
-            waiting: Mutex::new(None),
         }
     }
 
     /// Take in one statement on its way to the window.
     ///
-    /// Two of them are the pane's own business as well as the person's: the fact that `amenbo agent`
-    /// ran here, and whose turn it is. Every other verb passes straight through.
-    ///
-    /// **No word takes a turn back down.** What ends one is the person it was handed to coming to the
-    /// pane (`AMB-D-859`), which is a thing the window measures and not a thing an agent says — so
-    /// the way down is [`Pane::saw`], called from the window, and never a verb. A name says nothing
-    /// about whose turn it is: it is the frame being named, not the session.
+    /// One of them is the pane's own business as well as the person's: the fact that `amenbo agent`
+    /// ran here. Every other verb passes straight through — a name is the frame being named, and the
+    /// frame is the window's.
     fn take_in(&self, said: &amenbo_core::session::Said) {
         use amenbo_core::session::Statement;
         match &said.statement {
             Statement::Briefed => self.briefed.store(true, Ordering::Relaxed),
-            Statement::Waiting(why) => {
-                *self.waiting.lock().expect("pane waiting lock") = Some(why.clone());
-            }
             Statement::Name(_) => {}
         }
-    }
-
-    /// Why a person's turn has come here, if one is standing.
-    fn waiting(&self) -> Option<String> {
-        self.waiting.lock().expect("pane waiting lock").clone()
-    }
-
-    /// A person has come to this pane — the turn standing in it, if one is, is over (`AMB-D-859`).
-    ///
-    /// **The measurement is the window's and the answer is this side's.** Only the window can see a
-    /// person arrive; only this outlives the pane they arrived at. Kept in the webview instead, the
-    /// arrival would go away with the pane while the declaration stayed here, and every turn already
-    /// answered would stand again the moment a second window drew the session.
-    fn saw(&self) {
-        *self.waiting.lock().expect("pane waiting lock") = None;
     }
 
     /// Whether the agent in this pane has the canon.
@@ -705,8 +669,6 @@ pub fn pty_open(
         session,
         started_at,
         folder: opened_in,
-        // Nothing has been said in a terminal that has just started.
-        waiting: None,
     })
 }
 
@@ -989,7 +951,7 @@ impl SessionSaidDto {
         use amenbo_core::session::Statement;
         let verb = said.statement.verb();
         let text = match said.statement {
-            Statement::Name(text) | Statement::Waiting(text) => Some(text),
+            Statement::Name(text) => Some(text),
             // The fact is the whole of it, so there is no line to draw (`AMB-D-805`).
             Statement::Briefed => None,
         };
@@ -1081,7 +1043,6 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
                 session: session.clone(),
                 started_at: terminal.started_at.clone(),
                 folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
-                waiting: terminal.pane.waiting(),
             })
             .collect(),
     )
@@ -1204,24 +1165,6 @@ pub fn pty_brief(terminals: tauri::State<'_, Terminals>, session: String) -> Res
         .and_then(|()| terminal.writer.flush())
         .map_err(failed)?;
     Ok(true)
-}
-
-/// A person has come to the pane drawing this session — the turn standing in it is over
-/// (`AMB-D-859`).
-///
-/// **Arriving is the measurement, and it is the only one taken.** Printing is not: an agent that
-/// hands a turn over and then prints the question would take its own hand down. Nor is the pane
-/// merely being on the screen — a page of panes is several turns, and the one a person went to is
-/// the one they attended to.
-///
-/// A session that has ended in the meantime is not an error worth raising: what the call is about is
-/// a turn, and a session with no terminal left has none.
-#[tauri::command]
-pub fn pty_saw(terminals: tauri::State<'_, Terminals>, session: String) {
-    let open = terminals.0.lock().expect("terminals lock");
-    if let Some(terminal) = open.get(&session) {
-        terminal.pane.saw();
-    }
 }
 
 /// Tell the terminal how large the pane is now, in characters.
@@ -1370,7 +1313,6 @@ mod tests {
             session: session.into(),
             started_at: started_at.into(),
             folder: Some("/work/repo".into()),
-            waiting: None,
         };
         let order = |open: Vec<PtySessionDto>| {
             in_open_order(open).into_iter().map(|one| one.session).collect::<Vec<_>>()
@@ -1603,12 +1545,7 @@ mod tests {
         let surface = Surface { session: "a-session".into(), dir: dir.clone() };
         let pane = Pane::new("main", OPENED_AT);
 
-        for spoken in [
-            Statement::Name("the top fix".into()),
-            Statement::Waiting("which way?".into()),
-        ] {
-            say(&surface, &spoken).expect("said");
-        }
+        say(&surface, &Statement::Name("the top fix".into())).expect("said");
         for said in amenbo_core::session::said_after(&dir, None).expect("read") {
             pane.take_in(&said);
         }
@@ -1619,57 +1556,6 @@ mod tests {
             pane.take_in(&said);
         }
         assert!(pane.briefed(), "and the fact itself is");
-    }
-
-    /// The reason a turn was handed over stands in the pane, which is where it stands because a
-    /// session outlives the pane drawing it (`AMB-D-860`).
-    ///
-    /// This walks the real statements rather than calling `take_in` with made-up ones: what reaches a
-    /// pane is whatever came off the drop box, so the pass over the box is the thing under test.
-    /// Taking the turn down is here too, and it is not a word: the window says a person came to the
-    /// pane, and no verb can (`AMB-D-859`).
-    #[test]
-    fn the_reason_a_turn_was_handed_over_stands_until_the_person_comes() {
-        use amenbo_core::session::{say, Statement, Surface};
-
-        let dir = amenbo_scratch::scratch("pty-waiting");
-        let surface = Surface { session: "a-session".into(), dir: dir.clone() };
-        let pane = Pane::new("main", OPENED_AT);
-        let mut last: Option<String> = None;
-        let carry = |pane: &Pane, last: &mut Option<String>| {
-            for said in amenbo_core::session::said_after(&dir, last.as_deref()).expect("read") {
-                *last = Some(said.name.clone());
-                pane.take_in(&said);
-            }
-        };
-
-        assert_eq!(pane.waiting(), None, "a pane nobody has spoken in is nobody's turn");
-
-        say(&surface, &Statement::Waiting("which of the two?".into())).expect("said");
-        carry(&pane, &mut last);
-        assert_eq!(pane.waiting().as_deref(), Some("which of the two?"));
-
-        // A name is the frame's, and says nothing about whose turn it is.
-        say(&surface, &Statement::Name("the pane".into())).expect("said");
-        carry(&pane, &mut last);
-        assert_eq!(pane.waiting().as_deref(), Some("which of the two?"));
-
-        // A second turn replaces the first: what is kept is the reason last given, there being one
-        // row to write it on.
-        say(&surface, &Statement::Waiting("and this one?".into())).expect("said");
-        carry(&pane, &mut last);
-        assert_eq!(pane.waiting().as_deref(), Some("and this one?"));
-
-        // The person came to the pane. That, and nothing an agent can say, is what ends a turn.
-        pane.saw();
-        assert_eq!(pane.waiting(), None);
-        pane.saw();
-        assert_eq!(pane.waiting(), None, "arriving at a pane nobody is calling from is nothing");
-
-        // A turn handed over after they left is a new call, and stands.
-        say(&surface, &Statement::Waiting("back to you".into())).expect("said");
-        carry(&pane, &mut last);
-        assert_eq!(pane.waiting().as_deref(), Some("back to you"));
     }
 
     /// What a pane is owed goes out once, whatever a person presses after.

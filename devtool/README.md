@@ -854,12 +854,15 @@ how long it holds.
   dev GUI placed in the guest, a road's own seed/install/run. Queuing behind one
   of those is indistinguishable from a hang, which is what the collision looked
   like from the outside.
-- **Waited for, naming the holder on the way in**, is for `vm exec`, which is how
-  the screen is driven at all: one line brings a window to the front and presses
-  it, and the whole of it is under a second. What that line has to be protected
-  from is another driver fronting something in between — a press that lands on
-  the wrong window and still exits 0. Turning a driver away there would break the
-  very command the lock exists to let through.
+- **Waited for, naming the holder on the way in**, is for the short lines that
+  drive it: `vm exec`, and the front a `devgui pid` / `devgui shot` takes before
+  it reads. `vm exec` is how the screen is driven at all — one line brings a
+  window to the front and presses it, and the whole of it is under a second. What
+  that line has to be protected from is another driver fronting something in
+  between — a press that lands on the wrong window and still exits 0. Turning a
+  driver away there would break the very command the lock exists to let through.
+  `devgui shot --vm` holds from its front to the capture for the same reason, and
+  `devgui pid --vm --front` lets go as soon as the window is forward.
 
 **The road and the dev GUI are read asymmetrically, on purpose.** A road being
 walked turns a dev GUI away, and does not turn away the road's own next command:

@@ -33,10 +33,6 @@ export type Session = {
   readonly agent: string | null;
   /** When the session began (RFC3339 UTC). */
   readonly startedAt: string;
-  /** Why a person's turn has come, said by the agent — the one thing nothing can find out by watching
-   *  (`AMB-D-748`). Null where none is standing. It is written by `declared`, off what the agent said
-   *  in this pane (`./plate`). */
-  readonly waiting: string | null;
   /** Whether the sentence Amenbo opens an agent with is sitting in this pane's input box, unsent.
    *  It is the window's own doing and not a guess: the host handed the sentence over itself and says
    *  how that ended (`crate::pty`). */
@@ -52,11 +48,6 @@ export type Opened = {
   folder?: string | null;
   project?: number | null;
   agent?: string | null;
-  /** A turn already standing in this session, as the host holds it (`crate::pty::Pane`). It is here
-   *  for the pane that comes **back** up: a session outlives the pane drawing it, so one that handed
-   *  its turn over while the reader was on another page still has it when they turn back
-   *  (`AMB-D-860`). A terminal this pane just started has none. */
-  waiting?: string | null;
 };
 
 export const NO_SESSIONS: Sessions = new Map<string, Session>();
@@ -80,7 +71,6 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
     project: open.project ?? null,
     agent: open.agent ?? null,
     startedAt: open.startedAt,
-    waiting: open.waiting ?? null,
     unsent: false,
   });
 }
@@ -109,7 +99,6 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
     project: null,
     agent: null,
     startedAt: statement.at,
-    waiting: null,
     unsent: false,
   };
   // The folder moves with the agent, so the newest statement's is the current one.
@@ -120,18 +109,6 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
   // left in the input box says is missing, and it is taken back by the agent working rather than by a
   // word for taking it back.
   return withEntry(sessions, { ...entry, folder, unsent: false });
-}
-
-/**
- * Write down what is standing in this session: why a person's turn has come, or `null` where none is.
- *
- * **It is written and never worked out.** What the caller hands over is the agent's own word about
- * itself, and nothing here decides whether a turn is still standing from anything else.
- */
-export function declared(sessions: Sessions, session: string, waiting: string | null): Sessions {
-  const known = sessions.get(session);
-  if (!known || known.waiting === waiting) return sessions;
-  return withEntry(sessions, { ...known, waiting });
 }
 
 /**

@@ -2232,7 +2232,7 @@ pub struct WakeDto {
 pub struct SessionSaidDto {
     /// The pane it was said in — the same id the terminal was opened under.
     pub(crate) session: String,
-    #[ts(type = "\"name\" | \"note\" | \"waiting\" | \"finished\" | \"briefed\"")]
+    #[ts(type = "\"name\" | \"briefed\"")]
     pub(crate) verb: &'static str,
     /// When it was said (RFC3339 UTC).
     pub(crate) at: String,
@@ -2283,21 +2283,6 @@ pub struct PtySessionDto {
     /// frame that does not know would have to ask the person for the folder again the next time it has
     /// a terminal to start, which is the one flow the face has asked for twice.
     pub(crate) folder: Option<String>,
-    /// Why a person's turn has come in this session, as its agent said it — `None` where none is
-    /// standing, either because none was handed over or because the person has been to the pane
-    /// since (`crate::pty::Pane`, `AMB-D-859`).
-    ///
-    /// It is here because a turn outlives the pane it was handed over in. A pane comes down whenever
-    /// the reader turns to another page or another project, and the turn standing in it is exactly
-    /// what the dots on the pages and the badges on the project tabs are there to carry
-    /// (`AMB-D-860`). A pane coming back up reads its own turn off this, so a row that returns says
-    /// what it was saying when it left.
-    ///
-    /// **This is the whole answer, and the window keeps none of its own.** A turn goes up by a word
-    /// and comes down by an arrival, and both are written here — so a second window drawing the same
-    /// session is told what the first one was told, rather than starting with every answered turn
-    /// standing again.
-    pub(crate) waiting: Option<String>,
 }
 
 /// One run of a session's tail, as the pane adopting it is handed it (`crate::pty::pty_attach`).

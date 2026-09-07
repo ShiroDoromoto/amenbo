@@ -16,14 +16,7 @@ use crate::output::{human, print_json, CliError, Flags};
 pub(crate) fn talk_cmd(flags: &Flags, sub: Option<&TalkCmd>) -> Result<i32, CliError> {
     let surface = session::surface().ok_or_else(CliError::talk_outside_surface)?;
     let Some(sub) = sub else { return Ok(canon(flags)) };
-    let statement = statement(sub);
-    // The bound is the label's, and this is the door it is held at (`amenbo_core::session`): what the
-    // row cannot fit is turned away here, where the agent can still write it shorter, rather than
-    // taken in and cut where nobody would know it had been.
-    if let Some(over) = statement.overlong() {
-        return Err(CliError::talk_reason_too_long(over));
-    }
-    say(flags, &surface, statement)
+    say(flags, &surface, statement(sub))
 }
 
 /// The clap verb, as the layer's own statement. The two lists are the same list — a verb that parses
@@ -31,7 +24,6 @@ pub(crate) fn talk_cmd(flags: &Flags, sub: Option<&TalkCmd>) -> Result<i32, CliE
 fn statement(sub: &TalkCmd) -> Statement {
     match sub {
         TalkCmd::Name { text } => Statement::Name(text.clone()),
-        TalkCmd::Waiting { text } => Statement::Waiting(text.clone()),
     }
 }
 
@@ -55,7 +47,6 @@ fn say(flags: &Flags, surface: &Surface, statement: Statement) -> Result<i32, Cl
 fn said(statement: &Statement) -> String {
     match statement {
         Statement::Name(text) => format!("this pane is now called “{text}”"),
-        Statement::Waiting(text) => format!("waiting for a person: {text}"),
         // Not a verb anyone types: `amenbo agent` leaves it on its own (`AMB-D-805`), so no route
         // through `talk` ever reaches this line.
         Statement::Briefed => "read the canon".to_string(),

@@ -44,7 +44,6 @@ fn outside_the_talk_window_every_verb_is_refused_rather_than_quietly_accepted() 
     let cli = Cli::new();
     for verb in [
         vec!["talk", "name", "the top fix"],
-        vec!["talk", "waiting", "a decision is needed"],
         vec!["talk"],
     ] {
         let (stderr, code) = cli.run_err(&verb);
@@ -87,27 +86,27 @@ fn a_session_named_without_a_drop_box_is_still_outside_the_window() {
     );
 }
 
-/// Inside a pane the verbs are accepted, and what each one said is left whole for the window to read —
-/// in the order it was said, with the pane it belongs to on every statement.
+/// Inside a pane the verb is accepted, and what it said is left whole for the window to read — in the
+/// order it was said, with the pane it belongs to on every statement.
 #[test]
 fn inside_a_pane_each_statement_is_left_whole_for_the_window() {
     let cli = Cli::new();
     let dir = amenbo_scratch::scratch("talk-drop");
     let pane = in_a_pane(&dir);
 
-    for (args, _) in [
-        (vec!["talk", "name", "the top fix"], ()),
-        (vec!["talk", "waiting", "a decision is needed"], ()),
+    for args in [
+        vec!["talk", "name", "the top fix"],
+        vec!["talk", "name", "the second fix"],
     ] {
         let (stdout, code) = cli.run_env(&pane_env(&pane), &args);
         assert_eq!(code, 0, "{args:?} is accepted inside a pane: {stdout}");
     }
 
     let said = statements(&dir);
-    let verbs: Vec<&str> = said.iter().map(|s| s["verb"].as_str().unwrap_or_default()).collect();
+    let texts: Vec<&str> = said.iter().map(|s| s["text"].as_str().unwrap_or_default()).collect();
     assert_eq!(
-        verbs,
-        vec!["name", "waiting"],
+        texts,
+        vec!["the top fix", "the second fix"],
         "the window reads them in the order they were said",
     );
     assert!(
@@ -120,54 +119,6 @@ fn inside_a_pane_each_statement_is_left_whole_for_the_window() {
     );
 }
 
-/// The reason for a person's turn is bounded, and a longer one is turned away rather than cut. The row
-/// it goes on holds three things, so a reason that overran would push the other two into ellipses —
-/// and cutting it here would lose the same words one step later, with the agent believing the whole of
-/// it had been read (`AMB-T-3673`).
-#[test]
-fn a_reason_too_long_for_the_label_is_refused_at_the_door_and_leaves_nothing_behind() {
-    let cli = Cli::new();
-    let dir = amenbo_scratch::scratch("talk-long-reason");
-    let pane = in_a_pane(&dir);
-    let limit = amenbo_core::session::WAITING_LIMIT;
-    // Japanese, where the bound is half the characters it is columns: this is one past it, and the
-    // refusal has to say so in columns or the two numbers in it do not compare.
-    let past = "あ".repeat(limit / 2 + 1);
-
-    let (stderr, code) = cli.run_env_err(&pane_env(&pane), &["talk", "waiting", &past]);
-    assert_eq!(code, 1, "a reason past the bound exits non-zero: {stderr}");
-    assert!(
-        stderr.contains(&(limit + 2).to_string()) && stderr.contains(&limit.to_string()),
-        "and says how much room it took against how much it may take: {stderr}",
-    );
-    assert!(
-        stderr.contains("Nothing was recorded"),
-        "and says outright that nothing happened: {stderr}",
-    );
-
-    let (stderr, code) =
-        cli.run_env_err(&pane_env(&pane), &["talk", "waiting", &past, "--json"]);
-    assert_eq!(code, 1, "the machine face refuses it too: {stderr}");
-    assert!(
-        stderr.contains("talk_reason_too_long"),
-        "in a code a caller can branch on: {stderr}",
-    );
-
-    assert!(
-        !dir.exists() || statements(&dir).is_empty(),
-        "and neither refusal left a statement for the window",
-    );
-
-    // The bound itself is within it, and the other verbs are not held to it: what they say does not
-    // share the row three ways.
-    let (stdout, code) =
-        cli.run_env(&pane_env(&pane), &["talk", "waiting", &"あ".repeat(limit / 2)]);
-    assert_eq!(code, 0, "a reason of exactly the bound is accepted: {stdout}");
-    let (stdout, code) = cli.run_env(&pane_env(&pane), &["talk", "name", &past]);
-    assert_eq!(code, 0, "and a name of the same length is nobody's business but the row's: {stdout}");
-    assert_eq!(statements(&dir).len(), 2, "the two that were accepted are the two that were left");
-}
-
 /// The layer needs no pointer, no project and no facet: it is run in whatever checkout an agent was put
 /// to work in, and what it moves is the pane rather than the store. A folder Amenbo was never bound to
 /// is exactly where this has to keep working.
@@ -177,8 +128,8 @@ fn the_layer_answers_in_a_folder_amenbo_was_never_bound_to() {
     let dir = amenbo_scratch::scratch("talk-unbound");
     let pane = in_a_pane(&dir);
 
-    let (stdout, code) = cli.run_env(&pane_env(&pane), &["talk", "waiting", "a decision is needed"]);
-    assert_eq!(code, 0, "no pointer is needed to say what this terminal is doing: {stdout}");
+    let (stdout, code) = cli.run_env(&pane_env(&pane), &["talk", "name", "the top fix"]);
+    assert_eq!(code, 0, "no pointer is needed to say what this terminal is called: {stdout}");
     assert_eq!(statements(&dir).len(), 1, "and the statement was left for the window");
 }
 
@@ -194,10 +145,10 @@ fn the_canon_is_served_inside_the_window_and_names_what_is_owed() {
     assert_eq!(code, 0, "the canon is served inside the window: {stdout}");
     let spec: serde_json::Value = serde_json::from_str(&stdout).expect("the canon is JSON");
     let owed = spec["owed"].as_array().expect("what is owed is a list").len();
-    assert_eq!(owed, 2, "two statements are owed — name and waiting — and no more: {spec}");
+    assert_eq!(owed, 1, "one statement is owed — the name — and no more: {spec}");
     assert!(
         spec["offered"].as_array().is_some_and(|o| o.is_empty()),
-        "and nothing here is the speaker's to leave out (`AMB-D-859`): {spec}",
+        "and nothing here is the speaker's to leave out: {spec}",
     );
     assert!(
         statements(&dir).is_empty(),

@@ -86,7 +86,6 @@ vi.mock("./terminal", () => ({
         session,
         took?.startedAt ?? "2026-01-01T00:00:00Z",
         took?.folder ?? start.cwd ?? null,
-        took?.waiting ?? null,
       );
       hoisted.end = () => on.closed(session);
       host.textContent = "(a terminal)";
@@ -258,7 +257,7 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
 
   it("asks nothing of a frame that adopts a terminal, and opens where that one runs when it ends", async () => {
     hoisted.running = [
-      { session: "session-1", startedAt: "2026-01-01T00:00:00Z", folder: "/work/adopted", waiting: null },
+      { session: "session-1", startedAt: "2026-01-01T00:00:00Z", folder: "/work/adopted" },
     ];
     const root = await put(wake({ offered: ["claude-code"], settled: "claude-code" }));
 

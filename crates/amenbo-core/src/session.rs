@@ -2,9 +2,8 @@
 //! inside the talk window's terminal (`AMB-D-749`).
 //!
 //! **It is spoken as `amenbo talk <verb>`** (`AMB-D-757`) — the window's own name, so the boundary and
-//! the namespace are the same word. This module keeps the layer's own name because it also holds the
-//! session id a write is stamped with (`id`), which is not of the surface at all, and one statement
-//! nobody speaks: the mark `amenbo agent` leaves to say it was run here ([`briefed`], `AMB-D-805`).
+//! the namespace are the same word. One thing in here is not spoken: the mark `amenbo agent` leaves to
+//! say it was run here ([`briefed`], `AMB-D-805`).
 //!
 //! Everything else Amenbo does lands in the store, means the same wherever it is typed, and is still
 //! true tomorrow. Nothing here is. A session is the terminal it runs in — it has no existence outside
@@ -73,30 +72,6 @@ pub fn surface() -> Option<Surface> {
     from_parts(crate::env::session(), crate::env::session_dir())
 }
 
-/// The longest session id a write will record itself under. The window mints 32 hex characters
-/// ([`SESSION_VAR`]); the cap is here because the variable is inherited from an environment anything
-/// can set, and what is written under it is a file name ([`crate::session_work`]) — a stray value
-/// would be a stray name on disk. A longer id is refused whole rather than cut: a shortened one names
-/// a session that does not exist, and naming the wrong session is worse than naming none.
-pub const MAX_ID_BYTES: usize = 128;
-
-/// The session a status move records itself as coming from, or `None` when the process is running
-/// outside the talk window's terminal ([`crate::session_work`]).
-///
-/// This is not the surface layer ([`surface`]) and asks for less. A statement needs somewhere to be
-/// left, so half an environment is no window at all; a name tag needs nothing but the name.
-///
-/// Blank, whitespace, or past [`MAX_ID_BYTES`]: `None`. An empty author is allowed to mean "unknown";
-/// a guess is not.
-pub fn id() -> Option<String> {
-    id_from(crate::env::session())
-}
-
-/// The rule [`id`] applies, apart from the environment it reads — separate for the reason
-/// [`from_parts`] is: the environment is process-wide and a test suite is not.
-fn id_from(raw: Option<String>) -> Option<String> {
-    raw.filter(|s| !s.trim().is_empty() && s.len() <= MAX_ID_BYTES)
-}
 
 /// The rule [`surface`] applies, apart from the environment it reads: both halves present, and neither
 /// of them blank. It is separate because the environment is process-wide while a test suite is not —
@@ -138,10 +113,10 @@ pub enum Statement {
 /// How much of the pane's label the reason for a person's turn may take, in the columns a terminal
 /// would count.
 ///
-/// **The label holds one line, and the reason is the last of three things on it** (`app/src/talk/
-/// nameplate.ts`): what the pane is called, what its session is on, and this. A reason written past
-/// that does not make the row longer — it pushes the other two into ellipses, and three things all cut
-/// short is a label nobody can read any of.
+/// **The label holds one line, and the reason is the second of two things on it** (`app/src/talk/
+/// nameplate.ts`): what the pane is called, and this. A reason written past that does not make the row
+/// longer — it pushes the name into an ellipsis, and both cut short is a label nobody can read either
+/// half of.
 ///
 /// **So the overflow is stopped at the door rather than mended at the display.** What comes in is a
 /// sentence an agent wrote, which is as long as the agent felt like being; the row cannot argue with
@@ -667,36 +642,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_write_carries_the_session_it_was_made_in_and_never_a_guess_at_one() {
-        let stamp = |raw: &str| id_from(Some(raw.to_string()));
-        assert_eq!(stamp("pane-1").as_deref(), Some("pane-1"), "the window named it: the write carries it");
-        assert_eq!(stamp(""), None, "a blank variable names no session");
-        assert_eq!(stamp("  "), None, "and neither does whitespace");
-        assert_eq!(
-            stamp(&"x".repeat(MAX_ID_BYTES + 1)),
-            None,
-            "past the cap the id is dropped whole — a cut one would name a session nobody has",
-        );
-        assert_eq!(
-            stamp(&"x".repeat(MAX_ID_BYTES)).map(|s| s.len()),
-            Some(MAX_ID_BYTES),
-            "the cap itself is inside it",
-        );
-        assert_eq!(id_from(None), None, "outside the window there is nothing to carry");
-    }
-
-    #[test]
-    fn a_name_tag_asks_for_less_than_a_statement_does() {
-        // `surface` needs somewhere to leave a statement; a stamp on a write that was happening anyway
-        // needs nothing but the name, so half an environment still names the session it came from.
-        assert!(from_parts(Some("pane-1".into()), None).is_none(), "no drop box: not the surface layer");
-        assert_eq!(
-            id_from(Some("pane-1".into())).as_deref(),
-            Some("pane-1"),
-            "but the write still knows which pane it was made in",
-        );
-    }
 
     #[test]
     fn the_spec_names_every_verb_the_layer_answers_to() {

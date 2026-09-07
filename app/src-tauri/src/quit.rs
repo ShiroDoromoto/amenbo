@@ -1,9 +1,9 @@
 //! The way out of the app, and the one question asked on the way.
 //!
 //! **Ending the app ends every terminal in it, and none of them comes back.** A session is the
-//! process's, not a window's or a pane's: quitting takes down the agents that were running, drops
-//! whatever they had not written yet, and leaves the volatile area for the next launch's `sweep` to
-//! empty (`crate::pty`). Closing a single pane has asked about this for a while
+//! process's, not a window's or a pane's: quitting takes down the agents that were running and drops
+//! whatever they had not written yet (`crate::pty`). Closing a single pane has asked about this for a
+//! while
 //! (`app/src/shell/TerminalPane.tsx`); closing all of them at once had not been asked about at all.
 //!
 //! **What is asked is whether a terminal is going, and never what one was doing** (`AMB-D-858`).

@@ -2198,10 +2198,9 @@ impl Instructor {
             // because an operator who did not know would have no way to tell an app that lost a pane
             // from one doing exactly as it said.
             //
-            // **One question, whatever the session is holding.** The three-way that
-            // named a pane's reservations is gone: what the volatile area says a pane reserved is a
-            // label and not a fact the ledger may be moved on, so the plain confirmation is the whole
-            // of what stands here.
+            // **One question, whatever the session was doing.** The three-way that named a pane's
+            // reservations is gone: what tied a pane to a task was a key the world could rewrite
+            // behind the pane, so the plain confirmation is the whole of what stands here.
             (Domain::Terminal, "remove-pane") => format!(
                 "On the pane showing \"{}\", press the cross at the end of its own row — the control beside what is said about that pane, and not the one on any other. A question comes up before anything happens: read it, then answer it yes. The terminal in that pane ends, the pane goes, and the page closes up behind it.",
                 req(with, "shows")?

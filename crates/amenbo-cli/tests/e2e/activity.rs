@@ -56,9 +56,8 @@ fn activity_records_system_events_and_comments() {
 
 /// The timeline names the facet and stops there. Two AI sessions are one facet, so every row an AI
 /// wrote reads the same on it — and the ledger says nothing else about who wrote one, in particular
-/// nothing about the pane it was written in. That belongs to a place that is emptied when the window
-/// closes (`AMB-D-758`, `crates/amenbo-cli/tests/e2e/talk.rs`), because a session id means nothing
-/// once its window has gone, and a permanent row is exactly where it must not be kept.
+/// nothing about the pane it was written in. A session id means nothing once its window has gone, so
+/// a permanent row is exactly where it must not be kept.
 #[test]
 fn the_timeline_names_the_facet_and_says_nothing_about_the_pane_a_write_came_from() {
     let cli = Cli::new();

@@ -1064,10 +1064,6 @@ impl Store {
             })
         })?;
         crate::activity_log::append(&self.paths.activity_file, &entry);
-        // And, when this process is inside a pane and the event is a status move, one row in the
-        // volatile area — which is where a session id lives now (`AMB-D-758`). It goes here rather than
-        // onto the line above so that nothing permanent carries a token nothing can resolve later.
-        crate::session_work::record(&self.paths.sessions_dir, &entry);
         Ok(entry)
     }
 

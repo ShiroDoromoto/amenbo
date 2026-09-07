@@ -423,15 +423,9 @@ export function AppShell() {
     let unlisten: (() => void) | undefined;
     let disposed = false;
     void import("@tauri-apps/api/event")
-      // Where a click on a toast lands: what it was about says which face, and the host has already
-      // raised the window that face is in — with the terminal split out that is a different window,
-      // and this one cannot raise it (`crate::notify`).
-      .then(({ listen }) =>
-        listen<string>("notification-activated", ({ payload }) => {
-          if (payload === "turn") selectFace("terminal");
-          else navTo({ type: "view", id: "inbox" });
-        }),
-      )
+      // Where a click on a toast lands: the inbox, which is the one thing a toast is ever about. The
+      // host has already raised the window it is in.
+      .then(({ listen }) => listen("notification-activated", () => navTo({ type: "view", id: "inbox" })))
       .then((un) => {
         if (disposed) un();
         else unlisten = un;

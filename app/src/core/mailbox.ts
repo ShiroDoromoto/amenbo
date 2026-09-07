@@ -122,5 +122,5 @@ export function useInboxCount(): number {
  * It is a count and names no single record, which is why a click on it opens the inbox.
  */
 async function notifyArrival(n: number): Promise<void> {
-  await notifyOs("arrival", t("mailbox.notifyTitle"), tn("mailbox.notifyBody", n));
+  await notifyOs(t("mailbox.notifyTitle"), tn("mailbox.notifyBody", n));
 }

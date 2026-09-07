@@ -3570,33 +3570,24 @@ pub async fn run_export(window: tauri::Window, path: String) -> Result<ExportRep
 /// permission not granted, say — that is not fatal (the app has no sound of its own; the sound is the
 /// OS notification's).
 ///
-/// `kind` is what the toast is about, and it decides where a click lands: the inbox is on the board,
-/// and a turn is in the terminal, which may be a window of its own (`crate::notify`). An unknown word
-/// is read as an arrival, which is where this started.
+/// A toast is only ever about one thing — something arrived in the inbox — so it carries nothing
+/// besides its words, and a click on it lands on the board's inbox wherever one is answered at all.
 #[tauri::command]
-#[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(unused_variables))]
-pub fn notify_os(
-    app: tauri::AppHandle,
-    title: String,
-    body: String,
-    kind: String,
-) -> Result<(), String> {
-    let kind = crate::notify::Kind::parse(&kind);
+#[cfg_attr(target_os = "macos", allow(unused_variables))]
+pub fn notify_os(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        crate::macos_notify::send(&title, &body, kind);
+        crate::macos_notify::send(&title, &body);
         Ok(())
     }
     #[cfg(target_os = "windows")]
     {
-        crate::windows_notify::send(&app, title, body, kind);
+        crate::windows_notify::send(&app, title, body);
         Ok(())
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        // The plugin's toast carries no click of ours, so the kind reaches no further here. What it
-        // decides — where a click lands — is a thing this platform does not offer.
-        let _ = kind;
+        // The plugin's toast carries no click of ours, so there is nowhere here for a click to land.
         use tauri_plugin_notification::NotificationExt;
         app.notification()
             .builder()

@@ -36,11 +36,14 @@ import (
 //
 //   - **Turned away** (vmTakeScreen) is for a command that holds the screen for minutes — a dev GUI
 //     placed in the guest. Queuing behind one of those is indistinguishable from a hang.
-//   - **Waited for** (vmHoldScreen) is for `vm exec`, which is how the screen is driven at all: one
-//     line brings a window to the front and presses it, and the whole of it is under a second. What
-//     that line has to be protected from is somebody fronting another window between the two halves
-//     — a press that lands on the wrong app and still exits 0. Turning the second driver away there
-//     would break the very command the lock exists to let through, so it waits its turn instead.
+//   - **Waited for** (vmHoldScreen) is for the short lines that drive it: `vm exec`, and the front
+//     a `devgui pid` / `devgui shot` takes before it reads. `vm exec` is how the screen is driven
+//     at all — one line brings a window to the front and presses it, and the whole of it is under a
+//     second. What that line has to be protected from is somebody fronting another window between
+//     the two halves — a press that lands on the wrong app and still exits 0. Turning the second
+//     driver away there would break the very command the lock exists to let through, so it waits
+//     its turn instead. `devgui shot` is the same shape on the other side of the screen: it holds
+//     from the front to the capture, or what comes back in the png is whatever went in front.
 
 // vmScreenLockName is the lock file's name, beside the per-id build locks in the same directory.
 const vmScreenLockName = "amenbo-vm-screen.lock"

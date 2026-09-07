@@ -400,36 +400,53 @@ func vmDevGUIPID(ip, id string) (int, error) {
 // Fronting is done by the guest's own copy of the screen tool, which `devtool vm screen` puts
 // there. A missing copy is reported and carried past: it costs a front, not the pid that was asked
 // for.
-func vmResolveDevGUI(id string, front bool, window string) (ip string, target devGUITarget, err error) {
+//
+// A front drives the guest's screen, so it goes under the claim every other driver takes
+// (vmscreen.go), waited for rather than turned away — it is one of the short lines the lock exists
+// to let through. The claim is the caller's to end, which is why it comes back rather than being
+// released here: `shot` has to hold from the front to the capture, or somebody else's window lands
+// in between. `frontLabel` is what a caller turned away reads as the holder's name; it is written
+// only when a front is actually taken. With no front there is nothing to claim, and what comes back
+// is a release that does nothing.
+func vmResolveDevGUI(id string, front bool, window string, frontLabel string) (ip string, target devGUITarget, release func(), err error) {
+	release = func() {}
 	id, err = vmInstanceID(id)
 	if err != nil {
-		return "", devGUITarget{}, err
+		return "", devGUITarget{}, release, err
 	}
 	ip, err = vmIP()
 	if err != nil {
-		return "", devGUITarget{}, err
+		return "", devGUITarget{}, release, err
 	}
 	pid, err := vmDevGUIPID(ip, id)
 	if err != nil {
-		return "", devGUITarget{}, err
+		return "", devGUITarget{}, release, err
 	}
 	if pid == 0 {
-		return "", devGUITarget{}, fmt.Errorf("%s is not running in %s — `make install-gui-dev-vm AMB-T-ID=%s` puts it there, then open it (`devtool vm exec -- open -a %s`)",
+		return "", devGUITarget{}, release, fmt.Errorf("%s is not running in %s — `make install-gui-dev-vm AMB-T-ID=%s` puts it there, then open it (`devtool vm exec -- open -a %s`)",
 			taskDevBundle(id), vmCloneName, id, shq(vmTaskDevBundle(id)))
 	}
 	if front {
 		// A front is the collision itself, not a step towards it: it is what puts one window over
 		// the one a road is pressing. Reading the pid or shooting the window without it disturbs
-		// nothing, so the guard sits here rather than over the whole command.
+		// nothing, so the claim and the guard sit here rather than over the whole command.
+		held, err := vmHoldScreen(frontLabel)
+		if err != nil {
+			return "", devGUITarget{}, release, err
+		}
+		release = held
+		// The guard reads the guest, so it goes inside the claim and not before it: read outside,
+		// a road can start in the moment between the answer and the front it let through.
 		if err := vmRefuseWhileRoadWalking(ip, "bringing "+taskDevBundle(id)+" forward"); err != nil {
-			return "", devGUITarget{}, err
+			release()
+			return "", devGUITarget{}, func() {}, err
 		}
 		if _, err := sshRun(ip, shq(vmScreenPath)+" front "+strconv.Itoa(pid)+vmWindowArg(window)); err != nil {
 			logf("  warning: bringing %s forward in %s failed (%v) — is the screen tool in there? (`devtool vm screen`)", taskDevBundle(id), vmCloneName, err)
 		}
 	}
 	logf("  %s is running in %s", taskDevBundle(id), vmCloneName)
-	return ip, devGUITarget{bundle: taskDevBundle(id), pid: pid}, nil
+	return ip, devGUITarget{bundle: taskDevBundle(id), pid: pid}, release, nil
 }
 
 // vmWindowArg is windowArgs for the guest, where the tool is reached through a shell line rather
@@ -445,10 +462,17 @@ func vmWindowArg(window string) string {
 // there, so what takes it is something driving that machine — the screen tool in the guest, or
 // `devtool vm exec`.
 func vmDevGUIShowPID(id string, front bool, window string) error {
-	_, target, err := vmResolveDevGUI(id, front, window)
+	inst, err := vmInstanceID(id)
 	if err != nil {
 		return err
 	}
+	_, target, release, err := vmResolveDevGUI(inst, front, window, "`devtool devgui pid "+inst+" --vm --front`")
+	if err != nil {
+		return err
+	}
+	// The front is the whole of what this one does to the screen, so the claim ends with it rather
+	// than covering a line printed on this machine.
+	release()
 	fmt.Printf("%d\n", target.pid)
 	return nil
 }
@@ -461,10 +485,14 @@ func vmDevGUIShot(id string, front bool, window string) error {
 	if err != nil {
 		return err
 	}
-	ip, target, err := vmResolveDevGUI(inst, front, window)
+	ip, target, release, err := vmResolveDevGUI(inst, front, window, "`devtool devgui shot "+inst+" --vm`")
 	if err != nil {
 		return err
 	}
+	// The front and the capture are one interval: a window somebody else brings forward between
+	// them is what comes back in the png.
+	defer release()
+
 	guest := filepath.Join(vmStagingDir, "amenbo-devgui-"+inst+".png")
 	if _, err := sshRun(ip, shq(vmScreenPath)+" shot "+strconv.Itoa(target.pid)+" "+shq(guest)+vmWindowArg(window)); err != nil {
 		return fmt.Errorf("shooting the window of %s in %s failed: %w — the screen tool has to be in there (`devtool vm screen`)", target.bundle, vmCloneName, err)

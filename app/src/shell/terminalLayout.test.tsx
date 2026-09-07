@@ -29,12 +29,12 @@ vi.mock("../talk/agent", () => ({
   mountAgentFrame: (
     _host: HTMLElement,
     _lang: string,
-    on: { opened: (s: string, at: string) => void; said: (statement: unknown) => void },
+    on: { opened: (s: string) => void; said: (statement: unknown) => void },
     start: PaneStart = {},
   ) => {
     const session = start.session ?? `s${hoisted.mounts.length + 1}`;
     hoisted.mounts.push({ start, said: on.said, session });
-    on.opened(session, "2026-08-24T00:00:00Z");
+    on.opened(session);
     return Promise.resolve(() => { hoisted.detached++; });
   },
 }));

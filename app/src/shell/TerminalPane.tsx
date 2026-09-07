@@ -174,7 +174,7 @@ export function TerminalPane({
     // one this pane took rather than what is true now.
     on.current.onRow?.(frame, plate.read);
     void mountAgentFrame(host, currentLang(), {
-      opened: (session, _startedAt, where) => {
+      opened: (session, where) => {
         // The folder is what the row above the pane calls it until something names the frame
         // (`../talk/frames`), and it is the one the terminal actually runs in — which is not always
         // the one this slot was handed.

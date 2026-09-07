@@ -28,10 +28,10 @@ vi.mock("../talk/agent", () => ({
   mountAgentFrame: (
     host: HTMLElement,
     _lang: string,
-    on: { opened: (s: string, at: string) => void },
+    on: { opened: (s: string) => void },
     start: PaneStart = {},
   ) => {
-    on.opened(start.session ?? "unasked", "2026-08-25T00:00:00Z");
+    on.opened(start.session ?? "unasked");
     // The box the emulator collects typing in, which is what the keyboard lands on. It is the one
     // thing of the real terminal this stub keeps (`../talk/terminal`).
     host.append(document.createElement("textarea"));

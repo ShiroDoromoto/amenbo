@@ -131,3 +131,35 @@ steps_gui:
     op: label
     with:
       shows: SCENARIO the migration
+
+  # ── And it stays answered when the window is built again ────────────────────────────────────────
+  # A turn is answered once. Taking the pane out into a window of its own builds the whole interface
+  # afresh around a session that never stopped running, and a call that came back at that point would
+  # be the app asking a second time for something already done. Every step from here names the window
+  # it is in, there being two.
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+
+  - type: assert
+    domain: terminal
+    op: label
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO the ledger migration needs a decision
+      present: false
+
+  # Read with the name, for the reason the reading above it is: a row saying less and a row not being
+  # drawn look the same otherwise, and a window that came up with no pane in it would pass either way.
+  - type: assert
+    domain: terminal
+    op: label
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO the migration
+
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: "Amenbo — "

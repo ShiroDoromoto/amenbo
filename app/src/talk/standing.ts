@@ -4,12 +4,12 @@
 // project (`../shell/TerminalPane`). **The turn does not come down with it** — that is exactly the turn
 // the dots on the pages and the badges on the project tabs exist to carry (`AMB-T-3610`).
 //
-// **The hand goes up on the host and comes down here** (`AMB-D-860`, `AMB-D-859`). An agent declares a
-// turn, and the host keeps it on the session (`crate::pty::Pane`), which outlives every pane: nothing
-// is assembled in the webview out of the statements, because a second record is one the pane's own row
-// could come to disagree with (`./plate`). What ends a turn is the person arriving at that pane — a
-// thing the window can see and the host cannot — so `sawPane` is written here, beside the answer it
-// takes from.
+// **Nothing about a turn is kept here** (`AMB-D-860`). The host holds it on the session
+// (`crate::pty::Pane`), which outlives every pane and every window: a turn goes up when an agent says
+// so and comes down when a person comes to the pane (`AMB-D-859`), and both are written there. Kept in
+// the webview, the arrival would go away with the webview while the declaration stayed — and a second
+// window drawing the same session would open with every answered turn standing again. So this asks and
+// answers, and holds no record of its own that could disagree with the pane's row (`./plate`).
 //
 // **`session://said` carries the signal and not the value.** It says an agent spoke; what it said is
 // read back off `pty_sessions`.
@@ -19,31 +19,21 @@
 // `AMB-D-748`). The other half of a turn is the sentence left unsent, which belongs to the pane: it is
 // the only thing that can see its own input box.
 //
-// **One record for the window, not one per reader.** Everything that reads this reads the same answer,
-// so the listeners are taken up once, on the first watcher, and what is held outlives every one of
-// them — a reader that comes and goes with a pane cannot take the window's memory with it.
+// **One reading for the window, not one per reader.** Everything that reads this reads the same
+// answer, so the listeners are taken up once, on the first watcher, and the answer outlives every one
+// of them — a reader that comes and goes with a pane cannot take it away.
 
 import type { PtySessionDto, SessionSaidDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { CLOSED_EVENT, SAID_EVENT } from "./terminal";
 
-/** What the window knows about the turns in its sessions. */
-export type Turns = {
-  /** The sessions a turn is standing in: declared to the host, and not gone to since. */
-  readonly standing: ReadonlySet<string>;
-  /** When the person came to each pane whose turn was taken down that way (RFC3339 UTC). It is handed
-   *  out because the row above a pane draws the same turn and must not answer differently
-   *  (`./plate`, `AMB-D-859`). */
-  readonly seen: ReadonlyMap<string, string>;
-};
+/** The turns standing in this window's sessions: the session, and why it was handed over. Being in
+ *  here is what standing means — a turn the person has come to is not in it (`AMB-D-859`). */
+export type Turns = ReadonlyMap<string, string>;
 
-/** Nobody's turn, and nowhere anybody has been. */
-export const NO_TURNS: Turns = { standing: new Set<string>(), seen: new Map<string, string>() };
+/** Nobody's turn. */
+export const NO_TURNS: Turns = new Map<string, string>();
 
-/** The host's answer: the sessions whose agent has declared a turn. */
-let declared: ReadonlySet<string> = new Set<string>();
-/** The panes the person has come to since the turn in them was declared. */
-let seen = new Map<string, string>();
 /** What the watchers were last told. */
 let turns: Turns = NO_TURNS;
 
@@ -57,34 +47,27 @@ let wanted = false;
  *  last would put back an answer the newer one had already moved past. */
 let latest = 0;
 
-/** Whether two answers name the same sessions, so a reading that has not moved draws nothing again. */
-function same(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+/** Whether two answers say the same thing about the same sessions. */
+function same(a: Turns, b: Turns): boolean {
   if (a.size !== b.size) return false;
-  for (const one of a) if (!b.has(one)) return false;
+  for (const [session, why] of a) if (b.get(session) !== why) return false;
   return true;
 }
 
-/** Work out what is standing and hand it round, where either half has moved. */
-function settle(seenMoved: boolean): void {
-  const standing = new Set([...declared].filter((session) => !seen.has(session)));
-  if (!seenMoved && same(standing, turns.standing)) return;
-  turns = { standing, seen: new Map(seen) };
-  // Over a copy: a watcher taken off while the round is being handed out is one that would otherwise
-  // still be called, and a pane going away in answer to what it just heard is an ordinary thing here.
-  for (const watcher of [...watchers]) watcher(turns);
-}
-
-/** Ask the host which sessions have a turn declared in them. */
+/** Ask the host which sessions have a turn standing in them, and hand the answer round where it moved. */
 function read(): void {
   const mine = ++latest;
   void invoke<PtySessionDto[]>("pty_sessions")
     .then((open) => {
       if (!wanted || mine !== latest) return;
-      declared = new Set(open.filter((one) => one.waiting !== null).map((one) => one.session));
-      // A session the host no longer holds is one whose terminal has ended. Nothing about it is kept:
-      // a session has no existence outside the terminal it runs in (`AMB-D-749`).
-      for (const session of [...seen.keys()]) if (!declared.has(session)) seen.delete(session);
-      settle(false);
+      const now = new Map<string, string>();
+      for (const one of open) if (one.waiting !== null) now.set(one.session, one.waiting);
+      if (same(now, turns)) return;
+      turns = now;
+      // Over a copy: a watcher taken off while the round is being handed out is one that would
+      // otherwise still be called, and a pane going away in answer to what it just heard is an
+      // ordinary thing here.
+      for (const watcher of [...watchers]) watcher(turns);
     })
     .catch(() => {});
 }
@@ -92,18 +75,9 @@ function read(): void {
 function listen(): void {
   void import("@tauri-apps/api/event")
     .then(async ({ listen }) => {
-      const offSaid = await listen<SessionSaidDto>(SAID_EVENT, ({ payload }) => {
-        // **A turn said after the person has left stands again.** The arrival that took the last one
-        // down answered that one, and this is a new call.
-        if (payload.verb === "waiting" && seen.delete(payload.session)) settle(true);
-        read();
-      });
-      const offClosed = await listen<string>(CLOSED_EVENT, ({ payload }) => {
-        // Nothing about a session outlives the session (`AMB-D-749`), the arrival that answered its
-        // turn included.
-        if (seen.delete(payload)) settle(true);
-        read();
-      });
+      const offSaid = await listen<SessionSaidDto>(SAID_EVENT, () => read());
+      // A session that has ended is one the host stops answering with at all.
+      const offClosed = await listen<string>(CLOSED_EVENT, () => read());
       const off = () => { offSaid(); offClosed(); };
       if (wanted) stopListening = off;
       else off();
@@ -117,7 +91,7 @@ function listen(): void {
  * Watch the turns standing in this window's sessions, and answer with them each time they move.
  *
  * What comes back stops this watcher. The last one leaving stops the listening as well — what is kept
- * is an answer, and a window with nothing drawing from it has nothing to keep it up to date for.
+ * is a reading, and a window with nothing drawing from it has nothing to keep it up to date for.
  */
 export function watchStanding(onChange: (turns: Turns) => void): () => void {
   watchers.add(onChange);
@@ -146,11 +120,12 @@ export function watchStanding(onChange: (turns: Turns) => void): () => void {
  * on the screen — a page of panes is several turns, and the one a person went to is the one they
  * attended to. Who says it is the pane, which is the only thing that knows both halves
  * (`../shell/TerminalPane`).
+ *
+ * It is said to the host rather than kept here, for the reason the declaration is kept there: the
+ * session outlives the window, and half an answer held on either side of that comes apart.
  */
-export function sawPane(session: string, at: string = new Date().toISOString()): void {
-  // A pane with no turn declared in it records nothing, and a second arrival at one records nothing
-  // twice: a watcher woken for a change that did not happen would redraw every row for nothing.
-  if (!declared.has(session) || seen.has(session)) return;
-  seen.set(session, at);
-  settle(true);
+export function sawPane(session: string): void {
+  void invoke<void>("pty_saw", { session })
+    .then(() => read())
+    .catch(() => {});
 }

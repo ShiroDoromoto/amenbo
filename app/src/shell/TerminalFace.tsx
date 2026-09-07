@@ -289,7 +289,7 @@ export function TerminalFace({
   const needy = useMemo(() => {
     const all = new Set(reported);
     for (const frame of layout.frames) {
-      if (frame.session !== null && turns.standing.has(frame.session)) all.add(frame.id);
+      if (frame.session !== null && turns.has(frame.session)) all.add(frame.id);
     }
     return all;
   }, [reported, turns, layout.frames]);

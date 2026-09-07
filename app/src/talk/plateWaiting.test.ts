@@ -3,7 +3,7 @@
 // this pane. The board wears it as a badge on the face switch, where the label itself cannot be seen
 // (`AMB-D-753`), so what is pinned here is that it follows `waiting` and not the pane's chatter — an
 // agent at work says a great deal — and that the pane going away takes the turn with it.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionSaidDto } from "../bindings/bindings";
 
 // The one boundary the plate reaches across. It has nothing to say about a turn standing.
@@ -12,6 +12,23 @@ vi.mock("./frames", async (orig) => ({
   ...(await orig<typeof import("./frames")>()),
   frameNames: async () => new Map<string, string>(),
 }));
+
+// The window's answer about whose turn it is, which the row copies rather than works out
+// (`./standing`, `AMB-D-860`). Standing in for it here is what lets a turn arrive without a host.
+const hoisted = vi.hoisted(() => ({ tellTurns: [] as ((turns: ReadonlyMap<string, string>) => void)[] }));
+vi.mock("./standing", () => ({
+  watchStanding: (on: (turns: ReadonlyMap<string, string>) => void) => {
+    hoisted.tellTurns.push(on);
+    on(new Map());
+    return () => { hoisted.tellTurns = hoisted.tellTurns.filter((one) => one !== on); };
+  },
+}));
+
+/** The host says a turn is standing in this pane — or that it is not any more. */
+function handOver(why: string | null): void {
+  const turns = why === null ? new Map<string, string>() : new Map([["pane-1", why]]);
+  for (const on of [...hoisted.tellTurns]) on(turns);
+}
 
 const { mountPlate } = await import("./plate");
 
@@ -27,35 +44,41 @@ beforeEach(() => {
   plate = mountPlate(document.createElement("div"), () => "en", (w) => told.push(w));
 });
 
+afterEach(() => {
+  // The row is taken down between cases: a label left standing goes on watching the window, and what
+  // the next case hands over would reach it too (`./plate`).
+  plate.stop();
+});
+
 describe("what the plate says about a turn standing in its pane", () => {
-  it("says it once, and goes on saying it whatever the agent says next", () => {
+  it("says it once, and says it is over when the window says the person came", () => {
     plate.opened("pane-1", AT, null);
     plate.said(say({ verb: "name", text: "the migration" }));
     expect(told, "a pane merely naming itself was reported as a turn").toEqual([]);
 
-    plate.said(say({ verb: "waiting", text: "which of the two" }));
+    handOver("which of the two");
     expect(told).toEqual([true]);
 
-    // The turn stands while nobody has come to the pane, and the pane keeps talking.
-    plate.said(say({ verb: "waiting", text: "still which of the two" }));
+    // The turn stands while nobody has come to the pane, and the reason may be said again.
+    handOver("still which of the two");
     expect(told, "the same turn was reported twice").toEqual([true]);
 
-    // **No word takes it back** (`AMB-D-859`). What ends one is the person arriving, which the window
-    // sees and says (`./standing`).
-    plate.said(say({ verb: "name", text: "still the migration" }));
-    expect(told).toEqual([true]);
+    // **No word takes it back** (`AMB-D-859`). What ends one is the person arriving, which the host
+    // is told and the window reads back (`./standing`).
+    handOver(null);
+    expect(told).toEqual([true, false]);
   });
 
   it("takes the turn away when the program in the terminal exits", () => {
     plate.opened("pane-1", AT, null);
-    plate.said(say({ verb: "waiting", text: "which of the two" }));
+    handOver("which of the two");
     plate.closed("pane-1");
     expect(told, "the pane ended and the badge was left standing").toEqual([true, false]);
   });
 
   it("takes the turn away when the label itself comes down", () => {
     plate.opened("pane-1", AT, null);
-    plate.said(say({ verb: "waiting", text: "which of the two" }));
+    handOver("which of the two");
     plate.stop();
     expect(told, "the face went and the badge was left standing").toEqual([true, false]);
   });

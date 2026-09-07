@@ -42,6 +42,11 @@ vi.mock("../core/ipc", async (importOriginal) => {
   return {
     ...real,
     invoke: async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd === "pty_saw") {
+        // A person came to the pane, and the host is where that is written down (`AMB-D-859`).
+        hoisted.waiting.delete((args as { session: string }).session);
+        return undefined;
+      }
       if (cmd !== "pty_sessions") return real.invoke(cmd, args);
       return hoisted.opened.map((session) => ({
         session,
@@ -122,6 +127,8 @@ const pressPane = async (nth: number) => {
   await act(async () => {
     q(".slot")[nth]!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
   });
+  // Saying so and reading the answer back are two round trips to the host.
+  await act(async () => { for (let i = 0; i < 4; i++) await Promise.resolve(); });
 };
 /** A pane says a turn is standing in it — or that it is not any more. */
 const turn = async (pane: number, standing: boolean) => {

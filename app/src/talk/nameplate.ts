@@ -44,7 +44,7 @@
 import { iconSvg, type DrawnIcon } from "../components/Icon";
 import { t, tf, type Lang } from "../core/i18n";
 import { BLINK_MS, hueOf, phaseDelay } from "./moving";
-import { turnStands, type Session } from "./sessions";
+import type { Session } from "./sessions";
 
 /** The right of the row: the one thing worth saying, in rank order. */
 export type Say =
@@ -113,11 +113,11 @@ export type Plate = {
  * pane has said nothing else. An agent that handed a turn over has plainly been told; standing in
  * front of that would be an old fact pushing a live one off the row.
  *
- * **A turn the person has already come to is not standing** (`turnStands`, `AMB-D-859`). The reason
- * is kept and the row stops leading with it: what the mark is for is a pane nobody is at.
+ * **A turn the person has already come to is not one** (`AMB-D-859`): the host takes it down on the
+ * arrival, so a turn that is here at all is one nobody has been to.
  */
 export function sayOf(session: Session | undefined): Say {
-  if (turnStands(session)) return { kind: "waiting", text: session!.waiting! };
+  if (session?.waiting) return { kind: "waiting", text: session.waiting };
   if (session?.unsent) return { kind: "unsent" };
   return { kind: "silent" };
 }

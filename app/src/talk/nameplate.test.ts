@@ -9,18 +9,20 @@ import {
   type Dot,
   standsAsTurn,
 } from "./nameplate";
-import { NO_SESSIONS, opened, said, seen, unsent, type Sessions } from "./sessions";
+import { declared, NO_SESSIONS, opened, said, unsent, type Sessions } from "./sessions";
 
 const AT = "2026-08-24T09:00:00Z";
 
-/** A session with one statement made in it. */
+/** A session with one statement made in it. A turn arrives the way it really does — the agent says it
+ *  and the host answers with it (`./standing`), which is not something a statement carries. */
 function sessionWith(verb: "name" | "waiting", text: string): Sessions {
-  return said(opened(NO_SESSIONS, { session: "pane-1", startedAt: AT }), {
+  const spoke = said(opened(NO_SESSIONS, { session: "pane-1", startedAt: AT }), {
     session: "pane-1",
     at: AT,
     verb,
     text,
   });
+  return verb === "waiting" ? declared(spoke, "pane-1", text) : spoke;
 }
 
 /** The language everything here is read in. The window is handed one rather than guessing at it. */
@@ -28,12 +30,7 @@ const EN = "en" as const;
 
 describe("the one thing said on the right", () => {
   it("puts a turn being handed over above everything else", () => {
-    const sessions = said(sessionWith("name", "the migration"), {
-      session: "pane-1",
-      at: AT,
-      verb: "waiting",
-      text: "which of the two",
-    });
+    const sessions = declared(sessionWith("name", "the migration"), "pane-1", "which of the two");
     const say = sayOf(sessions.get("pane-1"));
     expect(say).toEqual({ kind: "waiting", text: "which of the two" });
     expect(sayText(say, EN).mark).toBe("pause");
@@ -49,7 +46,7 @@ describe("the one thing said on the right", () => {
     // The pane it is news in: nothing else has been said about this session at all.
     expect(sayOf(left.get("pane-1"))).toEqual({ kind: "unsent" });
     // A turn handed over is the agent saying so now; the sentence never going in is an old fact.
-    const handed = said(left, { session: "pane-1", at: AT, verb: "waiting", text: "which of the two" });
+    const handed = declared(left, "pane-1", "which of the two");
     expect(sayOf(handed.get("pane-1"))).toEqual({ kind: "waiting", text: "which of the two" });
     // The mark is the pause: what is left where the row is too narrow for words is "somebody is
     // needed here", which is as true of this as of a turn handed over.
@@ -60,13 +57,13 @@ describe("the one thing said on the right", () => {
     const called = sessionWith("waiting", "which of the two");
     expect(sayOf(called.get("pane-1"))).toEqual({ kind: "waiting", text: "which of the two" });
 
-    // They went to the pane. The mark is for a pane nobody is at, so it comes down and the row has
-    // nothing left to lead with (`AMB-D-859`).
-    const answered = seen(called, "pane-1", "2026-08-24T09:01:00Z");
+    // They went to the pane. The host takes the turn down on the arrival, and the row copies that —
+    // so it has nothing left to lead with (`AMB-D-859`).
+    const answered = declared(called, "pane-1", null);
     expect(sayOf(answered.get("pane-1"))).toEqual({ kind: "silent" });
 
     // A second turn is a second call, and the row leads with it again.
-    const again = said(answered, { session: "pane-1", at: AT, verb: "waiting", text: "and now this" });
+    const again = declared(answered, "pane-1", "and now this");
     expect(sayOf(again.get("pane-1"))).toEqual({ kind: "waiting", text: "and now this" });
   });
 

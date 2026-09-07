@@ -200,11 +200,10 @@ impl Pane {
     /// Two of them are the pane's own business as well as the person's: the fact that `amenbo agent`
     /// ran here, and whose turn it is. Every other verb passes straight through.
     ///
-    /// **Nothing here takes a turn back down.** What ends one is the person it was handed to looking
-    /// at the pane (`AMB-D-859`), which is a thing the window measures and not a thing an agent says
-    /// — so what is kept here is the reason last given, and `app/src/talk/sessions.ts` reads it
-    /// against whether the person has been since. A name says nothing about whose turn it is: it is
-    /// the frame being named, not the session.
+    /// **No word takes a turn back down.** What ends one is the person it was handed to coming to the
+    /// pane (`AMB-D-859`), which is a thing the window measures and not a thing an agent says — so
+    /// the way down is [`Pane::saw`], called from the window, and never a verb. A name says nothing
+    /// about whose turn it is: it is the frame being named, not the session.
     fn take_in(&self, said: &amenbo_core::session::Said) {
         use amenbo_core::session::Statement;
         match &said.statement {
@@ -216,11 +215,19 @@ impl Pane {
         }
     }
 
-    /// Why a person's turn has come here, if one was ever handed over. It stands until the window
-    /// reads it against a person having been to the pane since (`AMB-D-859`) — this side never takes
-    /// it down.
+    /// Why a person's turn has come here, if one is standing.
     fn waiting(&self) -> Option<String> {
         self.waiting.lock().expect("pane waiting lock").clone()
+    }
+
+    /// A person has come to this pane — the turn standing in it, if one is, is over (`AMB-D-859`).
+    ///
+    /// **The measurement is the window's and the answer is this side's.** Only the window can see a
+    /// person arrive; only this outlives the pane they arrived at. Kept in the webview instead, the
+    /// arrival would go away with the pane while the declaration stayed here, and every turn already
+    /// answered would stand again the moment a second window drew the session.
+    fn saw(&self) {
+        *self.waiting.lock().expect("pane waiting lock") = None;
     }
 
     /// Whether the agent in this pane has the canon.
@@ -1106,6 +1113,24 @@ pub fn pty_brief(terminals: tauri::State<'_, Terminals>, session: String) -> Res
     Ok(true)
 }
 
+/// A person has come to the pane drawing this session — the turn standing in it is over
+/// (`AMB-D-859`).
+///
+/// **Arriving is the measurement, and it is the only one taken.** Printing is not: an agent that
+/// hands a turn over and then prints the question would take its own hand down. Nor is the pane
+/// merely being on the screen — a page of panes is several turns, and the one a person went to is
+/// the one they attended to.
+///
+/// A session that has ended in the meantime is not an error worth raising: what the call is about is
+/// a turn, and a session with no terminal left has none.
+#[tauri::command]
+pub fn pty_saw(terminals: tauri::State<'_, Terminals>, session: String) {
+    let open = terminals.0.lock().expect("terminals lock");
+    if let Some(terminal) = open.get(&session) {
+        terminal.pane.saw();
+    }
+}
+
 /// Tell the terminal how large the pane is now, in characters.
 ///
 /// This is what a program inside it reads when it asks the terminal its size, and what it is woken
@@ -1428,10 +1453,10 @@ mod tests {
     ///
     /// This walks the real statements rather than calling `take_in` with made-up ones: what reaches a
     /// pane is whatever came off the drop box, so the pass over the box is the thing under test.
-    /// Taking the turn down is not here — the window does that by measuring whether the person has
-    /// been to the pane (`AMB-D-859`).
+    /// Taking the turn down is here too, and it is not a word: the window says a person came to the
+    /// pane, and no verb can (`AMB-D-859`).
     #[test]
-    fn the_reason_a_turn_was_handed_over_stands_in_the_pane() {
+    fn the_reason_a_turn_was_handed_over_stands_until_the_person_comes() {
         use amenbo_core::session::{say, Statement, Surface};
 
         let dir = amenbo_scratch::scratch("pty-waiting");
@@ -1461,6 +1486,17 @@ mod tests {
         say(&surface, &Statement::Waiting("and this one?".into())).expect("said");
         carry(&pane, &mut last);
         assert_eq!(pane.waiting().as_deref(), Some("and this one?"));
+
+        // The person came to the pane. That, and nothing an agent can say, is what ends a turn.
+        pane.saw();
+        assert_eq!(pane.waiting(), None);
+        pane.saw();
+        assert_eq!(pane.waiting(), None, "arriving at a pane nobody is calling from is nothing");
+
+        // A turn handed over after they left is a new call, and stands.
+        say(&surface, &Statement::Waiting("back to you".into())).expect("said");
+        carry(&pane, &mut last);
+        assert_eq!(pane.waiting().as_deref(), Some("back to you"));
     }
 
     /// What a pane is owed goes out once, whatever a person presses after.

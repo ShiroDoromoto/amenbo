@@ -167,6 +167,10 @@ beforeEach(async () => {
       onWaiting: (waiting: boolean) => told.push(waiting),
     }));
   });
+  // Two panes to a page, pressed for. A project nobody has answered for is drawn at one
+  // (`../talk/layout`), and every road here is about a page that has panes on it and a page that is
+  // away — which needs a page that holds more than the pane in front of you.
+  await click(q(".termface__count")[1]!);
 });
 
 afterEach(async () => {

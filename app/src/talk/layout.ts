@@ -104,9 +104,31 @@ export function pageShape(count: Count, orient: Orient): string {
   return orientable(count) && orient === "down" ? `${count}-down` : String(count);
 }
 
-/** Two panes to start with: one is what a single terminal already was, and four is a screenful to
- *  arrive at rather than to be given. */
-export const DEFAULT_COUNT: Count = 2;
+/**
+ * What a project nobody has split opens at.
+ *
+ * **One, because the split is now an answer given on a project** and a project that has never been
+ * answered for has not been given one. Two would put an empty box beside the first pane on every
+ * project a reader walks into — a question about a second terminal, asked by the face rather than by
+ * them — and the wide splits are arrived at the same way they always were, by pressing for them.
+ *
+ * It is also what a face has when it is on no project at all, where there is nothing to have been
+ * answered about.
+ */
+export const DEFAULT_COUNT: Count = 1;
+
+/**
+ * How one project's page is split — one answer, kept against the project it was given on
+ * (`SplitDto`).
+ *
+ * **The count and the orientation travel together** because they are one answer: two panes laid down
+ * is not the same shape as two across, and a project remembered at the count without the way it sat
+ * would come back at a grid nobody left it in.
+ */
+export type Split = { readonly count: Count; readonly orient: Orient };
+
+/** What a project nobody has answered for is drawn at. */
+const UNANSWERED: Split = { count: DEFAULT_COUNT, orient: DEFAULT_ORIENT };
 
 /**
  * The arrangement as it is handed over — the wire shape of `TalkLayoutDto`.
@@ -115,9 +137,9 @@ export const DEFAULT_COUNT: Count = 2;
  * window is drawing the face writes it, and the one the terminal is split out into reads it as it
  * comes up (`app/src-tauri/src/frames.rs`).
  *
- * **What outlives the run is `count` and `project`, and nothing else** (`AMB-T-3687`). So an
+ * **What outlives the run is the splits and `project`, and nothing else** (`AMB-T-3687`). So an
  * arrangement read at the start of a run has no frames in it, and the face comes up on the project
- * the reader was looking at with one way in on it.
+ * the reader was looking at, at the split that project was left at, with one way in on it.
  */
 export type SavedLayout = {
   count: number;
@@ -125,6 +147,11 @@ export type SavedLayout = {
    *  (`Orient`). It is kept at every count and not only at two: a person who went to four and asked
    *  for two again means the two they set up, not the default back. */
   orient?: Orient;
+  /** The split of each project that has one, by project — and the two above read at `project`, which
+   *  is what the face is laid out from every render (`SplitDto`). A project nobody has answered for
+   *  is not in it: what is kept is the answers, and a row for every project a reader ever walked
+   *  through would say nothing about most of them. */
+  splits?: Record<string, { count: number; orient?: Orient }>;
   /** The next id to hand out. It is this run's, like the frames it numbers: an arrangement that comes
    *  back with no frames starts again at the first. */
   nextId: number;
@@ -161,9 +188,25 @@ export type Layout = {
   readonly frames: readonly Frame[];
   /** The next id to hand out. Frames are never renumbered, so this only ever goes up. */
   readonly nextId: number;
+  /** How many panes a page of the project on the screen holds — that project's own answer, or what
+   *  a project nobody has answered for is drawn at (`splits`). */
   readonly count: Count;
   /** Which way a two-pane page sits (`Orient`). It stands at every count, and is drawn on at two. */
   readonly orient: Orient;
+  /**
+   * The split each project has been left at, by project (`Split`).
+   *
+   * **A project is drawn at its own answer, and moving to one moves the face to that answer.** How
+   * many panes a person wants is a fact about the work, not about the face: a repository with an
+   * agent and its shell wants two, and the one they read in wants one, and a face with a single
+   * count made every move between them rewrite whichever they came from.
+   *
+   * `count` and `orient` above are this read at `project`, kept beside it because the page is laid
+   * out from them on every render. Nothing is in here for a project nobody has answered for —
+   * `DEFAULT_COUNT` is what that project is drawn at, and a row saying so would be an answer put in
+   * a person's mouth.
+   */
+  readonly splits: Readonly<Record<number, Split>>;
   /** The project whose panes are on the screen, or null before the face has been told of one. */
   readonly project: number | null;
   /** The page of that project being shown, counted from 1. */
@@ -185,6 +228,7 @@ export const EMPTY_LAYOUT: Layout = {
   nextId: 1,
   count: DEFAULT_COUNT,
   orient: DEFAULT_ORIENT,
+  splits: {},
   project: null,
   page: 1,
   focus: null,
@@ -367,8 +411,36 @@ export function addPane(layout: Layout): Layout {
  */
 export function goProject(layout: Layout, project: number): Layout {
   if (layout.project === project) return layout;
-  const first = panesOf(layout, project)[0] ?? null;
-  return { ...layout, project, page: 1, focus: first?.id ?? null, adding: false };
+  const shown = showing(layout, project);
+  const first = panesOf(shown, project)[0] ?? null;
+  return { ...shown, page: 1, focus: first?.id ?? null, adding: false };
+}
+
+/** The split a project is drawn at: its own answer, or what a project nobody has answered for gets
+ *  (`Layout.splits`). */
+function splitOf(layout: Layout, project: number | null): Split {
+  return (project === null ? undefined : layout.splits[project]) ?? UNANSWERED;
+}
+
+/**
+ * Put the face on a project, laid out the way that project was left.
+ *
+ * Every way onto a project goes through here, `goProject` and `focusOn` alike: a pane reached from
+ * the rail is as much a move between projects as a tab is, and a split that followed only one of the
+ * two would draw the same project at two different counts depending on how the reader got to it.
+ */
+function showing(layout: Layout, project: number): Layout {
+  // Staying where you are is not a move, and the split is not re-read for one: what the face is laid
+  // out at right now is the answer for this project, whether or not one has been kept yet.
+  if (layout.project === project) return layout;
+  const split = splitOf(layout, project);
+  return { ...layout, project, count: split.count, orient: split.orient };
+}
+
+/** The answers with this project's put in. A face on no project keeps none — an answer is given on a
+ *  project, and there is nothing here to hold one against. */
+function answered(layout: Layout, split: Split): Readonly<Record<number, Split>> {
+  return layout.project === null ? layout.splits : { ...layout.splits, [layout.project]: split };
 }
 
 /** Show a page of the project that is up, as far as there are pages to show. A page asked for and not
@@ -383,7 +455,7 @@ export function goPage(layout: Layout, page: number): Layout {
 export function focusOn(layout: Layout, frame: string): Layout {
   const one = layout.frames.find((each) => each.id === frame);
   if (!one) return layout;
-  const shown: Layout = { ...layout, project: one.project, adding: false };
+  const shown: Layout = { ...showing(layout, one.project), adding: false };
   const page = pageOfFrame(shown, frame);
   return page === null ? layout : { ...shown, page, focus: frame };
 }
@@ -398,7 +470,14 @@ export function focusOn(layout: Layout, frame: string): Layout {
 export function setCount(layout: Layout, count: Count): Layout {
   // A page asked for is measured against the old count, so it does not survive a change of it: what
   // the reader gets back is the pane they were on, on the page it is now.
-  const next: Layout = { ...layout, count, adding: false };
+  const next: Layout = {
+    ...layout,
+    count,
+    // The press is an answer about the project on the screen, and it is kept as one: going to
+    // another project and coming back brings this shape with it (`Layout.splits`).
+    splits: answered(layout, { count, orient: layout.orient }),
+    adding: false,
+  };
   const page = next.focus === null ? null : pageOfFrame(next, next.focus);
   return { ...next, page: Math.min(page ?? layout.page, pageCount(next)) };
 }
@@ -411,14 +490,15 @@ export function setCount(layout: Layout, count: Count): Layout {
  * in — what changes is where the two of them are drawn.
  */
 export function setOrient(layout: Layout, orient: Orient): Layout {
-  return layout.orient === orient ? layout : { ...layout, orient };
+  if (layout.orient === orient) return layout;
+  return { ...layout, orient, splits: answered(layout, { count: layout.count, orient }) };
 }
 
 /**
  * The arrangement as it is written down, for the other window to read.
  *
- * **What is written is the shape**: how many panes to a page, the panes in the order they were
- * opened, and for each the project it is one of and the folder it is working in. What is running is
+ * **What is written is the shape**: the split each project has been answered at, the panes in the
+ * order they were opened, and for each the project it is one of and the folder it is working in. What is running is
  * not — a session is a process, and a pane drawn as though one were still in it would be the window
  * saying something untrue. So a pane comes over as a place with its folder on it, and nothing is
  * started until somebody presses.
@@ -429,10 +509,17 @@ export function setOrient(layout: Layout, orient: Orient): Layout {
  * panes in it opens as the project the board was on (`../talk.tsx`).
  */
 export function laidOut(layout: Layout): SavedLayout {
+  const splits = Object.entries(layout.splits).map(([project, split]) => [
+    project,
+    // Across is what a page does when nothing says otherwise, so it is left out of the row the way
+    // the face's own orientation is — the shape a person asked for, and no more.
+    split.orient === DEFAULT_ORIENT ? { count: split.count } : { count: split.count, orient: split.orient },
+  ] as const);
   return {
     count: layout.count,
     nextId: layout.nextId,
     ...(layout.orient === DEFAULT_ORIENT ? {} : { orient: layout.orient }),
+    ...(splits.length === 0 ? {} : { splits: Object.fromEntries(splits) }),
     ...(layout.project === null ? {} : { project: layout.project }),
     frames: layout.frames.map((frame) => ({
       id: frame.id,
@@ -449,17 +536,16 @@ export function laidOut(layout: Layout): SavedLayout {
  * The layout an arrangement comes back as.
  *
  * **An arrangement with no frames in it still says something**, and it is what every window that
- * comes up after a run reads: the split the person chose is theirs, and it comes back whether or not
- * there is anything to draw with it (`AMB-T-3687`). What that leaves is the empty face, laid out the
- * way they laid it out.
+ * comes up after a run reads: the splits the person chose are theirs, and they come back whether or
+ * not there is anything to draw with them (`AMB-T-3687`). What that leaves is the empty face, on the
+ * project they were on and laid out the way they laid that project out.
  *
  * `onto` is the project the window is on, and it answers for the frames an older build wrote without
  * one: a pane whose project nothing records is put where the person is rather than dropped, and where
  * there is nowhere to put it there is nothing to draw.
  */
 export function restored(saved: SavedLayout, onto: number | null): Layout {
-  const count = COUNTS.find((one) => one === saved.count) ?? DEFAULT_COUNT;
-  const orient = ORIENTS.find((one) => one === saved.orient) ?? DEFAULT_ORIENT;
+  const splits = answers(saved.splits);
   const frames: Frame[] = [];
   for (const frame of saved.frames) {
     const project = frame.project ?? onto;
@@ -467,17 +553,45 @@ export function restored(saved: SavedLayout, onto: number | null): Layout {
     frames.push({ id: frame.id, project, session: null, folder: frame.folder ?? null });
   }
   const first = frames[0];
+  const project = first?.project ?? onto;
+  // The split the face opens at. It is read out of the answers where the project it lands on has
+  // one, and off the pair beside them where it has not — which is what an arrangement written before
+  // the answers were kept by project has, and all it has.
+  const opening = (project === null ? undefined : splits[project]) ?? {
+    count: COUNTS.find((one) => one === saved.count) ?? DEFAULT_COUNT,
+    orient: ORIENTS.find((one) => one === saved.orient) ?? DEFAULT_ORIENT,
+  };
   return {
     frames,
     // Ids are never reused, so the next one has to clear every frame that came with the arrangement
     // — one written by a newer build, or an id list nobody can vouch for, must not hand a fresh
     // frame the name of one already up.
     nextId: Math.max(saved.nextId, ...frames.map((frame) => Number(frame.id) + 1 || 0)),
-    count,
-    orient,
-    project: first?.project ?? onto,
+    count: opening.count,
+    orient: opening.orient,
+    splits,
+    project,
     page: 1,
     focus: first?.id ?? null,
     adding: false,
   };
+}
+
+/**
+ * The answers an arrangement is carrying, as this build can draw them.
+ *
+ * A row whose count this build has no grid for is dropped rather than rounded: it was written by a
+ * build that offered some other split, and a project put back at a count the stylesheet cannot lay
+ * out is a page with no rule for it. What is dropped comes back as the unanswered shape, which is
+ * the honest reading — this build does not know what that project was left at.
+ */
+function answers(kept: SavedLayout["splits"]): Record<number, Split> {
+  const splits: Record<number, Split> = {};
+  for (const [key, split] of Object.entries(kept ?? {})) {
+    const project = Number(key);
+    const count = COUNTS.find((one) => one === split.count);
+    if (count === undefined || !Number.isInteger(project)) continue;
+    splits[project] = { count, orient: ORIENTS.find((one) => one === split.orient) ?? DEFAULT_ORIENT };
+  }
+  return splits;
 }

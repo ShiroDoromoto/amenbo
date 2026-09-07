@@ -7,9 +7,11 @@ import {
   setOrient, slotsOf, type Layout,
 } from "./layout";
 
-/** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one. */
+/** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one.
+ *  The count is pressed for rather than written in: a split is an answer given on a project, and one
+ *  put straight into the shape would be a project drawn at a count nobody answered with. */
 function withPanes(n: number, count: Layout["count"] = 2, project = 1): Layout {
-  let layout: Layout = { ...EMPTY_LAYOUT, count, project };
+  let layout: Layout = setCount({ ...EMPTY_LAYOUT, project }, count);
   for (let i = 0; i < n; i++) layout = openedFrame(layout, project, `/work/${project}`).layout;
   return layout;
 }
@@ -229,11 +231,12 @@ describe("the count is the most a page draws", () => {
     expect(goPage(withPanes(2), 3).page).toBe(1);
   });
 
-  it("offers five counts and comes up on two", () => {
-    // Two is where a first run lands: one terminal is what there was before, and the wide splits are
-    // arrived at rather than handed out (`./layout`).
+  it("offers five counts and draws a project nobody has answered for at one", () => {
+    // The split is an answer given on a project, so a project that has never been answered for is
+    // drawn at the one pane that is certainly wanted — the wide splits are pressed for
+    // (`./layout`).
     expect(COUNTS).toEqual([1, 2, 4, 6, 8]);
-    expect(DEFAULT_COUNT).toBe(2);
+    expect(DEFAULT_COUNT).toBe(1);
     // Every count says how many go across, and no count ever asks for a third row — whichever way
     // the one count that can be asked is laid.
     for (const one of COUNTS) {
@@ -304,10 +307,15 @@ describe("the count is the most a page draws", () => {
 
   it("keeps a count it has never heard of out of a kept arrangement", () => {
     // A build that offered some other count wrote one, and this one has to land on something it can
-    // draw rather than on a grid with no rule for it.
-    const kept = { ...laidOut(withPanes(2)), count: 5 as Layout["count"] };
-    expect(restored(kept, null)!.count).toBe(DEFAULT_COUNT);
-    expect(restored({ ...laidOut(withPanes(2)), count: 8 }, null)!.count).toBe(8);
+    // draw rather than on a grid with no rule for it. The row is dropped rather than rounded: what
+    // that project was left at is a thing this build does not know.
+    const kept = laidOut(withPanes(2));
+    expect(restored({ ...kept, count: 5, splits: { 1: { count: 5 } } }, null).count).toBe(DEFAULT_COUNT);
+    expect(restored({ ...kept, count: 8, splits: { 1: { count: 8 } } }, null).count).toBe(8);
+    // And an arrangement written before the answers were kept by project is read off the pair
+    // beside them, which is all it has.
+    expect(restored({ count: 5, nextId: 1, project: 1, frames: [] }, null).count).toBe(DEFAULT_COUNT);
+    expect(restored({ count: 8, nextId: 1, project: 1, frames: [] }, null).count).toBe(8);
   });
 });
 
@@ -387,6 +395,67 @@ describe("an arrangement kept between runs", () => {
     expect(back.project).toBe(3);
     expect(back.focus).toBeNull();
     expect(pageCount(back)).toBe(1);
+  });
+});
+
+describe("the split each project was left at", () => {
+  it("draws a project at its own answer, and brings each back on the way between them", () => {
+    // How many panes a person wants is a fact about the work, not about the face: one project has an
+    // agent and its shell in it, the next is one they read in. A face with a single count made every
+    // move between the two rewrite whichever they came from.
+    let layout = setCount({ ...EMPTY_LAYOUT, project: 1 }, 4);
+    layout = setCount(goProject(layout, 2), 2);
+
+    expect(goProject(layout, 1).count).toBe(4);
+    expect(goProject(goProject(layout, 1), 2).count).toBe(2);
+  });
+
+  it("draws a project nobody has answered for at one, whatever the last one was set to", () => {
+    const wide = setCount({ ...EMPTY_LAYOUT, project: 1 }, 8);
+    expect(goProject(wide, 2).count).toBe(DEFAULT_COUNT);
+    // And going back is the answer again, rather than the shape the unanswered project was drawn at.
+    expect(goProject(goProject(wide, 2), 1).count).toBe(8);
+  });
+
+  it("moves the split with a pane reached for in another project, as a tab does", () => {
+    // The rail's rows reach panes that are not on the screen, so reaching one is as much a move
+    // between projects as pressing the tab is — and a split that followed only the tab would draw
+    // one project at two counts depending on how the reader got to it.
+    let layout = setCount({ ...EMPTY_LAYOUT, project: 1 }, 4);
+    layout = openedFrame(layout, 1, "/work/1").layout;
+    layout = setCount(openedFrame(layout, 2, "/work/2").layout, 2);
+
+    expect(focusOn(layout, "1").count).toBe(4);
+  });
+
+  it("keeps the answers between runs, and writes none for a project nobody answered for", () => {
+    let layout = setCount({ ...EMPTY_LAYOUT, project: 1 }, 4);
+    layout = setOrient(setCount(goProject(layout, 2), 2), "down");
+    // Walked through and left alone: an answer is what a person gave, and a row here would be one
+    // put in their mouth.
+    layout = goProject(layout, 3);
+
+    const kept = laidOut(layout);
+    expect(kept.splits).toEqual({ 1: { count: 4 }, 2: { count: 2, orient: "down" } });
+
+    const back = restored(kept, null);
+    expect(back.count).toBe(DEFAULT_COUNT);
+    expect(goProject(back, 1).count).toBe(4);
+    expect(goProject(back, 2)).toMatchObject({ count: 2, orient: "down" });
+  });
+
+  it("leaves the row out of an arrangement nobody has answered anything on", () => {
+    expect(laidOut(EMPTY_LAYOUT)).not.toHaveProperty("splits");
+    expect(laidOut(openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/work/1").layout))
+      .not.toHaveProperty("splits");
+  });
+
+  it("has nothing to keep an answer against where the face is on no project", () => {
+    // The count still moves — the face draws what it was asked for — but there is nothing here to
+    // hold the answer, so nothing is written down.
+    const wide = setCount(EMPTY_LAYOUT, 4);
+    expect(wide.count).toBe(4);
+    expect(wide.splits).toEqual({});
   });
 });
 

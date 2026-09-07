@@ -2,10 +2,8 @@
 // The lamp on the row, as the plate drives it. What is pinned here is the shape of the answer rather
 // than the mark: a stream that keeps arriving is one state and not a hundred, a pane that quietens
 // settles on the clock because nothing else will ever say so, and a pane whose program has exited is
-// out — the stream did not go quiet, it ended. And over all of it, the face that calls somebody: it
-// wins wherever a turn is standing, whatever the stream is doing.
+// out — the stream did not go quiet, it ended.
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import type { SessionSaidDto } from "../bindings/bindings";
 import { STILL_AFTER_MS } from "./moving";
 
 // The one boundary the plate reaches across. It has nothing to say about a stream.
@@ -15,11 +13,6 @@ vi.mock("./frames", async (orig) => ({
   frameNames: async () => new Map<string, string>(),
 }));
 
-/** The agent in this pane hands the turn over, and says why. */
-function handOver(why: string): void {
-  plate.said({ session: "pane-1", at: AT, verb: "waiting", text: why });
-}
-
 const { mountPlate } = await import("./plate");
 
 const AT = "2026-08-24T09:00:00Z";
@@ -27,17 +20,13 @@ const AT = "2026-08-24T09:00:00Z";
 let host: HTMLElement;
 let plate: ReturnType<typeof mountPlate>;
 
-/** Which of the lamp's three faces the row is drawn on now. */
+/** Which of the lamp's two faces the row is drawn on now. */
 const dot = () => host.querySelector<HTMLElement>(".plate__dot")!.dataset.face;
-const row = () => host.querySelector<HTMLElement>(".plate")!;
-
-const said = (over: Partial<SessionSaidDto> & Pick<SessionSaidDto, "verb">): SessionSaidDto =>
-  ({ session: "pane-1", at: AT, ...over });
 
 beforeEach(() => {
   vi.useFakeTimers();
   host = document.createElement("div");
-  plate = mountPlate(host, () => "en");
+  plate = mountPlate(host);
   plate.opened("pane-1", AT, null);
 });
 
@@ -77,44 +66,4 @@ describe("the lamp follows the stream and reads nothing else into it", () => {
     expect(dot()).toBe("out");
   });
 
-  it("does not move for a pane that is merely printing — the lit face is a glow held still", () => {
-    plate.output();
-    // Nothing is animating, so nothing has a phase to be put in step with.
-    expect(row().style.getPropertyValue("--phase")).toBe("");
-  });
-});
-
-describe("the lamp calls when a turn is standing, over whatever the stream is doing", () => {
-  it("blinks on the turn and goes back to the stream when the terminal ends", () => {
-    plate.output();
-    expect(dot()).toBe("lit");
-
-    handOver("which of the two");
-    expect(dot(), "a turn was standing and the lamp still reported the stream").toBe("calling");
-
-    // Nothing an agent says takes a turn down (`AMB-D-859`): a name leaves the lamp calling, and what
-    // ends this one here is the program in the pane ending.
-    plate.said(said({ verb: "name", text: "the migration" }));
-    expect(dot()).toBe("calling");
-    plate.closed("pane-1");
-    expect(dot()).toBe("out");
-  });
-
-  it("calls on a pane that has printed nothing at all", () => {
-    // The turn does not come off the stream, so it does not need one.
-    handOver("which of the two");
-    expect(dot()).toBe("calling");
-  });
-
-  it("joins the blink where every other pane already is", () => {
-    handOver("which of the two");
-    const phase = row().style.getPropertyValue("--phase");
-    expect(phase, "a blinking row was left without a phase to fall in with").not.toBe("");
-
-    // Still the same turn: setting it again would start the blink over, which is the one thing the
-    // shared phase exists to prevent.
-    vi.advanceTimersByTime(100);
-    handOver("still which of the two");
-    expect(row().style.getPropertyValue("--phase")).toBe(phase);
-  });
 });

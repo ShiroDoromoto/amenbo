@@ -1,182 +1,51 @@
-// The one line above a pane that says what is going on in it.
+// The one line above a pane: what the pane is called, and nothing else.
 //
-// There is room for three things and space for one, so the row is two places with a rank in each:
-// what the pane is called, and the one thing worth saying about it. Without a rank a reader cannot
-// predict what they are looking at — which of several notices won today's draw — and a label nobody
-// can predict is one nobody reads.
+// **It says the name because the name is the one thing about a pane that is not guesswork**
+// (`AMB-D-862`). What the row carried beside it was whether somebody was being waited on, which is an
+// agent's word about itself and can be neither confirmed nor taken back — a row that said it went on
+// saying it while the agent worked. What is left is what a person gave the pane, or the folder its
+// terminal runs in until they give it one (`./frames`).
 //
-// **The two places are ranked on the way out as well as on the way in.** A pane too narrow for both
-// drops the right one, and what is left is the name and the mark saying a person is needed
-// (`../styles/global.css`) — the reason being unreadable does not stop "your turn" from being read.
-// Whatever went is a pointer or the keyboard away. What keeps that a last resort is the other end: a
-// reason longer than a label is refused where it is said (`amenbo_core::session::WAITING_LIMIT`).
+// In front of the name is the lamp the pane is known by (`./moving`). It takes no words and has two
+// faces: **lit** while output is arriving, and **out** the rest of the time. Being lit is a
+// measurement of the stream and says nothing about what the stream means — a pane printing nothing
+// may be building, thinking, or waiting on somebody (`AMB-D-858`).
 //
-// **What gives it back is a panel of the row's own, and not the machine's tooltips** (`peekLines`).
-// A tooltip per place is a hover to find and a shape to read for each, and the one place with no
-// tooltip at all was the name — the part most often cut, and cut out of a line the agent typed. So
-// the whole row is read in one place instead: it drops under the header, wraps inside the pane's own
-// width, and takes no pointer events, so what is under it goes on being a terminal. It is dropped by
-// a pointer resting on the row and by the keyboard reaching the controls beside it — the row itself
-// is no tab stop (`../styles/global.css`).
-//
-// In front of the two is the lamp the pane is known by (`./moving`). It is not a third place and
-// takes no words, and it has three faces: **lit** while output is arriving, **blinking** while a
-// person's turn is standing, and **out** the rest of the time. All three are read at a glance and none
-// can push the others off the row, which is why they can share a mark this small when three sentences
-// cannot share a line.
-//
-// **The one face that moves is the rare one.** Movement given to the commonest state would leave every
-// pane on the screen going all day, and a mark that is always moving is one nobody can look away from
-// or read anything into. A turn standing is rare, and when it happens somebody really is being called
-// — so that is where the movement goes, and being lit is a glow held still.
-//
-// **What is shown is declared or measured, never guessed** (`AMB-D-858`). What the agent said in so
-// many words is one half; the pane's own measurements — the lamp, how long it has been quiet, a
-// sentence left unsent — are the other. Nothing here is read off the ledger: what tied a pane to a
-// task was a key the world could rewrite behind it, and the answer it gave was as often old as
-// right. Silence is left as silence — a pane that says nothing shows nothing, rather than being read
-// for signs.
-//
-// The marks are the application's own icons and not characters (`AMB-D-686`): a glyph is drawn at
-// whatever size and weight the machine's fonts happen to give it, and this row is where a mark has
-// least room to be wrong about either.
+// **A name too long for the row is elided, and given back in full by a panel of the row's own**
+// (`../styles/global.css`). A name is what the agent typed, so it is the one thing here worth a way
+// back to: the panel drops under the header, wraps inside the pane's own width, and takes no pointer
+// events, so what is under it goes on being a terminal. It is dropped by a pointer resting on the row
+// and by the keyboard reaching the controls beside it — the row itself is no tab stop.
 
-import { iconSvg, type DrawnIcon } from "../components/Icon";
-import { t, tf, type Lang } from "../core/i18n";
-import { BLINK_MS, hueOf, phaseDelay } from "./moving";
-import type { Session } from "./sessions";
+import { hueOf } from "./moving";
 
-/** The right of the row: the one thing worth saying, in rank order. */
-export type Say =
-  /** A person's turn has come, and why. The agent's own words. */
-  | { readonly kind: "waiting"; readonly text: string }
-  /** The sentence Amenbo opens an agent with is sitting in the pane's input box, unsent — and one
-   *  Enter is the whole of what it is waiting for (`crate::pty`, `AMB-D-805`). */
-  | { readonly kind: "unsent" }
-  /** Nothing has been said and nothing has come out for a while — how long, in whole minutes. It is
-   *  last because it is what fills the slot when there is nothing better in it: anything the session
-   *  actually said outranks a measurement of its silence (`./moving`). */
-  | { readonly kind: "quiet"; readonly minutes: number }
-  /** Nothing to say. Not "nothing is happening" — only that nothing was said. */
-  | { readonly kind: "silent" };
-
-/** Which of the lamp's three faces it is showing. */
+/** Which of the lamp's two faces it is showing. */
 export type Face =
   /** Output is arriving. A glow, held still, in the pane's own hue. */
   | "lit"
-  /** A person's turn is standing here. The warning colour, at the same beat and the same faintness as
-   *  the mark at the other end of the row — the two are one signal drawn twice (`./moving`). */
-  | "calling"
-  /** Neither. **Out is not away**: the lamp sinks in place rather than going, because a mark that
+  /** Not. **Out is not away**: the lamp sinks in place rather than going, because a mark that
    *  vanished would read as the pane having gone. Nothing is read into it (`AMB-D-858`) — a pane that
    *  is printing nothing may be building, thinking, or waiting on somebody who has not been told. */
   | "out";
 
 /** The lamp in front of the name: which pane this is, and which face it is on (`./moving`). */
 export type Dot = {
-  /** The frame the row belongs to. Its hue is what tells one pane from another — on every face but
-   *  the calling one, which leaves the hue for the colour that says come here. */
+  /** The frame the row belongs to. Its hue is what tells one pane from another. */
   readonly frame: string;
-  /** Which of the three it is showing. */
+  /** Which of the two it is showing. */
   readonly face: Face;
 };
 
-/**
- * Which face the lamp is on.
- *
- * **A turn outranks the stream.** The two are not exclusive — an agent can hand a turn over while its
- * build prints away — and when both are true the lamp says the one a person is meant to act on. It is
- * the same rank the row itself reads by, and it is worked out from the same answer, so the lamp and
- * the words beside it can never come to disagree.
- */
-export function faceOf(say: Say, moving: boolean): Face {
-  if (standsAsTurn(say)) return "calling";
+/** Whether the lamp is lit, which is the stream and nothing else. */
+export function faceOf(moving: boolean): Face {
   return moving ? "lit" : "out";
 }
 
 /** The whole row. */
 export type Plate = {
   readonly name: string | null;
-  readonly say: Say;
   readonly dot: Dot;
 };
-
-/**
- * The right of the row: the first of three that applies.
- *
- * The order is the order a person is needed in. A turn that has been handed over is the only thing
- * that cannot wait; a sentence left in the input box is a person needed for a keypress; and below
- * that there is nothing, which is not a claim that all is well.
- *
- * **The unsent sentence goes below the turn the agent handed over, and not above it.** What it says is
- * that the agent in this pane never got told where it is working — which is only ever news while the
- * pane has said nothing else. An agent that handed a turn over has plainly been told; standing in
- * front of that would be an old fact pushing a live one off the row.
- *
- * **A turn the person has already come to is not one** (`AMB-D-859`): the host takes it down on the
- * arrival, so a turn that is here at all is one nobody has been to.
- */
-export function sayOf(session: Session | undefined): Say {
-  if (session?.waiting) return { kind: "waiting", text: session.waiting };
-  if (session?.unsent) return { kind: "unsent" };
-  return { kind: "silent" };
-}
-
-/**
- * Whether what the row leads with is a person's turn standing.
- *
- * The two that are: the agent handing one over, and the opening sentence sitting in the input box —
- * where nothing at all will happen in the pane until a person presses Enter. The one that is not:
- * silence, which is not a claim about anything (`AMB-D-858`).
- */
-export function standsAsTurn(say: Say): boolean {
-  return say.kind === "waiting" || say.kind === "unsent";
-}
-
-/**
- * The words the right is drawn with, and the mark in front of them.
- *
- * The row is one line and gives this place what is left of it, so what is said here is elided where
- * the pane is narrow and dropped altogether where it is narrower still — the mark stays either way,
- * because "a person is needed here" survives the reason being unreadable (`AMB-T-3673`). The whole of
- * it is in the panel under the header instead (`peekLines`).
- */
-export function sayText(say: Say, lang: Lang): { mark: Mark; text: string } {
-  switch (say.kind) {
-    case "waiting":
-      return { mark: "pause", text: say.text };
-    case "unsent":
-      // The pause, which is the mark for a person's turn: something that was running has stopped for
-      // them. It is the same mark a handed-over turn gets, and deliberately — where the pane is too
-      // narrow for words, what has to survive is "somebody is needed here", and which of the two
-      // reasons it was is the sentence the panel gives back.
-      return { mark: "pause", text: t("talk.unsent", lang) };
-    case "quiet":
-      return { mark: null, text: tf("talk.quiet", { n: say.minutes }, lang) };
-    case "silent":
-      return { mark: null, text: "" };
-  }
-}
-
-/**
- * The whole row, unelided, in the order the row reads — the lines the panel under the header is drawn
- * from.
- *
- * **It is the row and not a second reading of it.** Every line here is a place on the row, said in
- * full: what the pane is called, and the one thing it said. Nothing is fetched for the panel that the
- * row did not already have, so a reader who opens it never finds it disagreeing with the line above
- * it.
- *
- * A place with nothing in it contributes no line. The panel of a pane that is silent and unnamed is
- * empty, and an empty panel is not drawn at all (`mountNameplate`).
- */
-export function peekLines(plate: Plate, lang: Lang): readonly string[] {
-  const right = sayText(plate.say, lang);
-  return right.text ? [right.text] : [];
-}
-
-/** Which mark stands in front of a part of the row, or nothing where the part asks for none. */
-export type Mark = DrawnIcon | null;
 
 /**
  * Draw the row into `host`, and hand back the way to draw it again.
@@ -189,17 +58,13 @@ export type Mark = DrawnIcon | null;
  * (`AMB-T-3606`), and a row saying the session is silent would be saying it of a session that does
  * not exist. The row is hidden rather than removed for the same reason it is redrawn rather than
  * rebuilt.
- *
- * The language is handed in rather than asked for: the talk window loads no snapshot — the store is
- * what a startup migration holds shut, and a window with a terminal in it has no reason to wait on one
- * — so `currentLang` here would answer with a guess from the browser instead of the reader's choice.
  */
-export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: Lang) => void {
+export function mountNameplate(host: HTMLElement): (plate: Plate | null) => void {
   const row = document.createElement("div");
   row.className = "plate";
-  const part = (name: string, of?: string) => {
+  const part = (name: string) => {
     const el = document.createElement("span");
-    el.className = of === undefined ? `plate__${name}` : `plate__${name} plate__${name}--${of}`;
+    el.className = `plate__${name}`;
     row.append(el);
     return el;
   };
@@ -207,85 +72,39 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
   // row reads from what it is towards what is happening in it.
   const dot = part("dot");
   dot.setAttribute("aria-hidden", "true");
-  // The turn's length, handed to the stylesheet rather than written there: it is what the phase is
-  // measured against, and the two have to be the same number or the panes beat out of step. It goes on
-  // the row rather than on the lamp because the mark at the other end blinks to it too.
-  row.style.setProperty("--blink", `${BLINK_MS}ms`);
   const name = part("name");
-  // The mark is its own element because the row drops the words as the pane narrows and keeps the
-  // mark that stands in front of them (`../styles/global.css`).
-  const sayMark = part("mark", "say");
-  const say = part("say");
   host.append(row);
 
-  // The panel the row is read in full in. It is a sibling of the row rather than a child of it,
+  // The panel the name is read in full in. It is a sibling of the row rather than a child of it,
   // because the row is one line by construction (`../styles/global.css`) and a box that dropped out
   // of it would be a second thing that line had to hold. Made once, like everything else here: what
-  // changes on a redraw is the words in these two, and neither moves out from under a pointer that
-  // is on the panel while it changes.
+  // changes on a redraw is the word in it, and it does not move out from under a pointer that is on
+  // the panel while it changes.
   const peek = document.createElement("div");
   peek.className = "plate-peek";
   peek.setAttribute("aria-hidden", "true");
   const peekName = document.createElement("b");
   peekName.className = "plate-peek__name";
-  const peekRest = document.createElement("span");
-  peek.append(peekName, peekRest);
+  peek.append(peekName);
   host.append(peek);
 
-  // Which face the lamp was on last time. Setting the phase again on a row that is already blinking
-  // would start the turn over, which is the one thing the shared phase exists to prevent — so it is
-  // written only where the answer has changed, which is also the only moment it can be out of step.
-  let face: Face | null = null;
-
-  return (plate: Plate | null, lang: Lang) => {
+  return (plate: Plate | null) => {
     row.hidden = plate === null;
     if (plate === null) {
       // The panel comes down with the row it belongs to. It is said here as well as below because the
-      // row being taken away is the one path that never reaches the lines, and a panel left up is an
+      // row being taken away is the one path that never reaches the name, and a panel left up is an
       // empty box with a border on it — dropped, on a pane that has never had a session, by a pointer
       // resting on the row's place or by the keyboard reaching the button that removes the pane.
       peek.hidden = true;
       return;
     }
     dot.style.setProperty("--dot-hue", String(hueOf(plate.dot.frame)));
-    if (plate.dot.face !== face) {
-      face = plate.dot.face;
-      dot.dataset.face = face;
-      // Joining where every other blinking mark already is, rather than starting where this one was
-      // noticed. The lamp and the mark on the right both read it off the row (`./moving`).
-      if (face === "calling") row.style.setProperty("--phase", phaseDelay(Date.now()));
-    }
+    dot.dataset.face = plate.dot.face;
     name.textContent = plate.name ?? "";
-    const right = sayText(plate.say, lang);
-    drawMark(sayMark, right.mark);
-    say.textContent = right.text;
-    // And the same words again, unelided, in the panel that drops under the header. **No part of
-    // the row carries a tooltip of its own**: the machine draws one wherever the pointer happens to
-    // stop, and two of them over the panel is the same sentence twice in two shapes.
+    // And the same name again, unelided, in the panel that drops under the header. **The row carries
+    // no tooltip of its own**: the machine draws one wherever the pointer happens to stop, and one of
+    // those over the panel is the same word twice in two shapes.
     peekName.textContent = plate.name ?? "";
-    const lines = peekLines(plate, lang);
-    peekRest.textContent = lines.join("\n");
-    peek.hidden = !plate.name && lines.length === 0;
-    // A turn that has been handed over is the one thing on this row a person is meant to act on, so it
-    // is the one thing drawn as more than grey text.
-    row.dataset.say = plate.say.kind;
+    peek.hidden = !plate.name;
   };
-}
-
-/**
- * Put a mark in its place, or take the place away.
- *
- * The element is left **empty** where there is no mark, rather than holding a hidden one: the
- * stylesheet folds an empty mark out of the row with `:empty`, so a box kept there with nothing drawn
- * in it would leave a gap in front of words that have no mark (`../styles/global.css`).
- *
- * What is there already is read off `data-icon` rather than remembered, so nothing has to be kept in
- * step with what was drawn last time — and the common redraw, where the mark has not changed, touches
- * no elements at all.
- */
-function drawMark(host: HTMLElement, mark: Mark): void {
-  const drawn = host.firstElementChild?.getAttribute("data-icon") ?? null;
-  if (drawn === mark) return;
-  host.replaceChildren();
-  if (mark !== null) host.append(iconSvg(mark));
 }

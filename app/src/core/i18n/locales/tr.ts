@@ -509,8 +509,6 @@ export const tr: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "{n} dk sessiz",
-    "talk.unsent": "Henüz gönderilmedi. Göndermek için Enter’a basın.",
     "face.switch": "Bu pencerenin gösterdiği",
     "face.tasks": "Görevler",
     "face.terminal": "Terminal",

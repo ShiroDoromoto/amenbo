@@ -512,8 +512,6 @@ export const id: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "hening {n} mnt",
-    "talk.unsent": "Belum terkirim. Tekan Enter untuk mengirimnya.",
     "face.switch": "Yang ditampilkan jendela ini",
     "face.tasks": "Tugas",
     "face.terminal": "Terminal",

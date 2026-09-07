@@ -165,11 +165,9 @@ export function TerminalPane({
     let taken = false;
     let detach: (() => void) | null = null;
     setEnded(false);
-    // The line above the pane. It holds what is known about the session running there for as long as
-    // it runs (`../talk/plate.ts`). Nothing is heard back from it: what it says about a turn goes
-    // nowhere on this face any more, the badges and dots that read it having been taken away
-    // (`AMB-D-862`).
-    const plate = mountPlate(label, currentLang, undefined, frame);
+    // The line above the pane: what this pane is called, and the lamp that says whether anything is
+    // coming out of it (`../talk/plate.ts`).
+    const plate = mountPlate(label, frame);
     plateRef.current = plate;
     // The row is readable from outside for as long as this pane is drawn, and no longer: a pane on
     // another page is not being measured at all, so a reading kept past this point would be the last
@@ -241,12 +239,6 @@ export function TerminalPane({
     // Only `running` is a reason to do any of this again. `start` and `frame` are what this pane *is*
     // — a change of either would be a different pane, and the face gives that one a different key.
   }, [running]);
-
-  // Which pane is being worked in decides one thing on the row: whether a long silence says how long
-  // (`../talk/moving`). It is told rather than read, because the arrangement is the face's.
-  useEffect(() => {
-    plateRef.current?.focused(focused);
-  }, [focused, running]);
 
   // A naming reaches every row, not only the one it happened in: the rail renames a pane that is not
   // the one being worked in, and the row above that pane is where the answer shows.

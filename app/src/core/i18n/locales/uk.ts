@@ -535,8 +535,6 @@ export const uk: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "тихо {n} хв",
-    "talk.unsent": "Ще не надіслано. Натисніть Enter, щоб надіслати.",
     "face.switch": "Що показує це вікно",
     "face.tasks": "Завдання",
     "face.terminal": "Термінал",

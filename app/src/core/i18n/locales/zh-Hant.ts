@@ -509,8 +509,6 @@ export const zhHant: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "已安靜 {n} 分鐘",
-    "talk.unsent": "還沒有送出。按 Enter 即可送出。",
     "face.switch": "此視窗顯示的介面",
     "face.tasks": "任務",
     "face.terminal": "終端機",

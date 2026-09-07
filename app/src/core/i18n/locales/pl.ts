@@ -535,8 +535,6 @@ export const pl: Translation = {
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
 
-    "talk.quiet": "cisza od {n} min",
-    "talk.unsent": "Jeszcze nie wysłano. Naciśnij Enter, aby wysłać.",
     "face.switch": "Co pokazuje to okno",
     "face.tasks": "Zadania",
     "face.terminal": "Terminal",

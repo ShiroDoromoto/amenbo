@@ -10,12 +10,9 @@
 // neither of which the world can rewrite behind it.
 
 import type { SessionSaidDto } from "../bindings/bindings";
-import { currentLang, type Lang } from "../core/i18n";
 import { frameLabel, frameNames, ONLY_FRAME, type FrameNames } from "./frames";
-import {
-  faceOf, mountNameplate, sayOf, standsAsTurn, type Plate as Row, type Say,
-} from "./nameplate";
-import { movingAt, quietFor, STILL_AFTER_MS } from "./moving";
+import { faceOf, mountNameplate, type Plate as Row } from "./nameplate";
+import { movingAt, STILL_AFTER_MS } from "./moving";
 import {
   closed,
   declared,
@@ -50,9 +47,6 @@ export type Plate = {
   closed(session: string): void;
   /** The frames have been named afresh — what a naming answered with. */
   named(names: FrameNames): void;
-  /** Whether this is the pane being worked in. It decides one thing: whether a long silence says how
-   *  long. A screen of panes each carrying a clock is a screen of clocks. */
-  focused(is: boolean): void;
   /** Take the label away. */
   stop(): void;
   /**
@@ -71,29 +65,11 @@ export type Plate = {
 /**
  * Put a label above a pane and keep it there.
  *
- * `lang` is asked each time rather than taken once: what the reader's language is comes out of the
- * snapshot, which is read as the window comes up — so the answer is not settled at the moment a pane
- * is built.
- *
  * `frame` is which of the arrangement's places this pane is in (`./layout`), because the name on the
  * row belongs to the place rather than to the session (`./frames`). A lone pane that has never been
  * told which place it is takes the first of them.
- *
- * `onWaiting` is told whenever the answer to "is a turn standing in this pane" changes. **A turn
- * stands for two reasons and neither of them is silence** (`AMB-D-858`): the agent said so
- * (`waiting`), or the sentence Amenbo opened it with is still sitting in the input box. What an agent
- * has *not* said is not one of them: a pane that has gone quiet is a pane that has gone quiet.
- *
- * Nothing outside this row reads it any more — the badges and the dots that did have been taken away
- * (`AMB-D-862`) — and what is reported is the change rather than the statement: an agent at work says
- * a great deal and almost none of it moves the answer.
  */
-export function mountPlate(
-  host: HTMLElement,
-  lang: () => Lang = currentLang,
-  onWaiting: (waiting: boolean) => void = () => {},
-  frame: string = ONLY_FRAME,
-): Plate {
+export function mountPlate(host: HTMLElement, frame: string = ONLY_FRAME): Plate {
   const draw = mountNameplate(host);
 
   // What the pane's session has said. It is gone when the pane is: a session has no existence outside
@@ -111,8 +87,6 @@ export function mountPlate(
   // to choose a folder (`./agent`), and a label about the session would be about nothing.
   let ran = false;
   let live = true;
-  // What `onWaiting` was last told, so it hears the changes and not every statement.
-  let waiting = false;
   // When something last came out of the terminal, and whether that still counts as moving — which is
   // the lamp's lit face (`./nameplate`). The time is written on every chunk and the row is only redrawn
   // when the answer turns over: a busy build prints hundreds of times a second, and a row redrawn with
@@ -120,10 +94,6 @@ export function mountPlate(
   let lastOutput: number | null = null;
   let moving = false;
   let settling: ReturnType<typeof setTimeout> | undefined;
-  // Whether this is the pane being worked in, and the clock that keeps a long silence's reading true.
-  // Silence raises no events, so the only thing that can notice a minute passing is a minute passing.
-  let focused = false;
-  let ticking: ReturnType<typeof setInterval> | undefined;
 
   /** Take in a chunk having crossed, and draw the change where there is one. */
   function tookOutput(): void {
@@ -143,32 +113,6 @@ export function mountPlate(
     redraw();
   }
 
-  /** Say whether a turn is standing here, where that is not what was said last. */
-  function tellWaiting(): void {
-    // The same question the row leads with, asked once: declared, or derived (`./nameplate`).
-    const now = live && standsAsTurn(sayOf(running === null ? undefined : sessions.get(running)));
-    if (now === waiting) return;
-    waiting = now;
-    onWaiting(now);
-  }
-
-  /**
-   * What the end of the row says.
-   *
-   * The session's own word comes first — a turn standing — and how long it has been quiet fills the
-   * slot only when that leaves it empty. A measurement of silence is the least of what can be said
-   * about a pane, and it must never stand where something that was actually said would.
-   *
-   * It is said in the pane being worked in and nowhere else. Every pane on a screen has been quiet for
-   * some length of time, and a row of clocks is what a reader stops reading.
-   */
-  function saying(): Say {
-    const said = sayOf(running === null ? undefined : sessions.get(running));
-    if (said.kind !== "silent" || !focused) return said;
-    const minutes = quietFor(lastOutput, Date.now());
-    return minutes === null ? said : { kind: "quiet", minutes };
-  }
-
   /**
    * The row as it stands, or nothing where this pane has none.
    *
@@ -179,15 +123,12 @@ export function mountPlate(
    */
   function row(): Row | null {
     if (!(ran || names.has(frame))) return null;
-    // The lamp is read off the same answer the row's right is, so the two cannot come to say different
-    // things about the same pane (`./nameplate`).
-    const say = saying();
-    return { name: frameLabel(names, frame, folder), say, dot: { frame, face: faceOf(say, moving) } };
+    return { name: frameLabel(names, frame, folder), dot: { frame, face: faceOf(moving) } };
   }
 
   function redraw(): void {
     if (!live) return;
-    draw(row(), lang());
+    draw(row());
   }
 
   void frameNames()
@@ -205,7 +146,6 @@ export function mountPlate(
       running = session;
       folder = where;
       ran = true;
-      tellWaiting();
       redraw();
     },
     output: tookOutput,
@@ -220,17 +160,14 @@ export function mountPlate(
       } else if (statement.verb === "note" || statement.verb === "finished") {
         sessions = declared(sessions, statement.session, null);
       }
-      tellWaiting();
       redraw();
     },
     unsent: (session) => {
       sessions = leftUnsent(sessions, session);
-      tellWaiting();
       redraw();
     },
     sent: (session) => {
       sessions = wentOut(sessions, session);
-      tellWaiting();
       redraw();
     },
     closed: (session) => {
@@ -241,21 +178,10 @@ export function mountPlate(
       lastOutput = null;
       sessions = closed(sessions, session);
       if (running === session) running = null;
-      tellWaiting();
       redraw();
     },
     named: (known) => {
       names = known;
-      redraw();
-    },
-    focused: (is) => {
-      if (is === focused) return;
-      focused = is;
-      clearInterval(ticking);
-      ticking = undefined;
-      // A minute passing raises nothing, so the row is asked again every minute while this is the pane
-      // being worked in. Only while: a pane nobody is looking at has nothing to keep true.
-      if (focused) ticking = setInterval(redraw, 60_000);
       redraw();
     },
     // A pane that has been taken down has no row to read: what it said was about a session that is
@@ -263,9 +189,7 @@ export function mountPlate(
     read: () => (live ? row() : null),
     stop: () => {
       live = false;
-      tellWaiting();
       clearTimeout(settling);
-      clearInterval(ticking);
       host.replaceChildren();
     },
   };

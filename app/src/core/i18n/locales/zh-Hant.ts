@@ -539,6 +539,7 @@ export const zhHant: Translation = {
     "face.orderCancel": "取消",
     "face.orderFrom": "來自第 {n} 頁",
     "face.orderNoName": "此窗格",
+    "face.orderEnded": "已結束",
     "face.whichStart": "這個窗格要用什麼開啟？",
     "face.open": "在此開啟終端機",
     "face.openPick": "請選擇一個",

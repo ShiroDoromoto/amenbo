@@ -12,7 +12,9 @@
 import type { SessionSaidDto } from "../bindings/bindings";
 import { currentLang, type Lang } from "../core/i18n";
 import { frameLabel, frameNames, ONLY_FRAME, type FrameNames } from "./frames";
-import { faceOf, mountNameplate, sayOf, standsAsTurn, type Say } from "./nameplate";
+import {
+  faceOf, mountNameplate, sayOf, standsAsTurn, type Plate as Row, type Say,
+} from "./nameplate";
 import { movingAt, quietFor, STILL_AFTER_MS } from "./moving";
 import {
   closed,
@@ -53,6 +55,17 @@ export type Plate = {
   focused(is: boolean): void;
   /** Take the label away. */
   stop(): void;
+  /**
+   * The row as it stands, for a face that draws this pane somewhere other than above it.
+   *
+   * **It is the row and not a second answer** — the same value the label is drawn from, handed over
+   * rather than worked out again, so a pane cannot be described two ways at once
+   * (`./nameplate`, `../shell/PaneOrder`). Null where the pane has no row: what has never held a
+   * session has nothing to say about one.
+   *
+   * What comes back is a reading and not a subscription. A caller that wants it later asks again.
+   */
+  read(): Row | null;
 };
 
 /**
@@ -156,26 +169,25 @@ export function mountPlate(
     return minutes === null ? said : { kind: "quiet", minutes };
   }
 
-  function redraw(): void {
-    if (!live) return;
-    const name = frameLabel(names, frame, folder);
+  /**
+   * The row as it stands, or nothing where this pane has none.
+   *
+   * A frame that was named keeps its row whether or not anything has run in it: the name is the
+   * person's, and it outlives every session the frame holds (`./frames`). A folder standing in for one
+   * is not that — it is what this pane's terminal is working in, so it goes when the pane has never
+   * had one.
+   */
+  function row(): Row | null {
+    if (!(ran || names.has(frame))) return null;
     // The lamp is read off the same answer the row's right is, so the two cannot come to say different
     // things about the same pane (`./nameplate`).
     const say = saying();
-    // A frame that was named keeps its row whether or not anything has run in it: the name is the
-    // person's, and it outlives every session the frame holds (`./frames`). A folder standing in for
-    // one is not that — it is what this pane's terminal is working in, so it goes when the pane has
-    // never had one.
-    draw(
-      ran || names.has(frame)
-        ? {
-            name,
-            say,
-            dot: { frame, face: faceOf(say, moving) },
-          }
-        : null,
-      lang(),
-    );
+    return { name: frameLabel(names, frame, folder), say, dot: { frame, face: faceOf(say, moving) } };
+  }
+
+  function redraw(): void {
+    if (!live) return;
+    draw(row(), lang());
   }
 
   void frameNames()
@@ -246,6 +258,9 @@ export function mountPlate(
       if (focused) ticking = setInterval(redraw, 60_000);
       redraw();
     },
+    // A pane that has been taken down has no row to read: what it said was about a session that is
+    // gone, and handing the last of it back would be this saying something it can no longer see.
+    read: () => (live ? row() : null),
     stop: () => {
       live = false;
       tellWaiting();

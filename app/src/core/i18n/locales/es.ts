@@ -560,6 +560,7 @@ export const es: Translation = {
     "face.orderCancel": "Cancelar",
     "face.orderFrom": "De la página {n}",
     "face.orderNoName": "Este panel",
+    "face.orderEnded": "Finalizado",
     "face.whichStart": "¿Con qué se abre este panel?",
     "face.open": "Abrir una terminal aquí",
     "face.openPick": "Elige uno",

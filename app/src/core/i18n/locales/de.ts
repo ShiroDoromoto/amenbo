@@ -549,6 +549,7 @@ export const de: Translation = {
     "face.orderCancel": "Abbrechen",
     "face.orderFrom": "Von Seite {n}",
     "face.orderNoName": "Dieser Bereich",
+    "face.orderEnded": "Beendet",
     "face.whichStart": "Womit soll dieses Feld geöffnet werden?",
     "face.open": "Hier ein Terminal öffnen",
     "face.openPick": "Bitte wählen",

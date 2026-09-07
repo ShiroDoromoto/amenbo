@@ -551,6 +551,7 @@ export const ja: Translation = {
     "face.orderCancel": "やめる",
     "face.orderFrom": "{n} ページ目から",
     "face.orderNoName": "このペイン",
+    "face.orderEnded": "終了しています",
     "face.whichStart": "何で開きますか",
     "face.open": "ここで端末を開く",
     "face.openPick": "選んでください",

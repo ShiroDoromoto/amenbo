@@ -539,6 +539,7 @@ export const hi: Translation = {
     "face.orderCancel": "रद्द करें",
     "face.orderFrom": "पृष्ठ {n} से",
     "face.orderNoName": "यह पैन",
+    "face.orderEnded": "समाप्त",
     "face.whichStart": "यह पैनल किससे खोलें?",
     "face.open": "यहाँ टर्मिनल खोलें",
     "face.openPick": "एक चुनें",

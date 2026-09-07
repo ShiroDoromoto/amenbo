@@ -539,6 +539,7 @@ export const nl: Translation = {
     "face.orderCancel": "Annuleren",
     "face.orderFrom": "Van pagina {n}",
     "face.orderNoName": "Dit deelvenster",
+    "face.orderEnded": "Beëindigd",
     "face.whichStart": "Waarmee opent dit deelvenster?",
     "face.open": "Hier een terminal openen",
     "face.openPick": "Kies er een",

@@ -538,6 +538,7 @@ export const ko: Translation = {
     "face.orderCancel": "취소",
     "face.orderFrom": "{n}페이지에서",
     "face.orderNoName": "이 페인",
+    "face.orderEnded": "종료됨",
     "face.whichStart": "이 창을 무엇으로 열까요?",
     "face.open": "여기에 터미널 열기",
     "face.openPick": "하나를 고르세요",

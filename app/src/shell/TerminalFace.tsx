@@ -5,6 +5,7 @@ import { FolderChoice } from "./FolderChoice";
 import { TerminalPane } from "./TerminalPane";
 import { FolderRail } from "./FolderRail";
 import { PaneOrder } from "./PaneOrder";
+import type { Plate as Row } from "../talk/nameplate";
 import { ProjectTabs } from "./ProjectTabs";
 import {
   frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
@@ -249,6 +250,14 @@ export function TerminalFace({
   // Whether the panes are being put in order (`./PaneOrder`). Nothing about the arrangement moves
   // while it is up: what the modal holds is a proposal until the reader presses for it.
   const [ordering, setOrdering] = useState(false);
+  // How to read the row of each pane that is drawn (`../talk/plate`). A ref rather than state: the
+  // row changes with every chunk a terminal prints, and a face redrawn on each of them would spend
+  // the panes' frames on a value nothing on this face draws. The modal reads it as it opens.
+  const rows = useRef(new Map<string, () => Row | null>());
+  const paneRow = useCallback((frame: string, read: (() => Row | null) | null) => {
+    if (read === null) rows.current.delete(frame);
+    else rows.current.set(frame, read);
+  }, []);
   const landedFor = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (landedFor.current !== null) clearTimeout(landedFor.current);
@@ -1134,6 +1143,7 @@ export function TerminalFace({
                     }}
                     onName={named}
                     onFocus={(id) => setLayout((was) => focusOn(was, id))}
+                    onRow={paneRow}
                   />
                 ))}
                 {asking !== null && (
@@ -1222,6 +1232,7 @@ export function TerminalFace({
           layout={layout}
           panes={panes}
           names={names}
+          rows={rows.current}
           onClose={() => setOrdering(false)}
           onOrder={(order) => {
             setLayout((was) => reordered(was, order));

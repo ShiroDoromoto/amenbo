@@ -542,6 +542,7 @@ export const vi: Translation = {
     "face.orderCancel": "Hủy",
     "face.orderFrom": "Từ trang {n}",
     "face.orderNoName": "Khung này",
+    "face.orderEnded": "Đã kết thúc",
     "face.whichStart": "Mở khung này bằng gì?",
     "face.open": "Mở terminal ở đây",
     "face.openPick": "Chọn một cái",

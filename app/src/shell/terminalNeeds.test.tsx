@@ -22,6 +22,8 @@ const hoisted = vi.hoisted(() => ({
   opened: [] as string[],
   /** The window's own way of hearing what an agent said, whichever pane it was said in. */
   said: [] as ((payload: unknown) => void)[],
+  /** And of hearing that a terminal has ended, which is what drops a session from that record. */
+  ended: [] as ((payload: unknown) => void)[],
 }));
 
 // The host, stood in for: what a pane's agent says arrives as an event to the window, and this is the
@@ -29,6 +31,7 @@ const hoisted = vi.hoisted(() => ({
 vi.mock("@tauri-apps/api/event", () => ({
   listen: (name: string, on: (event: { payload: unknown }) => void) => {
     if (name === "session://said") hoisted.said.push((payload) => on({ payload }));
+    if (name === "pty://closed") hoisted.ended.push((payload) => on({ payload }));
     return Promise.resolve(() => {});
   },
 }));
@@ -96,6 +99,13 @@ const openPane = async () => {
   if (strip) await click(strip);
   await click(q(".slot--empty .slot__open")[0]!);
 };
+/** Go to a pane the way a person does: press it. Which pane is being worked in is what says they
+ *  came to it rather than merely had it on the screen (`../talk/spoken`). */
+const goPane = async (nth: number) => {
+  await act(async () => {
+    q(".slot")[nth]!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  });
+};
 /** A pane says a turn is standing in it — or that it is not any more. */
 const turn = async (pane: number, standing: boolean) => {
   await act(async () => { hoisted.tell[pane]!(standing); });
@@ -121,6 +131,7 @@ beforeEach(async () => {
   hoisted.tell = [];
   hoisted.opened = [];
   hoisted.said = [];
+  hoisted.ended = [];
   told = [];
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -134,7 +145,13 @@ beforeEach(async () => {
   });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // The window's record of what its sessions said outlives every pane drawing them, which is the
+  // whole of why it is kept where it is (`../talk/spoken`) — and it outlives a test the same way. So
+  // each one ends its own sessions, the way the host does when their terminals exit.
+  await act(async () => {
+    for (const session of hoisted.opened) for (const end of hoisted.ended) end(session);
+  });
   act(() => root.unmount());
   container.remove();
 });
@@ -193,6 +210,27 @@ describe("a turn standing on a page", () => {
     await says(2, "note", "back at it");
     expect(q(".termface__needs")).toHaveLength(0);
     expect(told).toEqual([true, false]);
+  });
+
+  it("takes the turn down once the person comes to the pane, and leaves it up for the others", async () => {
+    await openPane();
+    await openPane();                 // page 1, full at two a page
+    await openPane();                 // and one on page 2, which is where the screen now is
+    await goPage(1);
+    await says(0, "waiting", "which of the two");
+    await says(2, "waiting", "and this");
+    await goPage(2);
+    // The pane on page 2 is on the screen now, so its page wears no dot — but page 1's turn is still
+    // standing, because nobody has been to that pane.
+    expect(q(".termface__needs")).toHaveLength(1);
+
+    await goPane(0);
+    await goPage(1);
+    // Being at the pane on page 2 is what ended its turn (`AMB-D-859`). Page 2 has nothing to say
+    // any more, and the pane the person never went to is untouched.
+    expect(q(".termface__needs")).toHaveLength(0);
+    await goPage(2);
+    expect(q(".termface__needs")).toHaveLength(1);
   });
 
   it("counts the turns standing on a page, because going there answers that many", async () => {

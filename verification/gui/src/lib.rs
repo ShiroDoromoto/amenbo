@@ -2393,7 +2393,7 @@ impl Instructor {
                     None => "the pane that has a terminal running in it".to_string(),
                 };
                 format!(
-                    "Click once on {pane} — on the terminal itself, not on the row above it — and type nothing. Nothing is sent: the press is a reader going back to the work, and what it is for is what happens to the column beside it."
+                    "Click once on {pane} — on the terminal itself, not on the row above it — and type nothing. Nothing is sent and nothing in the pane changes: the press is a reader going to that pane, and what it is for is what happens elsewhere on the screen."
                 )
             }
             // A file put in the folder from outside Amenbo, while the app is up. It is written as an

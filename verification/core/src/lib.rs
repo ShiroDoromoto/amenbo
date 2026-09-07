@@ -2739,10 +2739,12 @@ const REGISTRY: &[OpSpec] = &[
     // those out of the screen is an operator's. So the instruction says where to put the pointer and
     // what to watch follow it, and the shot after it is what an eye closes.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drag-side", required: &["side", "toward"], refs: &[], strings: &["side", "toward"], binds: false },
-    // A press on a pane, meaning nothing but the press. It is what puts the reading column back to
-    // its narrow width: the next press outside that column says where the reader is looking, and a
-    // pane is the answer that says they have gone back to the work. So what it proves is on the
-    // other side of the panes from what it touches.
+    // A press on a pane, meaning nothing but the press — a person going to that pane and to no other.
+    //
+    // **Two roads read it, and both read the same fact.** It is what puts the reading column back to
+    // its narrow width, the next press outside that column saying where the reader is looking; and it
+    // is what ends a turn an agent handed over, the hand going up by declaration and coming down by
+    // the person arriving. Neither is about what the press does to the pane, which is nothing.
     //
     // **It is not `type-line` with the typing left out.** That step's press is a way to reach the
     // input line and what it is about is the line; this one leaves the pane as it found it, and a

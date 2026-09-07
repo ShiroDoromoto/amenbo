@@ -8,6 +8,10 @@
 // **Nothing here is read off the ledger** (`AMB-D-858`). What a row is drawn from is what the agent
 // in this pane declared and what this pane measured — both of which the webview already has, and
 // neither of which the world can rewrite behind it.
+//
+// **Whether a turn is still standing is the window's answer and not this row's** (`./spoken`). A turn
+// comes down when the person arrives at the pane (`AMB-D-859`), and the dots on the pages are read
+// off the same record — so the row follows it rather than keeping a second one that could disagree.
 
 import type { SessionSaidDto } from "../bindings/bindings";
 import { currentLang, type Lang } from "../core/i18n";
@@ -19,10 +23,12 @@ import {
   NO_SESSIONS,
   opened,
   said,
+  seen as wasSeen,
   sent as wentOut,
   unsent as leftUnsent,
   type Sessions,
 } from "./sessions";
+import { watchSpoken } from "./spoken";
 
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
@@ -177,6 +183,19 @@ export function mountPlate(
     );
   }
 
+  // The window's own record of what has been said and which turns have been gone to (`./spoken`).
+  // Only the second of those is taken from it: what a turn was about is heard in this pane, and what
+  // ended one is a thing the window saw. Mirroring it here rather than reading the whole entry keeps
+  // the pane's own half — the unsent sentence — where the pane can see it.
+  const stopWatching = watchSpoken((window) => {
+    if (!live || running === null) return;
+    const at = window.get(running)?.seen;
+    if (at == null || sessions.get(running)?.seen != null) return;
+    sessions = wasSeen(sessions, running, at);
+    tellWaiting();
+    redraw();
+  });
+
   void frameNames()
     .then((known) => {
       names = known;
@@ -246,6 +265,7 @@ export function mountPlate(
       tellWaiting();
       clearTimeout(settling);
       clearInterval(ticking);
+      stopWatching();
       host.replaceChildren();
     },
   };

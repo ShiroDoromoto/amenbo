@@ -533,8 +533,6 @@ export const ja: Translation = {
     "face.dropConfirm": "このペインを消しますか？中の端末は終わり、次に起動してもこの場所は戻りません。",
     "quit.confirm": "Amenbo を終了しますか？開いている端末はすべて終わり、次に起動してもセッションは戻りません。",
 
-    "face.turnTitle": "Amenbo — あなたの番です",
-    "face.turnBody": "端末があなたを待っています。",
     "face.ended": "この端末のプログラムは終了しました。",
     "face.projects": "プロジェクト",
     "face.railFolders": "フォルダ",
@@ -575,7 +573,6 @@ export const ja: Translation = {
     "face.openHere": "このプロジェクトでもう1枚ぶんの空きへ",
     "face.whichFolder": "このペインはどのフォルダで作業しますか？",
     "face.rename": "このペインの名前を変える",
-    "face.needsYou": "手が要ります",
     "face.handHere": "落とすと、パスを貼ります",
     "face.more": "その他",
     "files.side": "メモとファイル",

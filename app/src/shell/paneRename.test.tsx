@@ -85,8 +85,7 @@ async function pane(names: Map<string, string> = new Map()): Promise<void> {
         hoisted.named.push({ frame, name, by });
       },
       onFocus: () => {},
-      onWaiting: () => {},
-    }));
+      }));
   });
 }
 
@@ -133,7 +132,7 @@ describe("naming a pane", () => {
         autoStart: false,
         focused: true,
         onOpened: () => {}, onSaid: () => {}, onPath: () => {}, onClosed: () => {},
-        onDrop: () => {}, onName: () => {}, onFocus: () => {}, onWaiting: () => {},
+        onDrop: () => {}, onName: () => {}, onFocus: () => {},
       }));
     });
 

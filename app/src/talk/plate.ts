@@ -8,11 +8,6 @@
 // **Nothing here is read off the ledger** (`AMB-D-858`). What a row is drawn from is what the agent
 // in this pane declared and what this pane measured — both of which the webview already has, and
 // neither of which the world can rewrite behind it.
-//
-// **Whose turn it is is the host's answer and not this row's** (`./standing`, `AMB-D-860`). A turn
-// goes up when an agent says so and comes down when the person arrives at the pane (`AMB-D-859`),
-// and the dots on the pages are drawn from that same answer — so the row copies it rather than
-// keeping a second one that could disagree.
 
 import type { SessionSaidDto } from "../bindings/bindings";
 import { currentLang, type Lang } from "../core/i18n";
@@ -31,7 +26,6 @@ import {
   unsent as leftUnsent,
   type Sessions,
 } from "./sessions";
-import { watchStanding } from "./standing";
 
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
@@ -86,18 +80,13 @@ export type Plate = {
  * told which place it is takes the first of them.
  *
  * `onWaiting` is told whenever the answer to "is a turn standing in this pane" changes. **A turn
- * stands for two reasons and neither of them is silence** (`AMB-D-858`, `AMB-T-3610`): the agent said
- * so (`waiting`), or the sentence Amenbo opened it with is still sitting in the input box. Both are
- * also what the row itself leads with (`./nameplate`), so the badge and the label say the same thing
- * about the same pane. What an agent has *not* said is not one of them: a pane that has gone quiet is
- * a pane that has gone quiet.
+ * stands for two reasons and neither of them is silence** (`AMB-D-858`): the agent said so
+ * (`waiting`), or the sentence Amenbo opened it with is still sitting in the input box. What an agent
+ * has *not* said is not one of them: a pane that has gone quiet is a pane that has gone quiet.
  *
- * It is said from here because the session map is here, and the
- * callers who want it are the shell's: with the terminal behind the other face neither this label nor
- * the dot on its page can be seen at all, so the badge on the face switch and the dots on the pages
- * are drawn from this instead (`../shell/terminalBadge`, `../shell/TerminalFace`). The change is what
- * is reported, not the statement: an agent at work says a great deal and almost none of it moves the
- * answer.
+ * Nothing outside this row reads it any more — the badges and the dots that did have been taken away
+ * (`AMB-D-862`) — and what is reported is the change rather than the statement: an agent at work says
+ * a great deal and almost none of it moves the answer.
  */
 export function mountPlate(
   host: HTMLElement,
@@ -201,19 +190,6 @@ export function mountPlate(
     draw(row(), lang());
   }
 
-  // Whose turn it is, as the host answers for every session in this window (`./standing`). It is
-  // copied in rather than worked out here: the dots on the pages are drawn from the same answer, and
-  // a row that decided for itself could come to say something they do not. The pane's own half — the
-  // sentence sitting unsent in its input box — stays here, being the one thing only the pane can see.
-  const stopWatching = watchStanding((turns) => {
-    if (!live || running === null) return;
-    const next = declared(sessions, running, turns.get(running) ?? null);
-    if (next === sessions) return;
-    sessions = next;
-    tellWaiting();
-    redraw();
-  });
-
   void frameNames()
     .then((known) => {
       names = known;
@@ -235,19 +211,25 @@ export function mountPlate(
     output: tookOutput,
     said: (statement) => {
       sessions = said(sessions, statement);
+      // The turn comes off the pane's own word about itself. The window used to keep one record of
+      // every session's, so that the dots on the pages and this row were drawn from one answer and
+      // could not disagree — there are no dots any more, and this row is the only reader left
+      // (`AMB-D-862`).
+      if (statement.verb === "waiting") {
+        sessions = declared(sessions, statement.session, statement.text ?? null);
+      } else if (statement.verb === "note" || statement.verb === "finished") {
+        sessions = declared(sessions, statement.session, null);
+      }
       tellWaiting();
       redraw();
     },
     unsent: (session) => {
       sessions = leftUnsent(sessions, session);
-      // A person is needed here, so the badge on the face switch and the dot on the page hear about
-      // it the same way they hear about a handed-over turn (`./nameplate`).
       tellWaiting();
       redraw();
     },
     sent: (session) => {
       sessions = wentOut(sessions, session);
-      // And they are not needed any more, which the same two have to hear for the same reason.
       tellWaiting();
       redraw();
     },
@@ -281,12 +263,9 @@ export function mountPlate(
     read: () => (live ? row() : null),
     stop: () => {
       live = false;
-      // The pane is going, and a turn standing in it is nobody's to be knocked about any more: the
-      // badge is the shell's and outlives this, so it has to be told on the way out.
       tellWaiting();
       clearTimeout(settling);
       clearInterval(ticking);
-      stopWatching();
       host.replaceChildren();
     },
   };

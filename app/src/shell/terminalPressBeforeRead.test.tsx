@@ -69,7 +69,7 @@ let root: Root;
 
 const draw = () =>
   act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} }));
+    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
   });
 
 /** The read comes back, with the folders named. The face is drawn again because the hook it reads

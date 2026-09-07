@@ -36,7 +36,6 @@ const props = {
   canForward: false,
   face: "tasks" as const,
   onSelectFace: () => {},
-  terminalBadge: false,
 };
 const badge = () => container.querySelector(".topbar__envbadge");
 

@@ -220,22 +220,6 @@ input[type="color"] {
 .termface__page--on {
   background: var(--c-accent); border-color: var(--c-accent); color: #fff; font-weight: 600;
 }
-/* The turns standing on a page that is not the one showing, counted. `--c-heed` is the step that
-   means "it moves, know this while it does" (`styles/tokens.css`) — which is exactly what it says:
-   somebody is needed there, not that anything is wrong. It sits on the corner of the number and
-   carries a ring of the band's own ground, so it reads as put on the button rather than part of it.
-   A page whose panes have finished wears nothing at all: what is over is not something a person is
-   needed for (`AMB-T-3610`). */
-.termface__page { position: relative; }
-.termface__needs {
-  position: absolute; top: -5px; right: -5px;
-  display: flex; align-items: center; justify-content: center;
-  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px;
-  background: var(--c-heed); color: #fff;
-  font-size: var(--fs-xs); font-weight: 700; line-height: 1;
-  box-shadow: 0 0 0 2px var(--c-surface);
-}
-
 /* The rail and the panes, side by side. A column keeps the width the person gave it and the panes
    take what is left: the panes are what the face is for, and a list of them that grew with their
    names would take the room from the thing it is a list of (`app/src/talk/columns.ts`). */
@@ -742,23 +726,9 @@ input[type="color"] {
    keeps a stored image from an older bake, or one that arrived some other way, from stretching. */
 .ptabs__icon { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ptabs__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* A turn standing in a project that is not the one being shown. It is the colour the pages wear and
-   for the same reason: somebody is needed there, and the panes that would say so are off the screen.
-   A dot and not a count — what a reader does about a project they are not in is go to it, and how
-   many turns are waiting there does not change that (`AMB-T-3610`). */
-.ptabs__needs {
-  flex: 0 0 auto;
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--c-heed);
-}
-/* Compact: the mark alone, centred, and the dot moved onto its corner. Over the mark rather than
-   beside it, because there is no beside left — and it keeps the tab the width it is, so folding the
-   names away does not make a project with somebody waiting in it wider than its neighbours. */
+/* Compact: the mark alone, centred. There is no beside left to put anything in, and the tab keeps
+   the width it had, so folding the names away moves no edge. */
 .ptabs--compact .ptabs__tab { justify-content: center; }
-.ptabs--compact .ptabs__needs {
-  position: absolute; top: 0; right: 0;
-  box-shadow: 0 0 0 2px var(--c-surface);
-}
 /* The way between the two widths (`AMB-D-838`). It is pressed once and left, where the tabs above it
    are pressed all day — but drawn as a faint mark on the column's own ground it could not be found at
    all, so it is given the frame a control has (`AMB-D-848`): a sunken ground with a rule round it,
@@ -1450,14 +1420,6 @@ input[type="color"] {
 }
 .topbar__face:hover { color: var(--c-text); }
 .topbar__face--on { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
-/* A turn standing behind the other face (`shell/terminalBadge.ts`). It is the accent dot the inbox
-   badge wears, in the one place that can be seen from the face the person is on — inline after the
-   label rather than pinned to a corner, so the segment simply grows by a dot and nothing shifts
-   under the pointer. */
-.topbar__face-badge {
-  display: inline-block; width: 6px; height: 6px; margin-left: var(--s-1);
-  border-radius: 50%; background: var(--c-accent); vertical-align: middle;
-}
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--c-sunken); border: 1px solid var(--c-edge);

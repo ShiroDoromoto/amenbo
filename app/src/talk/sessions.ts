@@ -34,11 +34,8 @@ export type Session = {
   /** When the session began (RFC3339 UTC). */
   readonly startedAt: string;
   /** Why a person's turn has come, said by the agent — the one thing nothing can find out by watching
-   *  (`AMB-D-748`). Null where none is standing: none was handed over, or the person has been to the
-   *  pane since (`AMB-D-859`).
-   *
-   *  **It is the host's answer, written here** (`./standing`, `AMB-D-860`). A turn outlives the pane
-   *  drawing it, so the one place it can be kept is the one that outlives the pane. */
+   *  (`AMB-D-748`). Null where none is standing. It is written by `declared`, off what the agent said
+   *  in this pane (`./plate`). */
   readonly waiting: string | null;
   /** Whether the sentence Amenbo opens an agent with is sitting in this pane's input box, unsent.
    *  It is the window's own doing and not a guess: the host handed the sentence over itself and says
@@ -126,12 +123,10 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
 }
 
 /**
- * Write down what the host says is standing in this session: why a person's turn has come, or `null`
- * where none is (`./standing`, `AMB-D-860`).
+ * Write down what is standing in this session: why a person's turn has come, or `null` where none is.
  *
- * **It is a copy and not a reading.** The row above a pane and the dots on the pages are the same turn
- * drawn in two places, so both are drawn from the one answer — nothing here works out for itself
- * whether a turn is still standing, because a second working-out is one that can disagree.
+ * **It is written and never worked out.** What the caller hands over is the agent's own word about
+ * itself, and nothing here decides whether a turn is still standing from anything else.
  */
 export function declared(sessions: Sessions, session: string, waiting: string | null): Sessions {
   const known = sessions.get(session);

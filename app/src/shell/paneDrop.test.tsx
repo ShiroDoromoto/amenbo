@@ -97,8 +97,7 @@ async function pane(autoStart = true): Promise<void> {
       onDrop: (frame: string) => { dropped.push(frame); },
       onName: () => {},
       onFocus: () => {},
-      onWaiting: () => {},
-    }));
+      }));
   });
 }
 

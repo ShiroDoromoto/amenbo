@@ -524,8 +524,6 @@ export const vi: Translation = {
     "face.dropConfirm": "Bỏ khung này? Terminal trong đó sẽ kết thúc, và chỗ này không trở lại ở lần chạy sau.",
     "quit.confirm": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc, và không phiên nào trở lại ở lần chạy sau.",
 
-    "face.turnTitle": "Amenbo — đến lượt bạn",
-    "face.turnBody": "Một terminal đang đợi bạn.",
     "face.ended": "Chương trình trong terminal này đã kết thúc.",
     "face.projects": "Dự án",
     "face.railFolders": "Thư mục",
@@ -566,7 +564,6 @@ export const vi: Translation = {
     "face.openHere": "Chỗ cho thêm một khung trong dự án này",
     "face.whichFolder": "Khung này làm việc trong thư mục nào?",
     "face.rename": "Đổi tên khung này",
-    "face.needsYou": "đang chờ bạn",
     "face.handHere": "Thả để dán đường dẫn",
     "face.more": "Thêm",
     "files.side": "Trang ghi và tệp",

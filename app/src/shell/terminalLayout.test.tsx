@@ -84,7 +84,7 @@ const atCount = async (count: 1 | 2 | 4 | 6 | 8) => {
  *  and the face reads it as it comes up. */
 const mount = async () => {
   await act(async () => {
-    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} }));
+    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null }));
   });
 };
 

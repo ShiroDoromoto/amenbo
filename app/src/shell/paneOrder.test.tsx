@@ -10,7 +10,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EMPTY_LAYOUT, openedFrame, openedIn, panesOf, setCount, type Count, type Frame, type Layout } from "../talk/layout";
 import type { Plate as Row } from "../talk/nameplate";
-import { NO_TURNS, type Turns } from "../talk/standing";
 import { PaneOrder } from "./PaneOrder";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,7 +43,6 @@ function draw(
   layout: Layout,
   names: ReadonlyMap<string, string> = new Map(),
   rows: ReadonlyMap<string, () => Row | null> = new Map(),
-  turns: Turns = NO_TURNS,
 ) {
   act(() => {
     root.render(createElement(PaneOrder, {
@@ -52,7 +50,6 @@ function draw(
       panes: panesOf(layout, layout.project),
       names,
       rows,
-      turns,
       onClose: () => { closed += 1; },
       onOrder: (order: readonly Frame[]) => { taken.push([...order]); },
     }));
@@ -212,18 +209,15 @@ describe("what a card says about its pane", () => {
     expect(cardOf("1").dataset.say).toBe("waiting");
   });
 
-  it("asks the host about a pane that is not drawn, and says nothing it cannot measure", () => {
-    // Only the page on the screen has panes mounted on it. A turn is the host's answer and is there
-    // for every session in the window; how long a pane has been quiet is a measurement, and nothing
-    // is measuring one that is not drawn.
+  it("says nothing about a pane that is not drawn, there being nothing measuring one", () => {
+    // Only the page on the screen has panes mounted on it, and what a card carries is what that
+    // pane's own row was measuring. A pane on another page is measured by nothing, so its card says
+    // nothing rather than something worked out on its behalf.
     let layout = faceOf(2, 2);
     layout = openedIn(layout, "2", "s-2", "/work/2");
-    draw(layout, new Map(), new Map(), new Map([["s-2", "your turn"]]));
-    expect(cardOf("2").querySelector(".paneorder__say")!.textContent).toContain("your turn");
-    expect(cardOf("2").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("calling");
-    // The pane beside it has no session at all, so there is nothing for the host to be keeping.
-    expect(cardOf("1").querySelector(".paneorder__say")).toBeNull();
-    expect(cardOf("1").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("out");
+    draw(layout);
+    expect(cardOf("2").querySelector(".paneorder__say")).toBeNull();
+    expect(cardOf("2").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("out");
   });
 
   it("says a pane has ended, which its screen cannot", () => {

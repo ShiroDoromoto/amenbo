@@ -83,7 +83,7 @@ const shownProject = () =>
 async function mount(projectId: number | null) {
   await act(async () => {
     root.render(createElement(TerminalFace, {
-      onWindow: () => {}, note: null, onWaiting: () => {}, projectId,
+      onWindow: () => {}, note: null, projectId,
     }));
     await new Promise((r) => setTimeout(r, 0));
   });

@@ -520,8 +520,6 @@ export const ko: Translation = {
     "face.dropConfirm": "이 페인을 지울까요? 안에서 돌던 터미널은 끝나고, 다음에 켜도 이 자리는 돌아오지 않습니다.",
     "quit.confirm": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝나고, 다음에 켜도 세션은 돌아오지 않습니다.",
 
-    "face.turnTitle": "Amenbo — 당신 차례입니다",
-    "face.turnBody": "터미널이 당신을 기다리고 있습니다.",
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
     "face.projects": "프로젝트",
     "face.railFolders": "폴더",
@@ -562,7 +560,6 @@ export const ko: Translation = {
     "face.openHere": "이 프로젝트에 페인 하나 더 놓을 자리로",
     "face.whichFolder": "이 페인은 어느 폴더에서 작업하나요?",
     "face.rename": "이 페인 이름 바꾸기",
-    "face.needsYou": "사용자를 기다리는 중",
     "face.handHere": "여기에 놓으면 경로를 붙여 넣습니다",
     "face.more": "더 보기",
     "files.side": "메모와 파일",

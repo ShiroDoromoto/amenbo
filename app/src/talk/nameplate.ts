@@ -127,9 +127,7 @@ export function sayOf(session: Session | undefined): Say {
  *
  * The two that are: the agent handing one over, and the opening sentence sitting in the input box —
  * where nothing at all will happen in the pane until a person presses Enter. The one that is not:
- * silence, which is not a claim about anything (`AMB-D-858`). It is one line and it is here rather
- * than at the two places that draw it, so the dot on a page and the badge on the face switch cannot
- * come to mean something the row does not (`AMB-T-3610`).
+ * silence, which is not a claim about anything (`AMB-D-858`).
  */
 export function standsAsTurn(say: Say): boolean {
   return say.kind === "waiting" || say.kind === "unsent";

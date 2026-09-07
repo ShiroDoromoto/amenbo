@@ -542,8 +542,6 @@ export const fr: Translation = {
     "face.dropConfirm": "Supprimer ce volet ? Le terminal qui s'y trouve se termine, et la place ne revient pas au prochain démarrage.",
     "quit.confirm": "Quitter Amenbo ? Tous les terminaux ouverts se terminent, et aucune session ne revient au prochain démarrage.",
 
-    "face.turnTitle": "Amenbo — à vous",
-    "face.turnBody": "Un terminal vous attend.",
     "face.ended": "Le programme de ce terminal s'est arrêté.",
     "face.projects": "Projets",
     "face.railFolders": "Dossiers",
@@ -584,7 +582,6 @@ export const fr: Translation = {
     "face.openHere": "De la place pour un autre volet dans ce projet",
     "face.whichFolder": "Dans quel dossier ce volet travaille-t-il ?",
     "face.rename": "Renommer ce volet",
-    "face.needsYou": "vous attend",
     "face.handHere": "Déposez pour coller le chemin",
     "face.more": "Plus",
     "files.side": "Page et fichiers",

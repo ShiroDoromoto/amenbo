@@ -5,7 +5,6 @@ import { frameLabel, type FrameNames } from "../talk/frames";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
 import { faceOf, sayText, type Plate as Row, type Say } from "../talk/nameplate";
 import { BLINK_MS, hueOf, phaseDelay } from "../talk/moving";
-import { type Turns } from "../talk/standing";
 import { sideOfBox } from "./rowDrag";
 import { Icon } from "../components/Icon";
 import { currentLang, t, tf } from "../core/i18n";
@@ -33,15 +32,13 @@ import { currentLang, t, tf } from "../core/i18n";
  * moved is exactly what the lamp and the one thing said tell them apart by. It is the row itself,
  * read off the pane rather than worked out again, so a pane is never described two ways at once.
  */
-export function PaneOrder({ layout, panes, names, rows, turns, onClose, onOrder }: {
+export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
   layout: Layout;
   /** The panes of the project on the screen, in the order they stand in now. */
   panes: readonly Frame[];
   names: FrameNames;
   /** How to read the row of each pane that is drawn, by frame (`../talk/plate`). */
   rows: ReadonlyMap<string, () => Row | null>;
-  /** Whose turn it is, as the host answers for every session in this window (`../talk/standing`). */
-  turns: Turns;
   onClose: () => void;
   /** The order the reader pressed for. Nothing is written until they do. */
   onOrder: (order: readonly Frame[]) => void;
@@ -51,18 +48,16 @@ export function PaneOrder({ layout, panes, names, rows, turns, onClose, onOrder 
   /**
    * The row of one pane, as it stood when this opened.
    *
-   * **A pane that is drawn is read; one that is not is asked about.** Only the page on the screen has
-   * panes mounted on it, so the measurements — output arriving, a sentence left unsent, how long the
-   * silence has run — exist for those and for no others. What every pane has either way is the turn
-   * the host is keeping for its session, which is the one thing here a person is meant to act on.
-   * The rest is left unsaid rather than filled in: silence is silence (`AMB-D-858`).
+   * **A pane that is drawn is read; one that is not says nothing.** Only the page on the screen has
+   * panes mounted on it, so what is known about a pane — output arriving, a sentence left unsent, how
+   * long the silence has run — exists for those and for no others. The rest is left unsaid rather
+   * than filled in: silence is silence (`AMB-D-858`).
    */
   function rowOf(frame: Frame): Row {
     const read = rows.get(frame.id);
     const drawn = read?.() ?? null;
     if (drawn !== null) return drawn;
-    const standing = frame.session === null ? null : turns.get(frame.session) ?? null;
-    const say: Say = standing === null ? { kind: "silent" } : { kind: "waiting", text: standing };
+    const say: Say = { kind: "silent" };
     return {
       name: frameLabel(names, frame.id, frame.folder),
       say,

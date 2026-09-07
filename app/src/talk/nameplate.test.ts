@@ -13,8 +13,8 @@ import { declared, NO_SESSIONS, opened, said, unsent, type Sessions } from "./se
 
 const AT = "2026-08-24T09:00:00Z";
 
-/** A session with one statement made in it. A turn arrives the way it really does — the agent says it
- *  and the host answers with it (`./standing`), which is not something a statement carries. */
+/** A session with one statement made in it. A turn is written on the session by `declared`, which is
+ *  what the row does with the agent's word (`./plate`), rather than carried by the statement. */
 function sessionWith(verb: "name" | "waiting", text: string): Sessions {
   const spoke = said(opened(NO_SESSIONS, { session: "pane-1", startedAt: AT }), {
     session: "pane-1",

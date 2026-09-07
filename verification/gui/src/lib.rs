@@ -2337,6 +2337,61 @@ impl Instructor {
                 orient(with)?.glyph(),
                 orient(with)?.phrase()
             ),
+            // The way to putting the panes in order. The control carries no words — it is drawn as
+            // the two boxes trading places — so the step says the shape and where it stands, the way
+            // `set-orient`'s pair is said. It is drawn from two panes up, which is why the roads that
+            // reach it open a second one first.
+            (Domain::Terminal, "reorder-panes") =>
+                "At the top of the terminal face, just before the row of page digits, press the small control drawn as two boxes with arrows between them. A panel opens over the face, drawing every pane of this project as a card, laid out page by page in the shape the pages themselves are drawn in. Nothing on the face behind it moves."
+                    .to_string(),
+            // Carrying one card onto another. It is a press and a move rather than the machine's own
+            // drag, so the step says to hold the card down while moving it — a press that travels no
+            // distance is a press and reorders nothing.
+            //
+            // The half of the card is what decides where it lands, and which half that is depends on
+            // how the cards are laid out — side by side on most pages, one above the other where the
+            // page is drawn that way — so the step says the half by the order it puts the card in
+            // rather than by left and right.
+            (Domain::Terminal, "carry-pane") => {
+                let side = match req(with, "side")? {
+                    "before" => "the half of it nearest the front of the order — the left half where the cards sit side by side, the top half where they sit one above the other — so that the carried card takes that one's place and pushes it along",
+                    "after" => "the half of it furthest from the front of the order — the right half where the cards sit side by side, the bottom half where they sit one above the other — so that the carried card lands just past it",
+                    other => {
+                        return Err(format!(
+                            "action `carry-pane` does not know the side `{other}` — it is before or after"
+                        ))
+                    }
+                };
+                format!(
+                    "In the panel of cards, press and hold the card called {}, and without letting go move the pointer onto the card called {}, over {}. The cards reorder under the pointer as you move, so what you are looking at while you hold it is the order you are about to ask for. Let go there. Nothing outside the panel has moved: the panes on the face behind it are where they were.",
+                    req(with, "pane")?,
+                    req(with, "onto")?,
+                    side
+                )
+            }
+            // The press that makes it the real order. It is named by what it says rather than by
+            // where it sits, being one of two buttons on a panel with nothing else to press.
+            (Domain::Terminal, "keep-order") =>
+                "In the panel of cards, press the button that takes the order you have made — the one drawn as the panel's own action, at the foot of it beside the way out. The panel closes and the panes are drawn in that order. The page you were on stays the page you are on, and the pane you were working in is still the one you are working in, wherever in the order it has ended up."
+                    .to_string(),
+            // And leaving without it. Three ways out, and each said by the gesture rather than by a
+            // word on screen: the words are the interface's own and the run's language is whatever
+            // the machine is set to.
+            (Domain::Terminal, "drop-order") => {
+                let leave = match req(with, "how")? {
+                    "button" => "press the other of the two buttons at the foot of the panel — the plain one beside the action",
+                    "escape" => "press Escape",
+                    "backdrop" => "press the dimmed face behind the panel, outside the panel itself",
+                    other => {
+                        return Err(format!(
+                            "action `drop-order` does not know the way out `{other}` — it is button, escape or backdrop"
+                        ))
+                    }
+                };
+                format!(
+                    "Leave the panel of cards without taking the order: {leave}. The panel closes and the panes are in the order they were in before it was opened, however much was carried about inside it."
+                )
+            }
             // Paging. The digits are the pages, so the step names the one it presses and says the
             // whole screen moves: a pane that was on the page being left is not on the screen after
             // this, which is the state half these roads are about.

@@ -86,7 +86,7 @@ Usage:
   devtool vm verify seed    [<path.pkg>] [--from-run <run id>] [--system-wide]
   devtool vm verify install [<path.pkg>] [--from-run <run id>]
   devtool vm verify run    <scenario.yaml>
-  devtool vm verify step | log | pull
+  devtool vm verify step | log | pull | stop
 
 devgui seed  clone the shared dev store into the app-data of the task's own
              throwaway dev GUI, so the instance opens on the setup grown in the
@@ -208,7 +208,9 @@ vm verify    walk a pre-distribution screen road inside that VM. The harness is
              asked there and answered from here; 'run'
              starts one road and comes back when the first step is handed over;
              'step' sends one line and waits for what the harness says next; 'log' re-reads that without advancing; 'pull' brings the
-             shots and the manifest back out. The road itself is still walked by
+             shots and the manifest back out; 'stop' ends a road walked away
+             from, which otherwise goes on holding the screen against every
+             dev GUI — a verdict is not an ending, and the evidence stays. The road itself is still walked by
              whoever is driving — the screen tool in the guest is how.`)
 }
 

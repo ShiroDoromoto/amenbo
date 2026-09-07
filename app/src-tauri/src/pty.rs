@@ -1141,30 +1141,26 @@ pub fn pty_write(
 /// that is a notice about a person's turn, and it is right to take it back on any word. What is owed
 /// is a narrower question, and only the one verb answers it.
 ///
-/// **What it answers is whether the sentence went**, which is the one thing only this side knows and
-/// the row above the pane has to be told: while a sentence is sitting in an input box the row says so
-/// and says that Enter sends it, and a row still saying that after the sending is a person being
-/// pointed at a keypress that now does nothing. It is taken back on the sending rather than on the
-/// agent's first word — that word may never come, and the notice is about the box, not the agent.
-///
-/// `false` is the answer for a pane with nothing owed: a press that turned out to need nothing is not
-/// a failure, and there is nothing for a reader to do about it. Only a terminal that is not there at
-/// all is refused, the same way a write to one is.
+/// **Nothing comes back but whether the terminal was there.** Whether the sentence went used to be
+/// answered here, for a row above the pane that said a sentence was sitting in an input box and had
+/// to stop saying it once the sending happened. That row now carries the pane's name and nothing else
+/// (`AMB-D-862`), so there is no notice left to take back and no reader for the answer. A press that
+/// turned out to need nothing is not a failure either. Only a terminal that is not there at all is
+/// refused, the same way a write to one is.
 #[tauri::command]
-pub fn pty_brief(terminals: tauri::State<'_, Terminals>, session: String) -> Result<bool, CmdError> {
+pub fn pty_brief(terminals: tauri::State<'_, Terminals>, session: String) -> Result<(), CmdError> {
     let mut open = terminals.0.lock().expect("terminals lock");
     let terminal = open.get_mut(&session).ok_or_else(|| gone(&session))?;
     if terminal.pane.briefed() {
-        return Ok(false);
+        return Ok(());
     }
-    let Some(instruction) = terminal.pane.take_unsent() else { return Ok(false) };
+    let Some(instruction) = terminal.pane.take_unsent() else { return Ok(()) };
     let bytes = crate::handover::paste_and_send(&instruction);
     terminal
         .writer
         .write_all(&bytes)
         .and_then(|()| terminal.writer.flush())
-        .map_err(failed)?;
-    Ok(true)
+        .map_err(failed)
 }
 
 /// Tell the terminal how large the pane is now, in characters.

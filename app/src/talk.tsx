@@ -14,7 +14,9 @@
 // was being worked in are all kept with the arrangement, and the terminals still running are asked
 // of the host — the same two questions the board answers when the app folds back into one window.
 // So the split says nothing and the window reads everything, which is one answer rather than two
-// that can disagree.
+// that can disagree. What does cross afterwards is a press: "start in the terminal", made on the
+// board, names a folder this window has to open — and that is an ask, not a state the two windows
+// could hold different copies of (`crate::windows::talk_raise`).
 //
 // The terminals it draws are the ones that were already running in the board, and folding back hands
 // them over the same way. Neither end restarts anything — a pane is a drawing of a session, not the
@@ -33,6 +35,7 @@
 import { StrictMode, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { OpenInDto } from "./bindings/bindings";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { currentLang, errText, t, tf } from "./core/i18n";
 import { invoke } from "./core/ipc";
@@ -83,6 +86,40 @@ function TalkWindow() {
     void invoke<boolean>("elevated").then(setElevated).catch(() => {});
   }, []);
 
+  // A folder the ledger asked for, and the project it named — "start in the terminal", pressed on
+  // the board while the face is here (`./components/FirstLoop`).
+  //
+  // It arrives from the host rather than from a press in this tree, for the reason a ref clicked
+  // here leaves the same way: the two faces are in two windows, and neither can reach the other
+  // (`crate::windows::talk_raise`). What is left to do here is hand it down, because what to do
+  // about a folder — open a pane or go to the one already in it — is the face's own
+  // (`./shell/TerminalFace`).
+  //
+  // `nth` is what makes the same folder pressed twice two answers, the way it does on the board: a
+  // second press is a reader saying it again, not a state that has not moved.
+  const [openIn, setOpenIn] = useState<{ project: number; dir: string; nth: number } | null>(null);
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<OpenInDto>("terminal-open-in", (e) => {
+          setOpenIn((asked) => ({ ...e.payload, nth: (asked?.nth ?? 0) + 1 }));
+        }),
+      )
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      })
+      // Outside Tauri (`npm run dev` in a browser) there is no host to hear from, and a page that
+      // draws the face is worth more than one that failed over a road nothing travels.
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   const nav = useMemo<RefNav>(() => ({
     selectTask: (id) => void invoke("show_ref", { kind: "task", id }).catch(() => {}),
     selectDecision: (id) => {
@@ -108,6 +145,7 @@ function TalkWindow() {
           onWaiting={(waiting) => {
             if (waiting && !document.hasFocus()) void notifyTurn();
           }}
+          openIn={openIn}
         />
       </div>
     </RefNavProvider>

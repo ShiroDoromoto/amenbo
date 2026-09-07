@@ -127,7 +127,7 @@ async function pane(autoStart = true): Promise<void> {
 /** The host opens a terminal in the pane, which is what puts the watch up. */
 async function opened(): Promise<void> {
   await act(async () => {
-    hoisted.events?.opened("session-7", "2026-08-29T00:00:00Z", "/work/here");
+    hoisted.events?.opened("session-7", "2026-08-29T00:00:00Z", "/work/here", null);
   });
   await act(async () => { await Promise.resolve(); });
 }

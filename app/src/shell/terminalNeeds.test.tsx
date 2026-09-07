@@ -20,18 +20,35 @@ const hoisted = vi.hoisted(() => ({
   tell: [] as ((waiting: boolean) => void)[],
   /** The sessions the panes opened, in the order they opened. */
   opened: [] as string[],
-  /** The window's own way of hearing what an agent said, whichever pane it was said in. */
+  /** The window's own way of hearing that an agent spoke, whichever pane it spoke in. */
   said: [] as ((payload: unknown) => void)[],
+  /** Why a turn stands in each session, as the host holds it (`crate::pty::Pane`). */
+  waiting: new Map<string, string | null>(),
 }));
 
-// The host, stood in for: what a pane's agent says arrives as an event to the window, and this is the
-// door it comes in by (`../talk/spoken`).
+// The host, stood in for. It carries two things and they are deliberately different: the event says
+// only that an agent spoke, and `pty_sessions` is where what it said is read back off (`AMB-D-860`).
 vi.mock("@tauri-apps/api/event", () => ({
   listen: (name: string, on: (event: { payload: unknown }) => void) => {
     if (name === "session://said") hoisted.said.push((payload) => on({ payload }));
     return Promise.resolve(() => {});
   },
 }));
+vi.mock("../core/ipc", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../core/ipc")>();
+  return {
+    ...real,
+    invoke: async (cmd: string, args?: Record<string, unknown>) => {
+      if (cmd !== "pty_sessions") return real.invoke(cmd, args);
+      return hoisted.opened.map((session) => ({
+        session,
+        startedAt: "2026-08-24T00:00:00Z",
+        folder: null,
+        waiting: hoisted.waiting.get(session) ?? null,
+      }));
+    },
+  };
+});
 
 // The ledger's projects and the one folder this one is bound to, so opening a pane asks nothing.
 vi.mock("../mock/adapter", () => ({
@@ -100,17 +117,16 @@ const openPane = async () => {
 const turn = async (pane: number, standing: boolean) => {
   await act(async () => { hoisted.tell[pane]!(standing); });
 };
-/** The agent in a pane says something, the way the host carries it: to the window, whether or not the
- *  pane it was said in is on the screen. */
+/** The agent in a pane says something, the way the host carries it: the turn it leaves standing goes
+ *  into what `pty_sessions` answers with, and the window is told that something was said — whether or
+ *  not the pane it was said in is on the screen. */
 const says = async (pane: number, verb: "waiting" | "note", text: string) => {
-  const payload = {
-    session: hoisted.opened[pane]!,
-    verb,
-    at: "2026-08-24T00:01:00Z",
-    cwd: null,
-    text,
-  };
+  const session = hoisted.opened[pane]!;
+  hoisted.waiting.set(session, verb === "waiting" ? text : null);
+  const payload = { session, verb, at: "2026-08-24T00:01:00Z", cwd: null, text };
   await act(async () => { for (const on of hoisted.said) on(payload); });
+  // The face reads the host back before it can answer, and that read is a round trip.
+  await act(async () => { await Promise.resolve(); });
 };
 
 beforeEach(async () => {
@@ -121,6 +137,7 @@ beforeEach(async () => {
   hoisted.tell = [];
   hoisted.opened = [];
   hoisted.said = [];
+  hoisted.waiting = new Map();
   told = [];
   container = document.createElement("div");
   document.body.appendChild(container);

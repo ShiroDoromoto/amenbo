@@ -82,7 +82,12 @@ vi.mock("./terminal", () => ({
       // the pane took up is where that one was started, not the folder this pane was handed.
       const took = start.adopt !== false ? hoisted.running[0] : undefined;
       const session = took?.session ?? "session-1";
-      on.opened(session, took?.startedAt ?? "2026-01-01T00:00:00Z", took?.folder ?? start.cwd ?? null);
+      on.opened(
+        session,
+        took?.startedAt ?? "2026-01-01T00:00:00Z",
+        took?.folder ?? start.cwd ?? null,
+        took?.waiting ?? null,
+      );
       hoisted.end = () => on.closed(session);
       host.textContent = "(a terminal)";
       return () => {};
@@ -252,7 +257,9 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
   });
 
   it("asks nothing of a frame that adopts a terminal, and opens where that one runs when it ends", async () => {
-    hoisted.running = [{ session: "session-1", startedAt: "2026-01-01T00:00:00Z", folder: "/work/adopted" }];
+    hoisted.running = [
+      { session: "session-1", startedAt: "2026-01-01T00:00:00Z", folder: "/work/adopted", waiting: null },
+    ];
     const root = await put(wake({ offered: ["claude-code"], settled: "claude-code" }));
 
     expect(hoisted.chose, "a running terminal was asked about").toBe(0);

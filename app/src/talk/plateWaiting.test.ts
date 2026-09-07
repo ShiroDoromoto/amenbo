@@ -81,6 +81,17 @@ describe("what the plate says about a turn standing in its pane", () => {
     expect(told, "there is nothing left in the box to press Enter for").toEqual([true, false]);
   });
 
+  it("comes back up saying the turn that was handed over while it was away", () => {
+    // A page turn takes the pane down, and an agent that hands its turn over then says it to a pane
+    // that is not there. The host kept it, because the session outlives the pane drawing it
+    // (`AMB-D-860`) — so the row that comes back is the one that left, and not an empty one.
+    plate.opened("pane-1", AT, null, "which of the two");
+    expect(told).toEqual([true]);
+
+    plate.said(say({ verb: "note", text: "on it" }));
+    expect(told).toEqual([true, false]);
+  });
+
   it("says nothing at all to a pane nobody is waiting on", () => {
     plate.opened("pane-1", AT, null);
     plate.said(say({ verb: "finished", text: "it landed" }));

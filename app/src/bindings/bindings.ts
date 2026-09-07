@@ -2105,7 +2105,18 @@ startedAt: string,
  * frame that does not know would have to ask the person for the folder again the next time it has
  * a terminal to start, which is the one flow the face has asked for twice.
  */
-folder: string | null, };
+folder: string | null, 
+/**
+ * Why a person's turn has come in this session, as its agent last said it — `None` once the agent
+ * went back to work (`crate::pty::Pane`).
+ *
+ * It is here because a turn outlives the pane it was handed over in. A pane comes down whenever
+ * the reader turns to another page or another project, and the turn standing in it is exactly
+ * what the dots on the pages and the badges on the project tabs are there to carry
+ * (`AMB-D-860`). A pane coming back up reads its own turn off this, so a row that returns says
+ * what it was saying when it left.
+ */
+waiting: string | null, };
 
 /**
  * What a reference resolves to (`kind` — task or decision — and the entity's id). The GUI branches

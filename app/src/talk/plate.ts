@@ -27,8 +27,13 @@ import {
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
   /** A terminal has started in the pane, under this session id, in `folder`. The folder is what the
-   *  row calls the pane until something names it (`./frames`). */
-  opened(session: string, startedAt: string, folder: string | null): void;
+   *  row calls the pane until something names it (`./frames`).
+   *
+   *  `waiting` is a turn already standing in that session, which the host hands over with the rest
+   *  of it (`crate::pty::pty_sessions`). It is not nothing for a pane that has just gone up: the
+   *  reader turning back to a page is a pane coming up on a session that handed its turn over while
+   *  they were away, and a row that started empty would be the one place saying so (`AMB-D-860`). */
+  opened(session: string, startedAt: string, folder: string | null, waiting?: string | null): void;
   /** Something came out of the terminal. Said per chunk and read as a time, never as a quantity: what
    *  it turns into is a fixed rhythm rather than a meter (`./moving`). */
   output(): void;
@@ -187,8 +192,8 @@ export function mountPlate(
   redraw();
 
   return {
-    opened: (session, startedAt, where) => {
-      sessions = opened(sessions, { session, startedAt });
+    opened: (session, startedAt, where, standing = null) => {
+      sessions = opened(sessions, { session, startedAt, waiting: standing });
       running = session;
       folder = where;
       ran = true;

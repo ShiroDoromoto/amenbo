@@ -21,7 +21,7 @@
 //! outside.
 //!
 //! **A pane is also handed somewhere to be spoken to.** Beside the session's name goes a throwaway
-//! directory, and what the agent says about its session — `waiting`, `note`, a name for the pane — is
+//! directory, and what the agent says about its session — whose turn it is, a name for the pane — is
 //! left there as one file per statement (`AMB-D-749`). This module watches that directory and carries
 //! each statement on to the pane, then takes the directory away with the terminal: nothing said about a
 //! session outlives the session. A run that ends without closing its terminals — a quit, a crash — takes
@@ -200,10 +200,11 @@ impl Pane {
     /// Two of them are the pane's own business as well as the person's: the fact that `amenbo agent`
     /// ran here, and whose turn it is. Every other verb passes straight through.
     ///
-    /// **A turn is taken back by working, not by a word for taking it back** — the vocabulary has no
-    /// such verb, and the two things that end one are a note and the work being finished
-    /// (`app/src/talk/sessions.ts` says the same, for the row it draws). A name says nothing about
-    /// whose turn it is: it is the frame being named, not the session.
+    /// **Nothing here takes a turn back down.** What ends one is the person it was handed to looking
+    /// at the pane (`AMB-D-859`), which is a thing the window measures and not a thing an agent says
+    /// — so what is kept here is the reason last given, and `app/src/talk/sessions.ts` reads it
+    /// against whether the person has been since. A name says nothing about whose turn it is: it is
+    /// the frame being named, not the session.
     fn take_in(&self, said: &amenbo_core::session::Said) {
         use amenbo_core::session::Statement;
         match &said.statement {
@@ -211,14 +212,13 @@ impl Pane {
             Statement::Waiting(why) => {
                 *self.waiting.lock().expect("pane waiting lock") = Some(why.clone());
             }
-            Statement::Note(_) | Statement::Finished(_) => {
-                *self.waiting.lock().expect("pane waiting lock") = None;
-            }
             Statement::Name(_) => {}
         }
     }
 
-    /// Why a person's turn has come here, if one has.
+    /// Why a person's turn has come here, if one was ever handed over. It stands until the window
+    /// reads it against a person having been to the pane since (`AMB-D-859`) — this side never takes
+    /// it down.
     fn waiting(&self) -> Option<String> {
         self.waiting.lock().expect("pane waiting lock").clone()
     }
@@ -1423,14 +1423,15 @@ mod tests {
         assert!(pane.briefed(), "and the fact itself is");
     }
 
-    /// A turn stands in the pane until the agent goes back to work, and the pane is where it stands
-    /// because a session outlives the pane drawing it (`AMB-D-860`).
+    /// The reason a turn was handed over stands in the pane, which is where it stands because a
+    /// session outlives the pane drawing it (`AMB-D-860`).
     ///
-    /// This walks the real statements for the same reason the one above does: what ends a turn is a
-    /// word an agent already has, and there is no verb for taking one back — so the two that end it
-    /// are read off the pass over the box rather than declared here.
+    /// This walks the real statements rather than calling `take_in` with made-up ones: what reaches a
+    /// pane is whatever came off the drop box, so the pass over the box is the thing under test.
+    /// Taking the turn down is not here — the window does that by measuring whether the person has
+    /// been to the pane (`AMB-D-859`).
     #[test]
-    fn a_turn_stands_in_the_pane_until_the_agent_goes_back_to_work() {
+    fn the_reason_a_turn_was_handed_over_stands_in_the_pane() {
         use amenbo_core::session::{say, Statement, Surface};
 
         let dir = amenbo_scratch::scratch("pty-waiting");
@@ -1455,17 +1456,11 @@ mod tests {
         carry(&pane, &mut last);
         assert_eq!(pane.waiting().as_deref(), Some("which of the two?"));
 
-        say(&surface, &Statement::Note("back at it".into())).expect("said");
-        carry(&pane, &mut last);
-        assert_eq!(pane.waiting(), None, "an agent saying what it is doing is one back at work");
-
+        // A second turn replaces the first: what is kept is the reason last given, there being one
+        // row to write it on.
         say(&surface, &Statement::Waiting("and this one?".into())).expect("said");
         carry(&pane, &mut last);
         assert_eq!(pane.waiting().as_deref(), Some("and this one?"));
-
-        say(&surface, &Statement::Finished("shipped".into())).expect("said");
-        carry(&pane, &mut last);
-        assert_eq!(pane.waiting(), None, "and the work being done is nobody's turn any more");
     }
 
     /// What a pane is owed goes out once, whatever a person presses after.

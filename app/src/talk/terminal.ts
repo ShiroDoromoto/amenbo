@@ -274,7 +274,12 @@ function refit(fit: FitAddon, host: HTMLElement): boolean {
  * have to guess, and there is nothing to guess from.
  */
 /** Put a terminal in front of this pane: the one it is meant to have, else a new one. */
-async function draw(term: Terminal, start: PaneStart): Promise<PtySessionDto> {
+async function draw(
+  term: Terminal,
+  fit: FitAddon,
+  host: HTMLElement,
+  start: PaneStart,
+): Promise<PtySessionDto> {
   const open = await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]);
   // The slot's own terminal where it has one. Otherwise, and only where this pane is the one that may:
   // a single open session is the only count that names one without guessing.
@@ -286,7 +291,24 @@ async function draw(term: Terminal, start: PaneStart): Promise<PtySessionDto> {
   if (want) {
     try {
       const replay = await invoke<string>("pty_attach", { session: want.session });
-      if (replay) term.write(decode(replay));
+      // **The tail is read at the width it was written at, and only then is the pane's own width
+      // put back.** The bytes are a terminal's output, not lines: where one of them ended is
+      // already decided, and an emulator told a narrower screen folds it somewhere else — which
+      // for a program that draws by moving the cursor about leaves parts of old frames standing
+      // (`AMB-T-4514`). Reading them at the width they were written at and reflowing afterwards
+      // keeps the logical lines, so the same reflow that would have broken them fixes them.
+      //
+      // Whose width it was is the host's answer: the pane was not there while it changed, so
+      // nothing sent the size along and the program went on writing to the last one it was told.
+      if (want.cols > 0 && want.rows > 0) term.resize(want.cols, want.rows);
+      // Written before the measuring, and awaited so it really is: `write` queues, and a resize
+      // landing in front of the bytes it is meant to follow would be the same wrong fold again.
+      if (replay) await new Promise<void>((wrote) => term.write(decode(replay), wrote));
+      refit(fit, host);
+      // The program is told last, because until now it was writing to the old width and its next
+      // line has to arrive at the new one.
+      void invoke("pty_resize", { session: want.session, cols: term.cols, rows: term.rows })
+        .catch(() => {});
       return want;
     } catch {
       // It ended between the two calls. Opening one is what the pane was there to do anyway.
@@ -505,7 +527,7 @@ export async function mountTerminal(
     else if (payload.session === session) take(payload);
   });
 
-  const running = await draw(term, start);
+  const running = await draw(term, fit, host, start);
   session = running.session;
   // The host's own answer for when it began, not the moment this pane went up: a session that moved
   // windows started when it started, and a pane that said otherwise would have the window telling the

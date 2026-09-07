@@ -2119,7 +2119,19 @@ folder: string | null,
  * session is told what the first one was told, rather than starting with every answered turn
  * standing again.
  */
-waiting: string | null, };
+waiting: string | null, 
+/**
+ * The terminal's size in characters, as the host last had it — the size the bytes in the tail
+ * were written at.
+ *
+ * It is here for the pane that **adopts** this session, which has no other way to find it out.
+ * A pane measures the space it has been given, and that is the size the tail is *going* to be
+ * drawn in, not the size it came out of: while nobody was drawing the session nothing told the
+ * host the pane had changed, so the program inside went on writing lines to the width it was
+ * last told. A pane that wrote those lines at its own new width would fold them in the wrong
+ * places, and no later reflow can put back where a line ended (`AMB-T-4514`).
+ */
+cols: number, rows: number, };
 
 /**
  * What a reference resolves to (`kind` — task or decision — and the entity's id). The GUI branches

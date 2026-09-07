@@ -326,6 +326,14 @@ pub struct Terminal {
     /// is drawn and thrown away as the session moves windows, and only what outlives the window can
     /// still say when the work began.
     started_at: String,
+    /// The size the terminal was last told, in characters — what [`pty_open`] opened it at, moved by
+    /// every [`pty_resize`] since.
+    ///
+    /// The master holds this too, and will not say it back, which is the reason for keeping it here:
+    /// the size is the width the tail was written at, and the pane adopting the session is asking
+    /// for exactly that (`crate::dto::PtySessionDto`).
+    cols: u16,
+    rows: u16,
 }
 
 /// A session id: sixteen bytes of the operating system's randomness, in hex.
@@ -585,6 +593,8 @@ pub fn pty_open(
             killer,
             pane: Arc::clone(&pane),
             started_at: started_at.clone(),
+            cols,
+            rows,
         },
     );
 
@@ -617,6 +627,8 @@ pub fn pty_open(
         folder: opened_in,
         // Nothing has been said in a terminal that has just started.
         waiting: None,
+        cols,
+        rows,
     })
 }
 
@@ -992,6 +1004,8 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
                 started_at: terminal.started_at.clone(),
                 folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
                 waiting: terminal.pane.waiting(),
+                cols: terminal.cols,
+                rows: terminal.rows,
             })
             .collect(),
     )
@@ -1143,8 +1157,8 @@ pub fn pty_resize(
     cols: u16,
     rows: u16,
 ) -> Result<(), CmdError> {
-    let open = terminals.0.lock().expect("terminals lock");
-    let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
+    let mut open = terminals.0.lock().expect("terminals lock");
+    let terminal = open.get_mut(&session).ok_or_else(|| gone(&session))?;
     terminal
         .master
         .resize(PtySize {
@@ -1153,7 +1167,12 @@ pub fn pty_resize(
             pixel_width: 0,
             pixel_height: 0,
         })
-        .map_err(failed)
+        .map_err(failed)?;
+    // Kept only once the terminal took it. What the next pane to adopt this session is told has to be
+    // the width the program is actually writing to, and a resize that failed left that where it was.
+    terminal.cols = cols;
+    terminal.rows = rows;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1198,6 +1217,8 @@ mod tests {
             started_at: started_at.into(),
             folder: Some("/work/repo".into()),
             waiting: None,
+            cols: 80,
+            rows: 24,
         };
         let order = |open: Vec<PtySessionDto>| {
             in_open_order(open).into_iter().map(|one| one.session).collect::<Vec<_>>()

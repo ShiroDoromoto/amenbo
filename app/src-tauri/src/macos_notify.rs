@@ -26,7 +26,6 @@ use objc2_user_notifications::{
     UNNotificationPresentationOptions, UNNotificationRequest, UNNotificationResponse,
     UNNotificationSound, UNUserNotificationCenter, UNUserNotificationCenterDelegate,
 };
-use crate::notify::Kind;
 use tauri::{Emitter, Manager};
 
 /// The AppHandle used, when a notification is clicked, to raise the window and ask the front end to
@@ -40,28 +39,22 @@ const ACTIVATED_EVENT: &str = "notification-activated";
 /// What a click on the toast does: raise the window that holds what it was about, and ask the front
 /// end to go there.
 ///
-/// An arrival names no single record — it is an aggregate count (`notifyArrival(n)`) — so the inbox is
-/// as specific as that destination can get. A turn names no single pane for the same reason, so the
-/// terminal is as far as that one goes; which pane it was is drawn there, on the rail and the pages.
+/// There is one thing a toast is ever about — something arrived in the inbox — and it names no single
+/// record, being an aggregate count (`notifyArrival(n)`), so the inbox is as specific as that
+/// destination can get and the board is the window it is on.
 ///
 /// Going there is the front end's navigation, so it is asked for with an event rather than resolved
-/// outside Tauri. Which window to raise is not, because with the terminal split out it is a different
-/// window (`AMB-D-753`) and the front end cannot raise one it is not in.
-fn on_activated(kind: Kind) {
+/// outside Tauri. Raising the window is not, because the front end cannot raise one it is not in.
+fn on_activated() {
     let Some(app) = APP.get() else { return };
     // The click has the OS activate the app, but restoring from minimized/hidden and coming to the
-    // front are spelled out here. A turn is raised in the window the terminal is actually in: the
-    // board when it is one window, and the split-out one when there are two.
-    let label = match kind {
-        Kind::Turn if app.get_webview_window(crate::windows::TALK).is_some() => crate::windows::TALK,
-        _ => crate::windows::BOARD,
-    };
-    if let Some(win) = app.get_webview_window(label) {
+    // front are spelled out here.
+    if let Some(win) = app.get_webview_window(crate::windows::BOARD) {
         let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();
     }
-    if let Err(e) = app.emit(ACTIVATED_EVENT, kind.as_str()) {
+    if let Err(e) = app.emit(ACTIVATED_EVENT, ()) {
         log::warn!("failed to emit {ACTIVATED_EVENT}: {e}");
     }
 }
@@ -91,19 +84,16 @@ define_class!(
             handler.call((opts,));
         }
 
-        // The response to a click on the toast (the default action): raise the window, ask for
-        // wherever this toast was about, and always call the completion handler (skip it and the OS
-        // calls us unresponsive). Which destination that is travels in the identifier, because the
-        // response carries the request back and nothing else of ours reaches this far.
+        // The response to a click on the toast (the default action): raise the window, ask for the
+        // inbox, and always call the completion handler (skip it and the OS calls us unresponsive).
         #[unsafe(method(userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:))]
         fn did_receive(
             &self,
             _center: &UNUserNotificationCenter,
-            response: &UNNotificationResponse,
+            _response: &UNNotificationResponse,
             handler: &block2::DynBlock<dyn Fn()>,
         ) {
-            let ident = response.notification().request().identifier().to_string();
-            on_activated(Kind::of(&ident));
+            on_activated();
             handler.call(());
         }
     }
@@ -172,7 +162,7 @@ pub fn init(app: tauri::AppHandle) {
 
 /// Raise one OS notification with the given title and body. Without permission the OS drops it
 /// silently (the sound comes from a separate path).
-pub fn send(title: &str, body: &str, kind: Kind) {
+pub fn send(title: &str, body: &str) {
     // Unbundled (dev) run: no bundle proxy, so `currentNotificationCenter` would abort. `init` already
     // logged that notifications are off; here we just drop the toast.
     if !is_bundled() {
@@ -187,9 +177,7 @@ pub fn send(title: &str, body: &str, kind: Kind) {
     content.setSound(Some(&UNNotificationSound::defaultSound()));
 
     let n = SEQ.fetch_add(1, Ordering::Relaxed);
-    // The kind is written into the identifier because the response hands the request back and nothing
-    // else of ours reaches the click (`crate::notify`).
-    let ident = format!("amenbo-{}-{n}", kind.as_str());
+    let ident = format!("amenbo-{n}");
     let request = UNNotificationRequest::requestWithIdentifier_content_trigger(
         &NSString::from_str(&ident),
         &content,

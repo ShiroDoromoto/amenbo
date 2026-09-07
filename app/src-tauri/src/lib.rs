@@ -66,7 +66,6 @@ mod handover;
 mod launch;
 #[cfg(target_os = "macos")]
 mod macos_notify;
-mod notify;
 mod menu;
 /// Migration at startup. It runs through the same execution site as the CLI, ahead of anything that
 /// opens the store: neither the watcher nor a command may read a store caught mid-version, and if

@@ -47,7 +47,7 @@ function watching(): { last: () => Turns } {
 
 /** One session the host is holding, with a turn standing in it or without. */
 const open = (session: string, waiting: string | null): PtySessionDto =>
-  ({ session, startedAt: "2026-09-06T00:00:00Z", folder: null, waiting, cols: 80, rows: 24 });
+  ({ session, startedAt: "2026-09-06T00:00:00Z", folder: null, waiting });
 
 /** Let the reads of the host land. */
 const settled = async () => { for (let i = 0; i < 4; i++) await Promise.resolve(); };

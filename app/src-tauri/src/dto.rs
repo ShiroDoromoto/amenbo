@@ -2298,17 +2298,31 @@ pub struct PtySessionDto {
     /// session is told what the first one was told, rather than starting with every answered turn
     /// standing again.
     pub(crate) waiting: Option<String>,
-    /// The terminal's size in characters, as the host last had it — the size the bytes in the tail
-    /// were written at.
-    ///
-    /// It is here for the pane that **adopts** this session, which has no other way to find it out.
-    /// A pane measures the space it has been given, and that is the size the tail is *going* to be
-    /// drawn in, not the size it came out of: while nobody was drawing the session nothing told the
-    /// host the pane had changed, so the program inside went on writing lines to the width it was
-    /// last told. A pane that wrote those lines at its own new width would fold them in the wrong
-    /// places, and no later reflow can put back where a line ended (`AMB-T-4514`).
+}
+
+/// One run of a session's tail, as the pane adopting it is handed it (`crate::pty::pty_attach`).
+///
+/// **A run is as much of the tail as was written at one size**, and the tail is handed over as the
+/// runs it was written in rather than as one stretch of bytes. Where a line ended was decided when
+/// it was written, and an emulator told a different width folds it somewhere else — so a pane that
+/// read the whole tail at one size would leave every part written before the last change folded in
+/// the wrong places (`AMB-T-4514`, `AMB-T-4516`). Read run by run, each at its own size, every part
+/// is folded where it was written and the reflow at the end moves all of it together.
+///
+/// A pane has no other way to find these sizes out. It measures the space it has been given, and
+/// that is the size the tail is *going* to be drawn in: while nobody was drawing the session,
+/// nothing told the host the pane had changed, so the program inside went on writing to the width
+/// it was last told.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PtyReplayDto {
+    /// The terminal's width in characters while these bytes were written.
     pub(crate) cols: u16,
+    /// The terminal's height in characters while these bytes were written.
     pub(crate) rows: u16,
+    /// The bytes, base64-encoded — the way a chunk is, and for the same reason.
+    pub(crate) base64: String,
 }
 
 /// One chunk of a terminal's output, on its way to the pane drawing it (the payload of the talk

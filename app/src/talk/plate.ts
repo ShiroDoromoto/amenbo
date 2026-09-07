@@ -13,15 +13,7 @@ import type { SessionSaidDto } from "../bindings/bindings";
 import { frameLabel, frameNames, ONLY_FRAME, type FrameNames } from "./frames";
 import { faceOf, mountNameplate, type Plate as Row } from "./nameplate";
 import { movingAt, STILL_AFTER_MS } from "./moving";
-import {
-  closed,
-  NO_SESSIONS,
-  opened,
-  said,
-  sent as wentOut,
-  unsent as leftUnsent,
-  type Sessions,
-} from "./sessions";
+import { closed, NO_SESSIONS, opened, said, type Sessions } from "./sessions";
 
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
@@ -33,10 +25,6 @@ export type Plate = {
   output(): void;
   /** The agent said something about its session. */
   said(statement: SessionSaidDto): void;
-  /** The sentence Amenbo opens an agent with was left in this pane's input box, unsent. */
-  unsent(session: string): void;
-  /** That sentence has since gone out of the input box, on the reader's own Enter. */
-  sent(session: string): void;
   /** The program in the terminal has exited. */
   closed(session: string): void;
   /** The frames have been named afresh — what a naming answered with. */
@@ -145,14 +133,6 @@ export function mountPlate(host: HTMLElement, frame: string = ONLY_FRAME): Plate
     output: tookOutput,
     said: (statement) => {
       sessions = said(sessions, statement);
-      redraw();
-    },
-    unsent: (session) => {
-      sessions = leftUnsent(sessions, session);
-      redraw();
-    },
-    sent: (session) => {
-      sessions = wentOut(sessions, session);
       redraw();
     },
     closed: (session) => {

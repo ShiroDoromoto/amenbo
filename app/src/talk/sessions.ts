@@ -12,11 +12,6 @@
 // it names. There is no confidence, no likelihood and no inference, because the one attempt to infer a
 // session from its folder and its time was right in none of fifteen cases (`AMB-T-3549`). Where neither
 // source has spoken, the field is null and the window says nothing.
-//
-// A pane taking up a session that was already running is handed what the host kept of it — the turn
-// standing in it (`AMB-D-860`). That is the same second source read back rather than a third one: the
-// host holds it because it heard the agent say it, and a pane comes and goes while the session does
-// not.
 
 import type { SessionSaidDto } from "../bindings/bindings";
 
@@ -33,10 +28,6 @@ export type Session = {
   readonly agent: string | null;
   /** When the session began (RFC3339 UTC). */
   readonly startedAt: string;
-  /** Whether the sentence Amenbo opens an agent with is sitting in this pane's input box, unsent.
-   *  It is the window's own doing and not a guess: the host handed the sentence over itself and says
-   *  how that ended (`crate::pty`). */
-  readonly unsent: boolean;
 };
 
 export type Sessions = ReadonlyMap<string, Session>;
@@ -60,8 +51,7 @@ function withEntry(sessions: Sessions, entry: Session): Sessions {
 }
 
 /** Record a session this pane has just put a terminal in — one it started, or one it took up that was
- *  already running. What it was started with is known exactly, and a turn already standing in it comes
- *  from the host along with that (`crate::pty::pty_sessions`); the rest waits to be said. Re-opening an
+ *  already running. What it was started with is known exactly; the rest waits to be said. Re-opening an
  *  id that is already there replaces it: an id is drawn fresh per terminal, so the same one twice is
  *  the same session being described again. */
 export function opened(sessions: Sessions, open: Opened): Sessions {
@@ -71,7 +61,6 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
     project: open.project ?? null,
     agent: open.agent ?? null,
     startedAt: open.startedAt,
-    unsent: false,
   });
 }
 
@@ -82,11 +71,6 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
  * finished registering it. That is why an unknown session is recorded rather than dropped.
  *
  * `name` is not here: a name belongs to the frame, not to the session running in it (`./frames`).
- *
- * **Whose turn it is is not read off this.** A turn goes up by a word and comes down by a person
- * arriving, and the host writes both (`crate::pty::Pane`, `AMB-D-859`); what a statement moves here
- * is only where the agent is working. The turn arrives by `declared`, which is that answer written
- * down.
  *
  * **A verb this does not know is passed over**, and so is one it does. The vocabulary has shrunk
  * before and will again, and a CLI from before a word went away still posts it into a newer window's
@@ -99,45 +83,10 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
     project: null,
     agent: null,
     startedAt: statement.at,
-    unsent: false,
   };
   // The folder moves with the agent, so the newest statement's is the current one.
   const folder = statement.cwd ?? entry.folder;
-  // **An agent that has spoken at all has the sentence.** Every verb of this layer is a word of
-  // Amenbo's own, said by running Amenbo's command in this pane — so a statement of any kind, a name
-  // as much as a turn, is an agent that knows where it is working. That is the one thing a sentence
-  // left in the input box says is missing, and it is taken back by the agent working rather than by a
-  // word for taking it back.
-  return withEntry(sessions, { ...entry, folder, unsent: false });
-}
-
-/**
- * Record that this pane's opening sentence was left in its input box, unsent (`crate::pty`).
- *
- * It is written only for a session the window is holding. Unlike a statement, this cannot be the
- * first thing heard about one: the host gives up on the hand-over only after a minute of looking at
- * the pane, and the pane it is about was registered before the first of those looks.
- */
-export function unsent(sessions: Sessions, session: string): Sessions {
-  const known = sessions.get(session);
-  return known ? withEntry(sessions, { ...known, unsent: true }) : sessions;
-}
-
-/**
- * Record that the sentence has gone out of this pane's input box (`crate::pty`).
- *
- * **It is the box the notice was about, and the box is empty now.** What was owed the reader while it
- * sat there was that it was theirs to send; a row still saying so after the sending would point them
- * at a keypress that does nothing.
- *
- * It is not the same news as the agent having read it — that is settled by the agent saying so
- * (`AMB-D-805`), and a pane can send the sentence to a program that never runs the command. Which is
- * why this is written on the sending rather than waited for: the word that would take the notice back
- * may never be said, and the notice would stand for the life of the pane.
- */
-export function sent(sessions: Sessions, session: string): Sessions {
-  const known = sessions.get(session);
-  return known ? withEntry(sessions, { ...known, unsent: false }) : sessions;
+  return withEntry(sessions, { ...entry, folder });
 }
 
 /** Forget a session whose terminal has closed. **Nothing running is kept**: the process is gone, and a

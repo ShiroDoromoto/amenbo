@@ -1,0 +1,174 @@
+# A turn came up in another project's pane, and that project's tab says so.
+#
+# A pane belongs to a project and can work in no folder outside it, so the tabs down the edge of the
+# face are the division itself: pressing one moves the whole face, and every other project's pane is
+# off the screen (`go-to-the-panes-of-another-project`). Those panes go on running, which is what
+# makes this needed — a session that stops and wants somebody is in a project the reader is not in,
+# and there is nothing on the screen it could be said on except the tab.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here and no gap in one. What is under test is a mark on a tab, put there by
+# a word that only exists inside a pane. Neither half has a shape outside a screen.
+#
+# ── Why the word is said from behind the tab ─────────────────────────────────────────────────────
+# The mark is raised by a turn arriving in a project nobody is in, and the layer is only ever spoken
+# inside a pane — which is in the project the mark is never drawn on, the reader being told plainly by
+# the pane in front of them. So the road arms the word and walks away from it: the operator starts it
+# in the greenhouse's pane, then presses the boathouse's tab before it lands. That is not a trick
+# around the seam — it is the seam, and the only door it has.
+#
+# ── Why the tab carries no number ────────────────────────────────────────────────────────────────
+# A page digit carries the count, a page being somewhere to go on the face already up
+# (`be-told-which-page-a-turn-came-up-on`). A tab is a whole face away: what it is asked is whether to
+# leave this project at all, and one turn settles that as well as four. So it is a dot and nothing
+# else, the way the mark on the face's own segment is.
+#
+# ── Why the boathouse has a pane of its own ──────────────────────────────────────────────────────
+# Without one, the two readings taken while standing in it would be about a project with nothing in
+# it, which is not a screen anybody is at. With one, both bite: the tab of a project that has panes
+# and no turn standing wears nothing, and the project being looked at wears nothing either — its pane
+# is right there to be read, so a mark on its own tab would be saying what the pane already says.
+#
+# ── Why the mark is spent by the work resuming, and not by looking ───────────────────────────────
+# Pressing the greenhouse's tab takes the mark off it, the project's panes being on the screen
+# afterwards. That is not the mark being spent: the turn is still standing, and pressing back would
+# raise it again. What takes it down for good is the session going back to work — `talk note`, the
+# same word that clears the lamp on the pane's own row. The road walks that, because a mark with no
+# way down is a light a reader learns to ignore.
+#
+# The world raises the two projects and nothing else: a terminal is not a record, and what the panes
+# run is the reader's own shell.
+id: be-told-which-project-a-turn-came-up-in
+title: A turn comes up in another project's pane, and that project's tab says so
+description: >
+  Raise two projects with a folder each and open a pane in both. Hand the turn over from inside the
+  greenhouse's pane and press to the boathouse before the word lands: the greenhouse's tab is wearing
+  a mark, and the boathouse's — the project being looked at, pane and all — is bare. Go back and say
+  the work has resumed, and the greenhouse's tab is bare too: the mark follows the turn, not the
+  looking.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face came up on is the run's business, so the road puts itself on one before it
+  # opens anything. It may well be the one already shown — that press is allowed to change nothing,
+  # and what the step says is where the screen is afterwards.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  # A pane in the project the readings below are taken from. It says nothing all road: it is here so
+  # that the tab being read as bare belongs to a project with work in it.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  # Down to a plain shell, which is what a road that speaks in a pane speaks to. An agent's screen is
+  # its own to draw, and a command handed to one is a request: whether it is carried out is the
+  # agent's own, and what raises the mark here has to be said rather than asked for.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # Armed, and left behind. The word is said in this project's pane and the reader is in the other
+  # project when it arrives, which is the only shape that raises anything on a tab.
+  - type: action
+    domain: terminal
+    op: say
+    with:
+      verb: waiting
+      text: SCENARIO the migration needs a decision
+      away: true
+
+  # And the leaving, which is the press the armed seconds are for.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  # The whole of what crossed the tabs. It is the one thing on this screen that could carry it: the
+  # greenhouse's pane is not further down the face, it is off it.
+  - type: assert
+    domain: terminal
+    op: tab-mark
+    with:
+      project: Greenhouse
+
+  # And the project being looked at wears nothing, pane and all. The tabs are not a row of lamps
+  # saying a turn is standing somewhere — a turn in a pane on this screen is said on that pane's own
+  # row, where the reader can read what it is about.
+  - type: assert
+    domain: terminal
+    op: tab-mark
+    with:
+      project: Boathouse
+      present: false
+
+  # Back to the pane, to say the work has resumed. This is said standing at the pane rather than armed
+  # — nothing is being raised behind anybody's back, and what is under test is the mark coming down.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: say
+    with:
+      verb: note
+      text: SCENARIO back at work
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  # Spent by the turn ending, which is the half that keeps the tabs worth reading. A mark still up
+  # after the session went back to work would be one a reader has to dismiss, and the whole of this is
+  # that they never do.
+  - type: assert
+    domain: terminal
+    op: tab-mark
+    with:
+      project: Greenhouse
+      present: false

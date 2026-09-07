@@ -2124,13 +2124,19 @@ impl Instructor {
                     other => return Err(format!("action `say` does not know the verb `{other}`")),
                 };
                 // Said and stood at, or said and walked away from. The second is the only way to a
-                // word that arrives while the ledger is the face up: the layer is spoken inside a
-                // pane and read on the other side of the switch, so the operator arms it and
-                // crosses over. The wait is here rather than in the road because how long a person
-                // needs to press one segment is the driver's business, not the goal's.
+                // word that arrives while nobody is on the pane it was said in: the layer is spoken
+                // inside a pane and read wherever the reader has gone, so the operator arms it and
+                // leaves. The wait is here rather than in the road because how long a person needs
+                // to make one press is the driver's business, not the goal's.
+                //
+                // **Where they go is the next step's to say and not this one's.** There are three
+                // ways off a pane — the other face, another page, another project — and each of them
+                // raises a mark of its own; a step that named one of them here would be an op per
+                // destination, and a road that walked a second one would be arming the same word
+                // twice to look at it from somewhere else.
                 if flagged(with, "away") {
                     format!(
-                        "In the pane that has a terminal running in it, run: sleep {SAY_AWAY_SECONDS} && amenbo talk {command} \"{text}\" — then press the segment that shows the ledger before those seconds are up. What lands is {what}, and it lands while the terminal is the face nobody is looking at, which is the only shape it ever reaches the other face in."
+                        "In the pane that has a terminal running in it, run: sleep {SAY_AWAY_SECONDS} && amenbo talk {command} \"{text}\" — then carry out the next step before those seconds are up. What lands is {what}, and it lands while the pane it was said in is off the screen, which is the only shape it ever reaches a reader who is somewhere else in."
                     )
                 } else {
                     format!(
@@ -3766,6 +3772,39 @@ impl Instructor {
                     .to_string(),
                 false => "In the pair of segments at the top of the window, confirm the one that shows the terminal is wearing no mark at all."
                     .to_string(),
+            },
+            // The mark on a page digit, which is the same turn said one step closer than the segment
+            // says it: not "somewhere behind this face" but "on page two, and there are two of them".
+            //
+            // The number is read out where the road names one, and left alone where it does not. An
+            // operator told to look for a mark would pass on a digit wearing a bare dot, and the count
+            // is the whole of what a page digit has over the segment — where to go, and whether going
+            // there answers one thing or four.
+            (Domain::Terminal, "page-mark") => {
+                let page = count(with, "page")?;
+                match (present(with), with.get("count").and_then(|v| v.as_u64())) {
+                    (true, Some(n)) => format!(
+                        "At the top of the terminal face, in the row of page digits, confirm the digit {page} is marked — it is drawn apart from the digits beside it, and it carries the number {n}, which is how many turns are standing on that page. Do not press it.",
+                    ),
+                    (true, None) => format!(
+                        "At the top of the terminal face, in the row of page digits, confirm the digit {page} is marked — drawn apart from the digits beside it, and carrying a number of its own. Do not press it.",
+                    ),
+                    (false, _) => format!(
+                        "At the top of the terminal face, in the row of page digits, confirm the digit {page} carries no mark and no number: it is a bare digit, whichever page is being shown.",
+                    ),
+                }
+            }
+            // And the same mark on a project's tab. It is a dot and nothing else — a project is a
+            // whole face away, so what it is asked is whether to go there at all.
+            (Domain::Terminal, "tab-mark") => match present(with) {
+                true => format!(
+                    "Down the edge of the terminal face, confirm the tab the project \"{}\" carries is wearing a small mark — a dot, with no number and no words on it. It says a turn is standing in one of that project's panes, none of which are on this screen. Do not press it.",
+                    req(with, "project")?
+                ),
+                false => format!(
+                    "Down the edge of the terminal face, confirm the tab the project \"{}\" carries is wearing no mark at all.",
+                    req(with, "project")?
+                ),
             },
             // What a project's tab is drawn with, down the edge of that same face. Both sides are a
             // picture and neither is an absence, the way `project icon`'s are: registered, the tab

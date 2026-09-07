@@ -26,16 +26,17 @@
 # it was printed, so the first line coming back says the screen was re-laid and only something typed
 # after the change says the terminal on the other end of it is still listening.
 #
-# ── Why two panes, and why the split is not pressed ──────────────────────────────────────────────
+# ── Why two panes, and why the split is pressed for ──────────────────────────────────────────────
 # Two is what the road is about: one pane and the empty frame beside it would draw the shape, but a
 # single pane cannot say what the shape was for, half a window being the whole of a window when there
 # is nothing to share it with. Only the first is ever spoken to — a step that typed into the other
 # would have to say which of two running panes it meant, and what the second is here for is to be the
 # one taking the other half.
 #
-# The count itself is never pressed. A fresh run comes up at two, which is the one count this control
-# is drawn at, and pressing the split the face is already at would be walking a re-cut this road does
-# not want and cannot tell apart from its own press afterwards.
+# So the count is asked for. A project nobody has answered for is drawn at one pane, which is a full
+# page with nowhere to open the second — and it is the count this control is not drawn at, there
+# being nothing to arrange. The press comes before the reading of how the two sit, so what it is is
+# the road standing the arrangement up rather than a change the reading afterwards could be about.
 #
 # The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
 # what the pane runs is the reader's own shell. Choosing the folder is what raises the project it
@@ -44,8 +45,8 @@ id: stack-the-two-panes-so-each-keeps-the-whole-width
 title: Two panes side by side are stacked one above the other, each takes the window's whole width, and the terminals in them come through the re-shape still running
 description: >
   Open the terminal face, choose the folder it runs in, get the pane down to a plain shell and type a
-  line into it. Open a second pane beside it, so the page is full at the split it came up on and the
-  two are sharing the width. Ask for them one above the other: the panes are stacked and each takes
+  line into it. Cut the page to two and open a second pane beside it, so the page is full and the two
+  are sharing the width. Ask for them one above the other: the panes are stacked and each takes
   the whole width between the columns, the first one's line is still on it, and a second line typed
   at it is taken — so the terminal behind the re-shape is still running and not a picture of one. Ask
   for them side by side again, and they go back to sharing it with the same session in each.
@@ -85,6 +86,14 @@ steps_gui:
     with:
       shows: SCENARIO the pane that keeps its width
 
+  # Room for the other half. A project nobody has answered for is drawn at one pane, so this is what
+  # puts a second place on the page for the press below to open.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
   # The other half of the page. Nothing is asked — the folder is the project's — and with it the page
   # is full: two panes at a split of two, which is the arrangement the whole of this road is about.
   - type: action
@@ -103,9 +112,8 @@ steps_gui:
       count: 2
       empty: 0
 
-  # Where a fresh run starts: across, because that is what every other count does and what two did
-  # before it could be asked. It is read before the press so that the press has something to have
-  # changed.
+  # Where a page nobody has answered about sits: across, because that is what every other count does.
+  # It is read before the press so that the press has something to have changed.
   - type: assert
     domain: terminal
     op: panes-sit

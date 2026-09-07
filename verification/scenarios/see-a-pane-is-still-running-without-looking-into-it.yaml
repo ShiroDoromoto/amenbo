@@ -15,11 +15,15 @@
 # the only step that could give it — something set going in the pane that goes on putting lines out
 # while the road walks around it.
 #
-# ── Why the second pane ──────────────────────────────────────────────────────────────────────────
+# ── Why the second pane, and why the page is cut to hold it ──────────────────────────────────────
 # What this road is about is a pane nobody is in: a reader working in a terminal can see it moving
 # without being told, and the whole point of the mark is the panes they are not looking at. The
 # second pane is opened for that alone: opening one makes it the pane being worked in, and the first
 # is left on the same page, drawn, with nobody in it. Nothing is ever said to the second one.
+#
+# **The first has to still be on the screen**, which is what the count is asked for. A project nobody
+# has answered for is drawn at one pane to a page, and the second pane would take the first away with
+# it rather than stand beside it — leaving the road reading a label that is not on screen at all.
 #
 # ── Why the printing runs out rather than being stopped ──────────────────────────────────────────
 # Every control a pane has is on the pane, and the face takes a press anywhere in a pane as going to
@@ -38,8 +42,8 @@ id: see-a-pane-is-still-running-without-looking-into-it
 title: A pane nobody is working in says by the lamp on its label that something is still coming out of it, and stops saying it when the output does
 description: >
   Open the terminal face, choose the folder it runs in, get the pane down to a plain shell and set
-  something printing in it. Open a second pane beside it, which takes the working place away from the
-  first: the lamp on the first pane's label is lit, and it is the only thing on the screen saying that
+  something printing in it. Cut the page to two and open a second pane beside it, which takes the
+  working place away from the first: the lamp on the first pane's label is lit, and it is the only thing on the screen saying that
   pane is alive rather than drawn. Wait for the line the printing ends with, and the same lamp has
   sunk — the pane never touched, and the mark following the stream and nothing else.
 
@@ -83,6 +87,15 @@ steps_gui:
     op: keep-printing
     with:
       text: SCENARIO nothing more is coming
+
+  # Room on the page for a second pane beside the first. At the one pane a project nobody has
+  # answered for is drawn at, the pane opened next would be on a page of its own and the first would
+  # go off the screen with the reader.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
 
   # The second pane, which is here to take the working place away rather than to be used. It is opened
   # from the empty frame beside the first, in the project's folder, and becomes the pane being worked

@@ -101,6 +101,15 @@ steps_gui:
     with:
       project: Greenhouse
 
+  # Two panes to a page. A project nobody has answered for is drawn at one, and this road reads the
+  # two panes side by side at the end: at one to a page the second would be on a page of its own and
+  # the first would be nowhere on the screen.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
   # The face's empty frame, and this time pressing it opens nothing: the project keeps two folders,
   # so what comes up where the pane would have been is the question of which of them.
   - type: action

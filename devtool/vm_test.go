@@ -64,6 +64,42 @@ func TestVersionDriftIgnoresThePatch(t *testing.T) {
 	}
 }
 
+// TestVMExecArgsReadsDevtoolsFlagsOnlyBeforeTheSeparator pins the side each half is read from. The
+// guest's line is quoted by the caller and full of words that look like flags, so nothing after
+// `--` may be parsed; devtool's own go before it, which is the whole reason `--front` can exist
+// without changing what reaches the guest's shell.
+func TestVMExecArgsReadsDevtoolsFlagsOnlyBeforeTheSeparator(t *testing.T) {
+	argv, front, window, err := vmExecArgs([]string{"--front", "34083", "--window", "Amenbo", "--", "/Users/admin/screen click 700 450"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(argv, " ") != "/Users/admin/screen click 700 450" || front != 34083 || window != "Amenbo" {
+		t.Errorf("vmExecArgs = %v, %d, %q", argv, front, window)
+	}
+
+	// A guest line carrying our own flag names is handed over untouched — it is on the far side.
+	argv, front, _, err = vmExecArgs([]string{"--", "screen front 1 --window x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(argv, " ") != "screen front 1 --window x" || front != 0 {
+		t.Errorf("vmExecArgs without --front = %v, %d", argv, front)
+	}
+
+	if _, _, _, err := vmExecArgs([]string{"sw_vers"}); err == nil {
+		t.Error("vmExecArgs with no `--` returned no error; the guest command is handed over after it")
+	}
+	if _, _, _, err := vmExecArgs([]string{"--front", "34083", "--"}); err == nil {
+		t.Error("vmExecArgs with nothing after `--` returned no error")
+	}
+	if _, _, _, err := vmExecArgs([]string{"sw_vers", "--", "sw_vers"}); err == nil {
+		t.Error("vmExecArgs with a word before `--` returned no error; it reads as a command on the wrong side")
+	}
+	if _, _, _, err := vmExecArgs([]string{"--front", "-3", "--", "sw_vers"}); err == nil {
+		t.Error("vmExecArgs with a negative pid returned no error")
+	}
+}
+
 // TestVMPushArgsTakesTheLastWordAsTheDestination reads the argument list the way cp and scp do. A
 // single word is refused rather than guessed at: it names a destination with nothing to put there
 // just as readily as a file with nowhere to go.

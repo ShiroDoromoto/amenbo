@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -112,14 +114,12 @@ func vmCmd(args []string) {
 		noArgs(fs)
 		fail(vmStatus())
 	case "exec":
-		// The guest command is handed over after `--`, for the same reason `devgui cli` does it:
-		// without it the first flag of theirs is read as one of ours.
-		_, argv, ok := splitDoubleDash(args[1:])
-		if !ok || len(argv) == 0 {
-			logf("devtool: vm exec passes its command to the guest after `--`, e.g. `devtool vm exec -- sw_vers`")
+		argv, front, window, err := vmExecArgs(args[1:])
+		if err != nil {
+			logf("devtool: %v", err)
 			os.Exit(2)
 		}
-		code, err := vmExec(argv)
+		code, err := vmExec(argv, front, window)
 		fail(err)
 		os.Exit(code)
 	case "push":
@@ -547,7 +547,13 @@ func vmIP() (string, error) {
 // vmExec runs a command in the guest with this process's own stdio and ends the way it ended. The
 // exit code has to come through: a caller driving the guest from a script reads it, and a step that
 // failed in there must not read as green out here.
-func vmExec(argv []string) (int, error) {
+//
+// `front` is the guest pid whose window is brought forward first, and 0 is no front at all. It is
+// devtool's own step rather than the first half of the caller's line, because the half that has to
+// be there is the half that gets left out: on 2026-09-07 a driving line went in without one and its
+// press landed on another session's window. Written here it cannot be forgotten, and the front and
+// the press are inside one claim by construction.
+func vmExec(argv []string, front int, window string) (int, error) {
 	ip, err := vmIP()
 	if err != nil {
 		return 0, err
@@ -560,6 +566,14 @@ func vmExec(argv []string) (int, error) {
 		return 0, err
 	}
 	defer release()
+	if front > 0 {
+		// Carried past on failure, the way the dev GUI side carries its own front past: what was
+		// asked for is the command, and a front that did not happen costs the caller a window in
+		// the wrong place rather than the run.
+		if _, err := sshRun(ip, shq(vmScreenPath)+" front "+strconv.Itoa(front)+vmWindowArg(window)); err != nil {
+			logf("  warning: bringing pid %d forward in %s failed (%v) — is the screen tool in there? (`devtool vm screen`)", front, vmCloneName, err)
+		}
+	}
 	return runThrough("", nil, "ssh", sshArgs(ip, argv...)...)
 }
 
@@ -572,6 +586,35 @@ func vmExecLabel(argv []string) string {
 		one = string(r[:60]) + "…"
 	}
 	return "`devtool vm exec -- " + one + "`"
+}
+
+// vmExecArgs splits `devtool vm exec [--front <pid>] [--window <title>] -- <command…>` into
+// devtool's half and the guest's. The guest command is handed over after `--`, for the same reason
+// `devgui cli` does it: without the separator the first flag of theirs is read as one of ours. Ours
+// are read from the words before it, which is what keeps `--front` out of the guest's shell.
+//
+// A word before `--` that is not one of ours is refused rather than passed on: it reads as a guest
+// command somebody put on the wrong side of the separator, and running the rest without it would
+// carry out something other than what was typed.
+func vmExecArgs(args []string) (argv []string, front int, window string, err error) {
+	head, argv, ok := splitDoubleDash(args)
+	if !ok || len(argv) == 0 {
+		return nil, 0, "", fmt.Errorf("vm exec passes its command to the guest after `--`, e.g. `devtool vm exec -- sw_vers`")
+	}
+	fs := flag.NewFlagSet("vm exec", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	frontPID := fs.Int("front", 0, "bring this guest pid's window to the front first, under the same claim as the command")
+	title := fs.String("window", "", "with --front, raise the window with this title rather than leaving the app to choose")
+	if err := fs.Parse(head); err != nil {
+		return nil, 0, "", fmt.Errorf("vm exec: %w (devtool's own flags go before the `--`)", err)
+	}
+	if fs.NArg() > 0 {
+		return nil, 0, "", fmt.Errorf("vm exec takes its guest command after `--`, got %s before it", strings.Join(fs.Args(), " "))
+	}
+	if *frontPID < 0 {
+		return nil, 0, "", fmt.Errorf("vm exec --front takes a pid in the guest, got %d (`devtool devgui pid <id> --vm` returns one)", *frontPID)
+	}
+	return argv, *frontPID, *title, nil
 }
 
 // vmPushArgs splits `devtool vm push <local…> <remote>` into its two halves. The last word is the

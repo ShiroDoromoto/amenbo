@@ -695,13 +695,32 @@ is a different command: it knows the four paths a verification run writes and
 brings those out by name.
 
 Arguments to `exec` go after `--`, and quoting is the caller's the same way it is
-with `ssh` — what follows is joined and handed to the guest's shell.
+with `ssh` — what follows is joined and handed to the guest's shell. devtool's
+own flags go **before** the `--`, so they never reach that shell.
 
 `exec` **holds the screen claim for as long as the guest command runs**, and
 waits its turn when somebody else is holding, naming them on the way in. A
 driving line fronts a window and then presses it; a front taken away in between
 lands the press on the wrong window and still exits 0. See
 [one screen, two roles](#one-screen-two-roles).
+
+**`--front <guest pid>` is that first half, written here rather than in the
+line.** devtool takes the claim, fronts the window, runs the command, and lets
+go — one interval, with no half a caller can leave out. `--window <title>` picks
+which window, for an instance drawing more than one. The pid is the guest's:
+`devtool devgui pid <id> --vm` is what returns it.
+
+```sh
+# without it, the front is the caller's to remember — and forgetting it is silent
+devtool vm exec -- "/Users/admin/screen front 34083; /Users/admin/screen click 700 450"
+
+# with it
+devtool vm exec --front 34083 -- "/Users/admin/screen click 700 450"
+```
+
+A front that fails is warned about and carried past, the way `devgui shot`
+carries its own: what was asked for is the command. Without `--front` nothing
+changes — the claim and the line are what they were.
 
 The host key is deliberately **neither checked nor remembered**: a clone is cut
 fresh from the golden and carries a new one each time, so a pinned entry would
@@ -720,7 +739,9 @@ anything having to be re-baked into it.
 
 **`click`/`click-named` in there still want a `front` first.** The tool does not
 call it, and a VM's bare desktop has a Terminal on it that a click is otherwise
-taken by — exit 0, nothing delivered.
+taken by — exit 0, nothing delivered. Let `vm exec --front <pid>` take it rather
+than writing it into the line: forgetting it is silent, and the front and the
+press belong in one claim.
 
 **`drop-file` carries a file that is in the guest.** A drop reads the disk the
 screen is on, so what is dragged in is a path in there — `devtool vm push` is how

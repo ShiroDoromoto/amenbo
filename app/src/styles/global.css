@@ -375,7 +375,7 @@ input[type="color"] {
 .slot__plate:hover .plate-peek:not([hidden]),
 .slot__bar:focus-within .plate-peek:not([hidden]) { display: block; }
 /* The name, which is the line the panel most often exists for: it is whatever the session called
-   itself, and the row gives it a share rather than the room it asks for (`.plate__name`). */
+   itself, and the row elides it where the pane is too narrow to hold it (`.plate__name`). */
 .plate-peek__name {
   display: block;
   color: var(--c-text);
@@ -1796,16 +1796,24 @@ body.dragging-row { user-select: none; }
 /* The pane's name. It belongs to the frame, so it is the one part of the row that does not move when
    the process in it does.
 
-   **It is given a share of the row and not the room it asks for.** A name is bounded before it is
-   kept (`amenbo_core::frames`), and a bounded one is still long enough to push what the pane said
-   off the end — so what does not fit here is elided rather than taken out of the place beside it.
-   `min-width: 0` is what lets a flex item shrink below its text at all. */
+   **It takes the room the row has spare, and that is what holds the other place at the far end.**
+   There is nothing between the two places to do it any more (`AMB-T-4532`), so a name shorter than
+   the row is drawn whole and the slack left behind it stands between the two — which is where what
+   the pane said was read from before. A name longer than the row is elided rather than taken out of
+   the place beside it: a name is bounded before it is kept (`amenbo_core::frames`), and a bounded one
+   is still long enough to push what the pane said off the end. `min-width: 0` is what lets a flex
+   item shrink below its text at all.
+
+   **Where both are too long, both give way rather than one of them going.** A name is kept to 80
+   characters and a reason to 60 columns (`amenbo_core::frames`, `amenbo_core::session`), so the
+   longer of the two gives up the more room and neither is left with nothing — and the row that is
+   too narrow for two places to say anything at all has its own answer further down, which is to drop
+   the right one outright. Both in full are one hover away on the panel (`.plate-peek`). */
 .plate__name {
   font-weight: 600;
   color: var(--c-text);
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 12em;
   overflow: hidden;
   text-overflow: ellipsis;
 }

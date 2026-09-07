@@ -45,7 +45,7 @@ description: >
   rather than answering a question it cannot see. The road opens such a pane, waits out the minute
   and reads that nothing was ever sent, then sends a line of its own and reads that the sentence went
   out behind it: on a second line handed back, which nothing but a newline Amenbo sent afterwards can
-  put there. The pane stops asking for a person at the end of it.
+  put there.
 
 given:
   - type: action
@@ -116,11 +116,6 @@ steps_gui:
       given-back: SCENARIO back 1>
       present: false
 
-  # The reader is told, which is what makes the press ahead an informed one rather than a lucky one.
-  - type: assert
-    domain: terminal
-    op: unsent
-
   # The press. The line is the reader's own and goes through untouched — what it is for is being on
   # the screen, and being the first thing that settles what the pane is called.
   - type: action
@@ -137,14 +132,3 @@ steps_gui:
     op: handed-over
     with:
       given-back: SCENARIO back 2>
-
-  # And the pane has stopped asking for a person: there is nothing left in the box for them to send.
-  # It is read at the lamp rather than at the row because the two are one signal drawn twice — the
-  # notice the step above read is what lit this — and the lamp is the half that is not written in the
-  # machine's own language, so it reads the same wherever the run is done. A row still asking for a
-  # press after the sentence has gone is a reader being pointed at a keypress that does nothing.
-  - type: assert
-    domain: terminal
-    op: dot
-    with:
-      face: out

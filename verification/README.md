@@ -813,7 +813,7 @@ the app is showing the ledger or the pane (`show-face`), what a reader typed int
 (`type-line`) and what a reader set running in it (`keep-printing`), and whether the pane is a face
 of the one window or a window of its own (`split-out` / `fold-back`), with `pane` reading the line
 back. `say` is the other half — the surface layer, said
-with the CLI from *inside* the pane it is about (`verb` naming which of its words, `text` what was
+with the CLI from *inside* the pane it is about (`verb` naming the layer's word, `text` what was
 said in it) — and `label` reads what the row above the pane carries afterwards. It is a domain of its own because a session is a
 process — what is under test is *where it is drawn*, which is this machine's arrangement of one
 screen and nothing the store holds. Screen roads alone, and for a reason no other domain has: the
@@ -947,21 +947,20 @@ asking about an answer it has. Then it answers, and reads the frame standing bes
 opens: the row on that answer, the press live. That is what says the asking was a state and not a
 wall.
 
-`dot` is the one reading on these roads that is not text at all. The mark on a pane's label pulses
+`dot` is the one reading on these roads that is not text at all. The mark on a pane's label is lit
 while something is coming out of that terminal, and it is the only thing on screen that says a pane
 is *alive* rather than drawn — a terminal that ended leaves its last output where it was, so words on
-a pane outlive the process that wrote them. Two things follow for whoever writes a road with it in.
-The pane it reads has to be one the reader is not working in, the focused pane never pulsing, since
-somebody looking straight at a terminal can already see it moving. And the step is watched rather
-than shot: a pulse rests, twice a turn, at exactly the still dot's own step, so it is a `Review` and
-the instruction says how long to watch. A machine set to play no animation is in that instruction
-too, holding the mark at the bright end of the same two steps instead of moving between them: the
-fact survives with the movement gone, and an operator told only to watch for a fade would fail a dot
-saying exactly what the step asks about.
+a pane outlive the process that wrote them. **Both its faces hold still, and nothing is read into
+either**: the lamp follows the stream and no more, so a pane printing nothing may be
+building, thinking or waiting on a person, and a road asking the mark which of those it is would be
+asking it for something it does not carry. It is a `Review` for that same reason — a mark with no
+words on it is nothing an eye can be handed to match.
 
-The third thing about the mark is what `keep-printing` is for. A pane reads as moving for a moment
-and a half after its last output, so a pulse anybody can watch for a few seconds is a pane that keeps
-printing — and no other step on this face starts one. The line a road types is deliberately a command
+What a road writing it in has to get right is *when* the lit half is read: it is true only while
+output is still arriving, and a pane that has already settled is one the reading came too late for.
+That is what `keep-printing` is for. A pane reads as moving for a moment and a half after its last
+output, so a lamp still lit a few steps later is a pane that keeps printing — and no other step on
+this face starts one. The line a road types is deliberately a command
 no shell knows, which prints once and is over. `keep-printing` sets something running in the pane and
 leaves it running: a bounded run, a line a second for a minute and a half, ending on a line the road
 chose. **What the length answers to is the road's own steps and not the one press** — a pane has to
@@ -995,9 +994,12 @@ principle. The surface layer has no existence outside a pane — said anywhere e
 purpose — so the pane has to be running before the words can be said at all, which is after the app
 is up and after a premise's turn is over. The operator types what an agent types, and that is not a
 shortcut around the seam: it is the only door there is.
-`be-told-in-the-pane-that-your-turn-has-come` is the road, and what it defends is the one thing
-nothing outside a pane can find out — an agent going quiet because it is waiting for a person, rather
-than because it is thinking — arriving where that person reads it.
+`call-a-pane-by-a-name-of-your-own` is the road, and what it defends is the one thing an agent can
+say about the pane it is running in that nothing has to interpret: what to call it. `shows:` names
+which pane speaks, the way `press-pane` and `paste` name one, by the words a road typed into it
+earlier — a page with one pane on it has nothing to name. The verb is `name` and there is no other:
+an unknown one is refused where the road is written rather than handed to an operator the CLI would
+turn away.
 
 Every road that speaks *in* a pane takes `open-shell` first. A folder with an agent on it opens on
 the agent, which is what a reader wants and what a road cannot use: what an agent does with a line
@@ -1009,39 +1011,7 @@ than the road's. The agent it has to end first is ended by control-D and never b
 the reason `run` clears by a press: the words on a pane are what a road names it by, and a step that
 typed `exit` would have added the harness's own word to them.
 
-`face-badge` reads the one thing that crosses between the two faces: the mark the terminal's segment
-wears while a turn is standing behind it. It carries no number and no words, so a road says it is
-there or that it is not — and the absent half is half the goal, since being on the terminal face is
-being told and crossing over spends the mark. Raising one takes `say` with `away:`, the only word on
-these roads said from behind whatever reads it: the layer is spoken inside a pane, and every mark
-outside one is raised by a turn arriving while that pane is off the screen — so the operator arms the
-word and leaves before it lands. Where they go is the *next* step's to say, there being three ways off
-a pane and a mark of its own on each. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
-
-`page-mark` and `tab-mark` are the other two, read on the terminal face itself while the pane is
-somewhere the reader is not. **`page-mark`** is the mark a page digit wears, and it is the one of the
-three that carries a number: a page is somewhere to go, and what a reader buys by going there is
-answering one thing or four, so `count:` is read beside the mark rather than the dot alone.
-**`tab-mark`** is the same mark on a project's tab, and it carries none — a project is a whole face
-away, where the question is whether to leave this one at all.
-`be-told-which-page-a-turn-came-up-on` and `be-told-which-project-a-turn-came-up-in` are the roads,
-and both walk the mark down again: neither is spent by looking, the way the segment's is. Going to the
-page or the project only puts those panes on the screen, and a page holds several — so a mark that
-came down on arrival would answer, for the reader, turns they have not read yet. A turn is put down by
-the person who was asked for it, and what counts as their answering it is a press on the pane itself:
-`press-pane`, the same press that clears the lamp on the pane's own row. A page carrying two turns
-takes two of them, one to each pane, and the digit comes down on the second.
-
-**A count read as one is not read as a count**, which is why the page road builds four panes rather
-than two: a digit wearing a mark and a 1 looks exactly like a digit wearing a mark, and a build
-drawing the panes on the page or the page's own digit would pass it. Two turns standing on one page
-takes two panes on that page saying the word, so `say` takes `shows:` — which pane it is said in,
-named the way `press-pane` and `paste` name one, by the words a road typed into it earlier. The panes
-are still built one to a page: `open-shell` has no way to say which of two frames it opens in, and a
-line naming a pane cannot be typed until there is a shell to type it into, so each pane stands alone
-while it is made and the page is cut to two once all four are named.
-
-`tab-icon` is the other reading on this face that answers with no words at all: what the tab of a
+`tab-icon` is the one reading on this face that answers with no words at all: what the tab of a
 project named is drawn with, the image registered for it or the colour and the letter it falls back to.
 It names the project rather than pressing its tab, every project having one whether or not the face is
 drawing that project's panes. `give-a-project-an-image-of-its-own` is the road, and it walks the

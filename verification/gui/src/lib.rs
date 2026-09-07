@@ -2117,45 +2117,23 @@ impl Instructor {
             // literally what an agent types — and because the layer refuses to be said anywhere else,
             // so an operator improvising it from a description would be turned away.
             //
-            // The layer's two verbs are the two accepted here. An unknown word is refused loudly —
-            // a road that asked for one would hand the operator a line the CLI turns away, and a
-            // step nobody can carry out is worse than one that was never written.
+            // The layer's one verb is the one accepted here. An unknown word is refused
+            // loudly — a road that asked for one would hand the operator a line the CLI turns away,
+            // and a step nobody can carry out is worse than one that was never written.
             (Domain::Terminal, "say") => {
                 let text = req(with, "text")?;
                 let verb = req(with, "verb")?;
                 let (command, what) = match verb {
                     "name" => ("name", "the agent naming the pane it is running in"),
-                    "waiting" => ("waiting", "the agent handing the turn over, and saying why"),
                     other => return Err(format!("action `say` does not know the verb `{other}`")),
                 };
-                // Said and stood at, or said and walked away from. The second is the only way to a
-                // word that arrives while nobody is on the pane it was said in: the layer is spoken
-                // inside a pane and read wherever the reader has gone, so the operator arms it and
-                // leaves. The wait is here rather than in the road because how long a person needs
-                // to make one press is the driver's business, not the goal's.
-                //
-                // **Where they go is the next step's to say and not this one's.** There are three
-                // ways off a pane — the other face, another page, another project — and each of them
-                // raises a mark of its own; a step that named one of them here would be an op per
-                // destination, and a road that walked a second one would be arming the same word
-                // twice to look at it from somewhere else.
-                //
                 // Which pane, where a road says so. A page with one has nothing to name; a page with
-                // two sessions on it has to be told which of them speaks, and being able to say so is
-                // the whole of how a page ever carries more than one turn at a time.
+                // two sessions on it has to be told which of them speaks.
                 let pane = match arg_str(with, "shows") {
                     Some(shows) => format!("the pane showing \"{shows}\""),
                     None => "the pane that has a terminal running in it".to_string(),
                 };
-                if flagged(with, "away") {
-                    format!(
-                        "In {pane}, run: sleep {SAY_AWAY_SECONDS} && amenbo talk {command} \"{text}\" — then carry out the next step before those seconds are up. What lands is {what}, and it lands while the pane it was said in is off the screen, which is the only shape it ever reaches a reader who is somewhere else in."
-                    )
-                } else {
-                    format!(
-                        "In {pane}, run: amenbo talk {command} \"{text}\" — this is {what}."
-                    )
-                }
+                format!("In {pane}, run: amenbo talk {command} \"{text}\" — this is {what}.")
             }
             // Ending the terminal in a pane, which is done from inside it. **The one control the pane
             // has takes the place away and is not this**, so there is nothing on the row to press
@@ -3836,48 +3814,6 @@ impl Instructor {
                 "In the panel standing under the row above the pane — the one the previous step brought up, and which is gone the moment the pointer leaves — confirm \"{}\" is written out whole, over as many lines as it takes and with nothing dropped out of the middle of it.",
                 req(with, "shows")?
             ),
-            // The dot on the terminal's own segment. It is read from the ledger, which is the only
-            // face it is ever drawn on, and it carries nothing to quote: a road says it is there, or
-            // that crossing over has spent it.
-            (Domain::Terminal, "face-badge") => match present(with) {
-                true => "In the pair of segments at the top of the window, confirm the one that shows the terminal is wearing a small mark — a dot, with no number and no words on it. It says a turn came up behind the face you are not looking at."
-                    .to_string(),
-                false => "In the pair of segments at the top of the window, confirm the one that shows the terminal is wearing no mark at all."
-                    .to_string(),
-            },
-            // The mark on a page digit, which is the same turn said one step closer than the segment
-            // says it: not "somewhere behind this face" but "on page two, and there are two of them".
-            //
-            // The number is read out where the road names one, and left alone where it does not. An
-            // operator told to look for a mark would pass on a digit wearing a bare dot, and the count
-            // is the whole of what a page digit has over the segment — where to go, and whether going
-            // there answers one thing or four.
-            (Domain::Terminal, "page-mark") => {
-                let page = count(with, "page")?;
-                match (present(with), with.get("count").and_then(|v| v.as_u64())) {
-                    (true, Some(n)) => format!(
-                        "At the top of the terminal face, in the row of page digits, confirm the digit {page} is marked — it is drawn apart from the digits beside it, and it carries the number {n}, which is how many turns are standing on that page. Do not press it.",
-                    ),
-                    (true, None) => format!(
-                        "At the top of the terminal face, in the row of page digits, confirm the digit {page} is marked — drawn apart from the digits beside it, and carrying a number of its own. Do not press it.",
-                    ),
-                    (false, _) => format!(
-                        "At the top of the terminal face, in the row of page digits, confirm the digit {page} carries no mark and no number: it is a bare digit, whichever page is being shown.",
-                    ),
-                }
-            }
-            // And the same mark on a project's tab. It is a dot and nothing else — a project is a
-            // whole face away, so what it is asked is whether to go there at all.
-            (Domain::Terminal, "tab-mark") => match present(with) {
-                true => format!(
-                    "Down the edge of the terminal face, confirm the tab the project \"{}\" carries is wearing a small mark — a dot, with no number and no words on it. It says a turn is standing in one of that project's panes, none of which are on this screen. Do not press it.",
-                    req(with, "project")?
-                ),
-                false => format!(
-                    "Down the edge of the terminal face, confirm the tab the project \"{}\" carries is wearing no mark at all.",
-                    req(with, "project")?
-                ),
-            },
             // What a project's tab is drawn with, down the edge of that same face. Both sides are a
             // picture and neither is an absence, the way `project icon`'s are: registered, the tab
             // wears the image, and with none registered it wears the project's colour with the first
@@ -3934,18 +3870,12 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
-            // The lamp on a pane's label, on one of its three faces. Two of them hold still and are a
-            // picture; the third blinks, and that one is watched rather than shot — both ends of its
-            // turn rest at a step a photograph cannot tell from the others.
-            //
-            // Each half of the instruction says what to look for on a machine set to play no
-            // animation as well, because motion turned down holds the calling face at its brightest
-            // instead of moving it: the fact survives and the word for it does not, and an operator
-            // told only to watch for a blink would fail a lamp reporting exactly what was asked.
+            // The lamp on a pane's label, on one of its two faces. Both hold still and
+            // both are a picture: the lamp follows the stream and nothing is read into it, so neither
+            // half is watched rather than shot.
             (Domain::Terminal, "dot") => match face(with)? {
-                Face::Lit => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is lit and holding still — a soft glow around it, in that pane's own colour, which is that terminal putting something out. It does not fade in and out: the one face that moves is the one calling for a person, and this is not it. **Read it while something is still arriving.** The lamp follows the stream and nothing else, so a pane that has already stopped — its last line on the screen with nothing following it — is one this reading came too late for: a sunk lamp there is the lateness and not a fault. Set that pane printing again and read the lamp while it is."),
-                Face::Calling => format!("{LAMP_ROW} watch the lamp to the left of the name for a few seconds: confirm it is blinking, and in the warning colour rather than that pane's own — which is that pane asking for a person. It falls to the same beat as the mark at the other end of the same row, and the two go together. Judge it by watching rather than by the shot: a still picture of a blink can be caught at the moment it rests. Where the machine is set to play no animation the lamp does not blink at all, and what to confirm there is the warning colour, held at its brightest."),
-                Face::Out => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is sunk — dim, in that pane's own colour, with no glow around it and no blinking. Out is the pane's resting state, not the pane having gone: the lamp is drawn either way."),
+                Face::Lit => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is lit and holding still — a soft glow around it, in that pane's own colour, which is that terminal putting something out. **Read it while something is still arriving.** The lamp follows the stream and nothing else, so a pane that has already stopped — its last line on the screen with nothing following it — is one this reading came too late for: a sunk lamp there is the lateness and not a fault. Set that pane printing again and read the lamp while it is."),
+                Face::Out => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is sunk — dim, in that pane's own colour, with no glow around it. Out is the pane's resting state, not the pane having gone: the lamp is drawn either way."),
             },
             // The question about where a pane runs, pointed at by a folder it offers. Both halves name
             // the box rather than the folder, because the folder is on the column down the side of
@@ -4113,12 +4043,6 @@ impl Instructor {
                     req(with, "given-back")?
                 ),
             },
-            // What the row says once the hand-over has given up. It is described rather than quoted:
-            // these are the interface's own words, drawn in the machine's language, and the operator
-            // is told what the row means rather than which letters to find.
-            (Domain::Terminal, "unsent") =>
-                "On the row above that pane, confirm it is now saying the opening sentence was not sent — words to the effect that it has not been sent yet and that pressing return sends it, in the language the machine is set to, with a pause mark in front of them. It is the row above the pane and never the pane itself: nothing Amenbo says goes into a terminal it is reading. Confirm too that the row is still naming the pane and what it is on, and has not been given over to this alone."
-                    .to_string(),
             // How many panes are standing on the page. Counted rather than read: the boxes carry no
             // words of the road's, and the whole of what this asks is how many of them there are.
             //
@@ -4515,13 +4439,6 @@ fn present(with: &Args) -> bool {
     with.get("present").and_then(|v| v.as_bool()).unwrap_or(true)
 }
 
-/// How long an armed word waits before it is said, in seconds.
-///
-/// It is a number a person has to beat with one press, so it is neither tight nor generous: long
-/// enough to cross a switch without hurrying, short enough that a road does not stand still. The road
-/// does not name it — what a road says is that the word arrives from behind the other face.
-const SAY_AWAY_SECONDS: u32 = 15;
-
 /// How long a pane set printing goes on putting something out.
 ///
 /// It answers to both ends of the one road it is on. Long enough that the lamp is still lit after a
@@ -4614,21 +4531,19 @@ const TABS_NEVER_CLOSED: &str = "the project tabs are the one column with no way
 /// rather than by anything on the screen: the one the steps before it were about.
 const LAMP_ROW: &str = "On the row above the pane the steps before this one were about — where another pane has been opened since, it is still that first one —";
 
-/// Which of the lamp's three faces a step is reading (`app/src/talk/nameplate.ts`).
+/// Which of the lamp's two faces a step is reading (`app/src/talk/nameplate.ts`).
 #[derive(Clone, Copy)]
 enum Face {
     Lit,
-    Calling,
     Out,
 }
 
 fn face(with: &Args) -> Result<Face, String> {
     match with.get("face").and_then(|v| v.as_str()) {
         Some("lit") => Ok(Face::Lit),
-        Some("calling") => Ok(Face::Calling),
         Some("out") => Ok(Face::Out),
-        Some(other) => Err(format!("`face` does not know `{other}` — it is lit, calling or out")),
-        None => Err("arg `face` must say which of the three faces the lamp is on".to_string()),
+        Some(other) => Err(format!("`face` does not know `{other}` — it is lit or out")),
+        None => Err("arg `face` must say which of the two faces the lamp is on".to_string()),
     }
 }
 
@@ -8590,11 +8505,11 @@ steps_gui:
         );
     }
 
-    /// The lamp's three faces, and the one of them that is watched rather than shot. The two still
-    /// ones are a picture; the blink rests, twice a turn, at a step a photograph cannot tell from
-    /// them — so only that half tells the operator to watch, and none of the three is a reading.
+    /// The lamp's two faces. Both are a picture and neither is a reading: what the lamp
+    /// follows is the stream, and the face that once said a pane was asking for a person is gone with
+    /// the word it was drawn from.
     #[test]
-    fn the_lamp_is_read_by_its_face_and_the_blinking_one_is_watched() {
+    fn the_lamp_is_read_by_its_face_and_neither_face_is_a_reading() {
         let dot = |face: &str| Step::Assert {
             domain: Domain::Terminal,
             op: "dot".to_string(),
@@ -8607,22 +8522,16 @@ steps_gui:
             lit.contains("came too late for"),
             "a lamp read after the printing stopped is the road being late, and the road has to say so: {lit}"
         );
-        let calling = Instructor::new().render(&dot("calling")).unwrap();
-        assert!(calling.contains("blinking"), "got: {calling}");
-        assert!(
-            calling.contains("watch") && calling.contains("warning colour"),
-            "the one face that moves, and the one that leaves the pane's own hue: {calling}"
-        );
         let out = Instructor::new().render(&dot("out")).unwrap();
         assert!(out.contains("sunk"), "got: {out}");
         assert!(
             out.contains("not the pane having gone"),
             "out is the resting state, and a lamp that vanished would say the pane had: {out}"
         );
-        let err = Instructor::new().render(&dot("pulsing")).unwrap_err();
-        assert!(err.contains("lit, calling or out"), "got: {err}");
+        let err = Instructor::new().render(&dot("calling")).unwrap_err();
+        assert!(err.contains("lit or out"), "the face read off a word is gone with it: {err}");
         assert!(
-            Instructor::new().expectation(&dot("calling")).is_none(),
+            Instructor::new().expectation(&dot("out")).is_none(),
             "a mark with no words on it is not a reading",
         );
     }

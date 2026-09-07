@@ -2223,31 +2223,6 @@ pub struct SessionSaidDto {
     pub(crate) text: Option<String>,
 }
 
-/// What the volatile area says the session in one pane has been doing — the reservations it is on, and
-/// how many it has ended ([`amenbo_core::session_work`]).
-///
-/// The tasks come back as ids rather than rows: the pane draws one of them at most, and the same
-/// [`crate::commands::tasks_by_ids`] every other screen hydrates with can say the rest. What is being
-/// answered here is *whose* they are, which nothing but that area knows.
-///
-/// **It goes on a label and nowhere else** (`AMB-D-855`). A move made outside a pane is not written to
-/// that area, so a task can come back in `holding` after the world has already finished it — the older
-/// row is the newest one left. Drawn beside the pane that is on it, that is a line that has fallen
-/// behind; used to move the ledger, it is a write on a fact that has gone.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/bindings/bindings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct SessionWorkDto {
-    /// Reserved and not ended, newest reservation first. One it has stopped on (`blocked`) is still
-    /// among them — the reservation stands.
-    #[ts(type = "Array<number>")]
-    pub(crate) holding: Vec<i64>,
-    /// How many it has ended, carried out or decided against. A count, because that is the whole of
-    /// what the label says about them.
-    #[ts(type = "number")]
-    pub(crate) finished: usize,
-}
-
 /// One session, and the place the talk window's face is drawing it in — as the face says it
 /// ([`crate::frames::panes_drawn`]).
 ///
@@ -2268,23 +2243,6 @@ pub struct PaneDrawnDto {
     /// The place it is drawn in (`FrameNameDto`).
     pub(crate) frame: String,
     /// What that place is called on the screen.
-    pub(crate) label: String,
-}
-
-/// The pane a task is being worked in, for the row on the task that goes there
-/// ([`crate::frames::task_pane`]).
-///
-/// It is two answers joined: the volatile area says which session holds the task
-/// ([`amenbo_core::session_work::holder`]), and the face says where that session is drawn
-/// ([`PaneDrawnDto`]). **Absent unless both speak** — a task held by a session no pane is drawing is a
-/// task with nowhere to send the reader, and a row that led nowhere would be worse than no row.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/bindings/bindings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct TaskPaneDto {
-    /// The session holding the task — what [`crate::windows::show_pane`] is asked for.
-    pub(crate) session: String,
-    /// What the pane is called on the screen.
     pub(crate) label: String,
 }
 

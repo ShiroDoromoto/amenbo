@@ -59,10 +59,9 @@ const OUTPUT_EVENT: &str = "pty://output";
 const CLOSED_EVENT: &str = "pty://closed";
 
 /// The variable a session's id is carried in, into the terminal and everything started inside it.
-/// A process that moves a task's status while this is set says which session it moved it from
-/// ([`amenbo_core::session::id`], written to the volatile area), which is the one thing no amount of
-/// watching from outside can establish — folder and clock were measured and separate nothing
-/// (`AMB-T-3549`).
+/// It is what tells a process several levels deep in a pane which pane it is in — the one thing no
+/// amount of watching from outside can establish, folder and clock having been measured and separated
+/// nothing (`AMB-T-3549`).
 ///
 /// The name is core's ([`amenbo_core::session::SESSION_VAR`]) rather than one of ours: the surface
 /// layer's verbs read it back out of the environment to decide whether they are inside a pane at all
@@ -571,7 +570,6 @@ pub fn pty_open(
             .lock()
             .expect("terminals lock")
             .remove(&id);
-        forget_work(&id);
         let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, &id);
     });
 
@@ -1010,22 +1008,6 @@ pub fn pty_close(terminals: tauri::State<'_, Terminals>, session: String) -> Res
         .remove(&session)
         .ok_or_else(|| gone(&session))?;
     terminal.killer.kill().map_err(failed)
-}
-
-/// Take away what a session left in the volatile area, now its terminal has ended
-/// ([`amenbo_core::session_work::forget`]).
-///
-/// **Only this process can do it.** Whether a session is still running is known to whoever holds its
-/// pseudo-terminal and to nobody else — the `amenbo` that wrote the rows was a short-lived process,
-/// gone long before the question could be put to it. So the rows are a window's to keep and a window's
-/// to take away, and this is the moment they stop being true.
-///
-/// Best-effort, like the drop box beside it: what is left behind is read by nothing (the session id
-/// names a terminal that has ended) and goes with the next start ([`amenbo_core::session_work::clear`]).
-fn forget_work(session: &str) {
-    if let Ok(paths) = amenbo_core::config::Paths::resolve() {
-        amenbo_core::session_work::forget(&paths.sessions_dir, session);
-    }
 }
 
 /// Send what was typed into the pane to the terminal. `data` is the text the emulator produced for

@@ -280,15 +280,12 @@ pub fn run() {
       // What an earlier run left in the temporary directory when it ended without closing its terminals.
       // Off the launch path: it is a scan of a directory, and nothing here waits on it.
       std::thread::spawn(pty::sweep);
-      // And what an earlier run left in the volatile area (`AMB-D-758`). Emptying all of it is right at
-      // exactly this moment and at no other: no session of this process is running yet, so every row in
-      // there was written by a window that has closed.
-      //
-      // On the launch path rather than off it, unlike the sweep above: it is one small directory to
-      // remove, and a pane cannot open until the webview is up. Left to a thread, the emptying could
-      // land after the first pane had written its first row and take that row with it.
+      // And the directory a removed feature left in app-data. Amenbo wrote a row there for every status
+      // move made inside a pane, to say which pane was holding which task; nothing writes or reads it
+      // any more, so what is left is bytes with nothing in the tree to explain them. Removed once, on
+      // the run that first has no use for it, and after that there is nothing to find.
       if let Ok(paths) = amenbo_core::config::Paths::resolve() {
-        amenbo_core::session_work::clear(&paths.sessions_dir);
+        let _ = std::fs::remove_dir_all(paths.base_dir.join("sessions"));
       }
       // The diagnostic log (`AMB-D-382`), in every build — see the `diag` module for what it may hold and why
       // its size is bounded. A logger that cannot start is not a reason to refuse to start the app, so
@@ -547,9 +544,7 @@ pub fn run() {
       wake::wake_register,
       wake::wake_amend,
       wake::wake_unregister,
-      commands::session_work,
       frames::panes_drawn,
-      frames::task_pane,
       frames::frame_names,
       frames::name_frame,
       commands::project_memo,

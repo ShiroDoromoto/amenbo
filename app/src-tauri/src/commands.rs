@@ -3923,34 +3923,6 @@ pub fn tick_banner_later() -> Result<(), CmdError> {
     Ok(())
 }
 
-/// What the volatile area says the session in one pane has been doing.
-///
-/// **Read, never inferred.** A status move made inside a pane is written under the session that made it
-/// (`AMB-D-758`), so which pane holds a task is a record rather than a guess — and a task whose newest
-/// move was made in another pane is not this one's, however it started here
-/// (`amenbo_core::session_work`).
-///
-/// **The window is the only reader of that area**, and this command is the door. Nothing in core asks
-/// it anything: a reservation, a `ready` and a `task list` answer the same on a machine that has never
-/// opened this window.
-///
-/// **What comes back is for a label, and for nothing that writes** (`AMB-D-855`). A move made outside
-/// a pane leaves no row, so the newest row the area still has about that task answers in its place —
-/// an older one, which may name a task the world has since finished. A screen that moved the ledger on
-/// the strength of this answer would be moving it on a row that has been overtaken; the one reader is
-/// the line above the pane, which says what this session did and claims nothing beyond it.
-#[tauri::command]
-pub fn session_work(session: String) -> Result<SessionWorkDto, CmdError> {
-    let _perf = amenbo_core::perf::Timer::start("session_work");
-    let mut out = SessionWorkDto { holding: Vec::new(), finished: 0 };
-    with_store_read(|store| {
-        let work = amenbo_core::session_work::work(&store.paths.sessions_dir, &session);
-        out = SessionWorkDto { holding: work.holding, finished: work.finished.len() };
-        Ok(())
-    })?;
-    Ok(out)
-}
-
 /// What is written on this project's draft page ([`amenbo_core::memo`]).
 ///
 /// It is the one place in Amenbo that is not a record: where a long request is put together before

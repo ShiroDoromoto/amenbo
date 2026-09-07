@@ -2416,11 +2416,10 @@ const REGISTRY: &[OpSpec] = &[
     // page has several and they carry nothing else a road put there, so a step that only said "the
     // pane" would leave the operator to choose one — and the whole of what follows is which one went.
     //
-    // **The question is the plain one, whatever the session is holding**, so there is
-    // nothing for a road to choose between and no task for it to name. What the volatile area says a
-    // pane reserved is drawn on the label above it and is not a fact the ledger may be moved on — a
-    // move made outside a pane leaves no row there, so the newest row left can be one the world has
-    // already passed.
+    // **The question is the plain one, whatever the session was doing**, so there is nothing for a
+    // road to choose between and no task for it to name. What tied a pane to a task was a key the
+    // world could rewrite behind the pane, and a question naming what was about to be lost named as
+    // often work somebody had already finished elsewhere.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "remove-pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // Something the agent in the pane said about its own session — the surface layer, said with the
     // CLI from inside the terminal it is about. `verb` is which of the layer's words was used and

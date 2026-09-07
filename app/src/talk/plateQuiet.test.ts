@@ -14,6 +14,23 @@ vi.mock("./frames", async (orig) => ({
   frameNames: async () => new Map<string, string>(),
 }));
 
+// The window's answer about whose turn it is, which the row copies rather than works out
+// (`./standing`, `AMB-D-860`). Standing in for it here is what lets a turn arrive without a host.
+const hoisted = vi.hoisted(() => ({ tellTurns: [] as ((turns: ReadonlyMap<string, string>) => void)[] }));
+vi.mock("./standing", () => ({
+  watchStanding: (on: (turns: ReadonlyMap<string, string>) => void) => {
+    hoisted.tellTurns.push(on);
+    on(new Map());
+    return () => { hoisted.tellTurns = hoisted.tellTurns.filter((one) => one !== on); };
+  },
+}));
+
+/** The host says a turn is standing in this pane — or that it is not any more. */
+function handOver(why: string | null): void {
+  const turns = why === null ? new Map<string, string>() : new Map([["pane-1", why]]);
+  for (const on of [...hoisted.tellTurns]) on(turns);
+}
+
 const { mountPlate } = await import("./plate");
 
 const AT = "2026-08-24T09:00:00Z";
@@ -73,7 +90,7 @@ describe("saying how long a pane has been quiet", () => {
     wentQuiet();
     expect(say()).toContain("quiet for");
     // A turn handed over is the session speaking, and it outranks a measurement of its silence.
-    plate.said({ session: "pane-1", verb: "waiting", at: AT, text: "which of the two" } as never);
+    handOver("which of the two");
     expect(say()).toBe("which of the two");
   });
 

@@ -9,10 +9,10 @@
 // in this pane declared and what this pane measured — both of which the webview already has, and
 // neither of which the world can rewrite behind it.
 //
-// **Whether a turn is still standing is the window's answer and not this row's** (`./standing`). A
-// turn comes down when the person arrives at the pane (`AMB-D-859`), and the dots on the pages are
-// read off the same record — so the row follows it rather than keeping a second one that could
-// disagree.
+// **Whose turn it is is the host's answer and not this row's** (`./standing`, `AMB-D-860`). A turn
+// goes up when an agent says so and comes down when the person arrives at the pane (`AMB-D-859`),
+// and the dots on the pages are drawn from that same answer — so the row copies it rather than
+// keeping a second one that could disagree.
 
 import type { SessionSaidDto } from "../bindings/bindings";
 import { currentLang, type Lang } from "../core/i18n";
@@ -21,10 +21,10 @@ import { faceOf, mountNameplate, sayOf, standsAsTurn, type Say } from "./namepla
 import { movingAt, quietFor, STILL_AFTER_MS } from "./moving";
 import {
   closed,
+  declared,
   NO_SESSIONS,
   opened,
   said,
-  seen as wasSeen,
   sent as wentOut,
   unsent as leftUnsent,
   type Sessions,
@@ -189,15 +189,15 @@ export function mountPlate(
     );
   }
 
-  // The window's record of which turns have been gone to (`./standing`). Only that is taken from it:
-  // what a turn was about is heard in this pane, and what ended one is a thing the window saw.
-  // Mirroring it here rather than reading the whole answer keeps the pane's own half — the unsent
-  // sentence — where the pane can see it.
-  const stopWatching = watchStanding(({ seen: went }) => {
+  // Whose turn it is, as the host answers for every session in this window (`./standing`). It is
+  // copied in rather than worked out here: the dots on the pages are drawn from the same answer, and
+  // a row that decided for itself could come to say something they do not. The pane's own half — the
+  // sentence sitting unsent in its input box — stays here, being the one thing only the pane can see.
+  const stopWatching = watchStanding((turns) => {
     if (!live || running === null) return;
-    const at = went.get(running);
-    if (at === undefined || sessions.get(running)?.seen != null) return;
-    sessions = wasSeen(sessions, running, at);
+    const next = declared(sessions, running, turns.get(running) ?? null);
+    if (next === sessions) return;
+    sessions = next;
     tellWaiting();
     redraw();
   });

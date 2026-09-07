@@ -34,12 +34,12 @@ export type Session = {
   /** When the session began (RFC3339 UTC). */
   readonly startedAt: string;
   /** Why a person's turn has come, said by the agent — the one thing nothing can find out by watching
-   *  (`AMB-D-748`). Null once the agent goes back to work. */
+   *  (`AMB-D-748`). Null where none is standing: none was handed over, or the person has been to the
+   *  pane since (`AMB-D-859`).
+   *
+   *  **It is the host's answer, written here** (`./standing`, `AMB-D-860`). A turn outlives the pane
+   *  drawing it, so the one place it can be kept is the one that outlives the pane. */
   readonly waiting: string | null;
-  /** When a person last came to this pane (RFC3339 UTC), or null if they have not since it spoke.
-   *  It is what takes a turn down (`turnStands`, `AMB-D-859`), so the text above outlives the turn
-   *  it was the reason for — which is what lets a reader ask why they were called after answering. */
-  readonly seen: string | null;
   /** Whether the sentence Amenbo opens an agent with is sitting in this pane's input box, unsent.
    *  It is the window's own doing and not a guess: the host handed the sentence over itself and says
    *  how that ended (`crate::pty`). */
@@ -84,7 +84,6 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
     agent: open.agent ?? null,
     startedAt: open.startedAt,
     waiting: open.waiting ?? null,
-    seen: null,
     unsent: false,
   });
 }
@@ -97,14 +96,14 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
  *
  * `name` is not here: a name belongs to the frame, not to the session running in it (`./frames`).
  *
- * **A turn is taken back by the person arriving, and by nothing an agent says** (`AMB-D-859`). There
- * is no word for taking one back, and there is no word left for the agent to end one with either:
- * what a word could never carry is the turn an agent forgets to end. So the last say is not the
- * agent's at all — a person coming to the pane takes it down (`seen`, `turnStands`), and that is a
- * thing nobody has to remember.
+ * **Whose turn it is is not read off this.** A turn goes up by a word and comes down by a person
+ * arriving, and the host writes both (`crate::pty::Pane`, `AMB-D-859`); what a statement moves here
+ * is only where the agent is working. The turn arrives by `declared`, which is that answer written
+ * down.
  *
- * **A verb this does not know is passed over.** The vocabulary has shrunk before and will again, and
- * a CLI from before a word went away still posts it into a newer window's drop box (`AMB-D-859`). */
+ * **A verb this does not know is passed over**, and so is one it does. The vocabulary has shrunk
+ * before and will again, and a CLI from before a word went away still posts it into a newer window's
+ * drop box. */
 export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
   const known = sessions.get(statement.session);
   const entry: Session = known ?? {
@@ -114,7 +113,6 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
     agent: null,
     startedAt: statement.at,
     waiting: null,
-    seen: null,
     unsent: false,
   };
   // The folder moves with the agent, so the newest statement's is the current one.
@@ -124,15 +122,21 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
   // as much as a turn, is an agent that knows where it is working. That is the one thing a sentence
   // left in the input box says is missing, and it is taken back by the agent working rather than by a
   // word for taking it back.
-  const spoke: Session = { ...entry, folder, unsent: false };
-  if (statement.verb !== "waiting") {
-    // `name` moves the frame's name, which is nothing about the session — but it still says where the
-    // agent is. So does a word this build has never heard of.
-    return withEntry(sessions, spoke);
-  }
-  // A turn nobody has come to yet: what `seen` answers is whether the person has been back since the
-  // turn was handed over, so a new one puts that question back.
-  return withEntry(sessions, { ...spoke, waiting: statement.text ?? null, seen: null });
+  return withEntry(sessions, { ...entry, folder, unsent: false });
+}
+
+/**
+ * Write down what the host says is standing in this session: why a person's turn has come, or `null`
+ * where none is (`./standing`, `AMB-D-860`).
+ *
+ * **It is a copy and not a reading.** The row above a pane and the dots on the pages are the same turn
+ * drawn in two places, so both are drawn from the one answer — nothing here works out for itself
+ * whether a turn is still standing, because a second working-out is one that can disagree.
+ */
+export function declared(sessions: Sessions, session: string, waiting: string | null): Sessions {
+  const known = sessions.get(session);
+  if (!known || known.waiting === waiting) return sessions;
+  return withEntry(sessions, { ...known, waiting });
 }
 
 /**
@@ -162,24 +166,6 @@ export function unsent(sessions: Sessions, session: string): Sessions {
 export function sent(sessions: Sessions, session: string): Sessions {
   const known = sessions.get(session);
   return known ? withEntry(sessions, { ...known, unsent: false }) : sessions;
-}
-
-/** Record that a person has come to this pane (`./standing`). */
-export function seen(sessions: Sessions, session: string, at: string): Sessions {
-  const known = sessions.get(session);
-  if (!known || known.seen !== null) return sessions;
-  return withEntry(sessions, { ...known, seen: at });
-}
-
-/**
- * Whether a turn the agent handed over is still standing: said, and not gone to since.
- *
- * **It is the one question both readers ask**, so they cannot come to disagree — the row above the
- * pane and the dots on the pages are the same turn drawn in two places (`./nameplate`,
- * `../shell/TerminalFace`).
- */
-export function turnStands(session: Session | undefined): boolean {
-  return session?.waiting != null && session.seen === null;
 }
 
 /** Forget a session whose terminal has closed. **Nothing running is kept**: the process is gone, and a

@@ -77,7 +77,7 @@ Usage:
   devtool fixtures gui     [--fail <face>=<status|timeout>] [--port n] [--app path] [--no-launch]
   devtool plugin round     --manifest <path.json> [--program path] [--set k=v] [--events list] [--keep]
   devtool vm up | rm | status
-  devtool vm exec          -- <command…>
+  devtool vm exec          [--front <guest pid>] [--window <title>] -- <command…>
   devtool vm push          <local…> <remote>
   devtool vm pull          <remote…> <local>
   devtool vm screen

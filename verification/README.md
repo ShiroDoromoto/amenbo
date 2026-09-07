@@ -1019,6 +1019,15 @@ page or the project tells the reader, but the turn is still standing until the s
 — so what takes the mark down is `say` with `note:`, the same word that clears the lamp on the pane's
 own row.
 
+**A count read as one is not read as a count**, which is why the page road builds four panes rather
+than two: a digit wearing a mark and a 1 looks exactly like a digit wearing a mark, and a build
+drawing the panes on the page or the page's own digit would pass it. Two turns standing on one page
+takes two panes on that page saying the word, so `say` takes `shows:` — which pane it is said in,
+named the way `press-pane` and `paste` name one, by the words a road typed into it earlier. The panes
+are still built one to a page: `open-shell` has no way to say which of two frames it opens in, and a
+line naming a pane cannot be typed until there is a shell to type it into, so each pane stands alone
+while it is made and the page is cut to two once all four are named.
+
 `tab-icon` is the other reading on this face that answers with no words at all: what the tab of a
 project named is drawn with, the image registered for it or the colour and the letter it falls back to.
 It names the project rather than pressing its tab, every project having one whether or not the face is

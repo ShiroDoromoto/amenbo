@@ -2436,7 +2436,12 @@ const REGISTRY: &[OpSpec] = &[
     // With it the word is armed and the operator leaves before it lands. **Where they go is the next
     // step's**, there being three ways off a pane and a mark of its own on each; how long they have
     // is the driver's to say and not the road's.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text"], binds: false },
+    //
+    // `shows` is which pane it is said in, named the way `press-pane` and `paste` name one: by the
+    // words a road typed into it earlier. Left out, it is the page's one pane. It is what lets a page
+    // hold two sessions that both speak — which is the only way a count on a page digit is ever more
+    // than one, and so the only way `page-mark`'s number is read as a count rather than as a mark.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text", "shows"], binds: false },
     // A name the person gives a pane, typed on that same row. It and the session's own `talk name` are
     // the only two things that name a frame, and this is the one that wins: the last word on a frame
     // is the person's, so a name typed here stands over whatever the session called itself

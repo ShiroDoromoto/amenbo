@@ -30,7 +30,9 @@ import (
 //
 // The two are read asymmetrically, on purpose. A road being walked turns a dev GUI away, and does
 // not turn away the road's own next command: `vm verify run` already takes a stopped run's app down
-// and starts over, and whoever types it is the one walking that road.
+// and starts over, and whoever types it is the one walking that road. A road nobody is going to walk
+// again leaves by `vm verify stop`, which is the only thing that ends the claim without ending the
+// machine.
 //
 // The command claim is taken two ways, and which one a command takes follows from how long it holds.
 //
@@ -161,5 +163,5 @@ func vmRefuseWhileRoadWalking(ip, what string) error {
 	if !vmRoadWalking(ip) {
 		return nil
 	}
-	return fmt.Errorf("a pre-distribution road is walking in %s — %s would put a window in front of the app it is pressing (`devtool vm verify log` reads where it stands)", vmCloneName, what)
+	return fmt.Errorf("a pre-distribution road is walking in %s — %s would put a window in front of the app it is pressing (`devtool vm verify log` reads where it stands, `devtool vm verify stop` ends it)", vmCloneName, what)
 }

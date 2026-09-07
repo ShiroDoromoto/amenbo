@@ -857,7 +857,8 @@ else's window in front of the app it was pressing.
 Two claims settle it, because the two roles are held by different things.
 
 - **A command on this machine** holds the screen for as long as it runs:
-  `vm verify seed`, `vm verify install`, `vm verify run`, `devgui install --vm`,
+  `vm verify seed`, `vm verify install`, `vm verify run`, `vm verify stop`,
+  `devgui install --vm`,
   a `devgui pid` / `devgui shot` that fronts a window, and `vm exec`. The claim is
   a lock on this side (`~/Library/Caches/amenbo-vm-screen.lock`), the flock form
   the dev GUI build lock uses and for the reason that one gives: the kernel drops
@@ -884,17 +885,21 @@ how long it holds.
   driver away there would break the very command the lock exists to let through.
   `devgui shot --vm` holds from its front to the capture for the same reason, and
   `devgui pid --vm --front` lets go as soon as the window is forward.
+  `vm verify stop` waits here too: it is one round trip, and taking a window off
+  the screen in the middle of somebody's front-then-press is that collision from
+  the other end.
 
 **The road and the dev GUI are read asymmetrically, on purpose.** A road being
 walked turns a dev GUI away, and does not turn away the road's own next command:
 `vm verify run` already takes a stopped run's app down and starts over, and
-whoever types it is the one walking that road.
+whoever types it is the one walking that road. `vm verify stop` is the other way
+out of that claim — for a road nobody is going to walk again.
 
 What this does not cover: a window brought to the front by something that is not
 a `devtool` command at all — a `.app` opened by hand in the guest's own Finder,
 say. Every command out here that fronts or presses goes through the claim.
 
-### `devtool vm verify seed | install | run | step | log | pull`
+### `devtool vm verify seed | install | run | step | log | pull | stop`
 
 Walks a **pre-distribution screen road** (`verification/scenarios/`) inside that VM.
 
@@ -905,6 +910,7 @@ devtool vm verify run verification/scenarios/link-a-folder.yaml
 # … drive the screen in the guest, then:
 devtool vm verify step --note 'pressed Link a folder'
 devtool vm verify pull --out ./evidence
+devtool vm verify stop                                       # done with it, verdict or not
 ```
 
 **The harness is not changed, and nothing here repeats what it does.** `verify-gui` still launches
@@ -983,6 +989,19 @@ advancing.
 
 **`pull`** brings the shots and the manifest out. They are what a `Review` step is closed from and
 what a red one is read by, and they are of no use inside a machine that is thrown away.
+
+**`stop`** ends a road. It takes down the two `run` takes down before it starts — the harness and the
+app the road opened — and leaves the evidence and the log where they are.
+
+- **A verdict is not an ending.** The harness goes on holding after it has said red or green: it is
+  still on stdin, waiting for a line that is not coming. Its process is what says a road is walking,
+  so a road walked away from goes on turning every `devgui install --vm` away until somebody ends it.
+  Before this command the two ways past that were to walk the same road again or to throw the machine
+  out (`devtool vm rm`), which takes every other session's instance with it.
+- **The evidence stays.** Why a road was abandoned is read afterwards, and `pull` is still how it
+  comes out.
+- **A road that is not walking is not an error.** The command is typed to be sure there is none as
+  often as to end one.
 
 The road itself is still walked by whoever is driving. In the guest that is the screen tool:
 

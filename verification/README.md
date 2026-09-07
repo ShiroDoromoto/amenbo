@@ -1015,9 +1015,11 @@ answering one thing or four, so `count:` is read beside the mark rather than the
 away, where the question is whether to leave this one at all.
 `be-told-which-page-a-turn-came-up-on` and `be-told-which-project-a-turn-came-up-in` are the roads,
 and both walk the mark down again: neither is spent by looking, the way the segment's is. Going to the
-page or the project tells the reader, but the turn is still standing until the session says otherwise
-— so what takes the mark down is `say` with `note:`, the same word that clears the lamp on the pane's
-own row.
+page or the project only puts those panes on the screen, and a page holds several — so a mark that
+came down on arrival would answer, for the reader, turns they have not read yet. A turn is put down by
+the person who was asked for it, and what counts as their answering it is a press on the pane itself:
+`press-pane`, the same press that clears the lamp on the pane's own row. A page carrying two turns
+takes two of them, one to each pane, and the digit comes down on the second.
 
 **A count read as one is not read as a count**, which is why the page road builds four panes rather
 than two: a digit wearing a mark and a 1 looks exactly like a digit wearing a mark, and a build

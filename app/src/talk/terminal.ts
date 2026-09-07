@@ -64,16 +64,6 @@ export type PaneEvents = {
   output(): void;
   /** The agent said something about its session. */
   said(statement: SessionSaidDto): void;
-  /** The sentence Amenbo opens an agent with is sitting in this pane's input box, unsent. What the
-   *  person is owed here is that it is theirs to send — a box holding it looks exactly like a box
-   *  that was emptied by the program reading it (`AMB-D-805`). */
-  unsent(session: string): void;
-  /** That sentence has gone out of the input box, on the reader's own Enter. What the row was owed
-   *  while it sat there was that it was theirs to send, and there is nothing left to send: a row
-   *  still saying so would point them at a keypress that now does nothing. It is not the agent having
-   *  read it — that is the agent's own word (`AMB-D-805`) — and a pane can send the sentence to a
-   *  program that never says it. */
-  sent(session: string): void;
   /** A file path drawn in this pane was clicked, as it was drawn. Where it leads is not the pane's to
    *  say: a relative one is read against the folder this session is in, and only the window knows
    *  whether that lands inside the folder the file face is rooted at (`AMB-T-3630`). */
@@ -514,16 +504,16 @@ export async function mountTerminal(
   const unlistenClosed = await listen<string>(CLOSED_EVENT, ({ payload }) => {
     if (payload === session) on.closed(payload);
   });
-  // Nothing is held for this one the way the output and the statements are. The hand-over gives up
-  // only after a minute of looking at the pane, so this cannot arrive before the id it is about.
+  // **All this event does is put the pane in the way of sending it**: from here on the person's next
+  // Enter carries the sentence out behind their own line (`sendsTheSentence`). Nothing is drawn for it
+  // — the row above a pane says the pane's name and no more (`AMB-D-862`).
   //
-  // It is also what puts this pane in the way of sending it: from here on the person's next Enter
-  // carries the sentence out behind their own line (`sendsTheSentence`).
+  // Nothing is held for it the way the output and the statements are, either. The hand-over gives up
+  // only after a minute of looking at the pane, so this cannot arrive before the id it is about.
   let owed = false;
   const unlistenUnsent = await listen<string>(UNSENT_EVENT, ({ payload }) => {
     if (payload !== session) return;
     owed = true;
-    on.unsent(payload);
   });
   // Statements are held the same way the output is, and for the same reason: the host starts watching
   // the drop box the moment it opens the terminal, so the first thing an agent says can be on its way
@@ -574,16 +564,10 @@ export async function mountTerminal(
     // trip per keystroke to be told nothing.
     owed = false;
     // The id is read out once here: nothing is owed before the host has answered with one, so this is
-    // never the null it starts as, and holding it keeps the answer landing on the pane that asked.
+    // never the null it starts as.
     const its = session;
     if (its === null) return;
-    void invoke<boolean>("pty_brief", { session: its })
-      // Only where something actually went: the host holds the sentence and is the one that can say
-      // whether this press was the one that sent it.
-      .then((went) => {
-        if (went) on.sent(its);
-      })
-      .catch(() => {});
+    void invoke("pty_brief", { session: its }).catch(() => {});
   });
 
   // **A paste carrying files is answered here; every other paste is the emulator's** — the reading

@@ -14,7 +14,7 @@
 # The mark is raised by a turn arriving on a page nobody is on, and the layer is only ever spoken
 # inside a pane — which is on the page the mark is never drawn on, a reader being told plainly by the
 # pane they are looking at. So the road arms the word and walks away from it: the operator starts it
-# in the pane on the second page, then presses the first digit before it lands. That is not a trick
+# in a pane on the second page, then presses the first digit before it lands. That is not a trick
 # around the seam — it is the seam, and the only door it has.
 #
 # ── Why the digit carries a number where the segment carries none ────────────────────────────────
@@ -24,12 +24,26 @@
 # and what a reader buys by going there is answering one thing or four. So the digit carries the
 # count, and this road reads it rather than the dot alone.
 #
-# ── Why three panes ─────────────────────────────────────────────────────────────────────────────
-# Two panes at one to a page would raise the mark, and would say nothing about the page being left
-# behind having panes of its own on it. Two to a page with three panes is the shape a reader is
-# actually in: a page in front of them with work on it, and one more page they cannot see. It is also
-# what makes the second reading worth taking — the digit of the page they are standing on wears
-# nothing, so the mark is about elsewhere and not about there being a turn anywhere.
+# ── Why four panes, and why the count is two ─────────────────────────────────────────────────────
+# **A count read as one is not read as a count.** A digit wearing a mark and a 1 looks exactly like a
+# digit wearing a mark, and a build that drew the number of panes, or the number 1, or the page's own
+# digit would pass. Two turns standing on one page is the smallest world where the number has to have
+# been counted, and it takes two panes on that page saying the word — which is why `say` names the
+# pane it is said in.
+#
+# The other two panes are the page being stood on. Without them the reading below that the first
+# digit is bare would be about a page with nothing on it, which is not a screen anybody is at: what it
+# is worth saying is that a page with work on it wears no mark, so the mark is about elsewhere and not
+# about there being a turn anywhere.
+#
+# ── Why the panes are built one to a page ────────────────────────────────────────────────────────
+# Every pane here has to be got down to a plain shell and given a line of its own, and both of those
+# steps name the pane they mean by *being the only one on the page*: `open-shell` has no way to say
+# which of two frames it opens in, and a line typed to name a pane cannot be typed until there is a
+# shell to type it into. So the road builds at one to a page, where each pane stands alone as it is
+# made, and cuts to two only once all four are named. The cut is the same move
+# `come-back-to-the-terminal-a-page-turn-took-away` walks, and it carries a running terminal exactly
+# as a page turn does.
 #
 # ── Why the mark is spent by the work resuming, and not by looking ───────────────────────────────
 # Crossing to the terminal face spends the segment's mark, because being on that face is being told.
@@ -43,13 +57,13 @@
 # folder is not furniture either — choosing one is what raises the project it belongs to, so the road
 # makes the world it needs by walking in.
 id: be-told-which-page-a-turn-came-up-on
-title: A turn comes up in a pane on another page, and that page's digit says so and says how many
+title: Turns come up in panes on another page, and that page's digit says so and says how many
 description: >
-  Open the terminal face, choose the folder the panes run in, and get to three panes at two to a page
-  — two on the first page and one on the second. Hand the turn over from inside the pane on the second
-  page and press back to the first before the word lands: the digit 2 is marked and carrying the
-  count, and the digit of the page being stood on is bare. Go back and say the work has resumed, and
-  the mark on 2 is gone — it follows the turn, not the looking.
+  Open the terminal face, choose the folder the panes run in, and build four panes one to a page, each
+  named by a line of its own. Cut to two to a page, and hand the turn over from both panes on the
+  second page — the last of them armed, so it lands after the press back to the first page. The digit
+  2 is marked and carrying a 2, and the digit of the page being stood on is bare. Say the work has
+  resumed in both, and the mark is gone: it follows the turns, not the looking.
 
 steps_gui:
   - type: action
@@ -59,38 +73,39 @@ steps_gui:
       face: terminal
 
   # The way in, and what binds the folder to the project the face is on. Every pane opened in that
-  # project afterwards works in it, which is what lets the two below be one press each.
+  # project afterwards works in it, which is what lets the three below be one press each.
   - type: action
     domain: terminal
     op: open-folder
     with:
       dir: workshop
 
-  # Down to a plain shell in the pane that opened, which is what a road that speaks in a pane speaks
-  # to. This pane never says anything: it is here so the page the reader stands on has work on it.
-  - type: action
-    domain: terminal
-    op: open-shell
-
-  # Two panes to a page, which is the cut the rest of this road is drawn on. It moves nothing yet —
-  # one pane on a page that holds two leaves the page with room in it.
+  # One pane to a page, which is the cut the four panes are built at. Each of them stands alone on its
+  # own page while it is opened, shelled and named, which is how the two steps that cannot say which
+  # pane they mean are kept unambiguous.
   - type: action
     domain: terminal
     op: set-panes
     with:
-      count: 2
+      count: 1
 
-  # The second pane, into the room beside the first. The page is full afterwards, which is what makes
-  # the next one land somewhere else.
+  # Down to a plain shell, which is what a road that speaks in a pane speaks to. An agent's screen is
+  # its own to draw, and a command handed to one is a request: whether it is carried out is the
+  # agent's own, and what raises the mark here has to be said rather than asked for.
   - type: action
     domain: terminal
-    op: open-pane
-    with:
-      from: face
+    op: open-shell
 
-  # And the third, from the strip a full page draws instead of an empty frame. There is no room on
-  # this page, so a second page comes into being and the screen goes to it — which is where the word
-  # below is said from.
+  # And the line that names it. The words are the reader's own, so every step below that says which
+  # pane it means finds them on that pane and on no other.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO alpha
+
+  # The second pane. This page is full at one, so the way in is the strip at its edge, and the screen
+  # goes to the page the pane lands on — which is where the next two steps are walked.
   - type: action
     domain: terminal
     op: open-pane
@@ -101,14 +116,73 @@ steps_gui:
     domain: terminal
     op: open-shell
 
-  # Armed, and left behind. The word is said in the pane on this page and the reader is on the first
-  # page when it arrives, which is the only shape that raises anything on a digit.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO bravo
+
+  # The third, and the first of the two that will be doing the talking.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: strip
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO charlie
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: strip
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO delta
+
+  # Two to a page, which puts alpha and bravo on the first and charlie and delta on the second. The
+  # screen stays with the pane being worked in, so it is the second page that is on it — which is
+  # where both words below are said from.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  # The first turn, said standing at the pane. It has to survive the page turn below on its own: what
+  # took the mark down before this road was walked was the pane going off the screen.
   - type: action
     domain: terminal
     op: say
     with:
       verb: waiting
       text: SCENARIO the migration needs a decision
+      shows: SCENARIO charlie
+
+  # And the second, armed and left behind — the other half, a turn arriving on a page nobody is on.
+  # Between them the two shapes that raise the mark are both walked, and the digit has two to count.
+  - type: action
+    domain: terminal
+    op: say
+    with:
+      verb: waiting
+      text: SCENARIO the backup has not finished
+      shows: SCENARIO delta
       away: true
 
   # And the leaving, which is the press the armed seconds are for.
@@ -118,18 +192,19 @@ steps_gui:
     with:
       page: 1
 
-  # The whole of what crossed the page turn — and how much of it. One pane is waiting, so the digit
-  # carries a 1: what the number buys a reader is knowing whether going there answers one thing.
+  # The whole of what crossed the page turn, and how much of it. The 2 is the reading this road is
+  # made for: a digit wearing a mark and a 1 says nothing a bare mark does not, and a build drawing
+  # the panes on the page, or the page's own digit, would pass it.
   - type: assert
     domain: terminal
     op: page-mark
     with:
       page: 2
-      count: 1
+      count: 2
 
-  # And the page being stood on wears nothing. The digits are not a row of lamps saying a turn is
-  # standing somewhere: what each one says is about its own page, and the panes on this one are in
-  # front of the reader already.
+  # And the page being stood on wears nothing, though it has two panes on it. The digits are not a row
+  # of lamps saying a turn is standing somewhere: what each one says is about its own page, and the
+  # panes on this one are in front of the reader already.
   - type: assert
     domain: terminal
     op: page-mark
@@ -137,8 +212,9 @@ steps_gui:
       page: 1
       present: false
 
-  # Back to the pane, to say the work has resumed. This is said standing at the pane rather than armed
-  # — nothing is being raised behind anybody's back, and what is under test is the mark coming down.
+  # Back to the panes, to say the work has resumed in both. This is said standing at them rather than
+  # armed — nothing is being raised behind anybody's back, and what is under test is the mark coming
+  # down.
   - type: action
     domain: terminal
     op: go-page
@@ -151,6 +227,15 @@ steps_gui:
     with:
       verb: note
       text: SCENARIO back at work
+      shows: SCENARIO charlie
+
+  - type: action
+    domain: terminal
+    op: say
+    with:
+      verb: note
+      text: SCENARIO back at work
+      shows: SCENARIO delta
 
   - type: action
     domain: terminal
@@ -158,9 +243,9 @@ steps_gui:
     with:
       page: 1
 
-  # Spent by the turn ending, which is the half that keeps the digits worth reading. A mark still up
-  # after the session went back to work would be one a reader has to dismiss, and the whole of this is
-  # that they never do.
+  # Spent by the turns ending, which is the half that keeps the digits worth reading. A mark still up
+  # after both sessions went back to work would be one a reader has to dismiss, and the whole of this
+  # is that they never do.
   - type: assert
     domain: terminal
     op: page-mark

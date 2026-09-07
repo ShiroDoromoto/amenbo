@@ -146,6 +146,11 @@ export function AppShell() {
   // it stays true, because the face is hidden rather than taken down (`TerminalFace`).
   const [terminalAsked, setTerminalAsked] = useState(false);
   const hostsTerminal = shape === "one" && terminalAsked;
+  // The project the reader came to the terminal from, and nothing where they came from nowhere. A
+  // launch puts the ledger on the first project by itself (`initialNav`), which is not a reader
+  // saying what their terminal is about — a face handed that would open on it every launch instead
+  // of on the project the last run was left on (`./TerminalFace`, `AMB-T-4517`).
+  const cameFromProject = nav !== initialNav && nav.type === "project" ? Number(nav.id) : null;
   // Splitting out and folding back are the same move seen from either end, and both go through the
   // shape: the window is opened and closed by the effect below, so every way into two windows — the
   // button, and a launch that remembers being two — arrives at the same place.
@@ -611,7 +616,7 @@ export function AppShell() {
             onWindow={splitOutTerminal}
             note={windowError}
             onWaiting={noteWaiting}
-            projectId={nav.type === "project" ? Number(nav.id) : (dataAdapter.listProjects()[0]?.id ?? null)}
+            projectId={cameFromProject}
             onOpenLedger={() => setFace("tasks")}
             openIn={openIn}
           />

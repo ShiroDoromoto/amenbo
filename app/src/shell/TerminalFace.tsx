@@ -116,6 +116,11 @@ const LANDED_MS = 900;
  * is on — the one picked on the rail, not the one selected on the ledger. `projectId` is only where
  * the face **starts**: a person who came to the terminal from a project is looking at that project,
  * and after that the rail is what moves it.
+ *
+ * **Where the window names no project, the one the last run was left on answers** (`../talk/layout`).
+ * A launch is nobody coming from anywhere — the ledger opens on a project of its own accord — so a
+ * face that took that would put the reader on it rather than on the project they were working in
+ * (`AMB-T-4517`).
  */
 export function TerminalFace({
   onWindow,
@@ -143,8 +148,10 @@ export function TerminalFace({
   ownWindow?: boolean;
   note: string | null;
   onWaiting: (waiting: boolean) => void;
-  /** The project the face opens on, where the window has one to say. The window the terminal was
-   *  split out into has no ledger to have been on, so it says nothing and the arrangement answers. */
+  /** The project the face opens on, where the window has one to say — a reader who went to a project
+   *  and came to the terminal from it. Nothing where there was no such move: the window the terminal
+   *  was split out into has no ledger to have been on, and the board's launch lands on a project
+   *  without anybody picking it. Then the arrangement answers. */
   projectId?: number | null;
   /** Go to the ledger, for a record clicked in a file or on an empty frame. Nothing in the window
    *  the terminal was split out into: the ledger is the other window there, and raising it is the
@@ -332,6 +339,10 @@ export function TerminalFace({
   // face that followed the ledger's selection would take a person off the panes they were watching
   // every time they looked something up.
   const opensOn = projectId ?? projects[0]?.id ?? null;
+  // Whether the window named that project, or whether it is the first one for want of an answer.
+  // Read at the first render, for the reason `opensOn` is taken once: where the ledger has gone since
+  // is not where the reader came to the terminal from.
+  const told = useRef(projectId ?? null);
   useEffect(() => {
     if (opensOn === null) return;
     setLayout((was) => (was.project === null ? { ...was, project: opensOn } : was));
@@ -391,10 +402,13 @@ export function TerminalFace({
           // draws nothing at all while it has none, so the way in would be gone from a face that
           // had one a moment ago (`AMB-T-4398`).
           let next = saved === null ? was : restored(saved, was.project);
-          // The project the board was on, for the window that has no ledger to have taken one from.
-          // It answers only where nothing came back to say it: an arrangement with panes in it names
-          // the project of every one of them, and this is the machine that has never had any.
-          if (ownWindow && next.frames.length === 0 && saved?.project != null) {
+          // The project the reader was looking at, for the face that was not told one — the window
+          // the terminal was split out into, which has no ledger to have taken one from, and the
+          // board on a launch, where the project it opens the ledger at is nobody's answer about the
+          // terminal (`AMB-T-4517`). It answers only where nothing came back to say it: an
+          // arrangement with panes in it names the project of every one of them, and this is the run
+          // that has none.
+          if (told.current === null && next.frames.length === 0 && saved?.project != null) {
             // Through `goProject` rather than by writing the project in, so the face comes up at the
             // split that project was left at: the answers came back with the arrangement, and a
             // window that set the project by hand would draw it at whichever project's shape the

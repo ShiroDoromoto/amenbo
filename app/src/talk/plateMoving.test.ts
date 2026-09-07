@@ -15,8 +15,6 @@ vi.mock("./frames", async (orig) => ({
 
 const { mountPlate } = await import("./plate");
 
-const AT = "2026-08-24T09:00:00Z";
-
 let host: HTMLElement;
 let plate: ReturnType<typeof mountPlate>;
 
@@ -27,7 +25,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   host = document.createElement("div");
   plate = mountPlate(host);
-  plate.opened("pane-1", AT, null);
+  plate.opened(null);
 });
 
 afterEach(() => {
@@ -62,7 +60,7 @@ describe("the lamp follows the stream and reads nothing else into it", () => {
 
   it("goes out when the program exits, whatever the last chunk's clock says", () => {
     plate.output();
-    plate.closed("pane-1");
+    plate.closed();
     expect(dot()).toBe("out");
   });
 

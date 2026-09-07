@@ -78,8 +78,8 @@ pub fn launch_instruction(cmd: &str) -> String {
     )
 }
 
-/// What a pane's agent is opened with: [`launch_instruction`], and after it the one sentence about
-/// the vocabulary that exists only inside the window.
+/// What a pane's agent is opened with: [`launch_instruction`], the pointer at the vocabulary that
+/// exists only inside the window, and the one thing to hold to until the person has said anything.
 ///
 /// **The pointer is said here because where it is written is too far in to count on.** `agent --json`
 /// carries the same one, under a key that sorts near the end of a document tens of thousands of
@@ -90,15 +90,30 @@ pub fn launch_instruction(cmd: &str) -> String {
 /// and a reader could not tell that from one they had simply not walked yet (`AMB-D-749`). A pane is
 /// both the place those words work and the one opening Amenbo writes itself.
 ///
+/// **What the words are for, not what layer they sit in.** `talk --json` describes itself at length —
+/// that it writes to no store, that it fails outside this terminal, that it promises nothing — so
+/// saying any of that here is saying it twice, and the second time in the more expensive place. What
+/// does not survive the trip is the reason to say anything at all: silence reads the same whatever
+/// the session is doing, so the person learns nothing from it.
+///
+/// **No number of words.** `owed` is a list that has already lost an entry (`AMB-D-859`), and a count
+/// written out here follows nothing — the reader is being sent to read the list anyway.
+///
+/// **Until the person speaks.** An agent opened into an empty pane holds no request, and the state of
+/// holding none is named nowhere in `agent --json` (`AMB-T-4521`) — so the cycle's step 1, whose
+/// trigger is nothing more than deciding to go looking, is what it falls into, and it reads the
+/// ledger before anyone asked it for anything (`AMB-T-4520`). This is the sentence that names the
+/// state, and it borrows step 1's own words so it is plain which step it is answering.
+///
 /// **One line.** It goes into an argument on one route and into a paste on the other, and a newline in
 /// a paste is a submit to any program that does not read bracketed paste (`crate::harness::opening`,
 /// `app/src-tauri/src/handover.rs`).
 pub fn pane_instruction(cmd: &str) -> String {
     format!(
-        "{instruction} You are in a pane of Amenbo's talk window, where a second vocabulary applies: \
-         what you say about this session, which writes to no store and lives in this terminal alone. \
-         Read `{cmd} talk --json` and follow it — two of its words are owed, and the person sees only \
-         what you say.",
+        "{instruction} You are in a pane of Amenbo's talk window, which has a vocabulary of its own. \
+         Read `{cmd} talk --json` and follow it — it names the words that are owed, and the person \
+         sees only what you say: silence looks the same whether you are working, thinking, or \
+         waiting. Do not go looking for work until the person speaks.",
         instruction = launch_instruction(cmd),
     )
 }

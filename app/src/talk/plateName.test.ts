@@ -16,8 +16,6 @@ vi.mock("./frames", async (orig) => ({
 
 const { mountPlate } = await import("./plate");
 
-const AT = "2026-08-24T09:00:00Z";
-
 let host: HTMLElement;
 let plate: ReturnType<typeof mountPlate>;
 
@@ -41,13 +39,13 @@ describe("what the row above a pane is headed with", () => {
   });
 
   it("is the folder the terminal was started in", async () => {
-    plate.opened("pane-1", AT, "/work/amenbo");
+    plate.opened("/work/amenbo");
     await settled();
     expect(heading()).toBe("amenbo");
   });
 
   it("gives way to a name the moment there is one, and does not come back over it", async () => {
-    plate.opened("pane-1", AT, "/work/amenbo");
+    plate.opened("/work/amenbo");
     await settled();
     plate.named(new Map([["1", "the migration"]]));
     expect(heading()).toBe("the migration");
@@ -58,7 +56,7 @@ describe("what the row above a pane is headed with", () => {
   });
 
   it("is empty for a pane whose terminal was started nowhere in particular", async () => {
-    plate.opened("pane-1", AT, null);
+    plate.opened(null);
     await settled();
     expect(heading()).toBe("");
   });

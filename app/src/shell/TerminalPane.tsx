@@ -174,14 +174,11 @@ export function TerminalPane({
     // one this pane took rather than what is true now.
     on.current.onRow?.(frame, plate.read);
     void mountAgentFrame(host, currentLang(), {
-      opened: (session, startedAt, where) => {
+      opened: (session, _startedAt, where) => {
         // The folder is what the row above the pane calls it until something names the frame
         // (`../talk/frames`), and it is the one the terminal actually runs in — which is not always
         // the one this slot was handed.
-        //
-        // A turn already standing in that session comes with it, so a row coming back up says what it
-        // was saying when the page turned away from it (`AMB-D-860`).
-        plate.opened(session, startedAt, where ?? start.cwd ?? null);
+        plate.opened(where ?? start.cwd ?? null);
         setLive(session);
         // Where the terminal actually runs, which is not always the folder this slot was handed: a
         // pane that took one up learns it from the session (`../talk/layout`).
@@ -196,12 +193,9 @@ export function TerminalPane({
       // Nothing on this face is opened without a folder — the question is answered before the pane
       // is made (`./FolderChoice`) — so there is no choice for the frame to report.
       chose: () => {},
-      said: (statement) => {
-        plate.said(statement);
-        on.current.onSaid(statement);
-      },
+      said: (statement) => on.current.onSaid(statement),
       closed: (session) => {
-        plate.closed(session);
+        plate.closed();
         setEnded(true);
         setLive(null);
         on.current.onClosed(session);

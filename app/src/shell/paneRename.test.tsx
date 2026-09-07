@@ -45,7 +45,7 @@ vi.mock("../core/ipc", () => ({ invoke: vi.fn(async () => undefined) }));
 // only that it is still there while the box stands in its place.
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({
-    opened: () => {}, said: () => {}, closed: () => {}, named: () => {},
+    opened: () => {}, closed: () => {}, named: () => {},
     focused: () => {}, stop: () => {},
   }),
 }));

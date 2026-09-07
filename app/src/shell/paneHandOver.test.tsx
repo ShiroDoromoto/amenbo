@@ -75,7 +75,7 @@ vi.mock("../core/ipc", () => ({ invoke: vi.fn(async () => undefined) }));
 // The label above the pane is a live thing of its own; what it draws is not what this is about.
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({
-    opened: () => {}, said: () => {}, closed: () => {}, named: () => {},
+    opened: () => {}, closed: () => {}, named: () => {},
     focused: () => {}, stop: () => {},
   }),
 }));

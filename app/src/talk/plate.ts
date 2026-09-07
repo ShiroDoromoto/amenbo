@@ -2,31 +2,27 @@
 //
 // A pane has two homes — the board's terminal face and the window it is split out into (`AMB-D-753`)
 // — and the same line belongs above it in both. What that line says is worked out in `./nameplate`;
-// this is everything around it: holding what the pane's session has said, measuring what the pane
-// itself is doing, and putting the row up again whenever either changes.
+// this is everything around it: holding what the pane's terminal was started in, measuring what the
+// pane itself is doing, and putting the row up again whenever either changes.
 //
 // **Nothing here is read off the ledger** (`AMB-D-858`). What a row is drawn from is what the agent
 // in this pane declared and what this pane measured — both of which the webview already has, and
 // neither of which the world can rewrite behind it.
 
-import type { SessionSaidDto } from "../bindings/bindings";
 import { frameLabel, frameNames, ONLY_FRAME, type FrameNames } from "./frames";
 import { faceOf, mountNameplate, type Plate as Row } from "./nameplate";
 import { movingAt, STILL_AFTER_MS } from "./moving";
-import { closed, NO_SESSIONS, opened, said, type Sessions } from "./sessions";
 
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
-  /** A terminal has started in the pane, under this session id, in `folder`. The folder is what the
-   *  row calls the pane until something names it (`./frames`). */
-  opened(session: string, startedAt: string, folder: string | null): void;
+  /** A terminal has started in the pane, in `folder`. The folder is what the row calls the pane
+   *  until something names it (`./frames`). */
+  opened(folder: string | null): void;
   /** Something came out of the terminal. Said per chunk and read as a time, never as a quantity: what
    *  it turns into is a fixed rhythm rather than a meter (`./moving`). */
   output(): void;
-  /** The agent said something about its session. */
-  said(statement: SessionSaidDto): void;
   /** The program in the terminal has exited. */
-  closed(session: string): void;
+  closed(): void;
   /** The frames have been named afresh — what a naming answered with. */
   named(names: FrameNames): void;
   /** Take the label away. */
@@ -54,19 +50,15 @@ export type Plate = {
 export function mountPlate(host: HTMLElement, frame: string = ONLY_FRAME): Plate {
   const draw = mountNameplate(host);
 
-  // What the pane's session has said. It is gone when the pane is: a session has no existence outside
-  // the terminal it runs in (`AMB-D-749`).
-  let sessions: Sessions = NO_SESSIONS;
   let names: FrameNames = new Map();
   // The folder this pane's terminal was started in. It is what the row is headed with until the frame
   // is named, and it is kept here rather than read back out of the arrangement: what the row says is
   // about the session in front of the reader, and a place is not one.
   let folder: string | null = null;
-  let running: string | null = null;
-  // Whether a terminal has ever run in this pane. It is not `running !== null` — a pane whose program
-  // has exited still has a row, because what it just finished is the one thing worth saying at that
-  // moment. What has no row is a pane that has never had a session: the face there is the invitation
-  // to choose a folder (`./agent`), and a label about the session would be about nothing.
+  // Whether a terminal has ever run in this pane. It is not whether one is running now — a pane whose
+  // program has exited still has a row, because what it just finished is the one thing worth saying at
+  // that moment. What has no row is a pane that has never had a session: the face there is the
+  // invitation to choose a folder (`./agent`), and a label about the session would be about nothing.
   let ran = false;
   let live = true;
   // When something last came out of the terminal, and whether that still counts as moving — which is
@@ -123,26 +115,18 @@ export function mountPlate(host: HTMLElement, frame: string = ONLY_FRAME): Plate
   redraw();
 
   return {
-    opened: (session, startedAt, where) => {
-      sessions = opened(sessions, { session, startedAt });
-      running = session;
+    opened: (where) => {
       folder = where;
       ran = true;
       redraw();
     },
     output: tookOutput,
-    said: (statement) => {
-      sessions = said(sessions, statement);
-      redraw();
-    },
-    closed: (session) => {
+    closed: () => {
       // A pane whose program has exited is not moving, whatever the last chunk's clock still says: the
       // stream did not go quiet, it ended.
       clearTimeout(settling);
       moving = false;
       lastOutput = null;
-      sessions = closed(sessions, session);
-      if (running === session) running = null;
       redraw();
     },
     named: (known) => {

@@ -1136,10 +1136,8 @@ pub fn pty_write(
 /// - nothing is left to send, because the hand-over got through, the sentence rode in on the command
 ///   line, or an earlier press already sent it ([`Pane::take_unsent`]).
 ///
-/// **A pane that has merely spoken is not one that has been briefed.** The row above it stops saying
-/// the sentence is unsent as soon as the agent says anything at all (`app/src/talk/sessions.ts`) —
-/// that is a notice about a person's turn, and it is right to take it back on any word. What is owed
-/// is a narrower question, and only the one verb answers it.
+/// **A pane that has merely spoken is not one that has been briefed.** An agent saying anything at
+/// all is not the answer — what is owed is a narrower question, and only the one verb settles it.
 ///
 /// **Nothing comes back but whether the terminal was there.** Whether the sentence went used to be
 /// answered here, for a row above the pane that said a sentence was sitting in an input box and had

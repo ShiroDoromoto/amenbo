@@ -19,7 +19,7 @@
 # typed *after* the return says the terminal on the other end of it is still listening — which is what
 # a reader means when they say the pane is still theirs.
 #
-# ── Why a second pane ────────────────────────────────────────────────────────────────────────────
+# ── Why a second pane, and why the page is cut to hold it ────────────────────────────────────────
 # One terminal would prove the page turn on its own, an empty page being somewhere to turn to. It
 # would not prove the re-cut: with one frame there is nothing for a new count to move, so a road with
 # a single pane would walk `set-panes` past the only thing it is dangerous for. A second frame is what
@@ -30,6 +30,11 @@
 # that already has a folder takes it, so nothing is asked. It opens on the page the first is on
 # rather than on a page of its own because that is where the room is — the way in goes to the page
 # with a gap in it, and a page comes into being only where every one of them is full.
+#
+# **The page has to hold two for the second to open beside the first**, which is what the count is
+# asked for before it. A project nobody has answered for is drawn at one pane to a page, so the pane
+# opened next would come up on a page of its own — carrying the first off the screen before any of
+# the moves this road is about had been made.
 #
 # Only the first pane is ever spoken to. The second is not named by a line of its own, because a step
 # that typed into it would have to say which of two running panes it meant and there is no way to say
@@ -48,10 +53,11 @@ id: come-back-to-the-terminal-a-page-turn-took-away
 title: A terminal carried off the screen by a page turn comes back with the same session running in it
 description: >
   Open the terminal face, choose the folder it runs in, get the pane down to a plain shell and type a
-  line into it. Open a second pane beside it, then cut the page down to one pane each: the screen
-  follows the new pane, and the first one's line is gone from the screen. Turn back to its page — the
-  line is there, and a second line typed at it is taken, so the terminal behind the page is still
-  running and not a picture of one. Cut back to two, and the pane is still the same one.
+  line into it. Cut the page to two and open a second pane beside it, then cut the page down to one
+  pane each: the screen follows the new pane, and the first one's line is gone from the screen. Turn
+  back to its page — the line is there, and a second line typed at it is taken, so the terminal behind
+  the page is still running and not a picture of one. Cut back to two, and the pane is still the same
+  one.
 
 steps_gui:
   - type: action
@@ -87,6 +93,15 @@ steps_gui:
     op: pane
     with:
       shows: SCENARIO the terminal behind the page
+
+  # Room on the page for a second pane beside the first. At the one pane a project nobody has answered
+  # for is drawn at, the pane opened next would be on a page of its own, and the first would go off
+  # the screen without any of the moves this road follows having been made.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
 
   # A second pane, from the empty frame beside the first: the page holds two and one is on it, so the
   # room is drawn where the pane will be. Nothing is asked — the folder is the project's — and the new

@@ -9,7 +9,7 @@ import {
   type Dot,
   standsAsTurn,
 } from "./nameplate";
-import { NO_SESSIONS, opened, said, unsent, type Sessions } from "./sessions";
+import { NO_SESSIONS, opened, said, seen, unsent, type Sessions } from "./sessions";
 
 const AT = "2026-08-24T09:00:00Z";
 
@@ -54,6 +54,19 @@ describe("the one thing said on the right", () => {
     // The mark is the pause: what is left where the row is too narrow for words is "somebody is
     // needed here", which is as true of this as of a turn handed over.
     expect(sayText({ kind: "unsent" }, EN).mark).toBe("pause");
+  });
+
+  it("stops leading with a turn the person has come to, and keeps what was said", () => {
+    const called = sessionWith("waiting", "which of the two");
+    expect(sayOf(called.get("pane-1"))).toEqual({ kind: "waiting", text: "which of the two" });
+
+    // They went to the pane. The mark is for a pane nobody is at, so it comes down — and the row
+    // falls through to whatever else the session has said (`AMB-D-859`).
+    const answered = seen(called, "pane-1", "2026-08-24T09:01:00Z");
+    expect(sayOf(answered.get("pane-1"))).toEqual({ kind: "silent" });
+
+    const noted = said(answered, { session: "pane-1", at: AT, verb: "note", text: "on it" });
+    expect(sayOf(noted.get("pane-1"))).toEqual({ kind: "note", text: "on it" });
   });
 
   it("says nothing where nothing was said", () => {

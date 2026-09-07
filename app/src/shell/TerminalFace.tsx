@@ -33,7 +33,7 @@ import type { PaneDrawnDto, PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf, tn } from "../core/i18n";
 import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
-import { NO_TURNS, watchStanding } from "../talk/standing";
+import { NO_TURNS, watchStanding, type Turns } from "../talk/standing";
 
 /** How long the pane a path was handed to keeps its ring on. Long enough for an eye that was in the
  *  panel to reach the pane, and short enough that what is left on the screen afterwards is the
@@ -262,7 +262,7 @@ export function TerminalFace({
   // (`../talk/standing`). It is the half that carries a turn handed over behind the reader's back;
   // the half above is the one that carries what the pane measured. `needy` below is the two of them
   // read together.
-  const [turns, setTurns] = useState<ReadonlySet<string>>(NO_TURNS);
+  const [turns, setTurns] = useState<Turns>(NO_TURNS);
   useEffect(() => watchStanding(setTurns), []);
   // Read through a ref for the same reason the panes' callbacks are: the face is mounted once and
   // must not come down to be handed a fresh one.
@@ -294,13 +294,13 @@ export function TerminalFace({
    * **A pane that is not on the screen still has one**, and it is the whole reason the dots and the
    * badges exist: a page turn is exactly when nobody is looking at that pane (`AMB-T-3610`). The
    * drawn panes answer for themselves, because a pane is the only thing here that can see its own
-   * input box; the rest is the turns the host is holding, which it holds whether or not a pane is up
-   * (`../talk/standing`).
+   * input box; the rest is the turns the window is holding — declared to the host and not gone to
+   * since — which stand whether or not a pane is up (`../talk/standing`).
    */
   const needy = useMemo(() => {
     const all = new Set(reported);
     for (const frame of layout.frames) {
-      if (frame.session !== null && turns.has(frame.session)) all.add(frame.id);
+      if (frame.session !== null && turns.standing.has(frame.session)) all.add(frame.id);
     }
     return all;
   }, [reported, turns, layout.frames]);

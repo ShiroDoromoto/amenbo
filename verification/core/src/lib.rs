@@ -2436,7 +2436,12 @@ const REGISTRY: &[OpSpec] = &[
     // With it the word is armed and the operator leaves before it lands. **Where they go is the next
     // step's**, there being three ways off a pane and a mark of its own on each; how long they have
     // is the driver's to say and not the road's.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text"], binds: false },
+    //
+    // `shows` is which pane it is said in, named the way `press-pane` and `paste` name one: by the
+    // words a road typed into it earlier. Left out, it is the page's one pane. It is what lets a page
+    // hold two sessions that both speak — which is the only way a count on a page digit is ever more
+    // than one, and so the only way `page-mark`'s number is read as a count rather than as a mark.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text", "shows"], binds: false },
     // A name the person gives a pane, typed on that same row. It and the session's own `talk name` are
     // the only two things that name a frame, and this is the one that wins: the last word on a frame
     // is the person's, so a name typed here stands over whatever the session called itself
@@ -2739,10 +2744,12 @@ const REGISTRY: &[OpSpec] = &[
     // those out of the screen is an operator's. So the instruction says where to put the pointer and
     // what to watch follow it, and the shot after it is what an eye closes.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drag-side", required: &["side", "toward"], refs: &[], strings: &["side", "toward"], binds: false },
-    // A press on a pane, meaning nothing but the press. It is what puts the reading column back to
-    // its narrow width: the next press outside that column says where the reader is looking, and a
-    // pane is the answer that says they have gone back to the work. So what it proves is on the
-    // other side of the panes from what it touches.
+    // A press on a pane, meaning nothing but the press — a person going to that pane and to no other.
+    //
+    // **Two roads read it, and both read the same fact.** It is what puts the reading column back to
+    // its narrow width, the next press outside that column saying where the reader is looking; and it
+    // is what ends a turn an agent handed over, the hand going up by declaration and coming down by
+    // the person arriving. Neither is about what the press does to the pane, which is nothing.
     //
     // **It is not `type-line` with the typing left out.** That step's press is a way to reach the
     // input line and what it is about is the line; this one leaves the pane as it found it, and a

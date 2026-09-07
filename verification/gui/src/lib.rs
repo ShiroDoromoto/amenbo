@@ -2134,13 +2134,21 @@ impl Instructor {
                 // raises a mark of its own; a step that named one of them here would be an op per
                 // destination, and a road that walked a second one would be arming the same word
                 // twice to look at it from somewhere else.
+                //
+                // Which pane, where a road says so. A page with one has nothing to name; a page with
+                // two sessions on it has to be told which of them speaks, and being able to say so is
+                // the whole of how a page ever carries more than one turn at a time.
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
                 if flagged(with, "away") {
                     format!(
-                        "In the pane that has a terminal running in it, run: sleep {SAY_AWAY_SECONDS} && amenbo talk {command} \"{text}\" — then carry out the next step before those seconds are up. What lands is {what}, and it lands while the pane it was said in is off the screen, which is the only shape it ever reaches a reader who is somewhere else in."
+                        "In {pane}, run: sleep {SAY_AWAY_SECONDS} && amenbo talk {command} \"{text}\" — then carry out the next step before those seconds are up. What lands is {what}, and it lands while the pane it was said in is off the screen, which is the only shape it ever reaches a reader who is somewhere else in."
                     )
                 } else {
                     format!(
-                        "In the pane that has a terminal running in it, run: amenbo talk {command} \"{text}\" — this is {what}."
+                        "In {pane}, run: amenbo talk {command} \"{text}\" — this is {what}."
                     )
                 }
             }
@@ -2393,7 +2401,7 @@ impl Instructor {
                     None => "the pane that has a terminal running in it".to_string(),
                 };
                 format!(
-                    "Click once on {pane} — on the terminal itself, not on the row above it — and type nothing. Nothing is sent: the press is a reader going back to the work, and what it is for is what happens to the column beside it."
+                    "Click once on {pane} — on the terminal itself, not on the row above it — and type nothing. Nothing is sent and nothing in the pane changes: the press is a reader going to that pane, and what it is for is what happens elsewhere on the screen."
                 )
             }
             // A file put in the folder from outside Amenbo, while the app is up. It is written as an

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionSaidDto } from "../bindings/bindings";
-import { closed, NO_SESSIONS, opened, said, seen, sent, unsent } from "./sessions";
+import { closed, NO_SESSIONS, opened, said, seen, sent, turnStands, unsent } from "./sessions";
 
 const AT = "2026-08-24T09:00:00Z";
 
@@ -103,6 +103,40 @@ describe("the sessions the window is running", () => {
     const map = unsent(NO_SESSIONS, "pane-9");
     expect(map.size).toBe(0);
     expect(sent(NO_SESSIONS, "pane-9").size).toBe(0);
+  });
+
+  it("takes a turn down when the person comes to the pane, and keeps why they were called", () => {
+    let map = opened(NO_SESSIONS, { session: "pane-1", startedAt: AT });
+    map = said(map, statement({ verb: "waiting", text: "which of the two" }));
+    expect(turnStands(map.get("pane-1"))).toBe(true);
+
+    map = seen(map, "pane-1", "2026-08-24T09:01:00Z");
+    expect(turnStands(map.get("pane-1"))).toBe(false);
+    // The reason outlives the turn: somebody who answered can still read what they were called for.
+    expect(map.get("pane-1")?.waiting).toBe("which of the two");
+  });
+
+  it("keeps the first arrival, and puts the question back on the next turn", () => {
+    let map = opened(NO_SESSIONS, { session: "pane-1", startedAt: AT });
+    map = said(map, statement({ verb: "waiting", text: "which of the two" }));
+    map = seen(map, "pane-1", "2026-08-24T09:01:00Z");
+    // Still there: what is being asked is whether they have been back since the pane spoke, so a
+    // second arrival is not news and must not move the answer.
+    expect(seen(map, "pane-1", "2026-08-24T09:02:00Z")).toBe(map);
+
+    map = said(map, statement({ verb: "waiting", text: "and now this" }));
+    expect(turnStands(map.get("pane-1"))).toBe(true);
+  });
+
+  it("says nothing stands where nothing was said, whoever has been to the pane", () => {
+    // Silence is not a turn, and arriving at a pane that never called is not an answer to one.
+    let map = opened(NO_SESSIONS, { session: "pane-1", startedAt: AT });
+    expect(turnStands(map.get("pane-1"))).toBe(false);
+    map = seen(map, "pane-1", "2026-08-24T09:01:00Z");
+    expect(turnStands(map.get("pane-1"))).toBe(false);
+    expect(turnStands(undefined)).toBe(false);
+    // And a pane the window is not holding is not recorded for.
+    expect(seen(NO_SESSIONS, "pane-9", AT).size).toBe(0);
   });
 
   it("keeps nothing of a session whose terminal has closed", () => {

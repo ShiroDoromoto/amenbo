@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import { endTerminal, focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
+import { sawPane } from "../talk/standing";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { pushNotice } from "../core/notice";
@@ -296,7 +297,19 @@ export function TerminalPane({
     <div
       className={`slot${focused ? " slot--focused" : ""}${landed ? " slot--landed" : ""}`}
       data-hand={frame}
-      onMouseDown={() => onFocus(frame)}
+      onMouseDown={() => {
+        onFocus(frame);
+        // **The press is what ends a turn** (`AMB-D-859`): the hand goes up by declaration and comes
+        // down by measurement, and a person going to the pane is the measurement. It is said to the
+        // window rather than to the row above this pane, because the dots on the pages are read off
+        // the same record and the two must not come apart (`../talk/standing`).
+        //
+        // **Going to the pane, and not looking at the face it is on.** Bringing the terminal forward
+        // is how a person answers the call — a turn taken down by that would be gone before they
+        // could read what it was for, and the reason is half of what the word says (`AMB-D-748`).
+        // So the mark stands until they press the pane it is above, which is also how they answer it.
+        if (live !== null) sawPane(live);
+      }}
     >
       {/* What is said about this terminal, and the one control the place has. They share the row
           because the row is what is said about this pane, and removing it is the last thing there is

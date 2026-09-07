@@ -495,6 +495,56 @@ export function setOrient(layout: Layout, orient: Orient): Layout {
 }
 
 /**
+ * One pane put before or after another, within the list its project's panes make.
+ *
+ * **The list is the whole of what a reorder moves.** The pages are that list cut at the count
+ * (`slotsOf`), so a pane carried onto another page is the same move as one carried across a page —
+ * there is no second operation for crossing one, and none is drawn (`AMB-D-853`).
+ *
+ * A pane dropped on itself, and an id no pane in the list has, both come back as the list unchanged:
+ * a gesture that settled nowhere is not a new order.
+ */
+export function movedWithin(
+  panes: readonly Frame[],
+  moved: string,
+  target: string,
+  side: "before" | "after",
+): readonly Frame[] {
+  if (moved === target) return panes;
+  const one = panes.find((each) => each.id === moved);
+  if (!one || !panes.some((each) => each.id === target)) return panes;
+  const rest = panes.filter((each) => each.id !== moved);
+  const at = rest.findIndex((each) => each.id === target);
+  rest.splice(side === "before" ? at : at + 1, 0, one);
+  return rest;
+}
+
+/**
+ * The shown project's panes put in this order, with everything else left as it stands.
+ *
+ * **Only the shown project's panes move.** A frame's project is settled when it is made (`Frame`), so
+ * the reorder is written back into the places this project's frames already hold in the whole list
+ * and the frames of every other project stay where they are.
+ *
+ * **The page and the pane being worked in are not touched.** A pane that has moved onto another page
+ * is still the pane the person was in, and taking them to it would be the reorder deciding where they
+ * are looking (`AMB-D-853`, `goPage`).
+ *
+ * An order that is not this project's panes — one short, one over, or one from another project — is
+ * refused whole rather than written in part.
+ */
+export function reordered(layout: Layout, order: readonly Frame[]): Layout {
+  const panes = panesOf(layout, layout.project);
+  if (order.length !== panes.length) return layout;
+  const ids = new Set(panes.map((one) => one.id));
+  if (!order.every((one) => ids.has(one.id))) return layout;
+  const places = layout.frames.flatMap((one, at) => (one.project === layout.project ? [at] : []));
+  const frames = [...layout.frames];
+  places.forEach((place, i) => { frames[place] = order[i]!; });
+  return { ...layout, frames };
+}
+
+/**
  * The arrangement as it is written down, for the other window to read.
  *
  * **What is written is the shape**: the split each project has been answered at, the panes in the

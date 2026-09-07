@@ -17,6 +17,23 @@ export function sideOfRow(clientY: number, rect: { top: number; height: number }
 }
 
 /**
+ * Which half of a box the pointer is in, along whichever axis the boxes are laid out on.
+ *
+ * A list runs down the screen and a grid runs across it, and both settle the same question — before
+ * this one, or after it. The midline is the midline either way, so the axis is a parameter rather
+ * than a second piece of arithmetic (`../shell/PaneOrder`).
+ */
+export function sideOfBox(
+  point: Point,
+  rect: { top: number; height: number; left: number; width: number },
+  axis: "across" | "down",
+): "before" | "after" {
+  return axis === "down"
+    ? sideOfRow(point.y, rect)
+    : sideOfRow(point.x, { top: rect.left, height: rect.width });
+}
+
+/**
  * Where a drag that ended here would put the row, or nothing where it would put it back.
  *
  * A row dropped on itself is not a move, and neither is one dropped off the list. Both come back as

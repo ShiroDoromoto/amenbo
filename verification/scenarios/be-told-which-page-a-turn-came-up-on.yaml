@@ -45,13 +45,13 @@
 # `come-back-to-the-terminal-a-page-turn-took-away` walks, and it carries a running terminal exactly
 # as a page turn does.
 #
-# ── Why the mark is spent by the work resuming, and not by looking ───────────────────────────────
+# ── Why the mark is spent by the reader reaching the page ────────────────────────────────────────
 # Crossing to the terminal face spends the segment's mark, because being on that face is being told.
-# A page digit is not that: going to the page tells the reader, but the turn is still standing until
-# the session says otherwise, and a mark taken down by a glance would leave a reader who paged past
-# it with nothing. What takes it down is the session going back to work — `talk note`, which is the
-# same word that clears the lamp on the pane's own row. The road walks that, because a mark with no
-# way down is a light a reader learns to ignore.
+# A page digit is not that: the digit says turns are standing on a page the reader cannot see, and
+# what answers it is going there. So the mark comes down when those panes are on the screen and not a
+# step earlier: a turn is put down by the person who was asked for it, and the session has no word
+# for putting one down. The road walks that, because a mark with no way down is a light a reader
+# learns to ignore.
 #
 # The world is empty on purpose. What raises the mark is a session's own word, not a record, and the
 # folder is not furniture either — choosing one is what raises the project it belongs to, so the road
@@ -62,8 +62,8 @@ description: >
   Open the terminal face, choose the folder the panes run in, and build four panes one to a page, each
   named by a line of its own. Cut to two to a page, and hand the turn over from both panes on the
   second page — the last of them armed, so it lands after the press back to the first page. The digit
-  2 is marked and carrying a 2, and the digit of the page being stood on is bare. Say the work has
-  resumed in both, and the mark is gone: it follows the turns, not the looking.
+  2 is marked and carrying a 2, and the digit of the page being stood on is bare. Go to page 2, where
+  both panes are, and come back: the mark is gone — it followed the turns, and both were answered.
 
 steps_gui:
   - type: action
@@ -212,9 +212,9 @@ steps_gui:
       page: 1
       present: false
 
-  # Back to the panes, to say the work has resumed in both. This is said standing at them rather than
-  # armed — nothing is being raised behind anybody's back, and what is under test is the mark coming
-  # down.
+  # To the page the digit was about, which is the whole of answering it: both panes are on the screen
+  # and the person asked for is looking at them. Nothing is said here, the session having no word for
+  # putting a turn down — the reader arriving is the whole of it coming down.
   - type: action
     domain: terminal
     op: go-page
@@ -223,29 +223,13 @@ steps_gui:
 
   - type: action
     domain: terminal
-    op: say
-    with:
-      verb: note
-      text: SCENARIO back at work
-      shows: SCENARIO charlie
-
-  - type: action
-    domain: terminal
-    op: say
-    with:
-      verb: note
-      text: SCENARIO back at work
-      shows: SCENARIO delta
-
-  - type: action
-    domain: terminal
     op: go-page
     with:
       page: 1
 
-  # Spent by the turns ending, which is the half that keeps the digits worth reading. A mark still up
-  # after both sessions went back to work would be one a reader has to dismiss, and the whole of this
-  # is that they never do.
+  # Spent by the turns being answered, which is the half that keeps the digits worth reading. A mark
+  # still up after the reader has been to the page would be one they have to dismiss, and the whole of
+  # this is that they never do.
   - type: assert
     domain: terminal
     op: page-mark

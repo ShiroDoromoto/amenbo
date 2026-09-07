@@ -31,9 +31,7 @@ pub(crate) fn talk_cmd(flags: &Flags, sub: Option<&TalkCmd>) -> Result<i32, CliE
 fn statement(sub: &TalkCmd) -> Statement {
     match sub {
         TalkCmd::Name { text } => Statement::Name(text.clone()),
-        TalkCmd::Note { text } => Statement::Note(text.clone()),
         TalkCmd::Waiting { text } => Statement::Waiting(text.clone()),
-        TalkCmd::Finished { text } => Statement::Finished(text.clone()),
     }
 }
 
@@ -57,9 +55,7 @@ fn say(flags: &Flags, surface: &Surface, statement: Statement) -> Result<i32, Cl
 fn said(statement: &Statement) -> String {
     match statement {
         Statement::Name(text) => format!("this pane is now called “{text}”"),
-        Statement::Note(text) => format!("note: {text}"),
         Statement::Waiting(text) => format!("waiting for a person: {text}"),
-        Statement::Finished(text) => format!("finished: {text}"),
         // Not a verb anyone types: `amenbo agent` leaves it on its own (`AMB-D-805`), so no route
         // through `talk` ever reaches this line.
         Statement::Briefed => "read the canon".to_string(),
@@ -80,10 +76,15 @@ fn canon(flags: &Flags) -> i32 {
     for line in spec["owed"].as_array().into_iter().flatten() {
         human(flags, format!("  • {}", line.as_str().unwrap_or_default()));
     }
-    human(flags, "");
-    human(flags, "Offered:");
-    for line in spec["offered"].as_array().into_iter().flatten() {
-        human(flags, format!("  • {}", line.as_str().unwrap_or_default()));
+    // Printed only when there is something in it. The canon keeps the key either way — an empty list
+    // is the statement that nothing here may be left out (`AMB-D-859`) — but a heading with no lines
+    // under it reads on a terminal as an answer that got cut off.
+    if let Some(lines) = spec["offered"].as_array().filter(|o| !o.is_empty()) {
+        human(flags, "");
+        human(flags, "Offered:");
+        for line in lines {
+            human(flags, format!("  • {}", line.as_str().unwrap_or_default()));
+        }
     }
     human(flags, "");
     for c in spec["commands"].as_array().into_iter().flatten() {

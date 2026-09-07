@@ -2423,8 +2423,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "remove-pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // Something the agent in the pane said about its own session — the surface layer, said with the
     // CLI from inside the terminal it is about. `verb` is which of the layer's words was used and
-    // `text` is what was said in it; both travel as values because the layer is one seam with several
-    // words, and an op per word would be the same instruction written four times.
+    // `text` is what was said in it; both travel as values because the layer is one seam with more
+    // than one word, and an op per word would be the same instruction written out once each.
     //
     // It is walked by a hand rather than by a driver on purpose. The layer exists only inside a pane
     // — said anywhere else it is refused — so there is no way to reach it except the one an agent

@@ -892,10 +892,7 @@ impl SessionSaidDto {
         use amenbo_core::session::Statement;
         let verb = said.statement.verb();
         let text = match said.statement {
-            Statement::Name(text)
-            | Statement::Note(text)
-            | Statement::Waiting(text)
-            | Statement::Finished(text) => Some(text),
+            Statement::Name(text) | Statement::Waiting(text) => Some(text),
             // The fact is the whole of it, so there is no line to draw (`AMB-D-805`).
             Statement::Briefed => None,
         };
@@ -1409,9 +1406,8 @@ mod tests {
         let pane = Pane::new("main");
 
         for spoken in [
-            Statement::Note("reading the canon".into()),
+            Statement::Name("the top fix".into()),
             Statement::Waiting("which way?".into()),
-            Statement::Finished("done".into()),
         ] {
             say(&surface, &spoken).expect("said");
         }

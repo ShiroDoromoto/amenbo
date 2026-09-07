@@ -44,9 +44,7 @@ fn outside_the_talk_window_every_verb_is_refused_rather_than_quietly_accepted() 
     let cli = Cli::new();
     for verb in [
         vec!["talk", "name", "the top fix"],
-        vec!["talk", "note", "reading the migration"],
         vec!["talk", "waiting", "a decision is needed"],
-        vec!["talk", "finished", "it landed"],
         vec!["talk"],
     ] {
         let (stderr, code) = cli.run_err(&verb);
@@ -80,7 +78,7 @@ fn a_session_named_without_a_drop_box_is_still_outside_the_window() {
         vec![("AMENBO_SESSION_DIR", path.as_str())],
         vec![("AMENBO_SESSION", " "), ("AMENBO_SESSION_DIR", path.as_str())],
     ] {
-        let (_, code) = cli.run_env(&half, &["talk", "note", "half"]);
+        let (_, code) = cli.run_env(&half, &["talk", "name", "half"]);
         assert_eq!(code, 1, "half a window is not a window: {half:?}");
     }
     assert!(
@@ -99,9 +97,7 @@ fn inside_a_pane_each_statement_is_left_whole_for_the_window() {
 
     for (args, _) in [
         (vec!["talk", "name", "the top fix"], ()),
-        (vec!["talk", "note", "reading the migration"], ()),
         (vec!["talk", "waiting", "a decision is needed"], ()),
-        (vec!["talk", "finished", "it landed"], ()),
     ] {
         let (stdout, code) = cli.run_env(&pane_env(&pane), &args);
         assert_eq!(code, 0, "{args:?} is accepted inside a pane: {stdout}");
@@ -111,7 +107,7 @@ fn inside_a_pane_each_statement_is_left_whole_for_the_window() {
     let verbs: Vec<&str> = said.iter().map(|s| s["verb"].as_str().unwrap_or_default()).collect();
     assert_eq!(
         verbs,
-        vec!["name", "note", "waiting", "finished"],
+        vec!["name", "waiting"],
         "the window reads them in the order they were said",
     );
     assert!(
@@ -167,8 +163,8 @@ fn a_reason_too_long_for_the_label_is_refused_at_the_door_and_leaves_nothing_beh
     let (stdout, code) =
         cli.run_env(&pane_env(&pane), &["talk", "waiting", &"あ".repeat(limit / 2)]);
     assert_eq!(code, 0, "a reason of exactly the bound is accepted: {stdout}");
-    let (stdout, code) = cli.run_env(&pane_env(&pane), &["talk", "note", &past]);
-    assert_eq!(code, 0, "and a note of the same length is nobody's business but the row's: {stdout}");
+    let (stdout, code) = cli.run_env(&pane_env(&pane), &["talk", "name", &past]);
+    assert_eq!(code, 0, "and a name of the same length is nobody's business but the row's: {stdout}");
     assert_eq!(statements(&dir).len(), 2, "the two that were accepted are the two that were left");
 }
 
@@ -198,7 +194,11 @@ fn the_canon_is_served_inside_the_window_and_names_what_is_owed() {
     assert_eq!(code, 0, "the canon is served inside the window: {stdout}");
     let spec: serde_json::Value = serde_json::from_str(&stdout).expect("the canon is JSON");
     let owed = spec["owed"].as_array().expect("what is owed is a list").len();
-    assert_eq!(owed, 3, "three statements are owed — name, waiting and finished — and no more: {spec}");
+    assert_eq!(owed, 2, "two statements are owed — name and waiting — and no more: {spec}");
+    assert!(
+        spec["offered"].as_array().is_some_and(|o| o.is_empty()),
+        "and nothing here is the speaker's to leave out (`AMB-D-859`): {spec}",
+    );
     assert!(
         statements(&dir).is_empty(),
         "reading the canon says nothing about the session, so nothing is left for the window",
@@ -228,16 +228,24 @@ fn the_agent_entry_point_does_not_teach_a_vocabulary_most_readers_cannot_run() {
 ///
 /// The risk the name carries is that `talk <text>` reads as a mouth that talks to the agent, and an AI
 /// that believed it had one would send a person's answer into a drop box nobody speaks from
-/// (`AMB-D-757`). So the layer answers to its four verbs and to nothing else: a word that is not one of
-/// them fails at the door, where the mistake is still visible.
+/// (`AMB-D-757`). So the layer answers to its two verbs and to nothing else: a word that is not one of
+/// them fails at the door, where the mistake is still visible. `talk note` and `talk finished` are two
+/// such words, and an agent carrying an older habit types them — so they are walked here beside the
+/// bare one, to pin that the refusal is the same.
 #[test]
 fn a_bare_word_under_talk_is_refused_rather_than_taken_as_something_to_say() {
     let cli = Cli::new();
     let dir = amenbo_scratch::scratch("talk-bare-word");
     let pane = in_a_pane(&dir);
 
-    let (stderr, code) = cli.run_env_err(&pane_env(&pane), &["talk", "carry on then"]);
-    assert_ne!(code, 0, "a bare word is not a verb of the layer: {stderr}");
+    for stray in [
+        vec!["talk", "carry on then"],
+        vec!["talk", "note", "reading the migration"],
+        vec!["talk", "finished", "it landed"],
+    ] {
+        let (stderr, code) = cli.run_env_err(&pane_env(&pane), &stray);
+        assert_ne!(code, 0, "{stray:?} is not a verb of the layer: {stderr}");
+    }
     assert!(
         !dir.exists() || statements(&dir).is_empty(),
         "and nothing was left for the window to read",

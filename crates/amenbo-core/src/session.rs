@@ -84,12 +84,18 @@ fn from_parts(session: Option<String>, dir: Option<std::ffi::OsString>) -> Optio
 
 /// What an AI says about the session it is in.
 ///
-/// Four of them are verbs of the spoken vocabulary — `amenbo talk <verb>`, one variant each. Three of
-/// those are owed: [`Statement::Name`], [`Statement::Waiting`] and [`Statement::Finished`], which say
-/// the things nothing else can find out (`AMB-D-748`). A folder answers "where", never "which one" —
-/// several panes opened on the same folder wear the same label, and the one thing that tells them
-/// apart is what the AI in each calls itself. [`Statement::Note`] is offered: a pane nobody notes is a
-/// pane with an empty second line, which misleads no one.
+/// Two of them are verbs of the spoken vocabulary — `amenbo talk <verb>`, one variant each — and both
+/// are owed (`AMB-D-859`). They are the two things a person watching the pane cannot find out:
+/// [`Statement::Name`], because a folder answers "where" and never "which one" — several panes opened
+/// on the same folder wear the same label, and what tells them apart is what the AI in each calls
+/// itself — and [`Statement::Waiting`], because silence looks the same whether the AI is building,
+/// thinking, or waiting.
+///
+/// **What the AI is doing now is not among them: the terminal is already showing it.** A word for that
+/// would be one more word to forget, and every line on the label is an agent's own declaration with
+/// nothing deriving it (`AMB-D-858`) — so a word left unsaid is a line left blank. The turn is put
+/// down by measurement rather than by a second word: the window drops it when a person looks at the
+/// pane (`AMB-D-859`).
 ///
 /// [`Statement::Briefed`] is the one that is not spoken. It says the same kind of thing about the same
 /// session and travels the same drop box, so it belongs to this vocabulary; what it does not have is a
@@ -99,12 +105,8 @@ pub enum Statement {
     /// Name this pane. The name sticks to the frame, not to the process in it. Owed — the folder a
     /// pane sits in is not a name for that pane (`AMB-D-748`).
     Name(String),
-    /// A line about what is being done now, for the pane's label. Offered.
-    Note(String),
     /// A person's turn has come, and why. Owed — the window cannot derive it (`AMB-D-748`).
     Waiting(String),
-    /// The work is done, and what came of it. Owed, for the same reason.
-    Finished(String),
     /// The AI in this pane has run `amenbo agent`, so it has read the canon and knows Amenbo is here
     /// (`AMB-D-805`). Left by [`briefed`] rather than said, and carrying nothing but the fact.
     Briefed,
@@ -185,14 +187,12 @@ impl Statement {
         (got > WAITING_LIMIT).then_some(Overlong { got, limit: WAITING_LIMIT })
     }
 
-    /// The word this statement is filed under, and the one the window branches on. For the spoken four
+    /// The word this statement is filed under, and the one the window branches on. For the spoken two
     /// it is the verb the person typed, so the two never drift.
     pub fn verb(&self) -> &'static str {
         match self {
             Statement::Name(_) => "name",
-            Statement::Note(_) => "note",
             Statement::Waiting(_) => "waiting",
-            Statement::Finished(_) => "finished",
             Statement::Briefed => "briefed",
         }
     }
@@ -200,10 +200,7 @@ impl Statement {
     /// The statement's own fields, on top of the ones every statement carries.
     fn body(&self) -> Value {
         match self {
-            Statement::Name(text)
-            | Statement::Note(text)
-            | Statement::Waiting(text)
-            | Statement::Finished(text) => json!({ "text": text }),
+            Statement::Name(text) | Statement::Waiting(text) => json!({ "text": text }),
             // The fact is the whole of it: the verb says what happened and the fields every statement
             // carries say in which pane and when.
             Statement::Briefed => json!({}),
@@ -315,10 +312,17 @@ pub struct Said {
 
 impl Said {
     /// Read one statement back out of the record [`say`] wrote, or `None` when this reader cannot make
-    /// sense of it — a shape from a later version, or a file that is not a statement at all.
+    /// sense of it — a shape from a later version, a verb this version no longer has, or a file that is
+    /// not a statement at all.
     ///
     /// A window left running across an update is what this is for. It goes on reading the statements it
     /// knows and passes over the ones it does not, rather than drawing a verb it can mean nothing by.
+    ///
+    /// **Which is also how a verb that was withdrawn leaves.** `note` and `finished` were said until
+    /// `AMB-D-859`, and an older CLI beside a newer window still posts them. They land here as a word
+    /// with no arm and are passed over — dropped without a sound, the same way a word from the future
+    /// is. Recording them would put a line on the label that the pane has no meaning for, which is
+    /// worse than the blank second line the withdrawal was for.
     fn read(name: &str, v: &Value) -> Option<Said> {
         if v["schema"].as_u64()? > u64::from(SCHEMA) {
             return None;
@@ -326,9 +330,7 @@ impl Said {
         let text = || v["text"].as_str().map(str::to_string);
         let statement = match v["verb"].as_str()? {
             "name" => Statement::Name(text()?),
-            "note" => Statement::Note(text()?),
             "waiting" => Statement::Waiting(text()?),
-            "finished" => Statement::Finished(text()?),
             "briefed" => Statement::Briefed,
             _ => return None,
         };
@@ -393,23 +395,17 @@ pub fn spec() -> Value {
              way to tell which one to look at.",
             "Say `waiting` the moment a person's turn has come, and why. Nobody can find this out by \
              watching — silence looks the same whether you are building, thinking, or waiting. The \
-             reason goes on one line of the pane's label beside two other things, so it is bounded and \
-             a longer one is refused rather than cut: say the one thing they have to decide, and leave \
-             what led up to it where it will still be true tomorrow.",
-            "Say `finished` when the work is done, and what came of it."
+             reason goes on one line of the pane's label beside the name, so it is bounded and a \
+             longer one is refused rather than cut: say the one thing they have to decide, and leave \
+             what led up to it where it will still be true tomorrow."
         ],
-        "offered": [
-            "`note` puts what you are doing now beside the name. Say nothing and the pane carries its \
-             name alone, which misleads no one."
-        ],
+        "offered": [],
         "promises": "A statement is information, never a promise. Say what has happened, not what you \
                      will do — a person who believes a promise stops checking, and this layer cannot \
                      make one hold.",
         "commands": [
             { "command": "talk name", "args": "<text>", "summary": "Name this pane. The name sticks to the frame, so it survives what runs in it." },
-            { "command": "talk note", "args": "<text>", "summary": "A line about what you are doing now, shown on the pane's label." },
-            { "command": "talk waiting", "args": "<text>", "summary": format!("A person's turn has come. Say why in the same breath — the reason is what they read. It goes on one line of the label: up to {WAITING_LIMIT} columns — {WAITING_LIMIT} characters of English or half that of Japanese — and a longer one is refused rather than cut.") },
-            { "command": "talk finished", "args": "<text>", "summary": "The work is done. Say what came of it." }
+            { "command": "talk waiting", "args": "<text>", "summary": format!("A person's turn has come. Say why in the same breath — the reason is what they read. It goes on one line of the label: up to {WAITING_LIMIT} columns — {WAITING_LIMIT} characters of English or half that of Japanese — and a longer one is refused rather than cut.") }
         ],
         // Columns rather than characters, so the bound means the same room in every language it is
         // written in. A reader that wants to check before speaking can, and a reader that does not
@@ -477,11 +473,7 @@ mod tests {
             "the room the reason takes is the reason, not the spaces around it",
         );
 
-        for other in [
-            Statement::Name("x".repeat(WAITING_LIMIT * 3)),
-            Statement::Note("x".repeat(WAITING_LIMIT * 3)),
-            Statement::Finished("x".repeat(WAITING_LIMIT * 3)),
-        ] {
+        for other in [Statement::Name("x".repeat(WAITING_LIMIT * 3)), Statement::Briefed] {
             assert_eq!(other.overlong(), None, "only the reason is bounded: {other:?}");
         }
     }
@@ -490,11 +482,8 @@ mod tests {
     fn texts(said: &[Said]) -> Vec<String> {
         said.iter()
             .map(|s| match &s.statement {
-                Statement::Name(t)
-                | Statement::Note(t)
-                | Statement::Waiting(t)
-                | Statement::Finished(t) => t.clone(),
-                // Nothing was said; the mark is not one of the spoken four.
+                Statement::Name(t) | Statement::Waiting(t) => t.clone(),
+                // Nothing was said; the mark is not one of the spoken verbs.
                 Statement::Briefed => String::new(),
             })
             .collect()
@@ -505,7 +494,7 @@ mod tests {
         let dir = amenbo_scratch::scratch("session-order");
         let s = surface_at(&dir);
         for verb in ["one", "two", "three"] {
-            say(&s, &Statement::Note(verb.to_string())).expect("written");
+            say(&s, &Statement::Name(verb.to_string())).expect("written");
         }
         let said = said_after(&dir, None).expect("read back");
         assert_eq!(
@@ -524,7 +513,7 @@ mod tests {
         let dir = amenbo_scratch::scratch("session-after");
         let s = surface_at(&dir);
         for verb in ["one", "two"] {
-            say(&s, &Statement::Note(verb.to_string())).expect("written");
+            say(&s, &Statement::Name(verb.to_string())).expect("written");
         }
         let first = said_after(&dir, None).expect("read back");
         assert_eq!(texts(&first), vec!["one", "two"]);
@@ -535,7 +524,7 @@ mod tests {
             "nothing was said since, so nothing comes back",
         );
 
-        say(&s, &Statement::Note("three".into())).expect("written");
+        say(&s, &Statement::Name("three".into())).expect("written");
         assert_eq!(
             texts(&said_after(&dir, Some(&last)).expect("read back")),
             vec!["three"],
@@ -547,7 +536,7 @@ mod tests {
     fn a_half_written_file_is_not_read_and_neither_is_a_directory_nobody_used() {
         let dir = amenbo_scratch::scratch("session-partial");
         let s = surface_at(&dir);
-        say(&s, &Statement::Note("real".into())).expect("written");
+        say(&s, &Statement::Name("real".into())).expect("written");
         // What a composing writer leaves behind: a dotted, extension-less name a reader must skip.
         fs::write(dir.join(".00000000000000000001-1-0000.json.partial"), "{\"verb\":").unwrap();
         let said = said_after(&dir, None).expect("read back");
@@ -563,15 +552,21 @@ mod tests {
 
     /// A window left running across an update meets shapes it was not written for. It passes over them
     /// and goes on with the rest — drawing a verb it cannot mean anything by is the failure here.
+    ///
+    /// **A verb that was withdrawn arrives the same way, from the other direction**: an older CLI
+    /// beside this window still posts `note` and `finished`, which this reader no longer has an arm
+    /// for (`AMB-D-859`). They are passed over exactly as a word from a later version is.
     #[test]
     fn a_statement_this_reader_cannot_understand_is_passed_over() {
         let dir = amenbo_scratch::scratch("session-unknown");
         let s = surface_at(&dir);
-        say(&s, &Statement::Note("real".into())).expect("written");
+        say(&s, &Statement::Name("real".into())).expect("written");
         for (name, body) in [
-            ("00000000000000000001-1-0000.json", json!({ "schema": SCHEMA + 1, "session": "pane-1", "at": "2026-08-24T00:00:00Z", "verb": "note", "text": "from a later version" })),
+            ("00000000000000000001-1-0000.json", json!({ "schema": SCHEMA + 1, "session": "pane-1", "at": "2026-08-24T00:00:00Z", "verb": "name", "text": "from a later version" })),
             ("00000000000000000002-1-0000.json", json!({ "schema": SCHEMA, "session": "pane-1", "at": "2026-08-24T00:00:00Z", "verb": "shrug", "text": "a verb that is not one" })),
-            ("00000000000000000003-1-0000.json", json!({ "schema": SCHEMA, "session": "pane-1", "at": "2026-08-24T00:00:00Z", "verb": "note" })),
+            ("00000000000000000003-1-0000.json", json!({ "schema": SCHEMA, "session": "pane-1", "at": "2026-08-24T00:00:00Z", "verb": "name" })),
+            ("00000000000000000004-1-0000.json", json!({ "schema": SCHEMA, "session": "pane-1", "at": "2026-08-24T00:00:00Z", "verb": "note", "text": "from a CLI that still has the word" })),
+            ("00000000000000000005-1-0000.json", json!({ "schema": SCHEMA, "session": "pane-1", "at": "2026-08-24T00:00:00Z", "verb": "finished", "text": "and the other one" })),
         ] {
             fs::write(dir.join(name), body.to_string()).unwrap();
         }
@@ -609,7 +604,7 @@ mod tests {
         let dir = amenbo_scratch::scratch("session-briefed-old");
         let s = surface_at(&dir);
         say(&s, &Statement::Briefed).expect("written");
-        say(&s, &Statement::Note("reading the migration".into())).expect("written");
+        say(&s, &Statement::Name("reading the migration".into())).expect("written");
 
         let said = said_after(&dir, None).expect("read back");
         assert_eq!(said.len(), 2, "this reader knows both: {said:?}");
@@ -619,7 +614,7 @@ mod tests {
             )
             .unwrap()["schema"]
                 == SCHEMA),
-            "and both were left at the schema the four spoken verbs are left at",
+            "and both were left at the schema the spoken verbs are left at",
         );
     }
 
@@ -652,10 +647,16 @@ mod tests {
             .iter()
             .map(|c| c["command"].as_str().unwrap_or_default())
             .collect();
-        for verb in ["name", "note", "waiting", "finished"] {
+        for verb in ["name", "waiting"] {
             assert!(
                 named.contains(&format!("talk {verb}").as_str()),
                 "the canon is missing `talk {verb}`: {named:?}",
+            );
+        }
+        for withdrawn in ["talk note", "talk finished"] {
+            assert!(
+                !named.contains(&withdrawn),
+                "the canon still teaches {withdrawn}, which no longer parses (`AMB-D-859`): {named:?}",
             );
         }
         assert!(
@@ -665,21 +666,25 @@ mod tests {
     }
 
     /// Which side of the line each verb sits on is the whole of what a reader takes from the canon, and
-    /// naming the pane is on the owed side: a folder says where a pane is and never which of several in
-    /// it this one is (`AMB-D-748`). A verb that slid to the offered side would still be documented and
-    /// still work, and nothing but this would notice.
+    /// both of the remaining verbs are on the owed side (`AMB-D-859`). A verb that slid to the offered
+    /// side would still be documented and still work, and nothing but this would notice.
+    ///
+    /// **The offered side is empty rather than gone**, because that is the statement: there is no word
+    /// here a speaker may leave out. A reader is told so instead of being left to infer it from a
+    /// missing key.
     #[test]
-    fn naming_the_pane_is_owed_and_the_note_is_offered() {
+    fn both_verbs_are_owed_and_nothing_is_left_to_the_speaker() {
         let spec = spec();
         let side = |key: &str| -> String {
             spec[key].as_array().into_iter().flatten().filter_map(|l| l.as_str()).collect()
         };
         let (owed, offered) = (side("owed"), side("offered"));
-        for verb in ["`name`", "`waiting`", "`finished`"] {
+        for verb in ["`name`", "`waiting`"] {
             assert!(owed.contains(verb), "the canon owes {verb}: {owed}");
-            assert!(!offered.contains(verb), "and does not also offer it: {offered}");
         }
-        assert!(offered.contains("`note`"), "the note is what is left to the speaker: {offered}");
-        assert!(!owed.contains("`note`"), "and is not owed as well: {owed}");
+        assert!(
+            spec["offered"].as_array().is_some_and(|o| o.is_empty()),
+            "and offers nothing at all: {offered}",
+        );
     }
 }

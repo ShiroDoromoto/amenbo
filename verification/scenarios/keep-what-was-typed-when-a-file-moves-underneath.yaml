@@ -249,3 +249,60 @@ steps_gui:
     with:
       shows: fourth the seedlings
       present: false
+
+  # ── what actually differs, and the answer that keeps what was typed ─────────────────────────────
+  # The line says the file moved and nothing more, so a reader cannot choose from it: the two texts
+  # have to be put side by side first. The answers stand on that screen as well as beside the line,
+  # so nobody closes it and then chooses from memory.
+  - type: action
+    domain: files
+    op: see-difference
+
+  - type: assert
+    domain: files
+    op: compared
+    with:
+      theirs: fourth the seedlings
+      mine: typed with the tab about to move
+
+  # The answer there was no way to give before this: the reader keeps their own text and the file is
+  # written over. Which of the two stands is theirs to say, and this is them saying it.
+  - type: action
+    domain: files
+    op: keep-mine
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: changed-underneath
+      present: false
+
+  # And the bytes really landed. What the panel draws after a save would read the same whether or not
+  # anything was written, so the file is let go of and opened again — which is the app reading the
+  # disk, and the one reading that could not have come from what was on the screen.
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: typed with the tab about to move
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: fourth the seedlings
+      present: false

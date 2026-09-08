@@ -2929,6 +2929,16 @@ const REGISTRY: &[OpSpec] = &[
     // whole: a reading finds each name wherever it stands, and finds them all with a fourth tab
     // beside them. Both are what this exists to catch.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "tabs", required: &["names"], refs: &[], strings: &[], binds: false },
+    // The mark on one tab, which says that file is holding something the disk does not have. Named
+    // by the file rather than read off whichever tab is on top: the mark belongs to the text, so
+    // several tabs can carry one at once and a road says which it means.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "tab-unsaved", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // And one tab closed by the cross on it, which is the press that throws away what that file is
+    // holding. `answer` is what the reader says to the question in front of it — `yes` closes the tab,
+    // `no` leaves it standing — and is left out for a file with nothing to lose, where the press asks
+    // nothing at all. It is not `back` with a name: that one closes the file being read, from the row
+    // above it, and this is the row of tabs.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "close-tab", required: &["name"], refs: &[], strings: &["name", "answer"], binds: false },
 
     // ── changing what is in a file ────────────────────────────────────────────────────────────────
     // The words typed into the editor an opened file draws. They go on the end and on a line of their
@@ -2985,6 +2995,18 @@ const REGISTRY: &[OpSpec] = &[
     // a reading taken after it is a reading of the bytes, and it is how a road tells a save that was
     // refused from one that went through without leaving the file and opening it again.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "read-again", required: &[], refs: &[], strings: &[], binds: false },
+    // The question a reader cannot settle from the line alone: what actually differs. The press puts
+    // the disk's text and the editor's side by side, and the two answers stand on that screen as well
+    // as beside the line — so nobody chooses from memory after closing it.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "see-difference", required: &[], refs: &[], strings: &[], binds: false },
+    // And that screen read back: a word out of each side, named by which side it is on. Both are
+    // asked for in one step because what it exists to catch is the two being drawn the wrong way
+    // round, and a step that read one side could not see it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "compared", required: &["theirs", "mine"], refs: &[], strings: &["theirs", "mine"], binds: false },
+    // The other answer to a file written underneath: keep what was typed and write it over the file.
+    // It takes no args because the control is one control — it stands beside the line and on the
+    // comparison screen, and a reader presses whichever of the two is in front of them.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "keep-mine", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── putting a row in the bin, and taking it back ──────────────────────────────────────────────
     // Where the file face's own settings row stands: whether the panel asks before it bins a row.

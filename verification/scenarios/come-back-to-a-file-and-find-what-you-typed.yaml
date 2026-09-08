@@ -102,6 +102,14 @@ steps_gui:
     with:
       types: SCENARIO typed and not yet kept
 
+  # The tab says so from the first keystroke. It is the only thing on the screen that does while the
+  # file is off it, and it is what a reader closing a tab is answering to.
+  - type: assert
+    domain: files
+    op: tab-unsaved
+    with:
+      name: watering.md
+
   # ── the rendering and back ──────────────────────────────────────────────────────────────────────
   # Going to the rendering takes the editor off the page. What is drawn is drawn from what was
   # typed, rather than from the file on the disk — otherwise a reader who wanted to see how their
@@ -154,6 +162,21 @@ steps_gui:
       shows: typed and not yet kept
       present: false
 
+  # And the mark is the first file's alone: a mark that followed whichever tab was on top would be a
+  # mark about the reader rather than about the text.
+  - type: assert
+    domain: files
+    op: tab-unsaved
+    with:
+      name: watering.md
+
+  - type: assert
+    domain: files
+    op: tab-unsaved
+    with:
+      name: soil.md
+      present: false
+
   - type: action
     domain: files
     op: tab
@@ -194,3 +217,53 @@ steps_gui:
     op: reading
     with:
       shows: the seedlings are watered every second morning
+
+  # ── and letting them go ─────────────────────────────────────────────────────────────────────────
+  # Closing a tab is the one press on this row that throws what the file is holding away, so it is
+  # the one press with a question in front of it — and only where there is something to lose.
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: soil.md
+
+  - type: assert
+    domain: files
+    op: tabs
+    with:
+      names:
+        - watering.md
+
+  # Answered no, the tab is where it was and still holding what was typed.
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: watering.md
+      answer: "no"
+
+  - type: assert
+    domain: files
+    op: tab-unsaved
+    with:
+      name: watering.md
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: typed and not yet kept
+
+  # And answered yes, it goes — with what it was holding, which is what the question said.
+  - type: action
+    domain: files
+    op: close-tab
+    with:
+      name: watering.md
+      answer: "yes"
+
+  - type: assert
+    domain: files
+    op: tabs
+    with:
+      names: []

@@ -960,6 +960,23 @@ asking about an answer it has. Then it answers, and reads the frame standing bes
 opens: the row on that answer, the press live. That is what says the asking was a state and not a
 wall.
 
+Under that row the frame asks a second question — which model the agent starts on — and three words
+walk it. `pick-start` chooses an agent without opening anything, which is what puts the model row
+there at all; it names no agent and cannot, so what it names is a position: the first thing on the
+row, the row being drawn agents first. `pick-model` names the model, `name` being a name of the
+road's own — Amenbo holds no table of them, so a road writing a real one would be a road about a tool
+and about the account it was signed in to that day — and `name: none` presses the row's first choice,
+which is the agent's own settings and is a choice rather than the absence of one. `starts-on` reads
+what the whole thing is for: the line the frame writes out under the row, which is what the press
+would run. It is read from the end, the word it begins with being the agent's own program name; what
+follows is a flag and the name, or on `model: none` nothing at all. `choose-the-model-before-the-pane-opens`
+is the road, and the pane is never opened on it — what is under test is that the reader sees the line
+while there is still something to change, the same promise the registration form's own line keeps.
+On a stood-up machine every agent answers with no list of models, the stand-ins saying what they are
+and stopping, so the row draws the shape a provider that cannot be asked gives: a box to write a name
+in. That is one of the three shapes and not a fallback for the other two, which need a stand-in that
+answers a list before a road can walk them.
+
 `dot` is the one reading on these roads that is not text at all. The mark on a pane's label is lit
 while something is coming out of that terminal, and it is the only thing on screen that says a pane
 is *alive* rather than drawn — a terminal that ended leaves its last output where it was, so words on

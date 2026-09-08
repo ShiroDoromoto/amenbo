@@ -2277,6 +2277,27 @@ const REGISTRY: &[OpSpec] = &[
     // two are separate on purpose, and a road that pressed by the line would be reading the one place
     // the screen does not put it.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-registered", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // Choosing an agent on the row without opening anything, which is what puts the model row under
+    // it: a model is asked of one agent, so nothing is asked until one is on.
+    //
+    // **It names no agent, and cannot.** Which agents are on the row is the machine's own
+    // (`opens-with`), so what this names is a position: the first thing on it. The row is drawn in
+    // Amenbo's own order — the agents it lists, then anything registered here, then the plain shell
+    // — so the first is a catalogued agent on every machine, and on a road that stood the machine up
+    // (`can-start`) it is one of the stand-ins that were put in front of the `PATH`.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-start", required: &[], refs: &[], strings: &[], binds: false },
+    // Naming the model that agent starts on. `name` is a name of the road's own, and `none` is the
+    // choice that takes one back off — the agent starting on whatever its own settings say, which is
+    // where everybody begins and is a choice rather than the absence of one.
+    //
+    // **A name of the road's own is the only kind it can write.** Amenbo holds no table of model
+    // names: the row is whatever the agent's own command answered when it was asked, so a
+    // road naming a real model would be a road about a tool, and about that tool's account on the day
+    // it ran. On a stood-up machine no agent answers a list at all — the stand-ins say what they are
+    // and stop — so the row is the shape a provider with no list draws, which is a box to write a
+    // name in. That is the shape this walks, and it is the honest one to walk: it is what the row
+    // gives for a provider that cannot be asked, and what it gives for one whose answer did not come.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-model", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // A line typed into the pane and sent. `text` is the reader's own words rather than the
     // interface's, which is what makes it worth reading back: it is on the screen because a person
     // put it there, in whatever language the app is in, so a road can follow it from one window to
@@ -2716,6 +2737,21 @@ const REGISTRY: &[OpSpec] = &[
     // before anything on the frame has been pressed — a choice made anywhere in the run ends the
     // state for good, this person's answer being kept and outliving the press that made it.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "opens-with", required: &["start"], refs: &[], strings: &["start"], binds: false },
+    // The line the frame writes out under the model row: what the press would run, before it is
+    // pressed.
+    //
+    // **The reading is the flag and the name, and never the program.** Which agent is on the row is
+    // the machine's own, so the line begins with a word this cannot name — what it can name is what
+    // Amenbo put after it. `model` is the name the road chose, and `none` is the other reading: a
+    // line with nothing on it that names a model, which is what a reader who has never been asked is
+    // already getting (`crate::harness::opening`).
+    //
+    // It is worth reading at all for the reason the registration form's own line is: a
+    // model choice is a flag on a command line, and the promise the frame makes is that the reader
+    // sees the line before they press it. A build that drew the choice on the row and left the line
+    // alone would keep that promise falsely — the row would say one thing and the pane would open on
+    // another, and nothing on the screen would look wrong.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "starts-on", required: &["model"], refs: &[], strings: &["model"], binds: false },
     // A registered command as the frame draws it: the `name` on the row, and the `line` written out
     // beside it.
     //

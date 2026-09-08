@@ -15,9 +15,12 @@
 //!
 //! **Detecting a tool and starting it go through here, together.** A probe that resolves a command
 //! against one environment while the terminal runs in another can only be wrong: it finds what is
-//! not startable, or misses what is. So both are spelled once, here: [`crate::launch::command`] is
-//! the pane and [`crate::launch::installed`] is the probe — the same shell, the same flags, the same
-//! environment floor — and there is no way to ask this question that goes around them.
+//! not startable, or misses what is. So they are spelled once, here: [`crate::launch::command`] is
+//! the pane and [`crate::launch::asking`] is every question put to the machine behind one — the same
+//! shell, the same flags, the same environment floor — and there is no way to ask that goes around
+//! them. Two questions are put that way: which of the agents this machine has
+//! ([`crate::launch::installed`]), and which models one of them can be started on
+//! (`crate::agent_models`).
 //!
 //! **Nothing here elevates.** On Windows an administrator process will not traverse a junction a
 //! standard user made, which is where scoop keeps every one of its packages: run elevated and the
@@ -315,6 +318,33 @@ fn on_path(name: &str) -> Option<OsString> {
         .map(OsString::from)
 }
 
+/// The reader's own shell, given one command to run and no terminal to run it in — what every
+/// question Amenbo puts to the machine goes through.
+///
+/// It is the same shell, the same flags and the same environment floor as [`command`], which is the
+/// invariant this module exists to hold: a question answered in one environment and a pane opened in
+/// another can only disagree. What is left to the caller is stdin, stdout and stderr, because the
+/// two questions asked this way want different things there — the `PATH` probe has nothing to say to
+/// its shell ([`installed`]), and an ACP agent is asked in writing
+/// (`crate::agent_models`).
+pub fn asking(line: &str) -> std::process::Command {
+    let (program, login) = shell();
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(login);
+    cmd.arg(RUN);
+    cmd.arg(line);
+    for (key, value) in terminal_floor() {
+        cmd.env(key, value);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        // Nobody asked for a terminal; without this a console window flashes up on every question.
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 /// How long a probe is given before it is taken to have hung.
 ///
 /// A login shell reads the user's profile, and a profile is arbitrary code — one that blocks on a
@@ -354,24 +384,11 @@ pub fn installed(names: &[&str]) -> Probe {
         // for this to be true.
         return Probe::Found(Vec::new());
     }
-    let (program, login) = shell();
-    let mut cmd = std::process::Command::new(program);
-    cmd.args(login);
-    cmd.arg(RUN);
-    cmd.arg(script(&names));
-    for (key, value) in terminal_floor() {
-        cmd.env(key, value);
-    }
+    let mut cmd = asking(&script(&names));
     // Nothing is typed at it and nothing it complains about is an answer: a profile that greets the
     // user, or a shell grumbling that there is no terminal to take job control of, is noise on the
     // way to a list of program names.
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt as _;
-        // A probe is not a terminal the user asked for; without this a console window flashes up.
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
 
     let Ok(mut child) = cmd.spawn() else {
         return Probe::Unreachable;

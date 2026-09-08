@@ -1,0 +1,118 @@
+# A pane opens on an agent, and which model that agent starts on is a choice the frame makes before
+# the press.
+#
+# Amenbo holds no table of model names. The row under the agent is whatever that agent's own command
+# answered when it was asked, so it is right on the day a provider adds a name and empty where the
+# command cannot be asked at all — and where it is empty the row is a box to write a name in, because
+# a name somebody typed is the only answer anybody has for a tool that will not list its own.
+#
+# ── What this road defends ───────────────────────────────────────────────────────────────────────
+# That the reader sees the line before they press it. A model choice is a flag on a command line and
+# nothing more, and the frame writes that line out under the row — so what a press would run is on
+# the screen while there is still something to change. A build that drew the choice on the row and
+# left the line alone would keep the promise falsely: the row would say one thing, the pane would
+# open on another, and nothing on the screen would look wrong.
+#
+# And that taking the choice back is a choice. The first thing on the model row is the agent starting
+# on whatever its own settings say, which is where everybody begins — a build that could only ever
+# add a flag would leave a reader unable to get back to it.
+#
+# ── Why no model here is a real name ─────────────────────────────────────────────────────────────
+# The names on that row belong to the tools, and to the account the run happens to be signed in to:
+# a road naming one would pass on the machine that has it and nowhere else. What the road writes is a
+# name of its own, and the frame is asked to carry it — which is the whole reading anyway, since
+# Amenbo neither knows the name nor checks it. Whether the agent accepts it is the agent's answer, on
+# the pane's screen, and no part of this.
+#
+# ── Why the machine is stood up first ────────────────────────────────────────────────────────────
+# So there is a row of agents to choose the first of, and so the answer to "which models" is the same
+# on every machine this runs on: the stand-ins the premise puts in front of the `PATH` say what they
+# are and stop, so no list comes back for any of them and the row draws the shape a provider with no
+# list gives. That shape is not a fallback being walked in place of the real one — it is what the row
+# gives for a tool that cannot be asked, which is one of the six.
+#
+# The world is empty apart from the place to work: what is under test is a frame, and the pane is
+# never opened.
+id: choose-the-model-before-the-pane-opens
+title: The model a pane would start on is chosen on the frame, and the line says so before the press
+description: >
+  Stand a machine up with agents on it and open the terminal face. Nobody has chosen what to open
+  with, so nothing on the row is on. Choose the first agent, and a model row comes up under it with
+  the line the press would run written out below: the agent's own program name, with nothing after it
+  naming a model. Write a model name of the road's own into the row's box and the line takes it — a
+  flag spelled the way that agent spells it, and the name behind it. Then press the row's first
+  choice, which is the agent's own settings, and the line goes back to carrying no model at all. The
+  pane is never opened: what is under test is that the frame says what the press would run while
+  there is still something to change.
+
+given:
+  # The folder is named on the project rather than bound beside it, for the reason every terminal road
+  # names one: a pane has to open somewhere, and two folders is a question this road is not asking.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lantern
+      dir: lampstore
+    as: lantern
+
+  # Two, which is the floor: with one thing to start there is no row to choose the first of, and with
+  # none there is no row at all.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Read before anything is pressed: a choice made anywhere in the run ends this state for good.
+  - type: assert
+    domain: terminal
+    op: opens-with
+    with:
+      start: none
+
+  - type: action
+    domain: terminal
+    op: pick-start
+
+  # ── Nobody has named a model, and the line says nothing about one ─────────────────────────────
+  # The reading that has to come first: this is the line every reader who has never been asked is
+  # already getting, and the two below are only worth anything against it.
+  - type: assert
+    domain: terminal
+    op: starts-on
+    with:
+      model: none
+
+  # ── A name written in the box reaches the line ────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: pick-model
+    with:
+      name: scenario-model-from-the-lamp-store
+
+  - type: assert
+    domain: terminal
+    op: starts-on
+    with:
+      model: scenario-model-from-the-lamp-store
+
+  # ── And taking it back takes it off the line ──────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: pick-model
+    with:
+      name: none
+
+  - type: assert
+    domain: terminal
+    op: starts-on
+    with:
+      model: none

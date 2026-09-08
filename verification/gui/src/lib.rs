@@ -1981,6 +1981,28 @@ impl Instructor {
                 "On the empty frame, choose \"{}\" from the row of things a pane can be opened with — it stands among them after the ones Amenbo lists and before the plain shell — and press to open. A pane comes up and the command runs in it.",
                 req(with, "name")?
             ),
+            // Choosing an agent on the row and stopping there. What it is for is the row under it:
+            // the model row is asked of one agent, so it is not drawn until one is on.
+            //
+            // The agent is named by where it stands and never by what it is called, which is the
+            // rule every reading of this row is written to (`opens-with`). What the operator is told
+            // to expect afterwards is the row appearing — a frame that drew no model row here is the
+            // fault this step catches on its own.
+            (Domain::Terminal, "pick-start") =>
+                "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose the **first** thing on that row, and press nothing else: the row is drawn in Amenbo's own order — the agents it lists, then any command registered on this machine, then the plain shell — so the first of them is one of the agents whatever this machine has on it. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run."
+                    .to_string(),
+            // Naming the model. Two shapes and one of them is the road's: on a stood-up machine the
+            // agents are stand-ins that say what they are and stop, so no list comes back for any of
+            // them and the row is the one a provider with no list draws — a box to write a name in.
+            // A row of names to press here is a machine answering for a tool the run did not put
+            // there, and the step says so rather than leaving the operator to pick something.
+            (Domain::Terminal, "pick-model") => match req(with, "name")? {
+                "none" => "On the model row under the agent you chose, press the first thing on it — the one that says the agent starts on whatever its own settings already say. It is a choice like any other and not a way of not answering: what it does is take a model back off. Press nothing that opens the pane."
+                    .to_string(),
+                name => format!(
+                    "On the model row under the agent you chose, write `{name}` into the box the row offers for a model name — the whole of it, exactly as it stands here. That box is the row's shape where the agent's own command answered with no list of models, which is what every agent on a machine this road stood up answers: if the row instead offers a set of names to press and no box to write in, this step has failed, because something on this machine answered for a tool the run did not put there. Press nothing that opens the pane."
+                ),
+            },
             // A line typed into the pane and sent. It is typed rather than pasted because what is
             // under test is a terminal: keys are what a terminal is driven by, and a line that
             // arrived some other way would be evidence of a path nobody walks.
@@ -4210,6 +4232,16 @@ impl Instructor {
                 other => return Err(format!(
                     "assert `opens-with` cannot name `{other}` — the plain shell is the one thing every machine's row has, `none` is nobody having chosen yet, and which agents are on the row is that machine's own"
                 )),
+            },
+            // The line the frame writes out under the model row. It is read from the end: the word it
+            // begins with is the agent's own program name, which this cannot name and does not need
+            // to (`opens-with`), and what follows it is the whole of what a model choice does.
+            (Domain::Terminal, "starts-on") => match req(with, "model")? {
+                "none" => "On the empty frame, look at the line the frame writes out under the model row — what it says the press would run. Confirm nothing on that line names a model: the agent's own program name is there and nothing follows it. A flag with a name behind it here is a build holding a choice the reader has not made, or has taken back."
+                    .to_string(),
+                model => format!(
+                    "On the empty frame, look at the line the frame writes out under the model row — what it says the press would run. Confirm it ends with the model you named: a flag, spelled the way that agent spells it (`--model` on some of them, `-m` on others), and `{model}` after it, the same characters you typed with nothing added or tidied. What the line begins with is the agent's own program name and is nothing to this reading."
+                ),
             },
             // A registered command as the frame draws it, name and line together. The line is read
             // character for character rather than recognised: a build that tidied it — trimmed the

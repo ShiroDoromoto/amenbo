@@ -2045,6 +2045,23 @@ impl Instructor {
                     "Click into {pane}. On macOS and Windows, press the key this machine pastes with; on Linux, hold Ctrl and Shift and press V. A quoted path appears in that pane's input line, and the picture itself does not — leave the line there, and press nothing else."
                 )
             }
+            // Several lines pasted in one press. The clipboard is filled outside Amenbo, for the reason
+            // a drop is: nothing the run laid down is anywhere a hand can reach from the machine the
+            // operator is sitting at. What is said about the result is both halves — the lines
+            // standing together, and none of them having gone — because the failure this step exists
+            // for is the first one going while the last one stands, which looks like a paste that
+            // worked to anybody reading only the box.
+            (Domain::Terminal, "paste-lines") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Outside Amenbo — a text editor, a note, anywhere on this machine that holds two lines — put these two on the clipboard, the second under the first: \"{}\" and \"{}\". Then click into {pane} and press the key this machine pastes with, once. Both lines land in that pane's input line together and neither is sent — press nothing else, and do not press return.",
+                    req(with, "above")?,
+                    req(with, "below")?
+                )
+            }
             // A command run for its output, which is what the steps after it read. The clearing is
             // said first because it is what makes "the ref" a place on the screen rather than one of
             // several, and the waiting is said last because a press on a half-drawn line is a press
@@ -2100,6 +2117,20 @@ impl Instructor {
                 let text = req(with, "text")?;
                 format!(
                     "In the pane that has a terminal running in it, run: ping -c {KEEP_PRINTING_SECONDS} 127.0.0.1; echo \"{text}\" — where that pane's shell is PowerShell, the count is written -n {KEEP_PRINTING_SECONDS} and the rest of the line is the same. A line arrives about once a second for the {KEEP_PRINTING_SECONDS} seconds that takes, which is a terminal putting something out with nobody typing at it. Leave the pane alone once it is going: what every step after this reads is a pane nobody is working in, and the step looking for \"{text}\" is the road waiting for the printing to stop."
+                )
+            }
+            // A session pushed past the tail its pane keeps. The line is written out in full for the
+            // reason `keep-printing`'s is — the amount is the whole of what the step is for, and an
+            // operator improvising it would be improvising the step.
+            //
+            // **It ends in `&`, and that is the point of it.** A command run in front of the reader
+            // hands the shell back its prompt, and a shell draws one by asking for its modes again —
+            // which puts back the very bytes the printing is here to bury. Left running behind the
+            // prompt already on the screen, nothing after it is the shell's.
+            (Domain::Terminal, "print-past-what-is-kept") => {
+                let text = req(with, "text")?;
+                format!(
+                    "In the pane that has a terminal running in it, run: ( yes 'SCENARIO filler line' | head -n {PAST_WHAT_IS_KEPT_LINES}; printf '{text}\\n' ) & — the `&` at the end is part of the line, and it is what leaves the printing to a job behind the prompt rather than running it at one. Lines pour past for a few seconds. Wait until \"{text}\" is on the screen and the pouring has stopped, and leave the pane alone: what it has written by then is more than a pane keeps, which is the whole of what this step is for."
                 )
             }
             // The two moves between one window and two. Named by what each does rather than by the
@@ -4452,6 +4483,15 @@ fn present(with: &Args) -> bool {
 /// that would not light. What the number covers now is two of these steps, each of them a whole turn
 /// of whoever is walking the road, with room for a slower one.
 const KEEP_PRINTING_SECONDS: u32 = 90;
+
+/// How many lines `print-past-what-is-kept` asks for.
+///
+/// The cap a pane keeps is 256 KiB (`RECENT`, `app/src-tauri/src/pty.rs`), and each of these lines is
+/// a little over twenty bytes — so this is something over two capfuls, which leaves room for a line
+/// that comes out shorter than counted on and still buries what the session said as it started. It is
+/// written rather than measured because the road is walked by a person: what they can check is that
+/// the printing stopped, and the number is what makes that check enough.
+const PAST_WHAT_IS_KEPT_LINES: u32 = 25_000;
 
 /// An optional yes-or-no argument, false where it was not written. Unlike [`present`], whose default
 /// is the half most asserts want, these ask for a shape a step takes only when it says so.

@@ -2609,6 +2609,27 @@ impl Instructor {
                 None => "In the row of tabs above the file, press the first one — the draft page's, which is the one tab with no cross on it. The page comes up in the column."
                     .to_string(),
             },
+            // One tab closed by the cross on it, and what the reader says to the question that press
+            // raises. The three arms are three states and not one instruction with a note: a tab
+            // holding something asks, and a tab with nothing to lose does not, so an operator told to
+            // expect a question on a file that has none would stop and report the face.
+            (Domain::Files, "close-tab") => {
+                let name = req(with, "name")?;
+                match arg_str(with, "answer") {
+                    Some("yes") => format!(
+                        "In the row of tabs above the file, press the cross on the tab named \"{name}\". It is holding something that is not on the disk, so the machine asks whether to close it and lose that: answer yes. The tab goes."
+                    ),
+                    Some("no") => format!(
+                        "In the row of tabs above the file, press the cross on the tab named \"{name}\". It is holding something that is not on the disk, so the machine asks whether to close it and lose that: answer no. The tab stays where it was, still holding what was typed."
+                    ),
+                    Some(other) => {
+                        return Err(format!("action `close-tab` does not know the answer `{other}`"))
+                    }
+                    None => format!(
+                        "In the row of tabs above the file, press the cross on the tab named \"{name}\". Nothing is asked — there is nothing on that tab the disk does not already have — and the tab goes."
+                    ),
+                }
+            }
             // The other door onto the same tab, and the only one onto a tab off the end of the row.
             // What comes up brings its tab into view, which is said because it is the half that makes
             // the press worth walking: a face that marked a tab nobody can see would be answering a
@@ -2703,6 +2724,19 @@ impl Instructor {
             // at a dialog it never mentioned reads as the press having done nothing.
             (Domain::Files, "read-again") =>
                 "Beside the line saying somebody wrote to this file after it was opened, press the offer to read it again. The machine asks whether to throw away what was typed: answer yes. What is on the disk now replaces what is in the editor."
+                    .to_string(),
+            // The screen the two texts are put side by side on. Where it is pressed from is said the
+            // way the offer beside it is: it stands with the line about the file having moved, rather
+            // than in the row the saving is in.
+            (Domain::Files, "see-difference") =>
+                "Beside the line saying somebody wrote to this file after it was opened, press the offer to see what differs. The disk's text and the text in the editor come up side by side, over everything else."
+                    .to_string(),
+            // The answer that keeps the reader's text. **Where they press it is not said**, because
+            // the same control stands in both places a reader can be standing: beside that line, and
+            // on the screen the two texts are on. Naming one would send an operator who had opened
+            // the comparison back out of it to press the other.
+            (Domain::Files, "keep-mine") =>
+                "Press the offer to write what is in the editor over the file — wherever you are standing, beside the line about the file having moved or on the screen putting the two texts side by side. What was typed goes to the disk, and the line about the file having moved goes with it."
                     .to_string(),
             // The file face's own settings row moved. The move and what it writes are one instruction,
             // the way the tick's is: a row read in its new position with nothing written behind it
@@ -4222,6 +4256,27 @@ impl Instructor {
             (Domain::Files, "tabs") => format!(
                 "In the row of tabs above the file, confirm the tabs standing after the draft page's are exactly these, in this order and with no others among them:{}. Scroll the row sideways where it does not all fit — it scrolls and never wraps, so a tab off its end is still one of them.",
                 names(with, "names")?
+            ),
+            // The mark on one of those tabs. What it is drawn as belongs to the theme, so it is named
+            // by what it says rather than by its shape — and it is read on the tab named, because the
+            // mark belongs to the file and not to whichever tab the reader is standing on.
+            (Domain::Files, "tab-unsaved") => match present(with) {
+                true => format!(
+                    "In the row of tabs above the file, confirm the tab named \"{}\" carries a mark saying it is holding something that has not been saved. Rest on it where the mark alone does not say so: what the mark is drawn as belongs to the theme, and what it means is written out there.",
+                    req(with, "name")?
+                ),
+                false => format!(
+                    "In the row of tabs above the file, confirm the tab named \"{}\" carries no mark about anything unsaved — the name stands alone, beside the cross that closes it.",
+                    req(with, "name")?
+                ),
+            },
+            // The screen the two texts are on, read as a pair. Which side is which is the whole of
+            // what is asked: the two are named above them on the screen, and a face that drew them
+            // the wrong way round would have a reader keep the copy they meant to throw away.
+            (Domain::Files, "compared") => format!(
+                "On the screen putting the two texts side by side, confirm the side named as the disk's holds \"{}\" and the side named as yours holds \"{}\".",
+                req(with, "theirs")?,
+                req(with, "mine")?
             ),
             // What the hand-over left. Every one of the three is a `Review`, and for the same reason:
             // what settles it is not on Amenbo's window, which is the window the run shoots. The
@@ -5824,6 +5879,89 @@ steps_gui:
 
         for i in [2, 4, 6] {
             assert_eq!(ins.expectation(&steps[i]), None, "step {i} is not a reading of the shot");
+        }
+    }
+
+    /// Closing a tab is three states and not one, so it is three instructions. A tab holding
+    /// something the disk does not have asks before it goes and the answer is the reader's; a tab
+    /// with nothing to lose is closed without a word. An operator told to expect a question that
+    /// never comes stops and reports the face, which is why the arm with no answer says so plainly.
+    #[test]
+    fn closing_a_tab_says_whether_it_asks_and_what_to_answer() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: files
+    op: close-tab
+    with: { name: watering.md }
+  - type: action
+    domain: files
+    op: close-tab
+    with: { name: watering.md, answer: "no" }
+  - type: action
+    domain: files
+    op: close-tab
+    with: { name: watering.md, answer: "yes" }
+  - type: action
+    domain: files
+    op: close-tab
+    with: { name: watering.md, answer: later }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+
+        let quiet = ins.render(&steps[0]).unwrap();
+        assert!(quiet.contains("Nothing is asked"), "got: {quiet}");
+        let kept = ins.render(&steps[1]).unwrap();
+        assert!(kept.contains("answer no") && kept.contains("stays"), "got: {kept}");
+        let gone = ins.render(&steps[2]).unwrap();
+        assert!(gone.contains("answer yes") && gone.contains("The tab goes"), "got: {gone}");
+        // An answer outside the two the question offers is a scenario bug, met here rather than in
+        // front of a screen.
+        let err = ins.render(&steps[3]).unwrap_err();
+        assert!(err.contains("does not know the answer `later`"), "got: {err}");
+    }
+
+    /// The two readings a file written underneath needs: which tab is holding something, and which
+    /// side of the comparison is whose. Both are about telling two things apart — a mark that
+    /// followed the reader rather than the text, and two texts drawn the wrong way round — so both
+    /// name what they are about rather than leaving it to whatever is on top.
+    #[test]
+    fn the_mark_and_the_comparison_both_name_which_is_which() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: files
+    op: tab-unsaved
+    with: { name: watering.md }
+  - type: assert
+    domain: files
+    op: tab-unsaved
+    with: { name: soil.md, present: false }
+  - type: assert
+    domain: files
+    op: compared
+    with: { theirs: the hose, mine: not yet kept }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+
+        assert!(lines[0].contains("\"watering.md\"") && lines[0].contains("has not been saved"), "got: {}", lines[0]);
+        assert!(lines[1].contains("\"soil.md\"") && lines[1].contains("no mark"), "got: {}", lines[1]);
+        assert!(
+            lines[2].contains("disk's holds \"the hose\"") && lines[2].contains("yours holds \"not yet kept\""),
+            "got: {}",
+            lines[2]
+        );
+        // None of the three is read off the shot: what a mark is drawn as belongs to the theme, and
+        // the comparison is a screen an eye is standing in front of.
+        for (i, st) in steps.iter().enumerate() {
+            assert_eq!(ins.expectation(st), None, "step {i} is not a reading of the shot");
         }
     }
 

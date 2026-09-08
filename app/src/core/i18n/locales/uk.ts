@@ -599,6 +599,7 @@ export const uk: Translation = {
     "files.nothingOpen": "Нічого не відкрито.",
     "files.width": "Ширше або вужче",
     "files.openFiles": "Відкриті файли",
+    "files.unsaved": "Не збережено",
     "files.folderGone": "Цієї теки більше немає.",
     "files.closeFile": "Закрити цей файл",
     "files.edit": "Редагувати",

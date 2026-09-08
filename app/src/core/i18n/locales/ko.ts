@@ -572,6 +572,7 @@ export const ko: Translation = {
     "files.nothingOpen": "열린 파일이 없습니다.",
     "files.width": "넓게 또는 좁게",
     "files.openFiles": "열린 파일",
+    "files.unsaved": "저장하지 않음",
     "files.folderGone": "이 폴더는 더 이상 없습니다.",
     "files.closeFile": "이 파일 닫기",
     "files.edit": "편집",

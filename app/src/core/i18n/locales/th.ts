@@ -576,6 +576,7 @@ export const th: Translation = {
     "files.nothingOpen": "ยังไม่ได้เปิดอะไร",
     "files.width": "กว้างขึ้นหรือแคบลง",
     "files.openFiles": "ไฟล์ที่เปิดอยู่",
+    "files.unsaved": "ยังไม่ได้บันทึก",
     "files.folderGone": "ไม่พบโฟลเดอร์นี้แล้ว",
     "files.closeFile": "ปิดไฟล์นี้",
     "files.edit": "แก้ไข",

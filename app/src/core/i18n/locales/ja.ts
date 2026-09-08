@@ -585,6 +585,7 @@ export const ja: Translation = {
     "files.nothingOpen": "開いているファイルはありません。",
     "files.width": "幅を変える",
     "files.openFiles": "開いているファイル",
+    "files.unsaved": "保存していません",
     "files.folderGone": "このフォルダは見つかりません。",
     "files.closeFile": "このファイルを閉じる",
     "files.edit": "編集",

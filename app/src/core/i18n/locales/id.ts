@@ -576,6 +576,7 @@ export const id: Translation = {
     "files.nothingOpen": "Tidak ada yang terbuka.",
     "files.width": "Lebih lebar atau lebih sempit",
     "files.openFiles": "Berkas yang terbuka",
+    "files.unsaved": "Belum disimpan",
     "files.folderGone": "Folder ini sudah tidak ada.",
     "files.closeFile": "Tutup berkas ini",
     "files.edit": "Sunting",

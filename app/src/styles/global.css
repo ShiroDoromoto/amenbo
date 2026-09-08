@@ -1151,6 +1151,16 @@ input[type="color"] {
   border: 0; background: transparent; color: inherit;
   font-size: var(--fs-md); line-height: 1.6;
 }
+/* The file holding something typed that is not on the disk. A mark rather than a word: the row is
+   as narrow as the panel and a tab as narrow as its name, so there is nowhere to put a sentence —
+   and the sentence is on it as its title for whoever asks (`app/src/files/FilesPanel.tsx`). It
+   stands in the accent, the colour this face already says "there is something to do here" in
+   (`AMB-D-841`). */
+.files__unsaved {
+  flex: 0 0 auto; width: 6px; height: 6px; margin: 0 2px;
+  border-radius: 50%; background: var(--c-accent);
+}
+
 /* Letting a file go, and the list of everything open. Both are marks rather than words, so what says
    they can be pressed is the room around them: at the width they were drawn before, the only thing
    telling a reader the ✕ was a control was the colour it took under the pointer, which is an answer

@@ -573,6 +573,7 @@ export const hi: Translation = {
     "files.nothingOpen": "कुछ भी खुला नहीं है।",
     "files.width": "चौड़ा या सँकरा",
     "files.openFiles": "खुली फ़ाइलें",
+    "files.unsaved": "अभी सहेजा नहीं गया",
     "files.folderGone": "यह फ़ोल्डर अब मौजूद नहीं है।",
     "files.closeFile": "यह फ़ाइल बंद करें",
     "files.edit": "संपादित करें",

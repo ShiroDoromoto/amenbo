@@ -1588,27 +1588,60 @@ describe("the file face", () => {
       expect(button(t("files.save"))).toBeUndefined();
     });
 
-    /** A Markdown file being drawn is not a file that cannot be written back — it is one whose text
-     *  is not on the screen. There is no editor on the rendering, so a save there would have nothing
-     *  to write; the switch beside the name is what puts the text up, and the save with it. */
-    it("offers the save on a Markdown file once its text is the thing on the screen", async () => {
+    /** The keystroke everything else in the world saves with, taken on the window because the
+     *  reader may have clicked away from the editor — and asking what the control beside the name
+     *  asks, so a page nobody has typed into is not written back over itself by a reader who
+     *  pressed it out of habit. */
+    it("saves on the machine's own key, and only while something is waiting", async () => {
+      await open();
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", metaKey: true }));
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      expect(hoisted.saved).toEqual([]);
+
+      await type("#!/bin/sh\necho there");
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", metaKey: true }));
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      await settle();
+      expect(last(hoisted.saved)?.text).toBe("#!/bin/sh\necho there");
+    });
+
+    /** A Markdown file being drawn is not a file that cannot be written back. What a person typed is
+     *  caught on the way off the editor and the rendering is drawn from it, so the offer stands over
+     *  the same text either way.
+     *
+     *  The rendering is the form a Markdown file opens in, so a save the rendering does not carry is
+     *  a file whose whole first screen says nothing about whether it has been written
+     *  (`AMB-T-4560`). */
+    it("keeps the save on a Markdown file while its rendering is what is on the screen", async () => {
       hoisted.entries[""] = [{ name: "notes.md", isDir: false, ignored: false }];
-      hoisted.file = aFile({ text: "# a heading", encoding: "UTF-8" });
+      hoisted.file = aFile({ text: "# a heading", encoding: "UTF-8", digest: "before" });
       await drawOpen();
       await openFile(button("notes.md"));
       await settle();
       expect(container.querySelector("h1")).not.toBeNull();
-      expect(button(t("files.saved"))).toBeUndefined();
+      // Nothing typed yet, and the control says so rather than being absent.
+      expect(pressable(t("files.saved"))?.disabled).toBe(true);
 
       await click(button(t("files.edit")));
       await settle();
-      expect(button(t("files.saved"))).toBeDefined();
+      await type("# what was typed");
+      expect(pressable(t("files.save"))?.disabled).toBe(false);
 
-      // And it goes again with the rendering, rather than standing over a document nobody can type
-      // into.
+      // Back on the rendering it still stands, over the text that was caught on the way out.
       await click(button(t("files.read")));
       await settle();
-      expect(button(t("files.saved"))).toBeUndefined();
+      expect(container.querySelector("h1")?.textContent).toBe("what was typed");
+      expect(pressable(t("files.save"))?.disabled).toBe(false);
+
+      // And the press writes that text, rather than the copy the disk is still on.
+      await click(button(t("files.save")));
+      await settle();
+      expect(last(hoisted.saved)?.text).toBe("# what was typed");
+      expect(pressable(t("files.saved"))?.disabled).toBe(true);
     });
   });
 
@@ -2261,6 +2294,65 @@ describe("the file face", () => {
       await settle();
       expect(container.querySelector(".termface__column--side .files__none")?.textContent)
         .toBe(t("files.nothingOpen"));
+    });
+
+    /** Which tab is drawn with the mark saying it is holding something not on the disk, by name. */
+    const marked = () => [...container.querySelectorAll<HTMLElement>(".files__tab")]
+      .filter((one) => one.querySelector(".files__unsaved") !== null)
+      .map((one) => one.querySelector(".files__tabname")?.textContent);
+
+    /** Two files open that go straight to the editor, the second of them on top. */
+    const twoTextOpen = async () => {
+      hoisted.entries[""] = [
+        { name: "a.txt", isDir: false, ignored: false },
+        { name: "b.txt", isDir: false, ignored: false },
+      ];
+      hoisted.file = aFile({ text: "echo hi", encoding: "UTF-8", digest: "before" });
+      await drawOpen();
+      await openFile(button("a.txt"));
+      await settle();
+      await openFile(button("b.txt"));
+      await settle();
+    };
+
+    /** The reader typing into the file that is up, as the stand-in editor reports it. */
+    const typeIn = async (text: string) => {
+      await act(async () => {
+        const drawn = container.querySelector(".cm-editor");
+        if (drawn !== null) drawn.textContent = text;
+        hoisted.typing?.();
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    };
+
+    /** The state of a file the panel holds and the disk does not, said on the tab rather than only
+     *  on the save control — which is the one place it was said before, and which a reader on a
+     *  Markdown rendering could not see at all (`AMB-T-4560`). */
+    it("marks the tab of the file something was typed into", async () => {
+      await twoTextOpen();
+      expect(marked()).toEqual([]);
+
+      await typeIn("echo there");
+      // Named by the file rather than by whichever tab is on: the mark belongs to the text.
+      expect(marked()).toEqual(["b.txt"]);
+    });
+
+    it("takes the mark off once the file has been written", async () => {
+      await twoTextOpen();
+      await typeIn("echo there");
+      await click(button(t("files.save")));
+      await settle();
+      expect(marked()).toEqual([]);
+    });
+
+    /** What a person types is in the editor, and every road off this file takes the editor with it.
+     *  A mark left standing would be pointing at text nothing holds. */
+    it("takes the mark off when the file leaves the screen", async () => {
+      await twoTextOpen();
+      await typeIn("echo there");
+      await click(button(t("files.memo")));
+      await settle();
+      expect(marked()).toEqual([]);
     });
 
     // The row scrolls rather than paging, so the tab that is off the end of it is reached by name.

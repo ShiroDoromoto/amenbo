@@ -602,6 +602,7 @@ export const ru: Translation = {
     "files.nothingOpen": "Ничего не открыто.",
     "files.width": "Шире или уже",
     "files.openFiles": "Открытые файлы",
+    "files.unsaved": "Не сохранено",
     "files.folderGone": "Этой папки больше нет.",
     "files.closeFile": "Закрыть этот файл",
     "files.edit": "Править",

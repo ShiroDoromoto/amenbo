@@ -594,6 +594,7 @@ export const es: Translation = {
     "files.nothingOpen": "No hay nada abierto.",
     "files.width": "Más ancho o más estrecho",
     "files.openFiles": "Archivos abiertos",
+    "files.unsaved": "Sin guardar",
     "files.folderGone": "Esta carpeta ya no está.",
     "files.closeFile": "Cerrar este archivo",
     "files.edit": "Editar",

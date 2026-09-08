@@ -960,7 +960,7 @@ asking about an answer it has. Then it answers, and reads the frame standing bes
 opens: the row on that answer, the press live. That is what says the asking was a state and not a
 wall.
 
-Under that row the frame asks a second question — which model the agent starts on — and three words
+Under that row the frame asks a second question — which model the agent starts on — and four words
 walk it. `pick-start` chooses an agent without opening anything, which is what puts the model row
 there at all; it names no agent and cannot, so what it names is a position: the first thing on the
 row, the row being drawn agents first. `pick-model` names the model, `name` being a name of the
@@ -969,13 +969,29 @@ and about the account it was signed in to that day — and `name: none` presses 
 which is the agent's own settings and is a choice rather than the absence of one. `starts-on` reads
 what the whole thing is for: the line the frame writes out under the row, which is what the press
 would run. It is read from the end, the word it begins with being the agent's own program name; what
-follows is a flag and the name, or on `model: none` nothing at all. `choose-the-model-before-the-pane-opens`
-is the road, and the pane is never opened on it — what is under test is that the reader sees the line
-while there is still something to change, the same promise the registration form's own line keeps.
-On a stood-up machine every agent answers with no list of models, the stand-ins saying what they are
-and stopping, so the row draws the shape a provider that cannot be asked gives: a box to write a name
-in. That is one of the three shapes and not a fallback for the other two, which need a stand-in that
-answers a list before a road can walk them.
+follows is a flag and the name, or on `model: none` nothing at all. `open-start` is the press itself,
+and it is the one way of opening a pane that chooses nothing on the way: `open-shell` and
+`open-registered` carry their own answer, and what this one opens on is whatever the two rows were
+set to.
+
+**The row has three shapes, and which one is drawn is decided by how long the agent's answer was** —
+so a road says which it is walking, in `pick-model`'s `how`. `write` is a box to type a name in, which
+is what a provider with no list gives; `press` is a name on a row drawn whole; `narrow` is a long
+answer, where the row stops at its own length, says how many more there are, and a box above it cuts
+the list down — `find` is what is typed there and `name` is what is pressed after. Each shape's step
+says what it must *not* be looking at, because finding the wrong one is finding out what the agent
+answered: a road that meant to press a name and found a box has learnt the answer never came.
+
+What decides the shape on the machine the gate runs on is `terminal can-start`'s `models` (below).
+`choose-the-model-before-the-pane-opens` leaves it off and walks the box, which is the honest shape
+for a provider that cannot be asked at all;
+`open-a-pane-on-a-model-the-agent-itself-named` asks for three and presses one of them, then presses
+open and reads the name back **off the program** — the line under the row is Amenbo's own account of
+what a press would do, and a build that drew it right and started the pane wrong would keep that
+promise falsely. It then takes the pane away and reads the row on the frame drawn in its place, which
+is where a kept choice is told from a button that stayed pressed.
+`narrow-a-long-row-of-models-to-the-one-you-want` asks for twenty and reaches one the row was not
+drawing, which is the whole of what the box above it is for.
 
 `dot` is the one reading on these roads that is not text at all. The mark on a pane's label is lit
 while something is coming out of that terminal, and it is the only thing on screen that says a pane
@@ -1382,6 +1398,22 @@ so what a road may ask for is a row with *more* than one thing on it, which is t
 standing up: it is where the first run has a question to put. A profile that rebuilds the `PATH` from
 scratch instead of adding to it drops the directory, and that shows as the road failing to find the
 row it stood up rather than as a quiet pass.
+
+**`models` is the second question those stand-ins answer**: how many models each of them comes back
+with when the frame asks what that agent can be started on. Left off it is none, which is a stand-in
+that says what it is and stops — the row then draws the shape a provider with no list door gives.
+Asked for, each one answers **in its own provider's shape**, because the shapes are what the build
+reads by: a paragraph of help text for one, a JSON catalog for another, qualified lines, `id - label`
+rows, an ACP session's answer, and nothing at all for the provider that has nowhere to be asked. The
+names are the harness's own and numbered two digits wide, so a road narrowing the row to `-17` means
+one of them. The shapes are written down here rather than asked for, which is the same bargain the
+catalog of commands is written under: what drift costs is an agent that reads as having no models, and
+the step that meant to press one is what says so.
+
+**And a stand-in prints what it was started with**, one argument to a line under a mark of the
+harness's own. That is how a road reads a model choice back off the program rather than off the line
+Amenbo drew: the name is on a line by itself, so what is read is the road's own word and never a flag
+spelled one tool's way.
 
 **A premise that does not stand ends that scenario, red, on the line that failed, and the road is not
 walked at all.** Judging a road against a world half built says nothing about the road — every line it

@@ -2236,6 +2236,14 @@ const REGISTRY: &[OpSpec] = &[
     // on it and may not ask for one with less. That is the one shape worth standing up in any case:
     // where several can be started and nobody has chosen, the frame comes up asking, and that is a
     // state no machine's own `PATH` can be relied on to be in.
+    //
+    // `models` is how many models each of those agents answers with when the frame asks what it can
+    // be started on — the second question a stand-in is put, and the one a road walking the model row
+    // needs an answer to. Left off it is none, which is what a stand-in that says what it is and
+    // stops answers, and the row then draws the shape a provider with no list door gives. Asked for,
+    // each stand-in answers in its own provider's shape, the names being the harness's own
+    // (`amenbo_verify_cli::domain::terminal`): a road never writes a real model name, because the
+    // names on that row belong to the tools and to the account a run is signed in to.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "can-start", required: &["count"], refs: &[], strings: &[], binds: false },
     // Which face the one window is showing. Pressed rather than arrived at: the segments are the only
     // way between the two, and a road that could not name which it pressed could not say which face
@@ -2297,7 +2305,26 @@ const REGISTRY: &[OpSpec] = &[
     // and stop — so the row is the shape a provider with no list draws, which is a box to write a
     // name in. That is the shape this walks, and it is the honest one to walk: it is what the row
     // gives for a provider that cannot be asked, and what it gives for one whose answer did not come.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-model", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    //
+    // **`how` is which of the row's three shapes the choice is made in**, and a road says it because
+    // the shape is what it is reading. `write` is the box, which is the shape above and the one a road
+    // gets by standing a machine up with no models on it. `press` is a name on the row, which is what
+    // a short answer draws. `narrow` is a long answer: the row stops at its own length and a box above
+    // it cuts the list down, so `find` is what is typed there and `name` is what is pressed
+    // afterwards. Each is refused where the row drew another shape — a road that meant to read a list
+    // and found a box has learnt the answer never came, and a step that quietly typed the name
+    // instead would pass on it.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-model", required: &["name"], refs: &[], strings: &["name", "how", "find"], binds: false },
+    // The press itself, on what the frame has been set to. It is the two rows' one outcome: an agent
+    // is on, a model is named under it, and this is the press that opens a pane on both — which is
+    // where a model choice stops being a line drawn on a frame and becomes an argument a program was
+    // started with.
+    //
+    // **Nothing is chosen here.** Every other way of opening a pane carries its own choice
+    // (`open-shell`, `open-registered`), and that is exactly what this one must not do: what is under
+    // test is that what the frame said it would run is what ran, so the steps that chose it are the
+    // ones before, and this one only presses.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-start", required: &[], refs: &[], strings: &[], binds: false },
     // A line typed into the pane and sent. `text` is the reader's own words rather than the
     // interface's, which is what makes it worth reading back: it is on the screen because a person
     // put it there, in whatever language the app is in, so a road can follow it from one window to

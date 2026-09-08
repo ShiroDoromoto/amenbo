@@ -1999,10 +1999,35 @@ impl Instructor {
             (Domain::Terminal, "pick-model") => match req(with, "name")? {
                 "none" => "On the model row under the agent you chose, press the first thing on it — the one that says the agent starts on whatever its own settings already say. It is a choice like any other and not a way of not answering: what it does is take a model back off. Press nothing that opens the pane."
                     .to_string(),
-                name => format!(
-                    "On the model row under the agent you chose, write `{name}` into the box the row offers for a model name — the whole of it, exactly as it stands here. That box is the row's shape where the agent's own command answered with no list of models, which is what every agent on a machine this road stood up answers: if the row instead offers a set of names to press and no box to write in, this step has failed, because something on this machine answered for a tool the run did not put there. Press nothing that opens the pane."
-                ),
+                // Which shape the row took, and every one of them says what it must not be looking
+                // at: the three are told apart by what is drawn, so a step that found the wrong one
+                // has learnt something about the answer that came back and must say so rather than
+                // making the choice some other way.
+                name => match arg_str(with, "how").unwrap_or("write") {
+                    "write" => format!(
+                        "On the model row under the agent you chose, write `{name}` into the box the row offers for a model name — the whole of it, exactly as it stands here. That box is the row's shape where the agent's own command answered with no list of models, which is what every agent on a machine stood up without one answers: if the row instead offers a set of names to press and no box to write in, this step has failed, because something on this machine answered for a tool the run did not put there. Press nothing that opens the pane."
+                    ),
+                    "press" => format!(
+                        "On the model row under the agent you chose, press `{name}` — one of the names on that row, which is what the agent's own command answered with when it was asked. The whole answer is drawn here, so the name is on the row and there is no box above it to narrow the row with: a box to write a model name in and no names to press means the answer never came, and this step has failed. Press nothing that opens the pane."
+                    ),
+                    "narrow" => format!(
+                        "The model row under the agent you chose is longer than it draws — it stops at the length of the row and says how many more there are — so above it is a box for narrowing it down. Type `{find}` into that box. The row comes down to the names carrying those characters; press `{name}` on what is left. If there is no box above the row, this step has failed: the answer that came back was short enough to draw whole, and the narrowing is what a long one is reached by. Press nothing that opens the pane.",
+                        find = req(with, "find")?,
+                    ),
+                    other => {
+                        return Err(format!(
+                            "action `pick-model` does not know the shape `{other}` — the row is a box to write in (`write`), a set of names to press (`press`), or a long set reached through a box that narrows it (`narrow`)"
+                        ))
+                    }
+                },
             },
+            // The press that opens the pane on both rows' answers. What it says about the pane is
+            // only that it came up: what is *in* it is the next step's, and that is the whole point
+            // of parting them — the press is Amenbo acting on what it drew, and the reading is a
+            // program saying what it was started with.
+            (Domain::Terminal, "open-start") =>
+                "On the empty frame, press what opens a pane — the press under the rows, the one the frame has been saying would run that line. Choose nothing first: what is on the row of agents and what is named on the model row under it are what the steps before this one set, and pressing anything else now would open the pane on a different answer. A pane comes up in the frame's place, with the program running in it."
+                    .to_string(),
             // A line typed into the pane and sent. It is typed rather than pasted because what is
             // under test is a terminal: keys are what a terminal is driven by, and a line that
             // arrived some other way would be evidence of a path nobody walks.
@@ -4240,7 +4265,7 @@ impl Instructor {
                 "none" => "On the empty frame, look at the line the frame writes out under the model row — what it says the press would run. Confirm nothing on that line names a model: the agent's own program name is there and nothing follows it. A flag with a name behind it here is a build holding a choice the reader has not made, or has taken back."
                     .to_string(),
                 model => format!(
-                    "On the empty frame, look at the line the frame writes out under the model row — what it says the press would run. Confirm it ends with the model you named: a flag, spelled the way that agent spells it (`--model` on some of them, `-m` on others), and `{model}` after it, the same characters you typed with nothing added or tidied. What the line begins with is the agent's own program name and is nothing to this reading."
+                    "On the empty frame, look at the line the frame writes out under the model row — what it says the press would run. Confirm it ends with the model you named: a flag, spelled the way that agent spells it (`--model` on some of them, `-m` on others), and `{model}` after it, the same characters the row was answered with and nothing added or tidied. What the line begins with is the agent's own program name and is nothing to this reading."
                 ),
             },
             // A registered command as the frame draws it, name and line together. The line is read

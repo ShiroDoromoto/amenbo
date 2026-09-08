@@ -1,0 +1,96 @@
+# An agent that answers with more models than a row can hold is answered with a box to narrow it.
+#
+# The row under an agent draws what that agent said, and some of them say a great deal: the answer is
+# every model an account can reach, which runs to dozens. A row cannot draw dozens of names and stay a
+# row, so it draws as far as it goes, says how many more there are, and puts a box above itself that
+# cuts the list down to what carries what is typed.
+#
+# ── What this road defends ───────────────────────────────────────────────────────────────────────
+# That the rest of a long answer is reachable at all. A row that stopped at its own length and said
+# nothing would look like the whole answer, and a reader would never learn the models past it exist —
+# so the count of what is not drawn is read here beside the box, and the name pressed at the end is
+# one that was never on the row until the box was typed in.
+#
+# ── Why the machine is stood up first, and with twenty ────────────────────────────────────────────
+# Because which shape the row takes is decided by how many models came back, and on the machine the
+# gate is run on that number is whatever the operator's own tools answer that day — none of them where
+# nothing is signed in, and a different count on the next machine. The premise puts programs in front
+# of the `PATH` answering with a number this road chose: twenty, which is more than the row draws, so
+# the shape it takes is the one this road is about. The names are the harness's own, numbered two
+# digits wide, so `-17` is one of them and not the beginning of several.
+#
+# The world is empty apart from the place to work: what is under test is a frame, and the pane is
+# never opened.
+id: narrow-a-long-row-of-models-to-the-one-you-want
+title: A model row longer than it draws says so, and the box above it reaches the rest
+description: >
+  Stand a machine up whose agents answer with twenty models each, and open the terminal face. Choose
+  the first agent: the model row under it draws as far as it goes and says how many more it is not
+  drawing, with a box above it for narrowing. Type part of a name into that box — one that is not on
+  the row as drawn — and the row comes down to it. Press it, and the line the frame writes out under
+  the row carries that name. The pane is never opened: what is under test is that a long answer is
+  reachable, not what is done with it afterwards.
+
+given:
+  # The folder is named on the project rather than bound beside it, for the reason every terminal road
+  # names one: a pane has to open somewhere, and two folders is a question this road is not asking.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lantern
+      dir: lampstore
+    as: lantern
+
+  # Two agents, which is the floor, and twenty models each — more than the row draws, which is the
+  # whole of what puts the box there.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+      models: 20
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
+  # that read a screen it had not put itself on would be reading somebody else's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lantern
+
+  - type: action
+    domain: terminal
+    op: pick-start
+
+  # The line before anybody has named a model, which is what the reading at the end is worth anything
+  # against.
+  - type: assert
+    domain: terminal
+    op: starts-on
+    with:
+      model: none
+
+  # ── The rest of the answer, reached through the box ───────────────────────────────────────────
+  # The seventeenth, which is past where the row stops: a name the row was already drawing would be
+  # pressed just as well by a build whose box did nothing at all.
+  - type: action
+    domain: terminal
+    op: pick-model
+    with:
+      name: scenario-model-17
+      find: "-17"
+      how: narrow
+
+  - type: assert
+    domain: terminal
+    op: starts-on
+    with:
+      model: scenario-model-17

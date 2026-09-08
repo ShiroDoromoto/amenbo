@@ -1,0 +1,153 @@
+# A pane is a real terminal, and under it stands a box that is Amenbo's own.
+#
+# What the box buys is text editing that does not differ by CLI. Undo is a different press in every
+# agent and one of them has no undo at all, so a pane that sent keys through could never offer it;
+# a box on the page has undo, redo and select-all from the browser, whatever is running above it.
+#
+# ── What the road is about ──────────────────────────────────────────────────────────────────────
+# Two things, and they are the two halves of one rule.
+#
+# **A line written there is unsent until a person sends it.** That is what parts this box from the
+# terminal's own input line: a build that sent as it was written would have answered whatever the
+# program was asking at that moment, and on a first run one of the real answers to that runs a
+# script off the network. So the road writes, reads the box with nothing run, and only then sends.
+#
+# **An empty box hands its presses on.** The keys that walk a history, complete a word or leave a
+# menu are the ones a person at a prompt reaches for without looking, and a box standing in the way
+# of them would have taken them away by being there. What decides is what is written, and never what
+# the program is drawing — that second question cannot be asked of a terminal at all, which is the
+# whole reason the rule is the one it is.
+#
+# ── Why the arrow is walked first ───────────────────────────────────────────────────────────────
+# The box is empty when a pane has just been opened and at no other point on this road, so the press
+# that only an empty box hands on is walked before anything is written. `ctrl-c` after it is the road
+# tidying up as much as anything: the recalled line is standing at the prompt, and it is the fifth
+# press the box hands on, so abandoning it walks one more of them and leaves a clean prompt for the
+# half that follows.
+#
+# ── Why the pane runs a shell ───────────────────────────────────────────────────────────────────
+# What is sent has to be answered by something that answers the same way every time. A folder with
+# an agent on it opens on the agent, and what an agent does with a line is the agent's own — so the
+# pane is taken down to a plain prompt first, the way every road that speaks in one does.
+id: write-a-line-under-the-pane-and-send-it
+title: A line is written in the box under the pane, stands there unsent, and goes when it is sent
+description: >
+  Open a pane on a plain shell. With nothing written in the box beneath it, press the up arrow and
+  watch the shell's own history answer it — the press went past the box. Then write a line in the
+  box: it stands there with nothing run. Send it with return, and it reaches the terminal. Write a
+  second and send it with the press beside the box instead. What is under test is that the box holds
+  what is written until a person sends it, and stays out of the way while it is empty.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The frame and not the way in beside it: the project was bound where the world was stood up, so
+  # the press opens a pane in that folder and asks nothing.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # ── The empty box, which hands its presses on ─────────────────────────────────────────────────
+  # Typed at the terminal itself rather than in the box, and that is the point of it: what the arrow
+  # below asks for is the shell's own history, and only a line the shell was given is in it.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the seedling trays were counted on the first cold morning
+
+  - type: action
+    domain: terminal
+    op: press-through
+    with:
+      key: up
+
+  # The shell answered the press, which is the whole of what "handed on" means here. The line is back
+  # where it was typed, waiting to be run again.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: SCENARIO the seedling trays were counted on the first cold morning
+
+  # Abandoned rather than run, which walks the fifth press the box hands on and leaves the prompt
+  # clean for what follows.
+  - type: action
+    domain: terminal
+    op: press-through
+    with:
+      key: ctrl-c
+
+  # ── Written in the box, and nothing sent ──────────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: write-to-pane
+    with:
+      text: SCENARIO this line is written and has not been sent anywhere
+
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO this line is written and has not been sent anywhere
+
+  # ── Sent with return ──────────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: send-written
+    with:
+      by: return
+
+  # It reached the program: the shell was given the line, echoed it, and did not know the command.
+  # What is read is the line itself, which is on the pane because the terminal put it there.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO this line is written and has not been sent anywhere
+
+  # ── And sent with the press beside the box ────────────────────────────────────────────────────
+  # A second line, because the first is already on the screen: a press read against words that were
+  # there before it would say nothing about the press.
+  - type: action
+    domain: terminal
+    op: write-to-pane
+    with:
+      text: SCENARIO this second line went by the press beside the box
+
+  - type: action
+    domain: terminal
+    op: send-written
+    with:
+      by: button
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO this second line went by the press beside the box

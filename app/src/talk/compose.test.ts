@@ -8,9 +8,10 @@
 //
 // Which presses leave the box is decided by what is written in it and by nothing on the screen. An
 // empty box has no history to walk, no word to complete and nothing to escape from; a box holding a
-// half-written sentence has all three, and keeps them.
+// half-written sentence has all three, and keeps them — except the ArrowUp on its first line, which
+// is the one road out and takes the keyboard with it.
 import { describe, expect, it, vi } from "vitest";
-import { boxHeight, passedOn, pressIntoTerminal, sendIntoTerminal } from "./terminal";
+import { boxHeight, leavesForTerminal, passedOn, pressIntoTerminal, sendIntoTerminal } from "./terminal";
 
 const hoisted = vi.hoisted(() => ({
   /** What crossed to the host, in the order it crossed. */
@@ -93,6 +94,37 @@ describe("which presses an empty box hands on", () => {
     expect(passedOn(press("Enter"))).toBeNull();
     expect(passedOn(press("Backspace"))).toBeNull();
     expect(passedOn(press("ArrowLeft")), "moving inside the line left the box").toBeNull();
+  });
+});
+
+describe("the way out of a box with something written in it", () => {
+  /** Where the caret sits when a person has just written `text` and not moved. */
+  const end = (text: string) => text.length;
+
+  it("hands on the ArrowUp pressed on the first line, which a box does nothing with", () => {
+    expect(leavesForTerminal(press("ArrowUp"), "half a sentence", end("half a sentence"))).toBe("\x1b[A");
+    expect(leavesForTerminal(press("ArrowUp"), "half a sentence", 0), "the caret at the front").toBe("\x1b[A");
+  });
+
+  it("keeps it below the first line, where it walks up through what is written", () => {
+    const written = "first line\nsecond line";
+
+    expect(leavesForTerminal(press("ArrowUp"), written, end(written)), "the second line lost its ArrowUp")
+      .toBeNull();
+    // The newline itself is still the first line: the caret in front of it has nothing above it.
+    expect(leavesForTerminal(press("ArrowUp"), written, "first line".length)).toBe("\x1b[A");
+  });
+
+  it("is not this road while the box is empty, where every press of the four goes on anyway", () => {
+    expect(leavesForTerminal(press("ArrowUp"), "", 0)).toBeNull();
+  });
+
+  it("is the ArrowUp alone — not a press held with something, and not another key", () => {
+    expect(leavesForTerminal(press("ArrowUp", { shiftKey: true }), "a line", 6), "selecting upwards left")
+      .toBeNull();
+    expect(leavesForTerminal(press("ArrowUp", { metaKey: true }), "a line", 6)).toBeNull();
+    expect(leavesForTerminal(press("ArrowDown"), "a line", 6), "the way out went downwards").toBeNull();
+    expect(leavesForTerminal(press("Escape"), "a line", 6)).toBeNull();
   });
 });
 

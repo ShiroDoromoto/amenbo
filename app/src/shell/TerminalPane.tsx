@@ -4,6 +4,7 @@ import {
   boxHeight,
   endTerminal,
   focusTerminal,
+  leavesForTerminal,
   passedOn,
   pasteIntoTerminal,
   pressIntoTerminal,
@@ -252,6 +253,11 @@ export function TerminalPane({
    * history to walk, no word to complete and nothing to escape from, so the presses that mean those
    * things go to the program instead and the person keeps them without leaving the box
    * (`../talk/terminal`).
+   *
+   * **The one way out of a written box is the ArrowUp on its first line.** It moves the keyboard to
+   * the terminal and goes there itself, so a menu the program is drawing is walked by the one press
+   * rather than by a press to leave and a press to move. What is written stays where it is, and the
+   * mark beside the box goes on saying the way back.
    */
   const pressed = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (isEnterSubmit(e)) {
@@ -260,6 +266,15 @@ export function TerminalPane({
       e.preventDefault();
       void send();
       return;
+    }
+    if (live !== null) {
+      const out = leavesForTerminal(e, written, e.currentTarget.selectionStart);
+      if (out !== null) {
+        e.preventDefault();
+        focusTerminal(paneRef.current);
+        void pressIntoTerminal(live, out).catch(() => {});
+        return;
+      }
     }
     if (written !== "" || live === null) return;
     const data = passedOn(e);

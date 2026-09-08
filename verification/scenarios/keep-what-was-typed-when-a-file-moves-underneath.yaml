@@ -194,3 +194,58 @@ steps_gui:
     with:
       note: changed-underneath
       present: false
+
+  # ── the file moving while the tab is off the screen ─────────────────────────────────────────────
+  # A tab a reader moves away from takes the editor with it, and the file is read afresh when they
+  # come back — so that read is the first sight of the file since they left. The news has to be made
+  # then, or a save from there writes over a writer nobody was told about.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO typed with the tab about to move
+
+  # The draft page, which is the way off a file with nothing else open beside it.
+  - type: action
+    domain: files
+    op: tab
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: SCENARIO fourth the seedlings are watered by the hose
+
+  - type: action
+    domain: files
+    op: tab
+    with:
+      name: watering.md
+
+  # What was typed is handed back, and the news is made about the file it was typed over.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: typed with the tab about to move
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: changed-underneath
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: fourth the seedlings
+      present: false

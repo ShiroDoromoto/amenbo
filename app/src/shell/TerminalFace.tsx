@@ -22,7 +22,7 @@ import {
   setRailWidth, setSideNarrow, setSideShown, setSideTab, setSideWide, setTabsCompact, setTabsWidth,
   TABS_COMPACT_WIDTH, type SideTab,
 } from "../talk/columns";
-import { FilesPanel, openKey, type OpenFile } from "../files/FilesPanel";
+import { FilesPanel, openKey, type OpenFile, type Typed } from "../files/FilesPanel";
 import { FolderTree } from "../files/FolderTree";
 import { fileUnderAny } from "../files/fileUnder";
 import { isBlankSpaceClose } from "./outsideClose";
@@ -53,11 +53,26 @@ const LANDED_MS = 900;
  * Nothing of it is written down: what is kept between runs is the widths and the wish, and whether
  * the files themselves come back after a restart is not answered here (`../talk/columns`).
  */
-type Reading = { open: OpenFile[]; showing: string | null };
+type Reading = {
+  open: OpenFile[];
+  showing: string | null;
+  /** What each of them was left holding, by `openKey` (`Typed`). The column draws one file at a
+   *  time, so the text a reader typed into the others is here and nowhere else. */
+  typed: Record<string, Typed>;
+};
 
 /** What a project nobody has opened a file on is holding, and what the face draws while it is on no
  *  project at all. */
-const NOTHING_OPEN: Reading = { open: [], showing: null };
+const NOTHING_OPEN: Reading = { open: [], showing: null, typed: {} };
+
+/** The same record without the named keys — and the record itself where it holds none of them, so
+ *  that letting go of what was never held draws nothing again. */
+function without<T>(all: Record<string, T>, keys: string[]): Record<string, T> {
+  if (!keys.some((key) => key in all)) return all;
+  const left = { ...all };
+  for (const key of keys) delete left[key];
+  return left;
+}
 
 /**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
@@ -234,7 +249,7 @@ export function TerminalFace({
   // a reader does: a reference followed is a second file to hold, not a first one to give up.
   const [byProject, setByProject] = useState<Record<number, Reading>>({});
   // The one on the screen, which is the project the rail is on.
-  const { open, showing } =
+  const { open, showing, typed } =
     (layout.project === null ? null : byProject[layout.project]) ?? NOTHING_OPEN;
   // The one on top: whichever is named, and the first one where nothing is — a column holding files
   // with none of them drawn would be a row of tabs over an empty page.
@@ -869,6 +884,7 @@ export function TerminalFace({
   const openFile = useCallback((at: OpenFile) => {
     const key = openKey(at);
     takeReading((was) => ({
+      ...was,
       open: was.open.some((one) => openKey(one) === key) ? was.open : [...was.open, at],
       showing: key,
     }));
@@ -895,11 +911,38 @@ export function TerminalFace({
       const nth = was.open.findIndex((one) => openKey(one) === key);
       if (nth < 0) return was;
       const left = was.open.filter((one) => openKey(one) !== key);
-      if (was.showing !== key) return { open: left, showing: was.showing };
+      // A tab closed is the file let go of, so what it was holding goes with it: opening it again
+      // is opening the file, and what would come up otherwise is text from before it was closed.
+      const typed = without(was.typed, [key]);
+      if (was.showing !== key) return { open: left, showing: was.showing, typed };
       const next = left[nth] ?? left[nth - 1] ?? null;
-      return { open: left, showing: next === null ? null : openKey(next) };
+      return { open: left, showing: next === null ? null : openKey(next), typed };
     });
   }, [takeReading]);
+
+  /**
+   * Keep what one file was left holding, or let go of it (`../files/FilesPanel`).
+   *
+   * **The project is named rather than taken from the face**, because the moment this is said is the
+   * moment the file left the screen — and one of the ways it leaves is the reader going to another
+   * project. Read off the face, the answer would be filed under wherever they went.
+   */
+  const keepTyped = useCallback((project: number, at: OpenFile, one: Typed | null) => {
+    const key = openKey(at);
+    setByProject((was) => {
+      const before = was[project] ?? NOTHING_OPEN;
+      if (one === null) {
+        if (!(key in before.typed)) return was;
+        return { ...was, [project]: { ...before, typed: without(before.typed, [key]) } };
+      }
+      // **A file this column is no longer holding holds nothing.** Closing a tab is the last thing
+      // that happens to a file, and the file leaving the screen is what says what it was holding —
+      // in that order, so what arrives after the tab has gone is the answer to a question nobody is
+      // asking any more.
+      if (!before.open.some((file) => openKey(file) === key)) return was;
+      return { ...was, [project]: { ...before, typed: { ...before.typed, [key]: one } } };
+    });
+  }, []);
 
   /**
    * The files that have gone to the bin, let go of: a file that is not there is not one to hold.
@@ -915,6 +958,7 @@ export function TerminalFace({
     takeReading((was) => ({
       open: was.open.filter((one) => !dead.has(openKey(one))),
       showing: was.showing !== null && dead.has(was.showing) ? null : was.showing,
+      typed: without(was.typed, [...dead]),
     }));
   }, [takeReading]);
 
@@ -1263,6 +1307,12 @@ export function TerminalFace({
               onTab={takeTab}
               open={open}
               reading={reading}
+              typed={typed}
+              // Under the project drawn at the moment the panel says so, which is the project the
+              // file it is talking about was opened under (`keepTyped`).
+              onTyped={(at, one) => {
+                if (layout.project !== null) keepTyped(layout.project, at, one);
+              }}
               onPick={showFile}
               onCloseTab={closeFile}
               onBack={() => { if (reading !== null) closeFile(reading); }}

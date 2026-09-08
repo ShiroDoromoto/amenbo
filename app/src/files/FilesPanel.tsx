@@ -814,10 +814,15 @@ function FileReader({
   // (`AMB-D-863`). The disk's text is read here rather than kept from the moment the file was found
   // to have moved: what a reader is about to weigh their own text against is what the file says
   // now, and the news that it moved may be minutes old by the time they press.
+  //
+  // **The side that is the reader's own is the same one the save writes.** Asking the editor alone
+  // left this press doing nothing at all on a Markdown file being drawn — there is no editor there,
+  // and a Markdown file opens on the rendering again every time a reader comes back to its tab — so
+  // the one control that answers what changed was the one that died in the state a reader reaches
+  // by walking away and returning (`AMB-T-4573`).
   const seeDifference = async () => {
-    const read = typed.current;
-    if (read === null) return;
-    const mine = read();
+    const mine = nowText();
+    if (mine === undefined) return;
     try {
       const fresh = await folderRead(projectId, root, path, asked);
       // A file that no longer comes back as text is one there is nothing to line up against — and
@@ -1010,10 +1015,10 @@ function FileReader({
         {stale && (
           <div className="files__changed">
             <p className="files__none">{t("files.changedUnderneath")}</p>
-            {/* Both of these read the editor's own text, so both are drawn only where there is
-                one to read: on a file this panel could not write back there is nothing to compare
-                the disk against and nothing to write over it with, and taking the disk's copy —
-                below — is the whole of what is left. */}
+            {/* Both of these stand on the reader's own text going back over the file, so both
+                are drawn only where this panel could write it back at all: on a file it could not,
+                there is nothing to weigh the disk against and nothing to write over it with, and
+                taking the disk's copy — below — is the whole of what is left. */}
             {overwritable && (
               <>
                 <button className="files__mine" onClick={() => void seeDifference()}>

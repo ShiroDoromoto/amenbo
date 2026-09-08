@@ -266,6 +266,12 @@ type Replay = Pick<Terminal, "resize" | "write">;
  * wrong (`AMB-T-4516`). Which size each run is is the host's answer: the pane was not there while it
  * changed, so nothing sent the size along (`crate::pty::Recent`).
  *
+ * **The first run may not be output at all.** A program asks for the modes it wants — bracketed
+ * paste, focus reporting — as it starts, and those bytes are long out of the tail of a session that
+ * has been running a while; the host puts them back in front of it so a pane built now comes up in
+ * the modes the terminal is actually in (`crate::pty::Modes`, `AMB-T-4566`). They carry the size the
+ * tail begins at, and nothing here has to tell them apart from the tail.
+ *
  * **Each write is awaited.** `write` queues, so a resize let go in front of the bytes it is meant to
  * follow would land on them instead — the same wrong fold, put back by the thing that reads it.
  */

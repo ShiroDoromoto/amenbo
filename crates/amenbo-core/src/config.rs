@@ -750,6 +750,41 @@ pub struct Config {
     /// one's place without anybody choosing it.
     #[serde(default)]
     pub custom_agent_seq: u64,
+    /// **The model each agent comes up on**, by agent id ([`AgentModel`], `AMB-D-865`) — written by
+    /// every press that chooses one, and read when a pane is opened with that agent.
+    ///
+    /// **The agent is the scale.** A model name means nothing away from the tool it was chosen for:
+    /// `opus` is Claude Code's, `gpt-5.5` is Codex CLI's, `auto` is Copilot's and Cursor's. Kept as a
+    /// single name it would stop meaning anything the moment the person opened a pane with something
+    /// else, so what is written down is the pair.
+    ///
+    /// Nothing narrower than the agent is asked for. A project-shaped answer would put the question
+    /// again on every project while the tool and its models stayed the same, and which tool it is has
+    /// already been answered by the two ranks above ([`Config::project_agent`],
+    /// [`Config::last_agent`]).
+    ///
+    /// **An agent with no row here starts on the CLI's own default**, which is a different state from
+    /// one whose model was chosen and then taken back off: taking it off drops the row
+    /// ([`Config::forget_model`]) and leaves the history alone, and the launch line carries no model
+    /// flag at all (`AMB-T-4587`).
+    ///
+    /// A row for an agent that has since gone is left alone rather than pruned, the same as
+    /// [`Config::project_agent`]'s. **A user-level setting; never synced** — which models can be
+    /// reached is answered by the CLI on this machine.
+    #[serde(default)]
+    pub agent_model: std::collections::BTreeMap<String, AgentModel>,
+    /// **The models most recently chosen for each agent**, newest first and capped at
+    /// [`MODEL_HISTORY`] — the rows behind [`Config::agent_model`].
+    ///
+    /// It is kept because **not every tool can be asked for a list.** `github-copilot` has no way to
+    /// name its models, so its row is a box to type into (`AMB-D-865`) — and what somebody typed
+    /// before is the only set of candidates a face has to offer them. For a tool that can be asked,
+    /// it is what the answer is drawn on top of.
+    ///
+    /// Taking a model back off leaves this alone: what was chosen is still what was chosen, and a box
+    /// to type into with nothing under it is where this started.
+    #[serde(default)]
+    pub agent_model_history: std::collections::BTreeMap<String, Vec<AgentModel>>,
 }
 
 /// One command the reader registered themselves — a row in [`Config::custom_agents`] (`AMB-D-794`).
@@ -791,6 +826,33 @@ impl CustomAgent {
         self.line.split_whitespace().next().unwrap_or("")
     }
 }
+
+/// One model as it was chosen — a row in [`Config::agent_model`] and
+/// [`Config::agent_model_history`] (`AMB-D-865`).
+///
+/// **The two strings are not one string written twice.** What a launch line carries is the name the
+/// CLI takes, and what a face draws is the name the tool calls it by: `gemini-cli` answers with
+/// `gemini-3.1-pro-preview-customtools` for a model its own screen calls Gemini 3.1 Pro
+/// (`AMB-T-4586`). Keeping only the first draws the reader a token nobody says out loud; keeping only
+/// the second opens a pane on a name the tool does not know.
+///
+/// **The drawn name is kept even though the tool could be asked for it**, because it cannot always be
+/// asked: a tool with no list to hand over, or one that is not signed in, still has to be able to say
+/// which model was chosen last time. Cursor's own `cli-config.json` keeps it for that reason.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AgentModel {
+    /// The model's name **as the CLI takes it** — what goes on the launch line (`AMB-T-4587`).
+    pub name: String,
+    /// What the tool calls it, for a face to draw. Where nothing else was given, the name itself.
+    pub label: String,
+}
+
+/// How many models are kept per agent in [`Config::agent_model_history`].
+///
+/// A cap rather than everything ever chosen: the history is drawn as a row of candidates, and a row
+/// that grows without end stops being one. It is small because what it answers is "the ones I work
+/// with", and somebody who ranges wider than this is on a tool that can be asked for the whole list.
+pub const MODEL_HISTORY: usize = 8;
 
 /// The two halves of a registered command, trimmed — or the refusal for a half that is empty.
 ///
@@ -881,6 +943,8 @@ impl Default for Config {
             installed_agents: None,
             custom_agents: Vec::new(),
             custom_agent_seq: 0,
+            agent_model: Default::default(),
+            agent_model_history: Default::default(),
         }
     }
 }
@@ -1201,6 +1265,62 @@ impl Config {
         let before = self.custom_agents.len();
         self.custom_agents.retain(|one| one.id != id);
         self.custom_agents.len() != before
+    }
+
+    /// The model this agent comes up on, where one has been chosen for it
+    /// ([`Config::agent_model`]). `None` is "start it on its own default".
+    pub fn model_for(&self, agent: &str) -> Option<&AgentModel> {
+        self.agent_model.get(agent)
+    }
+
+    /// Keep what was just chosen for this agent, replacing whatever it came up on before, and put it
+    /// at the front of that agent's history.
+    ///
+    /// Both strings are trimmed. The name may not be empty — it is what a launch line is built from,
+    /// and a blank one would start a pane on a flag with nothing after it. A blank label is not a
+    /// refusal: a model typed into a box is its own display name, so the name stands in for it.
+    ///
+    /// **The history holds one row per name.** Choosing again what was chosen before moves that row
+    /// to the front rather than writing it twice, and takes the label with it — a tool that has begun
+    /// calling a model something else is still answering about the same model.
+    pub fn remember_model(&mut self, agent: &str, name: &str, label: &str) -> Result<()> {
+        let agent = agent.trim();
+        let name = name.trim();
+        let label = label.trim();
+        if agent.is_empty() {
+            return Err(crate::error::Error::invalid(
+                "a chosen model needs the agent it was chosen for",
+            ));
+        }
+        if name.is_empty() {
+            return Err(crate::error::Error::invalid("a chosen model needs a name"));
+        }
+        let chosen = AgentModel {
+            name: name.to_string(),
+            label: if label.is_empty() { name.to_string() } else { label.to_string() },
+        };
+        let history = self.agent_model_history.entry(agent.to_string()).or_default();
+        history.retain(|one| one.name != chosen.name);
+        history.insert(0, chosen.clone());
+        history.truncate(MODEL_HISTORY);
+        self.agent_model.insert(agent.to_string(), chosen);
+        Ok(())
+    }
+
+    /// Drop what this agent comes up on, so the next pane opened with it starts on the CLI's own
+    /// default — what taking the choice back off leaves behind.
+    ///
+    /// **The history is left alone.** What was chosen before is still what was chosen, and for a tool
+    /// that cannot be asked for a list it is the only set of candidates there is
+    /// ([`Config::agent_model_history`]).
+    pub fn forget_model(&mut self, agent: &str) {
+        self.agent_model.remove(agent);
+    }
+
+    /// The models most recently chosen for this agent, newest first — what a face draws candidates
+    /// from where the tool itself has no list to hand over ([`Config::agent_model_history`]).
+    pub fn model_history(&self, agent: &str) -> &[AgentModel] {
+        self.agent_model_history.get(agent).map_or(&[], Vec::as_slice)
     }
 
     /// Read the config file, falling back to the defaults when it is absent — for the cases that
@@ -1868,5 +1988,120 @@ mod tests {
         let older: Config = serde_json::from_value(older).unwrap();
         assert!(older.custom_agents().is_empty());
         assert_eq!(older.custom_agent_seq, 0);
+    }
+
+    /// **A model name means nothing away from the agent it was chosen for** — `opus` is Claude
+    /// Code's word and `gpt-5.5` is Codex CLI's — so what is written down is the pair. Choosing one
+    /// for one tool leaves what the other comes up on alone.
+    #[test]
+    fn a_model_is_kept_against_the_agent_it_was_chosen_for() {
+        let mut config = Config::default();
+        config.remember_model("claude-code", "opus", "Opus").unwrap();
+        config.remember_model("codex-cli", "gpt-5.5", "GPT-5.5").unwrap();
+
+        assert_eq!(config.model_for("claude-code").map(|one| one.name.as_str()), Some("opus"));
+        assert_eq!(config.model_for("codex-cli").map(|one| one.name.as_str()), Some("gpt-5.5"));
+        // A tool nobody has chosen for starts on its own default rather than on somebody else's word.
+        assert_eq!(config.model_for("gemini-cli"), None);
+    }
+
+    /// The name a launch line carries and the name a face draws are kept apart, because for at least
+    /// one tool they differ (`AMB-T-4586`). A model typed into a box has only the one, and it stands
+    /// for both — which is what a tool with no list to hand over gives a face to work with.
+    #[test]
+    fn the_name_a_cli_takes_and_the_name_a_face_draws_are_both_kept() {
+        let mut config = Config::default();
+        config
+            .remember_model("gemini-cli", "  gemini-3.1-pro-preview-customtools  ", "  Gemini 3.1 Pro  ")
+            .unwrap();
+        let kept = config.model_for("gemini-cli").expect("the model just chosen");
+        assert_eq!(kept.name, "gemini-3.1-pro-preview-customtools");
+        assert_eq!(kept.label, "Gemini 3.1 Pro");
+
+        config.remember_model("github-copilot", "claude-sonnet-4.5", "").unwrap();
+        let typed = config.model_for("github-copilot").expect("the model just typed");
+        assert_eq!(typed.label, "claude-sonnet-4.5", "what was typed is its own display name");
+    }
+
+    /// The name is what a launch line is built from, so a blank one is not a choice; the agent it was
+    /// chosen for is half the pair, so a blank one is not either.
+    #[test]
+    fn a_chosen_model_needs_an_agent_and_a_name() {
+        let mut config = Config::default();
+        assert!(config.remember_model("claude-code", "   ", "Opus").is_err());
+        assert!(config.remember_model("   ", "opus", "Opus").is_err());
+        assert!(config.agent_model.is_empty(), "a refusal writes nothing");
+    }
+
+    /// Taking a model back off puts the agent on the CLI's own default — no flag at all
+    /// (`AMB-T-4587`) — and leaves the history where it was, because the history is what a tool with
+    /// no list to hand over is drawn from.
+    #[test]
+    fn taking_a_model_off_leaves_the_history_behind() {
+        let mut config = Config::default();
+        config.remember_model("github-copilot", "gpt-5.5", "GPT-5.5").unwrap();
+        config.forget_model("github-copilot");
+
+        assert_eq!(config.model_for("github-copilot"), None);
+        assert_eq!(
+            config.model_history("github-copilot").iter().map(|one| one.name.as_str()).collect::<Vec<_>>(),
+            vec!["gpt-5.5"],
+        );
+        // And an agent nothing was ever chosen for has a history to draw and no row to read.
+        assert!(config.model_history("cursor").is_empty());
+    }
+
+    /// The history is newest first and holds one row per name: choosing again what was chosen before
+    /// moves it up rather than filling the row with the same model, and it takes the tool's current
+    /// name for it along.
+    #[test]
+    fn the_history_is_newest_first_and_holds_each_model_once() {
+        let mut config = Config::default();
+        config.remember_model("cursor", "auto", "Auto").unwrap();
+        config.remember_model("cursor", "sonnet-4.5", "Sonnet 4.5").unwrap();
+        config.remember_model("cursor", "auto", "Auto (default)").unwrap();
+
+        let history = config.model_history("cursor");
+        assert_eq!(
+            history.iter().map(|one| one.name.as_str()).collect::<Vec<_>>(),
+            vec!["auto", "sonnet-4.5"],
+        );
+        assert_eq!(history[0].label, "Auto (default)", "the name it is called by now");
+    }
+
+    /// The history is a row of candidates, so it stops at the cap and the oldest choice falls off
+    /// the end rather than the row growing without end.
+    #[test]
+    fn the_history_stops_at_the_cap() {
+        let mut config = Config::default();
+        for n in 0..MODEL_HISTORY + 3 {
+            config.remember_model("codex-cli", &format!("model-{n}"), "").unwrap();
+        }
+        let history = config.model_history("codex-cli");
+        assert_eq!(history.len(), MODEL_HISTORY);
+        assert_eq!(history[0].name, format!("model-{}", MODEL_HISTORY + 2), "newest first");
+        assert_eq!(history[MODEL_HISTORY - 1].name, "model-3", "the first three have fallen off");
+    }
+
+    /// What was chosen survives the file, which is where it lives: a model picked on one run is what
+    /// the next one opens with. A settings file written before any of this reads as a machine nobody
+    /// has chosen a model on, rather than failing to read and taking the config down with it.
+    #[test]
+    fn the_chosen_models_are_written_down_and_read_back() {
+        let mut config = Config::default();
+        config.remember_model("claude-code", "opus", "Opus").unwrap();
+        config.remember_model("claude-code", "haiku", "Haiku").unwrap();
+        let text = serde_json::to_string(&config).unwrap();
+        let back: Config = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.model_for("claude-code"), config.model_for("claude-code"));
+        assert_eq!(back.model_history("claude-code"), config.model_history("claude-code"));
+
+        let mut older: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let map = older.as_object_mut().unwrap();
+        map.remove("agent_model");
+        map.remove("agent_model_history");
+        let older: Config = serde_json::from_value(older).unwrap();
+        assert_eq!(older.model_for("claude-code"), None);
+        assert!(older.model_history("claude-code").is_empty());
     }
 }

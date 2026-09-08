@@ -4,7 +4,7 @@ import {
   ACROSS, acrossIn, addPane, closedFrame, closedIn, COUNTS, DEFAULT_COUNT, DEFAULT_ORIENT,
   EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo, movedWithin, openedFrame, openedIn,
   ORIENTS, orientable, pageCount, pageOfFrame, pageShape, paneIn, panesOf, reordered, restored,
-  roomOnPage, setCount, setOrient, slotsOf, type Layout,
+  roomOnPage, setCount, setOrient, slotsOf, writing, type Layout,
 } from "./layout";
 
 /** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one.
@@ -200,7 +200,7 @@ describe("where a pane works", () => {
 
   it("is learned from the session for a pane that took one up rather than starting it", () => {
     const adopted = openedIn({ ...EMPTY_LAYOUT, project: 1, frames: [
-      { id: "1", project: 1, session: null, folder: null },
+      { id: "1", project: 1, session: null, folder: null, written: "" },
     ], nextId: 2 }, "1", "s1", null);
     expect(movedTo(adopted, "s1", "/said").frames[0]!.folder).toBe("/said");
   });
@@ -542,5 +542,45 @@ describe("putting the panes in order", () => {
     const beside = openedFrame(three, 2, "/b");
     const mixed = goProject(beside.layout, 1);
     expect(reordered(mixed, [panes[0]!, panes[1]!, beside.frame])).toBe(mixed);
+  });
+});
+
+describe("what is written in the box under a pane", () => {
+  /** One project with two pages of panes, and a sentence half written in the first one. */
+  function half() {
+    const one = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/repo");
+    return { layout: writing(one.layout, one.frame.id, "run the tests"), frame: one.frame.id };
+  }
+
+  it("is nothing in a place that has just been opened", () => {
+    const one = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/repo");
+    expect(one.frame.written).toBe("");
+  });
+
+  it("is kept against the pane it was written in", () => {
+    const { layout, frame } = half();
+    expect(layout.frames.find((one) => one.id === frame)?.written).toBe("run the tests");
+  });
+
+  it("stays where it is when the page turns, which is the pane being put away and not written in", () => {
+    const { layout, frame } = half();
+    const away = goPage(goPage(layout, 2), 1);
+    expect(away.frames.find((one) => one.id === frame)?.written).toBe("run the tests");
+  });
+
+  it("stays through a change of how many panes are on the screen", () => {
+    const { layout, frame } = half();
+    expect(setCount(layout, 4).frames.find((one) => one.id === frame)?.written)
+      .toBe("run the tests");
+  });
+
+  it("is not written down with the arrangement, which keeps where the panes are and not what is in them", () => {
+    const { layout } = half();
+    expect(JSON.stringify(laidOut(layout))).not.toContain("run the tests");
+  });
+
+  it("is nothing again in the places an arrangement is restored into", () => {
+    const { layout } = half();
+    expect(restored(laidOut(layout), 1).frames.every((one) => one.written === "")).toBe(true);
   });
 });

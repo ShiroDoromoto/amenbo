@@ -71,8 +71,8 @@ async function handOver(session: string, paths: string[]) {
  * running on the way out — a session whose place has gone is one nobody can reach.
  */
 export function TerminalPane({
-  frame, project, names, start, autoStart, focused, landed = false, offered = false,
-  onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow,
+  frame, project, names, start, autoStart, focused, landed = false, offered = false, written,
+  onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
@@ -121,6 +121,18 @@ export function TerminalPane({
    *  is a way to ask rather than the answer: the row changes with every chunk that crosses, and a
    *  value pushed up on each of them would redraw the face for a mark that has not moved. */
   onRow?: (frame: string, read: (() => Row | null) | null) => void;
+  /**
+   * What has been written in the box under this pane and not sent yet (`AMB-D-864`).
+   *
+   * **Held by the window rather than here** (`../talk/layout`). A pane is taken down whenever it
+   * stops being on the screen — the page turned, the count changed, the tasks face came up — and a
+   * half-written sentence kept in the drawing would go down with it. The terminal is the same shape
+   * of thing from the other side: what is running belongs to the host, and this pane only draws it.
+   */
+  written: string;
+  /** What is in the box now, on its way to the window that holds it. Said as it is written and again
+   *  with nothing in it once a line has gone. */
+  onWrite: (frame: string, written: string) => void;
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
@@ -145,12 +157,6 @@ export function TerminalPane({
   // in a window over the pane: what is being named is the line the box stands in.
   const [naming, setNaming] = useState(false);
   const nameField = useRef<HTMLInputElement>(null);
-  // The line being written to whatever runs in this pane, as far as it has been written
-  // (`AMB-D-864`). It decides three things at once: what a press in the box means, what the box
-  // looks like, and whether there is anything to send. Empty is the resting state and is what the
-  // pane comes up in — how long it outlives a send, and whether it goes with the pane when the pane
-  // moves, are `AMB-T-4585`.
-  const [written, setWritten] = useState("");
   // The box itself, which is measured rather than told how tall to be: how many lines a sentence
   // takes is the browser's answer, not one this can work out from the characters.
   const boxRef = useRef<HTMLTextAreaElement>(null);
@@ -228,16 +234,21 @@ export function TerminalPane({
   }, [live]);
 
   /** Send what has been written to the program in the pane, as the person's own line
-   *  (`../talk/terminal`). What is written stays where it is: the box is emptied by `AMB-T-4585`,
-   *  which is where the life of what is in it is settled. */
+   *  (`../talk/terminal`), and empty the box behind it. */
   const send = async () => {
     if (live === null || written === "") return;
     try {
       await sendIntoTerminal(live, written);
     } catch (e: unknown) {
       // The terminal having ended between the writing and the send is the whole of what this can be.
+      // What was written stays in the box: it did not go, and a box emptied on a refusal would have
+      // thrown away the only copy of it.
       pushNotice(errText(e));
+      return;
     }
+    // Emptied only once the line has actually gone. What follows it is a sentence of its own, and a
+    // box that kept what was sent would make the next one the tail of the last.
+    onWrite(frame, "");
   };
 
   /**
@@ -558,7 +569,7 @@ export function TerminalPane({
             placeholder={t("face.compose")}
             aria-label={t("face.compose")}
             {...asTyped}
-            onChange={(e) => setWritten(e.currentTarget.value)}
+            onChange={(e) => onWrite(frame, e.currentTarget.value)}
             onKeyDown={pressed}
           />
           <button

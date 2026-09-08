@@ -2420,7 +2420,30 @@ const REGISTRY: &[OpSpec] = &[
     // person looks away from what they were writing.
     //
     // `onto` is which pane, named the way `write-to-pane` names one.
+    //
+    // The one press a box hands on with something written in it is `press-out` below, which is the
+    // hole deliberately left in this rule rather than an exception to it.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-through", required: &["key"], refs: &[], strings: &["key", "onto"], binds: false },
+    // The one press a box with something **written** in it hands on: the up arrow, made on the first
+    // line. It moves the keyboard to the terminal and goes there itself, so a menu the program put up
+    // is walked by the one press rather than by a press to leave and a press to move.
+    //
+    // It is not `press-through` with a fuller box. That op is the rule — an empty box hands its
+    // presses on — and this is the one hole deliberately left in the other half of it: while a line
+    // is half written the arrows are the box's, which would leave a program that is asking something
+    // unreachable, and there is no way to ask a terminal whether it is asking. Written as one op, a
+    // road could say "press up" and mean either, and the two are green on opposite states of the box.
+    //
+    // **What was written stays where it is**, which is why the step after this one reads the box as
+    // well as the terminal: a way out that emptied the box would be a way out nobody would take
+    // twice.
+    //
+    // There is no `key`: this is one press and not a set of them. Below the first line the same key
+    // is the box's own and walks up through what is written, which is why the operator is told where
+    // to put the caret.
+    //
+    // `onto` is which pane, named the way `press-through` names one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-out", required: &[], refs: &[], strings: &["onto"], binds: false },
     // A command run in the pane, and waited on until what it printed is drawn. It is not `type-line`
     // with a longer word in it: that step's line is the reader's own and is written to be *left* on
     // the screen — the shell is not meant to know it — and this is a program being asked for output

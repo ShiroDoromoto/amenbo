@@ -1704,6 +1704,59 @@ describe("the file face", () => {
       expect(last(hoisted.saved)?.seen).toBe("after");
     });
 
+    /** The other answer, and the one there was no way to give before: the reader keeps what they
+     *  typed and the file is written over. The mark the panel is holding is the one the door
+     *  refuses, so the file is read again for the mark it answers to now and the save carries that
+     *  (`AMB-D-863`). */
+    it("writes the reader's text over the file, on the mark it answers to now", async () => {
+      await open();
+      hoisted.keptDigest = "mine";
+      await type("#!/bin/sh\necho mine");
+      await written("#!/bin/sh\necho theirs", "after");
+      expect(container.textContent).toContain(t("files.changedUnderneath"));
+
+      await click(button(t("files.keepMine")));
+      await settle();
+      expect(last(hoisted.saved)).toMatchObject({ text: "#!/bin/sh\necho mine", seen: "after" });
+      // What they typed is on the disk, so there is nothing left of the news or of the offer, and
+      // the editor was never handed a document of somebody else's.
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("mine");
+      expect(pressable(t("files.saved"))?.disabled).toBe(true);
+
+      // And the file is known by what this save wrote: the folder moving because of it says
+      // nothing, and the next save answers to that mark.
+      await written("#!/bin/sh\necho mine", "mine");
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+      await type("#!/bin/sh\necho mine again");
+      await click(button(t("files.save")));
+      await settle();
+      expect(last(hoisted.saved)?.seen).toBe("mine");
+    });
+
+    /** Somebody writing to the file in the moment between that reading and the save. The press
+     *  wrote nothing, and a press answered by the same screen it was made on says nothing at all —
+     *  so the refusal is the sentence, and the offer stays where it is. */
+    it("says so when a writer got in between the reading and the save", async () => {
+      await open();
+      await type("#!/bin/sh\necho mine");
+      await written("#!/bin/sh\necho theirs", "after");
+      hoisted.refuseSave = {
+        code: "folder_changed_underneath",
+        message_en: "somebody wrote to this file after it was read here",
+        fields: {},
+      };
+      await click(button(t("files.keepMine")));
+      await settle();
+
+      expect(hoisted.saved).toEqual([]);
+      expect(container.textContent).toContain(errLabel(hoisted.refuseSave as CmdError));
+      // Theirs is still theirs, and both ways out are still on the screen.
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("mine");
+      expect(button(t("files.keepMine"))).toBeDefined();
+      expect(button(t("files.readAgain"))).toBeDefined();
+    });
+
     /** A save answers with the mark of what it wrote, and the panel takes it: without that, the
      *  panel's own writing would come back as the folder having moved and be read as somebody
      *  else's. */

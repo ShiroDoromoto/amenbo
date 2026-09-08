@@ -617,10 +617,11 @@ export const vi: Translation = {
     "files.save": "Lưu",
     "files.saving": "Đang lưu…",
     "files.saved": "Đã lưu",
-    // The file moving under a reader who has typed into it. What is said is the fact and
-    // nothing else — which of the two texts is right is the pane's agent's to settle, not
-    // this panel's (`AMB-D-784`).
+    // The file moving under a reader who has typed into it, and the two answers there are to it:
+    // write their own text over the file, or take what the disk says and lose theirs. The panel
+    // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "Ai đó đã ghi vào tệp này sau khi nó được mở ở đây.",
+    "files.keepMine": "Giữ bản của tôi",
     "files.readAgain": "Đọc lại",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).

@@ -413,7 +413,8 @@ function FileReader({
   // reader picks, and the save waits for that rather than guessing.
   const [newline, setNewline] = useState<Newline>(null);
   // Whether the file moved under a reader who has typed. Nothing of theirs is taken away by it —
-  // reading the file again is a thing they ask for, and this is the asking (`AMB-D-784`).
+  // which of the two texts stands is a thing they say, and this is the asking (`AMB-D-784`). The
+  // saying has two answers: take the disk's, or write their own over it (`AMB-D-863`).
   const [stale, setStale] = useState(false);
   // Where a file this face would not draw was handed on to the machine from. The same menu the list
   // rows open, opened here because these are the states a reader reaches it from with no row under
@@ -538,6 +539,12 @@ function FileReader({
     && file.clean
     && (!markdown || asText);
 
+  // Whether the reader's own text is a thing that could be written over the file at all. It is what
+  // the save control asks minus the mark — the one thing the offer below replaces — so a file this
+  // panel could not write back, or one whose newline nobody has picked, has no such offer on it
+  // rather than a control that would refuse the press.
+  const overwritable = savable && newline !== null && file?.digest !== undefined;
+
   // **A file already known to have moved is not sent to the door a second time.** The mark this
   // panel holds is the one the host refuses, so the press would spend a round trip and land back on
   // the state the reader is already looking at, having said nothing about having been heard
@@ -565,6 +572,48 @@ function FileReader({
       // reader, and what that wants is the offer below rather than a line of prose.
       if (changedUnderneath(e)) setStale(true);
       else setRefused(errText(e));
+    } finally {
+      setKeeping(false);
+    }
+  };
+
+  // Taking what the reader has typed, over what is on the disk now.
+  //
+  // **The file is read again for its mark, and for nothing else.** The mark this panel is holding
+  // is the one the door refuses (`AMB-T-4401`), so a save carrying it would spend a round trip to
+  // be told what the reader was just told; what the door will write over is the file as it stands
+  // now, and this is the reading that asks what that is. Nothing of what came back is drawn — the
+  // whole of this press is the reader saying they want their own text and not the disk's
+  // (`AMB-D-863`).
+  //
+  // **It is the file, not the lines.** Which of the two texts stands is the question, and taking
+  // some lines from each is not one of the answers — a reader who wants that takes one side and
+  // edits it.
+  const keepMine = async () => {
+    const read = typed.current;
+    if (!overwritable || keeping || file?.encoding === undefined || file.digest === undefined
+      || read === null || newline === null) return;
+    setKeeping(true);
+    setRefused(null);
+    try {
+      const fresh = await folderRead(projectId, root, path, asked);
+      const kept = await folderSave(
+        projectId, root, path, read(), file.encoding, file.bom, newline,
+        // A file that came back without a mark is one this panel could not write back at all any
+        // more. The mark it is holding goes instead of a guess, and the door is what says no to it.
+        fresh.digest ?? file.digest,
+      );
+      setEdited(false);
+      setStale(false);
+      // The same mark the ordinary save takes, for the same reason: without it the panel's next
+      // look at the folder would find its own writing and read it as somebody else's. The text is
+      // left where it is — it is the reader's own, and it is what was just written.
+      setFile({ ...file, lineEnding: newline, digest: kept });
+    } catch (e) {
+      // Somebody wrote to the file between that reading and this save, or the encoding has no room
+      // for a character in it. The offer is already on the screen, so what is added is the sentence
+      // saying this press wrote nothing.
+      setRefused(errText(e));
     } finally {
       setKeeping(false);
     }
@@ -736,12 +785,18 @@ function FileReader({
             </select>
           </div>
         )}
-        {/* The file moved under the reader while they were typing in it. What is said is the fact
-            and nothing else, and what is offered is the one thing this panel can do about it:
-            lining the two texts up is the work of the agent in the pane (`AMB-D-784`). */}
+        {/* The file moved under the reader while they were typing in it. What is said is the fact,
+            and under it the two answers there are: write their own text over the file, or take
+            what the disk says and lose theirs. The panel settles it rather than handing it to the
+            agent in the pane, which cannot see an editor nobody has saved out of (`AMB-D-863`). */}
         {stale && (
           <div className="files__changed">
             <p className="files__none">{t("files.changedUnderneath")}</p>
+            {overwritable && (
+              <button className="files__mine" onClick={() => void keepMine()} disabled={keeping}>
+                {t("files.keepMine")}
+              </button>
+            )}
             <button className="files__reread" onClick={readAgain}>{t("files.readAgain")}</button>
           </div>
         )}

@@ -841,8 +841,11 @@ impl CustomAgent {
 /// which model was chosen last time. Cursor's own `cli-config.json` keeps it for that reason.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AgentModel {
-    /// The model's name **as the CLI takes it** — what goes on the launch line (`AMB-T-4587`).
-    pub name: String,
+    /// The spelling the agent takes behind its model flag — what goes on the launch line
+    /// (`AMB-T-4587`). It is `id` because that is what it is called wherever else a model crosses
+    /// (`crate::agent_models::Model`), and one thing under two words is the fault the pair of them
+    /// exists to avoid.
+    pub id: String,
     /// What the tool calls it, for a face to draw. Where nothing else was given, the name itself.
     pub label: String,
 }
@@ -1276,31 +1279,31 @@ impl Config {
     /// Keep what was just chosen for this agent, replacing whatever it came up on before, and put it
     /// at the front of that agent's history.
     ///
-    /// Both strings are trimmed. The name may not be empty — it is what a launch line is built from,
+    /// Both strings are trimmed. The spelling may not be empty — it is what a launch line is built from,
     /// and a blank one would start a pane on a flag with nothing after it. A blank label is not a
     /// refusal: a model typed into a box is its own display name, so the name stands in for it.
     ///
     /// **The history holds one row per name.** Choosing again what was chosen before moves that row
     /// to the front rather than writing it twice, and takes the label with it — a tool that has begun
     /// calling a model something else is still answering about the same model.
-    pub fn remember_model(&mut self, agent: &str, name: &str, label: &str) -> Result<()> {
+    pub fn remember_model(&mut self, agent: &str, id: &str, label: &str) -> Result<()> {
         let agent = agent.trim();
-        let name = name.trim();
+        let id = id.trim();
         let label = label.trim();
         if agent.is_empty() {
             return Err(crate::error::Error::invalid(
                 "a chosen model needs the agent it was chosen for",
             ));
         }
-        if name.is_empty() {
+        if id.is_empty() {
             return Err(crate::error::Error::invalid("a chosen model needs a name"));
         }
         let chosen = AgentModel {
-            name: name.to_string(),
-            label: if label.is_empty() { name.to_string() } else { label.to_string() },
+            id: id.to_string(),
+            label: if label.is_empty() { id.to_string() } else { label.to_string() },
         };
         let history = self.agent_model_history.entry(agent.to_string()).or_default();
-        history.retain(|one| one.name != chosen.name);
+        history.retain(|one| one.id != chosen.id);
         history.insert(0, chosen.clone());
         history.truncate(MODEL_HISTORY);
         self.agent_model.insert(agent.to_string(), chosen);
@@ -1999,8 +2002,8 @@ mod tests {
         config.remember_model("claude-code", "opus", "Opus").unwrap();
         config.remember_model("codex-cli", "gpt-5.5", "GPT-5.5").unwrap();
 
-        assert_eq!(config.model_for("claude-code").map(|one| one.name.as_str()), Some("opus"));
-        assert_eq!(config.model_for("codex-cli").map(|one| one.name.as_str()), Some("gpt-5.5"));
+        assert_eq!(config.model_for("claude-code").map(|one| one.id.as_str()), Some("opus"));
+        assert_eq!(config.model_for("codex-cli").map(|one| one.id.as_str()), Some("gpt-5.5"));
         // A tool nobody has chosen for starts on its own default rather than on somebody else's word.
         assert_eq!(config.model_for("gemini-cli"), None);
     }
@@ -2015,7 +2018,7 @@ mod tests {
             .remember_model("gemini-cli", "  gemini-3.1-pro-preview-customtools  ", "  Gemini 3.1 Pro  ")
             .unwrap();
         let kept = config.model_for("gemini-cli").expect("the model just chosen");
-        assert_eq!(kept.name, "gemini-3.1-pro-preview-customtools");
+        assert_eq!(kept.id, "gemini-3.1-pro-preview-customtools");
         assert_eq!(kept.label, "Gemini 3.1 Pro");
 
         config.remember_model("github-copilot", "claude-sonnet-4.5", "").unwrap();
@@ -2044,7 +2047,7 @@ mod tests {
 
         assert_eq!(config.model_for("github-copilot"), None);
         assert_eq!(
-            config.model_history("github-copilot").iter().map(|one| one.name.as_str()).collect::<Vec<_>>(),
+            config.model_history("github-copilot").iter().map(|one| one.id.as_str()).collect::<Vec<_>>(),
             vec!["gpt-5.5"],
         );
         // And an agent nothing was ever chosen for has a history to draw and no row to read.
@@ -2063,7 +2066,7 @@ mod tests {
 
         let history = config.model_history("cursor");
         assert_eq!(
-            history.iter().map(|one| one.name.as_str()).collect::<Vec<_>>(),
+            history.iter().map(|one| one.id.as_str()).collect::<Vec<_>>(),
             vec!["auto", "sonnet-4.5"],
         );
         assert_eq!(history[0].label, "Auto (default)", "the name it is called by now");
@@ -2079,8 +2082,8 @@ mod tests {
         }
         let history = config.model_history("codex-cli");
         assert_eq!(history.len(), MODEL_HISTORY);
-        assert_eq!(history[0].name, format!("model-{}", MODEL_HISTORY + 2), "newest first");
-        assert_eq!(history[MODEL_HISTORY - 1].name, "model-3", "the first three have fallen off");
+        assert_eq!(history[0].id, format!("model-{}", MODEL_HISTORY + 2), "newest first");
+        assert_eq!(history[MODEL_HISTORY - 1].id, "model-3", "the first three have fallen off");
     }
 
     /// What was chosen survives the file, which is where it lives: a model picked on one run is what

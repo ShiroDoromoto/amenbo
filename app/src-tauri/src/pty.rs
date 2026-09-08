@@ -555,13 +555,13 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
 /// flag of its own — so it does not guess: the line is started as it stands and the sentence follows
 /// it into the pane (`AMB-D-793`).
 fn started_as(agent: &str) -> Result<Started, CmdError> {
-    if let Some(launch) = amenbo_core::wake::started_as(agent) {
-        return Ok(opening_line(launch));
-    }
     let cmd = amenbo_core::config::Paths::command_name();
     let config = amenbo_core::config::Paths::resolve()
         .map(|paths| amenbo_core::config::Config::load(&paths.config_file))
         .unwrap_or_default();
+    if let Some(launch) = amenbo_core::wake::started_as(agent) {
+        return Ok(opening_line(launch, config.model_for(agent)));
+    }
     if let Some(own) = config.custom_agent(agent) {
         return Ok(Started {
             line: own.line.clone(),
@@ -592,13 +592,27 @@ fn started_as(agent: &str) -> Result<Started, CmdError> {
 /// the pane opens. What is left of the old shape would be a card asking a person who has just arrived
 /// to decide what to ask for, which is the one thing they do not yet know.
 ///
-/// **No model is named.** The line says nothing about one, so the provider starts on however its own
-/// settings have it — which is what a person who has never been asked expects to happen. The asking is
-/// the face's, and this is where its answer arrives when there is one.
-fn opening_line(launch: &amenbo_core::harness::Launch) -> Started {
+/// **The model is whichever one was chosen for this agent, and no model at all where none was**
+/// (`amenbo_core::config::Config::agent_model`). A line naming none starts the provider on however
+/// its own settings have it, which is what a person who has never been asked expects to happen — so
+/// the flag is absent rather than passed empty (`amenbo_core::harness::opening`).
+///
+/// **It is read here rather than carried in from the face.** What model an agent comes up on is a
+/// fact about the agent and is kept against it (`AMB-D-865`), so every road that starts one — the
+/// press on the empty frame, the offer a folder with several puts up, the row on a frame whose
+/// program has ended — reaches the same answer without any of them having to hand it along.
+///
+/// **A row the reader registered gets none.** Its line is theirs as they wrote it and is never taken
+/// apart (`AMB-D-794`), so there is nowhere in it a model flag could be put that would not be Amenbo
+/// guessing at somebody else's command line.
+fn opening_line(
+    launch: &amenbo_core::harness::Launch,
+    model: Option<&amenbo_core::config::AgentModel>,
+) -> Started {
     let cmd = amenbo_core::config::Paths::command_name();
+    let named = model.map(|one| one.id.as_str());
     Started {
-        line: launch::command_line(launch.command, &amenbo_core::harness::opening(launch, cmd, None)),
+        line: launch::command_line(launch.command, &amenbo_core::harness::opening(launch, cmd, named)),
         hand_over: None,
     }
 }

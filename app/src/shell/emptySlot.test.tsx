@@ -31,6 +31,13 @@ const hoisted = vi.hoisted(() => ({
   reached: true,
   /** What the frame asked to be told when this person's answer changes — called to say it has. */
   chosen: [] as (() => void)[],
+  /** What each agent's own command answers when it is asked which models it can be started on
+      (`AMB-D-865`). An agent not named here answers with nothing, the way one with no list door
+      does. */
+  models: {} as Record<string, { id: string; label: string }[]>,
+  /** What this device already remembers for each agent: the model it comes up on, what was chosen
+      for it before, and the flag its command takes a model behind. */
+  kept: {} as Record<string, { chosen: { id: string; label: string } | null; history: { id: string; label: string }[]; flag: string | null }>,
 }));
 
 // Asking this machine again is a Tauri call and is gated on being inside Tauri, which a jsdom run is
@@ -65,6 +72,14 @@ vi.mock("../core/ipc", () => ({
       if (hoisted.wakeAfter !== null) hoisted.wake = hoisted.wakeAfter;
       return cmd === "wake_register" ? "custom:1" : undefined;
     }
+    if (cmd === "agent_models") {
+      return hoisted.models[(args as { agent: string }).agent] ?? [];
+    }
+    if (cmd === "wake_model") {
+      return hoisted.kept[(args as { agent: string }).agent]
+        ?? { chosen: null, history: [], flag: "--model" };
+    }
+    if (cmd === "wake_chose_model" || cmd === "wake_forget_model") return undefined;
     throw new Error(`the frame asked the host for ${cmd}`);
   }),
 }));
@@ -147,6 +162,8 @@ beforeEach(() => {
   hoisted.wakeHangs = false;
   hoisted.reached = true;
   hoisted.chosen = [];
+  hoisted.models = {};
+  hoisted.kept = {};
   started.length = 0;
   container = document.createElement("div");
   document.body.append(container);
@@ -535,7 +552,11 @@ describe("a command the reader registered", () => {
     expect(on()).toBe("Mine");
     await press("Remove");
 
-    expect(hoisted.asked).toEqual(["wake_choices", "wake_unregister", "wake_choices"]);
+    // The two model reads at the end are the row moving onto a catalogued agent: what it can be
+    // started on is asked of that agent, and what was chosen for it before is read off this device.
+    expect(hoisted.asked).toEqual([
+      "wake_choices", "wake_unregister", "wake_choices", "wake_model", "agent_models",
+    ]);
     expect(hoisted.args[1]).toEqual({ id: "custom:1" });
     expect(listed(), "the row it was drawn in stayed behind").toEqual([]);
     // The frame is not holding an id it can no longer start: the host's own answer takes over.
@@ -557,5 +578,125 @@ describe("a command the reader registered", () => {
     // Still open, with what was typed still in it: the reader has one thing to fix, not two.
     expect(buttons().some((b) => b.textContent === "Save"), "the form was closed on a failure")
       .toBe(true);
+  });
+});
+
+describe("which model the agent on the row starts on", () => {
+  /** The models drawn under the row, in the order they stand — the first is always the default. */
+  function offered(): string[] {
+    const rows = [...container.querySelectorAll(".slot__pick")];
+    const models = rows[rows.length - 1];
+    return [...(models?.querySelectorAll(".slot__start") ?? [])].map((one) => one.textContent ?? "");
+  }
+
+  /** Which model is on, out of that row — read off the model block and not the row of agents above
+   *  it, both being drawn with the same pill. */
+  function onModel(): string | null {
+    const rows = [...container.querySelectorAll(".slot__pick")];
+    return rows[rows.length - 1]?.querySelector(".slot__start--on")?.textContent ?? null;
+  }
+
+  /** The line the frame says will run. */
+  function runs(): string | null {
+    return container.querySelector(".slot__runs code")?.textContent ?? null;
+  }
+
+  it("is the agent's own default until somebody says otherwise, and nothing is written down",
+    async () => {
+      hoisted.wake = startable(["claude-code"], "claude-code");
+      hoisted.models["claude-code"] = [{ id: "opus", label: "Opus" }, { id: "sonnet", label: "Sonnet" }];
+      await draw("/work/here");
+
+      // The default stands first, and it is what is on: a person who has never been asked is
+      // already in this state, and the row says so rather than pre-selecting a model for them.
+      expect(offered()).toEqual(["Its own default", "Opus", "Sonnet"]);
+      expect(runs(), "a default carries no flag at all").toBe("claude-code");
+
+      await press("Open a terminal here");
+      expect(hoisted.asked).not.toContain("wake_chose_model");
+      expect(hoisted.asked).not.toContain("wake_forget_model");
+      expect(started).toEqual(["claude-code"]);
+    });
+
+  it("is kept against the agent when the pane opens, and the line says so first", async () => {
+    hoisted.wake = startable(["claude-code"], "claude-code");
+    hoisted.models["claude-code"] = [{ id: "opus", label: "Opus" }];
+    await draw("/work/here");
+
+    await press("Opus");
+    // Said before it is pressed, the way the registration form says what it will run before it
+    // saves: what a model choice does is put a flag on a command line.
+    expect(runs()).toBe("claude-code --model opus");
+    // Not written on the press — the pane opening is what settles it.
+    expect(hoisted.asked).not.toContain("wake_chose_model");
+
+    await press("Open a terminal here");
+    expect(hoisted.asked[hoisted.asked.length - 1]).toBe("wake_chose_model");
+    expect(hoisted.args[hoisted.args.length - 1]).toEqual({ agent: "claude-code", model: "opus", label: "Opus" });
+    expect(started).toEqual(["claude-code"]);
+  });
+
+  it("goes back to the default by a press, which is a choice and not the absence of one", async () => {
+    hoisted.wake = startable(["claude-code"], "claude-code");
+    hoisted.models["claude-code"] = [{ id: "opus", label: "Opus" }];
+    hoisted.kept["claude-code"] = { chosen: { id: "opus", label: "Opus" }, history: [{ id: "opus", label: "Opus" }], flag: "--model" };
+    await draw("/work/here");
+
+    // What was remembered is what is on, without anybody pressing anything.
+    expect(onModel()).toBe("Opus");
+    expect(runs()).toBe("claude-code --model opus");
+
+    await press("Its own default");
+    await press("Open a terminal here");
+    expect(hoisted.asked[hoisted.asked.length - 1]).toBe("wake_forget_model");
+    expect(hoisted.args[hoisted.args.length - 1]).toEqual({ agent: "claude-code" });
+  });
+
+  it("is a box to type into where the agent has no list to give, with what was typed before under it",
+    async () => {
+      hoisted.wake = startable(["github-copilot"], "github-copilot");
+      hoisted.models["github-copilot"] = [];
+      hoisted.kept["github-copilot"] = {
+        chosen: null,
+        history: [{ id: "claude-sonnet-4.5", label: "claude-sonnet-4.5" }],
+        flag: "--model",
+      };
+      await draw("/work/here");
+
+      // The history is the whole of what anybody can offer for an agent that cannot be asked.
+      expect(offered()).toEqual(["Its own default", "claude-sonnet-4.5"]);
+      await type("Model name", "gpt-5.5");
+      expect(runs()).toBe("github-copilot --model gpt-5.5");
+
+      await press("Open a terminal here");
+      expect(hoisted.args[hoisted.args.length - 1])
+        .toEqual({ agent: "github-copilot", model: "gpt-5.5", label: "gpt-5.5" });
+    });
+
+  it("grows a box to narrow itself where the agent answered with more than a row", async () => {
+    hoisted.wake = startable(["cursor"], "cursor");
+    hoisted.models["cursor"] = [...Array(40).keys()].map((n) => ({ id: `m-${n}`, label: `Model ${n}` }));
+    await draw("/work/here");
+
+    // Drawn as far as a row goes and no further, and the rest are said to be there rather than
+    // left to be guessed at.
+    expect(offered().length, "the whole answer was drawn as a row").toBe(13);
+    expect(container.querySelector(".slot__note")?.textContent).toContain("28");
+
+    await type("Narrow the list", "Model 37");
+    expect(offered()).toEqual(["Its own default", "Model 37"]);
+  });
+
+  // The plain shell is the absence of an agent and a registered command is a line of the reader's
+  // own (`AMB-D-794`) — neither is something Amenbo can ask anything of, so neither is asked.
+  it("is not asked about for the plain shell or for a command the reader wrote", async () => {
+    hoisted.wake = withOwn(["claude-code"], [["Mine", "mine --model big"]], true, "custom:1");
+    await draw("/work/here");
+
+    expect(hoisted.asked).not.toContain("agent_models");
+    expect(runs(), "a line the reader wrote is not one Amenbo adds a flag to").toBe(null);
+
+    await press("Plain shell");
+    expect(hoisted.asked).not.toContain("agent_models");
   });
 });

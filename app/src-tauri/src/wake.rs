@@ -52,7 +52,7 @@ use std::path::{Path, PathBuf};
 use amenbo_core::wake::{self, Choice};
 use tauri::Emitter as _;
 
-use crate::dto::{WakeCandidateDto, WakeDto, WakeReachDto};
+use crate::dto::{AgentModelDto, AgentModelKeptDto, WakeCandidateDto, WakeDto, WakeReachDto};
 use crate::error::CmdError;
 use crate::launch::Probe;
 
@@ -363,6 +363,70 @@ pub fn wake_unregister(id: String) -> Result<(), CmdError> {
     registered(&store.config, &id)?;
     store.config.forget_custom_agent(&id);
     store.save_config().map_err(not_kept)
+}
+
+/// What model this agent comes up on, and what was chosen for it before
+/// (`amenbo_core::config::Config::agent_model`).
+///
+/// It is asked per agent, the way the list of candidates is (`crate::agent_models`), because that is
+/// how a face reads it: the row of models is drawn under the agent the reader has picked, and it is
+/// re-drawn when they pick another.
+///
+/// **The history is answered even where the chosen model is not**, and that is the point of keeping
+/// it. An agent whose command has no way of being asked for a list — `github-copilot` — is offered a
+/// box to type into, and what somebody typed before is the only set of candidates there is
+/// (`AMB-D-865`).
+///
+/// Read the cheap way, like [`wake_probe`]: this happens every time a reader moves along the row.
+#[tauri::command]
+pub fn wake_model(agent: String) -> Result<AgentModelKeptDto, CmdError> {
+    let config = config()?;
+    Ok(AgentModelKeptDto {
+        chosen: config.model_for(&agent).map(model),
+        history: config.model_history(&agent).iter().map(model).collect(),
+        flag: wake::started_as(&agent).map(|launch| launch.model_flag.to_string()),
+    })
+}
+
+/// Keep the model this agent is to come up on, and put it at the front of that agent's history.
+///
+/// `model` is the spelling the agent takes and `label` is what a face draws — the pair, because a
+/// model name means nothing away from the agent it was chosen for and one of the six answers with a
+/// spelling its own screen never shows (`amenbo_core::config::AgentModel`).
+///
+/// **The agent is checked and the model is not.** Which agents exist is Amenbo's own answer, so an
+/// id nothing can start is refused the way it is everywhere else; which models exist is the agent's
+/// answer and never Amenbo's, and a box the reader typed into is the one road left for an agent with
+/// no list to offer (`AMB-D-865`). A model that is not there is found out by starting it, in the
+/// agent's own words, on the agent's own screen.
+///
+/// Written through the store for the reason [`wake_chose`] is: a write is a whole-file rewrite of
+/// the device's settings.
+#[tauri::command]
+pub fn wake_chose_model(agent: String, model: String, label: String) -> Result<(), CmdError> {
+    crate::migrate::gate()?;
+    let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
+    known(&store.config, &agent)?;
+    store.config.remember_model(&agent, &model, &label).map_err(not_kept)?;
+    store.save_config().map_err(not_kept)
+}
+
+/// Put this agent back on its own default, so the next pane opened with it carries no model flag at
+/// all (`amenbo_core::harness::opening`).
+///
+/// **The history is left where it was.** What was chosen before is still what was chosen, and for an
+/// agent with no list to offer it is the only row of candidates a face has.
+#[tauri::command]
+pub fn wake_forget_model(agent: String) -> Result<(), CmdError> {
+    crate::migrate::gate()?;
+    let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
+    store.config.forget_model(&agent);
+    store.save_config().map_err(not_kept)
+}
+
+/// One remembered model as the face draws it — the same two spellings the candidates cross with.
+fn model(one: &amenbo_core::config::AgentModel) -> AgentModelDto {
+    AgentModelDto { id: one.id.clone(), label: one.label.clone() }
 }
 
 /// Whether an id names something this machine can be asked to start — a catalog row, or a command

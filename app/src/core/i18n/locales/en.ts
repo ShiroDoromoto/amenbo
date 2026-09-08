@@ -649,6 +649,15 @@ const ui = {
   "face.startLine": "Command line",
   "face.startLinePh": "claude --model opus",
   "face.startRuns": "This is what runs in the terminal:",
+  // The line over the row of models the chosen agent can be started on (`app/src/shell/EmptySlot.tsx`).
+  // Amenbo holds no list of its own: what the row draws is whatever that agent's command answered
+  // when it was asked, so the question is about the tool that is on and not about models in general.
+  "face.whichModel": "What model does it start on?",
+  "face.modelsChecking": "Asking which models it can be started on…",
+  "face.modelDefault": "Its own default",
+  "face.modelFind": "Narrow the list",
+  "face.modelName": "Model name",
+  "face.modelsMore": "{n} more — narrow the list to reach them",
   "face.startSave": "Save",
   "face.startCancel": "Cancel",
   "face.startEdit": "Edit",

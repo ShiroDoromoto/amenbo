@@ -2172,6 +2172,29 @@ pub struct AgentModelDto {
     pub(crate) label: String,
 }
 
+/// What a model choice this device has already made looks like to a face (`AMB-D-865`).
+///
+/// **Two lists, because they answer two different questions.** `chosen` is what the next pane opened
+/// with this agent starts on, and `null` is the agent's own default — the state a person is in
+/// before they have chosen and the one they go back to. `history` is what was chosen for it before,
+/// newest first, and it is the whole of what a face has to offer for an agent whose command cannot
+/// be asked for a list at all (`amenbo_core::config::Config::agent_model_history`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModelKeptDto {
+    /// What this agent comes up on, or `null` for the agent's own default.
+    pub(crate) chosen: Option<AgentModelDto>,
+    /// What was chosen for it before, newest first.
+    pub(crate) history: Vec<AgentModelDto>,
+    /// The flag this agent's command takes a model behind
+    /// (`amenbo_core::harness::Launch::model_flag`), so a face can draw the line a press will run
+    /// before it is pressed — the same thing the registration form draws before it saves
+    /// (`AMB-D-794`). `null` for a command the reader registered themselves: that line is theirs as
+    /// they wrote it and nothing is added to it.
+    pub(crate) flag: Option<String>,
+}
+
 /// Whether what a row says about being installed was got from this machine at all (`AMB-D-792`).
 ///
 /// **It is not `candidates` being empty, and it cannot be read off one.** The row is the whole

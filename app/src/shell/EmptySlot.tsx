@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import type { WakeDto } from "../bindings/bindings";
+import type { AgentModelDto, AgentModelKeptDto, WakeDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { asTyped } from "../core/keys";
 import { onAgentChosen, onAgentsInstalled, wakeRescan } from "./wake";
@@ -53,6 +53,23 @@ import { Icon } from "../components/Icon";
  * to open with is not a question — and neither is a machine with none, where the shell is the whole
  * of what can be started and is on, whatever else the row draws beside it.
  *
+ * **And under the row, which model that agent starts on** (`AMB-D-865`). Amenbo holds no table of
+ * model names — the row is whatever the agent's own command answered when it was asked
+ * (`crate::agent_models`), so it is right on the day a provider adds one and empty where the
+ * provider will not say. The first press on it is always "its own default", which is the state a
+ * person who has never been asked is already in: nothing goes on the launch line and the CLI's own
+ * setting stands. What is pressed is kept against the agent rather than against this frame, because
+ * a model name means nothing away from the tool it was chosen for (`crate::config`).
+ *
+ * **Three shapes, because the six providers answer three different ways.** A short list is the row
+ * itself. A long one — Cursor answered with 217 — is the same row with a box to narrow it, since a
+ * row of 217 is not a row. And a provider with no list door at all is a box to type into with what
+ * was typed before under it: Amenbo cannot know that name, and the person can.
+ *
+ * **The line that will run is drawn before it is pressed**, the same as the registration form draws
+ * one before it saves: what a model choice does is put a flag on a command line, and a reader who
+ * cannot see the line cannot judge it.
+ *
  * `onOpen` is what this is for: opening a pane in this project, with the agent that was chosen —
  * {@link SHELL} for a prompt with nothing started at it, and null where the read that would have
  * said never came back, which leaves the answer to be settled on the pane's own side
@@ -66,6 +83,13 @@ type Start = { id: string; label: string; line?: string };
 /** The form's two fields while it is open, and which row they belong to: an id to correct, or null
  *  for one being registered. Null instead of the form means it is not open. */
 type Draft = { id: string | null; name: string; line: string };
+
+/** How many models the row draws before it grows a box to narrow itself with.
+ *
+ *  It is a row of pills, and a row is something an eye takes in at once: Cursor answered with 217,
+ *  which is a page. The number is where the six providers actually fall — one answered with eleven
+ *  and the rest with six or fewer, so every provider that *can* be read as a row is drawn as one. */
+const MANY = 12;
 
 export function EmptySlot({
   folders,
@@ -108,6 +132,21 @@ export function EmptySlot({
   // Why the last save or removal did not land, in the reader's own language. Kept beside the form
   // rather than thrown: what failed is a sentence about the two fields they are looking at.
   const [failed, setFailed] = useState<string | null>(null);
+  // What the chosen agent said it can be started on, and what has been chosen for it before. Both
+  // are read per agent and re-read when the reader moves along the row: the candidates are the
+  // agent's own answer and the memory is kept against the agent, so neither is a fact about this
+  // frame (`crate::agent_models` · `crate::config`).
+  const [models, setModels] = useState<AgentModelDto[] | null>(null);
+  const [kept, setKept] = useState<AgentModelKeptDto | null>(null);
+  // Which model the reader picked here. `undefined` is "they have not", which falls back to what was
+  // remembered; `null` is the agent's own default, which is a choice and not the absence of one —
+  // it is how somebody takes a model back off.
+  const [picked, setPicked] = useState<AgentModelDto | null | undefined>(undefined);
+  // What the reader has typed into the one box the row can carry. It is a box in two cases and it
+  // means a different thing in each: under a list too long to read, it narrows the list; instead of
+  // a list nobody could get, it **is** the choice. What decides is whether the provider had a list
+  // to give.
+  const [typed, setTyped] = useState("");
 
   // What this machine can start, asked again. It is a probe of a login shell, so it is not run per
   // render — but it is run after every registration, because whether a line can be started is
@@ -211,6 +250,44 @@ export function EmptySlot({
   // drawn instead is that it could not be checked, and the press that checks again.
   const unreached = wake?.reach === "unreachable";
 
+  // Which agent the model row is about: the one that is on, where it is a catalogued provider.
+  // Null for the plain shell, for a command the reader registered, and for a frame with nothing
+  // on yet — none of the three is a provider Amenbo can ask anything of.
+  const asks = on === null || on === SHELL || rows.usable.some((one) => one.id === on && one.line !== undefined)
+    ? null
+    : on;
+
+  // What the row is on, where that is a catalogued agent: the models it answered with, and what has
+  // been chosen for it before. A registered command is not asked — its line is the reader's own and
+  // Amenbo has no idea which program is inside it (`AMB-D-794`) — and neither is the plain shell,
+  // which is the absence of an agent.
+  //
+  // **Asked when the reader moves along the row, not when the frame is drawn.** The first ask starts
+  // a login shell and the provider on top of it, so asking about all six would pay six of those for
+  // the five nobody pressed; the host keeps what came back, so moving back along the row is free
+  // (`crate::agent_models`).
+  useEffect(() => {
+    if (asks === null) {
+      setModels(null);
+      setKept(null);
+      return;
+    }
+    let alive = true;
+    setModels(null);
+    setKept(null);
+    setPicked(undefined);
+    setTyped("");
+    void invoke<AgentModelKeptDto>("wake_model", { agent: asks })
+      .then((said) => { if (alive) setKept(said); })
+      .catch(() => {});
+    // A read that failed is an empty row, the same as an agent that would not answer: the other road
+    // is always open, which is to open the pane and use the provider's own picker (`AMB-D-865`).
+    void invoke<AgentModelDto[]>("agent_models", { agent: asks })
+      .then((said) => { if (alive) setModels(said); })
+      .catch(() => { if (alive) setModels([]); });
+    return () => { alive = false; };
+  }, [asks]);
+
   /** Take what is in the form and keep it — a new registration, or a correction to one that is
    *  already there. The row is read again afterwards, because whether the line can be started is
    *  what the read answers and the line has just changed. */
@@ -254,6 +331,63 @@ export function EmptySlot({
       setFailed(errText(e));
     }
   };
+
+  // Which model the next pane starts on: what the reader picked here, else what was remembered for
+  // this agent, else the agent's own default. `null` is that default and is a state of its own —
+  // the launch line carries no model flag at all, which is what somebody who has never been asked
+  // is already getting (`crate::harness::opening`).
+  const onModel = picked === undefined ? kept?.chosen ?? null : picked;
+  // The models to draw. A short answer is drawn whole; a long one is drawn as far as the row goes,
+  // and the box above it is how the rest are reached. A provider with no list draws what was chosen
+  // for it before, which is the whole of what anybody can offer for one.
+  const matching = (models ?? []).filter((one) =>
+    typed.trim() === "" || `${one.id} ${one.label}`.toLowerCase().includes(typed.trim().toLowerCase()));
+  const drawn = models !== null && models.length === 0 ? kept?.history ?? [] : matching.slice(0, MANY);
+  // What the press will run, said before it is pressed — the same reason the registration form says
+  // it before it saves (`AMB-D-794`). It is the command and the flag and nothing else: what else
+  // goes on that line is Amenbo's own plumbing, and a reader judging a model choice is judging this.
+  const runs = [
+    wake?.candidates.find((one) => one.id === asks)?.command ?? asks ?? "",
+    ...(onModel === null || kept?.flag === null || kept?.flag === undefined ? [] : [kept.flag, onModel.id]),
+  ].join(" ");
+
+  /** Keep what was picked here against this agent, so the pane that is about to open starts on it and
+   *  the next one does too (`crate::config`).
+   *
+   *  **Only where the reader actually picked.** A frame that wrote on every press would put the
+   *  remembered model back at the front of its own history for nobody having touched it — the same
+   *  reason a pane opened on what was already settled is nobody deciding anything ({@link pick} in
+   *  `../talk/agent`).
+   *
+   *  A refusal to keep it is not a reason not to open. */
+  const keepModel = async () => {
+    if (asks === null || picked === undefined) return;
+    try {
+      if (picked === null) await invoke<void>("wake_forget_model", { agent: asks });
+      else await invoke<void>("wake_chose_model", { agent: asks, model: picked.id, label: picked.label });
+    } catch {
+      // Said nowhere: what the reader asked for is a terminal, and it is about to open.
+    }
+  };
+
+  /** One model, drawn as a pill. `null` is the agent's own default and stands first, because it is
+   *  where everybody starts and the one press that takes a choice back off. */
+  const modelPill = (one: AgentModelDto | null) => (
+    <button
+      key={one?.id ?? ""}
+      className={`slot__start${(one?.id ?? null) === (onModel?.id ?? null) ? " slot__start--on" : ""}`}
+      role="radio"
+      aria-checked={(one?.id ?? null) === (onModel?.id ?? null)}
+      onClick={() => {
+        setPicked(one);
+        // The box and the row are the same answer where the box is the choice: a press has to be
+        // readable in it, or the reader is looking at two fields saying different things.
+        if (models !== null && models.length === 0) setTyped(one?.id ?? "");
+      }}
+    >
+      {one === null ? t("face.modelDefault") : one.label}
+    </button>
+  );
 
   /** One thing to open with, drawn as a pill. `missing` is a provider this machine has not got: it
    *  stays in the group so the row reads as "these are the choices, some of them not yet here", and
@@ -418,9 +552,70 @@ export function EmptySlot({
           </div>
         </div>
       )}
+      {/* Which model that agent starts on (`AMB-D-865`). It is its own block rather than part of the
+          row above, because it is asked of one agent and re-asked when the reader moves: a machine
+          with a single agent on it has no row to draw and still has models to choose between. */}
+      {!reading && asks !== null && (
+        <div className="slot__pick">
+          <p className="slot__ask" id={`${askId}-model`}>{t("face.whichModel")}</p>
+          {models === null
+            ? (
+              <p className="slot__note" role="status">{t("face.modelsChecking")}</p>
+            )
+            : (
+              <>
+                {/* The box, in the two shapes it takes. Above a long list it narrows; where there is
+                    no list at all it is the answer itself, and what was chosen before stands under
+                    it as the only candidates anybody has. */}
+                {models.length > MANY && (
+                  <label className="slot__field">
+                    <span>{t("face.modelFind")}</span>
+                    <input {...asTyped} value={typed} onChange={(e) => setTyped(e.target.value)} />
+                  </label>
+                )}
+                {models.length === 0 && (
+                  <label className="slot__field">
+                    <span>{t("face.modelName")}</span>
+                    <input
+                      {...asTyped}
+                      value={typed}
+                      onChange={(e) => {
+                        setTyped(e.target.value);
+                        const name = e.target.value.trim();
+                        setPicked(name === "" ? null : { id: name, label: name });
+                      }}
+                    />
+                  </label>
+                )}
+                <div className="slot__starts" role="radiogroup" aria-labelledby={`${askId}-model`}>
+                  {modelPill(null)}
+                  {drawn.map((one) => modelPill(one))}
+                </div>
+                {/* Said rather than left to be noticed: a row that stops at its own length looks
+                    like the whole answer, and the reader would never learn the box above reaches
+                    the rest. */}
+                {matching.length > drawn.length && models.length > 0 && (
+                  <p className="slot__note">{tf("face.modelsMore", { n: matching.length - drawn.length })}</p>
+                )}
+              </>
+            )}
+          {/* What the press runs, before it is pressed. */}
+          <p className="slot__runs">
+            {t("face.startRuns")} <code>{runs}</code>
+          </p>
+        </div>
+      )}
       {/* Not pressed while nothing is on, and it says which it is rather than explaining a refusal
-          afterwards: what the reader has to do is written on the thing they would press. */}
-      <button className="slot__open" onClick={() => onOpen(on)} disabled={asking}>
+          afterwards: what the reader has to do is written on the thing they would press.
+
+          The model picked here is kept **before** the pane is opened, and waited on: what the pane
+          starts with is read out of the settings on the host side, so a write still in flight would
+          open the pane on the model before it (`crate::pty`). */}
+      <button
+        className="slot__open"
+        onClick={() => { void keepModel().then(() => onOpen(on)); }}
+        disabled={asking}
+      >
         {asking ? t("face.openPick") : t("face.open")}
       </button>
     </div>

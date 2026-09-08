@@ -1,0 +1,121 @@
+# An address drawn in a terminal is a place on the web, and pressing it is the way there.
+#
+# A pane is a real terminal, so a program running in it writes characters and nothing else: an
+# `https://…` in a build log, in a diff, in an agent's own sentence is an address to a reader and a
+# run of characters to the terminal. This road is that being true from end to end — an address on the
+# screen, a press, and the machine's own browser standing at it.
+#
+# ── The two ways an address becomes something to press ───────────────────────────────────────────
+# The same pair `follow-a-ref-out-of-the-pane` walks for refs, and they part company here in the same
+# place. One is read back off the drawn buffer, which is what covers every program's output; the
+# other is OSC 8, the escape a program writes beside its characters to say where they point, which is
+# what an agent wraps a link in. Neither reaches the other's half: nothing finds an address in words
+# that do not spell one, and nothing reads an escape off a screen. So the road walks both — the plain
+# one out of an `echo`, the escape out of a `printf` written out in full.
+#
+# ── Why the two presses go to different addresses ────────────────────────────────────────────────
+# What closes each press is a browser window standing at an address, and a browser left standing from
+# the press before it looks exactly like one a press just raised. The second address is a different
+# one for that reason alone: a press that opened nothing cannot pass on the window the first one left.
+#
+# ── What is read, and where ──────────────────────────────────────────────────────────────────────
+# The address bar of another program, which is the one thing on this road that is not on Amenbo's
+# screen. It is read by an eye off a shot the attending AI takes, the way `mcp-in-app` is read. What
+# it is read for is the address and not the page: a machine off the network still shows where it was
+# sent, and a road that waited for a page would be a road about somebody else's uptime.
+#
+# ── Why the pane runs a shell ────────────────────────────────────────────────────────────────────
+# The lines below are run rather than asked for. A folder with an agent on it opens on the agent, and
+# what an agent does with a line typed at it is the agent's own, so a gate resting on one carrying out
+# a command rests on a promise nothing holds it to.
+id: open-an-address-a-pane-drew
+title: An address drawn in the pane is pressed, and the machine's browser stands at it
+description: >
+  Open a pane on a project's folder and print an address into it as plain characters. Press it where
+  it is drawn: the machine's own browser comes forward at that address. Then print a second address
+  the way an agent writes one — wrapped in OSC 8, so the words on the screen are not the address and
+  the pane is told where they point — and press those words. What is under test is that an address on
+  a terminal is a way to the web, however it got onto the screen.
+
+given:
+  # One project, bound to one folder, and the folder is named here rather than left to be added
+  # afterwards. Bound to exactly one, the press that opens a pane opens there and asks nothing.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Workshop
+      dir: workshop
+    as: workshop
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project's panes the face is drawing, pressed rather than assumed: the pane below has to be
+  # the one standing in this project's folder.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Workshop
+
+  # The frame and not the way in beside it. The folder was bound where the world was stood up, so the
+  # press opens a pane in it and asks nothing.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # ── An address as plain characters, which is most of what a pane draws ─────────────────────────
+  # Nothing here says where the characters point. What finds them is the reading of the drawn screen,
+  # and nothing else can be.
+  - type: action
+    domain: terminal
+    op: run
+    with:
+      command: echo "SCENARIO the guide is at https://example.com/guide"
+
+  - type: action
+    domain: terminal
+    op: press-url
+    with:
+      url: https://example.com/guide
+
+  - type: assert
+    domain: terminal
+    op: opened-in-browser
+    with:
+      url: https://example.com/guide
+
+  # ── And an address written the way an agent writes one ────────────────────────────────────────
+  # The escape says where the words point, so the address is beside the characters rather than in
+  # them: nothing on the screen spells it, and a build that only ever read the screen would draw a
+  # link that led nowhere. The line is written out in full because the escape is the whole of what
+  # this half is for, and an operator improvising it would be improvising the step.
+  - type: action
+    domain: terminal
+    op: run
+    with:
+      command: printf '\e]8;;https://example.org/other\e\\SCENARIO the other guide\e]8;;\e\\\n'
+
+  - type: action
+    domain: terminal
+    op: press-url
+    with:
+      url: https://example.org/other
+      shows: SCENARIO the other guide
+
+  - type: assert
+    domain: terminal
+    op: opened-in-browser
+    with:
+      url: https://example.org/other

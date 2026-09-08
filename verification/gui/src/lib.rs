@@ -725,6 +725,10 @@ impl Instructor {
     /// wording of the expectation that would be read against the right window. The instruction asks the
     /// attending AI for that shot instead, and an eye closes the step from it.
     ///
+    /// `terminal opened-in-browser` is a `Review` out at that same distance, and for the same reason:
+    /// what settles it is the machine's own browser, standing at an address, on a window nothing in this
+    /// workspace shoots. Its instruction asks the attending AI for that shot too.
+    ///
     /// `ai-launch-answer` is the third of them and a `Review`, for the reason `plugin config`'s state
     /// is: all three of its answers — the yes, the no, and the never asked — are drawn as words of the
     /// interface, and which of them is standing is not something the presence of text can settle.
@@ -2100,6 +2104,21 @@ impl Instructor {
                 true => format!(
                     "Drag the window's side edge in or out until the ref of the task \"{}\" is broken across two rows — part of it at the end of one row, the rest at the start of the next — and press it there. The fold is the whole of this step: pressed while it sits whole on one row, it proves what the step above already did.",
                     self.target_label(with)
+                ),
+            },
+            // Pressing an address, which the pane finds the same two ways it finds a ref. Where the
+            // step names no `shows`, what is drawn is the address and the operator presses that; where
+            // it names one, the address travels beside the words rather than in them and the words are
+            // what is on the screen to press. The line says the address out loud in both, because what
+            // the step after this reads is the browser standing at that one and not at a near miss.
+            (Domain::Terminal, "press-url") => match arg_str(with, "shows") {
+                None => format!(
+                    "In the pane, press the address {} where the output drew it — the characters themselves, which the pane offers as a link.",
+                    req(with, "url")?
+                ),
+                Some(shows) => format!(
+                    "In the pane, press the words \"{shows}\" — drawn as a link by the program that wrote them, with the address {} behind them rather than in them.",
+                    req(with, "url")?
                 ),
             },
             // Something set running in the pane and left there, which is what parts it from `run`
@@ -3970,6 +3989,21 @@ impl Instructor {
             (Domain::Terminal, "turned-away") => format!(
                 "On the terminal face, confirm no pane opened for the folder just chosen, and that the way in is answering under itself: it says the folder belongs to another store, and names \"{}\" as the store it belongs to.",
                 req(with, "store")?
+            ),
+            // The browser the press was for, which is the one window on this road that is not Amenbo's.
+            // It asks for the shot for the reason `repo mcp-in-app` does: the shot taken here is of the
+            // build under test, and the answer is on another program's screen.
+            //
+            // What is asked for is the address bar and not the page. A run machine need not be on the
+            // network for the press to have worked, and the sentence says so, because an operator
+            // looking at an error page has to know whether they are looking at a pass.
+            (Domain::Terminal, "opened-in-browser") => format!(
+                "Confirm this machine's own browser has come forward with {} in its address bar — that \
+                 address and nothing added to the end of it. Whether the page arrives is not the step: a \
+                 machine off the network still shows where it was sent. Shoot that browser's window \
+                 yourself and keep the picture with this run: the shot taken here is of Amenbo, which is \
+                 not where the answer is.",
+                req(with, "url")?
             ),
             // Whether a column is beside the panes. The absent half says what the width went to, so an
             // operator reading it knows a screen that merely drew the column narrower would be a fail.

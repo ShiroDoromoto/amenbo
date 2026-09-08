@@ -1988,9 +1988,21 @@ impl Instructor {
             // rule every reading of this row is written to (`opens-with`). What the operator is told
             // to expect afterwards is the row appearing — a frame that drew no model row here is the
             // fault this step catches on its own.
-            (Domain::Terminal, "pick-start") =>
-                "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose the **first** thing on that row, and press nothing else: the row is drawn in Amenbo's own order — the agents it lists, then any command registered on this machine, then the plain shell — so the first of them is one of the agents whatever this machine has on it. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run."
-                    .to_string(),
+            (Domain::Terminal, "pick-start") => match arg_str(with, "at").unwrap_or("first") {
+                "first" =>
+                    "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose the **first** thing on that row, and press nothing else: the row is drawn in Amenbo's own order — the agents it lists, then any command registered on this machine, then the plain shell — so the first of them is one of the agents whatever this machine has on it. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run."
+                        .to_string(),
+                // The second of them, which a road asks for when the fault it is about lives on some
+                // providers and not on others. It is still a position and still not a name.
+                "second" =>
+                    "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose the **second** thing on that row, and press nothing else: the row is drawn in Amenbo's own order, so the second of them is the second of the agents Amenbo lists that this machine has. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run."
+                        .to_string(),
+                other => {
+                    return Err(format!(
+                        "action `pick-start` does not know the position `{other}` — the row is chosen at its `first` or its `second`, and never by naming an agent"
+                    ))
+                }
+            },
             // Naming the model. Two shapes and one of them is the road's: on a stood-up machine the
             // agents are stand-ins that say what they are and stop, so no list comes back for any of
             // them and the row is the one a provider with no list draws — a box to write a name in.
@@ -2028,6 +2040,38 @@ impl Instructor {
             (Domain::Terminal, "open-start") =>
                 "On the empty frame, press what opens a pane — the press under the rows, the one the frame has been saying would run that line. Choose nothing first: what is on the row of agents and what is named on the model row under it are what the steps before this one set, and pressing anything else now would open the pane on a different answer. A pane comes up in the frame's place, with the program running in it."
                     .to_string(),
+            // ── Moving a pane that is already running ─────────────────────────────────────────────
+            // Opening the candidates. The row is under the box a pane is written in — the last line
+            // of the pane's own column — and it says the model the pane was last moved to, or simply
+            // that there is a model to choose.
+            (Domain::Terminal, "open-models") => format!(
+                "Press the row under {pane} that names its model — the quiet line below the box a line is written in, at the very bottom of that pane's column. Candidates come up over the pane. Press none of them yet. A pane with no such row is a pane running something Amenbo cannot name — the plain shell, or a command registered on this machine — and this step has failed if the pane the road opened is one of those.",
+                pane = named_pane(with),
+            ),
+            // Pressing one. The three shapes are `pick-model`'s, and each says what it must not be
+            // looking at for the same reason that one does.
+            (Domain::Terminal, "switch-model") => {
+                let name = req(with, "name")?;
+                let pane = named_pane(with);
+                match arg_str(with, "how").unwrap_or("press") {
+                    "press" => format!(
+                        "Among the candidates open over {pane}, press `{name}` — one of the names the agent's own command answered with. The whole answer is drawn here, so the name is on the row and there is no box above it to narrow the row with: a box to write a model name in and no names to press means the answer never came, and this step has failed."
+                    ),
+                    "write" => format!(
+                        "Among the candidates open over {pane}, write `{name}` into the box offered for a model name — the whole of it, exactly as it stands here — and press what sends it. That box is the shape this row takes where the agent's own command answered with no list of models: if names are offered to press instead, this step has failed, because something answered for a tool the run did not put there."
+                    ),
+                    "narrow" => format!(
+                        "The candidates open over {pane} are more than the row draws, so above them is a box for narrowing the list down. Type `{find}` into that box, then press `{name}` on what is left. If there is no box above them, this step has failed: the answer that came back was short enough to draw whole.",
+                        find = req(with, "find")?,
+                    ),
+                    other => {
+                        return Err(format!(
+                            "action `switch-model` does not know the shape `{other}` — the candidates are a set of names to press (`press`), a box to write one in (`write`), or a long set reached through a box that narrows it (`narrow`)"
+                        ))
+                    }
+                }
+            }
+
             // A line typed into the pane and sent. It is typed rather than pasted because what is
             // under test is a terminal: keys are what a terminal is driven by, and a line that
             // arrived some other way would be evidence of a path nobody walks.
@@ -4268,6 +4312,45 @@ impl Instructor {
                     "On the empty frame, look at the line the frame writes out under the model row — what it says the press would run. Confirm it ends with the model you named: a flag, spelled the way that agent spells it (`--model` on some of them, `-m` on others), and `{model}` after it, the same characters the row was answered with and nothing added or tidied. What the line begins with is the agent's own program name and is nothing to this reading."
                 ),
             },
+            // What the row under a **running** pane says a press would do, read before it is pressed.
+            // The first half is the provider's own command and the second is what the press costs the
+            // reader outside this session — which is the half a build could stop saying while still
+            // switching models correctly, with nothing else on the screen looking wrong.
+            (Domain::Terminal, "switch-says") => {
+                let keeps = match arg_str(with, "keeps") {
+                    None | Some("none") => "Confirm it says nothing about a file of your own: this provider changes the session in front of you and nothing else, and a sentence naming a file here would be Amenbo promising a change it does not make.".to_string(),
+                    Some(path) => format!("Confirm it also says the change reaches `{path}` — one of your own files, named before the press and not after it. This provider keeps the change past this session, so a press that said nothing about it would move your default without telling you."),
+                };
+                format!(
+                    "With the candidates open over {pane}, read the sentence under them — what the press will put in the pane. Confirm it names `{command}`, which is this provider's own command and not a word of Amenbo's. {keeps}",
+                    command = req(with, "command")?,
+                    pane = named_pane(with),
+                )
+            }
+            // And what it says once the press has been made. Both readings are of the row and never
+            // of the pane's screen: three of the six providers say in words that the model moved and
+            // three say nothing at all, so a build reading either would be parsing a provider's own
+            // screen.
+            (Domain::Terminal, "answers-on") => match req(with, "model")? {
+                // Nothing has moved it yet, so there is nothing for it to name. The row is still
+                // there — it is a pane running a provider Amenbo can name — and what it says is that
+                // there is a model to choose.
+                "none" => format!(
+                    "Read the row under {pane} that names its model. Confirm it names no model at all: what it says is that there is one to choose, and nothing more. A name here is a build holding a choice nobody made in this pane.",
+                    pane = named_pane(with),
+                ),
+                // The provider's own picker is standing open in the pane and the choosing has not
+                // been made, so there is no model to name — and a row naming one here would be a
+                // build claiming a change nobody has made.
+                "waiting" => format!(
+                    "Read the row under {pane} that names its model. Confirm it says the terminal is waiting for a choice, and that it names no model: this provider does not take a model name on that line, so what the press did was open the provider's own picker, and choosing in there is yours. A model named here is a build saying a change was made that was not.",
+                    pane = named_pane(with),
+                ),
+                model => format!(
+                    "Read the row under {pane} that names its model. Confirm it now says `{model}` — the name that was pressed. This provider's own command settles the model on the line it was given, so the row says which one; it says it because Amenbo sent that line, and never because anything was read off the pane's screen.",
+                    pane = named_pane(with),
+                ),
+            },
             // A registered command as the frame draws it, name and line together. The line is read
             // character for character rather than recognised: a build that tidied it — trimmed the
             // quotes, dropped the arguments, rebuilt it from the first word — would draw something a
@@ -4507,6 +4590,20 @@ fn unmapped(domain: Domain, op: &str) -> String {
     format!(
         "op `{op}` for domain `{domain:?}` is in the scenario registry but not yet mapped in the GUI harness"
     )
+}
+
+/// Which pane a step means, said the way every pane step says it: by words the road put on its screen
+/// itself (`type-line`, and the first line a stand-in prints), or — where the road named none — the
+/// one pane there is.
+///
+/// A page can hold several panes, and on one that does "the pane" names three boxes — so a road that
+/// opened more than one says which. Where it opened exactly one, naming it would be asking the
+/// operator to match text for nothing.
+fn named_pane(with: &Args) -> String {
+    match arg_str(with, "shows") {
+        Some(shows) => format!("the pane showing \"{shows}\""),
+        None => "the pane".to_string(),
+    }
 }
 
 fn arg_str<'a>(with: &'a Args, key: &str) -> Option<&'a str> {

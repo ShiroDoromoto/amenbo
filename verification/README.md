@@ -993,6 +993,32 @@ is where a kept choice is told from a button that stayed pressed.
 `narrow-a-long-row-of-models-to-the-one-you-want` asks for twenty and reaches one the row was not
 drawing, which is the whole of what the box above it is for.
 
+**A pane already running is the other half of the same question, and it has nothing in common with
+the half above.** A model chosen before a pane opens goes on the launch line; an hour into a session
+there is no line left to put anything on, so the only way in is the one a person has — the provider's
+own slash command, typed into the pane. Four words walk that. `open-models` presses the row under a
+running pane, the quiet line below the box a line is written in, and the candidates come up over it.
+`switch-says` reads what the press *will* do before it is pressed: `command` is the provider's own
+word, and `keeps` is the file on this machine the change lands in, or `none` for a provider that
+changes only the session in front of the reader — three of the six rewrite a file the person edits by
+hand and a fourth keeps it in a database, so a control that moved somebody's default without saying so
+would be Amenbo writing a provider's settings through the back door. `switch-model` presses one, and
+its `how` is `pick-model`'s three shapes for the same reason: the candidates are drawn from the same
+answer. `answers-on` reads the row afterwards — a name where the provider's own command settles the
+model in one line, `waiting` where it opens a picker instead and the choosing is the person's, and
+`none` before anything has moved it. **Nothing on any of these reads the pane's screen**: three of the
+six say in words that the model changed and three change a value on a status line and say nothing, so
+a build reading either would be parsing a provider's own screen.
+
+`move-a-running-pane-to-another-model` walks the provider that takes the name on its line, and reads
+the line back **off the program** — `terminal can-start`'s `then: reads` is what leaves one running to
+read it with. `leave-the-choosing-to-a-provider-that-charges-for-a-named-line` walks the other kind,
+and is the road worth the most on this face: two of the six take `/model <name>` as a prompt, reach
+their own servers and bill the reader for the answer, so what has to be read is that the name is *not*
+on the line. It is read whole — the stand-in prints what it was given inside brackets, so `[/model]`
+and `[/model a-name]` are two readings and not one that contains the other. `pick-start`'s `at:
+second` is how that road reaches a provider of that kind: still a position and still never a name.
+
 `dot` is the one reading on these roads that is not text at all. The mark on a pane's label is lit
 while something is coming out of that terminal, and it is the only thing on screen that says a pane
 is *alive* rather than drawn — a terminal that ended leaves its last output where it was, so words on
@@ -1414,6 +1440,12 @@ the step that meant to press one is what says so.
 harness's own. That is how a road reads a model choice back off the program rather than off the line
 Amenbo drew: the name is on a line by itself, so what is read is the road's own word and never a flag
 spelled one tool's way.
+
+**`then` is what a stand-in does once it has printed.** `ends` is the default and is the pane every
+road but two reads: the output standing on the screen and nothing running in it. `reads` keeps it open
+and prints back every line it is given, inside brackets so a road reads the whole line and never a
+piece of one. A road that **moves a running pane** needs it twice over — there is no model row on a
+frame whose program has gone, and what says the move arrived is the program that was given it.
 
 **A premise that does not stand ends that scenario, red, on the line that failed, and the road is not
 walked at all.** Judging a road against a world half built says nothing about the road — every line it

@@ -92,6 +92,8 @@ mod single_instance;
 /// Which agent a folder's pane is opened with: the folder's trace times what this machine can
 /// start (`AMB-T-3591`).
 mod wake;
+/// Which models an agent can be started on, asked of the agent's own command (`AMB-D-865`).
+mod agent_models;
 /// OS-specific file watching — the half that wakes `commands::watch_store`. It does not depend on
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
 /// operating systems.
@@ -543,6 +545,7 @@ pub fn run() {
       wake::wake_register,
       wake::wake_amend,
       wake::wake_unregister,
+      agent_models::agent_models,
       frames::frame_names,
       frames::name_frame,
       commands::project_memo,

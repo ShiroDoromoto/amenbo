@@ -33,7 +33,7 @@
 //! | | [`HARNESSES`] — wired | [`LAUNCHES`] — started |
 //! |---|---|---|
 //! | what it does | a hook in the folder's own settings runs `amenbo agent` when a session starts | Amenbo opens a pane and starts the agent in it, saying the same thing as its first argument |
-//! | what a row holds | [`event`](Harness::event), [`places`](Harness::places), [`home`](Harness::home), [`paste_into`](Harness::paste_into), [`template`](Harness::template), [`json_layers`](Harness::json_layers) | [`command`](Launch::command), [`prompt_flag`](Launch::prompt_flag), [`model_flag`](Launch::model_flag) |
+//! | what a row holds | [`event`](Harness::event), [`places`](Harness::places), [`home`](Harness::home), [`paste_into`](Harness::paste_into), [`template`](Harness::template), [`json_layers`](Harness::json_layers) | [`command`](Launch::command), [`prompt_flag`](Launch::prompt_flag), [`model_flag`](Launch::model_flag), [`models`](Launch::models) |
 //!
 //! One product can stand in both, and Claude Code does — that repetition is what this costs. What it buys
 //! is a row for a provider that can only be started: with no session-start hook to write, the price of a
@@ -249,6 +249,14 @@ pub struct Launch {
     /// the account cannot reach, is refused by the provider in its own words on the pane's screen —
     /// which is the only place that answer exists.
     pub model_flag: &'static str,
+    /// How this provider is asked what models it can be started on, or `None` where it cannot be
+    /// asked at all ([`crate::agent_models`], `AMB-D-865`).
+    ///
+    /// It is a column here rather than a table of its own for the reason the prompt flag is one: the
+    /// question is per provider, and the answer is a property of the row that says how to start it.
+    /// What is **not** here is any model name — Amenbo holds none, and this says only how to go and
+    /// ask.
+    pub models: Option<crate::agent_models::Ask>,
     /// Whether this row has been watched starting the provider on a real machine (`AMB-T-3819`).
     ///
     /// Every row is written from the product's own documentation, and that is not the same as having
@@ -270,6 +278,12 @@ pub static LAUNCHES: &[Launch] = &[
         prompt_flag: None,
         // Aliases (`opus`, `haiku`) and full names are both taken here.
         model_flag: "--model",
+        // No list door at all: `claude models` is read as a prompt and answered by the model itself
+        // (`AMB-T-4581`). What names the aliases is the help text, so the help text is what is read.
+        models: Some(crate::agent_models::Ask {
+            args: &["--help"],
+            reading: crate::agent_models::Reading::HelpAliases,
+        }),
         confirmed: true,
     },
     Launch {
@@ -278,6 +292,12 @@ pub static LAUNCHES: &[Launch] = &[
         command: "codex",
         prompt_flag: None,
         model_flag: "-m",
+        // Answers without a key — the same list with `CODEX_HOME` empty — and its `slug` is the
+        // spelling `-m` takes (`AMB-T-4576`).
+        models: Some(crate::agent_models::Ask {
+            args: &["debug", "models"],
+            reading: crate::agent_models::Reading::CodexCatalog,
+        }),
         confirmed: true,
     },
     Launch {
@@ -287,6 +307,11 @@ pub static LAUNCHES: &[Launch] = &[
         // `-p` runs a prompt and exits here, so the interactive one is spelled separately.
         prompt_flag: Some("-i"),
         model_flag: "--model",
+        // The one provider with nowhere to ask: no list command, and its ACP session offers a mode
+        // and a permission and no model at all (`AMB-T-4581`). What `copilot help config` prints is
+        // a paragraph of documentation, which is a table Amenbo would be copying rather than asking
+        // for — and the measured one was wrong for this account in all 26 rows (`AMB-T-4576`).
+        models: None,
         confirmed: true,
     },
     Launch {
@@ -297,6 +322,13 @@ pub static LAUNCHES: &[Launch] = &[
         // "run this and stay" is not.
         prompt_flag: Some("-i"),
         model_flag: "-m",
+        // Asked over ACP, which is this one's only list door (`AMB-T-4581`). The pane itself is
+        // still a terminal running the ordinary TUI — what `AMB-D-747` refused is filling a pane
+        // with ACP, and this is a second process started to ask one question and killed.
+        models: Some(crate::agent_models::Ask {
+            args: &["--acp"],
+            reading: crate::agent_models::Reading::AcpSession,
+        }),
         confirmed: true,
     },
     Launch {
@@ -309,6 +341,12 @@ pub static LAUNCHES: &[Launch] = &[
         // A name here is `provider/model`, not a model on its own. The flag is the base command's, like
         // the prompt's above it — `opencode run` spells it the same, and that is the form to stay off.
         model_flag: "-m",
+        // Answers without a key, and the list is whatever this machine's providers come to — add a
+        // key and the same command answers with more (`AMB-T-4576`).
+        models: Some(crate::agent_models::Ask {
+            args: &["models"],
+            reading: crate::agent_models::Reading::QualifiedLines,
+        }),
         confirmed: true,
     },
     Launch {
@@ -320,6 +358,12 @@ pub static LAUNCHES: &[Launch] = &[
         // else's program.
         prompt_flag: None,
         model_flag: "--model",
+        // The one that needs the reader signed in: unauthenticated it exits 1 and names the ways to
+        // sign in, which reaches a face as no models rather than as a message (`AMB-T-4576`).
+        models: Some(crate::agent_models::Ask {
+            args: &["--list-models"],
+            reading: crate::agent_models::Reading::IdThenLabel,
+        }),
         // Written from the documentation and never run — the tool is not on the machine the other five
         // were tried on (`AMB-T-3838`).
         confirmed: false,

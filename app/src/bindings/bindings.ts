@@ -106,6 +106,24 @@ tool: AgentHookToolDto,
 dirs: Array<string>, };
 
 /**
+ * One model an agent can be started on, as a face draws it (`AMB-D-865`).
+ *
+ * **Two spellings, and both cross.** `id` is what the agent is started with and `label` is what the
+ * reader is shown, and for Gemini CLI they are different words for the same model — so a face
+ * drawing `id`, or a launch passing `label`, would each be showing or saying something nobody
+ * recognises (`amenbo_core::agent_models`).
+ */
+export type AgentModelDto = { 
+/**
+ * The spelling the agent takes behind its model flag, exactly as the agent gave it.
+ */
+id: string, 
+/**
+ * The agent's own name for it, for a person to read.
+ */
+label: string, };
+
+/**
  * One row of the collapsible "Archived (N)" section at the foot of the sidebar. These never ride
  * in the snapshot's `ProjectDto` (which comes from `project_overview` — active projects only), so
  * they are fetched over a dedicated read path, `project_list_archived`. Restoring navigates to the

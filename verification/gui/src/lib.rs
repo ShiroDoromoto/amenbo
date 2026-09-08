@@ -1041,7 +1041,11 @@ impl Instructor {
             | (Domain::Terminal, "label-in-full")
             // What is standing in the input line is on the same screen as what a program printed:
             // one shot, one reading, and the sentence is where the difference between them lives.
-            | (Domain::Terminal, "in-the-box") => {
+            | (Domain::Terminal, "in-the-box")
+            // And the box under it, which is on that same screen and that same shot. What parts the
+            // two is the sentence the operator is given, for the reason the input line is parted
+            // from the output above it.
+            | (Domain::Terminal, "still-to-send") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
             // The store the way in named as the folder's owner, read where the reader it turned away
@@ -1998,6 +2002,69 @@ impl Instructor {
                 format!(
                     "Click into {pane} — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, where it is how every step after it says which pane it means.",
                     req(with, "text")?
+                )
+            }
+            // A line written into the box under the pane and left standing. The box is named by
+            // where it is rather than by the words in it: it is empty at the moment the operator
+            // looks for it, so the only thing that finds it is the row it stands on.
+            //
+            // **It is emptied before anything is typed.** What a send leaves in the box is another
+            // road's question, and a step that typed onto the end of what was there would send two
+            // lines run together the day that answer changes.
+            (Domain::Terminal, "write-to-pane") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Under {pane}, and under the terminal itself, is a box of Amenbo's own with a mark at its left and a press at its right. Click into that box. If anything is standing in it, select all of it and delete it first. Then type \"{}\" there, and press nothing else — not return, not the press beside the box.",
+                    req(with, "text")?
+                )
+            }
+            // The two presses that send it. They are one step with a word for which press, because
+            // what they do is the same thing and where they are is not: one is made in the box and
+            // the other beside it, and a road that only ever walked the first would leave a control
+            // on the screen nobody had ever pressed.
+            (Domain::Terminal, "send-written") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                let press = match arg_str(with, "by").unwrap_or("return") {
+                    "return" => "with the keyboard still in that box, press return",
+                    "button" => "press the control at the right-hand end of that box, the one that came alive when something was written in it",
+                    other => {
+                        return Err(format!(
+                            "action `send-written` does not know the press `{other}` — it is return or button"
+                        ))
+                    }
+                };
+                format!(
+                    "At the box under {pane}, {press}. What was written goes into the terminal above as one line, and the program running there is given it."
+                )
+            }
+            // A press the empty box hands on. The operator is told the box has to be empty, because
+            // that is the whole of what decides where the press goes — not what the program is
+            // drawing, which nothing here can ask about.
+            (Domain::Terminal, "press-through") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                let press = match req(with, "key")? {
+                    "up" => "press the up arrow",
+                    "down" => "press the down arrow",
+                    "tab" => "press tab",
+                    "escape" => "press escape",
+                    "ctrl-c" => "hold control and press C",
+                    other => {
+                        return Err(format!(
+                            "action `press-through` does not know the press `{other}` — it is up, down, tab, escape or ctrl-c"
+                        ))
+                    }
+                };
+                format!(
+                    "Click into the box under {pane} and make sure nothing at all is written in it — where something is, select it and delete it. Then {press}. The press is not the box's: it goes to the program running in the terminal above, and what answers it is that program."
                 )
             }
             // A file let go over a pane. It comes from outside for the reason the file face's drop does:
@@ -3937,6 +4004,26 @@ impl Instructor {
                     ),
                     false => format!(
                         "On {pane}, confirm \"{}\" is not in the line you would type into.",
+                        req(with, "shows")?
+                    ),
+                }
+            }
+            // What is standing one row further down, in Amenbo's own box, with nothing sent. The
+            // sentence carries both halves for the reason the one above does — the box and the
+            // terminal are on one screen and one shot — and here the second half is the point of the
+            // box at all: a line written is a line the person still has to send.
+            (Domain::Terminal, "still-to-send") => {
+                let pane = match arg_str(with, "on") {
+                    Some(on) => format!("the pane showing \"{on}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                match present(with) {
+                    true => format!(
+                        "Under {pane}, in the box below the terminal, confirm \"{}\" is standing there — and that it has not gone: nothing was run in the terminal above, and the words are still in the box to be edited. The box says so of itself, the mark at its left having changed from the one that means the keys go to the terminal.",
+                        req(with, "shows")?
+                    ),
+                    false => format!(
+                        "Under {pane}, confirm \"{}\" is not standing in the box below the terminal.",
                         req(with, "shows")?
                     ),
                 }

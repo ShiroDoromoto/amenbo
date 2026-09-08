@@ -2156,6 +2156,22 @@ pub struct WakeCandidateDto {
     pub(crate) installed: bool,
 }
 
+/// One model an agent can be started on, as a face draws it (`AMB-D-865`).
+///
+/// **Two spellings, and both cross.** `id` is what the agent is started with and `label` is what the
+/// reader is shown, and for Gemini CLI they are different words for the same model — so a face
+/// drawing `id`, or a launch passing `label`, would each be showing or saying something nobody
+/// recognises (`amenbo_core::agent_models`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModelDto {
+    /// The spelling the agent takes behind its model flag, exactly as the agent gave it.
+    pub(crate) id: String,
+    /// The agent's own name for it, for a person to read.
+    pub(crate) label: String,
+}
+
 /// Whether what a row says about being installed was got from this machine at all (`AMB-D-792`).
 ///
 /// **It is not `candidates` being empty, and it cannot be read off one.** The row is the whole

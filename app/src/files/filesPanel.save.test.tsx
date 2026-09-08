@@ -433,6 +433,32 @@ describe("the file face", () => {
       expect(container.textContent).not.toContain(t("files.changedUnderneath"));
     });
 
+    /** The same screen, opened from where a Markdown file actually sits when a reader comes back to
+     *  it: the rendering, with no editor on the page to ask for the text. A Markdown file opens on
+     *  its rendering every time — `asText` goes back with every open — so this is the state a reader
+     *  reaches by leaving the tab and returning, and asking the editor alone left the one control
+     *  that answers what changed doing nothing at all there (`AMB-T-4573`). */
+    it("puts the two texts side by side from the rendering too", async () => {
+      hoisted.entries[""] = [{ name: "notes.md", isDir: false, ignored: false }];
+      hoisted.file = aFile({ text: "# a heading", encoding: "UTF-8", digest: "before" });
+      await drawOpen();
+      await openFile(button("notes.md"));
+      await settle();
+
+      await click(button(t("files.edit")));
+      await settle();
+      await type("# what was typed");
+      // Back on the rendering, which is the editor leaving the page and taking its text with it.
+      await click(button(t("files.read")));
+      await settle();
+      expect(container.querySelector(".cm-editor")).toBeNull();
+
+      await written("# theirs", "after");
+      await click(button(t("files.seeDifference")));
+      await settle();
+      expect(last(hoisted.compared)).toEqual({ theirs: "# theirs", mine: "# what was typed" });
+    });
+
     /** The other answer, from the same screen: the reader looked, and the disk's text is the one
      *  they want. It is the one press here that loses what they typed, which is why it is a press
      *  and not something the panel does for them. */

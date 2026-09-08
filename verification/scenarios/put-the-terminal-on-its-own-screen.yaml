@@ -24,6 +24,17 @@
 #    out and folding it back must all leave the process alone, and a reader with an agent running in
 #    the pane is who pays if one of them does not.
 #
+# ── What the half-written sentence is for ────────────────────────────────────────────────────────
+# The road also writes a line in the box under the pane and never sends it. It is the same claim as
+# the line above, made about the other half of what a reader has in front of them: a sentence part-way
+# through being written exists nowhere but that box, so a move that dropped it would be the one press
+# a person makes to get more room throwing away what they were saying.
+#
+# It is read after each of the three moves for the reason the printed line is, and the two are read
+# off one shot. **Neither reading can be the other's**: what is printed came from the shell and stands
+# on the pane, and what is written has been given to nothing and stands in the box beneath it — so the
+# words are different words, and the box's own mark says which of the two the keyboard is answering.
+#
 # ── How the two windows are told apart ───────────────────────────────────────────────────────────
 # The window the terminal is split out into holds the whole face rather than one pane of it, so it is
 # not named after anything on the screen: what its bar carries is the app's own name for that window.
@@ -43,14 +54,16 @@
 # folder the road chooses is not furniture either: choosing one is what raises the project it belongs
 # to, so the road makes the world it needs by walking in.
 id: put-the-terminal-on-its-own-screen
-title: The terminal moves to a screen of its own and back, and the session in it never restarts
+title: The terminal moves to a screen of its own and back, with the session never restarting and the half-written sentence still in its box
 description: >
   Open the terminal face of the one window, choose the folder it runs in, open a plain shell there,
-  and type a line into the pane. Switch to the ledger and back: the line is still there, because hiding a terminal must not end
-  it. Then open the terminal in a separate window — the line is on the pane there, the same session
-  drawn in the new window — and fold it back, where it is on the pane in the one window again. What is
-  under test is the process surviving all three moves: what a reader has running in the pane is theirs
-  until they end it.
+  and type a line into the pane. Write a second line in the box beneath it and leave it unsent.
+  Switch to the ledger and back: both are still there, because hiding a terminal must not end it.
+  Then open the terminal in a separate window — the printed line is on the pane there, the written one
+  still standing in the box, the same session drawn in the new window — and fold it back, where both
+  are in the one window again. What is under test is the process and the draft surviving all three
+  moves: what a reader has running in the pane, and what they are part-way through saying to it, are
+  theirs until they end one and send the other.
 
 steps_gui:
   - type: action
@@ -89,6 +102,20 @@ steps_gui:
     with:
       shows: SCENARIO the same terminal
 
+  # And a sentence started in the box under it, left where it was written. It goes to nothing: what
+  # every step below reads is a line the reader is still in the middle of.
+  - type: action
+    domain: terminal
+    op: write-to-pane
+    with:
+      text: SCENARIO this sentence is not finished
+
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO this sentence is not finished
+
   # The ledger, and the pane hidden behind it. The absent half is worth a step of its own: it is what
   # says the two faces are one window rather than two things drawn at once, and it is the state the
   # step after it is coming back from.
@@ -119,6 +146,14 @@ steps_gui:
     with:
       shows: SCENARIO the same terminal
 
+  # And the box came back with it. The pane was taken down and drawn again, so a draft the drawing had
+  # been holding would have gone down with it.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO this sentence is not finished
+
   # And out into a window of its own. Every step from here names the window it is in, this one
   # included, because from here there are two — and a shot of the wrong one is a picture of a screen
   # nobody stood at. This step is shot once it has been carried out, so the second window is already
@@ -135,6 +170,16 @@ steps_gui:
     with:
       shows: SCENARIO the same terminal
 
+  # The sentence crossed with it. This is the move it is easiest to lose on: the pane is drawn by a
+  # different window from here, and what it draws it learns from the arrangement the two of them
+  # share — so a draft left out of that arrangement is one the reader loses at the press.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO this sentence is not finished
+
   - type: action
     domain: terminal
     op: fold-back
@@ -148,3 +193,11 @@ steps_gui:
     op: pane
     with:
       shows: SCENARIO the same terminal
+
+  # And it came back the other way too, which is the half a build that only wrote the arrangement out
+  # would fail: the window folding away is the one holding the sentence.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO this sentence is not finished

@@ -574,13 +574,26 @@ describe("what is written in the box under a pane", () => {
       .toBe("run the tests");
   });
 
-  it("is not written down with the arrangement, which keeps where the panes are and not what is in them", () => {
-    const { layout } = half();
-    expect(JSON.stringify(laidOut(layout))).not.toContain("run the tests");
+  it("crosses with the arrangement, which is how the window split out of the face gets it", () => {
+    const { layout, frame } = half();
+    const over = restored(laidOut(layout), 1);
+    expect(over.frames.find((one) => one.id === frame)?.written).toBe("run the tests");
   });
 
-  it("is nothing again in the places an arrangement is restored into", () => {
+  it("is left out of the arrangement where the box is empty, the way the folder is", () => {
+    const one = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/repo");
+    expect(laidOut(one.layout).frames[0]).not.toHaveProperty("written");
+  });
+
+  it("is nothing in a place an arrangement carrying no draft is restored into", () => {
+    const bare = restored({ count: 1, nextId: 2, project: 1, frames: [{ id: "1", project: 1 }] }, 1);
+    expect(bare.frames[0]!.written).toBe("");
+  });
+
+  it("moves nothing the store keeps, so a keystroke is not a write to the disk", () => {
     const { layout } = half();
-    expect(restored(laidOut(layout), 1).frames.every((one) => one.written === "")).toBe(true);
+    const { frames: _typed, ...rest } = laidOut(layout);
+    const { frames: _empty, ...was } = laidOut(writing(layout, layout.frames[0]!.id, ""));
+    expect(rest).toEqual(was);
   });
 });

@@ -2840,6 +2840,15 @@ pub struct TalkFrameDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) folder: Option<String>,
+    /// What has been written in the box under this pane and not sent yet (`AMB-D-864`). Absent where
+    /// nothing is.
+    ///
+    /// **It rides the arrangement because the arrangement is how the two windows hand the face over**
+    /// (`crate::frames`), and it stops there: what goes on to the store is the splits and the
+    /// project, so a draft is held for as long as the process is up and is never written down.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) written: Option<String>,
 }
 
 /// **The store's identity, in the parts a reader has to tell apart** (`AMB-D-856`). It was one string

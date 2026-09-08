@@ -613,10 +613,11 @@ export const ko: Translation = {
     "files.save": "저장",
     "files.saving": "저장하는 중…",
     "files.saved": "저장했습니다",
-    // The file moving under a reader who has typed into it. What is said is the fact and
-    // nothing else — which of the two texts is right is the pane's agent's to settle, not
-    // this panel's (`AMB-D-784`).
+    // The file moving under a reader who has typed into it, and the two answers there are to it:
+    // write their own text over the file, or take what the disk says and lose theirs. The panel
+    // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "이 파일은 여기서 연 뒤에 누군가 고쳤습니다.",
+    "files.keepMine": "내가 쓴 것을 저장",
     "files.readAgain": "다시 읽기",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).

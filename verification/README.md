@@ -846,7 +846,10 @@ presses, because they are two controls and a road that walked one would leave th
 `press-through` is the other half of the box's rule: a press made in it **while nothing is written**
 goes to the program above instead, `key` naming which of the five (`up`, `down`, `tab`, `escape`,
 `ctrl-c`). What decides where a press goes is what is written and never what the program is drawing,
-which is a question nothing can ask of a terminal at all.
+which is a question nothing can ask of a terminal at all. `press-out` is the one hole left in that
+rule: the up arrow on a **written** box's first line, which moves the keyboard to the terminal and
+goes there itself, so a program that has put a menu up is still reachable with a line half written.
+It takes no `key` — there is one press, and the same key one line lower is the box's own.
 
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
 most of what there is: `set-panes` re-cuts the frames into pages of the count it names, `go-page` moves

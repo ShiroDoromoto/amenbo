@@ -8,7 +8,9 @@
 //
 // And that **what a press means is decided by what is written, not by what is on the screen**. An
 // empty box hands the arrows, the tab and Escape to the program; a box with something in it keeps
-// them. There is no way to ask a terminal whether it is showing a menu, so nothing here tries.
+// them, but for one — the ArrowUp on its first line, which is the way back to a program that is
+// asking something. There is no way to ask a terminal whether it is showing a menu, so nothing here
+// tries.
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -143,6 +145,12 @@ async function write(text: string): Promise<void> {
     setter?.call(field, text);
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
+}
+
+/** Put the caret at `at` in the box, the way moving about in a written line does. */
+function caretAt(at: number): void {
+  const field = box()!;
+  field.setSelectionRange(at, at);
 }
 
 /** Press a key in the box, and let whatever it set off settle. */
@@ -290,8 +298,33 @@ describe("where a press goes", () => {
     await opened();
     await write("half a sentence");
 
-    expect(await pressed("ArrowUp"), "the box gave up the line it was walking").toBe(false);
+    expect(await pressed("ArrowDown"), "the box gave up the line it was walking").toBe(false);
     expect(wrote(), "a press meant for the box reached the program").toEqual([]);
+  });
+
+  it("goes to the terminal on the first line's ArrowUp, keyboard and press together", async () => {
+    await pane();
+    await opened();
+    await write("half a sentence");
+
+    expect(await pressed("ArrowUp"), "the press stayed in the box").toBe(true);
+    expect(wrote(), "the way out reached the program as something else").toEqual(["\x1b[A"]);
+    expect(document.activeElement, "the keyboard stayed in the box the press left").toBe(typing());
+    expect(box()?.value, "what was written was thrown away on the way out").toBe("half a sentence");
+    expect(mark()?.title, "the mark stopped saying the line was still there").toBe(t("face.composeKeeps"));
+  });
+
+  it("walks up through what is written until the first line, and leaves from there", async () => {
+    await pane();
+    await opened();
+    await write("first line\nsecond line");
+
+    expect(await pressed("ArrowUp"), "the second line's ArrowUp was taken from the box").toBe(false);
+    expect(wrote(), "a press meant for the box reached the program").toEqual([]);
+
+    caretAt(0);
+    expect(await pressed("ArrowUp")).toBe(true);
+    expect(wrote()).toEqual(["\x1b[A"]);
   });
 
   it("hands Ctrl+C on while nothing is written, which is what stops what is running", async () => {

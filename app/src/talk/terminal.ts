@@ -268,9 +268,10 @@ export type Press = {
 /**
  * What the terminal is given for this press, or nothing where the press is not one that is handed on.
  *
- * **It is asked only of a box with nothing in it** (`AMB-D-864`). What decides where a press goes is
- * what the person has written, not what is on the screen: a box holding a half-written sentence keeps
- * its own arrows, and an empty one has nothing to keep them for.
+ * **It is asked of a box with nothing in it** (`AMB-D-864`). What decides where a press goes is what
+ * the person has written, not what is on the screen: a box holding a half-written sentence keeps its
+ * own arrows, and an empty one has nothing to keep them for. The one press a written box hands on as
+ * well is {@link leavesForTerminal}'s, which asks this for the bytes.
  *
  * `Ctrl+C` is here and `Ctrl` with anything else is not. It is the one press that means "stop what is
  * running", which is the reason a person looks away from what they were writing; the rest of the
@@ -283,6 +284,28 @@ export function passedOn(e: Press): string | null {
   }
   if (e.altKey || e.metaKey || e.shiftKey) return null;
   return PASSED_ON[e.key] ?? null;
+}
+
+/**
+ * What the terminal is given for the press that leaves a box with something written in it, or nothing
+ * where this press is not that one (`AMB-D-864`).
+ *
+ * **It is the way back to a program that is asking something.** While a line is half written the
+ * arrows are the box's, so a menu the program is drawing cannot be walked — and there is no way to
+ * ask a terminal whether it is drawing one (`AMB-T-4569`). Rather than guess at the screen, one press
+ * is left as the road out: `ArrowUp` with the caret on the first line, where a textarea does nothing
+ * with it anyway. Nothing written is lost by taking it; the box is still there to come back to.
+ *
+ * `caret` is where the caret sits in `written` — the first line is the text in front of it holding no
+ * newline. Below the first line the press is the box's, and walks up through what is written.
+ *
+ * **An empty box is not this road**, and answers `null` here: everything of an empty box's goes to
+ * the program already ({@link passedOn}), and this one press is the exception a written box makes.
+ */
+export function leavesForTerminal(e: Press, written: string, caret: number): string | null {
+  if (written === "" || e.key !== "ArrowUp") return null;
+  if (written.slice(0, caret).includes("\n")) return null;
+  return passedOn(e);
 }
 
 /**

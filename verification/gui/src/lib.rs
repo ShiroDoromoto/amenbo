@@ -2067,6 +2067,18 @@ impl Instructor {
                     "Click into the box under {pane} and make sure nothing at all is written in it — where something is, select it and delete it. Then {press}. The press is not the box's: it goes to the program running in the terminal above, and what answers it is that program."
                 )
             }
+            // The one press a written box hands on. The operator is told twice where the caret has to
+            // be, because that is the whole of what parts this press from the box's own: the same key
+            // one line lower walks up through what is written and never leaves.
+            (Domain::Terminal, "press-out") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "At the box under {pane}, with what you wrote still standing in it, put the cursor on the first line of it — click at the very start of what is written, in front of the first letter. Then press the up arrow. The keyboard leaves the box for the terminal above, and the press goes there too: the program running in it is the one that answers. Do not type anything else."
+                )
+            }
             // A file let go over a pane. It comes from outside for the reason the file face's drop does:
             // a drop reads the disk the operator is sitting at, and nothing the run laid down is
             // anywhere a hand can reach from there. What it lands as is not said here — where it goes

@@ -18,6 +18,12 @@
 # the program is drawing — that second question cannot be asked of a terminal at all, which is the
 # whole reason the rule is the one it is.
 #
+# **And a written box keeps one press as the way back.** The rule above leaves a person with a
+# half-written line unable to answer a program that has put a menu up, so the up arrow on the first
+# line is left as the road out: it moves the keyboard to the terminal and goes there itself. What
+# was written stays in the box, which is the half the road reads after it — a way out that threw the
+# line away is one nobody would take twice.
+#
 # ── Why the arrow is walked first ───────────────────────────────────────────────────────────────
 # The box is empty when a pane has just been opened and at no other point on this road, so the press
 # that only an empty box hands on is walked before anything is written. `ctrl-c` after it is the road
@@ -35,8 +41,10 @@ description: >
   Open a pane on a plain shell. With nothing written in the box beneath it, press the up arrow and
   watch the shell's own history answer it — the press went past the box. Then write a line in the
   box: it stands there with nothing run. Send it with return, and it reaches the terminal. Write a
-  second and send it with the press beside the box instead. What is under test is that the box holds
-  what is written until a person sends it, and stays out of the way while it is empty.
+  second and send it with the press beside the box instead. Then write a third, and leave the box by
+  the first line's up arrow: the shell walks its history, and the third line is still standing in the
+  box. What is under test is that the box holds what is written until a person sends it, stays out of
+  the way while it is empty, and lets a person back to the program without losing what they wrote.
 
 given:
   - type: action
@@ -151,3 +159,33 @@ steps_gui:
     op: pane
     with:
       shows: SCENARIO this second line went by the press beside the box
+
+  # ── The way back out of a written box ─────────────────────────────────────────────────────────
+  # A third line, and it is not sent: what this half is about is leaving the box with something still
+  # in it. One line and not two, because the road out is the up arrow on the *first* line — a caret
+  # any lower and the press is the box's own.
+  - type: action
+    domain: terminal
+    op: write-to-pane
+    with:
+      text: SCENARIO this third line is being left behind in the box
+
+  - type: action
+    domain: terminal
+    op: press-out
+
+  # The press reached the program, which is what "the keyboard went with it" means here: the shell
+  # walked its history back to the line it was last given, and that line is the one the box sent a
+  # moment ago. Different words from the third line, so neither reading can be the other's.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: SCENARIO this second line went by the press beside the box
+
+  # And nothing was paid for the way out. The third line is where it was written, still unsent.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO this third line is being left behind in the box

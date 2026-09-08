@@ -54,10 +54,14 @@ const UNSENT_EVENT = "pty://unsent";
  * frames are called; a pane is where those things happen, not where they are kept.
  */
 export type PaneEvents = {
-  /** A terminal is running in this pane, under this session id, in `folder`. It is said of a terminal
-   *  this pane adopted as much as of one it started: what the window holds is what is running in it,
-   *  and a session that moved windows is running in the one it moved to. */
-  opened(session: string, folder: string | null): void;
+  /** A terminal is running in this pane, under this session id, in `folder`, with `agent` in it. It
+   *  is said of a terminal this pane adopted as much as of one it started: what the window holds is
+   *  what is running in it, and a session that moved windows is running in the one it moved to.
+   *
+   *  `agent` is the id the program was started as, and null for a plain prompt. It comes off the
+   *  session rather than off what this pane asked for, which is the only reading that holds for a
+   *  pane that adopted one (`crate::pty`). */
+  opened(session: string, folder: string | null, agent: string | null): void;
   /** A chunk has crossed and been drawn. Said per chunk and carrying nothing: what is read off it is
    *  the time it happened, which is the one thing about a stream that means the same for every program
    *  in a pane (`./moving`). The tail a pane is handed on picking a terminal up is not one of these —
@@ -774,7 +778,7 @@ export async function mountTerminal(
   // The folder comes off the session rather than off `start`, because those are the same answer only
   // for a terminal this pane started. One it took up runs where it was started, which is what the page
   // holding it has to be told (`./layout`).
-  on.opened(running.session, running.folder ?? null);
+  on.opened(running.session, running.folder ?? null, running.agent ?? null);
   for (const chunk of held.splice(0)) {
     if (chunk.session !== session) continue;
     term.write(decode(chunk.base64));

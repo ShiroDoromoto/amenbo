@@ -151,6 +151,54 @@ history: Array<AgentModelDto>,
 flag: string | null, };
 
 /**
+ * Where a model's name may go when a running pane is moved (`amenbo_core::harness::Carries`).
+ */
+export type AgentSwitchCarriesDto = "named" | "picker" | "filter";
+
+/**
+ * What a running pane is asked to change model with, and what a press would actually put into it
+ * (`AMB-D-865`, `crate::wake::wake_switch`).
+ *
+ * **The first three are drawn before the press and the last three are what the press does.** What is
+ * typed, whether the model's name goes on that line, and where the machine keeps the change
+ * afterwards are the whole of what a person needs to judge it — and two of the six read a named line
+ * as a prompt and bill for it (`AMB-T-4581`).
+ *
+ * **Where the name may go is answered here and nowhere else.** A face that composed the line itself
+ * would be a second answer to the question this catalog exists to hold, and the two would drift on
+ * the row where it costs money (`amenbo_core::harness::switching`).
+ */
+export type AgentSwitchDto = { 
+/**
+ * The provider's own command, as it is typed — `/model`, or `/models` for OpenCode.
+ */
+command: string, 
+/**
+ * Whether the model's name may go on that command's line.
+ */
+carries: AgentSwitchCarriesDto, 
+/**
+ * Where this machine keeps the change past the session — a path in the reader's home — or
+ * `null` where the provider changes only the session in front of them.
+ */
+keeps: string | null, 
+/**
+ * What goes into the pane's input box and is submitted, as a person typing it would.
+ */
+line: string, 
+/**
+ * What is pasted after that line has gone, submitting nothing — the picker's own search text —
+ * or `null` where there is no second half.
+ */
+then: string | null, 
+/**
+ * Whether the line settles the model on its own. `false` is the provider's picker left standing
+ * open with the choosing still to do, which is a thing to say rather than a model to claim has
+ * moved.
+ */
+settles: boolean, };
+
+/**
  * One row of the collapsible "Archived (N)" section at the foot of the sidebar. These never ride
  * in the snapshot's `ProjectDto` (which comes from `project_overview` — active projects only), so
  * they are fetched over a dedicated read path, `project_list_archived`. Restoring navigates to the
@@ -2170,7 +2218,18 @@ session: string,
  * frame that does not know would have to ask the person for the folder again the next time it has
  * a terminal to start, which is the one flow the face has asked for twice.
  */
-folder: string | null, };
+folder: string | null, 
+/**
+ * The id the agent in this terminal was started as — a catalog row
+ * (`amenbo_core::harness::LAUNCHES`) or a command the reader registered — or `None` for a plain
+ * prompt.
+ *
+ * It is here for the reason `folder` is, and for the same pane: what is running was settled when
+ * the terminal started, and a frame that adopted one has no other way to learn it. What reads it
+ * is the control that moves a running pane to another model — a question about the provider in
+ * the pane, so a pane that cannot name the provider draws no control (`AMB-D-865`).
+ */
+agent: string | null, };
 
 /**
  * What a reference resolves to (`kind` — task or decision — and the entity's id). The GUI branches

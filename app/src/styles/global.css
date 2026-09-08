@@ -512,6 +512,54 @@ input[type="color"] {
 }
 .compose__send:disabled { color: var(--c-text-muted); opacity: 0.5; }
 
+/* The row under the box, where the model the program is answering on is moved (`../shell/PaneModel`).
+   It is the slot's last band and the quietest of them: what the pane is for is what is running in it,
+   and this is one press about that. `position: relative` is what the popover above is placed against
+   — it opens upwards, because this row is already at the bottom of the pane. */
+.modelrow {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--s-2);
+  min-width: 0;
+  padding: 0 var(--s-2);
+  font-size: var(--fs-xs);
+}
+/* The press, drawn as a word rather than as a button: it stands under a terminal, and a filled
+   control there would read as part of what the program is drawing. The name is cut rather than
+   wrapped — a model name runs long, and the row is as wide as a pane in a face split four ways. */
+.modelrow__now {
+  flex: 0 1 auto; min-width: 0;
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  padding: var(--s-1) 0;
+  border: 0; background: none;
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.modelrow__now:hover, .modelrow__now--open { color: var(--c-text); }
+/* What the row did, beside what it is. It gives way before the name does: the name is what the press
+   is about, and this is what happened last time. */
+.modelrow__note {
+  flex: 1 1 auto; min-width: 0;
+  color: var(--c-text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.modelrow__failed { flex: 1 1 auto; min-width: 0; color: var(--c-stop); }
+/* The candidates, opened over the pane rather than pushing it. Everywhere else on this face a band
+   takes room, because a terminal writes into every row it was told it has — but this box stands only
+   while a reader is holding it open, and a pane that resized under one would wake the program inside
+   to repaint for a press that is about to close (`../shell/TerminalPane`).
+   It opens upwards and from the left edge, which is where the press is. */
+.modelpick {
+  position: absolute; left: var(--s-2); bottom: 100%; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
+  width: max-content; max-width: min(28rem, calc(100% - var(--s-4)));
+  max-height: 22rem; overflow-y: auto;
+  margin-bottom: var(--s-1);
+  padding: var(--s-3);
+  border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  background: var(--c-surface); box-shadow: var(--shadow-md);
+}
+
 .slot--focused .termface__pane { border-color: var(--c-accent); }
 /* Where a path just landed. The pane the row's menu hands a file to is the one being worked in, which
    is not where the reader's eye is — they were in the panel, and the page may have turned since they

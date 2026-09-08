@@ -23,6 +23,7 @@ import type { SessionSaidDto } from "../bindings/bindings";
 import { currentLang, errText, t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { Icon } from "../components/Icon";
+import { PaneModel } from "./PaneModel";
 
 /**
  * Put the paths of what was dropped on a pane in front of whatever is running there (`AMB-D-820`).
@@ -147,6 +148,11 @@ export function TerminalPane({
   // The session running here, while one is. It is what the way out names, and it is null at exactly
   // the two moments there is nothing to end: before a terminal has opened, and after one has closed.
   const [live, setLive] = useState<string | null>(null);
+  // What is running in it, as the session says it was started (`../talk/terminal`). It is read off the
+  // session rather than off what this pane asked for, because a pane that adopted one never asked:
+  // the program in a terminal was settled when it started, and the row that moves it to another model
+  // is a question about that program (`./PaneModel`).
+  const [inPane, setInPane] = useState<string | null>(null);
   // Where the row's menu was opened, while it is open. It is placed at the press rather than under
   // the button for the reason every other menu in the app is (`../components/Menu`).
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -321,12 +327,13 @@ export function TerminalPane({
     // one this pane took rather than what is true now.
     on.current.onRow?.(frame, plate.read);
     void mountAgentFrame(host, currentLang(), {
-      opened: (session, where) => {
+      opened: (session, where, running) => {
         // The folder is what the row above the pane calls it until something names the frame
         // (`../talk/frames`), and it is the one the terminal actually runs in — which is not always
         // the one this slot was handed.
         plate.opened(where ?? start.cwd ?? null);
         setLive(session);
+        setInPane(running);
         // Where the terminal actually runs, which is not always the folder this slot was handed: a
         // pane that took one up learns it from the session (`../talk/layout`).
         on.current.onOpened(frame, session, where ?? start.cwd ?? null);
@@ -345,6 +352,7 @@ export function TerminalPane({
         plate.closed();
         setEnded(true);
         setLive(null);
+        setInPane(null);
         on.current.onClosed(session);
       },
       // How many rows the terminal is drawing now, which is the one measurement the box below it
@@ -615,6 +623,13 @@ export function TerminalPane({
           </button>
         </div>
       )}
+      {/* Which model the program in this pane is answering on, and the press that moves it
+          (`./PaneModel`, `AMB-D-865`). It is under the box rather than over the terminal for the
+          reason the box itself is: a terminal writes into every row it was told it has.
+
+          **It draws nothing for a pane whose program Amenbo cannot name** — the plain shell, and a
+          command the reader registered — so the row is absent rather than dead there. */}
+      {live !== null && <PaneModel session={live} agent={inPane} />}
     </div>
   );
 }

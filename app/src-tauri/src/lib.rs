@@ -548,6 +548,7 @@ pub fn run() {
       wake::wake_model,
       wake::wake_chose_model,
       wake::wake_forget_model,
+      wake::wake_switch,
       agent_models::agent_models,
       frames::frame_names,
       frames::name_frame,

@@ -33,7 +33,7 @@
 //! | | [`HARNESSES`] — wired | [`LAUNCHES`] — started |
 //! |---|---|---|
 //! | what it does | a hook in the folder's own settings runs `amenbo agent` when a session starts | Amenbo opens a pane and starts the agent in it, saying the same thing as its first argument |
-//! | what a row holds | [`event`](Harness::event), [`places`](Harness::places), [`home`](Harness::home), [`paste_into`](Harness::paste_into), [`template`](Harness::template), [`json_layers`](Harness::json_layers) | [`command`](Launch::command), [`prompt_flag`](Launch::prompt_flag), [`model_flag`](Launch::model_flag), [`models`](Launch::models) |
+//! | what a row holds | [`event`](Harness::event), [`places`](Harness::places), [`home`](Harness::home), [`paste_into`](Harness::paste_into), [`template`](Harness::template), [`json_layers`](Harness::json_layers) | [`command`](Launch::command), [`prompt_flag`](Launch::prompt_flag), [`model_flag`](Launch::model_flag), [`models`](Launch::models), [`switch`](Launch::switch) |
 //!
 //! One product can stand in both, and Claude Code does — that repetition is what this costs. What it buys
 //! is a row for a provider that can only be started: with no session-start hook to write, the price of a
@@ -46,6 +46,13 @@
 //! and not a branch, like everything else in these tables. The flag a model is named behind
 //! ([`Launch::model_flag`]) is the second such column, and the model itself is not a column at all:
 //! Amenbo keeps no list of model names (`AMB-D-865`).
+//!
+//! **A pane that is already running is moved by typing at it, and that is a third column**
+//! ([`Launch::switch`]). There is no flag to pass a program that started minutes ago: the only way in
+//! is the provider's own slash command, put in the input box the way a person would type it. What the
+//! six differ on is not just its spelling but whether the model's name may go on that line at all —
+//! two of them send an unrecognised line to the model as a prompt, which costs the reader money
+//! (`AMB-T-4581`).
 
 use std::path::{Path, PathBuf};
 
@@ -257,6 +264,11 @@ pub struct Launch {
     /// What is **not** here is any model name — Amenbo holds none, and this says only how to go and
     /// ask.
     pub models: Option<crate::agent_models::Ask>,
+    /// How a pane already running this provider is asked to change model ([`Switch`], `AMB-D-865`).
+    ///
+    /// A column for the same reason the flags are: every one of the six has a way, they spell it
+    /// differently, and what a row of the table cannot become is a branch in the code.
+    pub switch: Switch,
     /// Whether this row has been watched starting the provider on a real machine (`AMB-T-3819`).
     ///
     /// Every row is written from the product's own documentation, and that is not the same as having
@@ -264,6 +276,89 @@ pub struct Launch {
     /// out: an unconfirmed row is still the best answer Amenbo has for somebody who works with that
     /// tool, and what it must not do is read as tried when nobody has tried it.
     pub confirmed: bool,
+}
+
+/// What a running pane is asked to change model with — the provider's own slash command, typed into
+/// it the way a person would type it (`AMB-D-865`).
+///
+/// **There is no other road.** A model named on the launch line is settled for a program that has not
+/// started yet; a pane a person has been working in for an hour started long ago, and nothing outside
+/// it can reach the model it is answering on. What Amenbo can do is put the provider's own command in
+/// the box and let the provider do the rest, which is the pane passing this through the way it passes
+/// everything else through (`AMB-D-747`).
+pub struct Switch {
+    /// What is typed — `/model` for five of the six, `/models` for OpenCode.
+    pub command: &'static str,
+    /// Whether the model's name may go on that line ([`Carries`]).
+    pub carries: Carries,
+    /// Where this machine keeps the change once it is made, past the session — or `None` where the
+    /// provider changes only the session in front of the reader.
+    ///
+    /// **It is here to be said before the press, not after** (`AMB-T-4581`). Three of these rewrite a
+    /// file the person edits by hand, and a fourth keeps it in a database of its own; a control that
+    /// moved somebody's default without saying so would be Amenbo writing a provider's settings by
+    /// the back door, which `AMB-D-440` refuses at the front.
+    pub keeps: Option<&'static str>,
+}
+
+/// Whether a provider's model command takes the name on its line — the one thing the six differ on
+/// that costs money to get wrong (`AMB-T-4581`).
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Carries {
+    /// The name goes on the line and the return settles it: `/model sonnet`, and the change is done.
+    Named,
+    /// The line is the command alone. A name behind it is **sent to the model as a prompt** — Codex
+    /// and OpenCode were both watched billing for one — so what the press does is open the provider's
+    /// own picker, and the choosing is the person's.
+    Picker,
+    /// The command alone opens the picker, and the name is then put in the picker's own search box
+    /// rather than on the command's line. Nothing is submitted behind it: what the box narrows to is
+    /// for the reader to confirm, the way every other paste into a pane is (`AMB-D-793`).
+    Filter,
+}
+
+/// The command's line for a running pane, and what follows it — [`switching`]'s answer.
+#[derive(PartialEq, Eq, Debug)]
+pub struct Switching {
+    /// What goes in the input box and is submitted, as a person typing it would.
+    pub line: String,
+    /// What is pasted after that line has gone, submitting nothing — the picker's search text, or
+    /// `None` where there is no second half.
+    pub then: Option<String>,
+    /// Whether the line settles the model on its own. False is the provider's picker standing open
+    /// with the choosing still to do, which is a thing a face has to say rather than claim the model
+    /// has moved.
+    pub settles: bool,
+}
+
+/// What to put into a pane running `launch` to move it to `model` (`AMB-D-865`).
+///
+/// **The name is left off the line wherever the provider would read it as a prompt.** That is the
+/// whole of the branch, and it is why this is written once here rather than composed by whoever is
+/// drawing the control: Codex and OpenCode were both measured sending `/model <name>` to the model
+/// and being billed for the answer (`AMB-T-4581`).
+///
+/// A name that is blank or only spaces is no name at all, the same reading [`opening`] gives one: it
+/// arrives from a text box, and `/model ` with nothing behind it is a line the reader did not mean.
+pub fn switching(launch: &Launch, model: Option<&str>) -> Switching {
+    let name = model.map(str::trim).filter(|one| !one.is_empty());
+    match (launch.switch.carries, name) {
+        (Carries::Named, Some(name)) => Switching {
+            line: format!("{} {name}", launch.switch.command),
+            then: None,
+            settles: true,
+        },
+        (Carries::Filter, Some(name)) => Switching {
+            line: launch.switch.command.to_string(),
+            then: Some(name.to_string()),
+            settles: false,
+        },
+        _ => Switching {
+            line: launch.switch.command.to_string(),
+            then: None,
+            settles: false,
+        },
+    }
 }
 
 /// Every AI Amenbo knows how to start, in the order a face offers them — the launch catalog
@@ -284,6 +379,14 @@ pub static LAUNCHES: &[Launch] = &[
             args: &["--help"],
             reading: crate::agent_models::Reading::HelpAliases,
         }),
+        // `/model sonnet` settles it in one line, and settles it as the reader's own default: the
+        // session-only form is a key pressed inside the picker and there is no line that spells it
+        // (`AMB-T-4581`).
+        switch: Switch {
+            command: "/model",
+            carries: Carries::Named,
+            keeps: Some("~/.claude/settings.json"),
+        },
         confirmed: true,
     },
     Launch {
@@ -298,6 +401,14 @@ pub static LAUNCHES: &[Launch] = &[
             args: &["debug", "models"],
             reading: crate::agent_models::Reading::CodexCatalog,
         }),
+        // A name behind `/model` here is sent to the model as a prompt: the measurement reached the
+        // API and came back with a usage limit (`AMB-T-4581`). The picker it opens is two steps —
+        // model, then reasoning — and both of them are the reader's.
+        switch: Switch {
+            command: "/model",
+            carries: Carries::Picker,
+            keeps: Some("~/.codex/config.toml"),
+        },
         confirmed: true,
     },
     Launch {
@@ -312,6 +423,9 @@ pub static LAUNCHES: &[Launch] = &[
         // a paragraph of documentation, which is a table Amenbo would be copying rather than asking
         // for — and the measured one was wrong for this account in all 26 rows (`AMB-T-4576`).
         models: None,
+        // The one provider whose switch is session-only by design: its own picker says so, and the
+        // default is moved by a different command (`/config model`) that Amenbo does not send.
+        switch: Switch { command: "/model", carries: Carries::Named, keeps: None },
         confirmed: true,
     },
     Launch {
@@ -329,6 +443,10 @@ pub static LAUNCHES: &[Launch] = &[
             args: &["--acp"],
             reading: crate::agent_models::Reading::AcpSession,
         }),
+        // An argument here is dropped without a word, so the line would look like it worked and
+        // change nothing. What opens is a two-step picker, and remembering the answer past this
+        // session is a toggle inside it that starts off.
+        switch: Switch { command: "/model", carries: Carries::Picker, keeps: None },
         confirmed: true,
     },
     Launch {
@@ -347,6 +465,14 @@ pub static LAUNCHES: &[Launch] = &[
             args: &["models"],
             reading: crate::agent_models::Reading::QualifiedLines,
         }),
+        // Spelled with the plural, and a name on its line is billed the way Codex's is. What the
+        // picker offers instead is a search box that takes the name as text, which is why this is
+        // the one row whose second half goes anywhere (`AMB-T-4581`).
+        switch: Switch {
+            command: "/models",
+            carries: Carries::Filter,
+            keeps: Some("~/.local/share/opencode/opencode.db"),
+        },
         confirmed: true,
     },
     Launch {
@@ -364,6 +490,13 @@ pub static LAUNCHES: &[Launch] = &[
             args: &["--list-models"],
             reading: crate::agent_models::Reading::IdThenLabel,
         }),
+        // Takes the name as a filter on its line and settles on the return, which is the same one
+        // press as the two above it.
+        switch: Switch {
+            command: "/model",
+            carries: Carries::Named,
+            keeps: Some("~/.cursor/cli-config.json"),
+        },
         // Written from the documentation and never run — the tool is not on the machine the other five
         // were tried on (`AMB-T-3838`).
         confirmed: false,
@@ -923,6 +1056,93 @@ mod tests {
                 assert_eq!(opening(launch, "amenbo", empty), bare, "{}: {empty:?}", launch.id);
             }
             assert!(!bare.contains(&launch.model_flag.to_string()), "{}", launch.id);
+        }
+    }
+
+    /// Every row says how a running pane is moved, and says it as a slash command.
+    ///
+    /// The shape is worth holding to because the alternative reads as working: a row that spelled its
+    /// command without the slash would put a plain word in an agent's input box, which is a prompt.
+    #[test]
+    fn every_launch_row_says_how_a_running_pane_is_moved() {
+        for launch in LAUNCHES {
+            assert!(
+                launch.switch.command.starts_with('/'),
+                "{}: {} is not a command a provider's input box takes",
+                launch.id,
+                launch.switch.command
+            );
+            if let Some(keeps) = launch.switch.keeps {
+                assert!(keeps.starts_with('~'), "{}: {keeps} is not a place in the reader's home", launch.id);
+            }
+        }
+    }
+
+    /// The name goes on the line only where the provider takes it there.
+    ///
+    /// **This is the test the money is on.** Codex and OpenCode read `/model <name>` as a prompt and
+    /// were both billed for the answer (`AMB-T-4581`), so a row moved to `Named` by somebody tidying
+    /// the table has to fail here rather than on a reader's account.
+    #[test]
+    fn a_name_reaches_the_line_only_where_the_provider_takes_one() {
+        for launch in LAUNCHES {
+            let with = switching(launch, Some("a-model"));
+            match launch.switch.carries {
+                Carries::Named => assert_eq!(
+                    with,
+                    Switching {
+                        line: format!("{} a-model", launch.switch.command),
+                        then: None,
+                        settles: true,
+                    },
+                    "{}",
+                    launch.id
+                ),
+                Carries::Picker => assert_eq!(
+                    with,
+                    Switching {
+                        line: launch.switch.command.to_string(),
+                        then: None,
+                        settles: false,
+                    },
+                    "{}",
+                    launch.id
+                ),
+                Carries::Filter => assert_eq!(
+                    with,
+                    Switching {
+                        line: launch.switch.command.to_string(),
+                        then: Some("a-model".to_string()),
+                        settles: false,
+                    },
+                    "{}",
+                    launch.id
+                ),
+            }
+            // Nothing chosen, and a box somebody typed spaces into, are the same thing: the command
+            // alone, which opens the provider's own picker and settles nothing.
+            let bare = switching(launch, None);
+            assert_eq!(bare.line, launch.switch.command, "{}", launch.id);
+            assert_eq!(bare.then, None, "{}", launch.id);
+            assert!(!bare.settles, "{}", launch.id);
+            for empty in [Some(""), Some("   ")] {
+                assert_eq!(switching(launch, empty), bare, "{}: {empty:?}", launch.id);
+            }
+        }
+    }
+
+    /// The two the measurement caught billing for a prompt, named on their own.
+    ///
+    /// The test above holds whatever the table says; this one holds what the table says, so that
+    /// moving Codex or OpenCode to `Named` fails here as well as reading wrong.
+    #[test]
+    fn the_two_that_bill_for_a_named_line_never_get_one() {
+        for id in ["codex-cli", "opencode"] {
+            let launch = find_launch(id).unwrap();
+            assert!(
+                !switching(launch, Some("a-model")).line.contains("a-model"),
+                "{id} puts the name where the provider reads it as a prompt",
+            );
         }
     }
 

@@ -478,6 +478,11 @@ pub struct Terminal {
     /// pane and what they can be shown the contents of are one answer, settled when the pane opened
     /// and not re-derived per request. A terminal opened without one can be read nothing at all.
     folder: Option<PathBuf>,
+    /// The id the agent in it was started as — a catalog row or one of this device's registrations —
+    /// or `None` for a plain prompt. Kept for the reason `folder` is: it was settled when the
+    /// terminal started, and a pane that adopts this session has no other way to learn what is
+    /// running in it ([`crate::dto::PtySessionDto`]).
+    agent: Option<String>,
     /// The master side, kept for one purpose: telling the terminal how large the pane is.
     master: Box<dyn MasterPty + Send>,
     /// The keystrokes side. Writing to the master is what a key press is.
@@ -734,6 +739,10 @@ pub fn pty_open(
         .transpose()?;
 
     let started = agent.as_deref().map(started_as).transpose()?;
+    // Kept against the session, so a pane that adopts this terminal later can say what is running in
+    // it. It is the id as it was asked for — a catalog row, or one of this device's registrations —
+    // and which of the two it is stays the catalog's answer rather than being decided here.
+    let agent_id = agent;
     let run = started.as_ref().map(|s| s.line.as_str());
     let mut cmd = launch::command(folder.clone(), run);
     cmd.env(SESSION_ENV, &session);
@@ -768,6 +777,7 @@ pub fn pty_open(
         session.clone(),
         Terminal {
             folder,
+            agent: agent_id.clone(),
             master: pair.master,
             writer,
             killer,
@@ -802,6 +812,7 @@ pub fn pty_open(
     Ok(PtySessionDto {
         session,
         folder: opened_in,
+        agent: agent_id,
     })
 }
 
@@ -1178,6 +1189,7 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
                     PtySessionDto {
                         session: session.clone(),
                         folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
+                        agent: terminal.agent.clone(),
                     },
                 )
             })
@@ -1534,7 +1546,11 @@ mod tests {
         let at = |session: &str, started_at: &str| {
             (
                 started_at.to_owned(),
-                PtySessionDto { session: session.into(), folder: Some("/work/repo".into()) },
+                PtySessionDto {
+                    session: session.into(),
+                    folder: Some("/work/repo".into()),
+                    agent: None,
+                },
             )
         };
         let order = |open: Vec<(String, PtySessionDto)>| {

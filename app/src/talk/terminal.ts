@@ -78,6 +78,17 @@ export type PaneEvents = {
   /** Something has named this pane's frame. Whether the name takes is the store's to say — a person's
    *  name for a frame is not taken back off it by the agent (`./frames`). */
   name(name: string, by: NamedBy): void;
+  /**
+   * How large the terminal is now, in characters — said whenever that changes, and once when the
+   * pane comes up.
+   *
+   * **It is the one measurement only the emulator has.** What is drawn in a pane is a grid, and how
+   * many rows fit in a box is a question about the font the emulator measured, not about the box: a
+   * pane that wanted to keep the terminal above some number of rows cannot work that out from its
+   * own pixels (`../shell/TerminalPane`). Optional because most panes never ask — a face that only
+   * draws one has nothing to do with the answer.
+   */
+  sized?(cols: number, rows: number): void;
 };
 
 /**
@@ -130,6 +141,73 @@ export type PaneStart = {
  * (`wake_remember`): "which agent do you work with here" is not a question a shell answers.
  */
 export const SHELL = "shell";
+
+/**
+ * How many lines the box under a pane grows to before what is written scrolls inside it
+ * (`AMB-D-864`).
+ *
+ * It is a cap on the box and not on what may be sent: a paragraph pasted in is still one line to
+ * send, and a box that grew to hold it would leave a pane with no terminal in it. Ten is where a
+ * written message stops being a line and starts being a document.
+ */
+const BOX_LINES = 10;
+
+/**
+ * How many rows the terminal keeps, whatever is written in the box below it (`AMB-D-864`).
+ *
+ * Below this a full-screen interface has nowhere to put what it is asking — the choices of a
+ * first-run question, a diff, a menu — and a person writing a line would be answering something they
+ * can no longer see. So the box folds here rather than the terminal.
+ */
+const FLOOR_ROWS = 8;
+
+/**
+ * How tall the box under a pane is to be, given what is written in it and the room the terminal has
+ * to give up (`AMB-D-864`). Every length is in pixels but `rows`, which is in characters.
+ *
+ * **Two things stop the box growing, and the box is what folds to either.** Its own cap is
+ * {@link BOX_LINES} lines, past which what is written scrolls inside it; the terminal's is
+ * {@link FLOOR_ROWS} rows, which it keeps whatever is written below it. A pane in a face split eight
+ * ways meets the second first, and a pane on its own meets the first.
+ *
+ * **The floor is in rows and the box is in pixels**, so a row's height is worked out from what the
+ * emulator measured and what the pane stands at. The pane's own padding is counted into the row,
+ * which makes the floor slightly generous — it errs towards the terminal keeping more, which is the
+ * direction that cannot hide a question from a reader.
+ *
+ * **It settles in one pass.** Growing the box by some amount shrinks the pane above it by the same
+ * amount, so `standing + pane` does not change and the height this answers with is the height it
+ * answers with next time.
+ */
+export function boxHeight(
+  { content, standing, line, pane, rows }: {
+    /** How tall what is written needs the box to be. */
+    content: number;
+    /** How tall the box is at this moment. */
+    standing: number;
+    /** One line of it. */
+    line: number;
+    /** How tall the terminal above it is at this moment. */
+    pane: number;
+    /** How many rows the terminal is drawing in that, as the emulator measured it. 0 before it has
+     *  said, where there is no floor to work out and the box's own cap is the whole of the answer. */
+    rows: number;
+  },
+): number {
+  const spare = rows > 0 ? Math.max(0, pane - (pane / rows) * FLOOR_ROWS) : pane;
+  const cap = Math.max(line, Math.min(line * BOX_LINES, standing + spare));
+  return Math.min(content, cap);
+}
+
+/**
+ * How long the pane's size has to hold still before the host is told it (`AMB-D-864`).
+ *
+ * Long enough that a line being written is one call rather than one per character, short enough that
+ * a person who stopped typing does not watch the terminal catch up. It is the gap between keystrokes
+ * this is measured against and not their speed: a fast typist and a slow one both pause between
+ * words, and neither pauses this long mid-word.
+ */
+const SETTLED_MS = 150;
 
 /** What Shift-Enter is sent as: `ESC` and a carriage return, the form the programs that want it read. */
 export const NEWLINE = "\x1b\r";
@@ -788,14 +866,32 @@ export async function mountTerminal(
   // inside so it repaints at the new width.
   // Being shown again after the other face was up is such a change, which is what brings a hidden pane
   // back to the size of the window it is in.
+  //
+  // **The two halves are timed differently, and only since the box under the pane started moving the
+  // pane's height.** Re-measuring is local and cheap, so it happens on every change and what is drawn
+  // keeps up with the box growing under it. Telling the host is neither: a program in the pane
+  // repaints its whole screen when the size it was given changes, so one call per keystroke leaves
+  // the terminal flickering for as long as somebody is writing (`AMB-D-864`). So the call waits for
+  // the changes to stop, and the size it sends is read when it fires rather than when it was asked
+  // for — what the program is told is where the pane ended up, never a size it passed through.
+  let settling: ReturnType<typeof setTimeout> | null = null;
   const resize = new ResizeObserver(() => {
     if (!refit(fit, host)) return;
-    void invoke("pty_resize", { session, cols: term.cols, rows: term.rows }).catch(() => {});
+    if (settling !== null) clearTimeout(settling);
+    settling = setTimeout(() => {
+      settling = null;
+      void invoke("pty_resize", { session, cols: term.cols, rows: term.rows }).catch(() => {});
+    }, SETTLED_MS);
+    on.sized?.(term.cols, term.rows);
   });
   resize.observe(host);
+  // Said once for the size the pane came up at. The observer above fires on changes, and a pane that
+  // never changed size would otherwise leave the window with no answer at all.
+  on.sized?.(term.cols, term.rows);
 
   return () => {
     resize.disconnect();
+    if (settling !== null) clearTimeout(settling);
     links.dispose();
     stream.dispose();
     stopPaste();

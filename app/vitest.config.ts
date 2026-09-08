@@ -10,5 +10,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.{ts,tsx}"],
+    // What jsdom does not implement and the interface needs anyway (`src/vitest.setup.ts`). It is
+    // named here rather than imported per file so a component test cannot forget it and fail on the
+    // browser rather than on itself.
+    setupFiles: ["./src/vitest.setup.ts"],
   },
 });

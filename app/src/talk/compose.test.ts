@@ -10,7 +10,7 @@
 // empty box has no history to walk, no word to complete and nothing to escape from; a box holding a
 // half-written sentence has all three, and keeps them.
 import { describe, expect, it, vi } from "vitest";
-import { passedOn, pressIntoTerminal, sendIntoTerminal } from "./terminal";
+import { boxHeight, passedOn, pressIntoTerminal, sendIntoTerminal } from "./terminal";
 
 const hoisted = vi.hoisted(() => ({
   /** What crossed to the host, in the order it crossed. */
@@ -93,5 +93,47 @@ describe("which presses an empty box hands on", () => {
     expect(passedOn(press("Enter"))).toBeNull();
     expect(passedOn(press("Backspace"))).toBeNull();
     expect(passedOn(press("ArrowLeft")), "moving inside the line left the box").toBeNull();
+  });
+});
+
+describe("how tall the box under a pane is", () => {
+  // One line is 20, the pane stands at 400 and draws 20 rows — so a row is 20 too, and the floor of
+  // 8 rows leaves 240 of the pane to give up.
+  const pane = { standing: 20, line: 20, pane: 400, rows: 20 };
+
+  it("is one line while nothing is written in it", () => {
+    expect(boxHeight({ ...pane, content: 20 })).toBe(20);
+  });
+
+  it("grows to what is written", () => {
+    expect(boxHeight({ ...pane, content: 60 })).toBe(60);
+  });
+
+  it("comes back down when what was written goes", () => {
+    expect(boxHeight({ ...pane, standing: 60, content: 20 })).toBe(20);
+  });
+
+  it("stops at its own cap, so a document scrolls inside it rather than filling the pane", () => {
+    expect(boxHeight({ ...pane, content: 2000 })).toBe(200);
+  });
+
+  it("stops earlier where the terminal would be cut below its floor", () => {
+    // A short pane: 100 tall over 10 rows, so 8 rows are 80 and only 20 can be given up.
+    expect(boxHeight({ standing: 20, line: 20, pane: 100, rows: 10, content: 2000 })).toBe(40);
+  });
+
+  it("keeps one line even where the terminal has nothing to give up", () => {
+    expect(boxHeight({ standing: 20, line: 20, pane: 80, rows: 8, content: 200 })).toBe(20);
+  });
+
+  it("answers the same height again once it has grown, rather than creeping up", () => {
+    // What the two share does not change: the box took 40 and the pane gave 40.
+    const grown = boxHeight({ standing: 20, line: 20, pane: 100, rows: 10, content: 2000 });
+    expect(boxHeight({ standing: grown, line: 20, pane: 100 - (grown - 20), rows: 8, content: 2000 }))
+      .toBe(grown);
+  });
+
+  it("is held by its own cap alone before the pane has said how many rows it draws", () => {
+    expect(boxHeight({ standing: 20, line: 20, pane: 400, rows: 0, content: 2000 })).toBe(200);
   });
 });

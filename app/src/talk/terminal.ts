@@ -173,6 +173,42 @@ export function isNewline(e: KeyboardEvent): boolean {
     && !e.metaKey;
 }
 
+/**
+ * Whether this press is the paste the emulator is to stay out of, so the page answers it instead.
+ *
+ * **Only on Windows, and only for `Ctrl+V`.** macOS makes the press with the meta key, which the
+ * emulator never turns into a character, and Linux is answered from the press itself because a paste
+ * there carries nothing (`../core/clipFiles`). Windows is the one machine where the press a person
+ * makes for paste is also the press the emulator reads as a control character: `Ctrl+V` is `^V`
+ * (0x16), and that is what the program in the pane was given.
+ *
+ * **What is bought is the paste that carries files.** `Ctrl+Shift+V` was the only way into a pane
+ * here, and it is Chromium's "paste as text" — a clipboard holding files answers it with nothing at
+ * all, `text/plain` included, so an image and a copy made in the file panel had no road into a
+ * Windows pane at all. Left to the page, `Ctrl+V` arrives carrying `Files`, which is the door
+ * `takesPastedFiles` is already standing at (`AMB-T-4574` measured both halves on the real engine).
+ *
+ * **What is paid is `^V`.** The character stops reaching the program, and with it readline's
+ * quoted-insert and vim's block select — presses with no other spelling. The pane's own shell is
+ * PowerShell, where `Ctrl+V` is bound to paste and so nothing changes; an agent that took `^V` for a
+ * paste of its own is answered by this one instead, with an image arriving as the path it was
+ * written to rather than as the image (`AMB-D-854`).
+ *
+ * **Nothing is prevented, and that is the whole of it.** Answering `false` tells the emulator to
+ * leave the press alone; the browser then goes on with its own default, which for this key is the
+ * paste. `Ctrl+Shift+V` still passes through untouched, and so does every press held with Alt or the
+ * meta key, which belong to the program.
+ */
+export function isPagePaste(e: KeyboardEvent, os: HostOs = hostOs()): boolean {
+  return os === "windows"
+    && e.type === "keydown"
+    && (e.key === "v" || e.key === "V")
+    && e.ctrlKey
+    && !e.shiftKey
+    && !e.altKey
+    && !e.metaKey;
+}
+
 // The colours a pane is drawn in — **the one part of the interface the theme does not reach**. They
 // are tokens like everything else (`styles/tokens.css`), and the tokens they read are the ones no
 // theme overrides, so light and dark give the same three values.
@@ -617,6 +653,10 @@ export async function mountTerminal(
     "terminal",
   );
 
+  // **The two presses the emulator does not get to answer, and they are refused in opposite ways.**
+  // Windows' `Ctrl+V` is left to the page, default and all, because the page's default is the paste
+  // (`isPagePaste`). Shift-Enter is taken from both.
+  //
   // **Shift-Enter, which is the one press the emulator cannot pass on.** What a terminal is given for
   // Enter is a carriage return, and it is given the same one whether or not Shift was held — so an
   // agent that takes Shift-Enter for "another line" and Enter for "send it" is handed two presses it
@@ -634,7 +674,11 @@ export async function mountTerminal(
   // this key is a newline typed into the hidden box the emulator reads — and that newline reaches the
   // program as the carriage return this exists to replace. Both halves have to be refused, or the
   // press is sent twice and the second one wins.
+  //
+  // Read once rather than per press: the machine under a pane does not change while it is drawn.
+  const os = hostOs();
   term.attachCustomKeyEventHandler((e) => {
+    if (isPagePaste(e, os)) return false;
     if (!isNewline(e)) return true;
     e.preventDefault();
     send(NEWLINE);

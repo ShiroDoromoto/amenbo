@@ -1,0 +1,196 @@
+# What a reader typed into a file, and every way the panel takes that file off the screen.
+#
+# The editor is where the text is, and the editor goes with the file: turn a Markdown file over to
+# its rendering and the editor is gone, press another tab and it is gone, come back and it is built
+# again. So each of those is a moment the only copy of what somebody typed could be dropped, and
+# none of them is a moment they asked to lose it.
+#
+# ── Why this is walked rather than left to the unit tests ────────────────────────────────────────
+# What is being kept lives in a text editor the panel loads on demand and lays out by measuring,
+# which is the one part of this face no test environment draws. A road that reads the words off the
+# screen is the only one that reads what a person would.
+#
+# ── Why nothing is saved along the way ───────────────────────────────────────────────────────────
+# Saving is the answer to a different question, and one another road walks
+# (`change-a-file-without-leaving-amenbo`). What this road is about is the text that is nowhere but
+# on the screen, so every step below leaves it unsaved on purpose.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. An editor is a thing on a screen, and a shell has its own.
+id: come-back-to-a-file-and-find-what-you-typed
+title: What was typed into a file is still there after the panel has drawn something else
+description: >
+  Open a Markdown file, type into it, and move about: turn it over to its rendering and back, open
+  another file over it, go to the draft page. Every way back to it finds what was typed, standing
+  where it was put and with what the file already held still under it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # Markdown, because it is the one kind of file with two ways to be drawn — and the heading is what
+  # makes the two tell each other apart on the screen.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: |
+        # SCENARIO watering
+        the seedlings are watered every second morning
+
+  # The second file, so that "another file came up over it" is a road and not a description.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: soil.md
+      content: |
+        # SCENARIO soil
+        the beds are turned over before the frost
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  # A Markdown file opens on what its text draws, and there is no editor on a rendering — so the
+  # text is put on the screen before anything is typed into it.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO typed and not yet kept
+
+  # ── the rendering and back ──────────────────────────────────────────────────────────────────────
+  # Going to the rendering takes the editor off the page. What is drawn is drawn from what was
+  # typed, rather than from the file on the disk — otherwise a reader who wanted to see how their
+  # writing looks would find the version they started from.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: rendered
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: typed and not yet kept
+
+  # And the editor built again finds it, which is the half that costs somebody their work if it
+  # breaks: the text was only ever in the editor that just went away.
+  - type: action
+    domain: files
+    op: show-as
+    with:
+      form: source
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: typed and not yet kept
+
+  # ── another file over it ────────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: soil.md
+      section: tree
+
+  # The other file is its own: what one tab is holding is not drawn over another.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: the beds are turned over
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: typed and not yet kept
+      present: false
+
+  - type: action
+    domain: files
+    op: tab
+    with:
+      name: watering.md
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: typed and not yet kept
+
+  # ── the draft page over it ──────────────────────────────────────────────────────────────────────
+  # The draft page is a tab like the others and the file leaves the screen the same way, so it is
+  # walked as its own step rather than assumed from the one above.
+  - type: action
+    domain: files
+    op: tab
+
+  - type: action
+    domain: files
+    op: tab
+    with:
+      name: watering.md
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: typed and not yet kept
+
+  # ── and what the file already held is still under it ────────────────────────────────────────────
+  # The typing went on the end of the file rather than over it, so both readings are of one screen:
+  # a face that had dropped what the file came with and kept only the typing would pass a road that
+  # read the new words alone.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: the seedlings are watered every second morning

@@ -43,6 +43,23 @@ import { focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal"
 const LANDED_MS = 900;
 
 /**
+ * What one project's reading column is holding: the files open in it, in the order they were opened,
+ * and which of them is on top.
+ *
+ * **It is one answer per project, for the run.** A path is read against one project's folders, so
+ * the files a project was left reading mean nothing beside the next project's tree — and moving
+ * away is not closing them. The face holds one of these per project and draws the one whose project
+ * is on the screen, so a reader who goes and comes back finds the tabs they left (`AMB-D-835`).
+ * Nothing of it is written down: what is kept between runs is the widths and the wish, and whether
+ * the files themselves come back after a restart is not answered here (`../talk/columns`).
+ */
+type Reading = { open: OpenFile[]; showing: string | null };
+
+/** What a project nobody has opened a file on is holding, and what the face draws while it is on no
+ *  project at all. */
+const NOTHING_OPEN: Reading = { open: [], showing: null };
+
+/**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
  *
  * **It is not an editor and it does not pick anybody's AI.** What it holds is where the work happens
@@ -208,18 +225,36 @@ export function TerminalFace({
   // switch living inside it could not be the one that opens it (`../files/FilesPanel`). What it
   // starts as is this device's own answer, kept between runs (`../talk/columns`).
   const [tab, setTabState] = useState<SideTab>(getSideTab);
-  // The files the reading column is holding, in the order they were opened, and which of them is on
-  // top. They are held here rather than in either column because both answer to them: the tree in
-  // the rail marks the row the file on top was opened from, and the column on the other side of the
-  // panes draws it (`AMB-D-835`).
+  // What each project's reading column is holding, kept by project (`Reading`). They are held here
+  // rather than in either column because both answer to them: the tree in the rail marks the row the
+  // file on top was opened from, and the column on the other side of the panes draws it
+  // (`AMB-D-835`).
   //
   // **A file opened is added, never swapped in.** Reading one thing while another stays open is what
   // a reader does: a reference followed is a second file to hold, not a first one to give up.
-  const [open, setOpen] = useState<OpenFile[]>([]);
-  const [showing, setShowing] = useState<string | null>(null);
+  const [byProject, setByProject] = useState<Record<number, Reading>>({});
+  // The one on the screen, which is the project the rail is on.
+  const { open, showing } =
+    (layout.project === null ? null : byProject[layout.project]) ?? NOTHING_OPEN;
   // The one on top: whichever is named, and the first one where nothing is — a column holding files
   // with none of them drawn would be a row of tabs over an empty page.
   const reading = open.find((one) => openKey(one) === showing) ?? open[0] ?? null;
+
+  /**
+   * Move what the project on the screen is reading, leaving every other project's alone.
+   *
+   * A face on no project has nothing to move: there is no project to keep the answer under, and a
+   * file cannot have been opened from a tree that is not drawn.
+   */
+  const takeReading = useCallback((step: (was: Reading) => Reading) => {
+    const project = layout.project;
+    if (project === null) return;
+    setByProject((was) => {
+      const before = was[project] ?? NOTHING_OPEN;
+      const after = step(before);
+      return after === before ? was : { ...was, [project]: after };
+    });
+  }, [layout.project]);
   // The question about where the pane being opened works, while it is up. It is not a frame: a place
   // is made by opening one, and one nobody finished opening is a box that says nothing
   // (`../talk/layout`). `note` on it is a binding the host refused.
@@ -788,13 +823,13 @@ export function TerminalFace({
     setRailWidthState(getRailWidth(layout.project));
     setNarrowWidthState(getSideNarrow(layout.project));
     setWideWidthState(getSideWide(layout.project));
-    // And standing on the narrow step, which is where a project is arrived at: the wide one is
-    // asked for by opening a file, and no file is open on a project just moved to.
+    // And standing on the narrow step, which is where a project is arrived at: the wide one is asked
+    // for by opening a file, and arriving somewhere is not opening one. Files left open on the
+    // project come back to their tabs, and the reader says which they want by pressing it.
     setWideState(false);
-    // And nothing is being read: the file goes with the project it was opened from, since a path is
-    // read against one project's folders and the tree beside the next one has no row for it.
-    setOpen([]);
-    setShowing(null);
+    // What the column is holding is not touched here at all: each project's files are kept under
+    // that project and the face simply draws the one it is on, so moving away leaves them where
+    // they are and coming back finds them (`Reading`).
   }, [layout.project]);
 
   // A window that has shrunk cannot leave a column with the middle's room in it. Each is measured
@@ -832,12 +867,20 @@ export function TerminalFace({
    * (`AMB-D-835`).
    */
   const openFile = useCallback((at: OpenFile) => {
-    setOpen((was) => (was.some((one) => openKey(one) === openKey(at)) ? was : [...was, at]));
-    setShowing(openKey(at));
+    const key = openKey(at);
+    takeReading((was) => ({
+      open: was.open.some((one) => openKey(one) === key) ? was.open : [...was.open, at],
+      showing: key,
+    }));
     takeTab("files");
     wantSide(true);
     setWideState(true);
-  }, [takeTab, wantSide]);
+  }, [takeReading, takeTab, wantSide]);
+
+  /** Bring a file already open up on top. */
+  const showFile = useCallback((at: OpenFile) => {
+    takeReading((was) => ({ ...was, showing: openKey(at) }));
+  }, [takeReading]);
 
   /**
    * Let one file go, leaving the rest.
@@ -848,21 +891,32 @@ export function TerminalFace({
    */
   const closeFile = useCallback((at: OpenFile) => {
     const key = openKey(at);
-    const was = open.findIndex((one) => openKey(one) === key);
-    if (was < 0) return;
-    const left = open.filter((one) => openKey(one) !== key);
-    setOpen(left);
-    if (showing !== key) return;
-    const next = left[was] ?? left[was - 1] ?? null;
-    setShowing(next === null ? null : openKey(next));
-  }, [open, showing]);
+    takeReading((was) => {
+      const nth = was.open.findIndex((one) => openKey(one) === key);
+      if (nth < 0) return was;
+      const left = was.open.filter((one) => openKey(one) !== key);
+      if (was.showing !== key) return { open: left, showing: was.showing };
+      const next = left[nth] ?? left[nth - 1] ?? null;
+      return { open: left, showing: next === null ? null : openKey(next) };
+    });
+  }, [takeReading]);
 
-  /** The files that have gone to the bin, let go of: a file that is not there is not one to hold. */
+  /**
+   * The files that have gone to the bin, let go of: a file that is not there is not one to hold.
+   *
+   * It is the project on the screen that lets go, because it is that project's tree the rows were
+   * binned from — the column and the tree are both drawn on the one project the face is showing.
+   */
   const goneFiles = useCallback((root: string, went: string[]) => {
-    const dead = new Set(went.map((one) => `${root} ${one}`));
-    setOpen((was) => was.filter((one) => !dead.has(openKey(one))));
-    setShowing((now) => (now !== null && dead.has(now) ? null : now));
-  }, []);
+    // Named through `openKey` rather than spelled out here: the paths arrive joined
+    // (`../files/trash`), and a key written by hand beside the one that makes them is a key that
+    // matches nothing the moment either is changed.
+    const dead = new Set(went.map((one) => openKey({ root, path: [one] })));
+    takeReading((was) => ({
+      open: was.open.filter((one) => !dead.has(openKey(one))),
+      showing: was.showing !== null && dead.has(was.showing) ? null : was.showing,
+    }));
+  }, [takeReading]);
 
   // Back to the narrow width on the next press outside the column, wherever it lands: a press on a
   // pane is a reader going back to the work, and a press on the rail is one going back to the list.
@@ -1209,7 +1263,7 @@ export function TerminalFace({
               onTab={takeTab}
               open={open}
               reading={reading}
-              onPick={(at) => setShowing(openKey(at))}
+              onPick={showFile}
               onCloseTab={closeFile}
               onBack={() => { if (reading !== null) closeFile(reading); }}
               // A file binned from the reading column is one the tree in the rail is about to stop

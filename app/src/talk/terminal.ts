@@ -30,9 +30,10 @@ import type { PtyChunkDto, PtyReplayDto, PtySessionDto, SessionSaidDto } from ".
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
+import { openExternalUrl } from "../core/mutations";
 import { hostOs, type HostOs } from "../core/platform";
 import { type NamedBy } from "./frames";
-import { pathsOnRow, refFromUrl, refsOnRow, type Cell, type Rows } from "./refLinks";
+import { httpUrl, pathsOnRow, refFromUrl, refsOnRow, urlsOnRow, type Cell, type Rows } from "./refLinks";
 
 // The events the host sends this pane. Output is a chunk; closed is the program in the terminal
 // having exited, which arrives once and is the last thing that session says.
@@ -485,14 +486,18 @@ export async function mountTerminal(
     theme: paneColors(),
     // The second way a ref becomes clickable: our own output wraps one in OSC 8, so the escape says
     // where the text points and no pattern has to find it (`AMB-T-3595`). Non-HTTP addresses have to
-    // be let through for `amenbo://` to arrive at all — which is safe here because arriving is not
-    // being followed: an address this does not recognise is dropped, and the ones it does recognise
-    // reach a function that selects a record by number. Nothing here opens a URL.
+    // be let through for `amenbo://` to arrive at all, and an address neither branch below claims is
+    // dropped — a program can say a piece of text points anywhere, and only these two are followed.
     linkHandler: {
       allowNonHttpProtocols: true,
       activate: (_event, text) => {
         const target = refFromUrl(text);
-        if (target) showRef(target.space, target.num);
+        if (target) {
+          showRef(target.space, target.num);
+          return;
+        }
+        const url = httpUrl(text);
+        if (url) void openExternalUrl(url);
       },
     },
   });
@@ -513,7 +518,15 @@ export async function mountTerminal(
       // Paths are read off the same drawn buffer, by the same rules, and are the second kind of
       // thing in a pane that is a thing rather than a string (`AMB-T-3630`).
       const paths = pathsOnRow(rows, bufferLineNumber - 1);
+      // Addresses are the third, and they go first: xterm drops a link whose cells an earlier one
+      // already claimed, and a ref number drawn inside an address belongs to the address.
+      const urls = urlsOnRow(rows, bufferLineNumber - 1);
       callback([
+        ...urls.map((url) => ({
+          range: url.range,
+          text: url.text,
+          activate: () => void openExternalUrl(url.text),
+        })),
         ...found.map((ref) => ({
           range: ref.range,
           text: ref.text,

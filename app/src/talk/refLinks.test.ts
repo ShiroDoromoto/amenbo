@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pathsOnRow, refFromUrl, refsOnRow, type Cell, type Rows } from "./refLinks";
+import { httpUrl, pathsOnRow, refFromUrl, refsOnRow, urlsOnRow, type Cell, type Rows } from "./refLinks";
 
 /**
  * A buffer written the way a terminal draws one: each row is given as text, and a row prefixed with
@@ -152,5 +152,72 @@ describe("pathsOnRow", () => {
     const [hit] = pathsOnRow(rows, 0);
     expect(hit.text).toBe("notes/a.md");
     expect(hit.range.start.x).toBe(8);
+  });
+});
+
+describe("httpUrl", () => {
+  it("takes the two schemes a browser is for", () => {
+    expect(httpUrl("https://example.com/guide")).toBe("https://example.com/guide");
+    expect(httpUrl("http://example.com")).toBe("http://example.com");
+    expect(httpUrl("HTTPS://Example.COM")).toBe("HTTPS://Example.COM");
+  });
+
+  it("answers for nothing else — a pane draws output this app did not write", () => {
+    for (const url of [
+      "javascript:alert(1)",
+      "file:///etc/passwd",
+      "amenbo://task/42",
+      "vscode://file/etc/passwd",
+      "https://",
+      " https://example.com",
+      "https://exa mple.com",
+    ]) {
+      expect(httpUrl(url), url).toBeNull();
+    }
+  });
+});
+
+describe("urlsOnRow", () => {
+  const textsOn = (rows: Rows, y: number) => urlsOnRow(rows, y).map((one) => one.text);
+
+  it("finds an address a program drew, and says where it sits", () => {
+    const rows = buffer(40, "see https://example.com now");
+    const [hit, ...rest] = urlsOnRow(rows, 0);
+    expect(rest).toEqual([]);
+    expect(hit.text).toBe("https://example.com");
+    // 1-based, both ends inclusive: `h` is the 5th column, the last `m` the 23rd.
+    expect(hit.range).toEqual({ start: { x: 5, y: 1 }, end: { x: 23, y: 1 } });
+  });
+
+  it("drops what a sentence left on the end", () => {
+    expect(textsOn(buffer(40, "see https://example.com."), 0)).toEqual(["https://example.com"]);
+    expect(textsOn(buffer(40, "(at https://example.com)"), 0)).toEqual(["https://example.com"]);
+    expect(textsOn(buffer(50, "<https://example.com/a>, then"), 0)).toEqual(["https://example.com/a"]);
+  });
+
+  it("keeps the punctuation an address is written with", () => {
+    expect(textsOn(buffer(60, "open https://example.com:8080/a?b=1#c ok"), 0))
+      .toEqual(["https://example.com:8080/a?b=1#c"]);
+  });
+
+  it("leaves alone a scheme a pane must not open", () => {
+    expect(textsOn(buffer(50, "run file:///etc/passwd and ftp://example.com"), 0)).toEqual([]);
+  });
+
+  it("offers nothing where the scheme has nothing after it", () => {
+    expect(textsOn(buffer(40, "the https:// prefix"), 0)).toEqual([]);
+  });
+
+  it("follows an address across the fold, the way a ref is followed", () => {
+    // 20 columns: the address is drawn across two rows, and is on both of them.
+    const rows = buffer(20, "see https://example.", ">com/guide now");
+    expect(textsOn(rows, 0)).toEqual(["https://example.com/guide"]);
+    expect(textsOn(rows, 1)).toEqual(["https://example.com/guide"]);
+  });
+
+  it("says nothing about a row that is not there", () => {
+    const rows = buffer(40, "see https://example.com");
+    expect(urlsOnRow(rows, -1)).toEqual([]);
+    expect(urlsOnRow(rows, 5)).toEqual([]);
   });
 });

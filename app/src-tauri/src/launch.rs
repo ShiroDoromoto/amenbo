@@ -515,6 +515,7 @@ mod tests {
         let instruction = amenbo_core::harness::opening(
             amenbo_core::harness::find_launch("claude-code").expect("the catalog lists it"),
             "amenbo",
+            None,
         )
         .pop()
         .expect("an opening is at least the instruction");

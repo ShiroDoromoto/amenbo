@@ -1051,6 +1051,38 @@ input[type="color"] {
 }
 .files__mine:hover, .files__reread:hover { text-decoration: underline; }
 .files__mine:disabled { color: var(--c-text-muted); cursor: default; text-decoration: none; }
+/* The two texts side by side, over the window (`../files/FileDiff`). It is wider than the modals
+   that ask a question, because what is on it is two files and not a sentence: at the plain card's
+   width each side would be a column of a few words, which is the one shape a comparison cannot be
+   read in. The backdrop is `.modal__overlay` like every other, which is what `outsideClose` reads. */
+.filediff {
+  width: min(1100px, 100%); max-height: 86vh;
+  display: flex; flex-direction: column; gap: var(--s-3);
+  padding: var(--s-5);
+  background: var(--c-surface); border: 1px solid var(--c-rule);
+  border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+.filediff__title { font-weight: var(--fw-bold); font-size: var(--fs-xl); overflow-wrap: anywhere; }
+/* Which side is which. Two halves of one row, so each name stands over the text it names. */
+.filediff__sides { display: flex; gap: var(--s-3); font-size: var(--fs-xs); color: var(--c-text-muted); }
+.filediff__side { flex: 1 1 0; min-width: 0; }
+/* The comparison scrolls in here rather than growing the card: the two editors lay themselves out
+   to their full height and ask the box around them to be the thing that scrolls. */
+.filediff__body { min-height: 0; flex: 1 1 auto; overflow: auto; }
+.filediff__view .cm-mergeView { font-size: var(--fs-xs); }
+/* What is drawn until the comparison arrives, and where it never does: the two texts, still side
+   by side, with nothing marking what differs. */
+.filediff__plain { display: flex; gap: var(--s-3); }
+.filediff__plain .files__text { flex: 1 1 0; min-width: 0; }
+.filediff__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.filediff__action {
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--c-edge); border-radius: var(--r-md);
+  background: var(--c-surface); color: var(--c-text); cursor: pointer;
+}
+/* The answer this screen is most often opened to give: the reader looked at what differs and their
+   own text is the one they want. Drawn as the answer rather than as one of three equal presses. */
+.filediff__action--go { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-on-accent); }
 .files__body { min-height: 0; overflow-y: auto; }
 .files__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; }
 /* The editor a file's text is drawn in (`../files/FileEditor`). It brings its own type and colours

@@ -630,8 +630,15 @@ export const ja: Translation = {
     // write their own text over the file, or take what the disk says and lose theirs. The panel
     // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "このファイルは、ここで開いたあとに誰かが書き換えました。",
+    "files.seeDifference": "違いを見る",
     "files.keepMine": "自分のを通す",
     "files.readAgain": "読み直す",
+    // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
+    // named above them: which of the two stands is the question, and a screen that named neither
+    // would leave it to be guessed from which text looks familiar (`AMB-D-863`).
+    "files.diffTheirs": "ディスクの内容",
+    "files.diffMine": "編集中の内容",
+    "files.diffClose": "閉じる",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "このファイルは改行が2種類まざっています。保存すると、どちらかにそろいます。",

@@ -621,8 +621,15 @@ export const vi: Translation = {
     // write their own text over the file, or take what the disk says and lose theirs. The panel
     // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "Ai đó đã ghi vào tệp này sau khi nó được mở ở đây.",
+    "files.seeDifference": "Xem chỗ khác nhau",
     "files.keepMine": "Giữ bản của tôi",
     "files.readAgain": "Đọc lại",
+    // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
+    // named above them: which of the two stands is the question, and a screen that named neither
+    // would leave it to be guessed from which text looks familiar (`AMB-D-863`).
+    "files.diffTheirs": "Nội dung trên đĩa",
+    "files.diffMine": "Nội dung bạn đã nhập",
+    "files.diffClose": "Đóng",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Tệp này có cả hai kiểu xuống dòng. Khi lưu, tất cả sẽ thành một kiểu.",

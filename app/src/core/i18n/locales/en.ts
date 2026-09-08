@@ -658,6 +658,19 @@ const ui = {
   "face.modelFind": "Narrow the list",
   "face.modelName": "Model name",
   "face.modelsMore": "{n} more — narrow the list to reach them",
+  // The row under a running pane, where the model the program is answering on is moved
+  // (`app/src/shell/PaneModel.tsx`, `AMB-D-865`). A running program takes no flag, so what the press
+  // does is type the provider's own command into the pane — which is why the sentence names the
+  // command, and why it is three sentences: two of the six read a name on that line as a prompt and
+  // charge for the answer, so those get the command alone and their own picker opens.
+  "face.modelHere": "Model",
+  "face.modelSwitch": "Move this pane to another model",
+  "face.whichModelNow": "What model does this pane move to?",
+  "face.modelPicking": "The terminal is waiting for a choice.",
+  "face.modelSendsNamed": "Puts {command} in the pane with the name you press, and that settles it.",
+  "face.modelSendsPicker": "Puts {command} in the pane on its own. Its own picker opens, and the choosing is yours.",
+  "face.modelSendsFilter": "Puts {command} in the pane, then the name in its search box. Confirming it is yours.",
+  "face.modelKeeps": "It also moves your own default, in {path}.",
   "face.startSave": "Save",
   "face.startCancel": "Cancel",
   "face.startEdit": "Edit",

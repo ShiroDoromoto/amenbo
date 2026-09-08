@@ -123,7 +123,7 @@ describe("removing a pane", () => {
   it("asks first, and a refusal leaves the place and the terminal alone", async () => {
     await pane();
     await act(async () => {
-      hoisted.events?.opened("session-7", "/work/here");
+      hoisted.events?.opened("session-7", "/work/here", null);
     });
     hoisted.agrees = false;
     await press();
@@ -136,7 +136,7 @@ describe("removing a pane", () => {
   it("ends the terminal that was running, then takes the place away", async () => {
     await pane();
     await act(async () => {
-      hoisted.events?.opened("session-7", "/work/here");
+      hoisted.events?.opened("session-7", "/work/here", null);
     });
     await press();
 
@@ -147,7 +147,7 @@ describe("removing a pane", () => {
   it("ends nothing where the program had already exited", async () => {
     await pane();
     await act(async () => {
-      hoisted.events?.opened("session-7", "/work/here");
+      hoisted.events?.opened("session-7", "/work/here", null);
     });
     await act(async () => { hoisted.events?.closed("session-7"); });
     await press();

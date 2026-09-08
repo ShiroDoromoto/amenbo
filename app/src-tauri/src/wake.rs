@@ -52,7 +52,10 @@ use std::path::{Path, PathBuf};
 use amenbo_core::wake::{self, Choice};
 use tauri::Emitter as _;
 
-use crate::dto::{AgentModelDto, AgentModelKeptDto, WakeCandidateDto, WakeDto, WakeReachDto};
+use crate::dto::{
+    AgentModelDto, AgentModelKeptDto, AgentSwitchCarriesDto, AgentSwitchDto, WakeCandidateDto,
+    WakeDto, WakeReachDto,
+};
 use crate::error::CmdError;
 use crate::launch::Probe;
 
@@ -385,6 +388,37 @@ pub fn wake_model(agent: String) -> Result<AgentModelKeptDto, CmdError> {
         chosen: config.model_for(&agent).map(model),
         history: config.model_history(&agent).iter().map(model).collect(),
         flag: wake::started_as(&agent).map(|launch| launch.model_flag.to_string()),
+    })
+}
+
+/// How a pane **already running** this agent is moved to `model`, and what a press would put into it
+/// (`amenbo_core::harness::switching`, `AMB-D-865`).
+///
+/// `None` where there is no such road: a command the reader registered, whose program Amenbo cannot
+/// name (`AMB-D-794`), and an id nothing answers to. The plain shell never reaches here — a pane with
+/// nothing started in it has no agent id to ask about.
+///
+/// **Asked with the model as well as without it.** With none, a face has what it needs to say what
+/// the press will do; with one, it has the bytes to send. Both come from the same row, so the
+/// sentence and the press cannot disagree — and the row is where it is written that Codex and
+/// OpenCode never take a name on that line (`AMB-T-4581`).
+///
+/// Read the cheap way, like [`wake_model`]: the catalog is static and nothing is opened to answer.
+#[tauri::command]
+pub fn wake_switch(agent: String, model: Option<String>) -> Option<AgentSwitchDto> {
+    let launch = wake::started_as(&agent)?;
+    let switching = amenbo_core::harness::switching(launch, model.as_deref());
+    Some(AgentSwitchDto {
+        command: launch.switch.command.to_string(),
+        carries: match launch.switch.carries {
+            amenbo_core::harness::Carries::Named => AgentSwitchCarriesDto::Named,
+            amenbo_core::harness::Carries::Picker => AgentSwitchCarriesDto::Picker,
+            amenbo_core::harness::Carries::Filter => AgentSwitchCarriesDto::Filter,
+        },
+        keeps: launch.switch.keeps.map(str::to_string),
+        line: switching.line,
+        then: switching.then,
+        settles: switching.settles,
     })
 }
 

@@ -4,6 +4,7 @@ import { invoke } from "../core/ipc";
 import { asTyped } from "../core/keys";
 import { onAgentChosen, onAgentsInstalled, wakeRescan } from "./wake";
 import { SHELL } from "../talk/terminal";
+import { MANY } from "../talk/models";
 import { errText, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
 
@@ -84,12 +85,6 @@ type Start = { id: string; label: string; line?: string };
  *  for one being registered. Null instead of the form means it is not open. */
 type Draft = { id: string | null; name: string; line: string };
 
-/** How many models the row draws before it grows a box to narrow itself with.
- *
- *  It is a row of pills, and a row is something an eye takes in at once: Cursor answered with 217,
- *  which is a page. The number is where the six providers actually fall — one answered with eleven
- *  and the rest with six or fewer, so every provider that *can* be read as a row is drawn as one. */
-const MANY = 12;
 
 export function EmptySlot({
   folders,

@@ -2195,6 +2195,53 @@ pub struct AgentModelKeptDto {
     pub(crate) flag: Option<String>,
 }
 
+/// What a running pane is asked to change model with, and what a press would actually put into it
+/// (`AMB-D-865`, `crate::wake::wake_switch`).
+///
+/// **The first three are drawn before the press and the last three are what the press does.** What is
+/// typed, whether the model's name goes on that line, and where the machine keeps the change
+/// afterwards are the whole of what a person needs to judge it — and two of the six read a named line
+/// as a prompt and bill for it (`AMB-T-4581`).
+///
+/// **Where the name may go is answered here and nowhere else.** A face that composed the line itself
+/// would be a second answer to the question this catalog exists to hold, and the two would drift on
+/// the row where it costs money (`amenbo_core::harness::switching`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSwitchDto {
+    /// The provider's own command, as it is typed — `/model`, or `/models` for OpenCode.
+    pub(crate) command: String,
+    /// Whether the model's name may go on that command's line.
+    pub(crate) carries: AgentSwitchCarriesDto,
+    /// Where this machine keeps the change past the session — a path in the reader's home — or
+    /// `null` where the provider changes only the session in front of them.
+    pub(crate) keeps: Option<String>,
+    /// What goes into the pane's input box and is submitted, as a person typing it would.
+    pub(crate) line: String,
+    /// What is pasted after that line has gone, submitting nothing — the picker's own search text —
+    /// or `null` where there is no second half.
+    pub(crate) then: Option<String>,
+    /// Whether the line settles the model on its own. `false` is the provider's picker left standing
+    /// open with the choosing still to do, which is a thing to say rather than a model to claim has
+    /// moved.
+    pub(crate) settles: bool,
+}
+
+/// Where a model's name may go when a running pane is moved (`amenbo_core::harness::Carries`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum AgentSwitchCarriesDto {
+    /// On the command's own line, and the return settles it: `/model sonnet`.
+    Named,
+    /// Nowhere. The line is the command alone and it opens the provider's picker, where the choosing
+    /// is the person's — a name behind it would be sent to the model as a prompt.
+    Picker,
+    /// In the picker's search box, pasted after the command has opened it and submitted by nobody.
+    Filter,
+}
+
 /// Whether what a row says about being installed was got from this machine at all (`AMB-D-792`).
 ///
 /// **It is not `candidates` being empty, and it cannot be read off one.** The row is the whole
@@ -2318,6 +2365,15 @@ pub struct PtySessionDto {
     /// frame that does not know would have to ask the person for the folder again the next time it has
     /// a terminal to start, which is the one flow the face has asked for twice.
     pub(crate) folder: Option<String>,
+    /// The id the agent in this terminal was started as — a catalog row
+    /// (`amenbo_core::harness::LAUNCHES`) or a command the reader registered — or `None` for a plain
+    /// prompt.
+    ///
+    /// It is here for the reason `folder` is, and for the same pane: what is running was settled when
+    /// the terminal started, and a frame that adopted one has no other way to learn it. What reads it
+    /// is the control that moves a running pane to another model — a question about the provider in
+    /// the pane, so a pane that cannot name the provider draws no control (`AMB-D-865`).
+    pub(crate) agent: Option<String>,
 }
 
 /// One run of a session's tail, as the pane adopting it is handed it (`crate::pty::pty_attach`).

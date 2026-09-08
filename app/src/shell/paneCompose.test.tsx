@@ -118,7 +118,7 @@ async function pane(autoStart = true): Promise<void> {
 
 /** The host opens a terminal in the pane, which is what puts the box up. */
 async function opened(): Promise<void> {
-  await act(async () => { hoisted.events?.opened("session-7", "/work/here"); });
+  await act(async () => { hoisted.events?.opened("session-7", "/work/here", null); });
   await act(async () => { await Promise.resolve(); });
 }
 

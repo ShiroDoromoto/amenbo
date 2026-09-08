@@ -34,7 +34,7 @@ vi.mock("../talk/agent", () => ({
     on: PaneEvents,
     start: PaneStart = {},
   ) => {
-    on.opened(start.session ?? "s1", "/repo");
+    on.opened(start.session ?? "s1", "/repo", null);
     return Promise.resolve(() => {});
   },
 }));

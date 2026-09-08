@@ -644,8 +644,15 @@ export const uk: Translation = {
     // write their own text over the file, or take what the disk says and lose theirs. The panel
     // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "Хтось записав у цей файл після того, як його тут відкрили.",
+    "files.seeDifference": "Подивитися різницю",
     "files.keepMine": "Залишити мою версію",
     "files.readAgain": "Прочитати знову",
+    // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
+    // named above them: which of the two stands is the question, and a screen that named neither
+    // would leave it to be guessed from which text looks familiar (`AMB-D-863`).
+    "files.diffTheirs": "Що на диску",
+    "files.diffMine": "Що ви написали",
+    "files.diffClose": "Закрити",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "У цьому файлі обидва види переносу рядків. Після збереження всі стануть однаковими.",

@@ -617,8 +617,15 @@ export const ko: Translation = {
     // write their own text over the file, or take what the disk says and lose theirs. The panel
     // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "이 파일은 여기서 연 뒤에 누군가 고쳤습니다.",
+    "files.seeDifference": "다른 곳 보기",
     "files.keepMine": "내가 쓴 것을 저장",
     "files.readAgain": "다시 읽기",
+    // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
+    // named above them: which of the two stands is the question, and a screen that named neither
+    // would leave it to be guessed from which text looks familiar (`AMB-D-863`).
+    "files.diffTheirs": "디스크에 있는 내용",
+    "files.diffMine": "고치고 있는 내용",
+    "files.diffClose": "닫기",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "이 파일에는 줄바꿈이 두 가지 섞여 있습니다. 저장하면 한 가지로 맞춰집니다.",

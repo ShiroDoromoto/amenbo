@@ -28,6 +28,7 @@ import {
 import { FileMenu } from "./FileMenu";
 import { useTrash } from "./trash";
 import { FileEditor } from "./FileEditor";
+import { FileDiff } from "./FileDiff";
 import { MemoPage } from "./MemoPage";
 import { Icon } from "../components/Icon";
 
@@ -416,6 +417,10 @@ function FileReader({
   // which of the two texts stands is a thing they say, and this is the asking (`AMB-D-784`). The
   // saying has two answers: take the disk's, or write their own over it (`AMB-D-863`).
   const [stale, setStale] = useState(false);
+  // The two texts, once a reader has asked to see what differs: what the disk said when they asked,
+  // and what was in the editor at that moment. Held as a pair rather than read while the screen is
+  // up — what it shows is a still of both, and neither can move behind it (`./FileDiff`).
+  const [compared, setCompared] = useState<{ theirs: string; mine: string } | null>(null);
   // Where a file this face would not draw was handed on to the machine from. The same menu the list
   // rows open, opened here because these are the states a reader reaches it from with no row under
   // the pointer.
@@ -476,6 +481,7 @@ function FileReader({
     setRefused(null);
     setNewline(null);
     setStale(false);
+    setCompared(null);
     void folderRead(projectId, root, path, asked)
       .then((one) => { if (alive) take(one); })
       .catch((e) => {
@@ -637,6 +643,25 @@ function FileReader({
       setRefused(errText(e));
     } finally {
       setKeeping(false);
+    }
+  };
+
+  // Opening the two texts side by side, which is what a reader has to see before they can choose
+  // (`AMB-D-863`). The disk's text is read here rather than kept from the moment the file was found
+  // to have moved: what a reader is about to weigh their own text against is what the file says
+  // now, and the news that it moved may be minutes old by the time they press.
+  const seeDifference = async () => {
+    const read = typed.current;
+    if (read === null) return;
+    const mine = read();
+    try {
+      const fresh = await folderRead(projectId, root, path, asked);
+      // A file that no longer comes back as text is one there is nothing to line up against — and
+      // an empty side would read as a file emptied rather than as one this screen cannot show.
+      if (fresh.text === undefined) setRefused(t("files.unreadable"));
+      else setCompared({ theirs: fresh.text, mine });
+    } catch (e) {
+      setRefused(errText(e));
     }
   };
 
@@ -817,10 +842,19 @@ function FileReader({
         {stale && (
           <div className="files__changed">
             <p className="files__none">{t("files.changedUnderneath")}</p>
+            {/* Both of these read the editor's own text, so both are drawn only where there is
+                one to read: on a file this panel could not write back there is nothing to compare
+                the disk against and nothing to write over it with, and taking the disk's copy —
+                below — is the whole of what is left. */}
             {overwritable && (
-              <button className="files__mine" onClick={() => void keepMine()} disabled={keeping}>
-                {t("files.keepMine")}
-              </button>
+              <>
+                <button className="files__mine" onClick={() => void seeDifference()}>
+                  {t("files.seeDifference")}
+                </button>
+                <button className="files__mine" onClick={() => void keepMine()} disabled={keeping}>
+                  {t("files.keepMine")}
+                </button>
+              </>
             )}
             <button className="files__reread" onClick={readAgain}>{t("files.readAgain")}</button>
           </div>
@@ -858,6 +892,19 @@ function FileReader({
           onClose={() => setMenu(null)}
           onTrash={onTrash}
           onHandOver={onHandOver}
+        />
+      )}
+      {/* The two texts, over everything else. What it is opened from is the news that the file
+          moved, and the answers on it are that notice's own — a reader who has looked at what
+          differs should not have to close this screen and choose from memory (`AMB-D-863`). */}
+      {compared !== null && (
+        <FileDiff
+          name={name}
+          theirs={compared.theirs}
+          mine={compared.mine}
+          onKeepMine={() => { setCompared(null); void keepMine(); }}
+          onReadAgain={() => { setCompared(null); readAgain(); }}
+          onClose={() => setCompared(null)}
         />
       )}
       {picking !== null && (

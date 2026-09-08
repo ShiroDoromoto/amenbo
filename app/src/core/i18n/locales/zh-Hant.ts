@@ -618,8 +618,15 @@ export const zhHant: Translation = {
     // write their own text over the file, or take what the disk says and lose theirs. The panel
     // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "這個檔案在這裡開啟之後，有人寫過它。",
+    "files.seeDifference": "看看差別",
     "files.keepMine": "保留我寫的",
     "files.readAgain": "重新讀取",
+    // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
+    // named above them: which of the two stands is the question, and a screen that named neither
+    // would leave it to be guessed from which text looks familiar (`AMB-D-863`).
+    "files.diffTheirs": "磁碟上的內容",
+    "files.diffMine": "你正在編輯的內容",
+    "files.diffClose": "關閉",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "這個檔案裡兩種換行都有。儲存後會統一成一種。",

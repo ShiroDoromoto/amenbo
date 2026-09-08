@@ -618,8 +618,15 @@ export const nl: Translation = {
     // write their own text over the file, or take what the disk says and lose theirs. The panel
     // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "Iemand heeft naar dit bestand geschreven nadat het hier is geopend.",
+    "files.seeDifference": "Verschil bekijken",
     "files.keepMine": "Mijn versie behouden",
     "files.readAgain": "Opnieuw inlezen",
+    // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
+    // named above them: which of the two stands is the question, and a screen that named neither
+    // would leave it to be guessed from which text looks familiar (`AMB-D-863`).
+    "files.diffTheirs": "Wat er op de schijf staat",
+    "files.diffMine": "Wat u hebt getypt",
+    "files.diffClose": "Sluiten",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Dit bestand bevat beide soorten regeleinde. Bij het opslaan worden ze allemaal gelijk.",

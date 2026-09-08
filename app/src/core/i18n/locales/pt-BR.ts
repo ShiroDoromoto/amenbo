@@ -640,8 +640,15 @@ export const ptBR: Translation = {
     // write their own text over the file, or take what the disk says and lose theirs. The panel
     // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "Alguém escreveu neste arquivo depois que ele foi aberto aqui.",
+    "files.seeDifference": "Ver a diferença",
     "files.keepMine": "Manter a minha versão",
     "files.readAgain": "Ler de novo",
+    // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
+    // named above them: which of the two stands is the question, and a screen that named neither
+    // would leave it to be guessed from which text looks familiar (`AMB-D-863`).
+    "files.diffTheirs": "O que está no disco",
+    "files.diffMine": "O que você escreveu",
+    "files.diffClose": "Fechar",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Este arquivo tem os dois tipos de quebra de linha. Ao salvar, todas ficam iguais.",

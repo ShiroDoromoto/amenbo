@@ -83,6 +83,8 @@ const hoisted = vi.hoisted(() => ({
   saved: [] as {
     path: string; text: string; encoding: string; bom: boolean; lineEnding: string; seen: string;
   }[],
+  /** Every comparison the panel asked for, as the two texts it handed over. */
+  compared: [] as { theirs: string; mine: string }[],
   /** The mark a save answers with: what the file is once this save has landed. */
   keptDigest: "after",
   /** What the next save is refused with. Its own field: a name and a save are refused for different
@@ -110,6 +112,18 @@ vi.mock("./editorLoad", () => ({
       text() { return drawn.textContent ?? ""; },
       close() { drawn.remove(); hoisted.typing = null; },
     };
+  },
+}));
+
+// The two texts side by side are two editors laying themselves out by measuring, which jsdom cannot
+// do either — so what the panel handed over is recorded, the same stand-in the editor has.
+vi.mock("./diffLoad", () => ({
+  mountDiff: async (parent: HTMLElement, theirs: string, mine: string) => {
+    hoisted.compared.push({ theirs, mine });
+    const drawn = parent.ownerDocument.createElement("div");
+    drawn.className = "cm-mergeView";
+    parent.appendChild(drawn);
+    return { close() { drawn.remove(); } };
   },
 }));
 
@@ -464,6 +478,12 @@ const rowIn = (folder: Element, name: string): HTMLElement | undefined =>
 const anyButton = (text: string) =>
   [...document.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
 
+/** One of the answers on the difference screen. Named apart from `anyButton` because the notice
+ *  behind it carries the same two words: over the whole page, the press would land on the panel's
+ *  copy and the screen would stay up. */
+const diffButton = (text: string) =>
+  [...document.querySelectorAll(".filediff button")].find((b) => b.textContent?.includes(text));
+
 /** Press one of the machine's own keys on a row, the way a reader standing on it does. */
 const pressOn = (el: Element | null | undefined, key: string) => act(async () => {
   el?.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true }));
@@ -540,6 +560,7 @@ beforeEach(() => {
   hoisted.shown = [];
   hoisted.typing = null;
   hoisted.saved = [];
+  hoisted.compared = [];
   hoisted.keptDigest = "after";
   hoisted.refuseSave = null;
   hoisted.refuseRead = null;
@@ -1815,6 +1836,69 @@ describe("the file face", () => {
       expect(container.querySelector(".cm-editor")?.textContent).toContain("mine");
       expect(button(t("files.keepMine"))).toBeDefined();
       expect(button(t("files.readAgain"))).toBeDefined();
+    });
+
+    /** Before either answer there is a question a reader cannot settle from the notice alone: what
+     *  actually differs. The screen is opened on the two texts — the disk as it stands now, read at
+     *  the press, and what is in the editor — and carries both answers, so nobody chooses from
+     *  memory after closing it (`AMB-D-863`). */
+    it("puts the two texts side by side, and answers from there", async () => {
+      await open();
+      hoisted.keptDigest = "mine";
+      await type("#!/bin/sh\necho mine");
+      await written("#!/bin/sh\necho theirs", "after");
+
+      await click(button(t("files.seeDifference")));
+      await settle();
+      expect(last(hoisted.compared)).toEqual({
+        theirs: "#!/bin/sh\necho theirs",
+        mine: "#!/bin/sh\necho mine",
+      });
+      // The screen names which side is which — the whole choice would otherwise be guessed from
+      // which of the two texts looks familiar.
+      expect(document.body.textContent).toContain(t("files.diffTheirs"));
+      expect(document.body.textContent).toContain(t("files.diffMine"));
+
+      // And the answer is on the screen the reader is looking at.
+      await click(diffButton(t("files.keepMine")));
+      await settle();
+      expect(last(hoisted.saved)).toMatchObject({ text: "#!/bin/sh\necho mine", seen: "after" });
+      expect(document.querySelector(".filediff")).toBeNull();
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+    });
+
+    /** The other answer, from the same screen: the reader looked, and the disk's text is the one
+     *  they want. It is the one press here that loses what they typed, which is why it is a press
+     *  and not something the panel does for them. */
+    it("takes the disk's text from the screen too", async () => {
+      await open();
+      await type("#!/bin/sh\necho mine");
+      await written("#!/bin/sh\necho theirs", "after");
+      await click(button(t("files.seeDifference")));
+      await settle();
+
+      await click(diffButton(t("files.readAgain")));
+      await settle();
+      expect(document.querySelector(".filediff")).toBeNull();
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("theirs");
+      expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+    });
+
+    /** Closing it changes nothing: it is a screen to read, and the file it was opened over is still
+     *  in the state the reader was told about. */
+    it("leaves the news where it was when the screen is closed", async () => {
+      await open();
+      await type("#!/bin/sh\necho mine");
+      await written("#!/bin/sh\necho theirs", "after");
+      await click(button(t("files.seeDifference")));
+      await settle();
+
+      await click(diffButton(t("files.diffClose")));
+      await settle();
+      expect(document.querySelector(".filediff")).toBeNull();
+      expect(hoisted.saved).toEqual([]);
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("mine");
+      expect(container.textContent).toContain(t("files.changedUnderneath"));
     });
 
     /** A save answers with the mark of what it wrote, and the panel takes it: without that, the

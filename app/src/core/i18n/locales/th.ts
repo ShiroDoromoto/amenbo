@@ -621,8 +621,15 @@ export const th: Translation = {
     // write their own text over the file, or take what the disk says and lose theirs. The panel
     // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "มีคนเขียนทับไฟล์นี้หลังจากที่เปิดไว้ตรงนี้",
+    "files.seeDifference": "ดูว่าต่างกันตรงไหน",
     "files.keepMine": "เก็บฉบับของฉัน",
     "files.readAgain": "อ่านใหม่อีกครั้ง",
+    // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
+    // named above them: which of the two stands is the question, and a screen that named neither
+    // would leave it to be guessed from which text looks familiar (`AMB-D-863`).
+    "files.diffTheirs": "เนื้อหาบนดิสก์",
+    "files.diffMine": "เนื้อหาที่คุณพิมพ์ไว้",
+    "files.diffClose": "ปิด",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "ไฟล์นี้มีการขึ้นบรรทัดใหม่ทั้งสองแบบ ถ้าบันทึกจะกลายเป็นแบบเดียวกันทั้งหมด",

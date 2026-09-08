@@ -639,8 +639,15 @@ export const es: Translation = {
     // write their own text over the file, or take what the disk says and lose theirs. The panel
     // settles it rather than the pane's agent, which cannot see an unsaved editor (`AMB-D-863`).
     "files.changedUnderneath": "Alguien escribió en este archivo después de abrirlo aquí.",
+    "files.seeDifference": "Ver la diferencia",
     "files.keepMine": "Conservar mi versión",
     "files.readAgain": "Volver a leerlo",
+    // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
+    // named above them: which of the two stands is the question, and a screen that named neither
+    // would leave it to be guessed from which text looks familiar (`AMB-D-863`).
+    "files.diffTheirs": "Lo que hay en el disco",
+    "files.diffMine": "Lo que has escrito",
+    "files.diffClose": "Cerrar",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Este archivo tiene los dos tipos de salto de línea. Al guardarlo, todos quedarán iguales.",

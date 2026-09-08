@@ -33,7 +33,7 @@
 //! | | [`HARNESSES`] — wired | [`LAUNCHES`] — started |
 //! |---|---|---|
 //! | what it does | a hook in the folder's own settings runs `amenbo agent` when a session starts | Amenbo opens a pane and starts the agent in it, saying the same thing as its first argument |
-//! | what a row holds | [`event`](Harness::event), [`places`](Harness::places), [`home`](Harness::home), [`paste_into`](Harness::paste_into), [`template`](Harness::template), [`json_layers`](Harness::json_layers) | [`command`](Launch::command), [`prompt_flag`](Launch::prompt_flag), [`models`](Launch::models) |
+//! | what a row holds | [`event`](Harness::event), [`places`](Harness::places), [`home`](Harness::home), [`paste_into`](Harness::paste_into), [`template`](Harness::template), [`json_layers`](Harness::json_layers) | [`command`](Launch::command), [`prompt_flag`](Launch::prompt_flag), [`model_flag`](Launch::model_flag), [`models`](Launch::models) |
 //!
 //! One product can stand in both, and Claude Code does — that repetition is what this costs. What it buys
 //! is a row for a provider that can only be started: with no session-start hook to write, the price of a
@@ -43,7 +43,9 @@
 //! [`opening`] — the instruction handed over as an argument, read before the program has drawn anything,
 //! rather than printed by a hook the folder may never have been wired for. Which flag the argument goes
 //! behind is the one thing the providers spell differently, so it is a column ([`Launch::prompt_flag`])
-//! and not a branch, like everything else in these tables.
+//! and not a branch, like everything else in these tables. The flag a model is named behind
+//! ([`Launch::model_flag`]) is the second such column, and the model itself is not a column at all:
+//! Amenbo keeps no list of model names (`AMB-D-865`).
 
 use std::path::{Path, PathBuf};
 
@@ -238,6 +240,15 @@ pub struct Launch {
     /// `-p`, which runs it and exits: a pane started that way holds a program that is already gone by
     /// the time the person looks at it.
     pub prompt_flag: Option<&'static str>,
+    /// The flag this provider takes a model name behind ([`opening`]). All six spell one and they do
+    /// not agree on which — `--model` here, `-m` there — so it is a column and not a branch, the same
+    /// as [`prompt_flag`](Launch::prompt_flag).
+    ///
+    /// **What goes behind it is the provider's own name for a model, and Amenbo holds no list of
+    /// those** (`AMB-D-865`). Nothing here checks the name: a model the provider does not know, or one
+    /// the account cannot reach, is refused by the provider in its own words on the pane's screen —
+    /// which is the only place that answer exists.
+    pub model_flag: &'static str,
     /// How this provider is asked what models it can be started on, or `None` where it cannot be
     /// asked at all ([`crate::agent_models`], `AMB-D-865`).
     ///
@@ -265,6 +276,8 @@ pub static LAUNCHES: &[Launch] = &[
         command: "claude",
         // The prompt is this one's first argument; `-p` is the form that prints and exits.
         prompt_flag: None,
+        // Aliases (`opus`, `haiku`) and full names are both taken here.
+        model_flag: "--model",
         // No list door at all: `claude models` is read as a prompt and answered by the model itself
         // (`AMB-T-4581`). What names the aliases is the help text, so the help text is what is read.
         models: Some(crate::agent_models::Ask {
@@ -278,6 +291,7 @@ pub static LAUNCHES: &[Launch] = &[
         label: "Codex CLI",
         command: "codex",
         prompt_flag: None,
+        model_flag: "-m",
         // Answers without a key — the same list with `CODEX_HOME` empty — and its `slug` is the
         // spelling `-m` takes (`AMB-T-4576`).
         models: Some(crate::agent_models::Ask {
@@ -292,6 +306,7 @@ pub static LAUNCHES: &[Launch] = &[
         command: "copilot",
         // `-p` runs a prompt and exits here, so the interactive one is spelled separately.
         prompt_flag: Some("-i"),
+        model_flag: "--model",
         // The one provider with nowhere to ask: no list command, and its ACP session offers a mode
         // and a permission and no model at all (`AMB-T-4581`). What `copilot help config` prints is
         // a paragraph of documentation, which is a table Amenbo would be copying rather than asking
@@ -306,6 +321,7 @@ pub static LAUNCHES: &[Launch] = &[
         // A bare query is interactive by default, but the default is a setting: the flag that says
         // "run this and stay" is not.
         prompt_flag: Some("-i"),
+        model_flag: "-m",
         // Asked over ACP, which is this one's only list door (`AMB-T-4581`). The pane itself is
         // still a terminal running the ordinary TUI — what `AMB-D-747` refused is filling a pane
         // with ACP, and this is a second process started to ask one question and killed.
@@ -322,6 +338,9 @@ pub static LAUNCHES: &[Launch] = &[
         // The base command's own flag. `opencode run` takes a prompt too and is the non-interactive
         // form, so a pane started that way would hold a program that has already printed and gone.
         prompt_flag: Some("--prompt"),
+        // A name here is `provider/model`, not a model on its own. The flag is the base command's, like
+        // the prompt's above it — `opencode run` spells it the same, and that is the form to stay off.
+        model_flag: "-m",
         // Answers without a key, and the list is whatever this machine's providers come to — add a
         // key and the same command answers with more (`AMB-T-4576`).
         models: Some(crate::agent_models::Ask {
@@ -338,6 +357,7 @@ pub static LAUNCHES: &[Launch] = &[
         // of the reader's own could answer to it, and starting that would open a pane on somebody
         // else's program.
         prompt_flag: None,
+        model_flag: "--model",
         // The one that needs the reader signed in: unauthenticated it exits 1 and names the ways to
         // sign in, which reaches a face as no models rather than as a message (`AMB-T-4576`).
         models: Some(crate::agent_models::Ask {
@@ -396,8 +416,24 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 ///
 /// What is said is [`crate::agents::pane_instruction`] rather than the launch instruction alone: this
 /// route opens panes and nothing else, and a pane is where the talk vocabulary can be used.
-pub fn opening(launch: &Launch, cmd: &str) -> Vec<String> {
-    let mut args: Vec<String> = launch.prompt_flag.map(str::to_string).into_iter().collect();
+///
+/// **`model` is the provider's own name for a model, or `None` for however the provider is already
+/// set up.** Nothing is named where nobody chose one: an unchosen model leaves the flag off the line
+/// entirely, so the CLI's own setting — which is where the answer lived before Amenbo asked — keeps
+/// deciding (`AMB-D-865`). A name that is blank or only spaces is read as no choice for the same
+/// reason: it reaches here from a text field, and passing it on would open the pane on
+/// `--model ''`, which every one of these providers refuses.
+///
+/// It goes in front of the prompt, which is where all six were watched taking it (`AMB-T-4576`), and
+/// in front of [`prompt_flag`](Launch::prompt_flag) because that flag takes the argument straight
+/// after it.
+pub fn opening(launch: &Launch, cmd: &str, model: Option<&str>) -> Vec<String> {
+    let mut args: Vec<String> = Vec::new();
+    if let Some(model) = model.map(str::trim).filter(|name| !name.is_empty()) {
+        args.push(launch.model_flag.to_string());
+        args.push(model.to_string());
+    }
+    args.extend(launch.prompt_flag.map(str::to_string));
     args.push(crate::agents::pane_instruction(cmd));
     args
 }
@@ -822,6 +858,14 @@ mod tests {
             ["cursor"],
             "the rows nobody has watched start",
         );
+        for launch in LAUNCHES {
+            assert!(
+                launch.model_flag.starts_with('-'),
+                "{}: {} is not a flag",
+                launch.id,
+                launch.model_flag
+            );
+        }
         // The tables part in one direction only. A provider whose hook Amenbo writes is one it tells a
         // folder to run `amenbo agent` in — and a pane unable to open on that provider would leave the
         // wiring pointing at an agent this machine has no way to start.
@@ -842,7 +886,7 @@ mod tests {
         let said = crate::agents::pane_instruction("amenbo");
         assert!(said.starts_with(&crate::agents::launch_instruction("amenbo")), "{said}");
         for launch in LAUNCHES {
-            let args = opening(launch, "amenbo");
+            let args = opening(launch, "amenbo", None);
             assert_eq!(
                 args.last().map(String::as_str),
                 Some(said.as_str()),
@@ -859,12 +903,35 @@ mod tests {
         }
     }
 
+    /// A chosen model rides in front of the prompt, and no choice leaves the line as it was.
+    ///
+    /// The second half is the one worth a test: `--model ''` is not "however the CLI is set up", it is
+    /// a model name every one of these providers refuses, and the name arrives here from a text field
+    /// (`AMB-D-865`). Nothing downstream would look wrong — the pane opens, on a program that has
+    /// already given up.
+    #[test]
+    fn a_chosen_model_is_named_in_front_of_the_prompt_and_an_unchosen_one_is_not() {
+        let said = crate::agents::pane_instruction("amenbo");
+        for launch in LAUNCHES {
+            let mut want = vec![launch.model_flag.to_string(), "a-model".to_string()];
+            want.extend(launch.prompt_flag.map(str::to_string));
+            want.push(said.clone());
+            assert_eq!(opening(launch, "amenbo", Some("a-model")), want, "{}", launch.id);
+
+            let bare = opening(launch, "amenbo", None);
+            for empty in [Some(""), Some("   ")] {
+                assert_eq!(opening(launch, "amenbo", empty), bare, "{}: {empty:?}", launch.id);
+            }
+            assert!(!bare.contains(&launch.model_flag.to_string()), "{}", launch.id);
+        }
+    }
+
     /// The opening prompt points the agent at the binary the user is running, for the reason the
     /// configuration does: a dev-channel window telling an agent to run `amenbo` names a command the
     /// reader may not have.
     #[test]
     fn the_opening_prompt_names_the_running_command() {
-        let said = opening(find_launch("claude-code").unwrap(), "amenbo-dev").pop().unwrap();
+        let said = opening(find_launch("claude-code").unwrap(), "amenbo-dev", None).pop().unwrap();
         assert!(said.contains("amenbo-dev agent --json"), "{said}");
         assert!(!said.contains("`amenbo agent"), "{said}");
         // Both canons the pane names, and the second one for the same reason as the first.

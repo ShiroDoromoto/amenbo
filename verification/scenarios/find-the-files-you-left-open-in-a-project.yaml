@@ -1,0 +1,230 @@
+# The files a reader has open are the project's, the way the column's widths are: going to another
+# project puts them away and coming back finds them, in the order they were opened and with the same
+# one on top.
+#
+# ── Why the tabs belong to the project rather than to the face ───────────────────────────────────
+# A path is read against one project's folders, so the files of the project being left mean nothing
+# beside the next project's tree — that is why the column comes up empty over there. What does not
+# follow is that they were closed: pressing a tab at the edge of the face is going to look at
+# something else, and a reader who comes back to work they were reading is coming back to the reading
+# as well. A face that let them go would cost a person their whole row of tabs every time they
+# glanced at another project.
+#
+# ── Why the other project is read by the first project's own words ───────────────────────────────
+# `tabs` reads the row as a whole, which says what is there. What it cannot say on its own is that
+# the file underneath is gone too — a face drawing the last project's file with this project's tabs
+# would pass a reading of the row. So the leg in the second project reads for the first project's
+# text and finds it nowhere, one mark to a file, the way `go-to-the-panes-of-another-project` reads
+# for the pane it left behind.
+#
+# ── Why two files and not one ────────────────────────────────────────────────────────────────────
+# One file would say the column was refilled. Two say what was refilled with: the order they were
+# opened in is the row's own and has to survive the move, and which of the two is up is a second
+# answer the face has to have kept — a build that brought the tabs back and stood on the first of
+# them would pass a road with one file and lose the reader's place on this one.
+#
+# ── Why the second project opens a file of its own ───────────────────────────────────────────────
+# It is what makes the answers two rather than one. A project that was only looked at could be
+# holding the first project's row and drawing nothing; a project that opened its own file and shows
+# that file alone is a project with a row of its own — and the return then says the first project's
+# row was not the one just written over.
+#
+# ── What this road does not walk ─────────────────────────────────────────────────────────────────
+# Whether any of this outlives the application is not asked here, and nothing is written down: the
+# promise is about the reader's session, which is where the going and the coming back happen.
+#
+# The widths the column is drawn at are the neighbouring road
+# (`find-the-reading-column-at-the-width-you-left-this-project-at`), and a project is arrived at on
+# the narrow step in both.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A row of tabs is a thing on a screen. What the binary is handed is paths, and it holds nothing
+# between two of them.
+id: find-the-files-you-left-open-in-a-project
+title: The files open in the reading column are kept for the project they were opened in, so another project comes up with none of them and the first is found with its row as it was left
+description: >
+  Raise two projects, each with a folder of its own, and open two files in the first: the column
+  holds a tab for each, in the order they were opened, with the second up. Go to the other project —
+  neither file is there, and a file opened in it is the only tab it has. Go back to the first: both
+  tabs are there in the order they were opened, and the one on top is the one that was left on top.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+  # A mark of its own to every file, because what the readings below are of is the file that is up,
+  # and files that read alike would leave the road green on any of them.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: seedlings.md
+      content: SCENARIO the seedlings are moved out when the frosts have finished
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: cuttings.md
+      content: SCENARIO the cuttings are taken from wood that grew this year
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: boathouse
+      path: oars.md
+      content: SCENARIO the oars are stood on end so the blades dry out
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face opens on is the run's business, so the road presses for the one it means
+  # to read in rather than reading whichever was selected.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: seedlings.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are moved out when the frosts have finished
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: cuttings.md
+      section: tree
+
+  # The row this project is being left holding, which is what the return is read against.
+  - type: assert
+    domain: files
+    op: tabs
+    with:
+      names:
+        - seedlings.md
+        - cuttings.md
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the cuttings are taken from wood that grew this year
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  # Nothing of the other project came over. The column is open here — being open at all is how this
+  # reader likes to work, wherever they are — and there is nothing in it to read.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the cuttings are taken from wood that grew this year
+      present: false
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are moved out when the frosts have finished
+      present: false
+
+  # And a file opened here is this project's own and the only one it holds — the row is not the other
+  # project's with one more on the end of it.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: oars.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: tabs
+    with:
+      names:
+        - oars.md
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # Both of them, in the order they were opened, and with the file this project's own reading was in
+  # nowhere among them. A face that let the tabs go on the way out would have an empty row here, and
+  # one that kept a single row for the device would have three tabs in it.
+  - type: assert
+    domain: files
+    op: tabs
+    with:
+      names:
+        - seedlings.md
+        - cuttings.md
+
+  # And the reader's place with it. Coming back to the first tab rather than the one that was up is
+  # the half of this a person notices every time, and it is the half a build that merely refilled the
+  # row would fail.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the cuttings are taken from wood that grew this year

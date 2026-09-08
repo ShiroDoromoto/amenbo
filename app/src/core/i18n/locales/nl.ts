@@ -573,6 +573,7 @@ export const nl: Translation = {
     "files.nothingOpen": "Er is niets geopend.",
     "files.width": "Breder of smaller",
     "files.openFiles": "Geopende bestanden",
+    "files.unsaved": "Niet opgeslagen",
     "files.folderGone": "Deze map is er niet meer.",
     "files.closeFile": "Dit bestand sluiten",
     "files.edit": "Bewerken",

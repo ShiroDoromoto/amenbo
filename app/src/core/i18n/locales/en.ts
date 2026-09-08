@@ -680,6 +680,10 @@ const ui = {
   // The tab a reader cannot see, and the way to it. The row scrolls rather than paging, so what this
   // names is everything the column is holding — the answer to "where did the fourth one go".
   "files.openFiles": "Open files",
+  // The mark on the tab of a file holding something that is not on the disk. Read out as the tab's
+  // title and by anything reading the screen aloud, which is the whole of what a dot can say
+  // (`../../../files/FilesPanel`).
+  "files.unsaved": "Not saved yet",
   "files.folderGone": "This folder is not there any more.",
   // What the row above a file offers, now that the column holds several of them and the tree is in
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to

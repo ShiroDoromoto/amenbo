@@ -573,6 +573,7 @@ export const zhHans: Translation = {
     "files.nothingOpen": "没有打开任何文件。",
     "files.width": "变宽或变窄",
     "files.openFiles": "已打开的文件",
+    "files.unsaved": "尚未保存",
     "files.folderGone": "这个文件夹已经不在了。",
     "files.closeFile": "关闭这个文件",
     "files.edit": "编辑",

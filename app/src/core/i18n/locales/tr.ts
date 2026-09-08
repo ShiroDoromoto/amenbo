@@ -573,6 +573,7 @@ export const tr: Translation = {
     "files.nothingOpen": "Açık bir şey yok.",
     "files.width": "Daha geniş ya da dar",
     "files.openFiles": "Açık dosyalar",
+    "files.unsaved": "Kaydedilmedi",
     "files.folderGone": "Bu klasör artık yok.",
     "files.closeFile": "Bu dosyayı kapat",
     "files.edit": "Düzenle",

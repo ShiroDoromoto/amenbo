@@ -3908,7 +3908,10 @@ fn rendering_in_the_way(steps: &[Step]) -> Vec<(usize, &str)> {
                 as_source =
                     matches!(step.with().get("form").and_then(|v| v.as_str()), Some("source"));
             }
-            "edit" | "paste-into-editor" | "paste-image" | "save" if holding_markdown && !as_source => {
+            // Saving is not one of them. What a person typed is caught on the way off the editor
+            // and the rendering is drawn from it, so the offer stands over the same text in both
+            // forms (`app/src/files/FilesPanel.tsx`).
+            "edit" | "paste-into-editor" | "paste-image" if holding_markdown && !as_source => {
                 found.push((i, step.op()));
             }
             _ => {}
@@ -4111,6 +4114,38 @@ steps_gui:
             );
             load_str(&yaml).unwrap().validate().expect("the text is on the screen");
         }
+    }
+
+    /// And the keeping is walkable in either form. The text a person typed is caught on the way off
+    /// the editor and the rendering is drawn from it, so the offer stands over the same text whether
+    /// the file is showing as what it says or as what it is.
+    #[test]
+    fn saving_a_markdown_file_drawn_as_markdown_is_walkable() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: files
+    op: open
+    with: { name: watering.md, section: tree }
+  - type: action
+    domain: files
+    op: show-as
+    with: { form: source }
+  - type: action
+    domain: files
+    op: edit
+    with: { types: SCENARIO a line }
+  - type: action
+    domain: files
+    op: show-as
+    with: { form: rendered }
+  - type: action
+    domain: files
+    op: save
+"#;
+        load_str(yaml).unwrap().validate().expect("the save stands in both forms");
     }
 
     #[test]

@@ -573,6 +573,7 @@ export const zhHant: Translation = {
     "files.nothingOpen": "沒有開啟任何檔案。",
     "files.width": "變寬或變窄",
     "files.openFiles": "已開啟的檔案",
+    "files.unsaved": "尚未儲存",
     "files.folderGone": "這個資料夾已經不在了。",
     "files.closeFile": "關閉這個檔案",
     "files.edit": "編輯",

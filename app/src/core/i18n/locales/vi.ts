@@ -576,6 +576,7 @@ export const vi: Translation = {
     "files.nothingOpen": "Chưa mở gì cả.",
     "files.width": "Rộng hơn hoặc hẹp hơn",
     "files.openFiles": "Tệp đang mở",
+    "files.unsaved": "Chưa lưu",
     "files.folderGone": "Thư mục này không còn nữa.",
     "files.closeFile": "Đóng tệp này",
     "files.edit": "Sửa",

@@ -137,9 +137,10 @@ const sendBtn = () => container.querySelector<HTMLButtonElement>(".compose__send
 /** The box the emulator collects typing in, which is the terminal's own. */
 const typing = () => container.querySelector<HTMLTextAreaElement>(".termface__face textarea");
 
-/** Write `text` in the box, the way a person does. */
+/** Write `text` in the box, the way a person does — into the box that holds the keyboard. */
 async function write(text: string): Promise<void> {
   const field = box()!;
+  await act(async () => { field.focus(); });
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
     setter?.call(field, text);
@@ -311,7 +312,7 @@ describe("where a press goes", () => {
     expect(wrote(), "the way out reached the program as something else").toEqual(["\x1b[A"]);
     expect(document.activeElement, "the keyboard stayed in the box the press left").toBe(typing());
     expect(box()?.value, "what was written was thrown away on the way out").toBe("half a sentence");
-    expect(mark()?.title, "the mark stopped saying the line was still there").toBe(t("face.composeKeeps"));
+    expect(mark()?.title, "the mark went on naming a box the presses had left").toBe(t("face.composePasses"));
   });
 
   it("walks up through what is written until the first line, and leaves from there", async () => {
@@ -343,6 +344,18 @@ describe("where a press goes", () => {
     expect(mark()?.title).toBe(t("face.composePasses"));
     await write("half a sentence");
     expect(mark()?.title).toBe(t("face.composeKeeps"));
+  });
+
+  it("names the terminal again once the keyboard goes there, line still written", async () => {
+    await pane();
+    await opened();
+    await write("half a sentence");
+
+    // A person clicking into the terminal, which takes the keyboard and leaves the line alone.
+    await act(async () => { box()?.blur(); });
+
+    expect(mark()?.title, "the mark named a box the presses no longer reach").toBe(t("face.composePasses"));
+    expect(box()?.value, "the line went with the keyboard").toBe("half a sentence");
   });
 
   it("is not the box the emulator collects typing in", async () => {

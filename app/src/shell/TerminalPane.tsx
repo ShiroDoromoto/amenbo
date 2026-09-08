@@ -158,6 +158,12 @@ export function TerminalPane({
   // in a window over the pane: what is being named is the line the box stands in.
   const [naming, setNaming] = useState(false);
   const nameField = useRef<HTMLInputElement>(null);
+  // Whether the box is the one holding the keyboard. It is half of what the mark beside the box says
+  // — the other half is whether anything is written — because the keys only stay in the box while it
+  // is the thing being typed at. The way out leaves a written box with the keyboard on the terminal
+  // (`../talk/terminal`), and so does a person clicking the terminal, and the mark has to follow both
+  // rather than go on naming the box.
+  const [typing, setTyping] = useState(false);
   // The box itself, which is measured rather than told how tall to be: how many lines a sentence
   // takes is the browser's answer, not one this can work out from the characters.
   const boxRef = useRef<HTMLTextAreaElement>(null);
@@ -293,6 +299,10 @@ export function TerminalPane({
     e.preventDefault();
     void pressIntoTerminal(live, data).catch(() => {});
   };
+
+  /** Whether a press now would stay in the box — which is what the mark beside it names. Both halves
+   *  are the box's own: a line to keep the presses for, and the keyboard to keep them with. */
+  const keysHere = written !== "" && typing;
 
   useEffect(() => {
     if (!running) return;
@@ -566,14 +576,18 @@ export function TerminalPane({
         <div className={`compose${written === "" ? "" : " compose--writing"}`}>
           {/* Which of the two the keyboard is answering to, said as the box changes rather than
               after the fact. An empty box hands the presses that walk a history on to the program;
-              one with something written in it keeps them (`../talk/terminal`). */}
-          <span
-            className="compose__mark"
-            title={t(written === "" ? "face.composePasses" : "face.composeKeeps")}
-          >
+              one with something written in it keeps them (`../talk/terminal`).
+
+              **It is asked of the keyboard as well as of what is written**, because either one alone
+              would let it say something untrue: a person leaves a written box for the terminal by
+              the way out or by clicking into it, and the line they were writing stays where it is —
+              so a mark reading the text alone would go on naming a box the presses no longer reach.
+              What it names is where a press goes, which is the box only while the box is being typed
+              at. */}
+          <span className="compose__mark" title={t(keysHere ? "face.composeKeeps" : "face.composePasses")}>
             <Icon
-              name={written === "" ? "keyboard" : "pencil"}
-              label={t(written === "" ? "face.composePasses" : "face.composeKeeps")}
+              name={keysHere ? "pencil" : "keyboard"}
+              label={t(keysHere ? "face.composeKeeps" : "face.composePasses")}
             />
           </span>
           <textarea
@@ -586,6 +600,8 @@ export function TerminalPane({
             {...asTyped}
             onChange={(e) => onWrite(frame, e.currentTarget.value)}
             onKeyDown={pressed}
+            onFocus={() => setTyping(true)}
+            onBlur={() => setTyping(false)}
           />
           <button
             className="compose__send"

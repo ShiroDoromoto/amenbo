@@ -60,6 +60,14 @@ export interface TerminalPath {
   range: { start: At; end: At };
 }
 
+/** A URL found in the buffer: what was drawn, and where it sits. */
+export interface TerminalUrl {
+  /** The address as it was drawn, e.g. `https://example.com/guide`. */
+  text: string;
+  /** Where it sits — both ends inclusive, spanning two rows where it was drawn across the fold. */
+  range: { start: At; end: At };
+}
+
 /** A ref found in the buffer: what it says, what it names, and where it sits. */
 export interface TerminalRef {
   /** The ref as it was drawn, e.g. `AMB-T-42`. */
@@ -149,10 +157,9 @@ export function refsOnRow(rows: Rows, y: number): TerminalRef[] {
  * (`AMB-T-3595`). Wrapping and elision cannot touch it — the address travels beside the characters
  * rather than in them — which is why both ways exist rather than one replacing the other.
  *
- * Everything else is `null`, deliberately. A pane draws output this app did not write, and an OSC 8
- * from some other program names a destination nobody here vouched for: nothing is opened, navigated
- * to, or handed on. The addresses this answers for reach one function that selects a record by
- * number, and there is no path from here to a browser.
+ * Everything else is `null`. The addresses this answers for reach one function that selects a record
+ * by number, and an `amenbo://` address naming anything else is dropped rather than guessed at. What
+ * a pane does with the rest is `httpUrl`'s to say, and it says http and https and nothing more.
  */
 export function refFromUrl(url: string): { space: RefSpace; num: number } | null {
   const m = /^amenbo:\/\/(task|decision)\/(\d+)$/.exec(url);
@@ -207,6 +214,66 @@ export function pathsOnRow(rows: Rows, y: number): TerminalPath[] {
     // is not a file on this machine. A drive letter's colon is part of the run, not before it, and a
     // UNC share begins with the double separator but follows no colon — so neither is caught here.
     if (from > 0 && text[from - 1] === ":" && run.startsWith("//")) continue;
+    const start = at[from];
+    const end = at[to];
+    if (!start || !end) continue;
+    if (start.y > y + 1 || end.y < y + 1) continue;
+    found.push({ text: run, range: { start, end } });
+  }
+  return found;
+}
+
+/**
+ * The characters an address is made of, as drawn. Everything up to the first space, minus the few a
+ * terminal's own punctuation puts around one: quotes and angle brackets are how a sentence encloses
+ * an address, never part of it.
+ */
+const URL_CHARS = /https?:\/\/[^\s<>"'`]+/gi;
+
+/** Longer than any address worth offering. A run this long is a line of output, not a destination. */
+const URL_MAX = 2000;
+
+/**
+ * The address as it can be opened, or `null` for anything a pane must not open.
+ *
+ * **http and https, and nothing else.** A pane draws output this app did not write, so what it is
+ * told points somewhere is a claim by a program rather than by amenbo — and the two schemes a
+ * browser is for are the ones where following that claim costs no more than following a link on a
+ * page. `file:` reads this machine, `javascript:` runs in the window, and a scheme this app has
+ * never heard of reaches whatever the OS has registered for it; none of those is worth a click on
+ * text some program happened to draw.
+ */
+export function httpUrl(text: string): string | null {
+  return /^https?:\/\/[^\s<>"'`]+$/i.test(text) ? text : null;
+}
+
+/**
+ * The addresses reachable on row `y` (0-based), the same way refs and paths are (`refsOnRow`,
+ * `pathsOnRow`).
+ *
+ * This is the half that finds an address nobody marked. An agent that wrapped one in OSC 8 has said
+ * where it points and needs no pattern (`AMB-T-3595`), but a plain `https://…` in a log, a diff or a
+ * sentence is characters and nothing else — and that is most of what a pane draws.
+ *
+ * **The trailing punctuation a sentence leaves behind is dropped**, the same way a path's is: "see
+ * https://example.com." offers the address and not the full stop. It costs the rare address that
+ * really ends in a bracket, which is the cheaper of the two mistakes — an address cut short is told
+ * so by the browser, and one with a full stop welded on is the same.
+ */
+export function urlsOnRow(rows: Rows, y: number): TerminalUrl[] {
+  if (y < 0 || y >= rows.length) return [];
+  const { text, at } = joined(rows, y);
+  const re = new RegExp(URL_CHARS.source, URL_CHARS.flags);
+  const found: TerminalUrl[] = [];
+  for (let m = re.exec(text); m !== null; m = re.exec(text)) {
+    const from = m.index;
+    let to = m.index + m[0].length - 1;
+    while (to > from && TRAILING.test(text[to]!)) to--;
+    const run = text.slice(from, to + 1);
+    if (run.length > URL_MAX) continue;
+    // A scheme with nothing after it names nothing, and the punctuation stripped above can leave
+    // exactly that behind.
+    if (!/^https?:\/\/[^\s/]/i.test(run)) continue;
     const start = at[from];
     const end = at[to];
     if (!start || !end) continue;

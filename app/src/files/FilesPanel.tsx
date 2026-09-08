@@ -47,9 +47,24 @@ export function openKey(one: OpenFile): string {
   return `${one.root}\0${one.path.join("/")}`;
 }
 
+/**
+ * What one open file is left holding while another is on top.
+ *
+ * The reading column draws one file at a time, so the file a reader moves away from leaves the
+ * screen — and the text they typed into it is in the editor and nowhere else (`./FileEditor`). It is
+ * caught on the way out and handed to the face, which holds one of these per open file and hands it
+ * back when that file comes up again (`../shell/TerminalFace`).
+ *
+ * **`edited` and `seen` travel with the text because the panel cannot work them out again.** Whether
+ * any of it is unsaved is what the editor said while it stood, and the mark is the file as it was
+ * read then — the file is read afresh when the tab comes back, so without the old mark there is
+ * nothing to notice a writer having been there in the meantime by (`AMB-D-784`).
+ */
+export type Typed = { text: string; edited: boolean; seen: string | undefined };
+
 export function FilesPanel({
-  projectId, tab, onTab, open, reading, onPick, onCloseTab, onBack, onGone, onClose, wide, onWide,
-  onOpenLedger, onHandOver,
+  projectId, tab, onTab, open, reading, typed, onTyped, onPick, onCloseTab, onBack, onGone, onClose,
+  wide, onWide, onOpenLedger, onHandOver,
 }: {
   /** The project the file belongs to; nothing is drawn without one. */
   projectId: number | null;
@@ -76,6 +91,12 @@ export function FilesPanel({
   open: readonly OpenFile[];
   /** Which of them is on top, or nothing where none has been opened. */
   reading: OpenFile | null;
+  /** What each of them was left holding, by `openKey` (`Typed`). Held by the face for the same
+   *  reason the list of open files is: a file leaves this column the moment another comes up. */
+  typed: Readonly<Record<string, Typed>>;
+  /** Hand up what the file being read is holding, as it leaves the screen — and `null` where there
+   *  is nothing of the reader's left in it. */
+  onTyped: (at: OpenFile, one: Typed | null) => void;
   /** Bring one of the open files up. */
   onPick: (at: OpenFile) => void;
   /** Let one go. What is left is what a reader still has open, and the column stands on the one
@@ -212,6 +233,8 @@ export function FilesPanel({
         projectId={projectId}
         root={reading.root}
         path={reading.path}
+        typed={typed[openKey(reading)] ?? null}
+        onTyped={onTyped}
         onBack={onBack}
         onOpenLedger={onOpenLedger}
         // The file on the screen and never what is picked out in the rail: the reading column is
@@ -364,11 +387,16 @@ function changedUnderneath(e: unknown): boolean {
 
 /** One file, as far as a panel can show it. */
 function FileReader({
-  projectId, root, path, onBack, onOpenLedger, onTrash, onKey, aside, onHandOver,
+  projectId, root, path, typed, onTyped, onBack, onOpenLedger, onTrash, onKey, aside, onHandOver,
 }: {
   projectId: number;
   root: string;
   path: string[];
+  /** What this file was left holding when it was last on the screen, or nothing (`Typed`). */
+  typed: Typed | null;
+  /** Hand up what it is holding now — as it leaves, and wherever the panel learns there is nothing
+   *  of the reader's in it any more. */
+  onTyped: (at: OpenFile, one: Typed | null) => void;
   onBack: () => void;
   onOpenLedger?: () => void;
   /** Send the file being read to the machine's bin. The panel takes it off the screen from there. */
@@ -401,7 +429,7 @@ function FileReader({
   const [picking, setPicking] = useState<{ x: number; y: number } | null>(null);
   // The way to read what is in the editor, handed over once it is up. Nothing is saved before that:
   // the editor is where the text is (`./FileEditor`).
-  const typed = useRef<(() => string) | null>(null);
+  const editorText = useRef<(() => string) | null>(null);
   // Whether there is anything to save. It is set by the editor telling this side that a person
   // typed, rather than by comparing texts — the comparison would mean holding a second copy of the
   // document up here and reading it on every keystroke.
@@ -443,12 +471,15 @@ function FileReader({
   // carrying it to the next one would open that one in an encoding nobody chose for it.
   useEffect(() => setAsked(undefined), [projectId, root, path.join("/")]);
 
-  // What the file was as it was last read, and whether there is anything of the reader's to lose by
-  // replacing it. Held in a ref rather than read out of the effect below: that effect is subscribed
-  // once per file, and taking these as reasons to re-subscribe would install a fresh watch over the
-  // folder the first time somebody typed.
-  const held = useRef({ edited, digest: file?.digest });
-  held.current = { edited, digest: file?.digest };
+  // What the file was as it was last read, whether there is anything of the reader's to lose by
+  // replacing it, and that text itself where the editor is no longer the one holding it — a
+  // Markdown file left on its rendering has the text up here and no editor to ask for it.
+  //
+  // Held in a ref rather than read out of the effects below: they are set up once per file, and
+  // taking these as reasons to set them up again would install a fresh watch over the folder the
+  // first time somebody typed.
+  const held = useRef({ edited, digest: file?.digest, typedText });
+  held.current = { edited, digest: file?.digest, typedText };
 
   // Why a read did not answer, and whether the file may still be handed on from where it stopped.
   const unanswered = (e: unknown) => (
@@ -477,12 +508,43 @@ function FileReader({
     setNewline(null);
     setStale(false);
     void folderRead(projectId, root, path, asked)
-      .then((one) => { if (alive) take(one); })
+      .then((one) => {
+        if (!alive) return;
+        take(one);
+        if (typed === null) return;
+        // Back on what was typed into it, and on what the panel knew about that text: a tab that
+        // came back saying the file was saved over work that is not would be worse than one that
+        // lost the work outright.
+        setTypedText(typed.text);
+        setEdited(typed.edited);
+        // And on the file having moved while this tab was away. The read above is the first sight
+        // of it since, so its mark is weighed against the one the text was typed over — otherwise a
+        // save from here would write over a writer nobody was told about (`AMB-D-784`).
+        if (typed.edited && typed.seen !== one.digest) setStale(true);
+      })
       .catch((e) => {
         if (alive) setFailed(unanswered(e));
       });
     return () => { alive = false; };
   }, [projectId, root, path.join("/"), asked]);
+
+  // What the reader typed, handed up as this file leaves the screen — another tab brought up, the
+  // draft page opened, the column closed. The text is in the editor and the editor goes with the
+  // file, so this is the last moment there is anything to ask; nothing is handed up where there is
+  // nothing to hand, which leaves what the face is already holding where it is.
+  //
+  // **The way up is the one this file arrived by**, deliberately not among the reasons to run again:
+  // it is bound to the project the file was opened under, and a reader who moved to another project
+  // is one whose file left the screen. What it was holding belongs where it came from.
+  useEffect(() => {
+    const here = { root, path };
+    return () => {
+      const read = editorText.current;
+      const text = read === null ? held.current.typedText : read();
+      if (text === null) return;
+      onTyped(here, { text, edited: held.current.edited, seen: held.current.digest });
+    };
+  }, [projectId, root, path.join("/")]);
 
   // The file moving under the reader while they have it open.
   //
@@ -534,7 +596,16 @@ function FileReader({
   // loses somebody's work, which is why nothing does it on their behalf (`AMB-D-784`).
   const readAgain = () => {
     void folderRead(projectId, root, path, asked)
-      .then((fresh) => { take(fresh); setEdited(false); setStale(false); setRefused(null); })
+      .then((fresh) => {
+        take(fresh);
+        setEdited(false);
+        setStale(false);
+        setRefused(null);
+        // The one press that throws the reader's own text away throws away the copy the face is
+        // holding with it: what is on the screen after this is the disk's, and coming back to this
+        // tab has to find the same.
+        onTyped({ root, path }, null);
+      })
       .catch((e) => setFailed(unanswered(e)));
   };
 
@@ -543,7 +614,7 @@ function FileReader({
   // first. Where there is no editor to ask — one that never loaded — what was caught last time
   // stays, rather than being dropped for the disk's copy.
   const showAsText = (asSource: boolean) => {
-    if (!asSource) setTypedText((was) => typed.current?.() ?? was);
+    if (!asSource) setTypedText((was) => editorText.current?.() ?? was);
     setAsText(asSource);
   };
 
@@ -572,7 +643,7 @@ function FileReader({
   // (`AMB-T-4401`). What the reader has is the offer below, and the control above says the same by
   // being shut — the same shape a file with both kinds of newline is held in.
   const save = async () => {
-    const read = typed.current;
+    const read = editorText.current;
     if (!savable || keeping || stale || file?.encoding === undefined || file.digest === undefined
       || read === null || newline === null) return;
     setKeeping(true);
@@ -611,7 +682,7 @@ function FileReader({
   // some lines from each is not one of the answers — a reader who wants that takes one side and
   // edits it.
   const keepMine = async () => {
-    const read = typed.current;
+    const read = editorText.current;
     if (!overwritable || keeping || file?.encoding === undefined || file.digest === undefined
       || read === null || newline === null) return;
     setKeeping(true);
@@ -786,7 +857,7 @@ function FileReader({
                 editable={!file.truncated && file.clean}
                 name={name}
                 onEdit={() => setEdited(true)}
-                hold={(read) => { typed.current = read; }}
+                hold={(read) => { editorText.current = read; }}
               />
             )
         )}
@@ -863,7 +934,14 @@ function FileReader({
       {picking !== null && (
         <EncodingMenu
           at={picking}
-          onPick={(one) => { setPicking(null); setAsked(one); }}
+          onPick={(one) => {
+            setPicking(null);
+            setAsked(one);
+            // Reading the bytes again in another encoding is reading a different text off the same
+            // file, and what was typed over the old one has nothing to sit on. It goes here rather
+            // than being left for the read to drop, so that the face is not holding it either.
+            onTyped({ root, path }, null);
+          }}
           onClose={() => setPicking(null)}
         />
       )}

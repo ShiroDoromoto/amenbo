@@ -11,7 +11,7 @@
 // **What the folder moving does is send everybody back to ask** (`AMB-D-785`). The host's word
 // carries no rows, so what has to be right here is that the names of the open level and the colour
 // beside them are read again — and that a word about another folder moves nothing in this one.
-import { act, createElement, Fragment, useEffect, useState } from "react";
+import { act, createElement, Fragment, useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -239,7 +239,7 @@ vi.mock("../core/reads", async (importOriginal) => ({
   resolveRef: async () => ({ kind: "task", id: 12, title: "a task", live: true }),
 }));
 
-import { FilesPanel, openKey, type OpenFile } from "./FilesPanel";
+import { FilesPanel, openKey, type OpenFile, type Typed } from "./FilesPanel";
 import { FolderTree } from "./FolderTree";
 import { fileUnderAny } from "./fileUnder";
 import { type CmdError, errLabel, formatNumber, t, tf, tn } from "../core/i18n";
@@ -298,12 +298,29 @@ function Columns({ show, ...props }: Partial<Props> & { projectId: number | null
   // (`../shell/TerminalFace`).
   const [open, setOpen] = useState<OpenFile[]>([]);
   const [showing, setShowing] = useState<string | null>(null);
+  // What each open file was left holding, which the face keeps for the same reason it keeps the
+  // list: the column draws one of them and the rest are off the screen (`../shell/TerminalFace`).
+  const [typed, setTyped] = useState<Record<string, Typed>>({});
+  const keepTyped = (at: OpenFile, one: Typed | null) => setTyped((was) => {
+    const key = openKey(at);
+    // A file the column is no longer holding holds nothing: a tab closed is answered after the file
+    // it was on has left the screen, and the face drops what arrives then (`../shell/TerminalFace`).
+    if (one !== null) return holding.current.has(key) ? { ...was, [key]: one } : was;
+    if (!(key in was)) return was;
+    const left = { ...was };
+    delete left[key];
+    return left;
+  });
   // The step the column is standing on, which opening a file asks for and the face keeps.
   const [wide, setWide] = useState(false);
   // Which half is up. The face keeps it and the column reads it, so the harness holds it too
   // (`../talk/columns`).
   const [tab, setTab] = useState<"files" | "memo">(props.tab ?? "files");
   const reading = open.find((one) => openKey(one) === showing) ?? open[0] ?? null;
+  // The keys the column is holding as of this draw, for the answer that arrives after a tab has
+  // gone: the face reads its own state where this harness has to keep a mirror of it.
+  const holding = useRef(new Set<string>());
+  holding.current = new Set(open.map(openKey));
   const openOne = (at: OpenFile) => {
     setOpen((was) => (was.some((one) => openKey(one) === openKey(at)) ? was : [...was, at]));
     setShowing(openKey(at));
@@ -313,6 +330,7 @@ function Columns({ show, ...props }: Partial<Props> & { projectId: number | null
     const key = openKey(at);
     setOpen((was) => was.filter((one) => openKey(one) !== key));
     setShowing((now) => (now === key ? null : now));
+    keepTyped(at, null);
   };
   const gone = (root: string, went: string[]) => {
     const dead = new Set(went.map((one) => `${root} ${one}`));
@@ -346,6 +364,8 @@ function Columns({ show, ...props }: Partial<Props> & { projectId: number | null
       onTab: setTab,
       open,
       reading,
+      typed,
+      onTyped: keepTyped,
       onPick: (at: OpenFile) => setShowing(openKey(at)),
       onCloseTab: closeOne,
       onBack: () => { if (reading !== null) closeOne(reading); },
@@ -2261,6 +2281,113 @@ describe("the file face", () => {
       await settle();
       expect(container.querySelector(".termface__column--side .files__none")?.textContent)
         .toBe(t("files.nothingOpen"));
+    });
+
+    /** What a file that is not on top is holding (`AMB-D-835`).
+     *
+     *  One file is drawn at a time, so moving between tabs takes a file off the screen with the
+     *  text a person typed into it — the editor is where that text is, and the editor goes with the
+     *  file. What is caught on the way out is handed to the face and given back when the tab comes
+     *  up again, so the row of tabs is a row a reader can walk without counting the cost.
+     *
+     *  Driven on files this panel can write back, because the save is the point of keeping the
+     *  text: one that came back on the screen and not into the file would be half a promise. */
+    describe("what a file that is not on top is holding", () => {
+      /** Two writable files open, `b.sh` on top and the editor on it. */
+      const twoWritable = async () => {
+        hoisted.entries[""] = [
+          { name: "a.sh", isDir: false, ignored: false },
+          { name: "b.sh", isDir: false, ignored: false },
+        ];
+        hoisted.file = aFile({ text: "echo hi", encoding: "UTF-8", digest: "before" });
+        await drawOpen();
+        await openFile(button("a.sh"));
+        await settle();
+        await openFile(button("b.sh"));
+        await settle();
+      };
+
+      /** The reader typing, as the stand-in editor reports it. */
+      async function typeInto(text: string) {
+        await act(async () => {
+          const drawn = container.querySelector(".cm-editor");
+          if (drawn !== null) drawn.textContent = text;
+          hoisted.typing?.();
+          await new Promise((r) => setTimeout(r, 0));
+        });
+      }
+
+      /** What the editor is drawing, which is what a reader coming back to a tab sees. */
+      const inEditor = () => container.querySelector(".cm-editor")?.textContent;
+
+      /** One file's tab, by the name on it. */
+      const tabFor = (name: string) =>
+        [...container.querySelectorAll<HTMLElement>(".files__tabname")]
+          .find((one) => one.textContent === name);
+
+      it("gives it back when the tab comes up again, still unsaved", async () => {
+        await twoWritable();
+        await typeInto("echo mine");
+
+        await click(tabFor("a.sh"));
+        await settle();
+        // The other file is its own: what one tab is holding is not drawn over another.
+        expect(inEditor()).toBe("echo hi");
+
+        await click(tabFor("b.sh"));
+        await settle();
+        expect(inEditor()).toBe("echo mine");
+        // And the one control still says there is something to save, because there is.
+        expect(pressable(t("files.save"))?.disabled).toBe(false);
+        await click(button(t("files.save")));
+        await settle();
+        expect(last(hoisted.saved)?.text).toBe("echo mine");
+      });
+
+      // The draft page is a tab like the others, and the file goes off the screen the same way.
+      it("gives it back after the draft page has been up", async () => {
+        await twoWritable();
+        await typeInto("echo mine");
+
+        await click(container.querySelectorAll<HTMLElement>(".files__tabname")[0]);
+        await settle();
+        await click(tabFor("b.sh"));
+        await settle();
+        expect(inEditor()).toBe("echo mine");
+      });
+
+      /** Closing is the reader saying they are finished with the file, and what they typed goes
+       *  with it: opening it again is opening the file, and a file that came up on text from
+       *  before it was closed would be one nobody could get back to what it says. */
+      it("lets it go with the tab", async () => {
+        await twoWritable();
+        await typeInto("echo mine");
+        await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[1]);
+        await settle();
+
+        await openFile(button("b.sh"));
+        await settle();
+        expect(inEditor()).toBe("echo hi");
+      });
+
+      /** The file is read afresh when the tab comes back, so this is the first sight of it since
+       *  the reader moved off — and a file somebody wrote to in between is one they have to be
+       *  asked about, exactly as if they had been looking at it the whole time (`AMB-D-784`). */
+      it("comes back on the offer where the file moved while it was away", async () => {
+        await twoWritable();
+        await typeInto("echo mine");
+        await click(tabFor("a.sh"));
+        await settle();
+
+        hoisted.file = aFile({ text: "echo theirs", encoding: "UTF-8", digest: "after" });
+        await click(tabFor("b.sh"));
+        await settle();
+
+        expect(inEditor()).toBe("echo mine");
+        expect(container.textContent).toContain(t("files.changedUnderneath"));
+        // Shut, because a save from here would write over a writer nobody was told about.
+        expect(pressable(t("files.save"))?.disabled).toBe(true);
+      });
     });
 
     // The row scrolls rather than paging, so the tab that is off the end of it is reached by name.

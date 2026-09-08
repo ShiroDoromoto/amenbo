@@ -99,6 +99,11 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
 /// store, which is the part a person gets back after the app has been closed. That write is made only
 /// where one of the two has actually moved — the arrangement is kept on every press that changes the
 /// face, and the pane being worked in changes far more often than a split does.
+///
+/// **That guard is what lets a half-written sentence ride along.** The arrangement is sent again on
+/// every keystroke in a box under a pane ([`crate::dto::TalkFrameDto::written`]), and none of those
+/// reach the disk: what a keystroke moved is not a split and not the project, so the whole of it
+/// stops in the mutex above.
 #[tauri::command]
 pub fn save_talk_layout(
     face: tauri::State<'_, TalkFace>,

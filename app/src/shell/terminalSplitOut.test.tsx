@@ -193,6 +193,31 @@ describe("the terminals that were running in the face it left", () => {
   });
 });
 
+describe("the sentence somebody was part-way through writing", () => {
+  it("comes up in the box of the pane it was written under", async () => {
+    // A draft exists nowhere but the box, so a press that moves the work to the other screen has to
+    // carry it over — otherwise the one press a person makes to get more room is the press that
+    // throws away what they were saying (`AMB-D-864`).
+    hoisted.saved = {
+      count: 2,
+      nextId: 3,
+      project: 1,
+      frames: [
+        { id: "1", project: 1, folder: "/work/a", written: "run the tests" },
+        { id: "2", project: 1, folder: "/work/b" },
+      ],
+      splitOut: "1",
+    };
+    hoisted.running = [
+      { session: "s1", folder: "/work/a" },
+      { session: "s2", folder: "/work/b" },
+    ];
+    await mount(true);
+    const boxes = q(".compose__box") as HTMLTextAreaElement[];
+    expect(boxes.map((box) => box.value)).toEqual(["run the tests", ""]);
+  });
+});
+
 describe("the button that changes how many windows the app is", () => {
   it("says the move it makes, from whichever window is being read", async () => {
     // The words, not the row: the button carries a mark before them, and what is pinned here is

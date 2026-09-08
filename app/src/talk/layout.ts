@@ -159,7 +159,12 @@ export type SavedLayout = {
    *  out into, which has no ledger to have taken one from — and only where the arrangement came back
    *  with no panes in it, since a pane names its own project (`../shell/TerminalFace`). */
   project?: number;
-  frames: { id: string; project?: number; folder?: string }[];
+  /** The panes, in the order they were opened — where each one is, and what has been written in the
+   *  box under it. The draft is here because this is how the two windows hand the face over, and it
+   *  goes no further: what this side writes to the store is the splits and the project
+   *  (`app/src-tauri/src/frames.rs`), so an arrangement read at the start of a run carries no
+   *  frames and therefore no drafts. */
+  frames: { id: string; project?: number; folder?: string; written?: string }[];
   /** The pane being worked in when the arrangement was last written. It is what the window split out
    *  of this face comes up on, so the reader lands where they left rather than on the first place of
    *  the first project (`AMB-D-753`). Read by that window and never by the board: which pane is
@@ -191,9 +196,12 @@ export type Frame = {
    * is running is the host's and what is written is the window's, and the pane is only what draws
    * them (`AMB-D-753`).
    *
-   * **It is not written down with the arrangement** (`laidOut`): what is kept there is where the
-   * panes are and never what is in them, and a draft written to the store on every keystroke would
-   * be a file write per character.
+   * **It crosses to the other window with the arrangement, and stops there** (`laidOut`). The
+   * arrangement is how the board and the window a terminal is split out into hand the face over, so
+   * a draft left out of it would be one the person loses at exactly the press that moves their work
+   * to the other screen. What goes on from there to the store is the splits and the project and
+   * nothing else (`app/src-tauri/src/frames.rs`), so this is held for as long as the process is up
+   * and is never written down.
    */
   readonly written: string;
 };
@@ -574,10 +582,14 @@ export function reordered(layout: Layout, order: readonly Frame[]): Layout {
  * The arrangement as it is written down, for the other window to read.
  *
  * **What is written is the shape**: the split each project has been answered at, the panes in the
- * order they were opened, and for each the project it is one of and the folder it is working in. What is running is
- * not — a session is a process, and a pane drawn as though one were still in it would be the window
- * saying something untrue. So a pane comes over as a place with its folder on it, and nothing is
- * started until somebody presses.
+ * order they were opened, and for each the project it is one of, the folder it is working in and
+ * whatever is written in the box under it. What is running is not — a session is a process, and a
+ * pane drawn as though one were still in it would be the window saying something untrue. So a pane
+ * comes over as a place with its folder on it, and nothing is started until somebody presses.
+ *
+ * **The draft is here and the session is not, for the same reason in either direction.** A sentence
+ * somebody is part-way through writing is theirs and exists nowhere else, so it has to travel with
+ * the pane; a process belongs to the host, so it must not be drawn as though it travelled at all.
  *
  * **The project this face is on goes with it**, and is the one part of the shape this face never
  * reads back (`restored`). It is written for the window with no ledger: a terminal split out into
@@ -601,6 +613,9 @@ export function laidOut(layout: Layout): SavedLayout {
       id: frame.id,
       project: frame.project,
       ...(frame.folder === null ? {} : { folder: frame.folder }),
+      // Left out where the box is empty, the way the folder is: what is written down is what there
+      // is to say, and an empty box has nothing.
+      ...(frame.written === "" ? {} : { written: frame.written }),
     })),
     // The pane being worked in, written down for the window the terminal is split out into: the
     // press says nothing, so where the reader was is theirs to read back out of the shape.
@@ -626,9 +641,12 @@ export function restored(saved: SavedLayout, onto: number | null): Layout {
   for (const frame of saved.frames) {
     const project = frame.project ?? onto;
     if (project === null) continue;
-    // Nothing is written in a place that has just come back: what was in the box belongs to the
-    // window that was holding it, and this is a run that was not (`Frame.written`).
-    frames.push({ id: frame.id, project, session: null, folder: frame.folder ?? null, written: "" });
+    // The box comes over as it was left, which is what carries a half-written sentence to the window
+    // the terminal is split out into (`Frame.written`). An arrangement that came from the store has
+    // no frames in it at all, so a run that has just started has nothing here to take.
+    frames.push({
+      id: frame.id, project, session: null, folder: frame.folder ?? null, written: frame.written ?? "",
+    });
   }
   const first = frames[0];
   const project = first?.project ?? onto;

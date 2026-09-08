@@ -2502,7 +2502,16 @@ project?: number,
 /**
  * The folder its terminal was working in, where it had one.
  */
-folder?: string, };
+folder?: string, 
+/**
+ * What has been written in the box under this pane and not sent yet (`AMB-D-864`). Absent where
+ * nothing is.
+ *
+ * **It rides the arrangement because the arrangement is how the two windows hand the face over**
+ * (`crate::frames`), and it stops there: what goes on to the store is the splits and the
+ * project, so a draft is held for as long as the process is up and is never written down.
+ */
+written?: string, };
 
 /**
  * The talk window's arrangement, as the window drawing the face has it (`crate::frames`).

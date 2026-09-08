@@ -1,0 +1,105 @@
+# Some providers read a model name typed at them as a question to answer, and charge for the answer.
+# Amenbo does not type one at those.
+#
+# The road beside this one (`move-a-running-pane-to-another-model`) walks the provider whose own
+# command takes the name on its line and settles the model there. This one walks the other kind, and
+# it is the one worth the most: two of the six were watched taking `/model <name>` as a prompt,
+# reaching the provider's servers and being billed for it. What Amenbo types at those is the command
+# with nothing after it, which opens the provider's own picker, and the choosing is the person's.
+#
+# ── What this road defends ───────────────────────────────────────────────────────────────────────
+# That the name never reaches the line. It is read off the program that was given the line, and it is
+# read as a whole line: the harness prints what it was given inside brackets, so `[/model]` and
+# `[/model a-name]` are two readings and not one that contains the other. Without that, a build that
+# started naming models here would pass on the reading for the bare line and cost readers money.
+#
+# And that the row does not claim a model moved. What Amenbo did was open somebody else's picker; what
+# gets chosen in there is between the person and the provider, and Amenbo never reads a provider's
+# screen. So the row says the terminal is waiting, which is a thing that is true.
+id: leave-the-choosing-to-a-provider-that-charges-for-a-named-line
+title: A provider that would read a model name as a prompt is sent its command alone, and the choosing stays with the person
+description: >
+  Stand a machine up whose agents answer with three models each and stay open to what is typed at
+  them, and open a pane on the second of them — the provider whose own command does not take a model
+  name. Under the pane, the row that names its model says the press will put that command in the pane
+  on its own and that the provider's picker will open. Press one of the names. The program is given
+  the command and nothing after it, and the row says the terminal is waiting for a choice rather than
+  naming a model nobody has settled on.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lantern
+      dir: lampstore
+
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+      models: 3
+      then: reads
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lantern
+
+  # The second of the row, because the fault this road is about lives on some providers and not on
+  # others. It is a position and not a name, the way every reading of this row is.
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      at: second
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  - type: action
+    domain: terminal
+    op: open-models
+
+  # Said before the press: the command goes in alone, and the change reaches a file of the reader's.
+  - type: assert
+    domain: terminal
+    op: switch-says
+    with:
+      command: /model
+      keeps: ~/.codex/config.toml
+
+  - type: action
+    domain: terminal
+    op: switch-model
+    with:
+      name: scenario-model-02
+      how: press
+
+  # The whole line the program was given, and the name is not on it.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO said [/model]
+
+  # And nothing claims the model moved: the provider's picker is where that is settled.
+  - type: assert
+    domain: terminal
+    op: answers-on
+    with:
+      model: waiting
+
+  - type: action
+    domain: terminal
+    op: end-pane

@@ -1,0 +1,136 @@
+# The model a pane is answering on can be changed while the program is still running in it, and the
+# way it changes is the provider's own command, typed into the pane.
+#
+# A model chosen before a pane opens goes on the launch line, and that road is walked elsewhere
+# (`open-a-pane-on-a-model-the-agent-itself-named`). This is the other half of the same question and
+# it has nothing in common with it: an hour into a session there is no launch line left to put
+# anything on, and the only way in is the one a person has — the provider's own slash command, in the
+# pane's own input.
+#
+# ── What this road defends ───────────────────────────────────────────────────────────────────────
+# That what Amenbo types is what the provider takes. The row under the pane says what the press will
+# put there, and a build that drew that sentence right and typed something else would keep the promise
+# falsely with nothing on the screen looking amiss — so the press is made and the line is read back off
+# the program that was given it.
+#
+# And that the row says what it did rather than what is true. Amenbo does not read a provider's
+# screen: three of the six say in words that the model moved and three change a value on a
+# status line and say nothing. So a row that names a model is a row saying which line Amenbo sent, and
+# it may only name one where that line settles the matter.
+#
+# ── Why the machine is stood up this way ─────────────────────────────────────────────────────────
+# `then: reads` is what makes a running pane possible at all: a stand-in that printed and ended would
+# leave a frame with nothing running in it, and there is no model row on one of those. It also prints
+# back every line it is given, which is what turns "Amenbo said it typed this" into "the program was
+# given this".
+#
+# Three models each, which is short enough for the row to be drawn whole — the shape a provider that
+# answers gives. The names are the harness's own, because the real ones belong to the tools and to
+# whatever account a run happens to be signed in to.
+id: move-a-running-pane-to-another-model
+title: A pane already running is moved to another model by the provider's own command, typed into it
+description: >
+  Stand a machine up whose agents answer with three models each and stay open to what is typed at
+  them, and open a pane on the first of them. Under the box the pane is written in there is a row
+  naming its model; press it, and the candidates come up with a sentence saying what the press will
+  put in the pane and which of your own files the change reaches. Press one of the names. The line
+  Amenbo typed arrives at the program, which prints it back, and the row now names the model that was
+  pressed.
+
+given:
+  # A pane has to open somewhere, and one folder is what that takes.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lantern
+      dir: lampstore
+
+  # Two agents, which is the floor, and three models each. `then: reads` keeps the program running
+  # once it has printed — a pane whose program has gone has no model row on it — and makes it print
+  # back what it is given.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+      models: 3
+      then: reads
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and the
+  # pane this road opens has to open in the folder this road named.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lantern
+
+  # The first of the row, which is the provider whose own command takes a model name on its line and
+  # settles it there. Nothing is chosen on the model row: what a pane opens on is another road's, and
+  # this one is about the pane once it is open.
+  - type: action
+    domain: terminal
+    op: pick-start
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  # The program is running, which is the state this whole road is about — and the row under the pane
+  # names no model, because nothing has moved it yet.
+  - type: assert
+    domain: terminal
+    op: answers-on
+    with:
+      model: none
+
+  # ── What the press will do, said before it is pressed ─────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: open-models
+
+  - type: assert
+    domain: terminal
+    op: switch-says
+    with:
+      command: /model
+      keeps: ~/.claude/settings.json
+
+  # ── And what it actually does ─────────────────────────────────────────────────────────────────
+  # The second of the three rather than the first: a build that had drawn the row in some other order
+  # and pressed whatever stood at the front would pass on the first.
+  - type: action
+    domain: terminal
+    op: switch-model
+    with:
+      name: scenario-model-02
+      how: press
+
+  # The line, read back off the program it was given to. The brackets are the harness's own and are
+  # what make this a reading of the whole line: a line carrying the name and a line not carrying it
+  # are two readings here, and neither contains the other.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO said [/model scenario-model-02]
+
+  # And the row says which model, because the line it sent is one that settles it.
+  - type: assert
+    domain: terminal
+    op: answers-on
+    with:
+      model: scenario-model-02
+
+  # The program is ended deliberately: what a pane left running would do to the run after this one is
+  # not this road's question to leave open.
+  - type: action
+    domain: terminal
+    op: end-pane

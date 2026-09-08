@@ -2244,7 +2244,13 @@ const REGISTRY: &[OpSpec] = &[
     // each stand-in answers in its own provider's shape, the names being the harness's own
     // (`amenbo_verify_cli::domain::terminal`): a road never writes a real model name, because the
     // names on that row belong to the tools and to the account a run is signed in to.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "can-start", required: &["count"], refs: &[], strings: &[], binds: false },
+    //
+    // `then` is what a stand-in does once it has printed: `ends` — the default, and the pane every
+    // road before this one read, with the output standing and nothing running — or `reads`, which
+    // stays open and prints back every line it is given. A road that **moves a running pane** to
+    // another model needs the second, and for two reasons at once: there is no control on a frame
+    // whose program has gone, and what says the move arrived is the program that was given it.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "can-start", required: &["count"], refs: &[], strings: &["then"], binds: false },
     // Which face the one window is showing. Pressed rather than arrived at: the segments are the only
     // way between the two, and a road that could not name which it pressed could not say which face
     // the assert after it read.
@@ -2293,7 +2299,16 @@ const REGISTRY: &[OpSpec] = &[
     // Amenbo's own order — the agents it lists, then anything registered here, then the plain shell
     // — so the first is a catalogued agent on every machine, and on a road that stood the machine up
     // (`can-start`) it is one of the stand-ins that were put in front of the `PATH`.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-start", required: &[], refs: &[], strings: &[], binds: false },
+    //
+    // `at` is which position, and there are two: `first` — the default — and `second`. The second is
+    // there because the six providers do not answer the same way, and the fault worth the most is
+    // only on some of them: two read a model name typed at them as a prompt and charge for the
+    // answer, which the six were measured doing, so a road about that has to reach one of those. The
+    // position holds for
+    // the same reason the first one does — a machine stood up puts the catalog's first commands in
+    // front of the `PATH`, and the row is drawn in the catalog's order whatever else the operator
+    // has installed.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-start", required: &[], refs: &[], strings: &["at"], binds: false },
     // Naming the model that agent starts on. `name` is a name of the road's own, and `none` is the
     // choice that takes one back off — the agent starting on whatever its own settings say, which is
     // where everybody begins and is a choice rather than the absence of one.
@@ -2325,6 +2340,41 @@ const REGISTRY: &[OpSpec] = &[
     // test is that what the frame said it would run is what ran, so the steps that chose it are the
     // ones before, and this one only presses.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-start", required: &[], refs: &[], strings: &[], binds: false },
+    // ── Moving a pane that is already running ────────────────────────────────────────────────────
+    // The other half of the model question, and a different question. Above it a model goes on a
+    // launch line and is settled before the program starts; here the program has been running for an
+    // hour and there is no line left to put anything on, so what Amenbo does is type the provider's
+    // own command into the pane the way the person would.
+    //
+    // Opening the candidates, which is the press on the row under the pane. It is its own step
+    // because there is a reading between opening and choosing: what the press will put in the pane,
+    // and where this machine keeps it afterwards (`switch-says`).
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-models", required: &[], refs: &[], strings: &["shows"], binds: false },
+    // What the row says a press would do, read before anything is pressed. `command` is the
+    // provider's own — `/model` on five of the six — and `keeps` is the file this machine writes the
+    // change into, or `none` for a provider that changes only the session in front of the reader.
+    //
+    // **The second half is why this is a step of its own.** Three of the six rewrite a file the
+    // person edits by hand and a fourth keeps it in a database, so a control that moved somebody's
+    // default without saying so would be Amenbo writing a provider's settings through the back door
+    // — which Amenbo refuses at the front, writing no provider's settings at all. A build that
+    // stopped saying it would still switch
+    // models correctly, and nothing else on the screen would look wrong.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "switch-says", required: &["command"], refs: &[], strings: &["command", "keeps", "shows"], binds: false },
+    // Pressing one of them. The shapes are `pick-model`'s and mean the same three things — a name on
+    // the row (`press`), a box to write one in (`write`), and a long row reached through a box that
+    // narrows it (`narrow`) — because the row under a pane is drawn from the same answer the row
+    // under an agent is.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "switch-model", required: &["name"], refs: &[], strings: &["name", "how", "find", "shows"], binds: false },
+    // What the row says once the press has been made. `model` is a name where the provider's own
+    // command settles it in one line, and `waiting` where it opens a picker instead and the choosing
+    // is the person's — which is a thing to say and never a model to claim has moved.
+    //
+    // **Nothing here is read off the pane's screen**, and that is the reading this defends: three of
+    // the six say in words that the model changed and three change a value on a status line and say
+    // nothing, so a build that read either would be parsing a provider's screen — the one thing a
+    // pane exists not to do.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "answers-on", required: &["model"], refs: &[], strings: &["model", "shows"], binds: false },
     // A line typed into the pane and sent. `text` is the reader's own words rather than the
     // interface's, which is what makes it worth reading back: it is on the screen because a person
     // put it there, in whatever language the app is in, so a road can follow it from one window to

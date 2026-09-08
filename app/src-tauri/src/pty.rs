@@ -6,14 +6,17 @@
 //! (`AMB-D-747`), and this module is the host half of it — opening a PTY, carrying its bytes both
 //! ways, telling it how large the pane on screen is, and closing it.
 //!
-//! **Bytes travel whole, and nothing here reads them.** What comes off a PTY is a byte stream with
-//! escape sequences in it, and a read ends wherever the kernel happened to fill the buffer — through
-//! the middle of a sequence, or of a multi-byte character. Only the emulator drawing the pane can
-//! put those back together, so a chunk is carried to the webview base64-encoded and handed over
-//! exactly as it arrived. Decoding here would corrupt the split ones and buy nothing.
+//! **Bytes travel whole.** What comes off a PTY is a byte stream with escape sequences in it, and a
+//! read ends wherever the kernel happened to fill the buffer — through the middle of a sequence, or
+//! of a multi-byte character. Only the emulator drawing the pane can put those back together, so a
+//! chunk is carried to the webview base64-encoded and handed over exactly as it arrived. Decoding
+//! here would corrupt the split ones and buy nothing.
 //!
-//! The one exception is the four bytes a terminal is asked its cursor position with, and only on
-//! Windows, where they were not written by the program at all — see `CursorQuery` below.
+//! Two things are read out of the stream on the way past, and neither changes what is carried. One
+//! is the four bytes a terminal is asked its cursor position with, and only on Windows, where they
+//! were not written by the program at all — see `CursorQuery` below. The other is which private
+//! modes the program has put the terminal into, which outlive the bytes that set them — see
+//! `Modes`.
 //!
 //! **The session's name goes in as an environment variable**, and the whole of its value is that it
 //! is inherited: an agent that runs `amenbo` from inside the terminal is several processes deep by
@@ -32,7 +35,7 @@
 //! is only the terminal itself.
 
 use std::borrow::Cow;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -128,6 +131,10 @@ struct Recent {
     len: usize,
     /// The size in force, which whatever is written next belongs to.
     at: Size,
+    /// The private modes the program has put the terminal into ([`Modes`]). They are kept beside the
+    /// runs rather than in them because they have to outlive the cap: the bytes that set a mode are
+    /// written once, at the start, and are the first thing to fall away.
+    modes: Modes,
 }
 
 /// As much of the tail as was written at one size.
@@ -139,17 +146,111 @@ struct Run {
 /// A terminal's size in characters — width, then height.
 type Size = (u16, u16);
 
+/// The byte every escape sequence begins with.
+const ESC: u8 = 0x1b;
+
+/// How long a mode sequence is let run before it is given up on. `ESC [ ? 1000;1002;1003;1006 h` is
+/// longer than a program sends and far shorter than a chunk, so an `ESC` in the middle of a file
+/// being printed costs a handful of bytes rather than a buffer that grows with the file.
+const MODE_MAX: usize = 32;
+
+/// Which private modes the terminal has been put into, and what the latest value of each is.
+///
+/// A private mode is turned on with `ESC [ ? <n> h` and off with `ESC [ ? <n> l` (DECSET / DECRST),
+/// and a program asks for the ones it wants as it starts and then never again. Claude Code asks for
+/// bracketed paste (`?2004`) and focus reporting (`?1004`) in its first hundred bytes. Those bytes
+/// fall out of the tail as soon as the session has written [`RECENT`], and a pane built after that —
+/// the project being switched, the terminal opened in its own window — reads a tail with no mention
+/// of them and comes up with bracketed paste off. A multi-line paste then arrives as `L1\rL2\r…`,
+/// which sends every line but the last (`AMB-T-4566`).
+///
+/// So the modes are read out of the stream as it goes past and held whole, and [`Pane::adopt`] puts
+/// them in front of the tail. What the tail itself carries is read again after them, which is why
+/// holding only the latest value is enough: a mode set inside the tail lands last either way.
+struct Modes {
+    /// The latest value of each mode, by number. Ordered, so the same session hands over the same
+    /// bytes every time it is adopted.
+    latest: BTreeMap<u16, bool>,
+    /// A sequence that ran off the end of a chunk, waiting for the rest of it. A read ends wherever
+    /// the kernel filled the buffer, so the `ESC` and the `h` can arrive in different chunks.
+    partial: Vec<u8>,
+}
+
+impl Modes {
+    fn new() -> Self {
+        Self {
+            latest: BTreeMap::new(),
+            partial: Vec::new(),
+        }
+    }
+
+    /// Take in a chunk, keeping the latest value of every mode it sets or resets.
+    fn take_in(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            if self.partial.is_empty() {
+                if b == ESC {
+                    self.partial.push(b);
+                }
+                continue;
+            }
+            match self.partial.len() {
+                // `ESC [` opens every CSI sequence, and only the private ones carry a `?`:
+                // `ESC [ > …` and `ESC [ = …` are asking something else entirely.
+                1 if b == b'[' => self.partial.push(b),
+                2 if b == b'?' => self.partial.push(b),
+                n if (3..MODE_MAX).contains(&n) && (b.is_ascii_digit() || b == b';') => {
+                    self.partial.push(b)
+                }
+                n if n >= 3 && (b == b'h' || b == b'l') => {
+                    self.settle(b == b'h');
+                    self.partial.clear();
+                }
+                // Anything else was not a mode sequence — `ESC [ ? 2004 $ p` asks what a mode is
+                // rather than setting it, and a stray `ESC` is just a byte in a file.
+                _ => {
+                    self.partial.clear();
+                    // The byte that ended this one may be the start of the next.
+                    if b == ESC {
+                        self.partial.push(b);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Keep the modes named in the sequence just read. One sequence may name several, `;` apart.
+    fn settle(&mut self, on: bool) {
+        for param in self.partial[3..].split(|&b| b == b';') {
+            if let Some(mode) = std::str::from_utf8(param).ok().and_then(|p| p.parse().ok()) {
+                self.latest.insert(mode, on);
+            }
+        }
+    }
+
+    /// The sequences that put a terminal back into these modes, for a pane to read before the tail.
+    fn bytes(&self) -> Vec<u8> {
+        self.latest
+            .iter()
+            .flat_map(|(mode, on)| {
+                format!("\x1b[?{mode}{}", if *on { 'h' } else { 'l' }).into_bytes()
+            })
+            .collect()
+    }
+}
+
 impl Recent {
     fn new(at: Size) -> Self {
         Self {
             runs: VecDeque::new(),
             len: 0,
             at,
+            modes: Modes::new(),
         }
     }
 
     /// Take in a chunk at the size in force, dropping the oldest bytes once the tail is over the cap.
     fn push(&mut self, bytes: &[u8]) {
+        self.modes.take_in(bytes);
         match self.runs.back_mut() {
             Some(run) if run.at == self.at => run.bytes.extend(bytes),
             _ => self.runs.push_back(Run {
@@ -330,7 +431,14 @@ impl Pane {
     }
 
     /// Send what follows to this window, and answer with the tail as it stood at that moment — in
-    /// the runs it was written in, each carrying the size it belongs to ([`Recent`]).
+    /// the runs it was written in, each carrying the size it belongs to ([`Recent`]) — with the
+    /// modes the terminal is in ([`Modes`]) in front of all of it.
+    ///
+    /// **The modes come first because the tail is not enough on its own.** A program asks for
+    /// bracketed paste once, as it starts, and a session that has written a quarter of a megabyte
+    /// since has nothing left saying so; a pane that read only the tail would come up with it off
+    /// (`AMB-T-4566`). They are handed over at the size the tail begins at: they belong to no size
+    /// of their own, and a run carrying none would be read at whatever the pane happens to measure.
     ///
     /// After an overflow the tail begins wherever the cap fell, which can be part-way through an
     /// escape sequence — so a pane adopting a long-running session can open with a few characters
@@ -338,16 +446,24 @@ impl Pane {
     fn adopt(&self, label: &str) -> Vec<PtyReplayDto> {
         let recent = self.recent.lock().expect("pane recent lock");
         self.point_at(label);
-        recent
-            .runs
-            .iter()
-            .map(|run| PtyReplayDto {
-                cols: run.at.0,
-                rows: run.at.1,
-                base64: base64::engine::general_purpose::STANDARD
-                    .encode(run.bytes.iter().copied().collect::<Vec<u8>>()),
-            })
-            .collect()
+        let encode = |bytes: Vec<u8>| base64::engine::general_purpose::STANDARD.encode(bytes);
+        let modes = recent.modes.bytes();
+        let mut replay = Vec::with_capacity(recent.runs.len() + 1);
+        // A terminal that has written nothing has no modes either, so there is nothing to put in
+        // front of and nothing to put there.
+        if let Some(first) = recent.runs.front().filter(|_| !modes.is_empty()) {
+            replay.push(PtyReplayDto {
+                cols: first.at.0,
+                rows: first.at.1,
+                base64: encode(modes),
+            });
+        }
+        replay.extend(recent.runs.iter().map(|run| PtyReplayDto {
+            cols: run.at.0,
+            rows: run.at.1,
+            base64: encode(run.bytes.iter().copied().collect::<Vec<u8>>()),
+        }));
+        replay
     }
 }
 
@@ -1300,6 +1416,95 @@ mod tests {
     fn a_terminal_that_has_written_nothing_hands_over_no_runs() {
         let pane = Pane::new("main", OPENED_AT);
         assert!(pane.adopt("main").is_empty());
+    }
+
+    /// The modes the program asked for come back however long ago it asked. Bracketed paste is
+    /// requested once, in the first hundred bytes; a pane built after the tail has turned over reads
+    /// nothing about it and pastes line by line instead (`AMB-T-4566`).
+    #[test]
+    fn the_modes_outlive_the_bytes_that_set_them() {
+        let pane = Pane::new("main", OPENED_AT);
+        pane.keep(b"\x1b[?2004h\x1b[?1004h");
+        pane.keep(&vec![b'x'; RECENT]);
+
+        let replay = pane.adopt("main");
+        let tail = run_bytes(&replay[1..]);
+        assert!(!tail.windows(8).any(|w| w == b"\x1b[?2004"), "the tail has turned over");
+        assert_eq!(
+            run_bytes(std::slice::from_ref(&replay[0])),
+            b"\x1b[?1004h\x1b[?2004h".to_vec(),
+            "and the modes are read back before it, lowest number first"
+        );
+    }
+
+    /// The modes are handed over at the size the tail begins at. A run carrying no size would be
+    /// read at whatever the pane measured for itself, which is not what the rest of the tail says.
+    #[test]
+    fn the_modes_are_read_at_the_size_the_tail_begins_at() {
+        let pane = Pane::new("main", (110, 30));
+        pane.keep(b"\x1b[?2004h");
+        pane.resized((26, 30));
+        pane.keep(b"narrow");
+
+        let replay = pane.adopt("main");
+        assert_eq!((replay[0].cols, replay[0].rows), (110, 30));
+    }
+
+    /// The latest value of a mode is the one that comes back: a program that turned bracketed paste
+    /// off meant it, and a pane put back into the mode it wanted three screens ago would paste
+    /// differently from the terminal it is replacing.
+    #[test]
+    fn the_latest_value_of_a_mode_is_the_one_kept() {
+        let pane = Pane::new("main", OPENED_AT);
+        pane.keep(b"\x1b[?2004h");
+        pane.keep(b"\x1b[?2004l");
+        pane.keep(&vec![b'x'; RECENT]);
+
+        let replay = pane.adopt("main");
+        assert_eq!(
+            run_bytes(std::slice::from_ref(&replay[0])),
+            b"\x1b[?2004l".to_vec()
+        );
+    }
+
+    /// A sequence split across two chunks is still read. A read ends wherever the kernel filled the
+    /// buffer, so the `ESC` and the `h` arriving together is luck rather than a rule.
+    #[test]
+    fn a_mode_sequence_split_across_chunks_is_still_read() {
+        let pane = Pane::new("main", OPENED_AT);
+        pane.keep(b"\x1b[?20");
+        pane.keep(b"04h");
+        pane.keep(&vec![b'x'; RECENT]);
+
+        assert_eq!(
+            run_bytes(std::slice::from_ref(&pane.adopt("main")[0])),
+            b"\x1b[?2004h".to_vec()
+        );
+    }
+
+    /// One sequence may name several modes, `;` apart — mouse reporting is asked for that way — and
+    /// what is not a mode sequence at all is left alone. `ESC [ ? 2004 $ p` asks what a mode is set
+    /// to, and `ESC [ 4 h` is not a private mode.
+    #[test]
+    fn several_modes_in_one_sequence_are_read_and_the_rest_is_not() {
+        let pane = Pane::new("main", OPENED_AT);
+        pane.keep(b"\x1b[?1000;1006h\x1b[?2004$p\x1b[4h");
+        pane.keep(&vec![b'x'; RECENT]);
+
+        assert_eq!(
+            run_bytes(std::slice::from_ref(&pane.adopt("main")[0])),
+            b"\x1b[?1000h\x1b[?1006h".to_vec()
+        );
+    }
+
+    /// A terminal that has written bytes but no mode sequence hands over its runs and nothing else.
+    #[test]
+    fn a_terminal_in_no_modes_gets_nothing_in_front_of_its_tail() {
+        let pane = Pane::new("main", OPENED_AT);
+        pane.keep(b"plain");
+        let replay = pane.adopt("main");
+        assert_eq!(replay.len(), 1);
+        assert_eq!(run_bytes(&replay), b"plain".to_vec());
     }
 
     /// A pane put back in its place is put there by folder and by nothing else, so two terminals

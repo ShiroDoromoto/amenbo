@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import {
+  boxHeight,
   endTerminal,
   focusTerminal,
   passedOn,
@@ -150,6 +151,15 @@ export function TerminalPane({
   // pane comes up in — how long it outlives a send, and whether it goes with the pane when the pane
   // moves, are `AMB-T-4585`.
   const [written, setWritten] = useState("");
+  // The box itself, which is measured rather than told how tall to be: how many lines a sentence
+  // takes is the browser's answer, not one this can work out from the characters.
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+  // How many rows the terminal is drawing, as the emulator last measured it (`../talk/terminal`).
+  // It is what turns the floor below into pixels, and it is 0 only before a terminal has said.
+  const paneRows = useRef(0);
+  // The height of one line in the box, taken while nothing is written in it. It is read rather than
+  // computed from the line-height, so a font that rounds its lines differently is still one line.
+  const oneLine = useRef(0);
 
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
@@ -170,6 +180,52 @@ export function TerminalPane({
     if (live !== null) await endTerminal(live).catch(() => {});
     onDrop(frame);
   };
+
+  /**
+   * Measure the box and the pane, and set the box to the height {@link boxHeight} answers with
+   * (`AMB-D-864`). Everything decided is decided there; this is the reading and the writing.
+   */
+  const fitBox = () => {
+    const box = boxRef.current;
+    const face = paneRef.current;
+    if (box === null || face === null) return;
+    const standing = box.getBoundingClientRect().height;
+    const pane = face.getBoundingClientRect().height;
+    // Measured with the height let go of, or a box already at three lines reports three lines for a
+    // sentence that has come back down to one.
+    box.style.height = "auto";
+    const content = box.scrollHeight;
+    // One line is read while nothing is written, which is the only moment the box is one line by
+    // itself. It is read rather than computed off the line-height, so a font that rounds its lines
+    // differently is still one line here.
+    if (written === "") oneLine.current = content;
+    box.style.height = `${boxHeight({
+      content,
+      standing,
+      line: oneLine.current || content,
+      pane,
+      rows: paneRows.current,
+    })}px`;
+  };
+
+  // Read at the moment the pane is measured rather than when the watch was taken up, so a watch that
+  // outlives a render still fits the box to what is written now.
+  const fitting = useRef(fitBox);
+  fitting.current = fitBox;
+
+  // What is written decides the height, so this runs after every render that could have changed it.
+  useEffect(() => { fitBox(); });
+
+  // And so does the room there is for it: a window pulled shorter has to take the box down with it,
+  // and nothing about what is written has changed. It settles rather than looping — the height this
+  // sets is the height the next measurement asks for.
+  useEffect(() => {
+    const face = paneRef.current;
+    if (face === null) return;
+    const watch = new ResizeObserver(() => fitting.current());
+    watch.observe(face);
+    return () => watch.disconnect();
+  }, [live]);
 
   /** Send what has been written to the program in the pane, as the person's own line
    *  (`../talk/terminal`). What is written stays where it is: the box is emptied by `AMB-T-4585`,
@@ -254,6 +310,14 @@ export function TerminalPane({
         setEnded(true);
         setLive(null);
         on.current.onClosed(session);
+      },
+      // How many rows the terminal is drawing now, which is the one measurement the box below it
+      // cannot take for itself (`../talk/terminal`). It is kept rather than pushed up: it changes
+      // whenever the pane does, and a value in state would redraw the face for a number only the box
+      // reads.
+      sized: (_cols, rows) => {
+        paneRows.current = rows;
+        fitting.current();
       },
       // The window's own title is not the pane's to say — a face holds several panes, in either of
       // the windows it is drawn in. The name goes to the store, and what draws it is the line above
@@ -487,6 +551,7 @@ export function TerminalPane({
             />
           </span>
           <textarea
+            ref={boxRef}
             className="compose__box"
             rows={1}
             value={written}

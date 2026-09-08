@@ -34,7 +34,11 @@ vi.mock("../talk/agent", () => ({
     return Promise.resolve(() => {});
   },
 }));
-vi.mock("../talk/terminal", () => ({
+// Stubbed except for what the pane reads while it draws: the box under it asks the terminal how
+// tall it may be on every render (`../talk/terminal`), and a mock that dropped that answer would
+// fail the pane on the mock rather than on anything this is about.
+vi.mock("../talk/terminal", async (actual) => ({
+  ...(await actual<typeof import("../talk/terminal")>()),
   endTerminal: vi.fn(async (session: string) => {
     hoisted.ended.push(session);
   }),

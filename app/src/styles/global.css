@@ -462,7 +462,10 @@ input[type="color"] {
    `flex: 0 0 auto` is what makes the terminal above give the room up, since that one is `flex: 1`. */
 .compose {
   flex: 0 0 auto;
-  display: flex; align-items: center; gap: var(--s-2);
+  /* The two marks sit on the last line rather than in the middle of the box: once what is written
+     runs to several lines, a send button floating halfway up the sentence reads as belonging to the
+     line beside it. */
+  display: flex; align-items: flex-end; gap: var(--s-2);
   padding: var(--s-1) var(--s-2);
   /* Dashed while nothing is written, because that is the state where the keyboard is not really
      here: the arrows, the tab and Escape are handed to the program. The border goes solid the moment
@@ -479,10 +482,14 @@ input[type="color"] {
   color: var(--c-text-muted);
 }
 .compose--writing .compose__mark { color: var(--c-accent); }
-/* One line high, always. The height does not follow what is written and does not follow the
-   keyboard: every change of it wakes the program in the pane to repaint (`../talk/terminal`), so a
-   box that grew as a sentence did would make the terminal above it jump on the way
-   (`AMB-T-4583` is where it grows, once that is paid for deliberately). */
+/* One line high until something is written, and never taller than what is written needs. The height
+   is set from here in pixels (`../shell/TerminalPane`), which is why nothing sets it below: it is
+   measured against what the box holds and against the rows the terminal is keeping, and a rule here
+   would be a second answer to the same question.
+
+   It does not follow the keyboard — a box that appeared when it was written in would change the
+   pane's height at the moment somebody started typing. What is written past the cap scrolls in
+   here, which is what `overflow-y` is for. */
 .compose__box {
   flex: 1; min-width: 0;
   resize: none; overflow-y: auto;

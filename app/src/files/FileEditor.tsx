@@ -8,10 +8,11 @@
 // whose bytes and text do not round-trip, which is a file in an encoding nothing writes back
 // (`AMB-D-773`). Telling somebody after they have typed is worse than not letting them.
 //
-// **The text stays in the editor.** The panel above holds what was read and nothing more: pulling
-// every keystroke up into React state would replace the editor's own document on the way back down
-// and take the caret with it. So the panel is told *that* something was typed, and asks for the
-// text at the one moment it needs it — when it saves.
+// **The text stays in the editor.** Pulling every keystroke up into React state would replace the
+// editor's own document on the way back down and take the caret with it. So the panel is told
+// *that* something was typed, and asks for the text only at the moments it cannot do without it —
+// when it saves, and when it is about to take this editor off the page with a person's text still
+// in it (`./FilesPanel`).
 //
 // The editor arrives asynchronously, so the raw text is drawn until it does. Nothing is lost if it
 // never does: a `<pre>` is what the panel showed before, and it is what a failure falls back to —

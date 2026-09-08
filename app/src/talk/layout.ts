@@ -181,6 +181,21 @@ export type Frame = {
    *  the one pane that takes up a terminal somebody else started: where that one runs was settled
    *  when it started, and the pane learns it from the session rather than from the person. */
   readonly folder: string | null;
+  /**
+   * What has been written in the box under this pane and not sent yet (`AMB-D-864`).
+   *
+   * **It is here rather than in the pane because the pane comes and goes and this must not.** A page
+   * turned, a count changed, a project moved to, the tasks face brought up — each of those takes the
+   * drawing down and puts another one up later, and a half-written sentence kept in the drawing
+   * would go with it. The terminal survives all of the same moves for the same kind of reason: what
+   * is running is the host's and what is written is the window's, and the pane is only what draws
+   * them (`AMB-D-753`).
+   *
+   * **It is not written down with the arrangement** (`laidOut`): what is kept there is where the
+   * panes are and never what is in them, and a draft written to the store on every keystroke would
+   * be a file write per character.
+   */
+  readonly written: string;
 };
 
 /** The arrangement of the terminal face, as it stands. */
@@ -319,7 +334,7 @@ function withFrame(layout: Layout, frame: string, change: (was: Frame) => Frame)
  * and the screen moves to the page it landed on, because a person who opened a pane is looking at it.
  */
 export function openedFrame(layout: Layout, project: number, folder: string | null): { layout: Layout; frame: Frame } {
-  const frame: Frame = { id: String(layout.nextId), project, session: null, folder };
+  const frame: Frame = { id: String(layout.nextId), project, session: null, folder, written: "" };
   const next: Layout = {
     ...layout,
     frames: [...layout.frames, frame],
@@ -333,6 +348,17 @@ export function openedFrame(layout: Layout, project: number, folder: string | nu
 
 /** A terminal has started in a frame. The folder is the one it was started in, which a pane that
  *  took one up learns here and nowhere else. */
+/**
+ * What is written in the box under a pane, as far as it has been written (`Frame.written`).
+ *
+ * Emptied by the send, which is what makes the next sentence a sentence of its own rather than the
+ * tail of the one before it, and left alone by everything else — a pane taken down for a page turn
+ * has not been written in, it has been put away.
+ */
+export function writing(layout: Layout, frame: string, written: string): Layout {
+  return withFrame(layout, frame, (was) => ({ ...was, written }));
+}
+
 export function openedIn(layout: Layout, frame: string, session: string, folder: string | null): Layout {
   return withFrame(layout, frame, (was) => ({ ...was, session, folder: folder ?? was.folder }));
 }
@@ -600,7 +626,9 @@ export function restored(saved: SavedLayout, onto: number | null): Layout {
   for (const frame of saved.frames) {
     const project = frame.project ?? onto;
     if (project === null) continue;
-    frames.push({ id: frame.id, project, session: null, folder: frame.folder ?? null });
+    // Nothing is written in a place that has just come back: what was in the box belongs to the
+    // window that was holding it, and this is a run that was not (`Frame.written`).
+    frames.push({ id: frame.id, project, session: null, folder: frame.folder ?? null, written: "" });
   }
   const first = frames[0];
   const project = first?.project ?? onto;

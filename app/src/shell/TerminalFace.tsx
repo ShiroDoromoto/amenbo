@@ -13,7 +13,7 @@ import {
 import {
   addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject,
   laidOut, movedTo, openedFrame, openedIn, ORIENTS, orientable, pageCount, pageShape,
-  paneIn, panesOf, reordered, restored, roomOnPage, setCount, setOrient, slotsOf,
+  paneIn, panesOf, reordered, restored, roomOnPage, setCount, setOrient, slotsOf, writing,
   type Count, type Layout,
 } from "../talk/layout";
 import {
@@ -1242,6 +1242,8 @@ export function TerminalFace({
                     onName={named}
                     onFocus={(id) => setLayout((was) => focusOn(was, id))}
                     onRow={paneRow}
+                    written={frame.written}
+                    onWrite={(id, text) => setLayout((was) => writing(was, id, text))}
                   />
                 ))}
                 {asking !== null && (

@@ -1,0 +1,131 @@
+# The row of models under an agent is that agent's own answer, and choosing one of them is choosing
+# what the pane is started on.
+#
+# Amenbo holds no table of model names. It asks the agent's own command, and what comes back is drawn
+# as a row of names to press — which is the shape a provider that will answer gives, and the one a
+# reader meets on a machine where the tools are signed in.
+#
+# ── What this road defends ───────────────────────────────────────────────────────────────────────
+# That the name reaches the program. The frame writes the line a press would run out under the row,
+# and `choose-the-model-before-the-pane-opens` reads that line — but a line is Amenbo's own account of
+# what it is about to do, and a build that drew it right and started the pane wrong would keep the
+# promise falsely with nothing on the screen looking amiss. So this road presses, and reads the name
+# back off the program: the pane prints what it was started with, one argument to a line, and the name
+# the reader pressed is one of them.
+#
+# And that the choice outlives the press that made it. A model chosen here is kept against that agent,
+# so the next pane opens on it without being asked again — which is read on a frame drawn afresh,
+# after the pane it opened is gone, for the reason `open-a-pane-with-what-you-opened-the-last-one-with`
+# reads its own answer there: a frame still standing proves only that a button stayed pressed.
+#
+# ── Why the machine is stood up first ────────────────────────────────────────────────────────────
+# Because the row is the agent's answer, and on the machine the gate is run on that answer is whatever
+# the operator has installed and signed into that day. The premise puts programs in front of the
+# `PATH` that answer their own provider's question with names of the harness's own, so the row is the
+# same row everywhere this runs — three names, which is short enough for the whole answer to be drawn
+# and is therefore the row's plain shape. The names are the harness's for the reason no road writes a
+# real one: the real ones belong to the tools and to the account.
+#
+# The world is empty apart from the place to work: a pane has to open somewhere, and one folder is
+# what that takes.
+id: open-a-pane-on-a-model-the-agent-itself-named
+title: A model pressed on the row is the model the pane is started on, and it is still chosen afterwards
+description: >
+  Stand a machine up whose agents answer with three models each, and open the terminal face. Choose
+  the first agent, and the model row under it comes up drawn whole — the agent's own default first,
+  then the names it answered with. The line under the row names no model until one is pressed, and
+  then it names the one that was. Press what opens the pane: the program comes up in it and prints
+  what it was started with, and the name that was pressed is there among its arguments, on a line of
+  its own. Take that pane away, and the frame drawn in its place still has the same model on the row —
+  the choice was kept, not left standing on a screen.
+
+given:
+  # The folder is named on the project rather than bound beside it, for the reason every terminal road
+  # names one: a pane has to open somewhere, and two folders is a question this road is not asking.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lantern
+      dir: lampstore
+    as: lantern
+
+  # Two agents, which is the floor, and three models each — short enough that the row draws the whole
+  # answer, which is the shape being read here.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+      models: 3
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and the
+  # pane this road opens has to open in the folder this road named.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lantern
+
+  - type: action
+    domain: terminal
+    op: pick-start
+
+  # The line before anybody has named a model, which is what the two readings after it are worth
+  # anything against.
+  - type: assert
+    domain: terminal
+    op: starts-on
+    with:
+      model: none
+
+  # ── A name pressed on the row reaches the line ────────────────────────────────────────────────
+  # The second of the three, rather than the first of them: the first name on the row stands beside
+  # the agent's own default, and a road that pressed at the front would pass on a build that had drawn
+  # the row in some other order and pressed whatever was there.
+  - type: action
+    domain: terminal
+    op: pick-model
+    with:
+      name: scenario-model-02
+      how: press
+
+  - type: assert
+    domain: terminal
+    op: starts-on
+    with:
+      model: scenario-model-02
+
+  # ── And the line is not the promise. The program is ───────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: open-start
+
+  # What the program was started with, in its own words. The name is on a line of its own, so what is
+  # read is the whole of it and not a spelling that happens to carry it.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO arg scenario-model-02
+
+  # ── And the choice was kept, not left standing ────────────────────────────────────────────────
+  # The pane goes, so the frame that answers next is a frame drawn again.
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with:
+      shows: SCENARIO arg scenario-model-02
+
+  - type: assert
+    domain: terminal
+    op: starts-on
+    with:
+      model: scenario-model-02

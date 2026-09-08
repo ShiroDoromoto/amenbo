@@ -159,6 +159,55 @@ export function sendsTheSentence(owed: boolean, data: string): boolean {
 }
 
 /**
+ * What the terminal is given for the presses the box under it hands straight on (`AMB-D-864`).
+ *
+ * These four are what a person reaches for while the box is empty — the history of what they ran,
+ * the completion of a word, the way out of a menu — and none of them is a thing to do to an empty
+ * box. `Ctrl+C` is the fifth and is not written here, because it is the key with a modifier held.
+ *
+ * They are written out rather than produced by the emulator, which is the one place in this module
+ * that is true of besides Shift-Enter ({@link NEWLINE}): the box is not the emulator's textarea, so
+ * a press made in it never reaches xterm at all. What is written is the ordinary form — the same
+ * bytes the emulator produces for a terminal in its ordinary cursor mode.
+ */
+const PASSED_ON: Record<string, string> = {
+  ArrowUp: "\x1b[A",
+  ArrowDown: "\x1b[B",
+  Tab: "\t",
+  Escape: "\x1b",
+};
+
+/** The fields of a press this module reads. Written as a shape so the same test serves a press the
+ *  page reports and one React hands over. */
+export type Press = {
+  key: string;
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+};
+
+/**
+ * What the terminal is given for this press, or nothing where the press is not one that is handed on.
+ *
+ * **It is asked only of a box with nothing in it** (`AMB-D-864`). What decides where a press goes is
+ * what the person has written, not what is on the screen: a box holding a half-written sentence keeps
+ * its own arrows, and an empty one has nothing to keep them for.
+ *
+ * `Ctrl+C` is here and `Ctrl` with anything else is not. It is the one press that means "stop what is
+ * running", which is the reason a person looks away from what they were writing; the rest of the
+ * control keys are a text box's own, and taking them would leave a reader unable to move about in a
+ * sentence they had started.
+ */
+export function passedOn(e: Press): string | null {
+  if (e.ctrlKey) {
+    return (e.key === "c" || e.key === "C") && !e.altKey && !e.metaKey && !e.shiftKey ? "\x03" : null;
+  }
+  if (e.altKey || e.metaKey || e.shiftKey) return null;
+  return PASSED_ON[e.key] ?? null;
+}
+
+/**
  * Whether this press is the one the pane answers for rather than passing on.
  *
  * Shift and Enter, and nothing else held with them: what Alt or Ctrl with Enter means belongs to the
@@ -425,6 +474,41 @@ export async function pasteIntoTerminal(session: string, text: string): Promise<
 }
 
 /**
+ * Send `text` to whatever is running in a terminal, as the line a person wrote and pressed send on.
+ *
+ * **It is the paste plus the return, and the difference from {@link pasteIntoTerminal} is who
+ * pressed.** A path handed to a pane is put where the reader can look at it, because what is on the
+ * screen may be a first-run question and a return would answer it (`AMB-D-793`). Here the person has
+ * written the line themselves and said to send it, which is the same act as their Enter in the pane —
+ * so the return goes with it (`AMB-D-864`).
+ *
+ * The text is wrapped as a paste for the reason every other crossing is: what a person writes here
+ * has newlines in it, and an agent that reads a bracketed paste takes those as part of one message
+ * rather than as that many lines sent one after another.
+ *
+ * **The opening sentence rides out behind it**, the same way it rides out behind a line typed in the
+ * pane itself (`AMB-D-805`). Whether anything is owed is the host's to answer and it answers once
+ * (`crate::pty::pty_brief`), so this asks on every send rather than keeping a copy of the answer: a
+ * send is a person pressing something, not a keystroke, and one round trip per send costs nothing.
+ */
+export async function sendIntoTerminal(session: string, text: string): Promise<void> {
+  await pasteIntoTerminal(session, text);
+  await invoke<void>("pty_write", { session, data: SUBMIT });
+  await invoke<void>("pty_brief", { session }).catch(() => {});
+}
+
+/**
+ * Hand a press on to whatever is running in a terminal, exactly as {@link passedOn} wrote it.
+ *
+ * It is the road for a press made outside the emulator's own box — the one the pane draws under the
+ * terminal (`AMB-D-864`). Nothing else goes this way: a press made in the terminal is the emulator's,
+ * and what the program is given for it is what the emulator produced.
+ */
+export async function pressIntoTerminal(session: string, data: string): Promise<void> {
+  await invoke<void>("pty_write", { session, data });
+}
+
+/**
  * Put the keyboard on the terminal drawn in `host`.
  *
  * **Nothing else moves the keyboard into a pane.** A terminal takes it the way anything on a page
@@ -432,10 +516,11 @@ export async function pasteIntoTerminal(session: string, text: string): Promise<
  * the desktop never presses the page at all (`../core/hostDrop`), so the pane it landed on can be
  * the one being pointed at and still not be the one the next keystroke goes to (`AMB-T-4182`).
  *
- * What takes the focus is the box the emulator collects typing in — the only textarea a pane draws,
- * which is why it is asked for that way rather than by a class name of xterm's own. A place with no
- * terminal in it has none, and the focus then stays where it was: taking it off whatever holds it,
- * to give it to nothing, is worse than leaving it alone.
+ * What takes the focus is the box the emulator collects typing in — the only textarea inside the
+ * frame, which is why it is asked for that way rather than by a class name of xterm's own. The box a
+ * person writes a line in stands outside the frame and is never found from here (`AMB-D-864`). A
+ * place with no terminal in it has none, and the focus then stays where it was: taking it off
+ * whatever holds it, to give it to nothing, is worse than leaving it alone.
  */
 export function focusTerminal(host: HTMLElement | null): void {
   host?.querySelector<HTMLTextAreaElement>("textarea")?.focus();

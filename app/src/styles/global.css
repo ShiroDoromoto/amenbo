@@ -455,6 +455,56 @@ input[type="color"] {
 }
 .slot__more:hover { color: var(--c-text); }
 
+/* The box under the terminal, where a line is written before it is sent (`../shell/TerminalPane`).
+   It is the third band of the slot's one column — the row, the terminal, this — and it takes room
+   rather than being drawn over the pane: a terminal writes into every row it was told it has, so a
+   box lying over the bottom would lie over the line a program asks its question on (`AMB-D-864`).
+   `flex: 0 0 auto` is what makes the terminal above give the room up, since that one is `flex: 1`. */
+.compose {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  /* Dashed while nothing is written, because that is the state where the keyboard is not really
+     here: the arrows, the tab and Escape are handed to the program. The border goes solid the moment
+     something is written, which is one of the three things that change together. */
+  border: 1px dashed var(--c-rule); border-radius: var(--r-md);
+  background: var(--c-surface);
+}
+.compose--writing { border-style: solid; border-color: var(--c-accent); }
+/* Which of the two the keyboard is answering to. It is a mark rather than a sentence because the row
+   it sits on is as wide as a pane in a face split four ways, and it carries its words in a title for
+   the reader who stops on it. */
+.compose__mark {
+  flex: 0 0 auto; display: inline-flex; align-items: center;
+  color: var(--c-text-muted);
+}
+.compose--writing .compose__mark { color: var(--c-accent); }
+/* One line high, always. The height does not follow what is written and does not follow the
+   keyboard: every change of it wakes the program in the pane to repaint (`../talk/terminal`), so a
+   box that grew as a sentence did would make the terminal above it jump on the way
+   (`AMB-T-4583` is where it grows, once that is paid for deliberately). */
+.compose__box {
+  flex: 1; min-width: 0;
+  resize: none; overflow-y: auto;
+  padding: 0; border: 0; background: transparent;
+  color: var(--c-text);
+  font-family: var(--font-mono); font-size: var(--fs-md); line-height: 1.5;
+}
+/* The border around the whole box already says where the typing is going, and the machine's own ring
+   inside it would be a second line saying the same thing a millimetre in. */
+.compose__box:focus-visible { outline: none; }
+/* Sent by press as well as by Enter, for the reader who has just written with the mouse in hand. It
+   is dead while there is nothing to send, which is the third of the three things that change
+   together. */
+.compose__send {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-accent); font-size: var(--fs-md); line-height: 1;
+}
+.compose__send:disabled { color: var(--c-text-muted); opacity: 0.5; }
+
 .slot--focused .termface__pane { border-color: var(--c-accent); }
 /* Where a path just landed. The pane the row's menu hands a file to is the one being worked in, which
    is not where the reader's eye is — they were in the panel, and the page may have turned since they

@@ -658,6 +658,13 @@ const ui = {
   "face.rename": "Rename this pane",
   "face.handHere": "Drop to paste the path",
   "face.more": "More",
+  // The box under a pane, where a line is written before it is sent (`AMB-D-864`). The two marks are
+  // the same box in its two states: with nothing written the arrows, the tab and Escape go to the
+  // program, and with something written they belong to the box.
+  "face.compose": "Write to this pane",
+  "face.composeSend": "Send",
+  "face.composePasses": "Keys go to the terminal",
+  "face.composeKeeps": "Writing here",
   // The file face beside the terminal's pane: the project's folder, folded, with what git says
   // about each row drawn as a colour rather than as words (`AMB-D-785`). What a file turns out not
   // to be is said in its own words — a binary is not a failure, it is simply not something a panel

@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { mountAgentFrame } from "../talk/agent";
-import { endTerminal, focusTerminal, pasteIntoTerminal, quotedPaths } from "../talk/terminal";
+import {
+  endTerminal,
+  focusTerminal,
+  passedOn,
+  pasteIntoTerminal,
+  pressIntoTerminal,
+  quotedPaths,
+  sendIntoTerminal,
+} from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row } from "../talk/nameplate";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
@@ -136,6 +144,12 @@ export function TerminalPane({
   // in a window over the pane: what is being named is the line the box stands in.
   const [naming, setNaming] = useState(false);
   const nameField = useRef<HTMLInputElement>(null);
+  // The line being written to whatever runs in this pane, as far as it has been written
+  // (`AMB-D-864`). It decides three things at once: what a press in the box means, what the box
+  // looks like, and whether there is anything to send. Empty is the resting state and is what the
+  // pane comes up in — how long it outlives a send, and whether it goes with the pane when the pane
+  // moves, are `AMB-T-4585`.
+  const [written, setWritten] = useState("");
 
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
@@ -155,6 +169,47 @@ export function TerminalPane({
     if (!await confirmDialog(t("face.dropConfirm"))) return;
     if (live !== null) await endTerminal(live).catch(() => {});
     onDrop(frame);
+  };
+
+  /** Send what has been written to the program in the pane, as the person's own line
+   *  (`../talk/terminal`). What is written stays where it is: the box is emptied by `AMB-T-4585`,
+   *  which is where the life of what is in it is settled. */
+  const send = async () => {
+    if (live === null || written === "") return;
+    try {
+      await sendIntoTerminal(live, written);
+    } catch (e: unknown) {
+      // The terminal having ended between the writing and the send is the whole of what this can be.
+      pushNotice(errText(e));
+    }
+  };
+
+  /**
+   * What a press in the box means, which is decided by what is in the box and by nothing else
+   * (`AMB-D-864`).
+   *
+   * **Enter sends and Shift-Enter is another line**, whatever is written — those two are the box's
+   * however empty it is, because a box that sent nothing on Enter would be a box that swallowed the
+   * press. An Enter that is settling a conversion is not a send (`../core/keys`).
+   *
+   * **Everything else is the box's only while something is written in it.** An empty box has no
+   * history to walk, no word to complete and nothing to escape from, so the presses that mean those
+   * things go to the program instead and the person keeps them without leaving the box
+   * (`../talk/terminal`).
+   */
+  const pressed = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isEnterSubmit(e)) {
+      if (e.shiftKey) return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      e.preventDefault();
+      void send();
+      return;
+    }
+    if (written !== "" || live === null) return;
+    const data = passedOn(e);
+    if (data === null) return;
+    e.preventDefault();
+    void pressIntoTerminal(live, data).catch(() => {});
   };
 
   useEffect(() => {
@@ -403,6 +458,56 @@ export function TerminalPane({
             {t("face.open")}
           </button>
         )}
+      {/* Where a person writes a line for whatever is running in this pane (`AMB-D-864`). It is the
+          app's own box rather than the program's, which is what buys undo, redo and select-all in a
+          pane whatever CLI is in it — the keys for those differ per CLI and one of them has no undo
+          at all (`AMB-T-4575`), and a textarea has all three from the browser.
+
+          **It stands under the terminal in the same column, and pushes it up.** Nothing is drawn
+          over the pane: a terminal is told how many rows it has and goes on writing into every one
+          of them, so a box covering the bottom would cover the line a program was asking a question
+          on (`AMB-D-864`).
+
+          **It is drawn while a terminal is running and does not move for the keyboard.** A box that
+          appeared when it was written in would change the pane's height at the moment a person
+          started typing, and every change of height wakes the program inside to repaint
+          (`../talk/terminal`). */}
+      {live !== null && (
+        <div className={`compose${written === "" ? "" : " compose--writing"}`}>
+          {/* Which of the two the keyboard is answering to, said as the box changes rather than
+              after the fact. An empty box hands the presses that walk a history on to the program;
+              one with something written in it keeps them (`../talk/terminal`). */}
+          <span
+            className="compose__mark"
+            title={t(written === "" ? "face.composePasses" : "face.composeKeeps")}
+          >
+            <Icon
+              name={written === "" ? "keyboard" : "pencil"}
+              label={t(written === "" ? "face.composePasses" : "face.composeKeeps")}
+            />
+          </span>
+          <textarea
+            className="compose__box"
+            rows={1}
+            value={written}
+            placeholder={t("face.compose")}
+            aria-label={t("face.compose")}
+            {...asTyped}
+            onChange={(e) => setWritten(e.currentTarget.value)}
+            onKeyDown={pressed}
+          />
+          <button
+            className="compose__send"
+            type="button"
+            disabled={written === ""}
+            title={t("face.composeSend")}
+            aria-label={t("face.composeSend")}
+            onClick={() => { void send(); }}
+          >
+            <Icon name="arrowUp" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

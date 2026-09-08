@@ -11,7 +11,7 @@
 // them, but for one — the ArrowUp on its first line, which is the way back to a program that is
 // asking something. There is no way to ask a terminal whether it is showing a menu, so nothing here
 // tries.
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneEvents } from "../talk/terminal";
@@ -25,6 +25,8 @@ const hoisted = vi.hoisted(() => ({
   events: null as PaneEvents | null,
   /** What crossed to the host, in the order it crossed. */
   asked: [] as Array<{ cmd: string; args: Record<string, unknown> }>,
+  /** What the window is holding for this pane, as it last drew. */
+  held: "",
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -68,6 +70,7 @@ let root: Root;
 beforeEach(() => {
   hoisted.events = null;
   hoisted.asked = [];
+  hoisted.held = "";
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -78,24 +81,38 @@ afterEach(() => {
   container.remove();
 });
 
+/**
+ * The window the pane is drawn in, as far as this is about: the one that holds what has been written
+ * and hands it back down (`../talk/layout`). It is played rather than stubbed because where the
+ * draft lives is half of what is pinned here — a pane holding its own would pass every test below
+ * and still lose a sentence on the next page turn.
+ */
+function Window({ autoStart = true, put }: { autoStart?: boolean; put?: (text: string) => void }) {
+  const [written, setWritten] = useState("");
+  put?.(written);
+  return createElement(TerminalPane, {
+    frame: "1",
+    project: 3,
+    names: new Map(),
+    start: { cwd: "/work/here" },
+    autoStart,
+    focused: true,
+    written,
+    onWrite: (_frame: string, text: string) => setWritten(text),
+    onOpened: () => {},
+    onSaid: () => {},
+    onPath: () => {},
+    onClosed: () => {},
+    onDrop: () => {},
+    onName: () => {},
+    onFocus: () => {},
+  });
+}
+
 /** A pane on frame 1, working in `/work/here`. */
 async function pane(autoStart = true): Promise<void> {
   await act(async () => {
-    root.render(createElement(TerminalPane, {
-      frame: "1",
-      project: 3,
-      names: new Map(),
-      start: { cwd: "/work/here" },
-      autoStart,
-      focused: true,
-      onOpened: () => {},
-      onSaid: () => {},
-      onPath: () => {},
-      onClosed: () => {},
-      onDrop: () => {},
-      onName: () => {},
-      onFocus: () => {},
-    }));
+    root.render(createElement(Window, { autoStart, put: (text) => { hoisted.held = text; } }));
   });
 }
 
@@ -209,6 +226,40 @@ describe("sending what was written", () => {
 
     expect(await pressed("Enter", { shiftKey: true }), "the newline was taken from the box").toBe(false);
     expect(wrote(), "half a sentence went out").toEqual([]);
+  });
+
+  it("empties the box once the line has gone", async () => {
+    await pane();
+    await opened();
+    await write("run the tests");
+
+    await pressed("Enter");
+
+    expect(box()?.value, "the next sentence would have been the tail of this one").toBe("");
+    expect(hoisted.held, "the window went on holding a line that had been sent").toBe("");
+  });
+
+  it("leaves what was written where it is when the send is refused", async () => {
+    await pane();
+    await opened();
+    await write("run the tests");
+    hoisted.asked = [];
+    // The terminal ended between the writing and the send, which is the whole of what can refuse.
+    const ipc = await import("../core/ipc");
+    vi.mocked(ipc.invoke).mockRejectedValueOnce(new Error("that terminal is not there any more"));
+
+    await pressed("Enter");
+
+    expect(box()?.value, "the only copy of what was written was thrown away").toBe("run the tests");
+  });
+
+  it("is what the window hands down, so a pane put up again draws it", async () => {
+    await pane();
+    await opened();
+    await write("half a sentence");
+
+    expect(hoisted.held, "the pane kept the draft to itself").toBe("half a sentence");
+    expect(box()?.value).toBe("half a sentence");
   });
 
   it("sends nothing while nothing is written", async () => {

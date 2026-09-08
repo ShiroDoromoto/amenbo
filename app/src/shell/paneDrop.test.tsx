@@ -100,6 +100,8 @@ async function pane(autoStart = true): Promise<void> {
       onClosed: () => {},
       onDrop: (frame: string) => { dropped.push(frame); },
       onName: () => {},
+      written: "",
+      onWrite: () => {},
       onFocus: () => {},
       }));
   });

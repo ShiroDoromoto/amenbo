@@ -2366,6 +2366,61 @@ const REGISTRY: &[OpSpec] = &[
     // is the page's one pane — a road with two says which, the same way it says which one to type
     // into.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "in-the-box", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
+    // A line written into the box standing under the pane, and left there. It is **not** `type-line`
+    // with the box named: that one types at the terminal, where every character reaches the program
+    // as it is pressed, and this is Amenbo's own box drawn under it — what is written there belongs
+    // to the page until a person sends it, which is what the assert below reads.
+    //
+    // `text` is the reader's own words, for the reason `type-line`'s are: what is on the screen has
+    // to be something the interface would never write by itself.
+    //
+    // **The box is emptied first, whatever stood in it.** What a send leaves behind is another road's
+    // question, and a step that typed onto the end of what was already there would be sending two
+    // lines run together the day that answer changes.
+    //
+    // `onto` is which pane, named the way `paste` names one. Left out, it is the page's one pane.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "write-to-pane", required: &["text"], refs: &[], strings: &["text", "onto"], binds: false },
+    // What is standing in that box, **unsent**. It is `in-the-box` one row further down: that one
+    // reads the terminal's own input line, where a paste and a handed-over path land, and this reads
+    // the box the app draws under it.
+    //
+    // The two are on one screen and one shot, so what parts them is the sentence the operator is
+    // given rather than the reading — the same way the terminal's input line is parted from what a
+    // program printed above it. The half that matters is that nothing has gone: a build that sent
+    // the line as it was written would have answered whatever the program was asking at that moment,
+    // and a reading that could not tell writing from sending would go green over exactly that.
+    //
+    // `on` is which pane's box is being read, named the way `in-the-box`'s is. Left out, it is the
+    // page's one pane.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "still-to-send", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
+    // Sending what is written there, which is the press the whole box exists for.
+    //
+    // `by` is which of the two presses makes it go — `return` in the box, or `button` beside it —
+    // because they are two controls and not one written twice, and a road that only ever pressed one
+    // would leave the other unwalked. Left out, it is `return`.
+    //
+    // What lands in the pane is the line whole, with a return after it: it is wrapped as a paste the
+    // program is told to take entire, so a sentence with a line break in it arrives as a sentence
+    // rather than as the first of two commands. It is the person's own press that sends it, which is
+    // what a paste made by hand is allowed on the same terms.
+    //
+    // `onto` is which pane, named the way `write-to-pane` names one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "send-written", required: &[], refs: &[], strings: &["by", "onto"], binds: false },
+    // A press made in that box **while nothing is written in it**, which the box hands straight on to
+    // the program instead of answering itself.
+    //
+    // It is the other half of the box's whole rule, and the half a reader loses if it breaks: the
+    // keys that walk a history, complete a word, or leave a menu are the ones somebody at a prompt
+    // reaches for without looking, and a box that swallowed them would have taken them away by
+    // standing there. What decides is what is written and never what the program is drawing — that
+    // question cannot be asked of a terminal at all.
+    //
+    // `key` is which press: `up`, `down`, `tab`, `escape` or `ctrl-c`. `ctrl-c` is the one held with
+    // a modifier, and it is here because it is the press that means "stop", which is the reason a
+    // person looks away from what they were writing.
+    //
+    // `onto` is which pane, named the way `write-to-pane` names one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-through", required: &["key"], refs: &[], strings: &["key", "onto"], binds: false },
     // A command run in the pane, and waited on until what it printed is drawn. It is not `type-line`
     // with a longer word in it: that step's line is the reader's own and is written to be *left* on
     // the screen — the shell is not meant to know it — and this is a program being asked for output

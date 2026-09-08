@@ -838,6 +838,16 @@ part company: what Amenbo's own output says of itself travels beside the charact
 touch it, while reading them back off the screen means joining the rows a line was drawn across
 before anything can be found there at all.
 
+Under the pane stands a box of Amenbo's own, and it has a vocabulary of its own for one reason: what
+is written there is not typed at the terminal. `write-to-pane` writes a line into it, `still-to-send`
+reads that line standing there with nothing run — the half that parts the box from the terminal's own
+input line — and `send-written` sends it, `by: return` or `by: button` naming which of the two
+presses, because they are two controls and a road that walked one would leave the other unpressed.
+`press-through` is the other half of the box's rule: a press made in it **while nothing is written**
+goes to the program above instead, `key` naming which of the five (`up`, `down`, `tab`, `escape`,
+`ctrl-c`). What decides where a press goes is what is written and never what the program is drawing,
+which is a question nothing can ask of a terminal at all.
+
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
 most of what there is: `set-panes` re-cuts the frames into pages of the count it names, `go-page` moves
 the whole screen to another page, `go-project` moves it to another project's panes altogether, and

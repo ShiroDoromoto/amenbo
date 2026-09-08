@@ -1158,6 +1158,66 @@ describe("the file face", () => {
     expect(container.querySelector("h1")?.textContent).toBe("A heading");
   });
 
+  /** Switching over to the rendering takes the editor off the page, and what a person typed is
+   *  only in there — so it is caught on the way out, and the rendering and the editor that comes
+   *  back are both drawn from what was caught. Nothing on this road warns or asks, which is why
+   *  the catching is what has to be right: the offer to save stands over the text either way.
+   *
+   *  Driven with a file that can be written back, so that what the save carries is part of what is
+   *  under test: keeping the text on the screen and losing it at the door would be the same bug
+   *  one step further along. */
+  describe("a Markdown file switched over with something typed in it", () => {
+    /** The reader typing, as the stand-in editor reports it, and then the text it now holds. */
+    async function typeInto(text: string) {
+      await act(async () => {
+        const drawn = container.querySelector(".cm-editor");
+        if (drawn !== null) drawn.textContent = text;
+        hoisted.typing?.();
+        await new Promise((r) => setTimeout(r, 0));
+      });
+    }
+
+    /** Open `notes.md` in the editor, with something typed into it. */
+    async function typedInNotes() {
+      hoisted.entries[""] = [{ name: "notes.md", isDir: false, ignored: false }];
+      hoisted.file = aFile({ text: "# A heading", encoding: "UTF-8", digest: "before" });
+      await drawOpen();
+      await openFile(button("notes.md"));
+      await settle();
+      await click(button(t("files.edit")));
+      await settle();
+      await typeInto("# What was typed");
+    }
+
+    it("draws the rendering from what was typed, and gives it back to the editor", async () => {
+      await typedInNotes();
+
+      // The text is what the file holds and the rendering is a view of it (`AMB-D-41`) — of what
+      // is being written, not of the copy the disk is still on.
+      await click(button(t("files.read")));
+      await settle();
+      expect(container.querySelector("h1")?.textContent).toBe("What was typed");
+
+      await click(button(t("files.edit")));
+      await settle();
+      expect(last(hoisted.editing)?.text).toBe("# What was typed");
+      // And it is still theirs to save, which is what the control was saying all along.
+      await click(button(t("files.save")));
+      await settle();
+      expect(last(hoisted.saved)?.text).toBe("# What was typed");
+    });
+
+    it("carries none of it to the next file opened", async () => {
+      await typedInNotes();
+      await click(button(t("files.read")));
+      await settle();
+
+      hoisted.file = aFile({ text: "# Another file" });
+      await draw({ show: { target: "notes/b.md", cwd: ROOT, nth: 1 } });
+      expect(container.querySelector("h1")?.textContent).toBe("Another file");
+    });
+  });
+
   it("draws no switch on a file there is only one way to show", async () => {
     hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
     hoisted.file = aFile({ text: "echo hi" });

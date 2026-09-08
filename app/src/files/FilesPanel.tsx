@@ -424,6 +424,16 @@ function FileReader({
   // is to read it, and a choice that outlived the file would be a setting nobody set — one edit and
   // every Markdown file afterwards opens as source, the ones they only wanted to read included.
   const [asText, setAsText] = useState(false);
+  // The editor's text as it stood the last time the editor went away, and nothing while it stands.
+  // Switching a Markdown file over to the rendering takes the editor down with it, and the text a
+  // person typed is only in there (`./FileEditor`) — so it is caught on the way out and both sides
+  // are drawn from it afterwards: the rendering, because the text is what the file holds and the
+  // rendering is a view of it (`AMB-D-41`), and the editor that comes back, because that is the
+  // whole point of having caught it.
+  //
+  // **Every read clears it** (`take` below): what came off the disk is the newer of the two by the
+  // time it arrives, and a reader who had typed is asked rather than read over (`AMB-D-784`).
+  const [typedText, setTypedText] = useState<string | null>(null);
   const name = path[path.length - 1];
   // The one thing the name decides, and the only file there are two ways to show (`MARKDOWN`).
   const markdown = MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext));
@@ -451,6 +461,7 @@ function FileReader({
   // answer this side cannot act on by itself.
   const take = (one: FolderFileDto) => {
     setFile(one);
+    setTypedText(null);
     setNewline(one.lineEnding === "mixed" ? null : one.lineEnding);
   };
 
@@ -460,6 +471,7 @@ function FileReader({
     setFailed(null);
     setAsText(false);
     setEdited(false);
+    setTypedText(null);
     setRefused(null);
     setNewline(null);
     setStale(false);
@@ -523,6 +535,15 @@ function FileReader({
     void folderRead(projectId, root, path, asked)
       .then((fresh) => { take(fresh); setEdited(false); setStale(false); setRefused(null); })
       .catch((e) => setFailed(unanswered(e)));
+  };
+
+  // Turning a Markdown file between the rendering and the text it is. Going to the rendering is
+  // the direction that costs something: the editor leaves the page, so what is in it is asked for
+  // first. Where there is no editor to ask — one that never loaded — what was caught last time
+  // stays, rather than being dropped for the disk's copy.
+  const showAsText = (asSource: boolean) => {
+    if (!asSource) setTypedText((was) => typed.current?.() ?? was);
+    setAsText(asSource);
   };
 
   // Whether this file is one the panel can write back at all. The host says so before a reader has
@@ -642,7 +663,7 @@ function FileReader({
               it says is where it goes rather than where it is — the reader can see where they
               are. */}
           {switchable && (
-            <button className="files__view" onClick={() => setAsText((was) => !was)}>
+            <button className="files__view" onClick={() => showAsText(!asText)}>
               {t(asText ? "files.read" : "files.edit")}
             </button>
           )}
@@ -705,10 +726,14 @@ function FileReader({
             writes most is the one kind nobody could correct. */}
         {file?.text !== undefined && (
           markdown && !asText
-            ? <RefNavProvider value={nav}><Markdown>{file.text}</Markdown></RefNavProvider>
+            ? (
+              <RefNavProvider value={nav}>
+                <Markdown>{typedText ?? file.text}</Markdown>
+              </RefNavProvider>
+            )
             : (
               <FileEditor
-                text={file.text}
+                text={typedText ?? file.text}
                 editable={!file.truncated && file.clean}
                 name={name}
                 onEdit={() => setEdited(true)}

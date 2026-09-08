@@ -2388,6 +2388,27 @@ const REGISTRY: &[OpSpec] = &[
     // reaches it — a pane is narrow, a ref near the end of a line is ordinary, and the miss it would
     // hide looks exactly like characters that were never a link.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-ref", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // Pressing an address where a program drew it in the pane. `url` is spelled out rather than named,
+    // which is what parts it from `press-ref` above: a record's ref is the run's own numbering and an
+    // address is the road's own words.
+    //
+    // `shows` is what was drawn where the drawing is not the address itself. A program that wrapped one
+    // in OSC 8 puts words on the screen and the address beside them, so the operator is told which
+    // words to press; left out, the address is both what is drawn and what is pressed. Those two are
+    // the two ways a pane finds an address at all — one read back off the drawn screen, one carried
+    // beside the characters — and neither reaches the other's half, the same way `press-ref`'s pair
+    // does not.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-url", required: &["url"], refs: &[], strings: &["url", "shows"], binds: false },
+    // What that press is for, and the one thing on this road that is not on Amenbo's screen: the
+    // machine's own browser, standing at the address. It is a `Review` further out than the rest, for
+    // the reason `repo mcp-in-app` is — every reading behind an OCR verdict is taken off a shot of the
+    // build under test, and the window that settles this one belongs to another program — so the
+    // instruction asks the attending AI for that shot, and an eye closes the step from it.
+    //
+    // What is read there is the address and not the page. A machine with no network still shows where
+    // it was sent, and a step that waited for a page to arrive would be a step about somebody else's
+    // uptime.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "opened-in-browser", required: &["url"], refs: &[], strings: &["url"], binds: false },
     // Something set running in the pane and left running, which is the one thing this face has no
     // other way to reach. The line `type-line` types is a command no shell knows, on purpose, so what
     // it puts on the screen arrives once and is over — and a pane that printed once has already gone

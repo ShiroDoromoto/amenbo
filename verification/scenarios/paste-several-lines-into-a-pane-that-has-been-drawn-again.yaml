@@ -1,0 +1,151 @@
+# Two lines pasted into a pane, and neither of them sent — on a pane the app built for the second
+# time, over a session that had long since said what it wanted.
+#
+# A terminal is handed a paste whole or a line at a time, and which of the two it gets is the
+# program's own answer: a program that means to read a paste as text asks for it as it starts, in a
+# sequence written once and never again. What a pane hands on when it is drawn again is the tail of
+# what its terminal wrote, and the tail is capped — so on a session that has written more than that,
+# the asking is gone from it. A pane built from that tail comes up not knowing, sends a pasted block
+# a line at a time, and every line but the last runs at a prompt the person was still writing at.
+# The host puts the modes it read out of the stream in front of that tail, which is what this road is
+# here to hold down.
+#
+# Nothing above is visible in what a pane prints, which is why this road is walked on screen and
+# nowhere else: the host's half is held down by its own tests, and what those cannot reach is a real
+# terminal, a real clipboard and the emulator between them.
+#
+# ── Why the printing, and why it is behind the prompt ────────────────────────────────────────────
+# The whole road turns on the asking having fallen out of the tail, so the session has to write more
+# than a pane keeps before anything else happens. It is left to a job behind the prompt rather than
+# run at one, because a command run in front of the reader ends by handing the shell its prompt back
+# — and a shell draws a prompt by asking for its own modes again, which would put back the very bytes
+# the printing is here to bury.
+#
+# ── Why the project is left and come back to ─────────────────────────────────────────────────────
+# It is the ordinary way a pane is drawn a second time: the panes of one project are what the face
+# holds, so going to another takes this one off the screen and coming back builds it again from what
+# the host kept. Nothing about the move is special to this road — that is the point of using it.
+#
+# ── Why the line above is `clear` ────────────────────────────────────────────────────────────────
+# The failure this road exists for leaves the *last* line standing in the box, exactly as a paste
+# that worked does. A reading of the box alone would go green on both, and so would a reading of the
+# words: a line that ran is a line the pane echoed, so the words are on the screen either way. What
+# tells them apart is what the line *did*, so the line that must not go is one whose running is
+# unmistakable — `clear` takes the screen with it, and the marker the printing left is what the road
+# looks for afterwards.
+#
+# The world raises two projects and nothing else. A terminal is not a record, and what the pane runs
+# is the reader's own shell.
+id: paste-several-lines-into-a-pane-that-has-been-drawn-again
+title: A block of lines pasted into a pane the app drew a second time lands whole, with nothing run
+description: >
+  Open a terminal on a project, get it down to a plain shell, and leave a job printing more than the
+  pane keeps. Go to another project and back, which builds the pane again from what the host held.
+  Paste two lines into it in one press: both stand in the input line, and the marker the printing
+  left is still on the screen — so the first line, which would have taken the screen with it, never
+  went.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Foundry
+      dir: foundry
+    as: foundry
+
+  # Somewhere to go and come back from. It needs nothing on it: what it is for is to be the other
+  # project the face can be on, which is what takes the first one's panes off the screen.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face came up on is the run's business, so the road puts itself on one before it
+  # opens anything.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Foundry
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  # Down to a plain shell. It is the one program on the machine that is certain to be there and
+  # certain to be reading a line the reader is writing — which is what a pasted block lands in.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # More than the pane keeps, from a job left running behind the prompt. Everything the session said
+  # as it came up is gone from the tail by the time this stops.
+  - type: action
+    domain: terminal
+    op: print-past-what-is-kept
+    with:
+      text: SCENARIO the printing is done
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the printing is done
+
+  # Off this project's panes and back, which is the pane being built a second time — from the tail,
+  # which no longer says what the session asked for.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Foundry
+
+  # The pane is drawn again and what it kept is on it, which is where the road it is about starts.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the printing is done
+
+  - type: action
+    domain: terminal
+    op: paste-lines
+    with:
+      above: clear
+      below: SCENARIO the line under it
+
+  # The last line stands in the box unsent, which is the half a paste gets right even when it arrives
+  # a line at a time.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: SCENARIO the line under it
+
+  # And the half it does not: the line above it is still standing rather than run. The marker is the
+  # reading, because `clear` is a line whose running says so — the screen it took with it would have
+  # taken this with it too.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the printing is done

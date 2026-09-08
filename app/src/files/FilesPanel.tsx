@@ -129,6 +129,24 @@ export function FilesPanel({
   // (`./trash`).
   const trash = useTrash(projectId, onGone);
 
+  // Whether the file on top is holding something that is not on the disk, named by the file rather
+  // than by a plain yes: a mark on whichever tab is on would be a mark that moved to the next file
+  // the reader pressed. It is the reader below saying so, on every keystroke it changes on
+  // (`FileReader`).
+  const [unsaved, setUnsaved] = useState<string | null>(null);
+
+  // And the files that are not on top, which the face is holding for them (`Typed`). Each is
+  // holding what was in its editor when it left the screen, so several tabs can be marked at once —
+  // what the row says is which files have something to lose, not which one the reader is in.
+  //
+  // **The two never answer for the same file.** A file coming up hands back what it was holding and
+  // the face lets go of it, so from then until it leaves again the live word above is the only one
+  // about it (`FileReader`).
+  const marked = new Set(
+    Object.entries(typed).filter(([, one]) => one.edited).map(([key]) => key),
+  );
+  if (unsaved !== null) marked.add(unsaved);
+
   /**
    * The one key this column hears, rather than the window: the terminal beside it has its own idea
    * of what it means, and the boundary between the two is which of them the reader is in
@@ -187,6 +205,7 @@ export function FilesPanel({
     <FileTabs
       open={open}
       showing={tab === "memo" ? null : reading}
+      unsaved={marked}
       memo={tab === "memo"}
       onMemo={() => onTab("memo")}
       onPick={(at) => { onTab("files"); onPick(at); }}
@@ -234,7 +253,7 @@ export function FilesPanel({
         projectId={projectId}
         root={reading.root}
         path={reading.path}
-        typed={typed[openKey(reading)] ?? null}
+        wasTyped={typed[openKey(reading)] ?? null}
         onTyped={onTyped}
         onBack={onBack}
         onOpenLedger={onOpenLedger}
@@ -244,6 +263,7 @@ export function FilesPanel({
         onKey={onKey}
         aside={trash.aside}
         onHandOver={onHandOver}
+        onEdited={(edited) => setUnsaved(edited ? openKey(reading) : null)}
       />
     </div>
   );
@@ -264,9 +284,11 @@ export function FilesPanel({
  * **The file that comes up brings itself into view.** Marking it and leaving it off the end of the
  * row would be a face saying which tab is on to a reader who cannot see it.
  */
-function FileTabs({ open, showing, memo, onMemo, onPick, onCloseTab }: {
+function FileTabs({ open, showing, unsaved, memo, onMemo, onPick, onCloseTab }: {
   open: readonly OpenFile[];
   showing: OpenFile | null;
+  /** The files holding something not on the disk, by their keys (`FilesPanel`). */
+  unsaved: ReadonlySet<string>;
   /** Whether the draft page is the one on top. */
   memo: boolean;
   onMemo: () => void;
@@ -322,6 +344,17 @@ function FileTabs({ open, showing, memo, onMemo, onPick, onCloseTab }: {
               >
                 {one.path[one.path.length - 1] ?? ""}
               </button>
+              {/* Between the name and the way to let the file go, so that a mark arriving does not
+                  move the name a reader is reading. A mark and not a word: a tab is as wide as the
+                  name on it, and the sentence is on it as its title for whoever asks. */}
+              {unsaved.has(key) && (
+                <span
+                  className="files__unsaved"
+                  role="img"
+                  aria-label={t("files.unsaved")}
+                  title={t("files.unsaved")}
+                />
+              )}
               <button
                 className="files__tabclose"
                 title={t("pane.close")}
@@ -388,13 +421,14 @@ function changedUnderneath(e: unknown): boolean {
 
 /** One file, as far as a panel can show it. */
 function FileReader({
-  projectId, root, path, typed, onTyped, onBack, onOpenLedger, onTrash, onKey, aside, onHandOver,
+  projectId, root, path, wasTyped, onTyped, onBack, onOpenLedger, onTrash, onKey, aside,
+  onHandOver, onEdited,
 }: {
   projectId: number;
   root: string;
   path: string[];
   /** What this file was left holding when it was last on the screen, or nothing (`Typed`). */
-  typed: Typed | null;
+  wasTyped: Typed | null;
   /** Hand up what it is holding now — as it leaves, and wherever the panel learns there is nothing
    *  of the reader's in it any more. */
   onTyped: (at: OpenFile, one: Typed | null) => void;
@@ -409,6 +443,15 @@ function FileReader({
   aside: ReactNode;
   /** Hand this file to the pane being worked in, where there is one (`./FilesPanel`). */
   onHandOver?: (wholes: string[]) => void;
+  /**
+   * Told whether this file is holding something that is not on the disk, so the row of tabs above
+   * can mark it (`./FilesPanel`).
+   *
+   * It is said again with nothing left when this side leaves the screen — the draft page coming up,
+   * the file being let go of, the column closing. What a person typed goes with the editor on every
+   * one of those roads, so a mark that outlived it would be pointing at text nothing holds.
+   */
+  onEdited?: (edited: boolean) => void;
 }) {
   const [file, setFile] = useState<FolderFileDto | null>(null);
   // Why the file did not open, in the reader's own language. A link is not a broken file: the host
@@ -430,7 +473,7 @@ function FileReader({
   const [picking, setPicking] = useState<{ x: number; y: number } | null>(null);
   // The way to read what is in the editor, handed over once it is up. Nothing is saved before that:
   // the editor is where the text is (`./FileEditor`).
-  const editorText = useRef<(() => string) | null>(null);
+  const typed = useRef<(() => string) | null>(null);
   // Whether there is anything to save. It is set by the editor telling this side that a person
   // typed, rather than by comparing texts — the comparison would mean holding a second copy of the
   // document up here and reading it on every keystroke.
@@ -486,6 +529,16 @@ function FileReader({
   const held = useRef({ edited, digest: file?.digest, typedText });
   held.current = { edited, digest: file?.digest, typedText };
 
+  // Telling the row of tabs what this file is holding. Kept in a ref for the same reason as the
+  // pair above: the panel above hands a fresh function down on every render, and taking that as a
+  // reason to speak would be speaking on every keystroke.
+  const tell = useRef(onEdited);
+  tell.current = onEdited;
+  useEffect(() => { tell.current?.(edited); }, [edited]);
+  // And nothing left when this side goes. Every road off it — the draft page, the file being let go
+  // of, the column closing — takes the editor with it, so there is no text left to mark.
+  useEffect(() => () => { tell.current?.(false); }, []);
+
   // Why a read did not answer, and whether the file may still be handed on from where it stopped.
   const unanswered = (e: unknown) => (
     isErr(e, "folder_link")
@@ -517,16 +570,19 @@ function FileReader({
       .then((one) => {
         if (!alive) return;
         take(one);
-        if (typed === null) return;
+        if (wasTyped === null) return;
         // Back on what was typed into it, and on what the panel knew about that text: a tab that
         // came back saying the file was saved over work that is not would be worse than one that
         // lost the work outright.
-        setTypedText(typed.text);
-        setEdited(typed.edited);
+        setTypedText(wasTyped.text);
+        setEdited(wasTyped.edited);
         // And on the file having moved while this tab was away. The read above is the first sight
         // of it since, so its mark is weighed against the one the text was typed over — otherwise a
         // save from here would write over a writer nobody was told about (`AMB-D-784`).
-        if (typed.edited && typed.seen !== one.digest) setStale(true);
+        if (wasTyped.edited && wasTyped.seen !== one.digest) setStale(true);
+        // And the face lets go of it: from here it is this side that says what the file is holding,
+        // and two answers about one file are two answers to go wrong apart (`FilesPanel`).
+        onTyped({ root, path }, null);
       })
       .catch((e) => {
         if (alive) setFailed(unanswered(e));
@@ -545,7 +601,7 @@ function FileReader({
   useEffect(() => {
     const here = { root, path };
     return () => {
-      const read = editorText.current;
+      const read = typed.current;
       const text = read === null ? held.current.typedText : read();
       if (text === null) return;
       onTyped(here, { text, edited: held.current.edited, seen: held.current.digest });
@@ -620,7 +676,7 @@ function FileReader({
   // first. Where there is no editor to ask — one that never loaded — what was caught last time
   // stays, rather than being dropped for the disk's copy.
   const showAsText = (asSource: boolean) => {
-    if (!asSource) setTypedText((was) => editorText.current?.() ?? was);
+    if (!asSource) setTypedText((was) => typed.current?.() ?? was);
     setAsText(asSource);
   };
 
@@ -628,14 +684,14 @@ function FileReader({
   // typed a character: a file cut at the read cap, or one whose bytes and text do not round-trip,
   // is drawn read-only from the start (`AMB-D-773`).
   //
-  // **A Markdown file being drawn is not one of them.** There is no editor on the rendering, so
-  // there is no text to write and nothing a save could mean — the switch beside the name is what
-  // makes it savable, by putting the text on the screen.
+  // **A Markdown file being drawn keeps it.** What a person typed does not leave with the editor —
+  // it is caught on the way out and the rendering is drawn from it (`typedText`) — so a save there
+  // writes what is on the screen. Taking the control away instead left the rendering as the one
+  // state where nothing on the panel said whether the file had been written (`AMB-T-4560`).
   const savable = file?.text !== undefined
     && file.encoding !== undefined
     && !file.truncated
-    && file.clean
-    && (!markdown || asText);
+    && file.clean;
 
   // Whether the reader's own text is a thing that could be written over the file at all. It is what
   // the save control asks minus the mark — the one thing the offer below replaces — so a file this
@@ -643,20 +699,26 @@ function FileReader({
   // rather than a control that would refuse the press.
   const overwritable = savable && newline !== null && file?.digest !== undefined;
 
+  // The text as it stands, wherever it is being held. The editor is asked first and is the answer
+  // while it is up; on the rendering there is no editor, and what was caught on the way out is the
+  // same text (`typedText`). A file nobody has typed into falls back to what was read, so a save
+  // from there writes the file back as it is rather than writing nothing.
+  const nowText = (): string | undefined => typed.current?.() ?? typedText ?? file?.text;
+
   // **A file already known to have moved is not sent to the door a second time.** The mark this
   // panel holds is the one the host refuses, so the press would spend a round trip and land back on
   // the state the reader is already looking at, having said nothing about having been heard
   // (`AMB-T-4401`). What the reader has is the offer below, and the control above says the same by
   // being shut — the same shape a file with both kinds of newline is held in.
   const save = async () => {
-    const read = editorText.current;
+    const text = nowText();
     if (!savable || keeping || stale || file?.encoding === undefined || file.digest === undefined
-      || read === null || newline === null) return;
+      || text === undefined || newline === null) return;
     setKeeping(true);
     setRefused(null);
     try {
       const kept = await folderSave(
-        projectId, root, path, read(), file.encoding, file.bom, newline, file.digest,
+        projectId, root, path, text, file.encoding, file.bom, newline, file.digest,
       );
       setEdited(false);
       // What is on the disk now has one kind of newline, so the question is not asked again, and it
@@ -688,15 +750,15 @@ function FileReader({
   // some lines from each is not one of the answers — a reader who wants that takes one side and
   // edits it.
   const keepMine = async () => {
-    const read = editorText.current;
+    const text = nowText();
     if (!overwritable || keeping || file?.encoding === undefined || file.digest === undefined
-      || read === null || newline === null) return;
+      || text === undefined || newline === null) return;
     setKeeping(true);
     setRefused(null);
     try {
       const fresh = await folderRead(projectId, root, path, asked);
       const kept = await folderSave(
-        projectId, root, path, read(), file.encoding, file.bom, newline,
+        projectId, root, path, text, file.encoding, file.bom, newline,
         // A file that came back without a mark is one this panel could not write back at all any
         // more. The mark it is holding goes instead of a guess, and the door is what says no to it.
         fresh.digest ?? file.digest,
@@ -722,7 +784,7 @@ function FileReader({
   // to have moved: what a reader is about to weigh their own text against is what the file says
   // now, and the news that it moved may be minutes old by the time they press.
   const seeDifference = async () => {
-    const read = editorText.current;
+    const read = typed.current;
     if (read === null) return;
     const mine = read();
     try {
@@ -737,10 +799,14 @@ function FileReader({
   };
 
   // The keystroke everything else in the world saves with. It is taken on the window rather than
-  // inside the editor because the reader may have clicked away from it — and it is taken only
-  // while there is something to save, so nothing is swallowed on a file that cannot be.
+  // inside the editor because the reader may have clicked away from it — and it is taken only while
+  // there is something to save, so nothing is swallowed on a file that has nothing waiting.
+  //
+  // **What it asks is what the control beside the name asks.** The rendering is savable too now
+  // (`savable`), and a file nobody has typed into would otherwise be written back over itself by a
+  // reader who pressed the key out of habit on a page they were only reading (`AMB-T-4560`).
   useEffect(() => {
-    if (!savable) return;
+    if (!savable || !edited) return;
     const key = (e: KeyboardEvent) => {
       if (e.key !== "s" || !(e.metaKey || e.ctrlKey) || e.altKey) return;
       e.preventDefault();
@@ -882,7 +948,7 @@ function FileReader({
                 editable={!file.truncated && file.clean}
                 name={name}
                 onEdit={() => setEdited(true)}
-                hold={(read) => { editorText.current = read; }}
+                hold={(read) => { typed.current = read; }}
               />
             )
         )}

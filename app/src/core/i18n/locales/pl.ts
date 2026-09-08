@@ -599,6 +599,7 @@ export const pl: Translation = {
     "files.nothingOpen": "Nic nie jest otwarte.",
     "files.width": "Szerzej lub węziej",
     "files.openFiles": "Otwarte pliki",
+    "files.unsaved": "Niezapisane",
     "files.folderGone": "Tego folderu już nie ma.",
     "files.closeFile": "Zamknij ten plik",
     "files.edit": "Edytuj",

@@ -2332,6 +2332,27 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `onto` is which pane, named the way `paste` names one. Left out, it is the page's one pane.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-image", required: &[], refs: &[], strings: &["onto"], binds: false },
+    // **Several lines** put on the clipboard outside Amenbo and pasted into a pane in one press. It is
+    // not `paste` with a longer value in it: what a pane owes a paste of one line is that it lands,
+    // and what it owes a paste of several is that they land **together, and unsent**.
+    //
+    // A terminal is told to hand a paste over whole by the program running in it — the mode it asks
+    // for as it starts — and a pane that does not know about that sends the lines as they are, which
+    // is a line ending on every one of them but the last. Everything above the last then runs, at a
+    // prompt the person was still writing at. So the two args are the two halves of that: `above` is
+    // the line that must not go, and `below` is the one standing under it.
+    //
+    // **`above` is written to say so if it does go.** A line that ran is a line the pane echoed and
+    // then answered, and both of those are on the screen with the words the road pasted — so a road
+    // that read the words back could not tell the two apart. What it reads instead is what the line
+    // *did*, which is why the step after this one is a reading of the pane rather than of the box.
+    //
+    // The clipboard is filled outside Amenbo for the reason a drop comes from outside: nothing a run
+    // lays down is anywhere a hand can reach, and what is being proved is the press and not where the
+    // words came from.
+    //
+    // `onto` is which pane, named the way `paste` names one. Left out, it is the page's one pane.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-lines", required: &["above", "below"], refs: &[], strings: &["above", "below", "onto"], binds: false },
     // What is standing in the pane's input line, **unsent**. It is not `pane` with a different
     // sentence: that one reads what a program printed, and this reads what nothing has run yet.
     //
@@ -2384,6 +2405,25 @@ const REGISTRY: &[OpSpec] = &[
     // very pane it is about, and what it read afterwards would be a lamp gone out because the road put
     // it out. Left alone, the same pane crosses from lit to out untouched.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "keep-printing", required: &["text"], refs: &[], strings: &["text"], binds: false },
+    // A pane made to print more than it keeps, from a job left running behind the prompt.
+    //
+    // What a pane hands on when it is drawn again is the tail of what its terminal wrote, and that
+    // tail is capped (`app/src-tauri/src/pty.rs`). Everything a program said before the cap is
+    // reached is gone from it — including the sequences that put the terminal into the modes the
+    // program asked for, which are written once, at the start, and are the first thing to fall away.
+    // A road that means to read what a pane built after that comes up in has to get the session past
+    // the cap first, and this is the step that does it.
+    //
+    // **Behind the prompt, and not at it.** The printing is a job the shell is left running while it
+    // sits where it was: a command run in front of the reader ends with a fresh prompt, and a shell
+    // draws one by asking for its own modes again — which would put back the very bytes this step
+    // exists to push out. Left in the background, the prompt is the one already on the screen and
+    // nothing after it is the shell's.
+    //
+    // `text` is the line printed when it is over, which is how the road waits: what the steps after
+    // this read is a pane that has stopped, and the amount is more than a person would sit through
+    // guessing at.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "print-past-what-is-kept", required: &["text"], refs: &[], strings: &["text"], binds: false },
     // Splitting the terminal out into a window of its own, and folding it back. Two ops rather than
     // one with a direction, because they are pressed in different windows: the way out is on the
     // face, and the way back is in the window it made.
@@ -3868,7 +3908,10 @@ fn rendering_in_the_way(steps: &[Step]) -> Vec<(usize, &str)> {
                 as_source =
                     matches!(step.with().get("form").and_then(|v| v.as_str()), Some("source"));
             }
-            "edit" | "paste-into-editor" | "paste-image" | "save" if holding_markdown && !as_source => {
+            // Saving is not one of them. What a person typed is caught on the way off the editor
+            // and the rendering is drawn from it, so the offer stands over the same text in both
+            // forms (`app/src/files/FilesPanel.tsx`).
+            "edit" | "paste-into-editor" | "paste-image" if holding_markdown && !as_source => {
                 found.push((i, step.op()));
             }
             _ => {}
@@ -4071,6 +4114,38 @@ steps_gui:
             );
             load_str(&yaml).unwrap().validate().expect("the text is on the screen");
         }
+    }
+
+    /// And the keeping is walkable in either form. The text a person typed is caught on the way off
+    /// the editor and the rendering is drawn from it, so the offer stands over the same text whether
+    /// the file is showing as what it says or as what it is.
+    #[test]
+    fn saving_a_markdown_file_drawn_as_markdown_is_walkable() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: files
+    op: open
+    with: { name: watering.md, section: tree }
+  - type: action
+    domain: files
+    op: show-as
+    with: { form: source }
+  - type: action
+    domain: files
+    op: edit
+    with: { types: SCENARIO a line }
+  - type: action
+    domain: files
+    op: show-as
+    with: { form: rendered }
+  - type: action
+    domain: files
+    op: save
+"#;
+        load_str(yaml).unwrap().validate().expect("the save stands in both forms");
     }
 
     #[test]

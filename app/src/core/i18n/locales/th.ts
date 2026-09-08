@@ -579,6 +579,7 @@ export const th: Translation = {
     "files.unsaved": "ยังไม่ได้บันทึก",
     "files.folderGone": "ไม่พบโฟลเดอร์นี้แล้ว",
     "files.closeFile": "ปิดไฟล์นี้",
+    "files.closeConfirm": "ปิด {name} ไหม สิ่งที่คุณพิมพ์ไว้ยังไม่ได้บันทึก และจะหายไปเมื่อปิด",
     "files.edit": "แก้ไข",
     "files.read": "อ่าน",
     "files.reopenWith": "เปิดใหม่ด้วยการเข้ารหัสที่เลือก",
@@ -625,6 +626,7 @@ export const th: Translation = {
     "files.seeDifference": "ดูว่าต่างกันตรงไหน",
     "files.keepMine": "เก็บฉบับของฉัน",
     "files.readAgain": "อ่านใหม่อีกครั้ง",
+    "files.readAgainConfirm": "อ่านไฟล์นี้ใหม่ไหม สิ่งที่คุณพิมพ์ไว้จะถูกทิ้ง แล้วใช้เนื้อหาบนดิสก์แทน",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

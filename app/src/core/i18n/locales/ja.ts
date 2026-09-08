@@ -588,6 +588,7 @@ export const ja: Translation = {
     "files.unsaved": "保存していません",
     "files.folderGone": "このフォルダは見つかりません。",
     "files.closeFile": "このファイルを閉じる",
+    "files.closeConfirm": "{name} を閉じますか？打った内容は保存していないので、閉じると失われます。",
     "files.edit": "編集",
     "files.read": "読む",
     "files.reopenWith": "文字コードを指定して開き直す",
@@ -634,6 +635,7 @@ export const ja: Translation = {
     "files.seeDifference": "違いを見る",
     "files.keepMine": "自分のを通す",
     "files.readAgain": "読み直す",
+    "files.readAgainConfirm": "このファイルを読み直しますか？打った内容を捨てて、ディスクの内容を取ります。",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

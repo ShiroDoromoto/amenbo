@@ -25,7 +25,9 @@ export function FileDiff({ name, theirs, mine, onKeepMine, onReadAgain, onClose 
   mine: string;
   /** Write the reader's text over the file. This screen is gone by the time it runs. */
   onKeepMine: () => void;
-  /** Take the disk's text and lose the reader's. This screen is gone by the time it runs. */
+  /** Take the disk's text and lose the reader's. It asks before it does, and this screen stands
+   *  behind the question until it is answered — a reader who says no is one still weighing the two
+   *  texts (`./FilesPanel`). */
   onReadAgain: () => void;
   onClose: () => void;
 }) {

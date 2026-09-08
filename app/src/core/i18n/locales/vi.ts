@@ -579,6 +579,7 @@ export const vi: Translation = {
     "files.unsaved": "Chưa lưu",
     "files.folderGone": "Thư mục này không còn nữa.",
     "files.closeFile": "Đóng tệp này",
+    "files.closeConfirm": "Đóng {name}? Những gì bạn đã gõ chưa được lưu và sẽ mất khi đóng.",
     "files.edit": "Sửa",
     "files.read": "Đọc",
     "files.reopenWith": "Mở lại với một bảng mã",
@@ -625,6 +626,7 @@ export const vi: Translation = {
     "files.seeDifference": "Xem chỗ khác nhau",
     "files.keepMine": "Giữ bản của tôi",
     "files.readAgain": "Đọc lại",
+    "files.readAgainConfirm": "Đọc lại tệp này? Những gì bạn đã gõ sẽ bị bỏ, lấy nội dung trên đĩa.",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

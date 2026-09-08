@@ -575,6 +575,7 @@ export const ko: Translation = {
     "files.unsaved": "저장하지 않음",
     "files.folderGone": "이 폴더는 더 이상 없습니다.",
     "files.closeFile": "이 파일 닫기",
+    "files.closeConfirm": "{name}을(를) 닫을까요? 입력한 내용은 저장되지 않았고, 닫으면 사라집니다.",
     "files.edit": "편집",
     "files.read": "읽기",
     "files.reopenWith": "문자 인코딩을 지정해 다시 열기",
@@ -621,6 +622,7 @@ export const ko: Translation = {
     "files.seeDifference": "다른 곳 보기",
     "files.keepMine": "내가 쓴 것을 저장",
     "files.readAgain": "다시 읽기",
+    "files.readAgainConfirm": "이 파일을 다시 읽을까요? 입력한 내용을 버리고 디스크의 내용을 가져옵니다.",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

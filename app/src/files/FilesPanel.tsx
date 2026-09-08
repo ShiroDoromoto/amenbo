@@ -19,6 +19,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import type { FolderFileDto } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { Menu, MenuItem } from "../components/Menu";
+import { confirmDialog } from "../core/dialog";
 import { fileUrl } from "../core/fileUrl";
 import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
@@ -148,6 +149,26 @@ export function FilesPanel({
   if (unsaved !== null) marked.add(unsaved);
 
   /**
+   * Letting one file go, with the question in front of it where there is something to lose.
+   *
+   * **Both ways out come through here** — the cross on a tab, and the row above the file being
+   * read. The loss is the same one, and which control a reader happened to reach for is no reason
+   * to be asked on one road and not the other.
+   *
+   * What a file is holding is in the editor and in the face's copy of what the editor said
+   * (`Typed`); a tab closed throws both away (`../shell/TerminalFace`), and a save is the only
+   * thing that puts the text anywhere else. So this is the last moment there is to ask.
+   *
+   * **A file with nothing to lose is closed without a word.** Every tab would otherwise carry a
+   * question with one sensible answer, which is a press a reader learns to make without reading.
+   */
+  const letGo = async (at: OpenFile, go: () => void) => {
+    const one = at.path[at.path.length - 1];
+    if (marked.has(openKey(at)) && !(await confirmDialog(tf("files.closeConfirm", { name: one })))) return;
+    go();
+  };
+
+  /**
    * The one key this column hears, rather than the window: the terminal beside it has its own idea
    * of what it means, and the boundary between the two is which of them the reader is in
    * (`AMB-D-780`).
@@ -209,7 +230,7 @@ export function FilesPanel({
       memo={tab === "memo"}
       onMemo={() => onTab("memo")}
       onPick={(at) => { onTab("files"); onPick(at); }}
-      onCloseTab={onCloseTab}
+      onCloseTab={(at) => { void letGo(at, () => onCloseTab(at)); }}
     />
   );
 
@@ -255,7 +276,7 @@ export function FilesPanel({
         path={reading.path}
         wasTyped={typed[openKey(reading)] ?? null}
         onTyped={onTyped}
-        onBack={onBack}
+        onBack={() => { void letGo(reading, onBack); }}
         onOpenLedger={onOpenLedger}
         // The file on the screen and never what is picked out in the rail: the reading column is
         // about one file, and a bin pressed here is about the one being read.
@@ -657,8 +678,16 @@ function FileReader({
   // Taking what is on the disk now, over what the reader has typed. It is the one thing here that
   // loses somebody's work, which is why nothing does it on their behalf (`AMB-D-784`).
   const readAgain = () => {
-    void folderRead(projectId, root, path, asked)
-      .then((fresh) => {
+    void (async () => {
+      // **Asked every time it is pressed, with nothing weighed first.** The offer this button sits
+      // on is only drawn where the file moved under a reader who had typed (`stale`), so there is
+      // no press of it that loses nothing — a condition here would be one that is never false.
+      if (!(await confirmDialog(t("files.readAgainConfirm")))) return;
+      // The two texts, where the press came off that screen: the question was the one it asks, and
+      // an answer given leaves nothing for it to be read beside.
+      setCompared(null);
+      try {
+        const fresh = await folderRead(projectId, root, path, asked);
         take(fresh);
         setEdited(false);
         setStale(false);
@@ -667,8 +696,10 @@ function FileReader({
         // holding with it: what is on the screen after this is the disk's, and coming back to this
         // tab has to find the same.
         onTyped({ root, path }, null);
-      })
-      .catch((e) => setFailed(unanswered(e)));
+      } catch (e) {
+        setFailed(unanswered(e));
+      }
+    })();
   };
 
   // Turning a Markdown file between the rendering and the text it is. Going to the rendering is
@@ -1040,7 +1071,7 @@ function FileReader({
           theirs={compared.theirs}
           mine={compared.mine}
           onKeepMine={() => { setCompared(null); void keepMine(); }}
-          onReadAgain={() => { setCompared(null); readAgain(); }}
+          onReadAgain={readAgain}
           onClose={() => setCompared(null)}
         />
       )}

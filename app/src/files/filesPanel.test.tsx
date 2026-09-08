@@ -93,6 +93,12 @@ const hoisted = vi.hoisted(() => ({
   /** What the next read is refused with. Its own field for the same reason a save has one: a read
    *  and a save are turned away for different reasons. */
   refuseRead: null as unknown,
+  /** Every question the panel put in front of a press that loses what a reader typed, as it was
+   *  worded. */
+  confirmed: [] as string[],
+  /** The answers waiting for those questions, in order. An empty list is a reader who says yes —
+   *  which is what a test about anything else wants. */
+  answers: [] as boolean[],
 }));
 
 // The editor is loaded on demand and lays itself out by measuring, which jsdom cannot do — so what
@@ -124,6 +130,16 @@ vi.mock("./diffLoad", () => ({
     drawn.className = "cm-mergeView";
     parent.appendChild(drawn);
     return { close() { drawn.remove(); } };
+  },
+}));
+
+// The question in front of a press that throws away what a reader typed. It is the machine's own
+// dialog and jsdom has none, so the answer is arranged here — and the wording is kept, because
+// which file the reader was asked about is part of what the question has to get right.
+vi.mock("../core/dialog", () => ({
+  confirmDialog: async (message: string) => {
+    hoisted.confirmed.push(message);
+    return hoisted.answers.shift() ?? true;
   },
 }));
 
@@ -584,6 +600,8 @@ beforeEach(() => {
   hoisted.keptDigest = "after";
   hoisted.refuseSave = null;
   hoisted.refuseRead = null;
+  hoisted.confirmed = [];
+  hoisted.answers = [];
   // One file in the folder, so a test that only wants a row to press has one without saying so.
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();
@@ -1793,6 +1811,27 @@ describe("the file face", () => {
       expect(pressable(t("files.saved"))?.disabled).toBe(true);
     });
 
+    /** Taking what the disk says is the other press that loses what a reader typed, so it is asked
+     *  first — and a no leaves them exactly where they were: their text in the editor, and the news
+     *  still on the screen (`AMB-T-4561`). */
+    it("asks before it takes the disk's text, and keeps theirs on a no", async () => {
+      await open();
+      await type("#!/bin/sh\necho mine");
+      await written("#!/bin/sh\necho theirs", "after");
+
+      hoisted.answers = [false];
+      await click(button(t("files.readAgain")));
+      await settle();
+      expect(hoisted.confirmed).toEqual([t("files.readAgainConfirm")]);
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("mine");
+      expect(container.textContent).toContain(t("files.changedUnderneath"));
+
+      // And the press is still there to make: a question answered no is not an offer withdrawn.
+      await click(button(t("files.readAgain")));
+      await settle();
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("theirs");
+    });
+
     /** The belt behind the watch: a move the panel never heard about is still refused at the door,
      *  and what the reader gets is the same offer rather than a sentence to read. The press is
      *  answered once — by the offer appearing — and the control shuts behind it, because a second
@@ -1935,6 +1974,24 @@ describe("the file face", () => {
       expect(document.querySelector(".filediff")).toBeNull();
       expect(container.querySelector(".cm-editor")?.textContent).toContain("theirs");
       expect(container.textContent).not.toContain(t("files.changedUnderneath"));
+    });
+
+    /** The same question from the screen the two texts are on, and the screen stays up behind it: a
+     *  reader who says no is one still weighing the two, and taking the comparison away would make
+     *  them open it again to answer (`AMB-T-4561`). */
+    it("keeps the two texts up where the question was answered no", async () => {
+      await open();
+      await type("#!/bin/sh\necho mine");
+      await written("#!/bin/sh\necho theirs", "after");
+      await click(button(t("files.seeDifference")));
+      await settle();
+
+      hoisted.answers = [false];
+      await click(diffButton(t("files.readAgain")));
+      await settle();
+      expect(hoisted.confirmed).toEqual([t("files.readAgainConfirm")]);
+      expect(document.querySelector(".filediff")).not.toBeNull();
+      expect(container.querySelector(".cm-editor")?.textContent).toContain("mine");
     });
 
     /** Closing it changes nothing: it is a screen to read, and the file it was opened over is still
@@ -2570,6 +2627,49 @@ describe("the file face", () => {
       await click(tabFor("a.txt"));
       await settle();
       expect(marked()).toEqual(["b.txt"]);
+    });
+
+    /** Closing the tab is the press that throws what was typed away (`FilesPanel`), so it asks —
+     *  and the question names the file, because several tabs can be holding something at once and
+     *  the cross that was pressed is the only thing saying which (`AMB-T-4561`). */
+    it("asks before it closes a tab holding something unsaved", async () => {
+      await twoTextOpen();
+      await typeIn("echo there");
+
+      hoisted.answers = [false];
+      await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[1]);
+      await settle();
+      expect(hoisted.confirmed).toEqual([tf("files.closeConfirm", { name: "b.txt" })]);
+      // Answered no, so the file is still open and still holding what was typed.
+      expect(tabFor("b.txt")).toBeDefined();
+      expect(marked()).toEqual(["b.txt"]);
+
+      await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[1]);
+      await settle();
+      expect(tabFor("b.txt")).toBeUndefined();
+    });
+
+    /** The row above the file being read closes the same file, so it asks the same question: which
+     *  control a reader reached for is no reason to be warned on one road and not the other. */
+    it("asks on the way out of the file being read, too", async () => {
+      await twoTextOpen();
+      await typeIn("echo there");
+
+      hoisted.answers = [false];
+      await click(button(t("files.closeFile")));
+      await settle();
+      expect(hoisted.confirmed).toEqual([tf("files.closeConfirm", { name: "b.txt" })]);
+      expect(tabFor("b.txt")).toBeDefined();
+    });
+
+    /** A file that has been written has nothing to lose by being closed. A question there is one
+     *  with a single sensible answer, which is a press a reader learns to make without reading. */
+    it("closes a file with nothing unsaved without a word", async () => {
+      await twoTextOpen();
+      await click(container.querySelectorAll<HTMLElement>(".files__tabclose")[1]);
+      await settle();
+      expect(hoisted.confirmed).toEqual([]);
+      expect(tabFor("b.txt")).toBeUndefined();
     });
 
     // The row scrolls rather than paging, so the tab that is off the end of it is reached by name.

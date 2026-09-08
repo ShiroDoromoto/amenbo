@@ -579,6 +579,7 @@ export const id: Translation = {
     "files.unsaved": "Belum disimpan",
     "files.folderGone": "Folder ini sudah tidak ada.",
     "files.closeFile": "Tutup berkas ini",
+    "files.closeConfirm": "Tutup {name}? Yang Anda ketik belum disimpan dan akan hilang saat ditutup.",
     "files.edit": "Sunting",
     "files.read": "Baca",
     "files.reopenWith": "Buka ulang dengan pengodean",
@@ -625,6 +626,7 @@ export const id: Translation = {
     "files.seeDifference": "Lihat bedanya",
     "files.keepMine": "Simpan versi saya",
     "files.readAgain": "Baca ulang",
+    "files.readAgainConfirm": "Baca ulang berkas ini? Yang Anda ketik dibuang dan diambil isi yang ada di disk.",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

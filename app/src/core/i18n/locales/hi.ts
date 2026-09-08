@@ -576,6 +576,7 @@ export const hi: Translation = {
     "files.unsaved": "अभी सहेजा नहीं गया",
     "files.folderGone": "यह फ़ोल्डर अब मौजूद नहीं है।",
     "files.closeFile": "यह फ़ाइल बंद करें",
+    "files.closeConfirm": "{name} बंद करें? आपने जो लिखा है वह सहेजा नहीं गया है और बंद करने पर चला जाएगा।",
     "files.edit": "संपादित करें",
     "files.read": "पढ़ें",
     "files.reopenWith": "किसी एन्कोडिंग के साथ फिर से खोलें",
@@ -622,6 +623,7 @@ export const hi: Translation = {
     "files.seeDifference": "अंतर देखें",
     "files.keepMine": "मेरा वाला रखें",
     "files.readAgain": "फिर से पढ़ें",
+    "files.readAgainConfirm": "यह फ़ाइल फिर से पढ़ें? आपने जो लिखा है वह हटा दिया जाएगा और डिस्क की सामग्री ली जाएगी।",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

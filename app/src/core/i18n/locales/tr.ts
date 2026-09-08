@@ -576,6 +576,7 @@ export const tr: Translation = {
     "files.unsaved": "Kaydedilmedi",
     "files.folderGone": "Bu klasör artık yok.",
     "files.closeFile": "Bu dosyayı kapat",
+    "files.closeConfirm": "{name} kapatılsın mı? Yazdıklarınız kaydedilmedi ve kapatınca kaybolur.",
     "files.edit": "Düzenle",
     "files.read": "Oku",
     "files.reopenWith": "Bir kodlamayla yeniden aç",
@@ -622,6 +623,7 @@ export const tr: Translation = {
     "files.seeDifference": "Farkı gör",
     "files.keepMine": "Benimkini koru",
     "files.readAgain": "Yeniden oku",
+    "files.readAgainConfirm": "Bu dosya yeniden okunsun mu? Yazdıklarınız atılır, diskteki içerik alınır.",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

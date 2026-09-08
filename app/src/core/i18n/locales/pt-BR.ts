@@ -598,6 +598,7 @@ export const ptBR: Translation = {
     "files.unsaved": "Não salvo",
     "files.folderGone": "Esta pasta não está mais lá.",
     "files.closeFile": "Fechar este arquivo",
+    "files.closeConfirm": "Fechar {name}? O que você escreveu não está salvo e será perdido ao fechar.",
     "files.edit": "Editar",
     "files.read": "Ler",
     "files.reopenWith": "Reabrir com uma codificação",
@@ -644,6 +645,7 @@ export const ptBR: Translation = {
     "files.seeDifference": "Ver a diferença",
     "files.keepMine": "Manter a minha versão",
     "files.readAgain": "Ler de novo",
+    "files.readAgainConfirm": "Ler este arquivo de novo? O que você escreveu é descartado e fica o que está no disco.",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

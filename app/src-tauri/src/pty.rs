@@ -591,10 +591,14 @@ fn started_as(agent: &str) -> Result<Started, CmdError> {
 /// terminal outside — and once the terminal is here there is nothing to carry: the sentence goes in as
 /// the pane opens. What is left of the old shape would be a card asking a person who has just arrived
 /// to decide what to ask for, which is the one thing they do not yet know.
+///
+/// **No model is named.** The line says nothing about one, so the provider starts on however its own
+/// settings have it — which is what a person who has never been asked expects to happen. The asking is
+/// the face's, and this is where its answer arrives when there is one.
 fn opening_line(launch: &amenbo_core::harness::Launch) -> Started {
     let cmd = amenbo_core::config::Paths::command_name();
     Started {
-        line: launch::command_line(launch.command, &amenbo_core::harness::opening(launch, cmd)),
+        line: launch::command_line(launch.command, &amenbo_core::harness::opening(launch, cmd, None)),
         hand_over: None,
     }
 }

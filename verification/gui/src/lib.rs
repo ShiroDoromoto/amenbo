@@ -2697,8 +2697,12 @@ impl Instructor {
             // it does — take the disk, drop the typing — because the words on it are the interface's
             // own, and it is said where it is, since it stands with that line rather than in the row
             // the saving is in.
+            //
+            // **The question it raises is walked with it.** The press throws away the only copy
+            // there is of what was typed, so the panel asks before it does — and a road that stopped
+            // at a dialog it never mentioned reads as the press having done nothing.
             (Domain::Files, "read-again") =>
-                "Beside the line saying somebody wrote to this file after it was opened, press the offer to read it again — what is on the disk now replaces what is in the editor."
+                "Beside the line saying somebody wrote to this file after it was opened, press the offer to read it again. The machine asks whether to throw away what was typed: answer yes. What is on the disk now replaces what is in the editor."
                     .to_string(),
             // The file face's own settings row moved. The move and what it writes are one instruction,
             // the way the tick's is: a row read in its new position with nothing written behind it

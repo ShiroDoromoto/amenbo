@@ -576,6 +576,7 @@ export const nl: Translation = {
     "files.unsaved": "Niet opgeslagen",
     "files.folderGone": "Deze map is er niet meer.",
     "files.closeFile": "Dit bestand sluiten",
+    "files.closeConfirm": "{name} sluiten? Wat je erin hebt getypt is niet opgeslagen en gaat bij het sluiten verloren.",
     "files.edit": "Bewerken",
     "files.read": "Lezen",
     "files.reopenWith": "Opnieuw openen met een codering",
@@ -622,6 +623,7 @@ export const nl: Translation = {
     "files.seeDifference": "Verschil bekijken",
     "files.keepMine": "Mijn versie behouden",
     "files.readAgain": "Opnieuw inlezen",
+    "files.readAgainConfirm": "Dit bestand opnieuw inlezen? Wat je hebt getypt wordt weggegooid voor wat er op de schijf staat.",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

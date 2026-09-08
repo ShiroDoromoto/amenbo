@@ -576,6 +576,7 @@ export const zhHant: Translation = {
     "files.unsaved": "尚未儲存",
     "files.folderGone": "這個資料夾已經不在了。",
     "files.closeFile": "關閉這個檔案",
+    "files.closeConfirm": "關閉 {name}？你輸入的內容還沒有儲存，關閉後會遺失。",
     "files.edit": "編輯",
     "files.read": "閱讀",
     "files.reopenWith": "指定字元編碼重新開啟",
@@ -622,6 +623,7 @@ export const zhHant: Translation = {
     "files.seeDifference": "看看差別",
     "files.keepMine": "保留我寫的",
     "files.readAgain": "重新讀取",
+    "files.readAgainConfirm": "重新讀取這個檔案？你輸入的內容會被捨棄，改用磁碟上的內容。",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

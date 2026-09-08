@@ -597,6 +597,7 @@ export const fr: Translation = {
     "files.unsaved": "Non enregistré",
     "files.folderGone": "Ce dossier n'est plus là.",
     "files.closeFile": "Fermer ce fichier",
+    "files.closeConfirm": "Fermer {name} ? Ce que vous y avez écrit n'est pas enregistré et sera perdu à la fermeture.",
     "files.edit": "Modifier",
     "files.read": "Lire",
     "files.reopenWith": "Rouvrir avec un encodage",
@@ -643,6 +644,7 @@ export const fr: Translation = {
     "files.seeDifference": "Voir la différence",
     "files.keepMine": "Garder ma version",
     "files.readAgain": "Relire le fichier",
+    "files.readAgainConfirm": "Relire ce fichier ? Ce que vous avez écrit est abandonné au profit de ce qui est sur le disque.",
     // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
     // named above them: which of the two stands is the question, and a screen that named neither
     // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

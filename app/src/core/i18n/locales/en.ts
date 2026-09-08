@@ -689,6 +689,10 @@ const ui = {
   // the rail: closing this one, which is what leaving it comes to (`AMB-D-835`). It read "back to
   // the list" while a file lay over the tree and there was a list to go back to.
   "files.closeFile": "Close this file",
+  // The question in front of the press that loses what a reader typed. The file is named because
+  // several tabs can be holding something at once, and the one being closed is the answer to "which
+  // of them" (`../../../files/FilesPanel`). Nothing is asked of a file that has been saved.
+  "files.closeConfirm": "Close {name}? What you typed into it has not been saved, and closing it throws that away.",
   "files.edit": "Edit",
   "files.read": "Read",
   "files.reopenWith": "Reopen with an encoding",
@@ -743,6 +747,10 @@ const ui = {
   "files.seeDifference": "See the difference",
   "files.keepMine": "Keep what I typed",
   "files.readAgain": "Read it again",
+  // And the other press that loses it: taking what the disk says over what is in the editor. It is
+  // pressed from the notice and from the screen that puts the two texts side by side, and it is
+  // asked on both (`AMB-D-863`).
+  "files.readAgainConfirm": "Read this file again? What you typed is thrown away for what is on the disk.",
   // The screen the two texts are put side by side on (`../../../files/FileDiff`). The two sides are
   // named above them: which of the two stands is the question, and a screen that named neither
   // would leave it to be guessed from which text looks familiar (`AMB-D-863`).

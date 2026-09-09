@@ -113,7 +113,15 @@ export function useCardDrag(onDrop: (column: string, id: number) => void): {
   const press = useCallback((id: number, from: string, event: CardPress<HTMLElement>) => {
     // The main button only. A right or middle press on a card is not a move, and taking it would put
     // the card in hand with no gesture to put it down.
-    if (event.button !== 0 || held.current !== null) return;
+    if (event.button !== 0) return;
+    // 🚨 A card still in hand when a new press lands is one whose ending never came: the pointer was
+    // let go somewhere this page never heard of — over the menu bar a window at the top of the screen
+    // reveals, or over another application. Turning the new press away, which is what this did, made
+    // that permanent: the ghost stayed on the page, `is-dragging` stayed on the body, and no card
+    // could be taken up again until the page was reloaded (`AMB-T-4624`, measured on the panel's
+    // rows). Only ever one card is in hand, so a press arriving while one is held is a person
+    // starting over — put down what is held and take the new one.
+    held.current?.stop();
     const card = event.currentTarget;
     const grabbedAt = { x: event.clientX, y: event.clientY };
     const pointerId = event.pointerId;
@@ -138,14 +146,18 @@ export function useCardDrag(onDrop: (column: string, id: number) => void): {
       if (frame !== 0) cancelAnimationFrame(frame);
       ghost?.node.remove();
       document.body.classList.remove("is-dragging");
-      card.removeEventListener("pointermove", move);
-      card.removeEventListener("pointerup", up);
-      card.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("blur", away);
       window.removeEventListener("contextmenu", noMenu, true);
       if (card.hasPointerCapture(pointerId)) card.releasePointerCapture(pointerId);
       setDraggingId(null);
       setOverColumn(null);
     };
+
+    /** Whether an event is the pointer this gesture is holding — the window hears every one. */
+    const mine = (e: PointerEvent) => e.pointerId === pointerId;
 
     // 🚨 The fence that keeps a right click from freezing the gesture. Without it the menu opens over
     // the held card and macOS stops delivering pointer events entirely until it is dismissed
@@ -184,6 +196,7 @@ export function useCardDrag(onDrop: (column: string, id: number) => void): {
     const stopFlow = flowEdges(() => (ghost === null ? null : at), refresh);
 
     const move = (e: PointerEvent) => {
+      if (!mine(e)) return;
       at = { x: e.clientX, y: e.clientY };
       if (ghost === null) {
         if (!draggedFar(grabbedAt, at)) return;
@@ -196,6 +209,7 @@ export function useCardDrag(onDrop: (column: string, id: number) => void): {
     };
 
     const up = (e: PointerEvent) => {
+      if (!mine(e)) return;
       const dragged = ghost !== null;
       const to = { x: e.clientX, y: e.clientY };
       stop();
@@ -210,11 +224,29 @@ export function useCardDrag(onDrop: (column: string, id: number) => void): {
       if (column !== null && column !== from) land.current(column, id);
     };
 
-    const cancel = () => stop();
+    const cancel = (e: PointerEvent) => { if (mine(e)) stop(); };
 
-    card.addEventListener("pointermove", move);
-    card.addEventListener("pointerup", up);
-    card.addEventListener("pointercancel", cancel);
+    /**
+     * The page losing the pointer altogether.
+     *
+     * 🚨 An application put in the background mid-drag is one that may never be told the button came
+     * up, and a card held on a page nobody is looking at is held for ever (`AMB-T-4624`). Put down
+     * rather than landed: where the pointer went is not this page's to say any more.
+     */
+    const away = () => stop();
+
+    // 🚨 Hung on the window and not on the card, because **the card does not outlive the gesture**.
+    // A board that reads its cards afresh while one is held redraws the columns, and the card pressed
+    // goes out of the document with the column it was drawn in. Listeners that went with it could end
+    // the gesture only if the browser fired one last `pointercancel` at the node it had just removed
+    // — WebKit does, and that unstated favour was all that held this together. Where it is not done,
+    // `stop` never runs: the ghost stays on the page, `is-dragging` stays on the body, and `held`
+    // stays full, which turns every later press away until the page is reloaded (`AMB-T-4621`). The
+    // window is there for as long as the press is, whatever becomes of the card.
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("blur", away);
     window.addEventListener("contextmenu", noMenu, true);
     held.current = { stop };
   }, []);

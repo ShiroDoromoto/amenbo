@@ -28,6 +28,8 @@ let dragging: number | null;
 let overColumn: string | null;
 /** Where the card says it already is. Usually the column it sits in — but see the done column. */
 let home: string;
+/** Whether the board is still drawing the card, which is what a board read afresh mid-drag decides. */
+let cardThere: boolean;
 
 function Board() {
   const drag = useCardDrag((column, id) => { landed.push([column, id]); });
@@ -39,10 +41,10 @@ function Board() {
   const [taken] = useState(1);
   return createElement("div", null,
     createElement("div", { [DROP_ATTR]: "status:todo", id: "todo" },
-      createElement("div", {
+      cardThere ? createElement("div", {
         className: "card", id: "card",
         onPointerDown: (e: never) => press?.(taken, home, e),
-      }, "a card")),
+      }, "a card") : null),
     createElement("div", { [DROP_ATTR]: "status:done", id: "done" }));
 }
 
@@ -67,9 +69,25 @@ async function to(kind: "pointermove" | "pointerup" | "pointercancel", x: number
   });
 }
 
+/** Stop drawing the card, the way a board that has read its cards afresh does mid-drag. */
+async function unmountCard() {
+  cardThere = false;
+  await act(async () => { root.render(createElement(Board)); });
+}
+
+/** A release the window hears, which is all there is left once the card has gone. */
+async function releaseOnWindow(x: number, y: number) {
+  await act(async () => {
+    window.dispatchEvent(pointer("pointerup", x, y));
+    // The hit test is deferred to a frame, which jsdom runs as a timer.
+    await new Promise((r) => setTimeout(r, 20));
+  });
+}
+
 beforeEach(() => {
   landed = [];
   home = "status:todo";
+  cardThere = true;
   press = null;
   dragging = null;
   overColumn = null;
@@ -210,6 +228,78 @@ describe("letting a card go", () => {
     under(null);
     await to("pointerup", 900, 900);
     expect(landed).toEqual([]);
+  });
+
+  /**
+   * A board that reads its cards afresh while one is held redraws the columns, taking the pressed
+   * card out of the document. The gesture is the person's and not the card's, so it goes on
+   * (`AMB-T-4621`).
+   */
+  it("carries on after the card it was taken from stops being drawn", async () => {
+    await down(100, 100);
+    under(document.getElementById("done"));
+    await to("pointermove", 200, 100);
+    await unmountCard();
+
+    await releaseOnWindow(200, 100);
+    expect(landed, "the card that stopped being drawn never reached the column")
+      .toEqual([["status:done", 1]]);
+    expect(document.querySelector(".card--ghost"), "the ghost stayed on the page").toBeNull();
+    expect(document.body.classList.contains("is-dragging")).toBe(false);
+  });
+
+  /** What the stuck gesture cost was every press after it: `held` stayed full and turned them away. */
+  it("takes the next card up after one stopped being drawn mid-drag", async () => {
+    await down(100, 100);
+    under(document.getElementById("done"));
+    await to("pointermove", 200, 100);
+    await unmountCard();
+    await releaseOnWindow(200, 100);
+
+    cardThere = true;
+    await act(async () => { root.render(createElement(Board)); });
+    await down(100, 100);
+    under(document.getElementById("done"));
+    await to("pointermove", 200, 100);
+    await to("pointerup", 200, 100);
+    expect(landed.length, "no card could be taken up again").toBe(2);
+  });
+
+  /**
+   * The release that never comes. A pointer let go over the menu bar a window at the top of the
+   * screen reveals, or over another application, is one this page is never told about — and what is
+   * held then is held until something else puts it down (`AMB-T-4624`).
+   */
+  it("puts down the card still in hand when a new press lands", async () => {
+    await down(100, 100);
+    under(document.getElementById("done"));
+    await to("pointermove", 200, 100);
+    expect(document.querySelectorAll(".card--ghost")).toHaveLength(1);
+
+    // No release: the gesture is simply still held when the card is pressed again.
+    await down(100, 100);
+    expect(document.querySelectorAll(".card--ghost"), "the card let go of was still in hand")
+      .toHaveLength(0);
+
+    await to("pointermove", 200, 100);
+    await to("pointerup", 200, 100);
+    expect(landed, "the press that landed on a held gesture was turned away")
+      .toEqual([["status:done", 1]]);
+    expect(document.querySelector(".card--ghost")).toBeNull();
+    expect(document.body.classList.contains("is-dragging")).toBe(false);
+  });
+
+  /** Nobody carries a card across a window they have left, and the release there is never heard. */
+  it("puts the card down when the page loses the pointer altogether", async () => {
+    await down(100, 100);
+    under(document.getElementById("done"));
+    await to("pointermove", 200, 100);
+
+    await act(async () => { window.dispatchEvent(new Event("blur")); });
+    expect(landed, "a card was moved to a column by the window going away").toEqual([]);
+    expect(dragging).toBeNull();
+    expect(document.querySelector(".card--ghost")).toBeNull();
+    expect(document.body.classList.contains("is-dragging")).toBe(false);
   });
 });
 

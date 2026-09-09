@@ -1914,7 +1914,7 @@ body.dragging-row { user-select: none; }
   background: currentColor;
 }
 /* The glow, laid over the core: the same colour blurred out past the edge, which brightens the middle
-   and reads as light coming off it. Off on every face but the two that are lit. */
+   and reads as light coming off it. Off on the one face that is not lit. */
 .plate__dot::after {
   content: "";
   position: absolute; inset: -4px;
@@ -1932,22 +1932,9 @@ body.dragging-row { user-select: none; }
    lasts, and a mark that moved for it would leave every pane on the screen moving all day. */
 .plate__dot[data-face="lit"]::after { opacity: 0.7; }
 
-/* Out — nothing is arriving and nobody is being called. Sunk in place, in the pane's own hue. */
+/* Out — nothing is arriving. Sunk in place, in the pane's own hue. */
 .plate__dot[data-face="out"] { opacity: 0.3; }
 
-/* Calling — a person's turn is standing here. The one face that moves, because it is the one that is
-   rare and the one that is actually asking for somebody.
-
-   The colour is the warning colour, the same one the page's badge and an off-screen project's dot
-   wear: the same thing is said three times as the reader gets closer, and it is said in one colour.
-
-   **What moves is the opacity and nothing else.** Anything that shifted the lamp would push the words
-   beside it about; and a colour carried across a blur cannot be interpolated, so a fade written as a
-   change of colour comes out as a jump between two of them.
-
-   The beat and the phase are both the row's — `BLINK_MS` and `phaseDelay` (../talk/moving.ts) — so
-   that this and the mark at the other end of the row fall together rather than reading as two things
-   being asked. */
 /* The pane's name, which is the whole of what the row says (`AMB-D-862`). It belongs to the frame, so
    it is the one part of the row that does not move when the process in it does.
 

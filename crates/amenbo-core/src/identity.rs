@@ -34,12 +34,13 @@ impl Identity {
         }
     }
 
-    /// The startup clone check. `true` means the store looks to have been copied onto a different machine
-    /// (and wants forking).
-    pub fn hw_mismatch(&self) -> bool {
-        let live = live_hw();
-        // When either side is unobtainable ("unknown"), call it a match rather than raise a false alarm.
-        self.bound_hw != "unknown" && live != "unknown" && self.bound_hw != live
+    /// The startup clone check. `Some(true)` means the store looks to have been copied onto a different
+    /// machine (and wants forking); `Some(false)` is a check that was made and passed. `None` is neither
+    /// — one of the two sides is [`UNKNOWN_HW`], so no check was made at all. Telling the two apart is
+    /// what keeps a machine that hands out no hardware id (Linux, mostly — see [`platform_hw`]) from
+    /// being reported as one that passed.
+    pub fn hw_mismatch(&self) -> Option<bool> {
+        hw_mismatch_between(&self.bound_hw, &live_hw())
     }
 
     /// Rebind after a clone is detected: point `bound_hw` at the machine we are actually on.
@@ -67,6 +68,19 @@ impl Identity {
 
 }
 
+/// What [`live_hw`] answers when the machine hands out no hardware id. It is not an id: a store bound
+/// to it and a store running on it are not the same machine, they are two machines nobody measured.
+pub const UNKNOWN_HW: &str = "unknown";
+
+/// The comparison behind [`Identity::hw_mismatch`], split out so the three answers can be tested without
+/// a machine to run them on ([`live_hw`] settles once per process).
+fn hw_mismatch_between(bound: &str, live: &str) -> Option<bool> {
+    if bound == UNKNOWN_HW || live == UNKNOWN_HW {
+        return None;
+    }
+    Some(bound != live)
+}
+
 /// The UUID of the machine we are on. `AMENBO_HW_ID` overrides it, so development can pretend to be
 /// another machine. The value is read from **the hardware**, not from a file on disk — a file would be
 /// copied along with a clone.
@@ -81,7 +95,7 @@ pub fn live_hw() -> String {
         if let Some(v) = crate::env::hw_id() {
             return v.to_string_lossy().into_owned();
         }
-        platform_hw().unwrap_or_else(|| "unknown".to_string())
+        platform_hw().unwrap_or_else(|| UNKNOWN_HW.to_string())
     })
     .clone()
 }
@@ -134,6 +148,13 @@ fn platform_hw() -> Option<String> {
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn platform_hw() -> Option<String> {
     // Linux: the DMI product_uuid. `/etc/machine-id` will not do — it is a file, so a clone carries it.
+    //
+    // **On most machines this answers `None`**, and that is the expected outcome, not a failure: the
+    // kernel creates `product_uuid` mode 0400, so nobody but root can open it, and an ARM machine has no
+    // DMI table to create it from. Clone detection is simply not made on Linux — `whoami` says so rather
+    // than reporting a check that passed. There is no stand-in: `/etc/machine-id` travels with a copy,
+    // and a MAC address or a disk serial either misses a per-disk copy or cries wolf when the OS is
+    // reinstalled or a dock is unplugged. The cost of the gap is one missing warning line, so it stands.
     std::fs::read_to_string("/sys/class/dmi/id/product_uuid")
         .ok()
         .map(|s| s.trim().to_string())
@@ -169,4 +190,14 @@ mod tests {
         assert_eq!(round.user_name, "Alice");
     }
 
+    /// The clone check has three answers, and the third is the point: a machine that hands out no
+    /// hardware id is not a machine that passed.
+    #[test]
+    fn an_unmeasured_side_is_neither_a_match_nor_a_mismatch() {
+        assert_eq!(hw_mismatch_between("hw-1", "hw-1"), Some(false), "same machine — checked, and it passed");
+        assert_eq!(hw_mismatch_between("hw-1", "hw-2"), Some(true), "another machine — checked, and it caught the copy");
+        assert_eq!(hw_mismatch_between(UNKNOWN_HW, "hw-1"), None, "bound to nothing measurable — no check was made");
+        assert_eq!(hw_mismatch_between("hw-1", UNKNOWN_HW), None, "running where nothing is measurable — no check was made");
+        assert_eq!(hw_mismatch_between(UNKNOWN_HW, UNKNOWN_HW), None, "neither side measured — not a match");
+    }
 }

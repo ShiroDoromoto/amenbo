@@ -260,7 +260,7 @@ impl Store {
         // If the store looks copied to a different machine (bound_hw mismatch), rebind bound_hw to
         // the current one.
         let mut forked = false;
-        if identity.hw_mismatch() {
+        if identity.hw_mismatch() == Some(true) {
             identity.rebind_hw();
             identity_dirty = true;
             forked = true;

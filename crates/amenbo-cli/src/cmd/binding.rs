@@ -12,6 +12,8 @@ use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags}
 pub(crate) fn whoami(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     let id = &store.identity;
     let live = amenbo_core::identity::live_hw();
+    // Three answers, not two: `None` is a machine that hands out no hardware id, where no check was
+    // made. Reporting that as "ok" would read as a check that passed (`AMB-T-4651`).
     let mismatch = id.hw_mismatch();
     // The facet is the only actor there is, so the display name comes from config (`human_name`).
     if flags.json {
@@ -26,7 +28,11 @@ pub(crate) fn whoami(store: &Store, flags: &Flags) -> Result<i32, CliError> {
             human(flags, loc);
         }
         human(flags, format!("human: {}", store.config.human_display_name()));
-        human(flags, format!("hardware check: {}", if mismatch { "⚠ mismatch (suspected copy to another machine)" } else { "ok" }));
+        human(flags, format!("hardware check: {}", match mismatch {
+            Some(true) => "⚠ mismatch (suspected copy to another machine)",
+            Some(false) => "ok",
+            None => "not made — this machine hands out no hardware id",
+        }));
     }
     Ok(0)
 }

@@ -131,21 +131,20 @@ steps_cli:
       field: settings.startup_integrity_check
       equals: false
 
-  # And the identity: the rename reaches it, and the hardware check says this store is running
-  # where it was raised rather than as a copy carried onto another machine.
+  # And the identity: the rename reaches it too.
+  #
+  # The hardware check that sits beside the name is not asked here. Its answer is `null` — no check
+  # made — on a machine that hands out no hardware id, which on Linux is every machine an ordinary
+  # user runs (`/sys/class/dmi/id/product_uuid` is mode 0400, and an ARM box has no DMI table). A step
+  # asserting `false` would pass on macOS and Windows and fail on Linux, which is a road that proves
+  # something different depending on where it ran. The three answers are pinned instead where the
+  # machine can be dictated: `cli_e2e_store::r6_clone_to_new_machine_rebinds_hardware`.
   - type: assert
     domain: store
     op: identity
     with:
       field: human_name
       equals: SCENARIO Operator
-
-  - type: assert
-    domain: store
-    op: identity
-    with:
-      field: hw_mismatch
-      equals: false
 
 # The screen's road through the same goal. It is shorter than the terminal's on purpose: the settings
 # a store answers for are one screen here, and only some of them are drawn on it — the identity, the

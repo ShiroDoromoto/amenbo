@@ -1226,6 +1226,7 @@ export function TerminalFace({
                     project={frame.project}
                     names={names}
                     start={{
+                      frame: frame.id,
                       session: frame.session,
                       // Nothing on this face takes up a terminal it was not given: which session
                       // belongs where is answered once, as the face comes up, and a pane left to

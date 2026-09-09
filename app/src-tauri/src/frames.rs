@@ -61,6 +61,21 @@ pub struct TalkFace {
     seeded: AtomicBool,
 }
 
+impl TalkFace {
+    /// Write down the handle a pane's provider is resumed from, as the pane is started
+    /// (`crate::pty::pty_open`).
+    ///
+    /// **The host writes it and no window carries it**, which is why it is a door of its own rather
+    /// than a field of the arrangement: a value that made the round trip through a webview would be
+    /// one a webview could write, and what this holds is the way back into somebody's conversation.
+    ///
+    /// It reaches the store with the next write of the arrangement ([`keep`]), which the pane's own
+    /// opening brings about — what is started in a frame is part of the shape the window sends.
+    pub fn resumed_from(&self, frame: &str, handle: String) {
+        self.hints.lock().expect("resume hints lock").insert(frame.to_string(), handle);
+    }
+}
+
 /// What this run calls the talk window's frames — the whole of it, since the window draws every frame
 /// it has at once.
 #[tauri::command]
@@ -185,6 +200,7 @@ fn seed(face: &TalkFace, kept: &SavedLayout) {
 /// What was written is remembered only once the store has taken it, so a write that failed is made
 /// again by the next change rather than counted as done.
 fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
+    forget_dropped(face, layout);
     let keeping = SavedLayout {
         project: layout.project,
         splits: splits_of(layout),
@@ -197,6 +213,26 @@ fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
     open_store()?.save_layout(&keeping)?;
     *face.kept.lock().expect("kept layout lock") = Some(keeping);
     Ok(())
+}
+
+/// Let go of the handles of panes the arrangement no longer has, and of whatever they were holding
+/// open.
+///
+/// A pane that is closed is closed for good: its row goes with it ([`panes_of`] keeps only the places
+/// the window sent), so a handle left behind here would be one nothing could ever hand back. For most
+/// providers letting go is the whole of it — the handle is a session id, and what it names is the
+/// provider's to keep or forget. For `codex` it is a directory Amenbo made, and that comes away too
+/// rather than being left to pile up on the machine (`crate::codex_home::forget`).
+fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) {
+    let here: std::collections::BTreeSet<&str> =
+        layout.frames.iter().map(|frame| frame.id.as_str()).collect();
+    face.hints.lock().expect("resume hints lock").retain(|frame, handle| {
+        if here.contains(frame.as_str()) {
+            return true;
+        }
+        crate::codex_home::forget(std::path::Path::new(handle));
+        false
+    });
 }
 
 /// The panes as they are written down: what the window sent about each place, and beside it the two
@@ -311,6 +347,21 @@ mod tests {
         // And a pane the host has nothing to say about is a row of what the window sent.
         assert_eq!(panes[1].name, None);
         assert_eq!(panes[1].resume, None);
+    }
+
+    /// A pane the arrangement no longer has is a pane whose way back goes with it: the handle is let
+    /// go of rather than held for a frame nothing will draw again.
+    #[test]
+    fn a_pane_that_is_gone_lets_go_of_its_handle() {
+        let face = TalkFace::default();
+        face.resumed_from("1", "0f9c".to_string());
+        face.resumed_from("2", "7b2e".to_string());
+
+        forget_dropped(&face, &layout(vec![frame("1", Some("claude"))]));
+
+        let hints = face.hints.lock().unwrap();
+        assert_eq!(hints.get("1").map(String::as_str), Some("0f9c"));
+        assert_eq!(hints.get("2"), None);
     }
 
     /// A place the window sends with no project is let go rather than kept under a guess: a pane is

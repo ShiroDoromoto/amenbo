@@ -189,7 +189,10 @@ export async function mountAgentFrame(
         if (mine === showing) frame.append(row(choice));
       },
     };
-    void mountTerminal(pane, events, { ...take, cwd, agent })
+    // The place stays this frame's whichever road the pane came by, because it is what a way back
+    // into the session is written down against (`AMB-D-869`): a press on the row starts something
+    // here, and it has to be *here* that the handle lands.
+    void mountTerminal(pane, events, { ...take, frame: start.frame, cwd, agent })
       .then((dispose) => {
         if (mine === showing) close = dispose;
         else dispose();

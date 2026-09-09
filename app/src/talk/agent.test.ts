@@ -19,7 +19,7 @@ const hoisted = vi.hoisted(() => ({
   /** Every command that crossed, as `[name, args]`. */
   sent: [] as [string, Record<string, unknown> | undefined][],
   /** Where each pane was started, most recent last. */
-  panes: [] as { cwd?: string | null; agent?: string | null }[],
+  panes: [] as { frame?: string | null; cwd?: string | null; agent?: string | null }[],
   /** Ends the pane most recently mounted, the way the host's `pty://closed` does. */
   end: null as (() => void) | null,
   /** What `pty_sessions` answers with — a terminal already running is one nothing is asked about. */
@@ -75,7 +75,13 @@ vi.mock("./terminal", () => ({
       // What the frame hands a terminal it is *starting*: where, with what, and never taking one up —
       // adopting is settled before the question is put, and a started pane must not take a running
       // terminal off another slot (`./layout`).
-      start: { cwd?: string | null; agent?: string | null; adopt?: boolean; session?: string | null },
+      start: {
+        frame?: string | null;
+        cwd?: string | null;
+        agent?: string | null;
+        adopt?: boolean;
+        session?: string | null;
+      },
     ) => {
       hoisted.panes.push(start);
       // What the real one says: the session running here, and **where it runs** — which for a terminal
@@ -225,6 +231,22 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
     expect(heard.chose, "the window was not told where this frame settled").toEqual(["/work/here"]);
     expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/here", project: null }]);
     expect(hoisted.panes).toEqual([{ adopt: false, cwd: "/work/here", agent: "claude-code" }]);
+  });
+
+  it("starts the terminal in the place the frame was given, not in none", async () => {
+    hoisted.chosen = "/work/here";
+    const root = document.createElement("div");
+    document.body.replaceChildren(root);
+    hoisted.answers = [wake({ offered: ["codex-cli"], settled: "codex-cli" })];
+    await mountAgentFrame(root, "en", events, { frame: "7" }, null);
+    await chooseFolder(root);
+
+    // The press on the row is what starts it, and the place has to ride along: `codex` is resumed
+    // from a directory kept against the frame (`AMB-D-869`), so a pane started with no place named
+    // is one there is no way back into.
+    expect(hoisted.panes).toEqual([
+      { adopt: false, frame: "7", cwd: "/work/here", agent: "codex-cli" },
+    ]);
   });
 
   it("leaves the invitation standing when the dialog is cancelled", async () => {

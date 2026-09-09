@@ -29,10 +29,13 @@
 # came through the clipboard and could not have come from the tree, from a drop, or from anything the
 # road typed.
 #
-# ── Why the terminal's own line is read at the end ───────────────────────────────────────────────
-# The two lines are one shot apart, and the failure this road is nearest to is the picture going to
-# the pane above instead — which draws a path on the screen either way. Reading the terminal's line
-# for the absence is what parts "it went into the box" from "it went somewhere on this pane".
+# ── Why the terminal's own line is not read at the end ───────────────────────────────────────────
+# The failure this road is nearest to is the picture going to the pane above instead, and the two
+# lines are one screen and one shot. A reading is of that whole shot, so the path standing in the box
+# is in it whichever of the two lines was named — an assert for the path's *absence* on the
+# terminal's line would be red on the build that put it exactly where it belongs. What parts "it went
+# into the box" from "it went somewhere on this pane" is an eye, and it is asked for at the paste
+# itself, where both lines are in front of the operator at the moment the path arrives.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no second road. A clipboard is not a thing a shell holds, and the writing this proves
@@ -146,12 +149,3 @@ steps_gui:
     op: still-to-send
     with:
       shows: SCENARIO the seedlings in the picture
-
-  # And the terminal's own line, with none of it. The picture went where the person was writing, and
-  # a build that handed it to the pane above would draw a path on the same screen.
-  - type: assert
-    domain: terminal
-    op: in-the-box
-    with:
-      shows: "pasted-"
-      present: false

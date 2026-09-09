@@ -337,13 +337,29 @@ describe("where a press goes", () => {
     expect(wrote()).toEqual(["\x03"]);
   });
 
-  it("says which of the two the keyboard is answering to, and changes as the box does", async () => {
+  it("says which of the two the keyboard is answering to, and changes as the keyboard moves", async () => {
     await pane();
     await opened();
 
     expect(mark()?.title).toBe(t("face.composePasses"));
     await write("half a sentence");
     expect(mark()?.title).toBe(t("face.composeKeeps"));
+  });
+
+  it("names the box as soon as the keyboard is in it, nothing written yet", async () => {
+    await pane();
+    await opened();
+
+    // A person clicking into the box before they have typed anything. Every character they are about
+    // to type is the box's, so the mark that names the terminal would be untrue from here on.
+    await act(async () => { box()?.focus(); });
+
+    expect(mark()?.title, "the mark named the terminal while the box held the keyboard")
+      .toBe(t("face.composeKeeps"));
+    // And what the empty box does hand on is unchanged: the mark says where a press goes, and it is
+    // not what decides it.
+    expect(await pressed("ArrowUp"), "the press stayed in the box").toBe(true);
+    expect(wrote(), "the history an empty box hands on never reached the program").toEqual(["\x1b[A"]);
   });
 
   it("names the terminal again once the keyboard goes there, line still written", async () => {

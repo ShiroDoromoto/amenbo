@@ -164,10 +164,10 @@ export function TerminalPane({
   // in a window over the pane: what is being named is the line the box stands in.
   const [naming, setNaming] = useState(false);
   const nameField = useRef<HTMLInputElement>(null);
-  // Whether the box is the one holding the keyboard. It is half of what the mark beside the box says
-  // — the other half is whether anything is written — because the keys only stay in the box while it
-  // is the thing being typed at. The way out leaves a written box with the keyboard on the terminal
-  // (`../talk/terminal`), and so does a person clicking the terminal, and the mark has to follow both
+  // Whether the box is the one holding the keyboard, which is the whole of what the mark beside the
+  // box says: a press is the box's while the box is the thing being typed at, and the terminal's
+  // otherwise. The way out leaves a written box with the keyboard on the terminal
+  // (`../talk/terminal`), and so does a person clicking the terminal, and the mark follows both
   // rather than go on naming the box.
   const [typing, setTyping] = useState(false);
   // The box itself, which is measured rather than told how tall to be: how many lines a sentence
@@ -306,9 +306,12 @@ export function TerminalPane({
     void pressIntoTerminal(live, data).catch(() => {});
   };
 
-  /** Whether a press now would stay in the box — which is what the mark beside it names. Both halves
-   *  are the box's own: a line to keep the presses for, and the keyboard to keep them with. */
-  const keysHere = written !== "" && typing;
+  /** Whether a press now would stay in the box — which is what the mark beside it names. It is the
+   *  keyboard and nothing else: an empty box holding it keeps every ordinary character, and hands on
+   *  only the four presses that walk a history, complete a word or leave a menu, with `Ctrl+C`
+   *  (`../talk/terminal`). Asking what is written as well named the terminal while a person was
+   *  typing the first character of a line into the box. */
+  const keysHere = typing;
 
   useEffect(() => {
     if (!running) return;
@@ -582,16 +585,14 @@ export function TerminalPane({
           (`../talk/terminal`). */}
       {live !== null && (
         <div className={`compose${written === "" ? "" : " compose--writing"}`}>
-          {/* Which of the two the keyboard is answering to, said as the box changes rather than
-              after the fact. An empty box hands the presses that walk a history on to the program;
-              one with something written in it keeps them (`../talk/terminal`).
+          {/* Which of the two the keyboard is answering to, said as the keyboard moves rather than
+              after the fact. What it names is where a press goes, and that is the box for as long as
+              the box is the thing being typed at — an empty one included, which keeps the characters
+              and hands on the few presses it has nothing to do with (`keysHere`).
 
-              **It is asked of the keyboard as well as of what is written**, because either one alone
-              would let it say something untrue: a person leaves a written box for the terminal by
-              the way out or by clicking into it, and the line they were writing stays where it is —
-              so a mark reading the text alone would go on naming a box the presses no longer reach.
-              What it names is where a press goes, which is the box only while the box is being typed
-              at. */}
+              A box the keyboard has left is the other way round, whatever is written in it, and the
+              mark follows that too: the way out and a click into the terminal both take the keyboard
+              away and leave the line where it is. */}
           <span className="compose__mark" title={t(keysHere ? "face.composeKeeps" : "face.composePasses")}>
             <Icon
               name={keysHere ? "pencil" : "keyboard"}

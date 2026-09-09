@@ -189,7 +189,11 @@ export async function mountAgentFrame(
         if (mine === showing) frame.append(row(choice));
       },
     };
-    void mountTerminal(pane, events, { ...take, cwd, agent })
+    // Which place this is travels with every road into a pane, not just the one that takes a
+    // terminal up: a press arrives here with `take` standing in for the frame's own start, and a
+    // pane opened without the frame is a session the host has nowhere to write the way back onto
+    // (`AMB-D-869`).
+    void mountTerminal(pane, events, { ...take, cwd, agent, ...(start.frame == null ? {} : { frame: start.frame }) })
       .then((dispose) => {
         if (mine === showing) close = dispose;
         else dispose();

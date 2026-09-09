@@ -129,6 +129,15 @@ export type PaneStart = {
    * so nothing here can name a program.
    */
   agent?: string | null;
+  /**
+   * Which frame this pane is, for the row the way back into its session is written on
+   * (`AMB-D-869`). A pane opened without one starts a session nothing can come back to.
+   *
+   * The handle itself never crosses: the host issues it as the session starts and writes it down
+   * beside the arrangement, so what a window sends is which place it is opening and no more
+   * (`crate::frames`).
+   */
+  frame?: string | null;
 };
 
 /**
@@ -516,6 +525,7 @@ async function draw(
   return await invoke<PtySessionDto>("pty_open", {
     cwd: start.cwd ?? null,
     agent: start.agent ?? null,
+    frame: start.frame ?? null,
     cols: term.cols,
     rows: term.rows,
   });

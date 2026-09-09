@@ -33,7 +33,7 @@
 //! | | [`HARNESSES`] — wired | [`LAUNCHES`] — started |
 //! |---|---|---|
 //! | what it does | a hook in the folder's own settings runs `amenbo agent` when a session starts | Amenbo opens a pane and starts the agent in it, saying the same thing as its first argument |
-//! | what a row holds | [`event`](Harness::event), [`places`](Harness::places), [`home`](Harness::home), [`paste_into`](Harness::paste_into), [`template`](Harness::template), [`json_layers`](Harness::json_layers) | [`command`](Launch::command), [`prompt_flag`](Launch::prompt_flag), [`model_flag`](Launch::model_flag), [`models`](Launch::models), [`switch`](Launch::switch) |
+//! | what a row holds | [`event`](Harness::event), [`places`](Harness::places), [`home`](Harness::home), [`paste_into`](Harness::paste_into), [`template`](Harness::template), [`json_layers`](Harness::json_layers) | [`command`](Launch::command), [`prompt_flag`](Launch::prompt_flag), [`model_flag`](Launch::model_flag), [`models`](Launch::models), [`switch`](Launch::switch), [`rename`](Launch::rename), [`resume`](Launch::resume) |
 //!
 //! One product can stand in both, and Claude Code does — that repetition is what this costs. What it buys
 //! is a row for a provider that can only be started: with no session-start hook to write, the price of a
@@ -275,6 +275,12 @@ pub struct Launch {
     /// A column for the same reason [`switch`](Launch::switch) is one: four of the six have a way,
     /// and the two that do not are rows rather than an exception written into the code that types it.
     pub rename: Option<Rename>,
+    /// How a pane running this provider comes back into the session it was running, or `None`
+    /// where the way back is not a flag on the line ([`Resume`], `AMB-D-869`).
+    ///
+    /// A column for the same reason [`rename`](Launch::rename) is one: five of the six take a
+    /// handle beside the opening prompt, and the sixth carries a home instead (`AMB-T-4640`).
+    pub resume: Option<Resume>,
     /// Whether this row has been watched starting the provider on a real machine (`AMB-T-3819`).
     ///
     /// Every row is written from the product's own documentation, and that is not the same as having
@@ -396,6 +402,86 @@ pub struct Rename {
     pub titles: bool,
 }
 
+/// How a pane comes back into the session it was running — the resume catalog's column
+/// (`AMB-D-869`).
+///
+/// **Every one of the six has a way back, and no two of them spell it alike** (`AMB-T-4630`). What
+/// parts them is not the flag but who decides the handle: three take one Amenbo hands them as the
+/// session starts, one takes an unknown one and creates it, one names its own and has to be asked
+/// afterwards, and one is not a session id at all. So the column carries the two halves separately —
+/// [`back`](Resume::back) is the way in, [`issue`](Resume::issue) is who decides — and a provider
+/// with no way back at all is a row with `None` on it rather than a flag nothing takes.
+///
+/// **The row for `codex` is `None` here, and it is not "no way back".** Its handle is a home of its
+/// own rather than an id on a line, which is an environment variable and a directory to keep
+/// (`AMB-T-4640`), and a flag column could hold neither.
+pub struct Resume {
+    /// The flag the handle goes behind to come back into that session — `--resume` for four of
+    /// them, `-s` for OpenCode.
+    pub back: &'static str,
+    /// How a handle Amenbo decided is put on the line as the session **starts**, or `None` where
+    /// the provider names its own and it has to be read back afterwards ([`ask`](Resume::ask)).
+    pub issue: Option<Issue>,
+    /// How this provider is asked which sessions it has, for the row that names its own — or `None`
+    /// where Amenbo decides the handle and has nothing to ask.
+    pub ask: Option<crate::agent_sessions::Ask>,
+}
+
+/// Who decides the handle a session starts under (`AMB-T-4630`).
+///
+/// It is an enum rather than a second flag column because the two spellings mean different things
+/// to the provider: one is being told the id of a session it is about to create, and the other is
+/// being asked to come back into a session that does not exist yet.
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Issue {
+    /// A flag of the provider's own for it — `--session-id <uuid>`, which the three that have one
+    /// take beside the opening prompt.
+    Flag(&'static str),
+    /// The same flag as coming back. Cursor was watched creating a session under a handle it had
+    /// never seen, so the way in and the way it starts are one line (`AMB-T-4630`).
+    Back,
+}
+
+/// The handle a pane is opened on — one Amenbo has just decided, or the one the pane came back
+/// with (`AMB-D-869`).
+///
+/// The two are separate because the flag they go behind can be, and the caller is the only one that
+/// knows which it is holding: a handle read off a pane's row is a session that exists, and one
+/// [`issue`] has just minted is a name for a session about to be made.
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Handle<'a> {
+    /// A handle Amenbo decided, for a session the provider is about to create under it.
+    New(&'a str),
+    /// The handle a pane came back with, for the session it was running.
+    Back(&'a str),
+}
+
+/// A handle for a session about to start on `launch`, where Amenbo is the one that decides it.
+///
+/// `None` for the two rows it is not Amenbo's to decide: OpenCode names its own and is asked
+/// afterwards ([`Resume::ask`]), and Codex carries a home rather than an id (`AMB-T-4640`).
+///
+/// **A version 4 UUID, because that is the shape the providers were watched taking** — Claude Code
+/// refuses `--session-id` anything else, and the other two were only ever handed one
+/// (`AMB-T-4630`). The randomness is the operating system's, the same source a pane's own session
+/// id is drawn from: a handle is written down and read back a run later, so a counter would name
+/// one session this run and a different one the next.
+pub fn issue(launch: &Launch) -> Option<String> {
+    launch.resume.as_ref()?.issue.map(|_| uuid_v4())
+}
+
+/// Sixteen bytes of the operating system's randomness, spelled as a version 4 UUID.
+fn uuid_v4() -> String {
+    let mut bytes = [0u8; 16];
+    getrandom::fill(&mut bytes).expect("failed to draw OS randomness");
+    // The two fields a version 4 UUID is read by: the version in the high nibble of byte 6, and the
+    // variant in the top bits of byte 8. A provider that parses the text checks both.
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
+}
+
 /// Every AI Amenbo knows how to start, in the order a face offers them — the launch catalog
 /// (`AMB-D-791`). Wider than [`HARNESSES`]: a provider earns a row here by being startable, whether or
 /// not its session-start hook is one Amenbo can write.
@@ -425,6 +511,13 @@ pub static LAUNCHES: &[Launch] = &[
         // Watched renaming the thread and the title both, and taking the name on the line
         // (`AMB-T-4652`).
         rename: Some(Rename { command: "/rename", limit: None, titles: true }),
+        // Takes the id of the session it is about to make, and refuses anything that is not a
+        // UUID. Coming back on one it has no record of is an error and exit 1 (`AMB-T-4630`).
+        resume: Some(Resume {
+            back: "--resume",
+            issue: Some(Issue::Flag("--session-id")),
+            ask: None,
+        }),
         confirmed: true,
     },
     Launch {
@@ -450,6 +543,9 @@ pub static LAUNCHES: &[Launch] = &[
         // The one row the rename is half-seen on: the thread takes the name, the terminal title
         // stays on the folder it was started in (`AMB-T-4652`).
         rename: Some(Rename { command: "/rename", limit: None, titles: false }),
+        // The way back here is a home of its own rather than a handle on the line — an environment
+        // variable and a directory to keep, which is `AMB-T-4640`'s and not a flag column's.
+        resume: None,
         confirmed: true,
     },
     Launch {
@@ -470,6 +566,14 @@ pub static LAUNCHES: &[Launch] = &[
         // The only one that answers with a bound: 101 characters is refused in its own words
         // (`AMB-T-4652`), counted in characters rather than bytes.
         rename: Some(Rename { command: "/rename", limit: Some(100), titles: true }),
+        // Takes the id it is about to make, the same as Claude Code. Coming back on one it does not
+        // know is the one row that neither stops nor carries on quietly: it says so in the pane and
+        // then stands there as a new session (`AMB-T-4630`).
+        resume: Some(Resume {
+            back: "--resume",
+            issue: Some(Issue::Flag("--session-id")),
+            ask: None,
+        }),
         confirmed: true,
     },
     Launch {
@@ -494,6 +598,13 @@ pub static LAUNCHES: &[Launch] = &[
         // No such command at all — typed in, it goes to the model as a sentence and is answered as
         // one (`AMB-T-4652`), which is why this is `None` rather than a row with a spelling.
         rename: None,
+        // Its `--help` names `latest` and a number, and a UUID from `--session-id` was watched
+        // making the round trip all the same (`AMB-T-4630`).
+        resume: Some(Resume {
+            back: "--resume",
+            issue: Some(Issue::Flag("--session-id")),
+            ask: None,
+        }),
         confirmed: true,
     },
     Launch {
@@ -523,6 +634,17 @@ pub static LAUNCHES: &[Launch] = &[
         // The second one with no rename: the command is not offered, and the title it shows comes
         // from whatever it was first said (`AMB-T-4652`).
         rename: None,
+        // The one row that names its own handle: there is no flag to be told one, so the pane is
+        // started and the id is read back out of the provider's own list afterwards
+        // (`AMB-T-4630`).
+        resume: Some(Resume {
+            back: "-s",
+            issue: None,
+            ask: Some(crate::agent_sessions::Ask {
+                args: &["session", "list", "--format", "json"],
+                reading: crate::agent_sessions::Reading::JsonSessions,
+            }),
+        }),
         confirmed: true,
     },
     Launch {
@@ -550,6 +672,11 @@ pub static LAUNCHES: &[Launch] = &[
         // Takes the name on the line and moves both faces, saying nothing on the screen about it
         // (`AMB-T-4652`).
         rename: Some(Rename { command: "/rename", limit: None, titles: true }),
+        // One flag both ways: a handle it has never seen is created under that handle, so the line
+        // that starts a session and the line that comes back into one are the same
+        // (`AMB-T-4630`). **A handle it cannot find is a new session and no word about it** — the
+        // one row that fails silently, and `AMB-D-869` leaves it there rather than covering for it.
+        resume: Some(Resume { back: "--resume", issue: Some(Issue::Back), ask: None }),
         // Written from the documentation and never run — the tool is not on the machine the other five
         // were tried on (`AMB-T-3838`).
         confirmed: false,
@@ -613,15 +740,47 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 /// It goes in front of the prompt, which is where all six were watched taking it (`AMB-T-4576`), and
 /// in front of [`prompt_flag`](Launch::prompt_flag) because that flag takes the argument straight
 /// after it.
-pub fn opening(launch: &Launch, cmd: &str, model: Option<&str>) -> Vec<String> {
+///
+/// **`handle` is the session this pane is opened on, and `None` is a pane opened on none**
+/// ([`Handle`], `AMB-D-869`). It rides on the same line as the opening prompt rather than in a
+/// second move: all six take the two together, so a pane that comes back into a conversation is
+/// still told where it is working ([`Resume`]).
+pub fn opening(
+    launch: &Launch,
+    cmd: &str,
+    model: Option<&str>,
+    handle: Option<Handle<'_>>,
+) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
     if let Some(model) = model.map(str::trim).filter(|name| !name.is_empty()) {
         args.push(launch.model_flag.to_string());
         args.push(model.to_string());
     }
+    if let Some((flag, id)) = resuming(launch, handle) {
+        args.push(flag.to_string());
+        args.push(id.to_string());
+    }
     args.extend(launch.prompt_flag.map(str::to_string));
     args.push(crate::agents::pane_instruction(cmd));
     args
+}
+
+/// The flag a handle goes behind on this row's launch line, and the handle — or nothing where this
+/// row puts none there.
+///
+/// Three ways to have nothing, and they are different things: the pane is being opened on no
+/// session at all, the row has no way back on a line ([`Launch::resume`]), or the row names its own
+/// handle and the one it will name is not known yet ([`Resume::ask`]). None of them is a flag with
+/// an empty value, which is what every provider would refuse.
+fn resuming<'a>(launch: &Launch, handle: Option<Handle<'a>>) -> Option<(&'static str, &'a str)> {
+    let resume = launch.resume.as_ref()?;
+    match handle? {
+        Handle::Back(id) => Some((resume.back, id)),
+        Handle::New(id) => match resume.issue? {
+            Issue::Flag(flag) => Some((flag, id)),
+            Issue::Back => Some((resume.back, id)),
+        },
+    }
 }
 
 /// What a face hands the reader for one harness: a request addressed to the AI they work with, carrying
@@ -1072,7 +1231,7 @@ mod tests {
         let said = crate::agents::pane_instruction("amenbo");
         assert!(said.starts_with(&crate::agents::launch_instruction("amenbo")), "{said}");
         for launch in LAUNCHES {
-            let args = opening(launch, "amenbo", None);
+            let args = opening(launch, "amenbo", None, None);
             assert_eq!(
                 args.last().map(String::as_str),
                 Some(said.as_str()),
@@ -1102,13 +1261,101 @@ mod tests {
             let mut want = vec![launch.model_flag.to_string(), "a-model".to_string()];
             want.extend(launch.prompt_flag.map(str::to_string));
             want.push(said.clone());
-            assert_eq!(opening(launch, "amenbo", Some("a-model")), want, "{}", launch.id);
+            assert_eq!(opening(launch, "amenbo", Some("a-model"), None), want, "{}", launch.id);
 
-            let bare = opening(launch, "amenbo", None);
+            let bare = opening(launch, "amenbo", None, None);
             for empty in [Some(""), Some("   ")] {
-                assert_eq!(opening(launch, "amenbo", empty), bare, "{}: {empty:?}", launch.id);
+                assert_eq!(opening(launch, "amenbo", empty, None), bare, "{}: {empty:?}", launch.id);
             }
             assert!(!bare.contains(&launch.model_flag.to_string()), "{}", launch.id);
+        }
+    }
+
+    /// Every row that has a way back spells it as a flag, and the row that names its own handle is
+    /// the only one with something to ask.
+    ///
+    /// The pairing is what makes the column readable without a branch: a row Amenbo decides the
+    /// handle for has nothing to ask, and a row it does not has no way to be told one.
+    #[test]
+    fn every_row_with_a_way_back_spells_it_as_a_flag() {
+        for launch in LAUNCHES {
+            let Some(resume) = launch.resume.as_ref() else { continue };
+            assert!(resume.back.starts_with('-'), "{}: {} is not a flag", launch.id, resume.back);
+            if let Some(Issue::Flag(flag)) = resume.issue {
+                assert!(flag.starts_with('-'), "{}: {flag} is not a flag", launch.id);
+            }
+            assert_eq!(
+                resume.issue.is_none(),
+                resume.ask.is_some(),
+                "{}: who decides the handle and what is asked disagree",
+                launch.id
+            );
+        }
+        // And the row whose way back is a home of its own rather than a handle on a line
+        // (`AMB-T-4640`).
+        assert!(find_launch("codex-cli").unwrap().resume.is_none());
+    }
+
+    /// A handle rides on the same line as the opening prompt, in front of it, and a pane opened on
+    /// no session puts none there.
+    ///
+    /// The empty case is the one worth a test: a flag with nothing behind it would be read as the
+    /// prompt flag taking the instruction's place, so the pane would come up on a provider that was
+    /// never told where it is working.
+    #[test]
+    fn a_handle_rides_in_front_of_the_prompt_and_no_session_puts_none_there() {
+        let said = crate::agents::pane_instruction("amenbo");
+        for launch in LAUNCHES {
+            let bare = opening(launch, "amenbo", None, None);
+            assert!(!bare.iter().any(|arg| arg == "a-handle"), "{}", launch.id);
+
+            let Some(resume) = launch.resume.as_ref() else {
+                // A row with no way back is opened the same way whatever it is handed.
+                assert_eq!(opening(launch, "amenbo", None, Some(Handle::Back("a-handle"))), bare);
+                continue;
+            };
+            let mut want = vec![resume.back.to_string(), "a-handle".to_string()];
+            want.extend(launch.prompt_flag.map(str::to_string));
+            want.push(said.clone());
+            assert_eq!(
+                opening(launch, "amenbo", None, Some(Handle::Back("a-handle"))),
+                want,
+                "{}",
+                launch.id
+            );
+
+            // And a handle Amenbo has just decided goes behind whichever flag this row starts a
+            // session under — its own, or the same one it comes back on.
+            let started = opening(launch, "amenbo", None, Some(Handle::New("a-handle")));
+            match resume.issue {
+                Some(Issue::Flag(flag)) => assert_eq!(started[0], flag, "{}", launch.id),
+                Some(Issue::Back) => assert_eq!(started[0], resume.back, "{}", launch.id),
+                // The row that names its own is started with nothing on the line: the handle it
+                // takes is read back afterwards (`crate::agent_sessions`).
+                None => assert_eq!(started, bare, "{}", launch.id),
+            }
+        }
+    }
+
+    /// A handle is minted for every row Amenbo decides one for, and for no other — and it is a
+    /// version 4 UUID, which is the shape the providers were watched taking.
+    #[test]
+    fn a_handle_is_minted_only_where_amenbo_is_the_one_that_decides_it() {
+        for launch in LAUNCHES {
+            let decides = launch.resume.as_ref().is_some_and(|resume| resume.issue.is_some());
+            let Some(handle) = issue(launch) else {
+                assert!(!decides, "{} decides a handle and was given none", launch.id);
+                continue;
+            };
+            assert!(decides, "{} minted a handle it does not decide", launch.id);
+            assert_eq!(handle.len(), 36, "{}: {handle}", launch.id);
+            let parts: Vec<&str> = handle.split('-').collect();
+            assert_eq!(parts.iter().map(|one| one.len()).collect::<Vec<_>>(), [8, 4, 4, 4, 12]);
+            assert!(handle.chars().all(|c| c.is_ascii_hexdigit() || c == '-'), "{handle}");
+            assert!(parts[2].starts_with('4'), "{handle} is not version 4");
+            assert!(matches!(&parts[3][0..1], "8" | "9" | "a" | "b"), "{handle} has no variant");
+            // Two panes are two sessions: a handle that repeated would put both on one conversation.
+            assert_ne!(issue(launch), Some(handle), "{} minted the same handle twice", launch.id);
         }
     }
 
@@ -1256,7 +1503,7 @@ mod tests {
     /// reader may not have.
     #[test]
     fn the_opening_prompt_names_the_running_command() {
-        let said = opening(find_launch("claude-code").unwrap(), "amenbo-dev", None).pop().unwrap();
+        let said = opening(find_launch("claude-code").unwrap(), "amenbo-dev", None, None).pop().unwrap();
         assert!(said.contains("amenbo-dev agent --json"), "{said}");
         assert!(!said.contains("`amenbo agent"), "{said}");
         // Both canons the pane names, and the second one for the same reason as the first.

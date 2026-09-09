@@ -94,6 +94,9 @@ mod single_instance;
 mod wake;
 /// Which models an agent can be started on, asked of the agent's own command (`AMB-D-865`).
 mod agent_models;
+/// The handle a provider that names its own is resumed from, read back out of its list
+/// (`AMB-D-869`).
+mod agent_sessions;
 /// OS-specific file watching — the half that wakes `commands::watch_store`. It does not depend on
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
 /// operating systems.

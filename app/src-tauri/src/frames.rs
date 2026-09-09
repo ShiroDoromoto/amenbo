@@ -61,6 +61,49 @@ pub struct TalkFace {
     seeded: AtomicBool,
 }
 
+impl TalkFace {
+    /// The handle the session in this frame is resumed from, where one was written down **for this
+    /// provider**.
+    ///
+    /// It is what a pane is opened on when the frame already had a session — the one the person left
+    /// there, whether a run ago or a moment ago (`AMB-D-869`).
+    ///
+    /// **The provider is asked about because a handle is only a handle to the one that issued it.**
+    /// A frame the person opened Claude Code in and is now opening OpenCode in still holds Claude's
+    /// uuid, and OpenCode handed that would refuse to start. Which provider the handle belongs to is
+    /// the agent on the row it came back on — the row this frame was last written down as.
+    pub fn resumes_from(&self, frame: &str, agent: &str) -> Option<String> {
+        let kept = self.kept.lock().expect("kept layout lock");
+        let pane = kept.as_ref()?.panes.iter().find(|pane| pane.id == frame)?;
+        if pane.agent.as_deref() != Some(agent) {
+            return None;
+        }
+        self.hints.lock().expect("resume hints lock").get(frame).cloned()
+    }
+
+    /// Every handle written down in this run — what a pane reading one back out of a provider's own
+    /// list has to pick around ([`amenbo_core::agent_sessions::newest_in`]).
+    pub fn resume_hints(&self) -> Vec<String> {
+        self.hints.lock().expect("resume hints lock").values().cloned().collect()
+    }
+
+    /// Write down the handle a session in this frame is resumed from, and put the row on the store.
+    ///
+    /// **The write is made from here, the way a naming is.** A handle is issued by the host as a pane
+    /// starts, and the window has nothing to send that would carry it — so a handle that waited for
+    /// the window's next arrangement would be one lost to a quit in between. Where no arrangement has
+    /// been sent yet there is no row to write it onto, and the window's first one carries it.
+    pub fn resumes(&self, frame: &str, handle: String) {
+        self.hints.lock().expect("resume hints lock").insert(frame.to_string(), handle);
+        let Some(layout) = self.layout.lock().expect("talk layout lock").clone() else {
+            return;
+        };
+        if let Err(e) = keep(self, &layout) {
+            log::warn!("could not write down the way back into frame {frame}: {e:?}");
+        }
+    }
+}
+
 /// What this run calls the talk window's frames — the whole of it, since the window draws every frame
 /// it has at once.
 #[tauri::command]
@@ -322,6 +365,39 @@ mod tests {
         orphan.project = None;
 
         assert!(panes_of(&face, &layout(vec![orphan])).is_empty());
+    }
+
+    /// A handle is a handle to the provider that issued it, and the row says which that was.
+    ///
+    /// The frame that has been opened on two providers is the case: a uuid Claude Code was given is
+    /// nothing OpenCode could start on, and handing it over would open the pane on a refusal.
+    #[test]
+    fn a_handle_comes_back_only_for_the_provider_it_was_issued_for() {
+        let face = TalkFace::default();
+        seed(&face, &SavedLayout {
+            project: Some(1),
+            splits: std::collections::BTreeMap::new(),
+            panes: vec![SavedPane {
+                id: "1".to_string(),
+                project: 1,
+                folder: Some("/work/repo".to_string()),
+                agent: Some("claude-code".to_string()),
+                name: None,
+                resume: Some("0f9c".to_string()),
+            }],
+            next_id: 2,
+        });
+
+        assert_eq!(face.resumes_from("1", "claude-code").as_deref(), Some("0f9c"));
+        assert_eq!(face.resumes_from("1", "opencode"), None);
+        // And a frame no row came back for has nothing to come back to.
+        assert_eq!(face.resumes_from("2", "claude-code"), None);
+
+        // A handle written down now is what that frame answers with — the store is not reached for,
+        // there being no arrangement yet to write it onto.
+        face.resumes("1", "aa11".to_string());
+        assert_eq!(face.resumes_from("1", "claude-code").as_deref(), Some("aa11"));
+        assert_eq!(face.resume_hints(), vec!["aa11".to_string()]);
     }
 
     /// What the store kept comes back into the two maps the window does not hold — with the rank the

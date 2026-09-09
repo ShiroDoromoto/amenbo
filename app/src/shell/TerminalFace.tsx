@@ -1233,6 +1233,9 @@ export function TerminalFace({
                       adopt: false,
                       cwd: frame.folder,
                       agent: startWith.current.get(frame.id) ?? null,
+                      // Which place this is, so the host can write down the way back into what it
+                      // starts here (`../talk/terminal`).
+                      frame: frame.id,
                     }}
                     autoStart={frame.session !== null || startNow.current.has(frame.id)}
                     focused={layout.focus === frame.id}

@@ -222,8 +222,9 @@ export function Sidebar({
               <button
                 key={p.id}
                 className={cls}
-                // The name is said whether or not it is drawn: compact, the mark is the only thing on
-                // the row, and a colour is not something a reader can be asked to read out.
+                // The name is said whether or not it is drawn: compact, nothing on the row names the
+                // project — the mark is what it has, with the count on its corner (`AMB-D-848`) — and
+                // a colour is not something a reader can be asked to read out.
                 aria-label={p.name}
                 title={p.name}
                 onClick={() => onRowClick(n)}

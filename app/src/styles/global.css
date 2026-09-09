@@ -489,9 +489,15 @@ input[type="color"] {
 
    It does not follow the keyboard — a box that appeared when it was written in would change the
    pane's height at the moment somebody started typing. What is written past the cap scrolls in
-   here, which is what `overflow-y` is for. */
+   here, which is what `overflow-y` is for.
+
+   `max-width: none` drops the reading width every other textarea takes. That cap is there so a
+   paragraph is typed in the column it is shown back in; this box is a row of a pane and what is
+   written in it goes to a program, never to a page. Left capped, the box stops growing at
+   `--measure-prose` and the send button stops with it, standing short of the pane's right edge
+   wherever a pane is wider than that. */
 .compose__box {
-  flex: 1; min-width: 0;
+  flex: 1; min-width: 0; max-width: none;
   resize: none; overflow-y: auto;
   padding: 0; border: 0; background: transparent;
   color: var(--c-text);

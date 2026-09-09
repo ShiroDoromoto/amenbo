@@ -45,6 +45,8 @@ use base64::Engine as _;
 use portable_pty::{native_pty_system, ChildKiller, MasterPty, PtySize};
 use tauri::{Emitter, Manager};
 
+use amenbo_core::harness::Handle;
+
 use crate::dto::{PtyChunkDto, PtyReplayDto, PtySessionDto, SessionSaidDto};
 use crate::error::CmdError;
 use crate::launch;
@@ -599,6 +601,44 @@ fn random_hex(bytes: usize) -> String {
     })
 }
 
+/// Now, in milliseconds since the epoch — the floor a pane's own session is picked above
+/// (`crate::agent_sessions`). A clock this cannot read is zero, which takes the newest session in
+/// the folder rather than none.
+fn since_epoch_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since| i64::try_from(since.as_millis()).unwrap_or(0))
+}
+
+/// Watch for the session this pane opened to appear in its provider's own list, and write the
+/// handle down on the frame's row (`AMB-D-869`).
+///
+/// **On a thread, because the pane is not waiting for it.** What is being watched for is a provider
+/// writing its first record, which is quick but is not instant, and a pane that waited would be a
+/// window holding still while a terminal opened. Nothing on the screen depends on the answer: what
+/// it buys is the way back into this pane the next time the app comes up.
+fn read_back(
+    app: tauri::AppHandle,
+    command: &'static str,
+    ask: amenbo_core::agent_sessions::Ask,
+    frame: String,
+    folder: String,
+    since: i64,
+) {
+    std::thread::spawn(move || {
+        let face = app.state::<crate::frames::TalkFace>();
+        let taken = face.resume_hints();
+        let found =
+            crate::agent_sessions::appeared(command, &ask, std::path::Path::new(&folder), since, &taken);
+        match found {
+            Some(handle) => face.resumed_from(&frame, handle),
+            // Nothing appeared before the wait ran out. The pane is running either way; what is lost
+            // is the way back into it, and next run opens a fresh session there.
+            None => log::warn!("no session appeared for frame {frame} in {folder}"),
+        }
+    });
+}
+
 /// Turn a failure of the terminal itself into the refusal the webview is given. There is nothing
 /// for a reader to do about most of them, so what they say is what the operating system said —
 /// whichever of the two shapes it arrives in, the pty layer's or the file descriptor's.
@@ -633,13 +673,13 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
 /// `claude --model opus` an opening instruction would go — before the flags, after them, behind a
 /// flag of its own — so it does not guess: the line is started as it stands and the sentence follows
 /// it into the pane (`AMB-D-793`).
-fn started_as(agent: &str) -> Result<Started, CmdError> {
+fn started_as(agent: &str, handle: Option<Handle<'_>>) -> Result<Started, CmdError> {
     let cmd = amenbo_core::config::Paths::command_name();
     let config = amenbo_core::config::Paths::resolve()
         .map(|paths| amenbo_core::config::Config::load(&paths.config_file))
         .unwrap_or_default();
     if let Some(launch) = amenbo_core::wake::started_as(agent) {
-        return Ok(opening_line(launch, config.model_for(agent)));
+        return Ok(opening_line(launch, config.model_for(agent), handle));
     }
     if let Some(own) = config.custom_agent(agent) {
         return Ok(Started {
@@ -687,11 +727,15 @@ fn started_as(agent: &str) -> Result<Started, CmdError> {
 fn opening_line(
     launch: &amenbo_core::harness::Launch,
     model: Option<&amenbo_core::config::AgentModel>,
+    handle: Option<Handle<'_>>,
 ) -> Started {
     let cmd = amenbo_core::config::Paths::command_name();
     let named = model.map(|one| one.id.as_str());
     Started {
-        line: launch::command_line(launch.command, &amenbo_core::harness::opening(launch, cmd, named)),
+        line: launch::command_line(
+            launch.command,
+            &amenbo_core::harness::opening(launch, cmd, named, handle),
+        ),
         hand_over: None,
     }
 }
@@ -862,6 +906,11 @@ fn gone(session: &str) -> CmdError {
 /// (`app/src/talk/layout.ts`), and it is here because the way back into what is started is written
 /// down against the place rather than against the process: a pane comes back in the next run, and
 /// the session in it does not (`AMB-D-869`).
+///
+/// **A frame that already carries a handle for this provider is opened on it**, and one that does
+/// not is opened on a handle issued here, where the provider takes one
+/// ([`amenbo_core::harness::issue`]). Neither ever crosses to the window: both are read and written
+/// on this side, so a pane's way back is not something a webview could put there.
 // Seven of these are what a window holds about a pane, one answer each. Gathered into a shape they
 // would be taken apart again on arrival.
 #[allow(clippy::too_many_arguments)]
@@ -878,6 +927,7 @@ pub fn pty_open(
 ) -> Result<PtySessionDto, CmdError> {
     let session = new_session();
     let started_at = amenbo_core::time::Timestamp::now().to_rfc3339_z();
+    let opened_at = since_epoch_ms();
     let size = PtySize {
         rows,
         cols,
@@ -890,7 +940,29 @@ pub fn pty_open(
         .map(|dir| std::fs::canonicalize(dir).map_err(failed))
         .transpose()?;
 
-    let started = agent.as_deref().map(started_as).transpose()?;
+    // The way back into what this frame was running. A frame that came back with a handle for this
+    // provider is opened on it; one that has none is opened on a handle issued here and written
+    // down, so the pane has a way back the next time the app comes up (`AMB-D-869`).
+    let face = app.state::<crate::frames::TalkFace>();
+    let back = frame
+        .as_deref()
+        .zip(agent.as_deref())
+        .and_then(|(frame, agent)| face.comes_back_on(frame, agent));
+    let launch = agent.as_deref().and_then(amenbo_core::wake::started_as);
+    let issued = match back {
+        Some(_) => None,
+        None => launch.and_then(amenbo_core::harness::issue),
+    };
+    let handle = back
+        .as_deref()
+        .map(Handle::Back)
+        .or_else(|| issued.as_deref().map(Handle::New));
+    let started = agent.as_deref().map(|id| started_as(id, handle)).transpose()?;
+    // Written down before the program is started, so a quit that comes between the two still leaves
+    // the pane a way back — the session is made under this handle whether or not anybody is watching.
+    if let (Some(frame), Some(issued)) = (frame.as_deref(), issued.as_deref()) {
+        face.resumed_from(frame, issued.to_string());
+    }
     // Kept against the session, so a pane that adopts this terminal later can say what is running in
     // it. It is the id as it was asked for — a catalog row, or one of this device's registrations —
     // and which of the two it is stays the catalog's answer rather than being decided here.
@@ -904,8 +976,7 @@ pub fn pty_open(
     if let Some(frame) = frame.as_deref() {
         if let Some(home) = crate::codex_home::for_pane(frame, agent_id.as_deref()) {
             cmd.env(crate::codex_home::ENV, &home);
-            app.state::<crate::frames::TalkFace>()
-                .resumed_from(frame, home.to_string_lossy().into_owned());
+            face.resumed_from(frame, home.to_string_lossy().into_owned());
         }
     }
     // The drop box is made here rather than left for the first statement to make, so that a pane which
@@ -947,6 +1018,19 @@ pub fn pty_open(
             started_at,
         },
     );
+
+    // The one provider that names its own handle: the pane is started, and which session it took is
+    // read back out of the provider's own list once it has one (`crate::agent_sessions`).
+    //
+    // Only where a session is being made. A pane coming back into one already has its handle, and no
+    // new row appears in that folder for the reading to find.
+    if let (Some(frame), Some(folder), Some((command, ask))) = (
+        frame.filter(|_| back.is_none()),
+        opened_in.clone(),
+        launch.and_then(|launch| Some((launch.command, launch.resume.as_ref()?.ask?))),
+    ) {
+        read_back(app.clone(), command, ask, frame, folder, opened_at);
+    }
 
     listen(app.clone(), session.clone(), Arc::clone(&pane), drop_box);
     // Once the terminal is in the registry, which is where the hand-over reaches for the writer. It

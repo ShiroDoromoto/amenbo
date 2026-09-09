@@ -12,6 +12,7 @@ pub mod activity;
 pub mod activity_log;
 pub mod agent;
 pub mod agent_models;
+pub mod agent_sessions;
 pub mod agents;
 pub mod archive;
 pub mod binding;

@@ -850,6 +850,10 @@ which is a question nothing can ask of a terminal at all. `press-out` is the one
 rule: the up arrow on a **written** box's first line, which moves the keyboard to the terminal and
 goes there itself, so a program that has put a menu up is still reachable with a line half written.
 It takes no `key` — there is one press, and the same key one line lower is the box's own.
+`paste-image-into-box` is a picture on the clipboard put in there, which is not `paste-image` with
+the box named: that one lands in the terminal's own input line, the two are reached by different
+presses on Linux, and what arrives here is **quoted**, because the box's line goes to the program as
+the person's own. It goes in at the caret and leaves what was already written standing.
 
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
 most of what there is: `set-panes` re-cuts the frames into pages of the count it names, `go-page` moves

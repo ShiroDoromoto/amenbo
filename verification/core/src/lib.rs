@@ -2491,6 +2491,26 @@ const REGISTRY: &[OpSpec] = &[
     // `on` is which pane's box is being read, named the way `in-the-box`'s is. Left out, it is the
     // page's one pane.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "still-to-send", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
+    // A **picture** on the clipboard put into that box. It is not `paste-image` with the box named:
+    // that one lands in the terminal's own input line, and the two are reached by different presses
+    // on Linux. A pane holds out for `Ctrl+Shift+V` there because `Ctrl+V` is `^V` to the program in
+    // it; the box has no program behind it, so the press read there is the one a person writing
+    // makes (`app/src/core/clipFiles.ts`). macOS and Windows carry the picture on the paste itself
+    // and take the ordinary paste key at both.
+    //
+    // What lands is a path and never the picture, written into this pane's own directory first, and
+    // it is **quoted** — the box's line goes to the program as the person's own, so there is a shell
+    // behind it and a name with a space in it would be two words. That is the half that parts this
+    // from the draft page and the editor, which are handed the same path bare.
+    //
+    // It goes in **at the caret**, and what was already written stays. A paste that replaced the
+    // line would pass every reading of the path and have thrown a half-written sentence away, which
+    // is why a road walks this with something standing in the box.
+    //
+    // Nothing is sent, for the reason `paste-image` sends nothing.
+    //
+    // `onto` is which pane's box, named the way `write-to-pane` names one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-image-into-box", required: &[], refs: &[], strings: &["onto"], binds: false },
     // Sending what is written there, which is the press the whole box exists for.
     //
     // `by` is which of the two presses makes it go — `return` in the box, or `button` beside it —

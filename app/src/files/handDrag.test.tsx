@@ -250,6 +250,43 @@ describe("letting a row go", () => {
     expect(landed.length, "no row could be taken up again").toBe(2);
   });
 
+  /**
+   * The release that never comes. A pointer let go over the menu bar a window at the top of the
+   * screen reveals, or over another application, is one this page is never told about — and what is
+   * held then is held until something else puts it down (`AMB-T-4624`).
+   */
+  it("puts down the row still in hand when a new press lands", async () => {
+    await down(100, 100);
+    under(document.getElementById("one"));
+    await carryTo(300);
+    expect(document.querySelectorAll(".files__ghost")).toHaveLength(1);
+
+    // No release: the gesture is simply still held when the next row is pressed.
+    await down(100, 100);
+    expect(document.querySelectorAll(".files__ghost"), "the row let go of was still in hand")
+      .toHaveLength(0);
+
+    under(document.getElementById("two"));
+    await carryTo(300);
+    await to("pointerup", 300, 100);
+    expect(landed, "the press that landed on a held gesture was turned away")
+      .toEqual([["2", ["/work/a/notes.md"]]]);
+    expect(document.querySelector(".files__ghost")).toBeNull();
+    expect(document.body.classList.contains("is-dragging")).toBe(false);
+  });
+
+  /** Nobody carries a row across a window they have left, and the release there is never heard. */
+  it("puts the row down when the page loses the pointer altogether", async () => {
+    await down(100, 100);
+    under(document.getElementById("one"));
+    await carryTo(300);
+
+    await act(async () => { window.dispatchEvent(new Event("blur")); });
+    expect(landed, "a row was handed to a pane by the window going away").toEqual([]);
+    expect(document.querySelector(".files__ghost")).toBeNull();
+    expect(document.body.classList.contains("is-dragging")).toBe(false);
+  });
+
   /** The press outliving the gesture would leave the page marked as dragging with nothing held. */
   it("puts the fences down when the gesture is cancelled", async () => {
     await down(100, 100);

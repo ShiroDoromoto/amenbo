@@ -97,6 +97,25 @@ async function type(value: string) {
   });
 }
 
+/** A key pressed while an IME conversion is open: the field carries the guess, still under the mark. */
+async function composing(value: string) {
+  await act(async () => {
+    const one = field();
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!
+      .set!.call(one, value);
+    const e = new Event("input", { bubbles: true });
+    Object.defineProperty(e, "isComposing", { value: true });
+    one.dispatchEvent(e);
+  });
+}
+
+/** The conversion accepted, which is what the field's characters stop being a guess at. */
+async function accepted() {
+  await act(async () => {
+    field().dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+  });
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   hoisted.kept = {};
@@ -240,6 +259,45 @@ describe("the project's draft page", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
 
     expect(hoisted.writes).toEqual([{ project: 1, text: "/work/one.md" }]);
+  });
+
+  // **A conversion in Japanese runs past the settle at every phrase break** (`AMB-T-4636`), so a
+  // page answering each key of it would keep one sentence five to fifteen times over — and each of
+  // those writes would be characters the person has not chosen a reading for yet.
+  it("keeps nothing while an IME conversion is open, and shows it all the same", async () => {
+    await draw(1);
+    await composing("な");
+    await composing("なが");
+    await composing("長い");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+
+    expect(hoisted.writes).toEqual([]);
+    // The field is controlled, so the guess has to be on the page or the mark has nothing under it.
+    expect(field().value).toBe("長い");
+    expect(word()).toBe("");
+  });
+
+  // WKWebView and WebKitGTK send the last `input` of a conversion before `compositionend`, still
+  // composing, and none after it — so the accepted text is taken from the end of the conversion.
+  it("keeps the conversion once it is accepted, where the last key comes before the end", async () => {
+    await draw(1);
+    await composing("長い依頼");
+    await accepted();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+
+    expect(hoisted.writes).toEqual([{ project: 1, text: "長い依頼" }]);
+  });
+
+  // WebView2 sends `compositionend` first and an `input` that is no longer composing after it. Both
+  // sides are read, so the one arriving second finds the same text in hand and starts the settle again.
+  it("keeps the conversion once, where the last key comes after the end", async () => {
+    await draw(1);
+    await composing("長い依頼");
+    await accepted();
+    await type("長い依頼");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+
+    expect(hoisted.writes).toEqual([{ project: 1, text: "長い依頼" }]);
   });
 
   it("leaves 'kept' standing through the quiet that follows", async () => {

@@ -1,0 +1,166 @@
+# The draft page keeps what is typed on it without being asked, and this road is the one moment that
+# promise is hardest to hold: the window going away with a sentence on the page that has not been
+# written yet.
+#
+# Nothing on that page is pressed to keep it. What is typed settles for a moment and is then written,
+# which covers a person who stops typing — and covers nobody who types the last word of a request and
+# reaches straight for the way out. That is not an unusual way to leave: it is what leaving looks
+# like.
+#
+# ── Why the typing and the leaving are one step ──────────────────────────────────────────────────
+# Every step here is handed over to whoever is walking it and then photographed, so seconds pass
+# between one and the next. Typed in one step and left in another, the page would have settled and
+# written on its own long before the door was pressed, and the road would be walking the moment's
+# quiet a second time under another name. Said as one movement, what the door is asked to carry is a
+# sentence nothing has kept yet — which is why the instruction says not to stop and read it back.
+#
+# ── Why both doors are walked ────────────────────────────────────────────────────────────────────
+# A window closing and an app ending arrive by different roads inside the build, and each has to ask
+# the page for what it is holding on its own. The split-out window's close ends one window while the
+# app stands; the menu's way out ends every window there is. A road that walked one would leave the
+# other half resting on the first having been written well.
+#
+# ── Why the page is read on the board and not where it was typed ─────────────────────────────────
+# The window it was typed in is gone by then, so what answers is the store: the board draws the
+# project's page for the first time, and it can only draw what was kept. A face that had held the
+# sentence in front of it would pass this road; one that reads it back from where it was written is
+# the only thing that still passes after the window it was typed in has been closed.
+#
+# ── Why the second sentence is read beside the first ─────────────────────────────────────────────
+# The page is one page per project, and what is typed goes on the end of what is already there. So
+# the last reading is of both sentences at once: a build that kept only the newest would answer the
+# reading it was written for and have thrown the earlier one away.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A window is not something a shell closes, and the draft page has no command behind it: it is the
+# workbench rather than the work, and nothing the binary is handed reaches it.
+id: keep-the-sentence-a-window-was-closed-on
+title: A sentence typed on the draft page outlives the window it was typed in, whichever way that window goes
+description: >
+  Open the terminal face and split it out into a window of its own. On the draft page in that window,
+  type a line and close the window in the same movement, before the page has had its moment's quiet.
+  The board is left standing: open its draft page and the line is there. Type a second line on it and
+  end Amenbo from its own menu, again in one movement — and when the app comes up on the same store,
+  both lines are on the page.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+    as: orchard
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: orchard
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Out into a window of its own, which is the first of the two doors. From here there are two
+  # windows and every step says which it is in, this one included.
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+
+  # The reading column in that window, and the draft page on the first of its tabs. The board's own
+  # column is deliberately left unopened: a page it had already drawn would be holding the text in
+  # front of it, and the reading at the end would no longer be of what was kept.
+  - type: action
+    domain: terminal
+    op: show-side
+    window: "Amenbo — "
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tab
+    window: "Amenbo — "
+
+  # The sentence and the close, in one movement. What is under test is the window asking the page for
+  # what it is holding on the way out — so the press has to follow the last letter with no pause for
+  # the page to have settled in.
+  - type: action
+    domain: files
+    op: edit-and-leave
+    window: "Amenbo — "
+    with:
+      types: SCENARIO the pears want a word with the pruning crew
+      how: split-window
+
+  # The board, alone again. Nothing names a window from here, which is half of what these steps say:
+  # the window that was typed in has gone.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tab
+
+  # And the sentence, drawn by a face that never saw it typed. It came off the store or it came from
+  # nowhere.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears want a word with the pruning crew
+
+  # The second door, and the same movement: a line typed and the app ended on top of it. Nothing is
+  # asked on the way out — no terminal was ever opened here — and the run brings another app up on
+  # the same store.
+  - type: action
+    domain: files
+    op: edit-and-leave
+    with:
+      types: SCENARIO and the frames want a word about the glass
+      how: menu
+
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tab
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO and the frames want a word about the glass
+
+  # And the first line still under it. One page per project, and what is typed goes on the end of
+  # what is there — so a build that wrote only the newest would pass the reading above and have taken
+  # the earlier sentence away.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the pears want a word with the pruning crew

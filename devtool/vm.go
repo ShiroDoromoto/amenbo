@@ -114,12 +114,12 @@ func vmCmd(args []string) {
 		noArgs(fs)
 		fail(vmStatus())
 	case "exec":
-		argv, front, window, err := vmExecArgs(args[1:])
+		argv, front, window, shell, err := vmExecArgs(args[1:])
 		if err != nil {
 			logf("devtool: %v", err)
 			os.Exit(2)
 		}
-		code, err := vmExec(argv, front, window)
+		code, err := vmExec(argv, front, window, shell)
 		fail(err)
 		os.Exit(code)
 	case "push":
@@ -553,7 +553,7 @@ func vmIP() (string, error) {
 // be there is the half that gets left out: on 2026-09-07 a driving line went in without one and its
 // press landed on another session's window. Written here it cannot be forgotten, and the front and
 // the press are inside one claim by construction.
-func vmExec(argv []string, front int, window string) (int, error) {
+func vmExec(argv []string, front int, window string, shell bool) (int, error) {
 	ip, err := vmIP()
 	if err != nil {
 		return 0, err
@@ -574,7 +574,31 @@ func vmExec(argv []string, front int, window string) (int, error) {
 			logf("  warning: bringing pid %d forward in %s failed (%v) — is the screen tool in there? (`devtool vm screen`)", front, vmCloneName, err)
 		}
 	}
-	return runThrough("", nil, "ssh", sshArgs(ip, argv...)...)
+	return runThrough("", nil, "ssh", sshArgs(ip, vmExecLine(argv, shell))...)
+}
+
+// vmExecLine turns the words a caller handed over into the one line the guest's shell will read.
+//
+// 🚨 **ssh keeps no argument boundaries.** Whatever is passed to it is joined with spaces and given
+// to a login shell in there, so a word carrying a space, a bracket or a quote arrives as several
+// words of somebody else's grammar — `open -a '/Applications/amenbo (dev 4621).app'` reached zsh as
+// a glob it could not match, and the line devtool itself prints was one of those.
+// Quoting each word here is what `devgui cli --vm` already does with the arguments it forwards
+// (`devgui_vm.go`), and this is the one place that was not doing it.
+//
+// `shell` is the other thing `vm exec` is asked for: a line of shell — a `;` between two presses,
+// a `$(…)` read in the guest — which is handed over whole, because quoting it would leave the guest
+// looking for a program by that entire name. Named rather than guessed from the word count: a rule
+// that turns on how many words were typed is one nobody can see at the call.
+func vmExecLine(argv []string, shell bool) string {
+	if shell {
+		return strings.Join(argv, " ")
+	}
+	quoted := make([]string, 0, len(argv))
+	for _, a := range argv {
+		quoted = append(quoted, shq(a))
+	}
+	return strings.Join(quoted, " ")
 }
 
 // vmExecLabel is the line `vm exec` leaves for whoever is turned away or made to wait. The command
@@ -588,33 +612,35 @@ func vmExecLabel(argv []string) string {
 	return "`devtool vm exec -- " + one + "`"
 }
 
-// vmExecArgs splits `devtool vm exec [--front <pid>] [--window <title>] -- <command…>` into
-// devtool's half and the guest's. The guest command is handed over after `--`, for the same reason
-// `devgui cli` does it: without the separator the first flag of theirs is read as one of ours. Ours
-// are read from the words before it, which is what keeps `--front` out of the guest's shell.
+// vmExecArgs splits `devtool vm exec [--front <pid>] [--window <title>] [--shell] -- <command…>`
+// into devtool's half and the guest's. The guest command is handed over after `--`, for the same
+// reason `devgui cli` does it: without the separator the first flag of theirs is read as one of
+// ours. Ours are read from the words before it, which is what keeps `--front` out of the guest's
+// shell.
 //
 // A word before `--` that is not one of ours is refused rather than passed on: it reads as a guest
 // command somebody put on the wrong side of the separator, and running the rest without it would
 // carry out something other than what was typed.
-func vmExecArgs(args []string) (argv []string, front int, window string, err error) {
+func vmExecArgs(args []string) (argv []string, front int, window string, shell bool, err error) {
 	head, argv, ok := splitDoubleDash(args)
 	if !ok || len(argv) == 0 {
-		return nil, 0, "", fmt.Errorf("vm exec passes its command to the guest after `--`, e.g. `devtool vm exec -- sw_vers`")
+		return nil, 0, "", false, fmt.Errorf("vm exec passes its command to the guest after `--`, e.g. `devtool vm exec -- sw_vers`")
 	}
 	fs := flag.NewFlagSet("vm exec", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	frontPID := fs.Int("front", 0, "bring this guest pid's window to the front first, under the same claim as the command")
 	title := fs.String("window", "", "with --front, raise the window with this title rather than leaving the app to choose")
+	asShell := fs.Bool("shell", false, "hand the words over as a line of shell rather than as a command and its arguments")
 	if err := fs.Parse(head); err != nil {
-		return nil, 0, "", fmt.Errorf("vm exec: %w (devtool's own flags go before the `--`)", err)
+		return nil, 0, "", false, fmt.Errorf("vm exec: %w (devtool's own flags go before the `--`)", err)
 	}
 	if fs.NArg() > 0 {
-		return nil, 0, "", fmt.Errorf("vm exec takes its guest command after `--`, got %s before it", strings.Join(fs.Args(), " "))
+		return nil, 0, "", false, fmt.Errorf("vm exec takes its guest command after `--`, got %s before it", strings.Join(fs.Args(), " "))
 	}
 	if *frontPID < 0 {
-		return nil, 0, "", fmt.Errorf("vm exec --front takes a pid in the guest, got %d (`devtool devgui pid <id> --vm` returns one)", *frontPID)
+		return nil, 0, "", false, fmt.Errorf("vm exec --front takes a pid in the guest, got %d (`devtool devgui pid <id> --vm` returns one)", *frontPID)
 	}
-	return argv, *frontPID, *title, nil
+	return argv, *frontPID, *title, *asShell, nil
 }
 
 // vmPushArgs splits `devtool vm push <local…> <remote>` into its two halves. The last word is the

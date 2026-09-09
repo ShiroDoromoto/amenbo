@@ -671,7 +671,7 @@ sent the way the screen tool is. It is not a verb on `scripts/screen.swift`
 because that one runs on a developer's own Mac as well, and something that
 reconfigures a display does not belong next to click and type there.
 
-### `devtool vm exec -- <command…>` / `devtool vm push <local…> <remote>` / `devtool vm pull <remote…> <local>`
+### `devtool vm exec [--shell] -- <command…>` / `devtool vm push <local…> <remote>` / `devtool vm pull <remote…> <local>`
 
 Reach into the running clone. `exec` runs a command in there with this process's
 own stdio and **ends the way it ended**, so a step that failed in the guest does
@@ -680,7 +680,7 @@ usually sent is a `.app`; `pull` is its mirror, and brings back what was made in
 the guest.
 
 ```sh
-devtool vm exec -- 'stat -f %Su /dev/console'
+devtool vm exec -- stat -f %Su /dev/console
 devtool vm push "/Applications/amenbo (dev 3578).app" /Users/admin/
 devtool vm pull /Users/admin/shot.png .
 ```
@@ -694,9 +694,19 @@ It takes any path. [`vm verify pull`](#devtool-vm-verify-seed--install--run--ste
 is a different command: it knows the four paths a verification run writes and
 brings those out by name.
 
-Arguments to `exec` go after `--`, and quoting is the caller's the same way it is
-with `ssh` — what follows is joined and handed to the guest's shell. devtool's
-own flags go **before** the `--`, so they never reach that shell.
+Arguments to `exec` go after `--`, and each word is quoted for the guest before
+it is sent. **This is not what `ssh` does**: ssh keeps no argument boundaries at
+all — it joins what it is given with spaces and hands the result to a login shell
+in there, so a path with a space or a bracket in it arrives as several words of
+that shell's grammar. `open -a '/Applications/amenbo (dev 696).app'` reached zsh
+as a glob it could not match, and the line devtool itself prints was one of
+those. devtool's own flags go **before** the `--`, so they never reach the guest.
+
+**`--shell` is for a line of shell** — a `;` between two presses, a `$(…)` read
+in the guest. The words are then handed over whole rather than quoted, because
+quoting them would leave the guest looking for a program by that entire name. It
+is named rather than guessed from how many words were typed: a rule that turns on
+the word count is one nobody can see at the call.
 
 `exec` **holds the screen claim for as long as the guest command runs**, and
 waits its turn when somebody else is holding, naming them on the way in. A
@@ -712,10 +722,10 @@ which window, for an instance drawing more than one. The pid is the guest's:
 
 ```sh
 # without it, the front is the caller's to remember — and forgetting it is silent
-devtool vm exec -- "/Users/admin/screen front 34083; /Users/admin/screen click 700 450"
+devtool vm exec --shell -- "/Users/admin/screen front 34083; /Users/admin/screen click 700 450"
 
 # with it
-devtool vm exec --front 34083 -- "/Users/admin/screen click 700 450"
+devtool vm exec --front 34083 -- /Users/admin/screen click 700 450
 ```
 
 A front that fails is warned about and carried past, the way `devgui shot`
@@ -1006,10 +1016,10 @@ app the road opened — and leaves the evidence and the log where they are.
 The road itself is still walked by whoever is driving. In the guest that is the screen tool:
 
 ```sh
-devtool vm exec -- 'PID=$(pgrep -f "Amenbo.app/Contents/MacOS/amenbo-app" | head -1);
+devtool vm exec --shell -- 'PID=$(pgrep -f "Amenbo.app/Contents/MacOS/amenbo-app" | head -1);
   swift /Users/admin/screen.swift find $PID'
-devtool vm exec -- '… swift /Users/admin/screen.swift click-named $PID "Link a folder"'
-devtool vm exec -- '… swift /Users/admin/screen.swift set-date $PID "Due date" 2099-12-31'
+devtool vm exec --shell -- '… swift /Users/admin/screen.swift click-named $PID "Link a folder"'
+devtool vm exec --shell -- '… swift /Users/admin/screen.swift set-date $PID "Due date" 2099-12-31'
 ```
 
 ### Host and guest drifting apart

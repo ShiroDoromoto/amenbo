@@ -97,7 +97,15 @@ export function useHandDrag(
   const press = useCallback((wholes: string[], event: RowPress<HTMLElement>) => {
     // The main button only. A right press on a row is its menu, and taking it would put the row in
     // hand with no gesture to put it down.
-    if (event.button !== 0 || held.current !== null) return;
+    if (event.button !== 0) return;
+    // 🚨 A row still in hand when a new press lands is one whose ending never came: the pointer was
+    // let go somewhere this page never heard of — over the menu bar a window at the top of the
+    // screen reveals, or over another application. Turning the new press away, which is what this
+    // did, made that permanent: the ghost stayed on the page, `is-dragging` stayed on the body, and
+    // no row could be taken up again until the page was reloaded (`AMB-T-4624`). Only ever one row
+    // is in hand, so a press arriving while one is held is a person starting over — put down what
+    // is held and take the new one.
+    held.current?.stop();
     const row = event.currentTarget;
     const grabbedAt = { x: event.clientX, y: event.clientY };
     const pointerId = event.pointerId;
@@ -118,6 +126,7 @@ export function useHandDrag(
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("blur", away);
       window.removeEventListener("contextmenu", noMenu, true);
       if (row.hasPointerCapture(pointerId)) row.releasePointerCapture(pointerId);
       setOverFrame(null);
@@ -182,6 +191,15 @@ export function useHandDrag(
 
     const cancel = (e: PointerEvent) => { if (mine(e)) stop(); };
 
+    /**
+     * The page losing the pointer altogether.
+     *
+     * 🚨 An application put in the background mid-carry is one that may never be told the button
+     * came up, and a row held on a page nobody is looking at is held for ever (`AMB-T-4624`). Put
+     * down rather than landed: where the pointer went is not this page's to say any more.
+     */
+    const away = () => stop();
+
     // 🚨 Hung on the window and not on the row, because **the row does not outlive the gesture**.
     // The tree draws a window of its lines at a time (`./FolderTree`), so a list that scrolls under
     // a held pointer takes the grabbed row out of the document. Listeners that went with it could
@@ -193,6 +211,7 @@ export function useHandDrag(
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", cancel);
+    window.addEventListener("blur", away);
     window.addEventListener("contextmenu", noMenu, true);
     held.current = { stop };
   }, []);

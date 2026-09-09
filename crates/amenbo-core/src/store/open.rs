@@ -258,12 +258,22 @@ impl Store {
         };
 
         // If the store looks copied to a different machine (bound_hw mismatch), rebind bound_hw to
-        // the current one.
+        // the current one. A restatement rebinds too and tells nobody: the string moved under the
+        // reader that changed with `AMB-D-870`, not the machine under the store.
         let mut forked = false;
-        if identity.hw_mismatch() == Some(true) {
-            identity.rebind_hw();
-            identity_dirty = true;
-            forked = true;
+        match identity.hw_check() {
+            // Nothing to do either way: the machine answered with what is written down, or it handed
+            // out no id to answer with. A store nobody could measure stays bound to what it was bound to.
+            crate::identity::HwCheck::NotMade | crate::identity::HwCheck::Same => {}
+            crate::identity::HwCheck::Restated => {
+                identity.rebind_hw();
+                identity_dirty = true;
+            }
+            crate::identity::HwCheck::Cloned => {
+                identity.rebind_hw();
+                identity_dirty = true;
+                forked = true;
+            }
         }
         let new_identity = identity_dirty;
 

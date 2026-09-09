@@ -5,6 +5,7 @@ use serde_json::json;
 
 use amenbo_core::Store;
 use amenbo_core::config::Paths;
+use amenbo_core::identity::HwCheck;
 
 use crate::cmd::place::{location_header, project_name, slug_mismatch_warning};
 use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
@@ -12,9 +13,15 @@ use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags}
 pub(crate) fn whoami(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     let id = &store.identity;
     let live = amenbo_core::identity::live_hw();
-    // Three answers, not two: `None` is a machine that hands out no hardware id, where no check was
-    // made. Reporting that as "ok" would read as a check that passed (`AMB-T-4651`).
-    let mismatch = id.hw_mismatch();
+    // A machine that hands out no hardware id is its own answer, not a passing one: reporting `NotMade`
+    // as "ok" would read as a check that ran (`AMB-T-4651`). `Restated` is not one of whoami's answers —
+    // the machine is the same one, and only the string it spells changed. On the wire that is `null`
+    // rather than `false`, so a reader cannot take "not looked at" for "looked at and clean".
+    let mismatch = match id.hw_check() {
+        HwCheck::NotMade => None,
+        HwCheck::Same | HwCheck::Restated => Some(false),
+        HwCheck::Cloned => Some(true),
+    };
     // The facet is the only actor there is, so the display name comes from config (`human_name`).
     if flags.json {
         print_json(&json!({

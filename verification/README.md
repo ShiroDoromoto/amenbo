@@ -217,6 +217,16 @@ answer but `cancel` ends the app, and the harness brings another up on the same 
 handed over rather than before it: the operator is the one who watched it go, and a shot is aimed at
 a pid, so there has to be a window again by the time the step is photographed.
 
+**One other step walks out of that same door, and it is one step for a reason.** `files edit-and-leave`
+types a line onto the draft page and presses the way out straight after it — `how: menu` for the app's
+own, `how: split-window` for the close on a window a terminal was split out into. The page keeps what
+is typed on it a moment after the typing stops, and every step here is handed over and photographed
+before the next one starts, so a road that typed and then left in two steps would find the page had
+written and settled while the operator was still reading. Said as one movement, what the door is asked
+to carry is a sentence nothing has kept yet. The harness answers it the way it answers a `quit`: the
+menu's half ends the run and brings another app up on the same store, and the split window's half
+leaves the board standing and shoots that.
+
 The executable inside the bundle is started directly rather than the bundle being `open`ed, since
 the environment is what carries the store and `open` hands the launch to launchd with an
 environment of its own. `AMENBO_HOME` is the product's own override, so the build under test is not
@@ -1116,6 +1126,9 @@ wearing a colour says the same letters as the row beside it that wears none.
 for the text itself — and `reading` takes an `as` saying which of them its words are standing in,
 which hands that step to an eye: both forms carry the same words, and what separates them is
 punctuation the fold throws away and a size no reading reports.
+`edit` types onto the end of what is open — a file, or the draft page — and `edit-and-leave` is that
+same typing with the way out on the end of it, which is how the unwritten half of the page is walked
+([above](#gui-harness-mac)).
 `reopen-with` reads an open file again as an encoding the road names, and `read-as` reads back what
 the row says it was read as. The two are one control apart and stay two ops: one is about the bytes
 and what they mean, the other about the screen and what it draws — a road that named an encoding to

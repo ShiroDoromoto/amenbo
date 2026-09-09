@@ -4115,6 +4115,12 @@ impl Instructor {
             // sentence carries both halves for the reason the one above does — the box and the
             // terminal are on one screen and one shot — and here the second half is the point of the
             // box at all: a line written is a line the person still has to send.
+            //
+            // **The mark beside the box is not read here.** It says where the keyboard is
+            // (`app/src/shell/TerminalPane.tsx`), and a line stays in the box long after the
+            // keyboard has left it — the face is switched away and back, the pane is split out into
+            // a window of its own — so a sentence asking the operator for the mark as well would
+            // have them mark a working build red at every one of those steps.
             (Domain::Terminal, "still-to-send") => {
                 let pane = match arg_str(with, "on") {
                     Some(on) => format!("the pane showing \"{on}\""),
@@ -4122,7 +4128,7 @@ impl Instructor {
                 };
                 match present(with) {
                     true => format!(
-                        "Under {pane}, in the box below the terminal, confirm \"{}\" is standing there — and that it has not gone: nothing was run in the terminal above, and the words are still in the box to be edited. The box says so of itself, the mark at its left having changed from the one that means the keys go to the terminal.",
+                        "Under {pane}, in the box below the terminal, confirm \"{}\" is standing there — and that it has not gone: nothing was run in the terminal above, and the words are still in the box to be edited.",
                         req(with, "shows")?
                     ),
                     false => format!(

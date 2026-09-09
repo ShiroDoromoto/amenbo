@@ -32,6 +32,7 @@ import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
 import { openExternalUrl } from "../core/mutations";
 import { hostOs, type HostOs } from "../core/platform";
+import { tidiedCopy } from "./copied";
 import { type NamedBy } from "./frames";
 import { httpUrl, pathsOnRow, refFromUrl, refsOnRow, urlsOnRow, type Cell, type Rows } from "./refLinks";
 
@@ -731,6 +732,31 @@ export async function mountTerminal(
     },
   });
 
+  // **What a copy carries is the selection with the agent's drawing taken out of it** (`AMB-D-867`,
+  // rules in `./copied`). The screen is untouched and there is no second way to press: the drawing is
+  // the pane's width and the agent's marks, never a character a person chose, so it is not something
+  // to offer a choice about.
+  //
+  // Which agent is in the pane is answered below, once the host says — and it is read at the moment
+  // of the copy rather than closed over, because a pane that took up a running session learns what is
+  // in it after this is registered.
+  //
+  // Registered on `host` in the capture phase, which is the whole of how it gets in front of xterm:
+  // xterm takes `copy` as it bubbles up to `term.element`, a child of this one, so this runs first and
+  // `stopPropagation` is what keeps xterm's own handler from writing the raw selection over this
+  // (`AMB-T-4615`). The page's default has to be refused as well, or the browser copies the DOM
+  // selection and the two writes race.
+  let agentInPane: string | null = start.agent ?? null;
+  const onCopy = (e: ClipboardEvent) => {
+    const selection = term.getSelection();
+    // Nothing selected in the pane is somebody copying somewhere else. Leave it alone.
+    if (selection === "") return;
+    e.clipboardData?.setData("text/plain", tidiedCopy(selection, agentInPane));
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  host.addEventListener("copy", onCopy, true);
+
   // The session is not known until the host answers, and what the terminal has to say can be on its
   // way before that answer lands — the first prompt of a shell being started, or the next line of a
   // build on a session being adopted. Listening first and holding what arrives is what keeps either
@@ -775,6 +801,10 @@ export async function mountTerminal(
 
   const running = await draw(term, fit, host, start);
   session = running.session;
+  // Which agent is in the pane, for the copy rules above. It comes off the session and not off
+  // `start` for the reason the folder below does: a pane that took up a running terminal is running
+  // whatever that one was started with, which `start` has no answer for.
+  agentInPane = running.agent ?? null;
   // The folder comes off the session rather than off `start`, because those are the same answer only
   // for a terminal this pane started. One it took up runs where it was started, which is what the page
   // holding it has to be told (`./layout`).
@@ -919,6 +949,7 @@ export async function mountTerminal(
   return () => {
     resize.disconnect();
     if (settling !== null) clearTimeout(settling);
+    host.removeEventListener("copy", onCopy, true);
     links.dispose();
     stream.dispose();
     stopPaste();

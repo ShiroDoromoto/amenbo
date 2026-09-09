@@ -262,7 +262,9 @@ impl Store {
         // reader that changed with `AMB-D-870`, not the machine under the store.
         let mut forked = false;
         match identity.hw_check() {
-            crate::identity::HwCheck::Same => {}
+            // Nothing to do either way: the machine answered with what is written down, or it handed
+            // out no id to answer with. A store nobody could measure stays bound to what it was bound to.
+            crate::identity::HwCheck::NotMade | crate::identity::HwCheck::Same => {}
             crate::identity::HwCheck::Restated => {
                 identity.rebind_hw();
                 identity_dirty = true;

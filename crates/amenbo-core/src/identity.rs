@@ -28,6 +28,11 @@ pub struct Identity {
 /// What the startup clone check found.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HwCheck {
+    /// No check was made: one of the two sides is [`UNKNOWN_HW`], so there was nothing to compare.
+    /// Held apart from [`HwCheck::Same`] because a machine nobody measured is not a machine that
+    /// answered — on Linux that is every machine an ordinary user runs (see [`platform_hw`]), and
+    /// `whoami` would otherwise report a check that had passed.
+    NotMade,
     /// The machine answers with what is written down. Nothing to do.
     Same,
     /// A different string for the same machine — what changed is the reader, not the hardware
@@ -54,17 +59,7 @@ impl Identity {
     /// their store had been copied. So a mismatch is put to the old reader once, and an agreement there is
     /// a restatement: rewrite what is written down, and say nothing to anybody.
     pub fn hw_check(&self) -> HwCheck {
-        let live = live_hw();
-        // When either side is unobtainable ("unknown"), call it a match rather than raise a false alarm.
-        if self.bound_hw == "unknown" || live == "unknown" || self.bound_hw == live {
-            return HwCheck::Same;
-        }
-        if restated(&self.bound_hw) { HwCheck::Restated } else { HwCheck::Cloned }
-    }
-
-    /// Whether the store looks to have been copied onto a different machine (and wants forking).
-    pub fn hw_mismatch(&self) -> bool {
-        self.hw_check() == HwCheck::Cloned
+        hw_check_between(&self.bound_hw, &live_hw())
     }
 
     /// Rebind after a clone is detected: point `bound_hw` at the machine we are actually on.
@@ -92,6 +87,24 @@ impl Identity {
 
 }
 
+/// What [`live_hw`] answers when the machine hands out no hardware id. It is not an id: a store bound
+/// to it and a store running on it are not the same machine, they are two machines nobody measured.
+pub const UNKNOWN_HW: &str = "unknown";
+
+/// The comparison behind [`Identity::hw_check`], split out so the answers that need no second reader can
+/// be tried without a machine to try them on ([`live_hw`] settles once per process).
+fn hw_check_between(bound: &str, live: &str) -> HwCheck {
+    // An unobtainable side is not a match: nothing was compared, and saying so is the whole point of
+    // holding `NotMade` apart.
+    if bound == UNKNOWN_HW || live == UNKNOWN_HW {
+        return HwCheck::NotMade;
+    }
+    if bound == live {
+        return HwCheck::Same;
+    }
+    if restated(bound) { HwCheck::Restated } else { HwCheck::Cloned }
+}
+
 /// The UUID of the machine we are on. `AMENBO_HW_ID` overrides it, so development can pretend to be
 /// another machine. The value is read from **the hardware**, not from a file on disk — a file would be
 /// copied along with a clone.
@@ -108,7 +121,7 @@ pub fn live_hw() -> String {
         if let Some(v) = crate::env::hw_id() {
             return v.to_string_lossy().into_owned();
         }
-        platform_hw().unwrap_or_else(|| "unknown".to_string())
+        platform_hw().unwrap_or_else(|| UNKNOWN_HW.to_string())
     })
     .clone()
 }
@@ -300,6 +313,14 @@ fn uuid_text(bytes: &[u8], major: u8, minor: u8) -> Option<String> {
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn platform_hw() -> Option<String> {
     // Linux: the DMI product_uuid. `/etc/machine-id` will not do — it is a file, so a clone carries it.
+    //
+    // **On most machines this answers `None`**, and that is the expected outcome rather than a failure:
+    // the kernel creates `product_uuid` mode 0400, so nobody but root can open it, and an ARM machine has
+    // no DMI table to create it from. There is no second reader to fall back to the way Windows has one:
+    // `/etc/machine-id` travels with a copy, and a MAC address or a disk serial either misses a per-disk
+    // copy or cries wolf when the OS is reinstalled or a dock is unplugged. So clone detection is simply
+    // not made here — `HwCheck::NotMade`, which `whoami` says out loud. The cost is one warning line that
+    // never appears, which is why the gap stands rather than being papered over.
     std::fs::read_to_string("/sys/class/dmi/id/product_uuid")
         .ok()
         .map(|s| s.trim().to_string())
@@ -333,6 +354,17 @@ mod tests {
         assert!(!json.contains("device_public_key") && !json.contains("device_secret_key"));
         let round: Identity = serde_json::from_str(&json).unwrap();
         assert_eq!(round.user_name, "Alice");
+    }
+
+    /// A side nobody could measure is not a side that agreed. The two answers that need no second
+    /// reader are pinned here; `Restated` and `Cloned` are Windows's and the e2e suite's, where the
+    /// machine can be dictated.
+    #[test]
+    fn an_unmeasured_side_is_not_a_match() {
+        assert_eq!(hw_check_between("hw-1", "hw-1"), HwCheck::Same, "measured on both sides, and they agree");
+        assert_eq!(hw_check_between(UNKNOWN_HW, "hw-1"), HwCheck::NotMade, "bound to nothing measurable");
+        assert_eq!(hw_check_between("hw-1", UNKNOWN_HW), HwCheck::NotMade, "running where nothing is measurable");
+        assert_eq!(hw_check_between(UNKNOWN_HW, UNKNOWN_HW), HwCheck::NotMade, "neither side measured");
     }
 
     /// A raw SMBIOS buffer as `GetSystemFirmwareTable` hands one back: the version bytes, the length,

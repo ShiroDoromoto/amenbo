@@ -107,10 +107,12 @@ toml = "1"
 dunce = "1"
 
 [target.'cfg(windows)'.dependencies]
-# The one question the updater asks the OS: which machine is this, whatever the running binary was
-# built for (`IsWow64Process2`, plus the pseudo-handle it takes and the machine constants it answers
-# with). Windows-only — macOS is asked through `libc` and Linux is not asked at all. Two features, so
-# the crate compiles the two headers this needs and nothing else.
+# Two questions the OS is asked directly. Which machine this is, whatever the running binary was built
+# for (`IsWow64Process2`, plus the pseudo-handle it takes and the machine constants it answers with),
+# for the updater; and the raw SMBIOS table (`GetSystemFirmwareTable`), which is where the machine UUID
+# comes from without a PowerShell launch per command (`src/identity.rs`). Windows-only — macOS is asked
+# through `libc` and IOKit, and Linux reads a file. Two features, so the crate compiles the two headers
+# these need and nothing else.
 windows-sys = { version = "0.61", features = [
     "Win32_System_Threading",
     "Win32_System_SystemInformation",

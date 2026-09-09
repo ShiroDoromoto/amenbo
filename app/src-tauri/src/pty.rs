@@ -857,11 +857,20 @@ fn gone(session: &str) -> CmdError {
 /// here**, out of the catalog — what the webview names is a row, never a command line — and the
 /// launch instruction rides in on that command line as the agent's opening prompt
 /// ([`opening_line`]).
+///
+/// `frame` is the place of the arrangement this terminal is being drawn in
+/// (`app/src/talk/layout.ts`), and it is here because the way back into what is started is written
+/// down against the place rather than against the process: a pane comes back in the next run, and
+/// the session in it does not (`AMB-D-869`).
+// Seven of these are what a window holds about a pane, one answer each. Gathered into a shape they
+// would be taken apart again on arrival.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn pty_open(
     app: tauri::AppHandle,
     window: tauri::Window,
     terminals: tauri::State<'_, Terminals>,
+    frame: Option<String>,
     cwd: Option<String>,
     agent: Option<String>,
     cols: u16,
@@ -889,6 +898,16 @@ pub fn pty_open(
     let run = started.as_ref().map(|s| s.line.as_str());
     let mut cmd = launch::command(folder.clone(), run);
     cmd.env(SESSION_ENV, &session);
+    // Codex is resumed by a directory rather than by a name, so the pane is pointed at one of its own
+    // and the path goes down on that frame's row (`AMB-D-869`, `crate::codex_home`). Every other
+    // provider is given nothing here: their way back is a session id on the launch line.
+    if let Some(frame) = frame.as_deref() {
+        if let Some(home) = crate::codex_home::for_pane(frame, agent_id.as_deref()) {
+            cmd.env(crate::codex_home::ENV, &home);
+            app.state::<crate::frames::TalkFace>()
+                .resumed_from(frame, home.to_string_lossy().into_owned());
+        }
+    }
     // The drop box is made here rather than left for the first statement to make, so that a pane which
     // cannot be spoken to is one the surface layer refuses in from the start: with no directory named,
     // every verb fails loudly inside the terminal instead of writing where nothing is watching.

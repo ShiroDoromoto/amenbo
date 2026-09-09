@@ -593,12 +593,16 @@ pub fn run() {
       windows::talk_ready,
       windows::talk_raise,
       quit::app_quit,
+      quit::quit_written,
     ])
     .build(context)
     .expect("error while building tauri application")
     // Built rather than run, so the loop's own events can be read. The one that is read is the close
-    // pressed on the app's last window: it ends the process the way the menu's quit does, and it is
-    // the one way out that arrives without passing through a menu item of ours (`quit`).
+    // pressed on a window's own title bar: it is the one way out that arrives without passing
+    // through the page, so both the closes that mean something to this side are held here and
+    // answered by the module that owns them — the app ending (`quit`), and the talk window going
+    // (`windows`). A close on the talk window is never `destroy`, which is what the page's own way
+    // out uses, so this holds a person's press and nothing else.
     .run(|app, event| {
       if let tauri::RunEvent::WindowEvent {
         label,
@@ -606,8 +610,12 @@ pub fn run() {
         ..
       } = &event
       {
-        if quit::ask_before_this_close(app, label) {
+        if quit::is_the_app_ending(app, label) {
           api.prevent_close();
+          quit::requested(app);
+        } else if label.as_str() == windows::TALK {
+          api.prevent_close();
+          windows::talk_going(app);
         }
       }
     });

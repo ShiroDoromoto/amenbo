@@ -65,6 +65,20 @@ const TALK_URL: &str = "talk.html";
 /// while still running.
 pub const TALK_CLOSED_EVENT: &str = "talk://closed";
 
+/// Told to the talk window when its close has been pressed: write what is unwritten and let go.
+///
+/// Carries nothing, and is not a question — the window is going. It is needed because the close is
+/// the one way out of this window that does not pass through the page: [`talk_close`] is the page
+/// asking, and it writes before it asks, while the title bar goes straight to the window. The page
+/// answers this by calling [`talk_close`] itself, which is the same road either way.
+pub const TALK_GOING_EVENT: &str = "talk://going";
+
+/// How long the talk window is given to answer [`TALK_GOING_EVENT`] before it is taken away anyway.
+///
+/// A backstop rather than a wait, on the same reasoning as the app's own (`crate::quit`): the window
+/// goes the moment it answers, and one that cannot answer must not be able to hold its close open.
+const TALK_WRITE_GRACE: Duration = Duration::from_millis(500);
+
 /// The talk window's size, in logical pixels: the board's own, so the two look like one app split in
 /// half rather than a window and a dialogue.
 const TALK_SIZE: (f64, f64) = (1280.0, 820.0);
@@ -339,6 +353,27 @@ pub fn talk_close(app: tauri::AppHandle) -> Result<(), CmdError> {
         Some(win) => win.destroy().map_err(failed),
         None => Ok(()),
     }
+}
+
+/// The close was pressed on the talk window's title bar. Ask it for what it has not written first.
+///
+/// The window is held open (`prevent_close`) for as long as this takes, because a webview destroyed
+/// does not unload its page: a sentence typed on the draft page in this window and not yet written
+/// would go with it (`app/src/files/MemoPage.tsx`). The page answers by calling [`talk_close`], and
+/// [`TALK_WRITE_GRACE`] takes the window away if it cannot.
+pub fn talk_going(app: &tauri::AppHandle) {
+    if app.emit_to(TALK, TALK_GOING_EVENT, ()).is_err() {
+        let _ = talk_close(app.clone());
+        return;
+    }
+    let waited = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(TALK_WRITE_GRACE);
+        let going = waited.clone();
+        let _ = waited.run_on_main_thread(move || {
+            let _ = talk_close(going);
+        });
+    });
 }
 
 /// Where to put a window being split out: down and to the right of the board, in logical pixels.

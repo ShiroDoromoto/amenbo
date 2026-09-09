@@ -32,7 +32,7 @@
 // projects, offers folders and writes in the reader's language, and every one of those is the
 // snapshot's to answer. A migration is not waited on here — this window is only ever built by a
 // board that is already past one.
-import { StrictMode, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { StrictMode, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createRoot } from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { OpenInDto } from "./bindings/bindings";
@@ -41,6 +41,7 @@ import { currentLang, errText, t, tf } from "./core/i18n";
 import { invoke } from "./core/ipc";
 import { RefNavProvider, type RefNav } from "./core/refNav";
 import { loadSnapshot, subscribe, watchStore } from "./core/snapshot";
+import { writesOn, writeUnwritten } from "./core/unwritten";
 import { initTheme } from "./core/theme";
 import { ElevationBand } from "./talk/elevation";
 import { TerminalFace } from "./shell/TerminalFace";
@@ -119,6 +120,16 @@ function TalkWindow() {
     };
   }, []);
 
+  // Both ways out of this window write what is unwritten first, and there are two of them: the
+  // button below, and the close on the title bar — which the host holds open and asks about, because
+  // a window destroyed never unloads the page in it (`crate::windows::talk_going`). The app ending
+  // is a third, and it is the app's own ask rather than this window's (`crate::quit`).
+  const goAway = useCallback(() => {
+    void writeUnwritten().then(() => invoke("talk_close")).catch(() => {});
+  }, []);
+  useEffect(() => writesOn("talk://going", goAway), [goAway]);
+  useEffect(() => writesOn("quit://going", () => void invoke("quit_written").catch(() => {})), []);
+
   const nav = useMemo<RefNav>(() => ({
     selectTask: (id) => void invoke("show_ref", { kind: "task", id }).catch(() => {}),
     selectDecision: (id) => {
@@ -134,7 +145,7 @@ function TalkWindow() {
           ownWindow
           // Fold the app back to one window. The board is told nothing: this window going is what
           // says it, whether it went from here or from the title bar (`crate::windows`).
-          onWindow={() => void invoke("talk_close").catch(() => {})}
+          onWindow={goAway}
           // Nothing here is the shell's to say about the face — the window that could not be built
           // is the board's news, and this is the window that was.
           note={null}

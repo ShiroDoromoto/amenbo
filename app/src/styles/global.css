@@ -647,6 +647,13 @@ input[type="color"] {
      room in the frame, and `min-height` is what lets it shrink further in a short one — a grid that
      cannot shrink pushes the press out of the frame instead of scrolling. */
   max-height: 22rem; min-height: 0; overflow-y: auto;
+  /* And what shrinks is the box, never the rows in it. A grid item whose `overflow` is not `visible`
+     has an automatic minimum size of 0 — the pill clips its own name, so it is one — which lets an
+     implicit `auto` row be squeezed under the height the line above hands the grid. The pills then
+     come out shorter than the text in them and the names are cut off at the bottom, and the row
+     never scrolls, because everything fits once the rows have been flattened. Naming the floor puts
+     the content back under each row. */
+  grid-auto-rows: minmax(min-content, auto);
 }
 /* A name too long for its cell is cut with an ellipsis rather than widening the cell, which would
    take the evenness back. That is why the pill lays its content out as a line of text and not as a

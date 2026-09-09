@@ -208,7 +208,7 @@ describe("what a card says about its pane", () => {
     // pane's own row was measuring. A pane on another page is measured by nothing, so its lamp is
     // out rather than something worked out on its behalf.
     let layout = faceOf(2, 2);
-    layout = openedIn(layout, "2", "s-2", "/work/2");
+    layout = openedIn(layout, "2", "s-2", "/work/2", null);
     draw(layout);
     expect(cardOf("2").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("out");
   });
@@ -216,7 +216,7 @@ describe("what a card says about its pane", () => {
   it("says a pane has ended, which its screen cannot", () => {
     // What a finished shell leaves behind looks exactly like one waiting to be typed at.
     let layout = faceOf(2, 2);
-    layout = openedIn(layout, "1", "s-1", "/work/1");
+    layout = openedIn(layout, "1", "s-1", "/work/1", null);
     draw(layout);
     expect(cardOf("1").querySelector(".paneorder__ended")).toBeNull();
     expect(cardOf("2").querySelector(".paneorder__ended")).not.toBeNull();

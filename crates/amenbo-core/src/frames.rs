@@ -1,23 +1,25 @@
-//! The talk window's frames: what they are called, and the little of their arrangement that outlives
-//! the run.
+//! The talk window's frames: what they are called, and what of them outlives the run.
 //!
 //! A frame is the place a terminal is drawn in; a session is the process running in it. **The name
 //! belongs to the frame.** Tied to the session it would come back as an old name on a new process the
 //! moment anything restarted — a pane called "the migration" running something else entirely.
 //!
-//! **A frame does not outlive the app** (`AMB-T-3687`). What came back before was a place with
-//! nothing in it: the session died with the last run, so a restored frame was an empty box drawn
-//! exactly like the way in beside it, and a *named* one was worse — it said pressing would carry on
-//! where the reader left off, which nothing in the window can do. So the places, their names and
-//! which one was being worked in are this run's, and they live where the running state lives
-//! (`app/src-tauri/src/frames.rs`): in the process, for as long as it is up, shared by the board and
-//! the window a terminal is split out into.
+//! **A frame outlives the app, and comes back as a row rather than as a screen** ([`SavedPane`],
+//! `AMB-D-869`). One row a pane: where it works, what was started in it, what it is called, and the
+//! handle its provider is resumed from. A place that came back with none of that was the reason they
+//! were dropped once (`AMB-T-3687`) — an empty box drawn exactly like the way in beside it, and a
+//! named one saying that pressing would carry on where the reader left off, which nothing in the
+//! window could then do. The handle is what changed: every provider the window opens can be told to
+//! carry on, so the row is a way back into the session rather than a picture of one.
 //!
-//! **What is kept is what a person set rather than what they opened** ([`SavedLayout`]): how each
-//! project's page is split, and which project they were looking at. Both are one machine's answer — a
-//! wider screen holds more panes — so they sit in the store's device row, like the read receipts and
-//! the tick's day marks in [`crate::overview`], and not in `config.json`, which a restore does not
-//! carry (`AMB-D-434`).
+//! **What is written down is one machine's answer** — a wider screen holds more panes — so all of it
+//! sits in the store's device row, like the read receipts and the tick's day marks in
+//! [`crate::overview`], and not in `config.json`, which a restore does not carry (`AMB-D-434`).
+//!
+//! **What is not kept is the session.** A process died with the run, and the pane comes back with
+//! nothing running in it until something starts one from the handle the row carries. Which pane was
+//! being worked in is this run's as well: it is where the reader is looking, and an older write must
+//! not move them.
 //!
 //! **The split is one answer per project and not one for the face** ([`Split`]). How many panes a
 //! project wants is about the work in it — one repository is watched in a pane and another is worked
@@ -28,6 +30,8 @@
 //! in the pane names it, and a person renaming it outranks that, for good — an agent that says
 //! `talk name` afterwards does not take a person's word back off the frame. A frame neither has
 //! named is drawn by the folder it works in, which the window decides and nothing here writes down.
+//! Both the name and who gave it are on the pane's row: a name that came back without its rank would
+//! be a person's word the next `talk name` could take off.
 
 use std::collections::BTreeMap;
 
@@ -41,9 +45,11 @@ const LAYOUT_META: &str = "talk.layout";
 
 /// The `store_meta` key older builds kept the frame names under.
 ///
-/// Nothing writes it any more, and nothing may read it: ids start again at "1" every run, so a name
-/// kept against one would land on a place it was never given to. It is deleted wherever it is met
-/// ([`save_layout`]) rather than left as a row nobody can account for.
+/// Nothing writes it any more, and nothing may read it. A name is kept again ([`SavedPane::name`]),
+/// but on the row of the pane it names — while what is in here was held against ids that a build
+/// handed out from "1" on every run, so a name taken out of it would land on a place it was never
+/// given to. It is deleted wherever it is met ([`save_layout`]) rather than left as a row nobody can
+/// account for.
 const RETIRED_NAMES_META: &str = "talk.frame_names";
 
 /// How long a frame's name may be, in characters.
@@ -92,9 +98,11 @@ fn accepts(current: Option<&FrameName>, by: NamedBy) -> bool {
 
 /// What this run calls the talk window's frames.
 ///
-/// Held in the process and written nowhere: a name is about a place that is gone as soon as the app
-/// is (`AMB-T-3687`). It is one map for the whole app rather than one per window, because the face
-/// moves between the two windows and a name belongs to the place wherever it is being drawn.
+/// Held in the process, and written down with the panes rather than from here: what a frame is called
+/// goes on that frame's row as the arrangement is kept ([`SavedPane::name`]), and comes back into
+/// this map as the first window of a run reads one (`app/src-tauri/src/frames.rs`). It is one map for
+/// the whole app rather than one per window, because the face moves between the two windows and a
+/// name belongs to the place wherever it is being drawn.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FrameNames(BTreeMap<String, FrameName>);
 
@@ -141,16 +149,12 @@ pub struct Split {
     pub orient: Orient,
 }
 
-/// The part of the talk window's arrangement that outlives the run, as one machine left it.
-///
-/// **The frames are not in it** — see this module's head. What is here is what a person set rather
-/// than what they opened: how each project's page is split, and which project they were looking at.
-/// Both are worth coming back to because neither says anything about work that has ended.
+/// The talk window's arrangement as one machine left it: what a person set, and what they opened.
 ///
 /// **A project nobody has split is absent rather than written at a default.** What is kept is an
 /// answer somebody gave, and a row that carried every project the store has would grow with the
 /// store while saying nothing about most of them.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedLayout {
     /// The project whose panes the face was showing. `None` is a machine where the face has not been
@@ -160,6 +164,76 @@ pub struct SavedLayout {
     /// How each project's page is split, by project.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub splits: BTreeMap<u32, Split>,
+    /// The panes, in the order they were opened ([`SavedPane`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub panes: Vec<SavedPane>,
+    /// The id to hand out to the next pane opened.
+    ///
+    /// **It is kept because the ids are.** A pane's row is found again by its id, and a run that
+    /// began handing them out from the first would give a fresh pane the id of one that was closed
+    /// before the app went down — along with whatever is still lying about under that id
+    /// (`AMB-T-4640`). So the count goes up across runs and never back.
+    #[serde(default = "first_id")]
+    pub next_id: u32,
+}
+
+/// The id a store that has never opened a pane hands out first, and what a row written before the
+/// ids were kept reads as: there is nothing behind it to collide with.
+fn first_id() -> u32 {
+    1
+}
+
+/// A machine that has laid nothing out: no project, no answer about a split, no places — and the
+/// first id still to hand out, because an id is a count of what has been opened rather than a field
+/// that starts empty.
+impl Default for SavedLayout {
+    fn default() -> Self {
+        Self {
+            project: None,
+            splits: BTreeMap::new(),
+            panes: Vec::new(),
+            next_id: first_id(),
+        }
+    }
+}
+
+/// One pane's row: where it works, what was started in it, what it is called, and the way back into
+/// what it was talking to.
+///
+/// **It is a row and not a screen.** What a pane had on it went with the process that printed it, so
+/// nothing here draws: this is what a window needs to put the place back and offer to carry on in it
+/// (`AMB-D-869`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedPane {
+    /// The id this pane was handed when it was opened, which is what its name and its handle are held
+    /// against ([`SavedLayout::next_id`]).
+    pub id: String,
+    /// The project it is one of. A pane is a project's from the moment it is made and never moves
+    /// between them, so it comes back under the same one.
+    pub project: u32,
+    /// The folder its terminal works in — one of the folders that project is bound to. `None` for a
+    /// pane that took up a terminal somebody else started and had not yet been told where it runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
+    /// The id the agent in it was started as — a row of [`crate::harness::LAUNCHES`], or a command
+    /// the reader registered — and `None` for a plain prompt, which is a pane to come back to with
+    /// nothing to resume.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    /// What the pane is called, and who called it that ([`FrameName`]). Absent for a pane nobody has
+    /// named, which the window draws by the folder it works in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<FrameName>,
+    /// The handle this pane's provider is resumed from — a session id for most of them, and the path
+    /// of a home of its own for `codex` (`AMB-D-869`).
+    ///
+    /// **What shape it takes is the provider's, so it is kept as the word to hand back and nothing
+    /// more.** Which flag carries it is the launch's to say (`AMB-T-4639`, `AMB-T-4640`); a row that
+    /// has none is a pane there is no way back into, and it comes back as a place to start something
+    /// in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume: Option<String>,
 }
 
 /// Which way the two panes of a two-pane page sit: side by side, or one above the other.
@@ -195,6 +269,11 @@ impl Orient {
 /// A build before the split was per project wrote one for the whole face. That answer belonged to
 /// whichever project the face was on, and [`saved_layout`] is where it is put back under it — so a
 /// person who set four panes and updated finds four panes on the project they set them on.
+///
+/// **The panes an older build wrote are read straight past.** It kept them under `frames`, a shape
+/// with no name, no agent and no handle on it, numbered by a run that began again at "1" — so what
+/// there is to take from one is a place with nothing to say and an id another pane may already be
+/// holding. A store written by such a build comes back with its splits and no panes.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Row {
@@ -202,6 +281,10 @@ struct Row {
     project: Option<u32>,
     #[serde(default)]
     splits: BTreeMap<u32, Split>,
+    #[serde(default)]
+    panes: Vec<SavedPane>,
+    #[serde(default = "first_id")]
+    next_id: u32,
     /// The one split an older build wrote. `None` in anything this build has written.
     #[serde(default)]
     count: Option<u32>,
@@ -231,7 +314,14 @@ pub fn saved_layout(engine: &StoreEngine) -> Result<Option<SavedLayout>> {
     if let (true, Some(count), Some(project)) = (splits.is_empty(), row.count, row.project) {
         splits.insert(project, Split { count, orient: row.orient });
     }
-    Ok(Some(SavedLayout { project: row.project, splits }))
+    // Whatever the row says, the next id clears every pane in it: an id handed out twice would put one
+    // pane's name, and the way back into another one's session, on a place neither belongs to.
+    let next_id = row
+        .panes
+        .iter()
+        .filter_map(|pane| pane.id.parse::<u32>().ok())
+        .fold(row.next_id, |next, id| next.max(id + 1));
+    Ok(Some(SavedLayout { project: row.project, splits, panes: row.panes, next_id }))
 }
 
 /// Keep what outlives the run. It is written as the window is changed rather than as it closes: a
@@ -298,6 +388,7 @@ mod tests {
                 (1, Split { count: 4, orient: Orient::Across }),
                 (2, Split { count: 2, orient: Orient::Down }),
             ]),
+            ..SavedLayout::default()
         };
         save_layout(&engine, &kept).unwrap();
 
@@ -310,24 +401,96 @@ mod tests {
         assert!(!back.splits.contains_key(&3));
     }
 
-    /// What a person set comes back, and what they opened does not: the split and the project are
-    /// kept, and there is nowhere in the row for a frame to be kept in.
+    /// What a person set comes back, and so do the places they opened — with nothing running in any
+    /// of them, and no word about which one they were working in.
     #[test]
-    fn the_split_and_the_project_come_back_and_the_frames_do_not() {
+    fn the_split_the_project_and_the_panes_come_back() {
         let engine = StoreEngine::open_in_memory().unwrap();
         assert_eq!(saved_layout(&engine).unwrap(), None, "nothing has been laid out yet");
 
         let kept = SavedLayout {
             project: Some(1),
             splits: BTreeMap::from([(1, Split { count: 4, orient: Orient::Across })]),
+            panes: vec![SavedPane {
+                id: "2".into(),
+                project: 1,
+                folder: Some("/work/repo".into()),
+                agent: Some("claude".into()),
+                name: Some(FrameName { name: "the migration".into(), by: Person }),
+                resume: Some("0f9c-…".into()),
+            }],
+            next_id: 3,
         };
         save_layout(&engine, &kept).unwrap();
 
         assert_eq!(saved_layout(&engine).unwrap(), Some(kept));
         let written = engine.get_meta(LAYOUT_META).unwrap().expect("the arrangement");
-        assert!(!written.contains("frames"), "a place is not kept: {written}");
-        assert!(!written.contains("nextId"), "nor an id to hand out after it: {written}");
+        assert!(!written.contains("session"), "a process is not kept: {written}");
         assert!(!written.contains("splitOut"), "nor which one was being worked in: {written}");
+    }
+
+    /// A pane nobody has named, opened at a plain prompt, is a row of what there is to say and no
+    /// more — the absent halves are absent rather than written empty.
+    #[test]
+    fn a_pane_with_nothing_to_say_writes_nothing() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let kept = SavedLayout {
+            project: Some(1),
+            splits: BTreeMap::new(),
+            panes: vec![SavedPane {
+                id: "1".into(),
+                project: 1,
+                folder: Some("/work/repo".into()),
+                agent: None,
+                name: None,
+                resume: None,
+            }],
+            next_id: 2,
+        };
+        save_layout(&engine, &kept).unwrap();
+
+        let written = engine.get_meta(LAYOUT_META).unwrap().expect("the arrangement");
+        assert!(!written.contains("agent"), "nothing was started in it: {written}");
+        assert!(!written.contains("name"), "nobody has named it: {written}");
+        assert!(!written.contains("resume"), "and there is no way back into it: {written}");
+        assert_eq!(saved_layout(&engine).unwrap(), Some(kept));
+    }
+
+    /// The id handed out next clears every pane in the row, whichever of the two says the higher
+    /// number: a reused id would put one pane's name, and the way back into another's session, on a
+    /// place neither belongs to.
+    #[test]
+    fn the_next_id_clears_every_pane_that_came_back() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let pane = |id: &str| SavedPane {
+            id: id.into(),
+            project: 1,
+            folder: None,
+            agent: None,
+            name: None,
+            resume: None,
+        };
+        engine
+            .set_meta(
+                LAYOUT_META,
+                Some(r#"{"project":1,"nextId":2,"panes":[{"id":"5","project":1}]}"#),
+            )
+            .unwrap();
+        let back = saved_layout(&engine).unwrap().expect("the arrangement");
+        assert_eq!(back.next_id, 6, "a row that undercounts its own panes is answered past");
+
+        save_layout(
+            &engine,
+            &SavedLayout {
+                project: Some(1),
+                splits: BTreeMap::new(),
+                panes: vec![pane("2")],
+                next_id: 9,
+            },
+        )
+        .unwrap();
+        let back = saved_layout(&engine).unwrap().expect("the arrangement");
+        assert_eq!(back.next_id, 9, "and one that counts past them keeps its count");
     }
 
     /// An arrangement an older build wrote still reads: the frames beside it are read past rather
@@ -350,6 +513,10 @@ mod tests {
             Some(SavedLayout {
                 project: Some(2),
                 splits: BTreeMap::from([(2, Split { count: 4, orient: Orient::Across })]),
+                // Its places are read past: what it kept of one is a folder under an id its own run
+                // began handing out from the first, with nothing to say about what was in it.
+                panes: Vec::new(),
+                next_id: 3,
             })
         );
     }
@@ -362,7 +529,7 @@ mod tests {
         engine.set_meta(LAYOUT_META, Some(r#"{"count":4}"#)).unwrap();
         assert_eq!(
             saved_layout(&engine).unwrap(),
-            Some(SavedLayout { project: None, splits: BTreeMap::new() })
+            Some(SavedLayout { project: None, splits: BTreeMap::new(), panes: Vec::new(), next_id: 1 })
         );
     }
 
@@ -389,6 +556,7 @@ mod tests {
         let across = SavedLayout {
             project: Some(1),
             splits: BTreeMap::from([(1, Split { count: 2, orient: Orient::Across })]),
+            ..SavedLayout::default()
         };
         save_layout(&engine, &across).unwrap();
         let written = engine.get_meta(LAYOUT_META).unwrap().expect("the arrangement");
@@ -397,6 +565,7 @@ mod tests {
         let kept = SavedLayout {
             project: Some(1),
             splits: BTreeMap::from([(1, Split { count: 2, orient: Orient::Down })]),
+            ..SavedLayout::default()
         };
         save_layout(&engine, &kept).unwrap();
         assert_eq!(saved_layout(&engine).unwrap(), Some(kept));

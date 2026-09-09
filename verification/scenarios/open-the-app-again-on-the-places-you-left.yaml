@@ -1,29 +1,37 @@
 # What a run of the app leaves behind, and what goes out with it.
 #
-# A frame is a place a terminal is drawn in, and the terminal died with the run — so a place that came
-# back would be an empty box drawn exactly like the way in beside it, and a named one would say that
-# pressing carries on where the reader left off, which nothing in the window can do. What is kept is
-# what the person *set* rather than what they opened: how many panes to a page, and the project they
+# A frame is a place a terminal is drawn in, and the terminal died with the run. What comes back is
+# the place: where it worked, what was started in it, and what the reader called it. What does not is
+# the process — so the pane comes back with nothing running in it, and the reader says when something
+# does.
+#
+# Beside the places, the two answers a person *set*: how many panes to a page, and the project they
 # were looking at.
 #
-# The line is worth a road of its own because **both sides of it look right**. A face that brought
-# three empty places back and a face with one way in on it are each a working screen, and so are a
-# split that was kept and a split that fell back to the one every fresh device starts on. Nothing goes
-# red on the way; the only way to tell is to end a run and look at what the next one drew.
+# The line is worth a road of its own because **both sides of it look right**. A face with one way in
+# on it and a face standing the places back up are each a working screen, and so are a split that was
+# kept and a split that fell back to the one every fresh device starts on. Nothing goes red on the
+# way; the only way to tell is to end a run and look at what the next one drew.
 #
-# ── Why the reading is a count of boxes and not the words on a pane ──────────────────────────────
+# ── Why the reading is the name on the row and not the words on a pane ───────────────────────────
 # A pane keeps what was printed in it while the app is up and nothing keeps it across a run, so the
 # line this road types is gone from the screen whether or not the place it was typed in came back. A
-# step reading for it would pass on both screens and say nothing about either. What parts them is how
-# many boxes the page draws — one way in and nothing else, against the places standing where they
-# were left.
+# step reading for it would pass on both screens and say nothing about either. The name is the other
+# way about: it is given to the *place*, it is kept on that place's row, and it comes back on the row
+# above the pane — so a face that stood a fresh box up where the place had been carries no name at
+# all, and a face that came back on somebody else's place carries the wrong one.
+#
+# ── Why the pane has to be opened again before the name is read ──────────────────────────────────
+# The row above a pane says what is happening in the pane, and nothing is happening in a place that
+# came back: until a terminal is started there the row is blank, whatever the frame is called. So the
+# road opens the place it came back to — which is also the reading that it is a *place* and not a
+# picture of one — and reads the name off the row that comes up with the prompt.
 #
 # ── How a split is read at all ───────────────────────────────────────────────────────────────────
-# A count is not on the screen until there is something to lay out: a page with no panes draws its one
-# way in whatever the count is, so the screen the run came back on cannot say which split it is at. So
-# the road opens a pane and reads what stands beside it. At two to a page that pane has a way in next
-# to it; at the one a project nobody has answered for is drawn at, the page is full and there is no
-# empty frame at all. One pane, one reading, and the kept split is told from the default.
+# A count is not on the screen: what says which split a page is at is what it does with the panes on
+# it. One place came back, so at two to a page there is room beside it and the way in is drawn; at
+# the one a project nobody has answered for is drawn at, that same place fills the page and there is
+# no empty frame anywhere. One pane, one reading, and the kept split is told from the default.
 #
 # ── Why two projects, and why the pane is asked where it is ──────────────────────────────────────
 # A project that is the only one comes back by having nowhere else to be. The road raises two and
@@ -32,7 +40,7 @@
 # Reading which one came back is the pane's to answer rather than the tabs': every project has a tab
 # whichever is being shown, so a name read off the screen would be found there on a face that came
 # back on the wrong project. A pane belongs to a project and works in a folder that project
-# is bound to, so where the new pane is standing *is* the project the face came back on — read the way
+# is bound to, so where the pane is standing *is* the project the face came back on — read the way
 # `open-a-pane-where-a-project-keeps-more-than-one-folder` reads it, by printing a file that lies in
 # one of the folders and says so. Both folders carry one, so a face that came back on the wrong
 # project prints the wrong sentence rather than printing nothing: a step that could go red on a file
@@ -40,15 +48,15 @@
 #
 # The world raises the two projects and puts that one file in each folder, and nothing else: a
 # terminal is not a record, and what a pane runs is the reader's own shell.
-id: open-the-app-again-on-the-split-you-set-and-no-panes
-title: A run of the app keeps the split a reader set and the project they were looking at, and brings none of the places back
+id: open-the-app-again-on-the-places-you-left
+title: A run of the app keeps the places a reader opened, the split they set and the project they were looking at
 description: >
-  Raise two projects, go to the second, cut its page to two panes and open a terminal in it. End the
-  run and open the app again on the same store: the page comes back with no pane on it at all, one way
-  in and nothing else — the place that had a terminal in it is not there. Open a pane, and a way in
-  stands beside it, which is the split the reader set and not the one pane a project nobody has
-  answered for is drawn at; ask it where it is running, and it answers with the folder of the project
-  they were looking at.
+  Raise two projects, go to the second, cut its page to two panes and open a terminal in it, then
+  give that pane a name of your own. End the run and open the app again on the same store: the place
+  is standing where it was left, with a way in beside it — the split the reader set, and not the one
+  pane a project nobody has answered for is drawn at. Nothing is running in the place, so open a
+  plain shell in it: the row above it carries the name it was given in the run before, and asking it
+  where it is standing answers with the folder of the project the reader was looking at.
 
 given:
   - type: action
@@ -102,9 +110,9 @@ steps_gui:
     with:
       project: Boathouse
 
-  # The split the reader set, which is one of the two things a run keeps. Two to a page is worth
-  # setting here: it is not what a project nobody has answered for is drawn at, so a split that was
-  # forgotten and a split that was kept draw different screens.
+  # The split the reader set, which is one of the things a run keeps. Two to a page is worth setting
+  # here: it is not what a project nobody has answered for is drawn at, so a split that was forgotten
+  # and a split that was kept draw different screens.
   - type: action
     domain: terminal
     op: set-panes
@@ -138,6 +146,21 @@ steps_gui:
     with:
       shows: SCENARIO the terminal of the run before
 
+  # The name, which is the reader's own word on this place and the thing the next run has to bring
+  # back. It is given to the frame rather than to what is running in it, which is exactly why it can
+  # outlive a run at all.
+  - type: action
+    domain: terminal
+    op: name-pane
+    with:
+      name: SCENARIO the place of the run before
+
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the place of the run before
+
   # The page as the reader leaves it: one pane, with the room the split left for a second one drawn
   # as the way in beside it. It is the picture the reading after the run is taken against.
   - type: assert
@@ -162,26 +185,9 @@ steps_gui:
     with:
       face: terminal
 
-  # And the place is gone. A frame that came back would be standing here drawn as an empty box, and
-  # the count is what says which of the two screens this is: a page offering room, or a page with the
-  # last run's places still on it.
-  - type: assert
-    domain: terminal
-    op: frames
-    with:
-      count: 0
-      empty: 1
-
-  - type: action
-    domain: terminal
-    op: open-pane
-    with:
-      from: face
-
-  # The split, read the only way a split can be read: by what the page does with a pane. A way in
-  # standing beside it is a page with room on it at two. Had the count gone back to the one a project
-  # nobody has answered for is drawn at, this pane would be alone on a full page, and the screen would
-  # otherwise look the same.
+  # The place is standing, and the way in is beside it rather than in its stead. Two things are read
+  # at once here: that the run brought the place back at all, and that the page is still cut at two —
+  # at one, this same place would fill the page and no empty frame would be drawn anywhere.
   - type: assert
     domain: terminal
     op: frames
@@ -189,13 +195,25 @@ steps_gui:
       count: 1
       empty: 1
 
+  # Nothing is running in it, so the road starts something: the place comes back as a place, and what
+  # runs in it is a press. The shell opens in the pane already standing, which is the one that came
+  # back.
   - type: action
     domain: terminal
     op: open-shell
 
-  # And the project, asked of the pane rather than of the tabs. A pane works in a folder of its own
-  # project, so the folder's own file is the face saying which project it came back on — and the
-  # other folder holds one too, so the wrong project would answer this with the wrong sentence.
+  # And the row above it is the reader's own word from the run before. A face that stood a fresh box
+  # up here would carry no name at all.
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the place of the run before
+
+  # And where the place works, asked of the pane rather than of the tabs. A pane works in a folder of
+  # its own project, so the folder's own file is the face saying both which folder the place came
+  # back on and which project it belongs to — and the other folder holds one too, so the wrong answer
+  # is a wrong sentence rather than silence.
   - type: action
     domain: terminal
     op: run

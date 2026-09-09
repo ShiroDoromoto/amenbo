@@ -110,7 +110,7 @@ export function TerminalPane({
    * same surface, because to a reader they are the same act.
    */
   offered?: boolean;
-  onOpened: (frame: string, session: string, folder: string | null) => void;
+  onOpened: (frame: string, session: string, folder: string | null, agent: string | null) => void;
   onSaid: (statement: SessionSaidDto) => void;
   /** A file path drawn in this pane was clicked, as it was drawn. */
   onPath: (frame: string, target: string) => void;
@@ -343,9 +343,9 @@ export function TerminalPane({
         plate.opened(where ?? start.cwd ?? null);
         setLive(session);
         setInPane(running);
-        // Where the terminal actually runs, which is not always the folder this slot was handed: a
-        // pane that took one up learns it from the session (`../talk/layout`).
-        on.current.onOpened(frame, session, where ?? start.cwd ?? null);
+        // Where the terminal actually runs and what is in it, neither of which is always what this
+        // slot was handed: a pane that took one up learns both from the session (`../talk/layout`).
+        on.current.onOpened(frame, session, where ?? start.cwd ?? null, running);
       },
       // A path drawn in this pane was clicked. Where it leads is the face's to work out — it knows
       // the folder this frame is in and the one the file face is rooted at (`AMB-T-3630`).

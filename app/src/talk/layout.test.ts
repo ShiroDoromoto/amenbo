@@ -133,7 +133,7 @@ describe("a pane belongs to a project", () => {
 describe("a frame is a place, not a process", () => {
   it("keeps the frame when the program in it exits", () => {
     const { layout, frame } = openedFrame(EMPTY_LAYOUT, 1, "/w");
-    const ended = closedIn(openedIn(layout, frame.id, "s1", "/w"), "s1");
+    const ended = closedIn(openedIn(layout, frame.id, "s1", "/w", null), "s1");
     expect(ended.frames).toHaveLength(1);
     expect(ended.frames[0]!.session).toBeNull();
     expect(ended.frames[0]!.id).toBe(frame.id);
@@ -141,7 +141,7 @@ describe("a frame is a place, not a process", () => {
 
   it("never hands a retired id out again — a name is kept against it", () => {
     const four = withPanes(4);
-    const ended = closedIn(openedIn(four, "1", "s1", null), "s1");
+    const ended = closedIn(openedIn(four, "1", "s1", null, null), "s1");
     expect(openedFrame(ended, 1, "/w").frame.id).toBe("5");
   });
 });
@@ -194,14 +194,17 @@ describe("closing a pane takes the place away", () => {
 
 describe("where a pane works", () => {
   it("is the folder it was opened in, which an agent's own cd does not redraw", () => {
-    const one = openedIn(withPanes(1), "1", "s1", "/repo");
+    const one = openedIn(withPanes(1), "1", "s1", "/repo", null);
     expect(movedTo(one, "s1", "/elsewhere").frames[0]!.folder).toBe("/repo");
   });
 
   it("is learned from the session for a pane that took one up rather than starting it", () => {
     const adopted = openedIn({ ...EMPTY_LAYOUT, project: 1, frames: [
-      { id: "1", project: 1, session: null, folder: null, written: "" },
-    ], nextId: 2 }, "1", "s1", null);
+      { id: "1", project: 1, session: null, folder: null, agent: null, written: "" },
+    ], nextId: 2 }, "1", "s1", null, "claude");
+    // What is running comes off the session as well, and by the same reasoning: a pane that adopted
+    // one never asked for it.
+    expect(adopted.frames[0]!.agent).toBe("claude");
     expect(movedTo(adopted, "s1", "/said").frames[0]!.folder).toBe("/said");
   });
 });
@@ -322,13 +325,15 @@ describe("the count is the most a page draws", () => {
 describe("an arrangement kept between runs", () => {
   it("keeps the shape and lets the sessions go", () => {
     let layout = withPanes(2);
-    layout = openedIn(layout, "1", "session-a", "/work/1");
-    layout = openedIn(layout, "2", "session-b", "/work/1");
+    layout = openedIn(layout, "1", "session-a", "/work/1", "claude");
+    layout = openedIn(layout, "2", "session-b", "/work/1", null);
 
     const kept = laidOut(layout);
     expect(kept.count).toBe(layout.count);
     expect(kept.frames).toEqual([
-      { id: "1", project: 1, folder: "/work/1" },
+      // What was started in each, which is the half of a row a folder cannot carry: the second is at
+      // a plain prompt, and a prompt has nothing to name.
+      { id: "1", project: 1, folder: "/work/1", agent: "claude" },
       { id: "2", project: 1, folder: "/work/1" },
     ]);
     // What was running is not in it at all: a session died with the last run, and a pane drawn as
@@ -370,6 +375,23 @@ describe("an arrangement kept between runs", () => {
     expect(back.page).toBe(1);
   });
 
+  it("comes back with what was started in each place, and with none of it running", () => {
+    // The row is the way back into the session rather than a picture of one (`AMB-D-869`): the pane
+    // says what was in it, and the window is what decides to start one again (`AMB-T-4641`).
+    const back = restored({
+      count: 2,
+      nextId: 3,
+      project: 1,
+      frames: [{ id: "1", project: 1, folder: "/work/repo", agent: "claude" }],
+    }, 1);
+    expect(back.frames[0]!.agent).toBe("claude");
+    expect(back.frames[0]!.session).toBeNull();
+    // And a pane that was at a plain prompt has nothing to name, which is not the same as a pane
+    // nobody can account for.
+    const bare = restored({ count: 2, nextId: 3, frames: [{ id: "1", project: 1 }] }, 1);
+    expect(bare.frames[0]!.agent).toBeNull();
+  });
+
   it("puts a pane whose project nothing recorded where the person is looking", () => {
     const back = restored({ count: 2, nextId: 2, frames: [{ id: "1", folder: "/work/repo" }] }, 5);
     expect(back.frames[0]!.project).toBe(5);
@@ -387,8 +409,8 @@ describe("an arrangement kept between runs", () => {
   });
 
   it("brings the split back with no frames to draw it with", () => {
-    // What every window that comes up after a run reads: the frames are not kept, and the split the
-    // person chose is (`AMB-T-3687`). It is the empty face, laid out the way they laid it out.
+    // A device where nothing was ever opened: what came back is the split the person chose, and it
+    // is the empty face, laid out the way they laid it out.
     const back = restored({ count: 4, nextId: 1, project: 3, frames: [] }, 3);
     expect(back.count).toBe(4);
     expect(back.frames).toHaveLength(0);

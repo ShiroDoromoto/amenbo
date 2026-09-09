@@ -33,7 +33,7 @@ function twoProjects(): Layout {
   let layout: Layout = { ...EMPTY_LAYOUT, project: 1 };
   layout = openedFrame(layout, 1, "/repo").layout;
   layout = openedFrame(layout, 2, "/site").layout;
-  layout = openedIn(layout, "2", "s2", "/site");
+  layout = openedIn(layout, "2", "s2", "/site", null);
   return goProject(layout, 1);
 }
 

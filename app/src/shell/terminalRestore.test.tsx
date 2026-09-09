@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
-// What a window comes up as, and what it must not come up as (`AMB-T-3607`, `AMB-T-3687`).
+// What a window comes up as, and what it must not come up as (`AMB-T-3607`, `AMB-D-869`).
 //
-// **After a run there are no frames.** What the app kept is the split the person chose and the
-// project they were looking at, so the face comes up laid out their way with one way in on it — and
-// not with the places they opened last time, which would be empty boxes drawn exactly like that way
-// in, saying nothing except that something used to be there.
+// **A window comes up on the arrangement it is handed, and draws every place in it.** After a run
+// that is the rows the store kept — where each pane worked and what was started in it — and inside
+// one it is the face the other window is drawing. Both come over the same way, and neither carries a
+// session: a process died with the run that started it, and the pane is the offer to carry on
+// (`../talk/layout`).
 //
-// **Inside a run there are.** The arrangement is how the two windows share one face, so a window that
-// reads one with panes in it draws them — as places, with nothing started in any of them: a session
-// is a process, and the pane is the offer to start one (`../talk/layout`).
+// **A device that has never opened one still gets an answer**: the split the person chose and the
+// project they were looking at, which is the empty face laid out their way.
 //
 // Both halves are invisible in code that looks right either way. A face that started what it drew
 // would look like a face that remembered well, and the reader would find agents running that nobody
@@ -33,11 +33,13 @@ vi.mock("../talk/agent", () => ({
   mountAgentFrame: (
     _host: HTMLElement,
     _lang: string,
-    on: { opened: (s: string) => void },
+    on: { opened: (s: string, folder: string | null, agent: string | null) => void },
     start: PaneStart = {},
   ) => {
     hoisted.mounts.push({ start });
-    on.opened(start.session ?? `s${hoisted.mounts.length}`);
+    // What a session says it was started with, which is where the pane's folder and its agent come
+    // from (`../talk/terminal`). Nothing here was pressed for an agent, so it is a plain prompt.
+    on.opened(start.session ?? `s${hoisted.mounts.length}`, start.cwd ?? null, start.agent ?? null);
     return Promise.resolve(() => {});
   },
 }));
@@ -129,8 +131,8 @@ beforeEach(async () => {
   hoisted.mounts = [];
   hoisted.kept = [];
   hoisted.answer = null;
-  // What the app kept of the last run: the split, and the project the face was on. There are no
-  // frames in it, and there is no id to carry over, because neither is kept (`../talk/layout`).
+  // A device where the split and the project are all there is to come back to: nothing was open when
+  // the last run ended, so the arrangement names no place (`../talk/layout`).
   hoisted.saved = { count: 4, nextId: 1, project: 1, frames: [] };
   await mount();
 });
@@ -150,8 +152,7 @@ describe("the first window of a run", () => {
 
   it("comes up on the split that was kept, with one way in and nothing running", async () => {
     await answered();
-    // The panes are gone and the split is not: what a person set is theirs to come back to, and what
-    // they opened died with the run.
+    // Nothing was open to come back to, so what the split is drawn on is the one way in.
     expect(splitOn()).toBe(tn("face.panes", 4));
     expect(q(".slot--empty")).toHaveLength(1);
     expect(q(".slot")).toHaveLength(1);
@@ -175,6 +176,8 @@ describe("the first window of a run", () => {
   });
 });
 
+// The same road for the first window of a run, where the panes came out of the store rather than off
+// the other window: one arrangement, one way of reading it.
 describe("a window that reads an arrangement with panes in it", () => {
   beforeEach(async () => {
     act(() => root.unmount());
@@ -185,7 +188,10 @@ describe("a window that reads an arrangement with panes in it", () => {
       project: 1,
       frames: [
         { id: "1", project: 1, folder: "/work/repo" },
-        { id: "2", project: 1, folder: "/work/repo" },
+        // What was started in the second is part of its row: coming back to a pane means coming back
+        // to what was running in it (`AMB-D-869`). Nothing is pressed on this one, so it is the row
+        // that comes through the run untouched.
+        { id: "2", project: 1, folder: "/work/repo", agent: "claude" },
       ],
     };
     await mount();
@@ -220,6 +226,19 @@ describe("a window that reads an arrangement with panes in it", () => {
     expect(JSON.stringify(hoisted.kept)).not.toContain("session");
     // And the pane being worked in goes with it, for the window a terminal is split out into: a face
     // that read this one lands on the first place, which is where the person is (`../talk/layout`).
-    expect(hoisted.kept[hoisted.kept.length - 1]).toEqual({ ...(hoisted.saved as object), splitOut: "1" });
+    //
+    // The first place says what is running in it **now**, which is a plain prompt: the row records
+    // what a session says it was started with, so a place opened again on something else must not go
+    // on naming what was there before it (`../talk/layout`).
+    expect(hoisted.kept[hoisted.kept.length - 1]).toEqual({
+      count: 2,
+      nextId: 3,
+      project: 1,
+      frames: [
+        { id: "1", project: 1, folder: "/work/repo" },
+        { id: "2", project: 1, folder: "/work/repo", agent: "claude" },
+      ],
+      splitOut: "1",
+    });
   });
 });

@@ -343,6 +343,34 @@ struct Pane {
     /// once however many times a person presses Enter. `None` is a pane with nothing owed: one whose
     /// sentence rode in on the command line, one the hand-over got through to, or one already sent.
     unsent: Mutex<Option<String>>,
+    /// Whether the opening sentence is still being handed over — true from the moment that thread
+    /// starts until it is done with the pane.
+    ///
+    /// **Two things must never be writing into one input box.** The rename waits this out rather
+    /// than racing it: both of them paste into a screen that has stood still, so both could pick the
+    /// same still screen, and what a person would then press Enter on is one line made of two
+    /// (`AMB-D-872`).
+    opening: AtomicBool,
+    /// The name this pane's provider is still to be told, and whether a thread is carrying one
+    /// ([`Renaming`]).
+    renaming: Mutex<Renaming>,
+}
+
+/// A pane's rename, as the thread carrying it and the name it is to carry next.
+///
+/// **The newest name wins and there is one thread.** A rename waits for the pane to stand still,
+/// which can be the length of an agent's answer — long enough for a person to rename the pane again,
+/// and two threads pasting into one box would put both names in it. So a second naming replaces what
+/// the thread is to carry rather than starting one of its own, and the thread reads this again every
+/// time it finishes one (`AMB-D-872`).
+#[derive(Default)]
+struct Renaming {
+    /// The name not yet carried into the pane, or `None` when the provider has been told the latest
+    /// one.
+    owed: Option<String>,
+    /// Whether a thread is on it. It stays true across the wait, which is what a second naming
+    /// checks to know it has nothing to start.
+    running: bool,
 }
 
 impl Pane {
@@ -352,6 +380,8 @@ impl Pane {
             recent: Mutex::new(Recent::new(at)),
             briefed: AtomicBool::new(false),
             unsent: Mutex::new(None),
+            opening: AtomicBool::new(false),
+            renaming: Mutex::new(Renaming::default()),
         }
     }
 
@@ -386,6 +416,50 @@ impl Pane {
     /// nothing owed the moment it goes out and a second press finds nothing to send.
     fn take_unsent(&self) -> Option<String> {
         self.unsent.lock().expect("pane unsent lock").take()
+    }
+
+    /// Whether the opening sentence is still on its way into this pane — either a thread is handing
+    /// it over, or it is sitting in the input box waiting for a person's Enter.
+    fn opening(&self) -> bool {
+        self.opening.load(Ordering::Relaxed)
+            || self.unsent.lock().expect("pane unsent lock").is_some()
+    }
+
+    /// Say whether the opening sentence is in flight. Set before the thread starts and cleared when
+    /// it is done, so the rename never sees a gap that is not one.
+    fn handing_over(&self, yes: bool) {
+        self.opening.store(yes, Ordering::Relaxed);
+    }
+
+    /// This pane's provider is to be told it is called `line`. Answers whether a thread has to be
+    /// started — false where one is already carrying names into this pane and will pick this up.
+    fn rename_to(&self, line: String) -> bool {
+        let mut renaming = self.renaming.lock().expect("pane renaming lock");
+        renaming.owed = Some(line);
+        if renaming.running {
+            return false;
+        }
+        renaming.running = true;
+        true
+    }
+
+    /// The next name to carry, or `None` — which also puts the thread down, under the one lock, so a
+    /// naming arriving in that moment either replaces the name or starts a thread and never neither.
+    fn next_rename(&self) -> Option<String> {
+        let mut renaming = self.renaming.lock().expect("pane renaming lock");
+        let next = renaming.owed.take();
+        if next.is_none() {
+            renaming.running = false;
+        }
+        next
+    }
+
+    /// No more names will be carried into this pane — the terminal went, or the pane never came free
+    /// of its opening sentence.
+    fn rename_over(&self) {
+        let mut renaming = self.renaming.lock().expect("pane renaming lock");
+        renaming.owed = None;
+        renaming.running = false;
     }
 
     /// The window the chunks are going to right now.
@@ -657,6 +731,9 @@ const TRIES: usize = 120;
 /// and by the terminal, which it asks about on every pass, so a pane closed in the middle of this
 /// takes the thread with it.
 fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instruction: String) {
+    // Said before the thread is spawned, so a rename arriving in the same breath finds the sentence
+    // in flight rather than the gap before it started (`Pane::opening`).
+    pane.handing_over(true);
     std::thread::spawn(move || {
         let open = |app: &tauri::AppHandle| {
             app.state::<Terminals>().0.lock().expect("terminals lock").contains_key(&session)
@@ -664,6 +741,9 @@ fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instructio
         let ended = crate::handover::hand_over(
             &instruction,
             TRIES,
+            // A pane being started: ten seconds of a screen that will not stand still buys the paste
+            // anyway, because what the movement means here is a program still drawing itself.
+            Some(crate::handover::RESTLESS),
             || pane.briefed(),
             || open(&app).then(|| pane.screen()),
             |bytes| {
@@ -686,6 +766,69 @@ fn hand_over(app: tauri::AppHandle, session: String, pane: Arc<Pane>, instructio
             // anybody is told there is one to answer for (`pty_brief`).
             pane.leave(instruction);
             let _ = app.emit_to(pane.target().as_str(), UNSENT_EVENT, &session);
+        }
+        // Last, and after the sentence has been left: what this releases is the input box, and it is
+        // not free while the sentence is still going into it.
+        pane.handing_over(false);
+    });
+}
+
+/// How many looks a rename gets before the name is given up on.
+///
+/// With [`SETTLE`] between them this is ten minutes, and it is longer than the opening sentence's
+/// minute because what it is waiting out is longer: the sentence waits for a program to finish
+/// starting, and this waits for an agent to finish answering. A rename nobody is watching for is
+/// worth waiting on — and the pane says the name itself the whole time, which is the copy nothing
+/// depends on (`AMB-D-872`).
+const RENAME_TRIES: usize = 1200;
+
+/// Tell the provider running in this pane what the pane is called, on a thread of its own.
+///
+/// **It waits, and what it waits for is an input box nobody else is using.** The opening sentence
+/// has the box first — a rename pasted on top of one still going in would make a single line out of
+/// two — and after that the wait is for the pane to stand still, which is an agent's answer ending.
+/// Neither is hurried: what is being carried is a copy of a name the pane already shows.
+fn rename_pane(app: tauri::AppHandle, session: String, pane: Arc<Pane>) {
+    std::thread::spawn(move || {
+        let open = |app: &tauri::AppHandle| {
+            app.state::<Terminals>().0.lock().expect("terminals lock").contains_key(&session)
+        };
+        while let Some(line) = pane.next_rename() {
+            // The opening sentence first. A pane that never comes free of it is one this has nothing
+            // safe to do to, so the name is given up rather than pasted onto somebody else's line.
+            let mut waited = 0;
+            while pane.opening() {
+                if !open(&app) || waited >= RENAME_TRIES {
+                    log::debug!("rename for session {session}: the opening sentence still has the box");
+                    pane.rename_over();
+                    return;
+                }
+                waited += 1;
+                std::thread::sleep(SETTLE);
+            }
+            let ended = crate::handover::hand_over(
+                &line,
+                RENAME_TRIES,
+                // Nothing but stillness buys the paste. A pane that is moving here is one an agent is
+                // answering in, and that ends by itself (`crate::handover::RESTLESS`).
+                None,
+                // There is no fact to get off on: what would answer "the provider has this name" is
+                // the provider's own list of sessions, which is the thing being written to.
+                || false,
+                || open(&app).then(|| pane.screen()),
+                |bytes| {
+                    let terminals = app.state::<Terminals>();
+                    let mut open = terminals.0.lock().expect("terminals lock");
+                    let Some(terminal) = open.get_mut(&session) else { return false };
+                    terminal.writer.write_all(bytes).and_then(|()| terminal.writer.flush()).is_ok()
+                },
+                || std::thread::sleep(SETTLE),
+            );
+            log::debug!("rename for session {session}: {ended:?}");
+            if ended == crate::handover::Handover::Gone {
+                pane.rename_over();
+                return;
+            }
         }
     });
 }
@@ -1312,6 +1455,57 @@ pub fn pty_brief(terminals: tauri::State<'_, Terminals>, session: String) -> Res
         .map_err(failed)
 }
 
+/// The line to type into a pane running `agent` to have it call itself `name`, or `None` where there
+/// is nothing to type — no agent in the pane, one Amenbo has no launch row for, or one whose product
+/// has no rename command of its own ([`amenbo_core::harness::Rename`]).
+///
+/// The name is cut to what the provider takes rather than sent to be refused: Copilot answers a name
+/// over its bound with an error and keeps the name it had. Amenbo's own names are already shorter
+/// than every bound in the table (`amenbo_core::frames::NAME_LIMIT`), so this is what keeps that true
+/// when a row is added rather than what it costs today.
+fn rename_line(agent: Option<&str>, name: &str) -> Option<String> {
+    let rename = agent.and_then(amenbo_core::harness::find_launch)?.rename.as_ref()?;
+    let name = match rename.limit {
+        Some(limit) => name.chars().take(limit).collect::<String>(),
+        None => name.to_owned(),
+    };
+    Some(format!("{} {name}", rename.command))
+}
+
+/// Tell the provider running in this pane that the pane is now called `name`.
+///
+/// **The card is the name and this is the copy.** Amenbo's own name for the frame is settled before
+/// this is called and is not waiting on it (`crate::frames`); what this does is put the provider's
+/// own rename command in the pane the way a person would type it, so the provider's list of sessions
+/// says the same thing the row above the pane does (`AMB-D-872`).
+///
+/// **Nothing happens for a provider with no such command.** OpenCode and Gemini CLI have none, and a
+/// line typed at them goes to the model as a sentence and is answered as one
+/// ([`amenbo_core::harness::Rename`]) — so those, and a pane running no agent at all, are answered
+/// with nothing done rather than with a refusal. Only a session id naming no terminal is refused.
+///
+/// **It answers before the name is anywhere.** What follows is a wait — for the opening sentence to
+/// be out of the input box, and for the pane to stand still — and the caller has nothing to do with
+/// it: the name it asked for is already on the frame, and this is the copy catching up.
+#[tauri::command]
+pub fn pty_rename(
+    app: tauri::AppHandle,
+    terminals: tauri::State<'_, Terminals>,
+    session: String,
+    name: String,
+) -> Result<(), CmdError> {
+    let (line, pane) = {
+        let open = terminals.0.lock().expect("terminals lock");
+        let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
+        let Some(line) = rename_line(terminal.agent.as_deref(), &name) else { return Ok(()) };
+        (line, Arc::clone(&terminal.pane))
+    };
+    if pane.rename_to(line) {
+        rename_pane(app, session, pane);
+    }
+    Ok(())
+}
+
 /// Tell the terminal how large the pane is now, in characters.
 ///
 /// This is what a program inside it reads when it asks the terminal its size, and what it is woken
@@ -1350,6 +1544,84 @@ mod tests {
 
     /// The size a pane opens a terminal at, for a test that is not about the size.
     const OPENED_AT: Size = (80, 24);
+
+    /// The line typed into a pane says the provider's own rename command, and only for a provider
+    /// that has one.
+    ///
+    /// **The two with none are the test the money is on.** OpenCode and Gemini CLI read `/rename` as
+    /// a sentence and answer it, which is a turn and tokens spent on Amenbo talking to itself
+    /// (`AMB-T-4652`).
+    #[test]
+    fn only_a_provider_with_a_rename_command_is_typed_at() {
+        assert_eq!(
+            rename_line(Some("claude-code"), "the migration").as_deref(),
+            Some("/rename the migration")
+        );
+        for id in ["opencode", "gemini-cli"] {
+            assert_eq!(rename_line(Some(id), "the migration"), None, "{id}");
+        }
+        // A pane running no agent at all, and one running something Amenbo has no row for.
+        assert_eq!(rename_line(None, "the migration"), None);
+        assert_eq!(rename_line(Some("a-shell-somebody-registered"), "the migration"), None);
+    }
+
+    /// A name longer than the provider takes is cut to what it takes, in characters.
+    ///
+    /// Copilot is the only row with a bound, and it answers a name over it with an error and keeps
+    /// the name it had — so a name that reached it whole would leave the provider showing the *old*
+    /// name while Amenbo showed the new one.
+    #[test]
+    fn a_name_over_the_providers_bound_is_cut_to_it_on_a_character() {
+        let long = "の".repeat(120);
+        let line = rename_line(Some("github-copilot"), &long).expect("copilot renames");
+        let name = line.strip_prefix("/rename ").expect("the command's own line");
+        assert_eq!(name.chars().count(), 100, "cut to the bound the measurement found");
+        assert_eq!(name, "の".repeat(100), "and cut on a character, not on a byte");
+        // The rows with no bound are handed the name whole.
+        let claude = rename_line(Some("claude-code"), &long).expect("claude code renames");
+        assert_eq!(claude.strip_prefix("/rename ").map(str::chars).map(Iterator::count), Some(120));
+    }
+
+    /// One thread carries the names, and the newest name is the one it carries next.
+    ///
+    /// A rename waits for the pane to stand still, which can be as long as an agent's answer — long
+    /// enough for a person to rename the pane again. Two threads pasting into one input box would
+    /// put both names in it (`AMB-D-872`).
+    #[test]
+    fn a_second_naming_replaces_what_the_thread_carries_rather_than_starting_one() {
+        let pane = Pane::new("main", OPENED_AT);
+
+        assert!(pane.rename_to("/rename first".to_owned()), "nothing was carrying names yet");
+        assert!(!pane.rename_to("/rename second".to_owned()), "a thread is already on it");
+        assert!(!pane.rename_to("/rename third".to_owned()));
+
+        assert_eq!(pane.next_rename().as_deref(), Some("/rename third"), "the newest name");
+        assert_eq!(pane.next_rename(), None, "and nothing behind it");
+        // The thread is down, so the naming after that starts one again.
+        assert!(pane.rename_to("/rename fourth".to_owned()));
+    }
+
+    /// A pane still being handed its opening sentence is not one a rename may type into.
+    ///
+    /// Both of them paste into a screen that has stood still, so both could pick the same one — and
+    /// what a person would then press Enter on is a single line made of two.
+    #[test]
+    fn the_opening_sentence_has_the_input_box_until_it_is_out_of_it() {
+        let pane = Pane::new("main", OPENED_AT);
+        assert!(!pane.opening(), "a pane nothing was handed");
+
+        pane.handing_over(true);
+        assert!(pane.opening(), "while the thread is on it");
+        pane.handing_over(false);
+        assert!(!pane.opening());
+
+        // And the sentence left in the box holds it just as the thread did: it is sitting there
+        // waiting for a person's Enter, and a rename pasted after it would go out behind it.
+        pane.leave("Before you act on any request".to_owned());
+        assert!(pane.opening(), "while the sentence is in the box");
+        assert!(pane.take_unsent().is_some());
+        assert!(!pane.opening(), "and it is free once the sentence has gone");
+    }
 
     /// The bytes of every run a pane was handed, back in one piece — for the tests that are asking
     /// what was kept rather than how it was cut.

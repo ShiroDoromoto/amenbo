@@ -29,6 +29,7 @@
 import type { FrameNameDto, TalkLayoutDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import type { SavedLayout } from "./layout";
+import { renameInTerminal } from "./terminal";
 
 /** Who is naming a frame. Ranked in the store, lowest first. */
 export type NamedBy = "session" | "person";
@@ -50,14 +51,27 @@ export async function frameNames(): Promise<FrameNames> {
 }
 
 /**
- * Name a frame, and answer with the names as they now stand.
+ * Name a frame, tell the provider running in it, and answer with the names as they now stand.
  *
  * What comes back is the whole set rather than an acknowledgement, because a naming can be refused —
  * an agent's `talk name` does not take a person's name back off a frame. Drawing what was asked for
  * would show a name that is not the frame's.
+ *
+ * **The provider is told the same thing, and only where the naming took** (`AMB-D-872`). This is the
+ * one door both namings come through — the agent's `talk name` and a person's own word — which is
+ * why the copy is made here rather than beside each of them. `session` is what is running in the
+ * frame, or `null` for a frame nothing is: there is nobody to tell then, and a refused naming has
+ * nothing to tell either, because the name it asked for is not the frame's.
  */
-export async function nameFrame(frame: string, name: string, by: NamedBy): Promise<FrameNames> {
-  return named(await invoke<FrameNameDto[]>("name_frame", { frame, name, by }));
+export async function nameFrame(
+  frame: string,
+  name: string,
+  by: NamedBy,
+  session: string | null,
+): Promise<FrameNames> {
+  const names = named(await invoke<FrameNameDto[]>("name_frame", { frame, name, by }));
+  if (session !== null && names.get(frame) === name) void renameInTerminal(session, name);
+  return names;
 }
 
 /**

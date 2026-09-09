@@ -452,7 +452,15 @@ export function TerminalFace({
   const named = useCallback((frame: string, name: string, by: NamedBy) => {
     // What comes back is the whole set rather than an acknowledgement: a naming can be refused, and
     // drawing what was asked for would show a name that is not the frame's (`../talk/frames`).
-    void nameFrame(frame, name, by).then(setNames).catch(() => {});
+    //
+    // The session goes with it because the provider running in the frame is told the same name
+    // (`AMB-D-872`), and which one that is only the arrangement knows — read here the way the one
+    // below reads it.
+    setLayout((was) => {
+      const session = was.frames.find((one) => one.id === frame)?.session ?? null;
+      void nameFrame(frame, name, by, session).then(setNames).catch(() => {});
+      return was;
+    });
   }, []);
 
   /**

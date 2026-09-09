@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 // The restart that applies an update, and what it is about to take with it.
 //
-// Pressing it ends the process — every terminal running in it goes, and no session comes back on the
-// next run (`../talk/terminal`, `crate::pty`). That is the same loss the way out of the app asks
-// about, so the banner asks it the same way (`../shell/openPanes`): panes open is the confirmation,
-// and nothing open says nothing at all.
+// Pressing it ends the process — every terminal running in it goes, and whatever they were in the
+// middle of goes with them (`../talk/terminal`, `crate::pty`). The talk comes back on the next run
+// (`AMB-D-869`); the running does not. That is the same loss the way out of the app asks about, so
+// the banner asks it the same way (`../shell/openPanes`): panes open is the confirmation, and
+// nothing open says nothing at all.
 //
 // What is pinned here is that no answer but a yes ever reaches `restartApp`.
 import { act, createElement } from "react";

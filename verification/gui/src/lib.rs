@@ -2126,13 +2126,19 @@ impl Instructor {
             //
             // The operator is told to leave what is already written alone, because where the caret
             // is decides what the reading after this step finds.
+            //
+            // **The terminal's own line is named here, and it is named here because no assert can
+            // name it.** The failure nearest this press is the picture going to the pane above
+            // instead, and the two lines are one screen and one shot: a reading of the path's absence
+            // on the terminal's line would be red on the build that put it in the box. So the two
+            // lines are parted by an eye, at the moment the path arrives and both are in front of it.
             (Domain::Terminal, "paste-image-into-box") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
                 };
                 format!(
-                    "Click into the box under {pane} — Amenbo's own, below the terminal — and put the caret at the very end of whatever is written there, without deleting any of it. On macOS and Windows, press the key this machine pastes with; on Linux, hold Ctrl and press V. A quoted path goes in at the caret, the picture itself does not, and nothing is sent — press nothing else."
+                    "Click into the box under {pane} — Amenbo's own, below the terminal — and put the caret at the very end of whatever is written there, without deleting any of it. On macOS and Windows, press the key this machine pastes with; on Linux, hold Ctrl and press V. A quoted path goes in at the caret, the picture itself does not, and the terminal's own input line — the row above the box, where you would type at the shell — takes none of it. Nothing is sent: press nothing else."
                 )
             }
             // Words put into that box, which is where a copy made in the pane above is read back. The

@@ -38,6 +38,7 @@ import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../co
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth, SIDEBAR_COMPACT } from "../core/sidebarWidth";
 import { getSidebarCompact, setSidebarCompact } from "../core/sidebarCompact";
 import { RefNavProvider } from "../core/refNav";
+import { writesOn } from "../core/unwritten";
 import { currentLang, errLabel, t, type CmdError } from "../core/i18n";
 import { Icon } from "../components/Icon";
 
@@ -510,6 +511,14 @@ export function AppShell() {
       disposed = true;
       unlisten?.();
     };
+  }, []);
+
+  // The app is ending for certain now, and this window is asked for the sentence it has typed and
+  // not yet written before the process goes (`crate::quit`). Every ordinary way out of the draft
+  // page writes it already; `exit` is the one that unloads nothing (`../core/unwritten`).
+  useEffect(() => {
+    if (!inTauri()) return;
+    return writesOn("quit://going", () => void invoke("quit_written").catch(() => {}));
   }, []);
 
   const isTaskScreen = nav.type === "project" || (nav.type === "view" && LIST_VIEWS.includes(nav.id));

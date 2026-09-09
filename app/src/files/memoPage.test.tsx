@@ -45,6 +45,7 @@ vi.mock("./memo", () => ({
 }));
 
 import { MemoPage } from "./MemoPage";
+import { writeUnwritten } from "../core/unwritten";
 import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -143,6 +144,30 @@ describe("the project's draft page", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
+  });
+
+  // The page coming down is not the only way out: the app ends by `exit` and a window by being
+  // destroyed, and neither of those unloads the page (`app/src-tauri/src/quit.rs`). So what is in
+  // hand is reachable from outside the page too, and the host asks for it before it takes the way
+  // out (`../core/unwritten`).
+  it("hands over what is in hand when the window is asked, before it goes", async () => {
+    await draw(1);
+    await type("窓ごと消える前の一文");
+
+    await act(async () => { await writeUnwritten(); });
+
+    expect(hoisted.writes).toEqual([{ project: 1, text: "窓ごと消える前の一文" }]);
+  });
+
+  it("has nothing to hand over once the typing has already been kept", async () => {
+    await draw(1);
+    await type("すでに書かれたぶん");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(hoisted.writes).toHaveLength(1);
+
+    await act(async () => { await writeUnwritten(); });
+
+    expect(hoisted.writes, "the same text is not written a second time").toHaveLength(1);
   });
 
   it("never carries one project's draft to another", async () => {

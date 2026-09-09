@@ -33,6 +33,7 @@ import {
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import { t } from "../core/i18n";
 import { asTyped } from "../core/keys";
+import { holdsUnwritten } from "../core/unwritten";
 import { projectMemo, setProjectMemo } from "./memo";
 
 /**
@@ -74,11 +75,15 @@ export function MemoPage({ projectId }: { projectId: number }) {
   // end of it, which is not where a person pasting into the middle of a draft left off.
   const caret = useRef<number | null>(null);
 
-  const write = useCallback(() => {
+  // It answers when the writing has landed, rather than when it has been asked for, because the way
+  // out of the window waits on this: a write only started is a write the process ends in the middle
+  // of (`../core/unwritten`).
+  const write = useCallback(async () => {
     const unsaved = pending.current;
     pending.current = null;
     clearTimeout(timer.current);
-    if (unsaved !== null) void setProjectMemo(projectId, unsaved).catch(() => {});
+    if (unsaved === null) return;
+    await setProjectMemo(projectId, unsaved).catch(() => {});
   }, [projectId]);
 
   useEffect(() => {
@@ -89,9 +94,14 @@ export function MemoPage({ projectId }: { projectId: number }) {
     // The page going away — the face coming down, the project changing — writes what is in hand.
     return () => {
       alive = false;
-      write();
+      void write();
     };
   }, [projectId, write]);
+
+  // The window going away is not the page coming down, and nothing above runs for it: the app ends
+  // by `exit` and a window by being destroyed, neither of which unloads the page. So what is in hand
+  // is left where the way out looks for it, for as long as this page is on screen.
+  useEffect(() => holdsUnwritten(write), [write]);
 
   const typed = useCallback((value: string) => {
     setText(value);
@@ -99,7 +109,7 @@ export function MemoPage({ projectId }: { projectId: number }) {
     setKeep("typing");
     setFills((n) => n + 1);
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => { write(); setKeep("kept"); }, SETTLE_MS);
+    timer.current = setTimeout(() => { void write(); setKeep("kept"); }, SETTLE_MS);
   }, [write]);
 
   // **A paste carrying files puts the paths in as words** (`AMB-T-4404`). A reader who copied a

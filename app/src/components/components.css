@@ -256,7 +256,7 @@ body.is-dragging { user-select: none; }
 }
 .idchip:hover { color: var(--c-accent); }
 
-/* ---------- comment compose (multi-line, Markdown, Cmd+Enter or the send button) ------ */
+/* ---------- the comment thread and the box a comment is written in (`.writebox`) ---------- */
 /* The comment thread; bodies render as Markdown. */
 .comments { margin-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-2); }
 .comment {
@@ -354,9 +354,14 @@ body.is-dragging { user-select: none; }
 }
 .markdown a.reflink:hover { text-decoration: underline; }
 
-.compose { margin-top: var(--s-2); }
-.compose__input { width: 100%; min-height: 64px; }
-.compose__actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-2); }
+/* A box something is written into, plus the row of buttons under it — a comment, a comment being
+   edited, a new task's title and notes, a commit's ref, a reason for rejecting a decision. It is
+   `writebox` rather than `compose` because the box under a terminal pane already holds that name
+   (`../styles/global.css`), and both files are loaded on the same page: while the two shared a name,
+   this margin was landing on that pane's row as well. */
+.writebox { margin-top: var(--s-2); }
+.writebox__input { width: 100%; min-height: 64px; }
+.writebox__actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: var(--s-2); }
 /* One word for how a thing stands — enabled, filled, overdue, filed here. That is the whole of the
    chip's job (`AMB-D-841`): a box around a word that is not pressable, which only reads as a state
    while nothing else on the row wears one. A name is not a state and is written plainly (`.rowname`),

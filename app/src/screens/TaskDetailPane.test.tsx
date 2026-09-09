@@ -19,7 +19,7 @@ import { t } from "../core/i18n";
 let container: HTMLDivElement;
 let root: Root;
 
-const commentBox = () => container.querySelector<HTMLTextAreaElement>("textarea.compose__input");
+const commentBox = () => container.querySelector<HTMLTextAreaElement>("textarea.writebox__input");
 const tabButton = (label: string) =>
   Array.from(container.querySelectorAll("button")).find((b) => b.textContent === label);
 
@@ -145,7 +145,7 @@ describe("TaskDetailPane targeted edit", () => {
     render({ taskId: 1, editCommentAt: { commentId: 2, nonce: 1 } });
     await settle();
 
-    const drafts = Array.from(container.querySelectorAll<HTMLTextAreaElement>("textarea.compose__input"))
+    const drafts = Array.from(container.querySelectorAll<HTMLTextAreaElement>("textarea.writebox__input"))
       .filter((el) => el.value !== "");
     expect(drafts).toHaveLength(1); // The new-comment box is empty; only the edit box carries text
     expect(drafts[0].value).toContain("先方確認待ち");
@@ -155,7 +155,7 @@ describe("TaskDetailPane targeted edit", () => {
     render({ taskId: 1 });
     await settle();
 
-    const drafts = Array.from(container.querySelectorAll<HTMLTextAreaElement>("textarea.compose__input"))
+    const drafts = Array.from(container.querySelectorAll<HTMLTextAreaElement>("textarea.writebox__input"))
       .filter((el) => el.value !== "");
     expect(drafts).toHaveLength(0);
   });

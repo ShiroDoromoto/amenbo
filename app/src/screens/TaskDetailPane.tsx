@@ -234,7 +234,7 @@ export function TaskDetailPane({
             {editingTitle ? (
               <input
                 {...asTyped}
-                className="compose__input"
+                className="writebox__input"
                 style={{ minHeight: "unset", flex: 1 }}
                 autoFocus
                 value={titleDraft}
@@ -434,10 +434,10 @@ export function TaskDetailPane({
               )}
             </div>
             {editingNotes ? (
-              <div className="compose">
+              <div className="writebox">
                 <textarea
                   {...asTyped}
-                  className="compose__input"
+                  className="writebox__input"
                   rows={6}
                   autoFocus
                   value={notesDraft}
@@ -448,7 +448,7 @@ export function TaskDetailPane({
                     if (e.key === "Escape") setEditingNotes(false);
                   }}
                 />
-                <div className="compose__actions">
+                <div className="writebox__actions">
                   <span className="meta">{t("detail.notesHint")}</span>
                   <span>
                     <button className="btn" onClick={() => setEditingNotes(false)}>{t("detail.cancel")}</button>
@@ -502,11 +502,11 @@ export function TaskDetailPane({
                 ))}
               </div>
             )}
-            <div className="compose">
+            <div className="writebox">
               <textarea
                 {...asTyped}
                 ref={commentRef}
-                className="compose__input"
+                className="writebox__input"
                 rows={3}
                 placeholder={t("detail.commentPh")}
                 value={comment}
@@ -516,7 +516,7 @@ export function TaskDetailPane({
                 }}
               />
               {commentError && <ErrorNote>{commentError}</ErrorNote>}
-              <div className="compose__actions">
+              <div className="writebox__actions">
                 <span className="meta">{t("detail.commentHint")}</span>
                 <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
               </div>

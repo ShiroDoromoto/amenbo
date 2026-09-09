@@ -85,10 +85,10 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
         )}
       </div>
       {editing ? (
-        <div className="compose">
+        <div className="writebox">
           <textarea
             {...asTyped}
-            className="compose__input"
+            className="writebox__input"
             rows={4}
             autoFocus
             value={draft}
@@ -98,7 +98,7 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
               if (e.key === "Escape") cancelEdit();
             }}
           />
-          <div className="compose__actions">
+          <div className="writebox__actions">
             <span className="meta">{t("detail.notesHint")}</span>
             <span>
               <button className="btn" onClick={cancelEdit}>{t("detail.cancel")}</button>

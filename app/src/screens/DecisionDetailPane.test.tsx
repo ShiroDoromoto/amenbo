@@ -345,7 +345,7 @@ describe("rejection blast radius", () => {
     expect(container.textContent).toContain(t("dec.revisit"));
 
     opened.length = 0; // the edge rows carry buttons for the same decisions, so take only the revisit list's rows
-    const list = container.querySelector(".compose")!;
+    const list = container.querySelector(".writebox")!;
     const rows = Array.from(list.querySelectorAll("button")).filter((b) => b.textContent?.startsWith("D-"));
     expect(rows.map((b) => b.textContent?.trim())).toEqual(["D-7 決定7", "D-8 決定8"]);
     click(rows[0]);
@@ -555,7 +555,7 @@ describe("editing the title and body in place", () => {
 // decision and the comment, and it is this pane that has to land on the right box. The task-side twin of these
 // lives in TaskDetailPane.test.tsx.
 describe("DecisionDetailPane reply / edit focus", () => {
-  const commentBox = () => container.querySelector<HTMLTextAreaElement>(".compose__input");
+  const commentBox = () => container.querySelector<HTMLTextAreaElement>(".writebox__input");
 
   it("even when the decision arrives later, focus lands the moment the comment box is rendered", () => {
     render(1, { focusCommentAt: 1 });

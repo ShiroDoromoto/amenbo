@@ -349,7 +349,14 @@ mod tests {
             .stdout(std::process::Stdio::piped())
             .spawn()
             .expect("the stand-in runs");
-        child.stdin.take().expect("it takes input").write_all(input.as_bytes()).expect("written");
+        // A stand-in that ends is allowed to be gone before the line reaches it, and then the write
+        // is a broken pipe rather than a fault: what is being read here is what it printed, and one
+        // that ended without reading is the answer, not a failure to deliver.
+        match child.stdin.take().expect("it takes input").write_all(input.as_bytes()) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe => {}
+            Err(e) => panic!("written: {e:?}"),
+        }
         let out = child.wait_with_output().expect("it ends when its input does");
         String::from_utf8(out.stdout).expect("what it printed is text")
     }

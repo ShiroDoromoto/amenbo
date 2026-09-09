@@ -60,7 +60,9 @@ dependencies = [
  "libc",
  "minisign-verify",
  "objc2",
+ "objc2-core-foundation",
  "objc2-foundation",
+ "objc2-io-kit",
  "objc2-service-management",
  "proptest",
  "pulldown-cmark",
@@ -890,6 +892,16 @@ dependencies = [
  "block2",
  "libc",
  "objc2",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-io-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
+dependencies = [
+ "libc",
  "objc2-core-foundation",
 ]
 

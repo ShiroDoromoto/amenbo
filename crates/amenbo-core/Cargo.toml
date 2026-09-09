@@ -134,6 +134,23 @@ libc = "0.2"
 objc2 = "0.6"
 objc2-foundation = "0.3"
 objc2-service-management = "0.3"
+# Which machine this is (`src/identity.rs`). The value is `IOPlatformUUID` on `IOPlatformExpertDevice`,
+# and IOKit is asked for it in this process: reading the registry is 0.019ms, where launching a program
+# to print it is 12.7ms — and a CLI is one process per command, so that is paid per command.
+# `objc2-io-kit` carries the four calls (match, look up, read the property, release) and
+# `objc2-core-foundation` the `CFString` key and the string that comes back. Both belong to the objc2
+# family this file already reaches macOS through, `objc2-core-foundation` sitting under
+# `objc2-foundation` besides.
+#
+# Features are cut to what those calls need: `libc` is what the IOKit half is gated behind (it is
+# `mach_port_t` and `kern_return_t`), and the two Core Foundation types are named rather than taking
+# the crate's default, which pulls in USB, HID, power and graphics.
+objc2-core-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "CFString",
+    "CFDictionary",
+] }
+objc2-io-kit = { version = "0.3", default-features = false, features = ["std", "libc"] }
 
 [dev-dependencies]
 amenbo-scratch.workspace = true

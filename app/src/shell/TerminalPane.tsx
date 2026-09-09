@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import {
   boxHeight,
@@ -15,6 +15,7 @@ import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row } from "../talk/nameplate";
 import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
+import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import { pushNotice } from "../core/notice";
 import { Menu, MenuItem } from "../components/Menu";
 import type { FrameNames, NamedBy } from "../talk/frames";
@@ -173,6 +174,11 @@ export function TerminalPane({
   // The box itself, which is measured rather than told how tall to be: how many lines a sentence
   // takes is the browser's answer, not one this can work out from the characters.
   const boxRef = useRef<HTMLTextAreaElement>(null);
+  // Where the caret goes once a pasted path has been put in, and null whenever it is where the
+  // browser left it. What is written in the box is the window's (`../talk/layout`), so text put in
+  // here comes back down as a new value and the browser puts the caret at the end of it — which is
+  // the wrong place for a paste made in the middle of a sentence.
+  const caret = useRef<number | null>(null);
   // How many rows the terminal is drawing, as the emulator last measured it (`../talk/terminal`).
   // It is what turns the floor below into pixels, and it is 0 only before a terminal has said.
   const paneRows = useRef(0);
@@ -183,8 +189,8 @@ export function TerminalPane({
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
   // callback — that would take the terminal down to learn something it could have been told.
-  const on = useRef({ onOpened, onSaid, onPath, onClosed, onName, onFocus, onRow });
-  on.current = { onOpened, onSaid, onPath, onClosed, onName, onFocus, onRow };
+  const on = useRef({ onOpened, onSaid, onPath, onClosed, onName, onFocus, onRow, onWrite });
+  on.current = { onOpened, onSaid, onPath, onClosed, onName, onFocus, onRow, onWrite };
 
   /** Take the place away, once the person has said so. The terminal in it is ended first: a session
    *  whose pane has gone is one nobody can get back to.
@@ -438,6 +444,56 @@ export function TerminalPane({
       stop?.();
     };
   }, [frame, live]);
+
+  // Files and pictures pasted into the box, which reach it by two doors and go in as one thing.
+  //
+  // **What goes in is the path, quoted** — the same as a drop on the pane and for the same reason
+  // (`AMB-D-832`). The box is not an editor: what is written in it is sent to the program in the
+  // pane as the person's own line (`AMB-D-864`), so there is a shell behind it and a name with a
+  // space in it would otherwise be two words.
+  //
+  // **A picture is written down before it can be named.** A screenshot on the clipboard is bytes
+  // and no file, so the host puts it in this pane's own directory and answers with where it landed
+  // (`AMB-D-854`). ⚠ It does not outlast the app — this is for handing a screenshot to something
+  // running now, not for keeping one.
+  //
+  // **On Linux the picture comes in by the press rather than by the paste** — WebKitGTK hands a
+  // paste nothing at all, so the clipboard is asked when `Ctrl+V` is pressed (`../core/clipFiles`).
+  // `Ctrl+V` and not `Ctrl+Shift+V`: this is a box a person writes in, and there is no program here
+  // to hand a control character to. On the other two machines that listener is never put on.
+  useEffect(() => {
+    const box = boxRef.current;
+    if (box === null || live === null) return;
+    // At the caret, taking the selection with it, which is what every other paste into a text box
+    // does. What is written is read off the box rather than off `written`, so a listener that
+    // outlives a keystroke still reads the sentence as it stands.
+    const insert = (arrived: string) => {
+      if (arrived === "") return;
+      const from = box.selectionStart;
+      const to = box.selectionEnd;
+      on.current.onWrite(frame, box.value.slice(0, from) + arrived + box.value.slice(to));
+      caret.current = from + arrived.length;
+    };
+    const writeImage = (bytes: Uint8Array, mime: string) => writesPastedImage(bytes, mime, live);
+    const stopPaste = takesPastedFiles(
+      box,
+      (paths, words) => insert(paths.length > 0 ? quotedPaths(paths) : words),
+      writeImage,
+    );
+    const stopPress = takesPastedImages(box, writeImage, (paths) => insert(quotedPaths(paths)), "textbox");
+    return () => {
+      stopPaste();
+      stopPress();
+    };
+  }, [frame, live]);
+
+  // And the caret put back, before the browser has drawn the box the sentence came back down into.
+  useLayoutEffect(() => {
+    const where = caret.current;
+    if (where === null) return;
+    caret.current = null;
+    boxRef.current?.setSelectionRange(where, where);
+  });
 
   return (
     <div

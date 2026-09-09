@@ -135,6 +135,16 @@ export type PaneStart = {
    * so nothing here can name a program.
    */
   agent?: string | null;
+  /**
+   * The agent to come back on, for a place that returned from the last run holding a way into what
+   * was running in it (`AMB-D-869`). Null for every other pane.
+   *
+   * **A pane given one opens on it and asks nothing** — no probe, no row of choices, and nothing
+   * kept as a fresh answer: the reader chose this a run ago, and the press they are being spared is
+   * the whole point (`AMB-T-4641`). The handle itself is not here and never crosses: the host holds
+   * it against the frame and puts it on the launch line (`crate::pty`).
+   */
+  resume?: string | null;
 };
 
 /**

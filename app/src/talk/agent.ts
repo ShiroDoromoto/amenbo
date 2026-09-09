@@ -138,6 +138,11 @@ export async function mountAgentFrame(
       ? running.some((one) => one.session === start.session)
       : start.adopt !== false && running.length === 1;
     if (mine) return open(null, start);
+    // A place that came back holding a way into what was running in it opens on that, and is asked
+    // nothing: where it works and what runs in it were both answered a run ago, and the probe would
+    // only be putting the same question again (`AMB-D-869`). It is not kept as a fresh choice
+    // either — nobody chose anything just now ({@link pick}).
+    if (start.resume != null && folder !== null) return open(start.resume);
     // Nothing to take up, and nowhere to start: the folder is what this frame is short of, and asking
     // for it is the whole of what it can do until it has one.
     if (folder === null) return invite(null);

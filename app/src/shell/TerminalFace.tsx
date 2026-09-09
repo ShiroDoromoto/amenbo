@@ -1234,8 +1234,14 @@ export function TerminalFace({
                       adopt: false,
                       cwd: frame.folder,
                       agent: startWith.current.get(frame.id) ?? null,
+                      // What this place comes back on, where it came back holding a way in
+                      // (`../talk/layout`). It is the row's own agent and not a fresh choice: the
+                      // reader answered this a run ago.
+                      resume: frame.resumes ? frame.agent : null,
                     }}
-                    autoStart={frame.session !== null || startNow.current.has(frame.id)}
+                    // A place that came back holding a way into what was running in it is opened
+                    // without being pressed — that press is what `AMB-D-869` is about.
+                    autoStart={frame.session !== null || startNow.current.has(frame.id) || frame.resumes}
                     focused={layout.focus === frame.id}
                     landed={landed === frame.id}
                     offered={overFrame === frame.id}

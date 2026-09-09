@@ -2606,7 +2606,19 @@ agent?: string,
  * (`crate::frames`), and it stops there: a half-written sentence is the window's, so it is held
  * for as long as the process is up and is never written down.
  */
-written?: string, };
+written?: string, 
+/**
+ * Whether this place came back with a way into what was running in it (`AMB-D-869`).
+ *
+ * **It travels one way only.** The host answers it as the arrangement comes back, and the
+ * window reads it to know which places to open without being pressed (`AMB-T-4641`); an
+ * arrangement sent the other way says nothing about it, because the handle it stands for is
+ * never a window's to hold (`crate::frames::TalkFace`).
+ *
+ * A place with no way back — a plain shell, a line the reader registered (`AMB-D-794`) — comes
+ * back false and is drawn as the place it is, with the way in on it.
+ */
+resumes?: boolean, };
 
 /**
  * The talk window's arrangement, as the window drawing the face has it (`crate::frames`).

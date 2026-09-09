@@ -167,7 +167,7 @@ export type SavedLayout = {
    *  other window: a half-written sentence is the window's, and what the host writes down is the
    *  place (`app/src-tauri/src/frames.rs`), so an arrangement read at the start of a run carries
    *  panes and no drafts. */
-  frames: { id: string; project?: number; folder?: string; agent?: string; written?: string }[];
+  frames: { id: string; project?: number; folder?: string; agent?: string; written?: string; resumes?: boolean }[];
   /** The pane being worked in when the arrangement was last written. It is what the window split out
    *  of this face comes up on, so the reader lands where they left rather than on the first place of
    *  the first project (`AMB-D-753`). Read by that window and never by the board: which pane is
@@ -199,6 +199,15 @@ export type Frame = {
    * which is the half of the row a folder cannot carry (`AMB-D-869`).
    */
   readonly agent: string | null;
+  /**
+   * Whether this place came back from the last run with a way into what was running in it
+   * (`AMB-D-869`). The face opens those without being pressed, and asks nothing on the way in.
+   *
+   * **It is true of a place that came back, and of nothing else.** Opening a terminal here settles
+   * it — the place has been come back to, and a page turned away from and back again is not a
+   * second reason to start something. A place a person made in this run was never away.
+   */
+  readonly resumes: boolean;
   /**
    * What has been written in the box under this pane and not sent yet (`AMB-D-864`).
    *
@@ -355,7 +364,16 @@ function withFrame(layout: Layout, frame: string, change: (was: Frame) => Frame)
  * and the screen moves to the page it landed on, because a person who opened a pane is looking at it.
  */
 export function openedFrame(layout: Layout, project: number, folder: string | null): { layout: Layout; frame: Frame } {
-  const frame: Frame = { id: String(layout.nextId), project, session: null, folder, agent: null, written: "" };
+  const frame: Frame = {
+    id: String(layout.nextId),
+    project,
+    session: null,
+    folder,
+    agent: null,
+    // Made in this run, so there is nothing to come back into.
+    resumes: false,
+    written: "",
+  };
   const next: Layout = {
     ...layout,
     frames: [...layout.frames, frame],
@@ -387,7 +405,16 @@ export function openedIn(
   folder: string | null,
   agent: string | null,
 ): Layout {
-  return withFrame(layout, frame, (was) => ({ ...was, session, folder: folder ?? was.folder, agent }));
+  // And the place has been come back to, whatever it came back holding: what happens in it now is
+  // this run's, and a page turned away from and back again must not start a second terminal here
+  // (`Frame.resumes`).
+  return withFrame(layout, frame, (was) => ({
+    ...was,
+    session,
+    folder: folder ?? was.folder,
+    agent,
+    resumes: false,
+  }));
 }
 
 /** The folder an agent says it is in now. A pane works in the folder it was **started** in, so this
@@ -673,6 +700,10 @@ export function restored(saved: SavedLayout, onto: number | null): Layout {
       session: null,
       folder: frame.folder ?? null,
       agent: frame.agent ?? null,
+      // Only the host can answer this, and only for an arrangement that came out of the store: what
+      // it stands for is a handle no window holds (`crate::frames`). The arrangement the other
+      // window sends carries none, and a place in it is one this run has already opened.
+      resumes: frame.resumes === true && frame.folder !== undefined && frame.agent !== undefined,
       written: frame.written ?? "",
     });
   }

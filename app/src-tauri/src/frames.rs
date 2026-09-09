@@ -62,8 +62,7 @@ pub struct TalkFace {
 }
 
 impl TalkFace {
-    /// The handle the session in this frame is resumed from, where one was written down **for this
-    /// provider**.
+    /// The handle this frame comes back on, where one was written down **for this provider**.
     ///
     /// It is what a pane is opened on when the frame already had a session — the one the person left
     /// there, whether a run ago or a moment ago (`AMB-D-869`).
@@ -72,7 +71,7 @@ impl TalkFace {
     /// A frame the person opened Claude Code in and is now opening OpenCode in still holds Claude's
     /// uuid, and OpenCode handed that would refuse to start. Which provider the handle belongs to is
     /// the agent on the row it came back on — the row this frame was last written down as.
-    pub fn resumes_from(&self, frame: &str, agent: &str) -> Option<String> {
+    pub fn comes_back_on(&self, frame: &str, agent: &str) -> Option<String> {
         let kept = self.kept.lock().expect("kept layout lock");
         let pane = kept.as_ref()?.panes.iter().find(|pane| pane.id == frame)?;
         if pane.agent.as_deref() != Some(agent) {
@@ -87,13 +86,19 @@ impl TalkFace {
         self.hints.lock().expect("resume hints lock").values().cloned().collect()
     }
 
-    /// Write down the handle a session in this frame is resumed from, and put the row on the store.
+    /// Write down the handle a pane's provider is resumed from, as the pane is started
+    /// (`crate::pty::pty_open`).
     ///
-    /// **The write is made from here, the way a naming is.** A handle is issued by the host as a pane
-    /// starts, and the window has nothing to send that would carry it — so a handle that waited for
-    /// the window's next arrangement would be one lost to a quit in between. Where no arrangement has
-    /// been sent yet there is no row to write it onto, and the window's first one carries it.
-    pub fn resumes(&self, frame: &str, handle: String) {
+    /// **The host writes it and no window carries it**, which is why it is a door of its own rather
+    /// than a field of the arrangement: a value that made the round trip through a webview would be
+    /// one a webview could write, and what this holds is the way back into somebody's conversation.
+    ///
+    /// **The row is written here rather than left to the next arrangement.** For a handle settled as
+    /// the pane starts, the pane's own opening would bring one about — but one provider names its
+    /// own handle and is asked for it seconds later (`crate::agent_sessions`), by which time the
+    /// window has sent its arrangement and has no reason to send another. Where no arrangement has
+    /// been sent yet there is no row to write onto, and the window's first one carries it.
+    pub fn resumed_from(&self, frame: &str, handle: String) {
         self.hints.lock().expect("resume hints lock").insert(frame.to_string(), handle);
         let Some(layout) = self.layout.lock().expect("talk layout lock").clone() else {
             return;
@@ -228,6 +233,7 @@ fn seed(face: &TalkFace, kept: &SavedLayout) {
 /// What was written is remembered only once the store has taken it, so a write that failed is made
 /// again by the next change rather than counted as done.
 fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
+    forget_dropped(face, layout);
     let keeping = SavedLayout {
         project: layout.project,
         splits: splits_of(layout),
@@ -240,6 +246,26 @@ fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
     open_store()?.save_layout(&keeping)?;
     *face.kept.lock().expect("kept layout lock") = Some(keeping);
     Ok(())
+}
+
+/// Let go of the handles of panes the arrangement no longer has, and of whatever they were holding
+/// open.
+///
+/// A pane that is closed is closed for good: its row goes with it ([`panes_of`] keeps only the places
+/// the window sent), so a handle left behind here would be one nothing could ever hand back. For most
+/// providers letting go is the whole of it — the handle is a session id, and what it names is the
+/// provider's to keep or forget. For `codex` it is a directory Amenbo made, and that comes away too
+/// rather than being left to pile up on the machine (`crate::codex_home::forget`).
+fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) {
+    let here: std::collections::BTreeSet<&str> =
+        layout.frames.iter().map(|frame| frame.id.as_str()).collect();
+    face.hints.lock().expect("resume hints lock").retain(|frame, handle| {
+        if here.contains(frame.as_str()) {
+            return true;
+        }
+        crate::codex_home::forget(std::path::Path::new(handle));
+        false
+    });
 }
 
 /// The panes as they are written down: what the window sent about each place, and beside it the two
@@ -356,6 +382,21 @@ mod tests {
         assert_eq!(panes[1].resume, None);
     }
 
+    /// A pane the arrangement no longer has is a pane whose way back goes with it: the handle is let
+    /// go of rather than held for a frame nothing will draw again.
+    #[test]
+    fn a_pane_that_is_gone_lets_go_of_its_handle() {
+        let face = TalkFace::default();
+        face.resumed_from("1", "0f9c".to_string());
+        face.resumed_from("2", "7b2e".to_string());
+
+        forget_dropped(&face, &layout(vec![frame("1", Some("claude"))]));
+
+        let hints = face.hints.lock().unwrap();
+        assert_eq!(hints.get("1").map(String::as_str), Some("0f9c"));
+        assert_eq!(hints.get("2"), None);
+    }
+
     /// A place the window sends with no project is let go rather than kept under a guess: a pane is
     /// drawn on its project's page, so one with nowhere to be put back is one nothing could draw.
     #[test]
@@ -388,15 +429,15 @@ mod tests {
             next_id: 2,
         });
 
-        assert_eq!(face.resumes_from("1", "claude-code").as_deref(), Some("0f9c"));
-        assert_eq!(face.resumes_from("1", "opencode"), None);
+        assert_eq!(face.comes_back_on("1", "claude-code").as_deref(), Some("0f9c"));
+        assert_eq!(face.comes_back_on("1", "opencode"), None);
         // And a frame no row came back for has nothing to come back to.
-        assert_eq!(face.resumes_from("2", "claude-code"), None);
+        assert_eq!(face.comes_back_on("2", "claude-code"), None);
 
         // A handle written down now is what that frame answers with — the store is not reached for,
         // there being no arrangement yet to write it onto.
-        face.resumes("1", "aa11".to_string());
-        assert_eq!(face.resumes_from("1", "claude-code").as_deref(), Some("aa11"));
+        face.resumed_from("1", "aa11".to_string());
+        assert_eq!(face.comes_back_on("1", "claude-code").as_deref(), Some("aa11"));
         assert_eq!(face.resume_hints(), vec!["aa11".to_string()]);
     }
 

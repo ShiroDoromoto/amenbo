@@ -135,6 +135,19 @@ describe("a pane works in a folder of its project", () => {
     expect(mounts().map((one) => one.start.cwd)).toEqual(["/repo", "/repo"]);
   });
 
+  it("tells each pane which place it is, so what is started there can be come back to", async () => {
+    await mount();
+    await openPane();
+    await openPane();
+    // Two panes, two places — a way back into a session is written down against the frame it was
+    // started in (`AMB-D-869`), so a pane handed somebody else's would come back into their
+    // conversation.
+    const places = mounts().map((one) => one.start.frame);
+    expect(places).toHaveLength(2);
+    expect(new Set(places).size, `two panes, two places: ${places.join(", ")}`).toBe(2);
+    expect(places.every((frame) => typeof frame === "string" && frame.length > 0)).toBe(true);
+  });
+
   it("asks which folder where the project is bound to several, and makes no pane until it is answered", async () => {
     hoisted.folders = [{ path: "/repo", exists: true }, { path: "/site", exists: true }];
     await mount();

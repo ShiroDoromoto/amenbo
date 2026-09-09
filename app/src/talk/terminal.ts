@@ -110,6 +110,12 @@ export type PaneEvents = {
  * when it started, and a pane moving between windows or pages does not restart anything (`AMB-D-753`).
  */
 export type PaneStart = {
+  /**
+   * Which of the arrangement's places this is (`./layout`). It goes with the terminal because the
+   * way back into what is started here is written down against the frame and not against the
+   * process: a pane comes back in the next run, and the session in it does not (`AMB-D-869`).
+   */
+  frame?: string | null;
   /** The terminal this slot already had. Taken up again where it is still running. */
   session?: string | null;
   /**
@@ -129,15 +135,6 @@ export type PaneStart = {
    * so nothing here can name a program.
    */
   agent?: string | null;
-  /**
-   * Which frame this pane is, for the row the way back into its session is written on
-   * (`AMB-D-869`). A pane opened without one starts a session nothing can come back to.
-   *
-   * The handle itself never crosses: the host issues it as the session starts and writes it down
-   * beside the arrangement, so what a window sends is which place it is opening and no more
-   * (`crate::frames`).
-   */
-  frame?: string | null;
 };
 
 /**
@@ -523,9 +520,9 @@ async function draw(
     }
   }
   return await invoke<PtySessionDto>("pty_open", {
+    frame: start.frame ?? null,
     cwd: start.cwd ?? null,
     agent: start.agent ?? null,
-    frame: start.frame ?? null,
     cols: term.cols,
     rows: term.rows,
   });

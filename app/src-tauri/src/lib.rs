@@ -10,6 +10,9 @@ mod blobproto;
 /// The machine's own clipboard, holding files rather than words — what `⌘C` and `⌘V` mean in the
 /// file panel (`AMB-D-796`).
 mod clipboard;
+/// A directory of its own for the Codex in each pane, so "the last session" in it is that
+/// pane's and no other's (`AMB-D-869`).
+mod codex_home;
 mod commands;
 mod diag;
 mod dto;
@@ -284,6 +287,10 @@ pub fn run() {
       // What an earlier run left in the temporary directory when it ended without closing its terminals.
       // Off the launch path: it is a scan of a directory, and nothing here waits on it.
       std::thread::spawn(pty::sweep);
+      // And the codex homes of panes that are no longer in the arrangement — what a run that ended
+      // with terminals open could not take away itself (`crate::codex_home`). Off the launch path for
+      // the same reason: it reads the store and then a directory, and nothing here waits on it.
+      std::thread::spawn(codex_home::sweep);
       // And the directory a removed feature left in app-data. Amenbo wrote a row there for every status
       // move made inside a pane, to say which pane was holding which task; nothing writes or reads it
       // any more, so what is left is bytes with nothing in the tree to explain them. Removed once, on

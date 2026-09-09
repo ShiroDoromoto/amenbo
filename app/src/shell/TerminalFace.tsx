@@ -1226,6 +1226,7 @@ export function TerminalFace({
                     project={frame.project}
                     names={names}
                     start={{
+                      frame: frame.id,
                       session: frame.session,
                       // Nothing on this face takes up a terminal it was not given: which session
                       // belongs where is answered once, as the face comes up, and a pane left to
@@ -1233,9 +1234,6 @@ export function TerminalFace({
                       adopt: false,
                       cwd: frame.folder,
                       agent: startWith.current.get(frame.id) ?? null,
-                      // Which place this is, so the host can write down the way back into what it
-                      // starts here (`../talk/terminal`).
-                      frame: frame.id,
                     }}
                     autoStart={frame.session !== null || startNow.current.has(frame.id)}
                     focused={layout.focus === frame.id}

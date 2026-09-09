@@ -631,7 +631,7 @@ fn read_back(
         let found =
             crate::agent_sessions::appeared(command, &ask, std::path::Path::new(&folder), since, &taken);
         match found {
-            Some(handle) => face.resumes(&frame, handle),
+            Some(handle) => face.resumed_from(&frame, handle),
             // Nothing appeared before the wait ran out. The pane is running either way; what is lost
             // is the way back into it, and next run opens a fresh session there.
             None => log::warn!("no session appeared for frame {frame} in {folder}"),
@@ -902,24 +902,26 @@ fn gone(session: &str) -> CmdError {
 /// launch instruction rides in on that command line as the agent's opening prompt
 /// ([`opening_line`]).
 ///
-/// `frame` is which place on the face this pane is, and it is what the way back into the session is
-/// written down against (`AMB-D-869`). A frame that already carries a handle for this provider is
-/// opened on it; one that does not is opened on a handle issued here, where the provider takes one.
-/// **The handle never crosses to the window** — it is issued and written down on this side, so a
-/// pane's way back is not something a webview could put there.
-// Four of the nine are the host's own handles, and the rest is one answer each: where the pane
-// works, what is started in it, which place it is, and how large it is. A struct around those would
-// be a shape only this door has, and every one of them is settled somewhere else on the face.
+/// `frame` is the place of the arrangement this terminal is being drawn in
+/// (`app/src/talk/layout.ts`), and it is here because the way back into what is started is written
+/// down against the place rather than against the process: a pane comes back in the next run, and
+/// the session in it does not (`AMB-D-869`).
+///
+/// **A frame that already carries a handle for this provider is opened on it**, and one that does
+/// not is opened on a handle issued here, where the provider takes one
+/// ([`amenbo_core::harness::issue`]). Neither ever crosses to the window: both are read and written
+/// on this side, so a pane's way back is not something a webview could put there.
+// Seven of these are what a window holds about a pane, one answer each. Gathered into a shape they
+// would be taken apart again on arrival.
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn pty_open(
     app: tauri::AppHandle,
     window: tauri::Window,
     terminals: tauri::State<'_, Terminals>,
-    face: tauri::State<'_, crate::frames::TalkFace>,
+    frame: Option<String>,
     cwd: Option<String>,
     agent: Option<String>,
-    frame: Option<String>,
     cols: u16,
     rows: u16,
 ) -> Result<PtySessionDto, CmdError> {
@@ -941,10 +943,11 @@ pub fn pty_open(
     // The way back into what this frame was running. A frame that came back with a handle for this
     // provider is opened on it; one that has none is opened on a handle issued here and written
     // down, so the pane has a way back the next time the app comes up (`AMB-D-869`).
+    let face = app.state::<crate::frames::TalkFace>();
     let back = frame
         .as_deref()
         .zip(agent.as_deref())
-        .and_then(|(frame, agent)| face.resumes_from(frame, agent));
+        .and_then(|(frame, agent)| face.comes_back_on(frame, agent));
     let launch = agent.as_deref().and_then(amenbo_core::wake::started_as);
     let issued = match back {
         Some(_) => None,
@@ -958,7 +961,7 @@ pub fn pty_open(
     // Written down before the program is started, so a quit that comes between the two still leaves
     // the pane a way back — the session is made under this handle whether or not anybody is watching.
     if let (Some(frame), Some(issued)) = (frame.as_deref(), issued.as_deref()) {
-        face.resumes(frame, issued.to_string());
+        face.resumed_from(frame, issued.to_string());
     }
     // Kept against the session, so a pane that adopts this terminal later can say what is running in
     // it. It is the id as it was asked for — a catalog row, or one of this device's registrations —
@@ -967,6 +970,15 @@ pub fn pty_open(
     let run = started.as_ref().map(|s| s.line.as_str());
     let mut cmd = launch::command(folder.clone(), run);
     cmd.env(SESSION_ENV, &session);
+    // Codex is resumed by a directory rather than by a name, so the pane is pointed at one of its own
+    // and the path goes down on that frame's row (`AMB-D-869`, `crate::codex_home`). Every other
+    // provider is given nothing here: their way back is a session id on the launch line.
+    if let Some(frame) = frame.as_deref() {
+        if let Some(home) = crate::codex_home::for_pane(frame, agent_id.as_deref()) {
+            cmd.env(crate::codex_home::ENV, &home);
+            face.resumed_from(frame, home.to_string_lossy().into_owned());
+        }
+    }
     // The drop box is made here rather than left for the first statement to make, so that a pane which
     // cannot be spoken to is one the surface layer refuses in from the start: with no directory named,
     // every verb fails loudly inside the terminal instead of writing where nothing is watching.

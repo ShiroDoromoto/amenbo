@@ -198,8 +198,10 @@ export function TerminalPane({
    *  **The one question is the plain one, whatever the session was doing** (`AMB-D-858`). What tied a
    *  pane to a task went through a key the world could rewrite behind the pane, so a question naming
    *  what was about to be lost named as often work somebody had already finished elsewhere.
-   *  `face.dropConfirm` already says the place is not coming back, which is the loss this press
-   *  stands in front of. */
+   *  `face.dropConfirm` says what the loss is: the place, and with it the handle the talk in it is
+   *  resumed from — so this press is what closes the way back into that conversation for good
+   *  (`AMB-D-869`). It is the heavier of the app's two questions now, the way out of the app being
+   *  the lighter one. */
   const drop = async () => {
     if (!await confirmDialog(t("face.dropConfirm"))) return;
     if (live !== null) await endTerminal(live).catch(() => {});

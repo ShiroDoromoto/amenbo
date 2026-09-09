@@ -328,7 +328,7 @@ export const tr: Translation = {
     "restart.how": "Yeniden başlatmak onu diskte zaten duran yeni Amenbo ile açar (GUI ve CLI birlikte gelir).",
     "restart.button": "Yeniden başlat",
     "restart.failed": "Yeniden başlatılamadı. Amenbo'dan çıkıp tekrar açın.",
-    "restart.confirm": "Amenbo yeniden başlatılsın mı? Açık olan tüm terminaller sonlandırılır ve hiçbir oturum bir dahaki açılışta geri gelmez.",
+    "restart.confirm": "Amenbo yeniden başlatılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, içlerinde çalışanlar gelmez.",
 
     "restart.stuck.title": "Yeniden başlatmak işe yaramazsa",
     "restart.stuck.intro": "O zaman diskteki Amenbo hâlâ eskisidir. Sürüm düşürme yolu yoktur — dönüş yolu, güncellemenin geride bıraktığı taşıma öncesi yedektir.",
@@ -516,8 +516,8 @@ export const tr: Translation = {
     "face.merge": "Tek pencereye dön",
     "face.opening": "Terminal kendi penceresinde açılıyor…",
     "face.drop": "Bu bölmeyi kaldır",
-    "face.dropConfirm": "Bu bölme kaldırılsın mı? İçindeki terminal sonlandırılır ve bu yer bir dahaki açılışta geri gelmez.",
-    "quit.confirm": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır ve hiçbir oturum bir dahaki açılışta geri gelmez.",
+    "face.dropConfirm": "Bu bölme kaldırılsın mı? İçindeki terminal sonlandırılır ve burada konuşulanlara dönüş yolu da bu yerle birlikte gider.",
+    "quit.confirm": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, içlerinde çalışanlar gelmez.",
 
     "face.ended": "Bu terminaldeki program sona erdi.",
     "face.projects": "Projeler",

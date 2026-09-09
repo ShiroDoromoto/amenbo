@@ -329,7 +329,7 @@ export const zhHant: Translation = {
     "restart.how": "重新啟動會用磁碟上已經就位的新 Amenbo 重新開啟它（GUI 與命令列是一起發布的）。",
     "restart.button": "重新啟動",
     "restart.failed": "無法重新啟動。請結束 Amenbo 後再開啟。",
-    "restart.confirm": "要重新啟動 Amenbo 嗎？開啟的終端機都會結束，下次啟動時工作階段不會回來。",
+    "restart.confirm": "要重新啟動 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，正在跑的東西不會。",
 
     "restart.stuck.title": "如果重新啟動也沒用",
     "restart.stuck.intro": "那表示磁碟上的 Amenbo 仍是舊的。沒有降版這條路——回頭路是更新時留下的遷移前備份。",
@@ -516,8 +516,8 @@ export const zhHant: Translation = {
     "face.merge": "合併回單一視窗",
     "face.opening": "正在單獨的視窗中開啟終端機…",
     "face.drop": "移除此窗格",
-    "face.dropConfirm": "要移除此窗格嗎？裡面的終端機會結束，下次啟動時這個位置不會回來。",
-    "quit.confirm": "要結束 Amenbo 嗎？開啟的終端機都會結束，下次啟動時工作階段不會回來。",
+    "face.dropConfirm": "要移除此窗格嗎？裡面的終端機會結束，回到這裡說過的話的路，也隨這個位置一起沒了。",
+    "quit.confirm": "要結束 Amenbo 嗎？開啟的終端機都會結束。下次啟動時對話會回來，正在跑的東西不會。",
 
     "face.ended": "此終端機中的程式已結束。",
     "face.projects": "專案",

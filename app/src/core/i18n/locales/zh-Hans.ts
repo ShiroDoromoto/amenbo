@@ -329,7 +329,7 @@ export const zhHans: Translation = {
     "restart.how": "重新启动会用磁盘上已经就位的新 Amenbo 重新打开它（GUI 与命令行是一起发布的）。",
     "restart.button": "重新启动",
     "restart.failed": "无法重新启动。请退出 Amenbo 后再打开。",
-    "restart.confirm": "要重新启动 Amenbo 吗？打开的终端都会结束，下次启动时会话不会回来。",
+    "restart.confirm": "要重新启动 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，正在跑的东西不会。",
 
     "restart.stuck.title": "如果重新启动也不管用",
     "restart.stuck.intro": "那说明磁盘上的 Amenbo 仍是旧的。没有降级这条路——回头路是更新时留下的迁移前备份。",
@@ -516,8 +516,8 @@ export const zhHans: Translation = {
     "face.merge": "合并回一个窗口",
     "face.opening": "正在单独的窗口中打开终端…",
     "face.drop": "移除此窗格",
-    "face.dropConfirm": "要移除此窗格吗？里面的终端会结束，下次启动时这个位置不会回来。",
-    "quit.confirm": "要退出 Amenbo 吗？打开的终端都会结束，下次启动时会话不会回来。",
+    "face.dropConfirm": "要移除此窗格吗？里面的终端会结束，回到这里说过的话的路，也随这个位置一起没了。",
+    "quit.confirm": "要退出 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，正在跑的东西不会。",
 
     "face.ended": "此终端中的程序已退出。",
     "face.projects": "项目",

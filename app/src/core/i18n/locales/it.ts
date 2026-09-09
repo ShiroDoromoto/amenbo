@@ -336,7 +336,7 @@ export const it: Translation = {
     "restart.how": "Riavviando si riapre con il nuovo Amenbo già presente sul disco (l'interfaccia e la riga di comando vengono distribuite insieme).",
     "restart.button": "Riavvia",
     "restart.failed": "Non è stato possibile riavviare. Chiudi Amenbo e riaprilo.",
-    "restart.confirm": "Riavviare Amenbo? Tutti i terminali aperti terminano e nessuna sessione torna al prossimo avvio.",
+    "restart.confirm": "Riavviare Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, ciò che stavano eseguendo no.",
 
     "restart.stuck.title": "Se riavviare non basta",
     "restart.stuck.intro": "Allora l'Amenbo sul disco è ancora quello vecchio. Non c'è modo di tornare a una versione precedente — la strada di ritorno è il backup pre-migrazione lasciato dall'aggiornamento.",
@@ -537,8 +537,8 @@ export const it: Translation = {
     "face.merge": "Torna a una sola finestra",
     "face.opening": "Apertura del terminale in una finestra propria…",
     "face.drop": "Rimuovi questo riquadro",
-    "face.dropConfirm": "Rimuovere questo riquadro? Il terminale al suo interno termina e il posto non torna al prossimo avvio.",
-    "quit.confirm": "Uscire da Amenbo? Tutti i terminali aperti terminano e nessuna sessione torna al prossimo avvio.",
+    "face.dropConfirm": "Rimuovere questo riquadro? Il terminale al suo interno termina, e la via di ritorno a ciò che vi è stato detto se ne va con il posto.",
+    "quit.confirm": "Uscire da Amenbo? Tutti i terminali aperti terminano. Le conversazioni tornano al prossimo avvio, ciò che stavano eseguendo no.",
 
     "face.ended": "Il programma di questo terminale è terminato.",
     "face.projects": "Progetti",

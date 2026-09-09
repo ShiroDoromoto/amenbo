@@ -333,7 +333,7 @@ export const ja: Translation = {
     "restart.how": "再起動すると、ディスク上の新しい Amenbo で開き直します（GUI と CLI は一体で配布されます）。",
     "restart.button": "再起動する",
     "restart.failed": "再起動できませんでした。Amenbo を手動で終了して開き直してください。",
-    "restart.confirm": "Amenbo を再起動しますか？開いている端末はすべて終わり、次に起動してもセッションは戻りません。",
+    "restart.confirm": "Amenbo を再起動しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、走っていたものは戻りません。",
 
     "restart.stuck.title": "再起動しても直らないときは",
     "restart.stuck.intro": "ディスク上の Amenbo がまだ古い、ということです。バージョンを下げる道はありません——戻すなら、更新時に残った移行前バックアップから復元します。",
@@ -528,8 +528,8 @@ export const ja: Translation = {
     "face.merge": "1つのウィンドウに戻す",
     "face.opening": "ターミナルを別ウィンドウで開いています…",
     "face.drop": "このペインを消す",
-    "face.dropConfirm": "このペインを消しますか？中の端末は終わり、次に起動してもこの場所は戻りません。",
-    "quit.confirm": "Amenbo を終了しますか？開いている端末はすべて終わり、次に起動してもセッションは戻りません。",
+    "face.dropConfirm": "このペインを消しますか？中の端末は終わり、ここで話していたことへ戻る道も場所と一緒に無くなります。",
+    "quit.confirm": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、走っていたものは戻りません。",
 
     "face.ended": "この端末のプログラムは終了しました。",
     "face.projects": "プロジェクト",

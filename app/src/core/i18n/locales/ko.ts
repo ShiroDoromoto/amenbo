@@ -328,7 +328,7 @@ export const ko: Translation = {
     "restart.how": "다시 시작하면 디스크에 이미 놓인 새 Amenbo로 다시 엽니다(GUI와 명령줄은 함께 배포됩니다).",
     "restart.button": "다시 시작",
     "restart.failed": "다시 시작하지 못했습니다. Amenbo를 끝내고 다시 여세요.",
-    "restart.confirm": "Amenbo를 다시 시작할까요? 열려 있는 터미널이 모두 끝나고, 다음에 켜도 세션은 돌아오지 않습니다.",
+    "restart.confirm": "Amenbo를 다시 시작할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, 그 안에서 돌던 것은 돌아오지 않습니다.",
 
     "restart.stuck.title": "다시 시작해도 안 된다면",
     "restart.stuck.intro": "그렇다면 디스크의 Amenbo가 아직 예전 것입니다. 되돌리는 길은 없고, 돌아가는 길은 업데이트가 남긴 이관 전 백업뿐입니다.",
@@ -515,8 +515,8 @@ export const ko: Translation = {
     "face.merge": "하나의 창으로 되돌리기",
     "face.opening": "터미널을 별도의 창에서 여는 중…",
     "face.drop": "이 페인 지우기",
-    "face.dropConfirm": "이 페인을 지울까요? 안에서 돌던 터미널은 끝나고, 다음에 켜도 이 자리는 돌아오지 않습니다.",
-    "quit.confirm": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝나고, 다음에 켜도 세션은 돌아오지 않습니다.",
+    "face.dropConfirm": "이 페인을 지울까요? 안에서 돌던 터미널은 끝나고, 여기서 나눈 이야기로 돌아갈 길도 자리와 함께 사라집니다.",
+    "quit.confirm": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, 그 안에서 돌던 것은 돌아오지 않습니다.",
 
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
     "face.projects": "프로젝트",

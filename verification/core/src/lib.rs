@@ -2451,6 +2451,33 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `onto` is which pane, named the way `paste` names one. Left out, it is the page's one pane.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-lines", required: &["above", "below"], refs: &[], strings: &["above", "below", "onto"], binds: false },
+    // A run of what the pane printed, taken by hand: pressed at the start of one row, let go at the
+    // end of another. It is the only way characters are picked out of a terminal — there is no
+    // command behind a selection and no control on the screen for it — so a road that means to read
+    // what a copy carries has to make one itself.
+    //
+    // `from` and `to` are the rows it runs between, named by words the road printed there, and what
+    // is taken is those rows **entire**: the space in front of the first, the space after the last,
+    // and everything between. That is what the press below is then judged on — a selection stopping
+    // at the first letter would have thrown the question away before asking it. A road taking one row
+    // names it in both.
+    //
+    // `onto` is which pane, named the way `paste` names one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "select-in-pane", required: &["from", "to"], refs: &[], strings: &["from", "to", "onto"], binds: false },
+    // The press that loads that selection, and it is not the machine copying what is drawn. The pane
+    // takes the press in front of the terminal underneath it and puts a **tidied** string on the
+    // clipboard: the space at the end of each row gone, the indentation the whole selection shares
+    // gone, and the marks a particular agent draws down its edges gone with them
+    // (`app/src/talk/copied.ts`). The screen is left exactly as it was — there is no second press for
+    // the raw one, the drawing being the pane's width and the agent's marks rather than characters a
+    // person chose.
+    //
+    // It is a step of its own rather than a word inside the selection above, because what this road
+    // is about lies between the two: a road that selected and then read the pane has read the half
+    // this press does not touch.
+    //
+    // `onto` is which pane, named the way `paste` names one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "copy-selection", required: &[], refs: &[], strings: &["onto"], binds: false },
     // What is standing in the pane's input line, **unsent**. It is not `pane` with a different
     // sentence: that one reads what a program printed, and this reads what nothing has run yet.
     //
@@ -2511,6 +2538,40 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `onto` is which pane's box, named the way `write-to-pane` names one.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-image-into-box", required: &[], refs: &[], strings: &["onto"], binds: false },
+    // **Words** on the clipboard put into that same box, which is where a copy made in the pane above
+    // is read back. It arrives bare: nothing quotes it, because what was copied is what the person
+    // selected rather than a path being handed over, and the two are told apart by which door they
+    // came through.
+    //
+    // It is not `paste` with the box named. That one lands in the terminal's own input line, where
+    // what arrives is a line a shell is about to be given; this box holds what is put in it until a
+    // person sends it, which is the only place a copy can be read at all — against a prompt, an
+    // indentation that survived and one that was dropped draw the same screen.
+    //
+    // The box is emptied first, for the reason `write-to-pane` empties it: what a send leaves behind
+    // is another road's question.
+    //
+    // `onto` is which pane's box, named the way `write-to-pane` names one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "paste-into-box", required: &[], refs: &[], strings: &["onto"], binds: false },
+    // What that paste put there, read for its **shape** rather than for its words: where each line
+    // begins, and where it ends. It is `still-to-send` one question further in — that one asks
+    // whether the words arrived, this one whether what arrived is what a person would have typed.
+    //
+    // `above` is the line that has to stand hard against the left edge of the box, and `below` the one
+    // under it, keeping only as much indentation as it had past `above` on the pane. Between them
+    // they carry the two rules a plain shell can put on a screen: the space at the end
+    // of a row, and the indentation a whole selection shares. The three that belong to a particular
+    // agent — the bar down the right edge, the mark in front of an answer, the numbers down the left
+    // — need that agent started to be drawn at all, and `app/src/talk/copied.test.ts` is what holds
+    // them.
+    //
+    // **It is an eye's, and no reading's.** The fold a reading is matched through keeps letters and
+    // digits and drops the rest, so a box that kept the indentation and a box that dropped it come
+    // back as the same words. What the instruction does instead is say where to look, and the pane
+    // above still draws the rows as they were printed for the eye to compare against.
+    //
+    // `on` is which pane's box, named the way `still-to-send`'s is.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "tidied-in-box", required: &["above", "below"], refs: &[], strings: &["above", "below", "on"], binds: false },
     // Sending what is written there, which is the press the whole box exists for.
     //
     // `by` is which of the two presses makes it go — `return` in the box, or `button` beside it —

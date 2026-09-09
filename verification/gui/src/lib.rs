@@ -810,6 +810,14 @@ impl Instructor {
     /// the run shoots the window under test. The eye that closes it is the operator's at the moment
     /// they pressed the item, which is why each of the three lines asks them to say what they saw.
     ///
+    /// `terminal tidied-in-box` is a `Review`, and the fold is the whole of why. What it reads is
+    /// where a line begins and where it ends — a box that kept the indentation it was copied with and
+    /// one that dropped it hold the same letters in the same order, and the fold drops everything
+    /// that is not a letter or a digit, so both come back as one reading. Its instruction therefore
+    /// walks the eye along the two edges the copy is judged on, and names the pane above as what to
+    /// hold them against: those rows are still drawn as they were printed, the tidying being the
+    /// clipboard's alone.
+    ///
     /// `terminal frames` is a `Review` for a reason close to the dot's: what it reads is a count of
     /// boxes, and a box on this face is a box whether it holds a terminal or a question. Nothing on
     /// it is the road's own words — the panes have not been typed into yet, and the empty ones this
@@ -2127,6 +2135,18 @@ impl Instructor {
                     "Click into the box under {pane} — Amenbo's own, below the terminal — and put the caret at the very end of whatever is written there, without deleting any of it. On macOS and Windows, press the key this machine pastes with; on Linux, hold Ctrl and press V. A quoted path goes in at the caret, the picture itself does not, and nothing is sent — press nothing else."
                 )
             }
+            // Words put into that box, which is where a copy made in the pane above is read back. The
+            // box is emptied first, so what stands in it afterwards is the paste and nothing else —
+            // and nothing is sent, the reading being of what a person has not handed over yet.
+            (Domain::Terminal, "paste-into-box") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Click into the box under {pane} — Amenbo's own, below the terminal. If anything is standing in it, select all of it and delete it first. Then press the key this machine pastes with, once. What the last copy loaded goes in there — leave it, and press nothing else: not return, not the press beside the box."
+                )
+            }
             // The two presses that send it. They are one step with a word for which press, because
             // what they do is the same thing and where they are is not: one is made in the box and
             // the other beside it, and a road that only ever walked the first would leave a control
@@ -2249,6 +2269,33 @@ impl Instructor {
                     "Outside Amenbo — a text editor, a note, anywhere on this machine that holds two lines — put these two on the clipboard, the second under the first: \"{}\" and \"{}\". Then click into {pane} and press the key this machine pastes with, once. Both lines land in that pane's input line together and neither is sent — press nothing else, and do not press return.",
                     req(with, "above")?,
                     req(with, "below")?
+                )
+            }
+            // A selection made by hand in what the pane printed. Where it starts and where it ends are
+            // both said in full, because the whole of the question the press after it answers is what
+            // lies outside the words: a drag that began at the first letter would have dropped the
+            // indentation before Amenbo was ever asked to.
+            (Domain::Terminal, "select-in-pane") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "In {pane}, press at the very start of the row showing \"{}\" — at the left edge of the row, in front of the spaces it begins with — hold, drag down to the row showing \"{}\" and past the last character on it, and let go. Leave the selection standing and press nothing else.",
+                    req(with, "from")?,
+                    req(with, "to")?
+                )
+            }
+            // The press that loads it. What the operator is told to look at is the screen, which has
+            // to be exactly as it was: the tidying is the clipboard's and a build that had tidied the
+            // drawing would show it here and nowhere else.
+            (Domain::Terminal, "copy-selection") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "With that selection still standing in {pane}, press the key this machine copies with. Nothing on the screen moves: the rows stay drawn exactly as they were printed, spaces and all, and the selection stays where it is."
                 )
             }
             // A command run for its output, which is what the steps after it read. The clearing is
@@ -4131,6 +4178,12 @@ impl Instructor {
             // terminal are on one screen and one shot — and here the second half is the point of the
             // box at all: a line written is a line the person still has to send.
             //
+            // **What it says of the terminal is that the box's own words are not in it**, rather than
+            // that nothing has run there. A road may run a line of its own between the writing and
+            // this reading — clearing the pane is how the words in the box are made the only ones on
+            // the shot — and a sentence claiming an untouched terminal would have such an operator
+            // mark a working build red.
+            //
             // **The mark beside the box is not read here.** It says where the keyboard is
             // (`app/src/shell/TerminalPane.tsx`), and a line stays in the box long after the
             // keyboard has left it — the face is switched away and back, the pane is split out into
@@ -4143,7 +4196,7 @@ impl Instructor {
                 };
                 match present(with) {
                     true => format!(
-                        "Under {pane}, in the box below the terminal, confirm \"{}\" is standing there — and that it has not gone: nothing was run in the terminal above, and the words are still in the box to be edited.",
+                        "Under {pane}, in the box below the terminal, confirm \"{}\" is standing there — and that it has not gone: the words are still in the box to be edited, and none of them went into the terminal above.",
                         req(with, "shows")?
                     ),
                     false => format!(
@@ -4151,6 +4204,22 @@ impl Instructor {
                         req(with, "shows")?
                     ),
                 }
+            }
+            // The same box read for its shape. What the eye is walked through is one line at a time and
+            // in the order the rules take them — the left edge first, because that is the one a
+            // reading could never answer, and the end of the line last, because seeing it means
+            // putting a caret there. The pane above is named as what to compare against: the rows are
+            // still drawn as they were printed, so the difference between the two is on one screen.
+            (Domain::Terminal, "tidied-in-box") => {
+                let pane = match arg_str(with, "on") {
+                    Some(on) => format!("the pane showing \"{on}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Under {pane}, read the box below the terminal for where its lines begin and end. \"{}\" stands hard against the left edge of the box, with nothing in front of it, although the row it was copied from is drawn indented on the pane above. \"{}\" stands under it, moved in by as much as it was moved in past that row on the pane and no more. Then click at the far right of the lower line: the caret lands against its last character rather than out beyond it, the spaces that row ended with having been left behind.",
+                    req(with, "above")?,
+                    req(with, "below")?
+                )
             }
             // Which pane the reader is in, read as one thing off two marks. The frame says the face's
             // answer and the cursor says the browser's, and a road that read only the first would go

@@ -854,6 +854,14 @@ It takes no `key` — there is one press, and the same key one line lower is the
 the box named: that one lands in the terminal's own input line, the two are reached by different
 presses on Linux, and what arrives here is **quoted**, because the box's line goes to the program as
 the person's own. It goes in at the caret and leaves what was already written standing.
+`paste-into-box` is words put in there instead, and it arrives bare: what was copied is what a person
+selected, not a path being handed over. It is the far end of the one road that reads a copy made in
+the pane — `select-in-pane` takes a run of what the terminal printed, from the very start of one row
+to the very end of another, `copy-selection` is the press that loads it, and `tidied-in-box` reads
+what came out the other side. That last one is read for **shape** rather than for words: what the
+press puts on the clipboard is the selection with the row's trailing space and the selection's common
+indentation taken off, and no reading answers where a line begins, so it is an eye's,
+with the pane above still drawing the rows as they were printed to hold it against.
 
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
 most of what there is: `set-panes` re-cuts the frames into pages of the count it names, `go-page` moves

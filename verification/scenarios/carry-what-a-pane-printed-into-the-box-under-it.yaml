@@ -1,0 +1,149 @@
+# What a terminal draws and what a person meant to copy are not the same characters, and this road is
+# the difference being taken off on the way to the clipboard.
+#
+# A pane is a real terminal: a program writes into a grid, and the grid pads every row to its width
+# and holds whatever indentation the program used. Select a passage there, press the key that copies,
+# and what a person gets back has the screen's own drawing in it — trailing space on every row, and
+# the indentation the whole passage happens to sit at. Pasted anywhere the words matter, that is
+# rubbish they have to take out by hand.
+#
+# ── Why the copy is read in the box under the pane ───────────────────────────────────────────────
+# It has to be read somewhere a person would actually paste, and the box under the pane is the
+# nearest one: the reason to copy out of a pane is usually to put it in front of the agent below it.
+# It is also the only place the reading works. Pasted back into the terminal's own input line the
+# passage lands against a prompt, where an indentation that survived and one that was dropped draw
+# the same screen; the box has a left edge of its own to stand against.
+#
+# ── Why the pane is cleared before the box is read for the words ─────────────────────────────────
+# A reading is taken off the whole shot, so words still drawn on the pane above would answer for the
+# box underneath it: the step would go green on a build whose paste put nothing there at all. The
+# pane is cleared first, and then the only place on that screen those words can be is the box.
+#
+# ── Why the shape is an eye's ────────────────────────────────────────────────────────────────────
+# The fold a reading is matched through keeps letters and digits and drops the rest, so a box that
+# kept the indentation and a box that dropped it come back as one reading. Where a line begins is
+# therefore walked by an eye — and it is walked while the pane above still draws the rows as they
+# were printed, so both are on one screen and the difference between them is the whole thing this
+# road is about.
+#
+# ── What this road does not reach ────────────────────────────────────────────────────────────────
+# Three of the five rules belong to a particular agent — the bar down the right edge, the mark in
+# front of an answer, the numbers down the left — and none of them is drawn unless that agent is
+# started, which is not something a road may rest on. A plain shell puts the other two on the screen,
+# and they are what is walked here. The rules themselves are held to the six measured screens in
+# `app/src/talk/copied.test.ts`.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# A selection is made with a hand and a clipboard is not a thing a shell holds. There is nothing here
+# for the binary to walk.
+id: carry-what-a-pane-printed-into-the-box-under-it
+title: What is copied out of a pane arrives as the person's own characters, not as the terminal drew them
+description: >
+  Open a pane on a project's folder and print two indented lines into it, each with space at the end
+  of it. Select them with the hand — the whole rows, from the very start of the first to the very end
+  of the last — and press the key that copies. Then paste into the box Amenbo draws under the pane:
+  the passage stands there as it would have been typed, the indentation the two lines shared taken
+  off and the space at the end of each with it, while the pane above still draws them exactly as they
+  were printed.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+    as: orchard
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: orchard
+
+  # The two rows, written down rather than printed by the command that draws them: a `printf` would
+  # put its own copy of these words on the screen as it was typed, and the step below names a row by
+  # the words on it. Read out of a file, the words are on the pane once and in one place.
+  #
+  # Both rows are indented, and by different amounts — four spaces and eight — so that what is shared
+  # can be taken off and what is not can stay. Both end in space, which is the other rule and the one
+  # nothing on a screen ever shows.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: orchard
+      path: pruning.txt
+      content: "    SCENARIO the pears are pruned   \n        SCENARIO the crew comes at dawn   \n"
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # A shell, because what is under test is a plain terminal's own drawing: an agent would put its own
+  # marks on the screen as well, and those are the rules this road leaves alone.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: run
+    with:
+      command: cat pruning.txt
+
+  # The rows on the screen, before a hand touches them. Nothing else on this face draws these words,
+  # so a reading that finds them found what the file put there — and the steps below are about those
+  # rows and not about whether the pane printed anything.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pears are pruned
+
+  # The whole of both rows, taken the way a person takes them: from the left edge of the first, in
+  # front of the spaces it begins with, to past the last character of the second. A selection that
+  # began at the first letter would have dropped the indentation itself and left nothing to ask.
+  - type: action
+    domain: terminal
+    op: select-in-pane
+    with:
+      from: SCENARIO the pears are pruned
+      to: SCENARIO the crew comes at dawn
+
+  - type: action
+    domain: terminal
+    op: copy-selection
+
+  - type: action
+    domain: terminal
+    op: paste-into-box
+
+  # And what came out the other side, read for where its lines begin and end while the rows they came
+  # from are still drawn above.
+  - type: assert
+    domain: terminal
+    op: tidied-in-box
+    with:
+      above: SCENARIO the pears are pruned
+      below: SCENARIO the crew comes at dawn
+
+  # The pane cleared, which is what makes the reading below the box's own. The line run here is the
+  # road's own words again, so what it puts on the screen cannot be mistaken for what was copied.
+  - type: action
+    domain: terminal
+    op: run
+    with:
+      command: echo SCENARIO the rows are off the pane now
+
+  # The words in the box, with the pane above no longer drawing them. This is the half a reading can
+  # answer: a paste that put nothing there, or put it somewhere else, leaves this screen carrying the
+  # line the shell just echoed and nothing more.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO the pears are pruned

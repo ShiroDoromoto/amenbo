@@ -33,7 +33,7 @@ import { invoke } from "../core/ipc";
 import { openExternalUrl } from "../core/mutations";
 import { hostOs, type HostOs } from "../core/platform";
 import { tidiedCopy } from "./copied";
-import { type NamedBy } from "./frames";
+import type { NamedBy } from "./frames";
 import { httpUrl, pathsOnRow, refFromUrl, refsOnRow, urlsOnRow, type Cell, type Rows } from "./refLinks";
 
 // The events the host sends this pane. Output is a chunk; closed is the program in the terminal
@@ -601,6 +601,24 @@ export async function sendIntoTerminal(session: string, text: string): Promise<v
   await pasteIntoTerminal(session, text);
   await invoke<void>("pty_write", { session, data: SUBMIT });
   await invoke<void>("pty_brief", { session }).catch(() => {});
+}
+
+/**
+ * Tell the provider running in a terminal that its pane is now called `name`.
+ *
+ * **It is a copy, and the card is the frame's own name.** That name is settled before this is called
+ * and does not wait on it: what this asks for is the provider's own list of sessions saying the same
+ * thing, so that a person reading that list from somewhere else can tell one pane from another
+ * (`AMB-D-872`). Every pane Amenbo opens is handed the same opening instruction, and a provider that
+ * titles a session from what it was told titles them all alike.
+ *
+ * **Nothing comes back but the asking.** The host answers before the name is anywhere — it waits for
+ * the pane's input box to be free and for the pane to stand still, which is an agent's answer ending
+ * — and a provider with no rename command of its own is answered with nothing done
+ * (`crate::pty::pty_rename`). A terminal that has ended in the meantime is nothing to say either.
+ */
+export async function renameInTerminal(session: string, name: string): Promise<void> {
+  await invoke<void>("pty_rename", { session, name }).catch(() => {});
 }
 
 /**

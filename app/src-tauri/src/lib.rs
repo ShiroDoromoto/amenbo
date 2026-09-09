@@ -586,6 +586,7 @@ pub fn run() {
       pty::pty_attach,
       pty::pty_write,
       pty::pty_brief,
+      pty::pty_rename,
       pty::pty_paste_image,
       pty::pty_resize,
       windows::talk_open,

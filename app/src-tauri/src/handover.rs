@@ -110,7 +110,13 @@ const STILL: usize = 3;
 /// enough that most of the patience is left for the words to come back. A program still drawing its
 /// interface goes quiet between the pieces; one that has been moving for this long is moving because
 /// moving is what it does.
-const RESTLESS: usize = 20;
+///
+/// **It is what the opening instruction is handed over on, and nothing else.** What the ten seconds
+/// buy is a program that is up and reading, which is the question a pane being started asks. A pane
+/// that has been worked in for an hour is past that question and is moving for the opposite reason —
+/// an agent is answering in it — so what goes in there waits for the answer to end
+/// ([`hand_over`]'s `blind_after`, `AMB-D-872`).
+pub const RESTLESS: usize = 20;
 
 /// How this ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -200,9 +206,17 @@ fn moved(screen: &[u8]) -> u64 {
 /// whether it could. `wait` is the pause between passes — the caller's, so that what this does can be
 /// walked without a clock. `tries` bounds the whole of it: the patience is passes × the length of
 /// `wait`.
+///
+/// `blind_after` is how many passes of unbroken movement buy the paste anyway ([`RESTLESS`]), or
+/// `None` where nothing but stillness ever does. **A screen moves for two reasons and only the caller
+/// knows which it is waiting out**: a program drawing its own interface stops when it is up, and an
+/// agent answering stops when the answer is done. The first is worth giving up on after ten seconds
+/// because a person is waiting on the sentence; the second is not, because what a blind paste would
+/// win is a line sitting in the box of a pane that is going to stand still by itself (`AMB-D-872`).
 pub fn hand_over(
     instruction: &str,
     tries: usize,
+    blind_after: Option<usize>,
     mut briefed: impl FnMut() -> bool,
     mut screen: impl FnMut() -> Option<Vec<u8>>,
     mut send: impl FnMut(&[u8]) -> bool,
@@ -256,7 +270,10 @@ pub fn hand_over(
             }
             pasted_into = Some(now);
             answer_due = true;
-        } else if pass + 1 >= RESTLESS && now != nothing && pasted_into.is_none() {
+        } else if blind_after.is_some_and(|after| pass + 1 >= after)
+            && now != nothing
+            && pasted_into.is_none()
+        {
             // Nothing has stood still in ten seconds and nothing has been written into this pane yet.
             // The program is up and reading, so the sentence goes in — and from here it is judged on
             // the words alone (`AMB-D-802`).
@@ -366,11 +383,23 @@ mod tests {
         }
     }
 
-    /// Drive [`hand_over`] against one of those, with no clock.
+    /// Drive [`hand_over`] against one of those, with no clock — on the opening instruction's terms,
+    /// which is the pane being started ([`RESTLESS`]).
     fn walk(agent: &Agent, instruction: &str, tries: usize) -> Handover {
+        walk_after(agent, instruction, tries, Some(RESTLESS))
+    }
+
+    /// The same, saying for itself what a restless screen buys.
+    fn walk_after(
+        agent: &Agent,
+        instruction: &str,
+        tries: usize,
+        blind_after: Option<usize>,
+    ) -> Handover {
         hand_over(
             instruction,
             tries,
+            blind_after,
             || {
                 agent.looks.set(agent.looks.get() + 1);
                 agent.briefed_on.get().is_some_and(|on| agent.looks.get() >= on)
@@ -453,6 +482,31 @@ mod tests {
     }
 
     #[test]
+    fn a_screen_that_never_stands_still_is_left_alone_where_nothing_but_stillness_buys_the_paste() {
+        // The rename's terms: a pane a person is working in moves because an agent is answering in
+        // it, and that stops by itself. Pasting into the middle of it would put a line in the box of
+        // a pane that was going to be still in a moment (`AMB-D-872`).
+        let agent = Agent::restless(Takes::Echoes);
+        assert_eq!(
+            walk_after(&agent, "/rename a pane", 60, None),
+            Handover::LeftForTheReader,
+            "the patience ran out rather than the sentence going in blind"
+        );
+        assert_eq!(agent.pastes(), 0, "nothing went into a screen that never stood still");
+        assert!(!agent.submitted());
+    }
+
+    #[test]
+    fn a_screen_that_stands_still_takes_the_sentence_whatever_a_restless_one_would_have_bought() {
+        // And the stillness rule itself is untouched by that: the pane the rename is waiting for is
+        // the one that has stopped, and it is pasted into on the same three looks as any other.
+        let agent = Agent::waiting(Takes::Echoes);
+        assert_eq!(walk_after(&agent, "/rename a pane", 10, None), Handover::Sent);
+        assert_eq!(agent.pastes(), 1);
+        assert!(agent.submitted());
+    }
+
+    #[test]
     fn a_screen_that_answered_nothing_while_still_is_not_pasted_into_again_when_it_moves() {
         // It stood still, took the sentence, showed nothing — and then started drawing and never
         // stopped. The waiting-out rule must not read that as a pane owed a sentence: it has one, and
@@ -496,6 +550,7 @@ mod tests {
         let verdict = hand_over(
             "Before you act on any request",
             8,
+            Some(RESTLESS),
             || false,
             || Some(Vec::new()),
             |_| {
@@ -511,7 +566,7 @@ mod tests {
     #[test]
     fn a_terminal_that_has_gone_ends_it() {
         assert_eq!(
-            hand_over("Before you act", 4, || false, || None, |_| true, || {}),
+            hand_over("Before you act", 4, Some(RESTLESS), || false, || None, |_| true, || {}),
             Handover::Gone
         );
     }
@@ -519,7 +574,15 @@ mod tests {
     #[test]
     fn a_write_that_fails_ends_it() {
         assert_eq!(
-            hand_over("Before you act", 4, || false, || Some(b"> ".to_vec()), |_| false, || {}),
+            hand_over(
+                "Before you act",
+                4,
+                Some(RESTLESS),
+                || false,
+                || Some(b"> ".to_vec()),
+                |_| false,
+                || {}
+            ),
             Handover::Gone
         );
     }

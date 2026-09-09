@@ -1,0 +1,157 @@
+# A picture on the machine's clipboard put into the box Amenbo draws under a pane.
+#
+# The box is the third place in the app a person writes in, and it is the one with a shell behind it:
+# what stands there goes to the program in the pane as the person's own line. So a picture has to
+# arrive as a **quoted** path — the same shape a pane's own input line is handed — and it has to
+# arrive **beside** what was already written rather than in place of it.
+#
+# ── Why this is not the pane's road with a different box named ───────────────────────────────────
+# They are two boxes on one screen, reached by two presses on one of the three machines. A pane holds
+# out for Ctrl+Shift+V on Linux because Ctrl+V is the character that makes the next one literal to
+# the program running in it; this box has no program behind it, so what is read there is the press a
+# person writing actually makes. A road that walked only the pane would go green over a box that
+# answered nothing at all on that machine — which is the state this road was written for: the panes
+# were done first and the box came after.
+#
+# ── Why it is not the draft page's road either ───────────────────────────────────────────────────
+# Those two are handed the path **bare**, because nothing reads what they hold as a command
+# (`hand-a-picture-on-the-clipboard-to-a-box-you-write-in`). This box is read as one. A build that
+# wrote one rule for every box a person types in would be right in one place and wrong in the other,
+# and the quoting is where that shows.
+#
+# ── Why something is written in the box first ────────────────────────────────────────────────────
+# What the paste owes is a path **at the caret**, and a build that replaced the line would pass every
+# reading of the path and have thrown a half-written sentence away. Read on an empty box the two are
+# the same screen, so the sentence is put there first and read again at the end.
+#
+# ── Why the file it copies lies outside every folder the road binds ──────────────────────────────
+# The run's own folder is where nothing in Amenbo can reach, so a path appearing in the box afterwards
+# came through the clipboard and could not have come from the tree, from a drop, or from anything the
+# road typed.
+#
+# ── Why the terminal's own line is read at the end ───────────────────────────────────────────────
+# The two lines are one shot apart, and the failure this road is nearest to is the picture going to
+# the pane above instead — which draws a path on the screen either way. Reading the terminal's line
+# for the absence is what parts "it went into the box" from "it went somewhere on this pane".
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. A clipboard is not a thing a shell holds, and the writing this proves
+# happens in the webview.
+id: hand-a-picture-on-the-clipboard-to-the-box-under-a-pane
+title: A picture on the clipboard reaches the box under a pane as a quoted path, beside what was already written
+description: >
+  Open the terminal face on a project's folder and get a shell running in a pane. Write a line in the
+  box Amenbo draws under it and leave it unsent. Then copy a picture outside Amenbo — the image
+  itself, out of whatever shows pictures on this machine — and paste it into that box: a quoted path
+  appears at the caret, the line that was already there is still standing, and the terminal above has
+  none of it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Nursery
+    as: nursery
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: nursery
+      project: nursery
+
+  # The picture the operator copies. It is an image, which no line of YAML holds, and it is put in the
+  # run's own folder — outside every folder the road binds — so what reaches the box can only have
+  # come through the clipboard.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: image/scenario-icon.png
+      path: scenario-icon.png
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # A shell, because the box is drawn only while a terminal is running under it.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The box before anything is put in it. Both words the readings below rest on are absent here, so
+  # finding them afterwards is the paste and nothing else.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: "pasted-"
+      present: false
+
+  # The sentence the paste has to go beside. It is emptied and written by this step, so what stands
+  # in the box from here on is the road's own words and nothing left over.
+  - type: action
+    domain: terminal
+    op: write-to-pane
+    with:
+      text: SCENARIO the seedlings in the picture
+
+  - type: action
+    domain: repo
+    op: copy-image-outside
+    with:
+      path: scenario-icon.png
+
+  - type: action
+    domain: terminal
+    op: paste-image-into-box
+
+  # What the paste wrote, named the way the build names one. A picture that arrived as words, or as
+  # nothing at all, has no such name in the box.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: "pasted-"
+
+  # And the shape it arrived in: the extension the type it was handed decides.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: ".png"
+
+  # And the quoting, which is this box's half of the pair — the clipboard was carrying bytes and no
+  # punctuation, so a quote here can only have been put there on the way in.
+  #
+  # **It is read at the head of the path, and by an eye.** At the head because nothing blinks in
+  # front of a paste, where a caret standing at the end of one passes for a closing quote. By an eye
+  # because the fold a reading is matched through keeps letters and digits and drops the rest: `'/`
+  # reaches the match as the empty string, so no reading answers for it either way. Written the other
+  # way round, `.png'` folds to `png` and goes green on a box carrying no quote at all.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: "'/"
+
+  # And the line that was already there, still there. A paste that had replaced what was written
+  # instead of going in beside it would pass every reading above and have thrown the sentence away.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO the seedlings in the picture
+
+  # And the terminal's own line, with none of it. The picture went where the person was writing, and
+  # a build that handed it to the pane above would draw a path on the same screen.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: "pasted-"
+      present: false

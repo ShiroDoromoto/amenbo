@@ -2112,6 +2112,21 @@ impl Instructor {
                     req(with, "text")?
                 )
             }
+            // A picture put into that box. Both presses are said, because the box takes a different
+            // one on Linux from the pane above it — and what to look for is said too: a quoted path
+            // standing where a picture was copied is the whole of what this step is walked for.
+            //
+            // The operator is told to leave what is already written alone, because where the caret
+            // is decides what the reading after this step finds.
+            (Domain::Terminal, "paste-image-into-box") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Click into the box under {pane} — Amenbo's own, below the terminal — and put the caret at the very end of whatever is written there, without deleting any of it. On macOS and Windows, press the key this machine pastes with; on Linux, hold Ctrl and press V. A quoted path goes in at the caret, the picture itself does not, and nothing is sent — press nothing else."
+                )
+            }
             // The two presses that send it. They are one step with a word for which press, because
             // what they do is the same thing and where they are is not: one is made in the box and
             // the other beside it, and a road that only ever walked the first would leave a control

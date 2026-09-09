@@ -75,17 +75,17 @@ export function Commits({ taskId }: { taskId: number }) {
           ))}
         </div>
       )}
-      <div className="compose" style={{ marginTop: 8 }}>
+      <div className="writebox" style={{ marginTop: 8 }}>
         <input
           {...asTyped}
-          className="compose__input"
+          className="writebox__input"
           value={draft}
           placeholder={t("commit.placeholder")}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submit(); } }}
         />
         {error && <ErrorNote>{error}</ErrorNote>}
-        <div className="compose__actions">
+        <div className="writebox__actions">
           <span />
           <button className="btn btn--primary" disabled={busy || !draft.trim()} onClick={() => void submit()}>
             {t("commit.record")}

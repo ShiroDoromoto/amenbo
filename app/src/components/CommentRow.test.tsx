@@ -71,11 +71,11 @@ describe("CommentRow edit", () => {
     const onEdit = vi.fn(() => Promise.resolve());
     render({ onEdit });
     act(() => editBtn()!.click());
-    type(container.querySelector<HTMLTextAreaElement>(".compose__input")!, "  edited  ");
+    type(container.querySelector<HTMLTextAreaElement>(".writebox__input")!, "  edited  ");
     act(() => container.querySelector<HTMLButtonElement>(".btn--primary")!.click());
     await flush();
     expect(onEdit).toHaveBeenCalledWith("edited");
-    expect(container.querySelector(".compose__input"), "box closed on success").toBeNull();
+    expect(container.querySelector(".writebox__input"), "box closed on success").toBeNull();
     expect(container.querySelector(".errortext")).toBeNull();
   });
 
@@ -83,10 +83,10 @@ describe("CommentRow edit", () => {
     const onEdit = vi.fn(() => Promise.reject(new Error("editComment refused")));
     render({ onEdit });
     act(() => editBtn()!.click());
-    type(container.querySelector<HTMLTextAreaElement>(".compose__input")!, "edited");
+    type(container.querySelector<HTMLTextAreaElement>(".writebox__input")!, "edited");
     act(() => container.querySelector<HTMLButtonElement>(".btn--primary")!.click());
     await flush();
-    expect(container.querySelector<HTMLTextAreaElement>(".compose__input")?.value, "box still open, draft kept").toBe("edited");
+    expect(container.querySelector<HTMLTextAreaElement>(".writebox__input")?.value, "box still open, draft kept").toBe("edited");
     expect(container.querySelector(".errortext")?.textContent).toContain("refused");
   });
 });

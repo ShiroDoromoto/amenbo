@@ -46,7 +46,7 @@ export function TaskComposePane({
 
         <input
           {...asTyped}
-          className="compose__input"
+          className="writebox__input"
           style={{ minHeight: "unset", fontWeight: "var(--fw-bold)" }}
           autoFocus
           value={title}
@@ -62,7 +62,7 @@ export function TaskComposePane({
           <div className="detail__section-h">{t("compose.notes")}</div>
           <textarea
             {...asTyped}
-            className="compose__input"
+            className="writebox__input"
             rows={6}
             value={notes}
             placeholder={t("compose.notesPh")}
@@ -83,7 +83,7 @@ export function TaskComposePane({
           <DateField label={t("date.start")} value={start} onChange={setStart} />
         </div>
 
-        <div className="compose__actions" style={{ marginTop: "var(--s-2)" }}>
+        <div className="writebox__actions" style={{ marginTop: "var(--s-2)" }}>
           <span className="meta">{t("compose.hint")}</span>
           <span>
             <button className="btn" onClick={onCancel}>{t("compose.cancel")}</button>

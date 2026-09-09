@@ -161,7 +161,7 @@ export function DecisionDetailPane({
         {editing ? (
           <input
             {...asTyped}
-            className="compose__input"
+            className="writebox__input"
             style={{ minHeight: "unset", flex: 1 }}
             autoFocus
             value={titleDraft}
@@ -183,10 +183,10 @@ export function DecisionDetailPane({
       <DecisionDimensions d={d} />
 
       {editing ? (
-        <div className="compose" style={{ marginTop: 8, maxWidth: "var(--measure-prose)" }}>
+        <div className="writebox" style={{ marginTop: 8, maxWidth: "var(--measure-prose)" }}>
           <textarea
             {...asTyped}
-            className="compose__input"
+            className="writebox__input"
             rows={8}
             value={bodyDraft}
             placeholder={t("dec.newBodyPh")}
@@ -200,7 +200,7 @@ export function DecisionDetailPane({
             <div className="faint" style={{ marginTop: 4 }}>{t("dec.editAcceptedHint")}</div>
           )}
           {editError && <ErrorNote>{editError}</ErrorNote>}
-          <div className="compose__actions">
+          <div className="writebox__actions">
             <span className="meta">{t("detail.notesHint")}</span>
             <span>
               <button className="btn" onClick={() => setEditing(false)}>{t("detail.cancel")}</button>
@@ -240,7 +240,7 @@ export function DecisionDetailPane({
       {d.status === "proposed" && (
         confirming ? (
           // Confirming an accept or reject, with an optional reason that is left behind as one comment.
-          <div className="compose" style={{ marginTop: 12 }}>
+          <div className="writebox" style={{ marginTop: 12 }}>
             {confirming === "reject" && standingOn(d).length > 0 && (
               <div style={{ marginBottom: 8 }}>
                 <div className="faint">{t("dec.revisit")}</div>
@@ -258,7 +258,7 @@ export function DecisionDetailPane({
             )}
             <textarea
               {...asTyped}
-              className="compose__input"
+              className="writebox__input"
               rows={3}
               autoFocus
               placeholder={t("dec.reasonPh")}
@@ -270,7 +270,7 @@ export function DecisionDetailPane({
               }}
             />
             {error && <ErrorNote>{error}</ErrorNote>}
-            <div className="compose__actions">
+            <div className="writebox__actions">
               <span className="meta">{t("detail.commentHint")}</span>
               <span>
                 <button className="btn" onClick={() => { setConfirming(null); setReason(""); setError(null); }}>{t("dec.cancel")}</button>
@@ -328,11 +328,11 @@ export function DecisionDetailPane({
                 ))}
               </div>
             )}
-            <div className="compose">
+            <div className="writebox">
               <textarea
                 {...asTyped}
                 ref={commentRef}
-                className="compose__input"
+                className="writebox__input"
                 rows={3}
                 placeholder={t("detail.commentPh")}
                 value={comment}
@@ -342,7 +342,7 @@ export function DecisionDetailPane({
                 }}
               />
               {commentError && <ErrorNote>{commentError}</ErrorNote>}
-              <div className="compose__actions">
+              <div className="writebox__actions">
                 <span className="meta">{t("detail.commentHint")}</span>
                 <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
               </div>
@@ -588,7 +588,7 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
         </select>
         <input
           {...asTyped}
-          className="compose__input"
+          className="writebox__input"
           style={{ flex: 1 }}
           autoFocus
           placeholder={t("dec.edge.searchPh")}

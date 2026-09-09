@@ -276,6 +276,16 @@ func fold(_ s: String) -> String {
     return out
 }
 
+/// A line read off a shot, and the patch of the shot it was read from.
+///
+/// The place is always in the **whole shot's** coordinates — Vision's, normalized with the origin at
+/// the bottom left — whichever image the line was read off. That is what lets a line a quarter read
+/// alone be put where it stands among the lines the whole shot gave ([`whereItStands`]).
+struct Line {
+    let text: String
+    let place: CGRect
+}
+
 /// Hand one image to Vision and give back a line per region it read.
 ///
 /// Every setting the reader has lives here, so the whole shot and each of its quarters
@@ -284,7 +294,15 @@ func fold(_ s: String) -> String {
 /// `cuts` are the sides this image was cut on rather than the sides the screen ends on. A row the
 /// cut ran through is half a row, and half a row is not something anybody typed: it is dropped
 /// rather than read, because the whole shot's own reading has that row entire.
-func recognize(_ image: CGImage, ignoringWhatRuns cuts: Set<Edge> = []) -> [String] {
+///
+/// `frame` is where this image stands on the whole shot, in Vision's normalized coordinates — the
+/// unit square for the shot itself, a quarter of it for a quarter. Each region comes back measured
+/// against the image it was read off, and is put back onto the shot here.
+func recognize(
+    _ image: CGImage,
+    ignoringWhatRuns cuts: Set<Edge> = [],
+    standingIn frame: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+) -> [Line] {
     let request = VNRecognizeTextRequest()
     // Accurate over fast: the board's card titles are small, and a missed character turns a present
     // card into an absent verdict. Language correction stays off — the text under test is titles and
@@ -307,7 +325,19 @@ func recognize(_ image: CGImage, ignoringWhatRuns cuts: Set<Edge> = []) -> [Stri
     }
     return (request.results ?? [])
         .filter { observation in !cuts.contains(where: { $0.runs(through: observation.boundingBox) }) }
-        .compactMap { $0.topCandidates(1).first?.string }
+        .compactMap { observation in
+            guard let text = observation.topCandidates(1).first?.string else { return nil }
+            let box = observation.boundingBox
+            return Line(
+                text: text,
+                place: CGRect(
+                    x: frame.minX + box.minX * frame.width,
+                    y: frame.minY + box.minY * frame.height,
+                    width: box.width * frame.width,
+                    height: box.height * frame.height
+                )
+            )
+        }
 }
 
 /// A side a quarter was cut on. Vision hands a region back in the quarter's own coordinates, where
@@ -339,11 +369,12 @@ enum Edge {
 let quarterOverlap = 0.15
 
 /// The shot cut into four overlapping quarters ([`quarterOverlap`]), each with the sides it was cut
-/// on — the sides the screen itself ends on are not cuts, and what stands against them is whole.
-func quarters(of image: CGImage) -> [(CGImage, Set<Edge>)] {
+/// on — the sides the screen itself ends on are not cuts, and what stands against them is whole —
+/// and where it stands on the shot, in Vision's normalized coordinates.
+func quarters(of image: CGImage) -> [(CGImage, Set<Edge>, CGRect)] {
     let width = Double(image.width), height = Double(image.height)
     let tileWidth = width / 2, tileHeight = height / 2
-    var out: [(CGImage, Set<Edge>)] = []
+    var out: [(CGImage, Set<Edge>, CGRect)] = []
     for column in 0..<2 {
         for row in 0..<2 {
             let x = max(0, Double(column) * tileWidth - tileWidth * quarterOverlap)
@@ -362,10 +393,62 @@ func quarters(of image: CGImage) -> [(CGImage, Set<Edge>)] {
             // in one is its high edge in the other.
             if rect.minY > 0 { cuts.insert(.top) }
             if rect.maxY < height { cuts.insert(.bottom) }
-            out.append((tile, cuts))
+            // The same rect said the way Vision says it: a share of the shot, counted from the
+            // bottom. It is what puts a line read off this tile back onto the shot.
+            let frame = CGRect(
+                x: rect.minX / width,
+                y: (height - rect.maxY) / height,
+                width: rect.width / width,
+                height: rect.height / height
+            )
+            out.append((tile, cuts, frame))
         }
     }
     return out
+}
+
+/// Where a line only a quarter read belongs among the lines already gathered: **in the gap it fills,
+/// or at the end.**
+///
+/// The lines the whole shot gave are left in the reader's own order, which is not one order down the
+/// screen — Vision walks a column at a time, so a sidebar's items come back before anything in the
+/// pane beside them, and sorting the whole reading by height would shuffle two columns into each
+/// other. So a line is placed rather than the reading sorted: among the lines whose width overlaps
+/// this one — the column it stands in — the nearest one above it is found, and this line goes just
+/// after it.
+///
+/// **A line level with one already read goes at the end, which is where every quarter's line used to
+/// go.** That is the whole care this takes. A caller meets a word broken across two rows by reading
+/// with the spaces taken out (`verification/gui/src/lib.rs`), and that only reaches the two halves
+/// while they are still next to each other — so anything dropped between a row and the row under it
+/// takes a line off the screen that a caller could read before. A row a quarter read a second way is
+/// not a row of its own: it stands at the same height as one already in hand, and putting it beside
+/// that one is what would part a wrap. A row the whole shot missed outright stands in the gap
+/// between two rows and parts nothing, and it is the one this is for.
+func whereItStands(_ line: Line, among lines: [Line]) -> Int {
+    // How far a line has to stand clear of one already read to be a row of its own rather than a
+    // second reading of that row: half its own height. A row under another is a whole row's pitch
+    // away, and a re-reading of one is level with it.
+    let clear = line.place.height / 2
+    var above: (index: Int, gap: CGFloat)?
+    var below: (index: Int, gap: CGFloat)?
+    for (index, other) in lines.enumerated() {
+        // The same column: two rows one under the other share the width their words are drawn
+        // across, and two things side by side share none of it.
+        guard other.place.maxX > line.place.minX, other.place.minX < line.place.maxX else { continue }
+        let gap = other.place.midY - line.place.midY
+        if gap > clear {
+            if above == nil || gap < above!.gap { above = (index, gap) }
+        } else if gap < -clear, below == nil || -gap < below!.gap {
+            below = (index, -gap)
+        } else if gap.magnitude <= clear {
+            // Level with a line already read: a second reading of that row, not a row of its own.
+            return lines.count
+        }
+    }
+    if let above { return above.index + 1 }
+    if let below { return below.index }
+    return lines.count
 }
 
 /// Read the text off a screenshot and print it as JSON: `text` is the reading folded, `raw` is what
@@ -384,8 +467,16 @@ func quarters(of image: CGImage) -> [(CGImage, Set<Edge>)] {
 ///
 /// A line the whole reading already carries verbatim is not added a second time, so the raw a person
 /// reads stays close to the reading it would have been. A line a quarter read differently — better,
-/// or worse — is kept beside it: which of the two a caller's expectation meets is the caller's
+/// or worse — is kept as well: which of the two a caller's expectation meets is the caller's
 /// question, and both were read off this shot.
+///
+/// **A row the whole shot missed goes in the gap it fills, not at the end** ([`whereItStands`]).
+/// Where a row ends is not something a shot records, so a caller meets a wrapped word by reading
+/// with the spaces taken out (`verification/gui/src/lib.rs`) — and that only reaches a word broken
+/// across two rows while the two rows are still next to each other. A pane wrapped
+/// `…went by the press beside the box` in the middle of `press`, the whole shot read the first row
+/// and only a quarter read the second, and a second row parked at the end of the reading is a word
+/// no caller can put back together (reported 2026-09-09 off `write-a-line-under-the-pane-and-send-it`).
 func readText(path: String) {
     guard let data = FileManager.default.contents(atPath: path) else {
         fail("could not read \(path)")
@@ -397,15 +488,16 @@ func readText(path: String) {
     }
 
     var lines = recognize(image)
-    var seen = Set(lines)
-    for (tile, cuts) in quarters(of: image) {
-        for line in recognize(tile, ignoringWhatRuns: cuts) where !seen.contains(line) {
-            seen.insert(line)
-            lines.append(line)
+    var seen = Set(lines.map(\.text))
+    for (tile, cuts, frame) in quarters(of: image) {
+        for line in recognize(tile, ignoringWhatRuns: cuts, standingIn: frame)
+        where !seen.contains(line.text) {
+            seen.insert(line.text)
+            lines.insert(line, at: whereItStands(line, among: lines))
         }
     }
 
-    let raw = lines.joined(separator: "\n")
+    let raw = lines.map(\.text).joined(separator: "\n")
     let json = ["text": fold(raw), "raw": raw]
     guard let out = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]) else {
         fail("could not encode the reading as JSON")

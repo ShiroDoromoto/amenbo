@@ -9729,6 +9729,31 @@ steps_gui:
         );
     }
 
+    /// What the reader owes for the tolerance above: the two halves of a wrapped word have to come
+    /// back next to each other. Anything put between them is a row of the screen standing in the
+    /// middle of a word, and no reading of the letters can take it out again — which is why a row
+    /// only a quarter of the shot was read for goes in the gap it fills rather than at the end of
+    /// the reading (`scripts/screen.swift`).
+    #[test]
+    fn a_row_dropped_between_the_halves_of_a_wrap_puts_the_word_out_of_reach() {
+        let expected = fold("SCENARIO this second line went by the press beside the box");
+        let in_order = fold("SCENARIO this second line went by the pre\nss beside the box");
+        assert_eq!(
+            held_whatever_the_spacing(&in_order, &expected),
+            Held { found: true, slipped: false }
+        );
+
+        let parted = fold(
+            "SCENARIO this second line went by the pre\n\
+             zsh: command not found: SCENARIO\n\
+             ss beside the box",
+        );
+        assert_eq!(
+            held_whatever_the_spacing(&parted, &expected),
+            Held { found: false, slipped: true }
+        );
+    }
+
     /// Taking the spaces out is not a second chance at the letters: a line that is not on the shot
     /// is not on either reading of it.
     #[test]

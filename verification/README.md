@@ -275,7 +275,12 @@ absent, while the same rows off a crop of that pane were read in full. The quart
 the cut runs through stands complete in at least one of them, and what a cut did run through is
 dropped rather than read: the whole shot's own reading has that row entire. A line the whole reading
 already carries is not written twice, so the `.txt` beside the shot stays close to what one pass
-would have said.
+would have said. A row only a quarter was read for goes **in the gap it fills**, not at the end: the
+match below reaches a word broken across two rows only while the two rows are still next to each
+other, and a row parked at the end of the reading is a word nothing can put back together. A quarter
+that read a row already in hand a second way stands level with it rather than in a gap, and that one
+does go at the end — dropping it between a row and the row under it would part a wrap that could be
+read before.
 
 **One character inside those words is forgiven, and nothing more.** Vision reads the words on a
 screen well and the glyphs inside them not always — `day's` came back as `dav's` on a title that was

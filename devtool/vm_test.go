@@ -69,16 +69,16 @@ func TestVersionDriftIgnoresThePatch(t *testing.T) {
 // `--` may be parsed; devtool's own go before it, which is the whole reason `--front` can exist
 // without changing what reaches the guest's shell.
 func TestVMExecArgsReadsDevtoolsFlagsOnlyBeforeTheSeparator(t *testing.T) {
-	argv, front, window, err := vmExecArgs([]string{"--front", "34083", "--window", "Amenbo", "--", "/Users/admin/screen click 700 450"})
+	argv, front, window, shell, err := vmExecArgs([]string{"--front", "34083", "--window", "Amenbo", "--", "/Users/admin/screen", "click", "700", "450"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(argv, " ") != "/Users/admin/screen click 700 450" || front != 34083 || window != "Amenbo" {
-		t.Errorf("vmExecArgs = %v, %d, %q", argv, front, window)
+	if strings.Join(argv, " ") != "/Users/admin/screen click 700 450" || front != 34083 || window != "Amenbo" || shell {
+		t.Errorf("vmExecArgs = %v, %d, %q, %v", argv, front, window, shell)
 	}
 
 	// A guest line carrying our own flag names is handed over untouched — it is on the far side.
-	argv, front, _, err = vmExecArgs([]string{"--", "screen front 1 --window x"})
+	argv, front, _, _, err = vmExecArgs([]string{"--", "screen front 1 --window x"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,17 +86,48 @@ func TestVMExecArgsReadsDevtoolsFlagsOnlyBeforeTheSeparator(t *testing.T) {
 		t.Errorf("vmExecArgs without --front = %v, %d", argv, front)
 	}
 
-	if _, _, _, err := vmExecArgs([]string{"sw_vers"}); err == nil {
+	// --shell is ours, and it is what says the words are a line rather than a command.
+	_, _, _, shell, err = vmExecArgs([]string{"--shell", "--", "a; b"})
+	if err != nil || !shell {
+		t.Errorf("vmExecArgs --shell = %v, %v", shell, err)
+	}
+
+	if _, _, _, _, err := vmExecArgs([]string{"sw_vers"}); err == nil {
 		t.Error("vmExecArgs with no `--` returned no error; the guest command is handed over after it")
 	}
-	if _, _, _, err := vmExecArgs([]string{"--front", "34083", "--"}); err == nil {
+	if _, _, _, _, err := vmExecArgs([]string{"--front", "34083", "--"}); err == nil {
 		t.Error("vmExecArgs with nothing after `--` returned no error")
 	}
-	if _, _, _, err := vmExecArgs([]string{"sw_vers", "--", "sw_vers"}); err == nil {
+	if _, _, _, _, err := vmExecArgs([]string{"sw_vers", "--", "sw_vers"}); err == nil {
 		t.Error("vmExecArgs with a word before `--` returned no error; it reads as a command on the wrong side")
 	}
-	if _, _, _, err := vmExecArgs([]string{"--front", "-3", "--", "sw_vers"}); err == nil {
+	if _, _, _, _, err := vmExecArgs([]string{"--front", "-3", "--", "sw_vers"}); err == nil {
 		t.Error("vmExecArgs with a negative pid returned no error")
+	}
+}
+
+// TestVMExecLineQuotesEachWordUnlessItIsALine is the fix for what ssh does to an argument list: it
+// keeps none of it. Whatever is handed over is joined with spaces and read by a shell in the guest,
+// so a path with a space or a bracket in it arrives as several words of that shell's grammar.
+func TestVMExecLineQuotesEachWordUnlessItIsALine(t *testing.T) {
+	// The line devtool prints for opening a task's dev GUI. Unquoted, the brackets reached zsh as a
+	// glob and the open never happened.
+	got := vmExecLine([]string{"open", "-a", "/Applications/amenbo (dev 4621).app"}, false)
+	want := `'open' '-a' '/Applications/amenbo (dev 4621).app'`
+	if got != want {
+		t.Errorf("vmExecLine = %s, want %s", got, want)
+	}
+
+	// A quote inside a word is the one thing the quoting itself has to survive.
+	if got := vmExecLine([]string{"echo", "it's"}, false); got != `'echo' 'it'\''s'` {
+		t.Errorf("vmExecLine with a quote in it = %s", got)
+	}
+
+	// 🚨 --shell hands the words over whole. Quoting this one would have the guest looking for a
+	// program called "screen front 1; screen click 700 450".
+	line := "/Users/admin/screen front 1; /Users/admin/screen click 700 450"
+	if got := vmExecLine([]string{line}, true); got != line {
+		t.Errorf("vmExecLine --shell = %s, want it untouched", got)
 	}
 }
 

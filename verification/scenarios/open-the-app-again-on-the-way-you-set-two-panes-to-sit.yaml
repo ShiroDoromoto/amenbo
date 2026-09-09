@@ -24,9 +24,14 @@
 # Two is the one count this arrangement is asked at, and a project nobody has answered for is drawn
 # at one — so the road has to ask for two before there is a way to sit them. The two readings stay
 # apart all the same: `frames` says both panes are standing, which is what makes an arrangement of
-# two something there is to look at, and `panes-sit` says which way they went. Whether the split
-# itself comes back is `open-the-app-again-on-the-split-you-set-and-no-panes`; what is under test here
-# is the answer riding home beside it.
+# two something there is to look at, and `panes-sit` says which way they went. Whether the split and
+# the places themselves come back is `open-the-app-again-on-the-places-you-left`; what is under test
+# here is the answer riding home beside them.
+#
+# ── Why only one pane is opened after the run ────────────────────────────────────────────────────
+# Because the other one came back. The run keeps the place the road opened before it ended, with
+# nothing running in it, so the page after it holds one place and room for one more: a shell started
+# in the place that came back, a press for the one beside it, and the two are standing.
 #
 # The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
 # what the pane runs is the reader's own shell. Choosing the folder is what raises the project it
@@ -36,9 +41,10 @@ title: A run of the app keeps the way a reader set two panes to sit, and the nex
 description: >
   Open the terminal face, choose the folder it runs in, and get the pane down to a plain shell. Cut
   the page to two panes and ask for them to sit one above the other. End the run and open the app
-  again on the same store: the page comes back with nothing on it, so open two panes there. They are
-  stacked, each taking the whole width between the columns — the arrangement the reader set, and not
-  the side by side a page that was never answered for would draw.
+  again on the same store: the place comes back with nothing running in it, so start a shell there
+  and open the pane beside it. They are stacked, each taking the whole width between the columns —
+  the arrangement the reader set, and not the side by side a page that was never answered for would
+  draw.
 
 steps_gui:
   - type: action
@@ -93,14 +99,13 @@ steps_gui:
     with:
       face: terminal
 
-  # Two panes, because an arrangement of two is what is being read and the run brought none of the
-  # last one's places back. The folder is the project's own and it is the only one, which is why each
-  # of these is a press and nothing else.
+  # Two panes, because an arrangement of two is what is being read. One of them is the place the run
+  # brought back — standing with nothing in it, so a shell is started there — and the other is a
+  # press on the way in beside it. The folder is the project's own and it is the only one, which is
+  # why that press is a press and nothing else.
   - type: action
     domain: terminal
-    op: open-pane
-    with:
-      from: face
+    op: open-shell
 
   - type: action
     domain: terminal

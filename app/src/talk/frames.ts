@@ -4,11 +4,11 @@
 // the process in it comes and goes. Tied to the session, a name would come back on the next process
 // started there — a pane still called "the migration" running something else entirely.
 //
-// So the name is held where the frame is, and for as long: in the process, for this run only
-// (`app/src-tauri/src/frames.rs`). Nothing about it is kept — ids start again at "1" on the next run,
-// so a name kept against one would come back on a place nobody gave it to (`AMB-T-3687`). It is the
-// host that holds it rather than the window, because the face moves between the two windows and a
-// name belongs to the place wherever it is being drawn.
+// So the name is held where the frame is: in the host, for as long as the app is up
+// (`app/src-tauri/src/frames.rs`), and on that frame's own row in the store between runs — which is
+// what lets a pane come back under the name it was given (`AMB-D-869`). It is the host that holds it
+// rather than the window, because the face moves between the two windows and a name belongs to the
+// place wherever it is being drawn.
 //
 // **Two things name a frame and they are ranked** — `talk name` from the agent running in it, then
 // the person saying so, which is the last word for good. The ranking itself is the store's
@@ -104,8 +104,9 @@ export function frameLabel(names: FrameNames, frame: string, folder: string | nu
  * The arrangement the face is laid out from, or nothing where there is none to read.
  *
  * Read once, as the face comes up. What comes back is a shape and no sessions, so nothing about it
- * starts anything (`./layout`). In the first window of a run it holds the split and the project and
- * no frames at all — the places are this run's, and the last one's went with it (`AMB-T-3687`).
+ * starts anything (`./layout`). In the first window of a run it holds what the store kept: the split,
+ * the project, and the places the reader left, each with the folder it works in and what was started
+ * in it (`AMB-D-869`).
  */
 export async function savedLayout(): Promise<SavedLayout | null> {
   return await invoke<TalkLayoutDto | null>("talk_layout", {});

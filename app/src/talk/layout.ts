@@ -9,10 +9,11 @@
 //
 // **A frame is a place, not a process.** It exists once a terminal has been opened in it and stays
 // when one ends, which is what lets a pane keep its last output on the screen and what lets a name
-// outlive the session that earned it (`./frames`). Ids are handed out once and never reused within a
-// run: a name is held against the id, so a reused one would put an old name on a new place. **A place
-// does not outlive the app**, though — what is kept between runs is the split and the project, and
-// not the frames (`AMB-T-3687`).
+// outlive the session that earned it (`./frames`). **A place outlives the app as well**: what is kept
+// between runs is the split, the project and a row a pane — where it works, what was started in it,
+// what it is called and the handle it is resumed from (`AMB-D-869`). Ids are handed out once and
+// never reused, in this run or the next: a name and a way back into a session are both held against
+// the id, so a reused one would put them on a place neither belongs to.
 //
 // **A place is made by opening one, and by nothing else.** A place somebody started making and walked
 // away from is a box nobody can say anything about, so the folder is answered first
@@ -137,9 +138,10 @@ const UNANSWERED: Split = { count: DEFAULT_COUNT, orient: DEFAULT_ORIENT };
  * window is drawing the face writes it, and the one the terminal is split out into reads it as it
  * comes up (`app/src-tauri/src/frames.rs`).
  *
- * **What outlives the run is the splits and `project`, and nothing else** (`AMB-T-3687`). So an
- * arrangement read at the start of a run has no frames in it, and the face comes up on the project
- * the reader was looking at, at the split that project was left at, with one way in on it.
+ * **What outlives the run is the splits, `project`, `nextId` and the panes** (`AMB-D-869`). So an
+ * arrangement read at the start of a run comes back with the places the reader left, on the project
+ * they were looking at, at the split that project was left at — and with nothing running in any of
+ * them, because a session is a process and that one has ended.
  */
 export type SavedLayout = {
   count: number;
@@ -152,19 +154,20 @@ export type SavedLayout = {
    *  is not in it: what is kept is the answers, and a row for every project a reader ever walked
    *  through would say nothing about most of them. */
   splits?: Record<string, { count: number; orient?: Orient }>;
-  /** The next id to hand out. It is this run's, like the frames it numbers: an arrangement that comes
-   *  back with no frames starts again at the first. */
+  /** The next id to hand out. It goes up across runs as well as within one — what a pane is called
+   *  and the way back into its session are held against its id, so a number handed out twice would
+   *  put them on a place neither belongs to (`app/src-tauri/src/frames.rs`). */
   nextId: number;
   /** The project whose panes the face was showing. It answers for the window the terminal was split
    *  out into, which has no ledger to have taken one from — and only where the arrangement came back
    *  with no panes in it, since a pane names its own project (`../shell/TerminalFace`). */
   project?: number;
-  /** The panes, in the order they were opened — where each one is, and what has been written in the
-   *  box under it. The draft is here because this is how the two windows hand the face over, and it
-   *  goes no further: what this side writes to the store is the splits and the project
-   *  (`app/src-tauri/src/frames.rs`), so an arrangement read at the start of a run carries no
-   *  frames and therefore no drafts. */
-  frames: { id: string; project?: number; folder?: string; written?: string }[];
+  /** The panes, in the order they were opened — where each one is, what was started in it, and what
+   *  has been written in the box under it. The draft is the one part that goes no further than the
+   *  other window: a half-written sentence is the window's, and what the host writes down is the
+   *  place (`app/src-tauri/src/frames.rs`), so an arrangement read at the start of a run carries
+   *  panes and no drafts. */
+  frames: { id: string; project?: number; folder?: string; agent?: string; written?: string }[];
   /** The pane being worked in when the arrangement was last written. It is what the window split out
    *  of this face comes up on, so the reader lands where they left rather than on the first place of
    *  the first project (`AMB-D-753`). Read by that window and never by the board: which pane is
@@ -186,6 +189,16 @@ export type Frame = {
    *  the one pane that takes up a terminal somebody else started: where that one runs was settled
    *  when it started, and the pane learns it from the session rather than from the person. */
   readonly folder: string | null;
+  /**
+   * The id the agent in this pane was started as — a catalogue row, or a command the reader
+   * registered — and null for a plain prompt or a place nothing has been opened in yet.
+   *
+   * **It is read off the session and not off what was pressed for** (`./terminal`): a pane that
+   * adopted a terminal never asked, and what is running in one was settled when it started. It rides
+   * the arrangement because coming back to a pane means coming back to what was running in it —
+   * which is the half of the row a folder cannot carry (`AMB-D-869`).
+   */
+  readonly agent: string | null;
   /**
    * What has been written in the box under this pane and not sent yet (`AMB-D-864`).
    *
@@ -342,7 +355,7 @@ function withFrame(layout: Layout, frame: string, change: (was: Frame) => Frame)
  * and the screen moves to the page it landed on, because a person who opened a pane is looking at it.
  */
 export function openedFrame(layout: Layout, project: number, folder: string | null): { layout: Layout; frame: Frame } {
-  const frame: Frame = { id: String(layout.nextId), project, session: null, folder, written: "" };
+  const frame: Frame = { id: String(layout.nextId), project, session: null, folder, agent: null, written: "" };
   const next: Layout = {
     ...layout,
     frames: [...layout.frames, frame],
@@ -354,8 +367,8 @@ export function openedFrame(layout: Layout, project: number, folder: string | nu
   return { layout: focusOn(next, frame.id), frame };
 }
 
-/** A terminal has started in a frame. The folder is the one it was started in, which a pane that
- *  took one up learns here and nowhere else. */
+/** A terminal has started in a frame. The folder and the agent are the ones the session says it was
+ *  started with, which a pane that took one up learns here and nowhere else. */
 /**
  * What is written in the box under a pane, as far as it has been written (`Frame.written`).
  *
@@ -367,8 +380,14 @@ export function writing(layout: Layout, frame: string, written: string): Layout 
   return withFrame(layout, frame, (was) => ({ ...was, written }));
 }
 
-export function openedIn(layout: Layout, frame: string, session: string, folder: string | null): Layout {
-  return withFrame(layout, frame, (was) => ({ ...was, session, folder: folder ?? was.folder }));
+export function openedIn(
+  layout: Layout,
+  frame: string,
+  session: string,
+  folder: string | null,
+  agent: string | null,
+): Layout {
+  return withFrame(layout, frame, (was) => ({ ...was, session, folder: folder ?? was.folder, agent }));
 }
 
 /** The folder an agent says it is in now. A pane works in the folder it was **started** in, so this
@@ -582,10 +601,10 @@ export function reordered(layout: Layout, order: readonly Frame[]): Layout {
  * The arrangement as it is written down, for the other window to read.
  *
  * **What is written is the shape**: the split each project has been answered at, the panes in the
- * order they were opened, and for each the project it is one of, the folder it is working in and
- * whatever is written in the box under it. What is running is not — a session is a process, and a
- * pane drawn as though one were still in it would be the window saying something untrue. So a pane
- * comes over as a place with its folder on it, and nothing is started until somebody presses.
+ * order they were opened, and for each the project it is one of, the folder it is working in, what
+ * was started in it and whatever is written in the box under it. What is running is not — a session
+ * is a process, and a pane drawn as though one were still in it would be the window saying something
+ * untrue. So a pane comes over as a place, and nothing is started until somebody presses.
  *
  * **The draft is here and the session is not, for the same reason in either direction.** A sentence
  * somebody is part-way through writing is theirs and exists nowhere else, so it has to travel with
@@ -613,6 +632,9 @@ export function laidOut(layout: Layout): SavedLayout {
       id: frame.id,
       project: frame.project,
       ...(frame.folder === null ? {} : { folder: frame.folder }),
+      // What was started in it, left out where nothing has been: a place nobody has opened anything
+      // in has nothing to come back to.
+      ...(frame.agent === null ? {} : { agent: frame.agent }),
       // Left out where the box is empty, the way the folder is: what is written down is what there
       // is to say, and an empty box has nothing.
       ...(frame.written === "" ? {} : { written: frame.written }),
@@ -626,10 +648,11 @@ export function laidOut(layout: Layout): SavedLayout {
 /**
  * The layout an arrangement comes back as.
  *
- * **An arrangement with no frames in it still says something**, and it is what every window that
- * comes up after a run reads: the splits the person chose are theirs, and they come back whether or
- * not there is anything to draw with them (`AMB-T-3687`). What that leaves is the empty face, on the
- * project they were on and laid out the way they laid that project out.
+ * **The places come back and nothing is running in any of them** (`AMB-D-869`). A window that comes
+ * up after a run reads the panes the reader left — each with its folder and what was started in it —
+ * on the project they were on and at the split they set there. An arrangement with no panes in it
+ * still says something all the same: the splits are the person's answer, and they come back whether
+ * or not there is anything to draw with them.
  *
  * `onto` is the project the window is on, and it answers for the frames an older build wrote without
  * one: a pane whose project nothing records is put where the person is rather than dropped, and where
@@ -645,7 +668,12 @@ export function restored(saved: SavedLayout, onto: number | null): Layout {
     // the terminal is split out into (`Frame.written`). An arrangement that came from the store has
     // no frames in it at all, so a run that has just started has nothing here to take.
     frames.push({
-      id: frame.id, project, session: null, folder: frame.folder ?? null, written: frame.written ?? "",
+      id: frame.id,
+      project,
+      session: null,
+      folder: frame.folder ?? null,
+      agent: frame.agent ?? null,
+      written: frame.written ?? "",
     });
   }
   const first = frames[0];

@@ -2834,9 +2834,10 @@ impl From<OrientDto> for amenbo_core::frames::Orient {
 /// working in. **What was running is not here** — a session is a process, and a pane drawn as though
 /// one were still in it would be the window saying something untrue (`AMB-T-3607`).
 ///
-/// It is what the two windows hand the face between themselves with, and it lives as long as the app
-/// does. Only the splits and `project` outlive that (`amenbo_core::frames::SavedLayout`), so an
-/// arrangement read at the start of a run has no frames in it (`AMB-T-3687`).
+/// It is what the two windows hand the face between themselves with. What of it outlives the run is
+/// the store's word (`amenbo_core::frames::SavedLayout`): the splits, the project, and a row a pane
+/// — so an arrangement read at the start of a run comes with the places the reader left and nothing
+/// running in any of them (`AMB-D-869`).
 #[derive(Clone, Deserialize, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -2861,8 +2862,10 @@ pub struct TalkLayoutDto {
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     #[ts(optional, type = "Record<string, SplitDto>")]
     pub(crate) splits: std::collections::BTreeMap<u32, SplitDto>,
-    /// The next frame id to hand out — ids are never reused within a run, so a name stays on its own
-    /// frame. It is not kept: a run starts its ids at the first (`crate::frames`).
+    /// The next frame id to hand out. Ids are never reused — not within a run, and not across one:
+    /// what a pane is called and the way back into its session are both held against its id, so a
+    /// number handed out twice would put one pane's session behind another's name
+    /// (`amenbo_core::frames::SavedLayout::next_id`).
     pub(crate) next_id: u32,
     /// The project whose panes the face was showing. It is what the window the terminal is split out
     /// into opens as, where the arrangement came with no panes to name one — which is every window
@@ -2896,12 +2899,21 @@ pub struct TalkFrameDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) folder: Option<String>,
+    /// The id the agent in it was started as, and absent for a plain prompt. It is read off the
+    /// session rather than off what the pane asked for (`app/src/talk/layout.ts`), so a pane that
+    /// took up a terminal somebody else started carries what is actually in it.
+    ///
+    /// It goes on to the store, because coming back to a pane means coming back to what was running
+    /// in it (`amenbo_core::frames::SavedPane::agent`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) agent: Option<String>,
     /// What has been written in the box under this pane and not sent yet (`AMB-D-864`). Absent where
     /// nothing is.
     ///
     /// **It rides the arrangement because the arrangement is how the two windows hand the face over**
-    /// (`crate::frames`), and it stops there: what goes on to the store is the splits and the
-    /// project, so a draft is held for as long as the process is up and is never written down.
+    /// (`crate::frames`), and it stops there: a half-written sentence is the window's, so it is held
+    /// for as long as the process is up and is never written down.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) written: Option<String>,

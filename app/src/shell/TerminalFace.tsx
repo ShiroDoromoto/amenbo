@@ -337,9 +337,10 @@ export function TerminalFace({
   // an offer to open a terminal — the person presses for the ones they want, and a window that
   // started them all would be starting work nobody asked for.
   //
-  // **It comes with places only inside a run** (`AMB-T-3687`): the arrangement is what the two
+  // **It comes with places on both sides of a run** (`AMB-D-869`): the arrangement is what the two
   // windows share the face with, so the window this terminal is split out into gets the panes as they
-  // stand, and the first window of a run gets the split and the project alone.
+  // stand — and the first window of a run gets the rows the store kept, which are the same places
+  // with nothing running in them.
   //
   // **What is running is a different question, and it is answered here.** A session with no pane
   // drawing it is one the other window was drawing a moment ago — the face moving between the two
@@ -411,7 +412,7 @@ export function TerminalFace({
                 return made.frame;
               })());
             if (!frame) continue;
-            next = openedIn(next, frame.id, session.session, session.folder);
+            next = openedIn(next, frame.id, session.session, session.folder, session.agent);
           }
           // And the pane that was being worked in when the arrangement was last written, which is
           // the pane the person split the terminal out of (`../talk/layout`). It carries the page
@@ -570,10 +571,13 @@ export function TerminalFace({
     (frame) => sessionIn(frame) !== null,
   );
 
-  const opened = useCallback((frame: string, session: string, folder: string | null) => {
-    startNow.current.delete(frame);
-    setLayout((was) => openedIn(was, frame, session, folder));
-  }, []);
+  const opened = useCallback(
+    (frame: string, session: string, folder: string | null, agent: string | null) => {
+      startNow.current.delete(frame);
+      setLayout((was) => openedIn(was, frame, session, folder, agent));
+    },
+    [],
+  );
 
   /**
    * Make the pane, now that where it works has been answered.

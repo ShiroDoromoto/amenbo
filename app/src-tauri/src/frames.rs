@@ -1,12 +1,16 @@
 //! The talk window's face while the app is up: where its panes are, which one is being worked in, and
 //! what each is called.
 //!
-//! **None of it is kept** (`AMB-T-3687`). A frame is a place a terminal is drawn in, and the terminal
-//! died with the last run — so a place that came back would be an empty box drawn exactly like the way
-//! in beside it, and a named one would say that pressing carries on where the reader left off, which
-//! nothing in the window can do. What outlives the run is what the person *set* rather than what they
-//! opened: how each project's page is split, and which project they were on
-//! ([`amenbo_core::frames::SavedLayout`], in the store's device row).
+//! **The places come back and the sessions do not** (`AMB-D-869`). What outlives a run is a row a
+//! pane — where it works, what was started in it, what it is called and the handle it is resumed
+//! from — kept in the store's device row ([`amenbo_core::frames::SavedLayout`]). The process that
+//! was drawing into the pane died with the run, so the row is a way back in rather than a picture of
+//! one, and nothing here starts anything: which of the panes is woken, and when, is the window's
+//! (`AMB-T-4641`).
+//!
+//! **What is this run's alone stays here**: the half-written sentence under each pane, and which pane
+//! is being worked in. Both are about a person's place on a screen that is up, and an older write
+//! must not move either.
 //!
 //! **It is held here, and not in either window, because the face moves between them.** The board and
 //! the window a terminal is split out into are two webviews of one process: the arrangement is written
@@ -15,25 +19,46 @@
 //! (`AMB-D-753`, `AMB-T-3664`). A window reload lands in the same place — what is here is this
 //! process's, and it goes when the process does.
 
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
-use amenbo_core::frames::{FrameName, FrameNames, NamedBy, Orient, SavedLayout, Split};
+use amenbo_core::frames::{FrameName, FrameNames, NamedBy, Orient, SavedLayout, SavedPane, Split};
 
 use crate::commands::{open_store, open_store_read};
-use crate::dto::{FrameNameDto, TalkLayoutDto};
+use crate::dto::{FrameNameDto, TalkFrameDto, TalkLayoutDto};
 use crate::error::CmdError;
 
-/// The face as this run has it: the arrangement both windows read, and the names on its frames.
+/// The face as this run has it: the arrangement both windows read, the names on its frames, and the
+/// handles the sessions in them are resumed from.
 ///
-/// Managed state, one for the whole app. Nothing here is written to the store — the parts of the
-/// arrangement that are ([`SavedLayout`]) go out through [`save_talk_layout`] as they change.
+/// Managed state, one for the whole app. What of it is kept goes out through [`keep`] as it changes,
+/// assembled from all three: the window sends the places, and the two maps beside them are what the
+/// window never holds.
 #[derive(Default)]
 pub struct TalkFace {
-    /// What this run calls its frames.
+    /// What this run calls its frames — read back out of the store's panes as the first window of a
+    /// run comes up ([`talk_layout`]).
     names: Mutex<FrameNames>,
+    /// The handle each pane's provider is resumed from, by frame — a session id for most of them, and
+    /// the path of a home of its own for `codex` (`AMB-D-869`).
+    ///
+    /// **It is held beside the arrangement rather than in it** for the reason the names are: it is
+    /// the host that issues one, as it starts the session (`AMB-T-4639`, `AMB-T-4640`), and a value
+    /// that made the round trip through the window would be one a window could write. What is in here
+    /// now is what came back from the store, which is what keeps a handle from being dropped by the
+    /// next write of the arrangement.
+    hints: Mutex<BTreeMap<String, String>>,
     /// The arrangement as the window drawing the face last had it, or nothing before either window
     /// has laid one out in this run.
     layout: Mutex<Option<TalkLayoutDto>>,
+    /// What was last written to the store, so a write is made only where something it holds has
+    /// actually moved.
+    kept: Mutex<Option<SavedLayout>>,
+    /// Whether the panes the store kept have been read back into the two maps above. Once, per run:
+    /// both windows read the arrangement as they come up, and a second reading would put a name back
+    /// over one a person had changed in between.
+    seeded: AtomicBool,
 }
 
 /// What this run calls the talk window's frames — the whole of it, since the window draws every frame
@@ -55,7 +80,14 @@ pub fn name_frame(
     name: String,
     by: NamedBy,
 ) -> Vec<FrameNameDto> {
-    named(face.names.lock().expect("frame names lock").name(&frame, &name, by))
+    let now = named(face.names.lock().expect("frame names lock").name(&frame, &name, by));
+    // And the name goes down on that pane's row, where it is read back from on the next run. The
+    // write is made from here because a naming moves nothing else: the window sends the arrangement
+    // as the *shape* of the face changes, and what a pane is called is not part of that shape.
+    if let Some(layout) = face.layout.lock().expect("talk layout lock").clone() {
+        let _ = keep(&face, &layout);
+    }
+    now
 }
 
 /// The arrangement of the talk window, as this run has it — and where it has none yet, the splits and
@@ -79,15 +111,28 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
         // answer kept opens at whatever the window lays out for one, which is the window's to decide
         // (`app/src/talk/layout.ts`) — nothing here invents a count for it.
         let opening = kept.project.and_then(|project| kept.splits.get(&project)).copied();
+        seed(&face, &kept);
         TalkLayoutDto {
             count: opening.map_or(0, |split| split.count),
             orient: Some(opening.unwrap_or_default().orient.into()),
             splits: kept.splits.iter().map(|(project, split)| (*project, (*split).into())).collect(),
-            // The ids of a run that has ended name nothing here, so this one starts its own at the
-            // first.
-            next_id: 1,
+            next_id: kept.next_id,
             project: kept.project,
-            frames: Vec::new(),
+            // The places, with nothing running in any of them: a session died with the run that
+            // started it, and what the window draws is the offer to carry on (`AMB-D-869`).
+            frames: kept
+                .panes
+                .iter()
+                .map(|pane| TalkFrameDto {
+                    id: pane.id.clone(),
+                    project: Some(pane.project),
+                    folder: pane.folder.clone(),
+                    agent: pane.agent.clone(),
+                    written: None,
+                })
+                .collect(),
+            // Which pane was being worked in is this run's: it is where a reader is looking, and the
+            // last run has nothing to say about that.
             split_out: None,
         }
     }))
@@ -95,33 +140,88 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
 
 /// Keep the arrangement of the talk window, as the window drawing the face has it now.
 ///
-/// The whole of it is held for the other window to read; the splits and the project go on to the
-/// store, which is the part a person gets back after the app has been closed. That write is made only
-/// where one of the two has actually moved — the arrangement is kept on every press that changes the
-/// face, and the pane being worked in changes far more often than a split does.
-///
-/// **That guard is what lets a half-written sentence ride along.** The arrangement is sent again on
-/// every keystroke in a box under a pane ([`crate::dto::TalkFrameDto::written`]), and none of those
-/// reach the disk: what a keystroke moved is not a split and not the project, so the whole of it
-/// stops in the mutex above.
+/// The whole of it is held for the other window to read, and what outlives the run goes on to the
+/// store ([`keep`]).
 #[tauri::command]
 pub fn save_talk_layout(
     face: tauri::State<'_, TalkFace>,
     layout: TalkLayoutDto,
 ) -> Result<(), CmdError> {
-    let keep = SavedLayout { project: layout.project, splits: splits_of(&layout) };
-    let moved = {
-        let mut held = face.layout.lock().expect("talk layout lock");
-        let moved = held.as_ref().map_or(true, |was| {
-            splits_of(was) != keep.splits || was.project != keep.project
-        });
-        *held = Some(layout);
-        moved
-    };
-    if moved {
-        open_store()?.save_layout(&keep)?;
+    *face.layout.lock().expect("talk layout lock") = Some(layout.clone());
+    keep(&face, &layout)
+}
+
+/// Take the halves of a pane's row no window holds — what it is called, and the way back into what
+/// was running in it — out of what the store kept.
+///
+/// **Once a run.** Both windows read the arrangement as they come up, and a second reading would put
+/// a name back over one a person had changed in between. What was read is remembered as written as
+/// well, so the window's first arrangement — the same row, come back around — is not written out
+/// again.
+fn seed(face: &TalkFace, kept: &SavedLayout) {
+    if face.seeded.swap(true, Ordering::SeqCst) {
+        return;
     }
+    let mut names = face.names.lock().expect("frame names lock");
+    let mut hints = face.hints.lock().expect("resume hints lock");
+    for pane in &kept.panes {
+        if let Some(name) = &pane.name {
+            names.name(&pane.id, &name.name, name.by);
+        }
+        if let Some(resume) = &pane.resume {
+            hints.insert(pane.id.clone(), resume.clone());
+        }
+    }
+    *face.kept.lock().expect("kept layout lock") = Some(kept.clone());
+}
+
+/// Write down what outlives the run, where anything in it has moved.
+///
+/// **The guard is what lets a half-written sentence ride along.** The arrangement is sent again on
+/// every keystroke in a box under a pane ([`crate::dto::TalkFrameDto::written`]), and none of those
+/// reach the disk: what a keystroke moved is not part of what is kept, so the row comes out
+/// identical to the one already written and the write is not made.
+///
+/// What was written is remembered only once the store has taken it, so a write that failed is made
+/// again by the next change rather than counted as done.
+fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
+    let keeping = SavedLayout {
+        project: layout.project,
+        splits: splits_of(layout),
+        panes: panes_of(face, layout),
+        next_id: layout.next_id,
+    };
+    if face.kept.lock().expect("kept layout lock").as_ref() == Some(&keeping) {
+        return Ok(());
+    }
+    open_store()?.save_layout(&keeping)?;
+    *face.kept.lock().expect("kept layout lock") = Some(keeping);
     Ok(())
+}
+
+/// The panes as they are written down: what the window sent about each place, and beside it the two
+/// halves the window never holds — what the frame is called, and the handle it is resumed from.
+///
+/// A frame the window sends with no project is let go rather than kept under a guess. A pane belongs
+/// to a project and is drawn on that project's page, so one with nowhere to be put back is one no
+/// window could draw again.
+fn panes_of(face: &TalkFace, layout: &TalkLayoutDto) -> Vec<SavedPane> {
+    let names = face.names.lock().expect("frame names lock");
+    let hints = face.hints.lock().expect("resume hints lock");
+    layout
+        .frames
+        .iter()
+        .filter_map(|frame| {
+            Some(SavedPane {
+                id: frame.id.clone(),
+                project: frame.project?,
+                folder: frame.folder.clone(),
+                agent: frame.agent.clone(),
+                name: names.all().get(&frame.id).cloned(),
+                resume: hints.get(&frame.id).cloned(),
+            })
+        })
+        .collect()
 }
 
 /// Which way the arrangement says a two-pane page sits. An arrangement that says nothing sits the way
@@ -164,4 +264,97 @@ fn named(names: &std::collections::BTreeMap<String, FrameName>) -> Vec<FrameName
             },
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A place as the window sends one over.
+    fn frame(id: &str, agent: Option<&str>) -> TalkFrameDto {
+        TalkFrameDto {
+            id: id.to_string(),
+            project: Some(1),
+            folder: Some("/work/repo".to_string()),
+            agent: agent.map(str::to_string),
+            written: Some("half a sentence".to_string()),
+        }
+    }
+
+    fn layout(frames: Vec<TalkFrameDto>) -> TalkLayoutDto {
+        TalkLayoutDto {
+            count: 2,
+            orient: None,
+            splits: std::collections::BTreeMap::new(),
+            next_id: 3,
+            project: Some(1),
+            frames,
+            split_out: Some("1".to_string()),
+        }
+    }
+
+    /// A row is the window's places joined to what only the host has: the name on the frame, and the
+    /// handle the session in it is resumed from.
+    #[test]
+    fn a_row_is_the_window_and_the_host_together() {
+        let face = TalkFace::default();
+        face.names.lock().unwrap().name("1", "the migration", NamedBy::Person);
+        face.hints.lock().unwrap().insert("1".to_string(), "0f9c".to_string());
+
+        let panes = panes_of(&face, &layout(vec![frame("1", Some("claude")), frame("2", None)]));
+
+        assert_eq!(panes.len(), 2);
+        assert_eq!(panes[0].agent.as_deref(), Some("claude"));
+        assert_eq!(panes[0].name.as_ref().map(|named| named.name.as_str()), Some("the migration"));
+        assert_eq!(panes[0].name.as_ref().map(|named| named.by), Some(NamedBy::Person));
+        assert_eq!(panes[0].resume.as_deref(), Some("0f9c"));
+        // And a pane the host has nothing to say about is a row of what the window sent.
+        assert_eq!(panes[1].name, None);
+        assert_eq!(panes[1].resume, None);
+    }
+
+    /// A place the window sends with no project is let go rather than kept under a guess: a pane is
+    /// drawn on its project's page, so one with nowhere to be put back is one nothing could draw.
+    #[test]
+    fn a_place_with_no_project_is_not_kept() {
+        let face = TalkFace::default();
+        let mut orphan = frame("1", None);
+        orphan.project = None;
+
+        assert!(panes_of(&face, &layout(vec![orphan])).is_empty());
+    }
+
+    /// What the store kept comes back into the two maps the window does not hold — with the rank the
+    /// name was given at, so an agent's `talk name` does not take a person's word back off a frame
+    /// that has just come back.
+    #[test]
+    fn the_panes_that_came_back_name_their_frames_again() {
+        let face = TalkFace::default();
+        let kept = SavedLayout {
+            project: Some(1),
+            splits: std::collections::BTreeMap::new(),
+            panes: vec![SavedPane {
+                id: "1".to_string(),
+                project: 1,
+                folder: Some("/work/repo".to_string()),
+                agent: Some("claude".to_string()),
+                name: Some(FrameName { name: "the migration".to_string(), by: NamedBy::Person }),
+                resume: Some("0f9c".to_string()),
+            }],
+            next_id: 2,
+        };
+
+        seed(&face, &kept);
+        assert_eq!(face.names.lock().unwrap().all()["1"].by, NamedBy::Person);
+        assert_eq!(face.hints.lock().unwrap()["1"], "0f9c");
+        // What was read stands as what is written, so the window's first arrangement is not written
+        // straight back out.
+        assert_eq!(face.kept.lock().unwrap().as_ref(), Some(&kept));
+
+        // And the second window of the run takes nothing: a name a person changed in between is
+        // theirs, and a re-reading would put the row's back over it.
+        face.names.lock().unwrap().name("1", "reading the store", NamedBy::Person);
+        seed(&face, &kept);
+        assert_eq!(face.names.lock().unwrap().all()["1"].name, "reading the store");
+    }
 }

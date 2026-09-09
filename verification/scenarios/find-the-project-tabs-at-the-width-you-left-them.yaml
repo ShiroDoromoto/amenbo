@@ -29,9 +29,9 @@
 # nothing is typed into it: what this road is about is the width beside a pane, not the pane.
 #
 # ── Why the names are left drawn ─────────────────────────────────────────────────────────────────
-# Folded, the column is the mark and nothing else, and a mark is one size — there is no edge on it to
-# take hold of. So every step here is walked with the names drawn, which is the state the width this
-# road is about belongs to.
+# Folded, the column is the mark with a count on its corner, and neither is a size a hand can take —
+# there is no edge on it to take hold of. So every step here is walked with the names drawn, which
+# is the state the width this road is about belongs to.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # A width is a thing on a screen, and the binary is handed paths.

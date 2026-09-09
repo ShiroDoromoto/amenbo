@@ -527,6 +527,7 @@ export const vi: Translation = {
     "face.railFolders": "Thư mục",
     "face.tabsCompact": "Ẩn tên",
     "face.tabsNamed": "Hiện tên",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Số khung trên màn hình",
     "face.paneOrient": "Cách xếp hai khung",
     "face.paneAcross": "Cạnh nhau",

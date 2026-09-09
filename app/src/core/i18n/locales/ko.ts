@@ -523,6 +523,7 @@ export const ko: Translation = {
     "face.railFolders": "폴더",
     "face.tabsCompact": "이름 숨기기",
     "face.tabsNamed": "이름 표시",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "화면에 보일 페인 수",
     "face.paneOrient": "두 페인의 배치",
     "face.paneAcross": "좌우로 나란히",

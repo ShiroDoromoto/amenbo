@@ -550,6 +550,7 @@ export const pl: Translation = {
     "face.railFolders": "Foldery",
     "face.tabsCompact": "Ukryj nazwy",
     "face.tabsNamed": "Pokaż nazwy",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Panele na ekranie",
     "face.paneOrient": "Układ dwóch paneli",
     "face.paneAcross": "Obok siebie",

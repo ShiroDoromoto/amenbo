@@ -794,7 +794,7 @@ input[type="color"] {
 }
 /* One project. It is the row the rail's projects are, because it is the same choice — what is picked
    here is what the whole face shows — and it is marked the same way when it is the one on the screen.
-   Positioned, because compact the dot has nowhere in the row to sit and goes to the corner. */
+   Positioned, because compact the count has nowhere in the row to sit and goes to the corner. */
 .ptabs__tab {
   position: relative; flex: 0 0 auto;
   display: flex; align-items: center; gap: var(--s-2);
@@ -828,8 +828,28 @@ input[type="color"] {
    keeps a stored image from an older bake, or one that arrived some other way, from stretching. */
 .ptabs__icon { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ptabs__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Compact: the mark alone, centred. There is no beside left to put anything in, and the tab keeps
-   the width it had, so folding the names away moves no edge. */
+/* How many panes the project has open. It is the sidebar's count on the task face (`.navitem__count`),
+   down to the radius and the muted ink, because it is the same project being counted and a reader
+   moving between the two faces should not have to work out that they mean the same thing (`AMB-D-848`).
+   The accent arm is deliberately not taken: that colour is the inbox asking to be looked at, and a
+   pane count is only saying what is there. */
+.ptabs__count {
+  margin-left: auto; font-size: var(--fs-xs); color: var(--c-text-muted);
+  background: var(--c-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center;
+}
+/* Compact: the count goes to the corner of the tab, over the mark rather than beside it, because
+   there is no beside left. Smaller and ringed in the column's own ground, the same way the sidebar
+   does it at the same width — at 46px a badge the size of the one beside a name would lie across the
+   letter that tells one project from another. */
+.ptabs--compact .ptabs__count {
+  position: absolute; top: 0; right: 0; margin-left: 0;
+  min-width: 0; padding: 0 3px;
+  font-size: 10px; line-height: 14px; border-radius: 7px;
+  box-shadow: 0 0 0 2px var(--c-surface);
+}
+/* Compact: the mark, centred, with the count off the row and onto the corner over it. There is no
+   beside left to put anything in, and the tab keeps the width it had, so folding the names away
+   moves no edge. */
 .ptabs--compact .ptabs__tab { justify-content: center; }
 /* The way between the two widths (`AMB-D-838`). It is pressed once and left, where the tabs above it
    are pressed all day — but drawn as a faint mark on the column's own ground it could not be found at

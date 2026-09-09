@@ -597,6 +597,11 @@ const ui = {
   // task face folds with the same two words.
   "face.tabsCompact": "Hide the names",
   "face.tabsNamed": "Show the names",
+  // What a project tab is read out as once it has panes open: the project, then how many
+  // (`face.panes`, counted). The label on the button is the whole of what is read, so the badge
+  // drawn inside it is never reached and the number has to be said here. The two are joined by
+  // this language's own punctuation rather than by a space, which is not a pause everywhere.
+  "face.tabPanes": "{name}, {panes}",
   "face.paneCount": "Panes on screen",
   // The orientation, named in words because the control itself is drawn
   // (`app/src/shell/TerminalFace.tsx`): a shape with nothing said about it is a

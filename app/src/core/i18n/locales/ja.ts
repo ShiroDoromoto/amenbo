@@ -536,6 +536,7 @@ export const ja: Translation = {
     "face.railFolders": "フォルダ",
     "face.tabsCompact": "名前を隠す",
     "face.tabsNamed": "名前を出す",
+    "face.tabPanes": "{name}、{panes}",
     "face.paneCount": "画面に出すペインの枚数",
     "face.paneOrient": "2枚の並べ方",
     "face.paneAcross": "横に並べる",

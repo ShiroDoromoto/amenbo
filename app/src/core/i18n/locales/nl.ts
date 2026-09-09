@@ -524,6 +524,7 @@ export const nl: Translation = {
     "face.railFolders": "Mappen",
     "face.tabsCompact": "Namen verbergen",
     "face.tabsNamed": "Namen tonen",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Deelvensters op het scherm",
     "face.paneOrient": "Indeling van de twee deelvensters",
     "face.paneAcross": "Naast elkaar",

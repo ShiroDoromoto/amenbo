@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_LAYOUT, goProject, openedFrame, openedIn, type Layout } from "../talk/layout";
 import type { Project } from "../mock/types";
 import { ProjectTabs } from "./ProjectTabs";
-import { t } from "../core/i18n";
+import { t, tf, tn } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -52,6 +52,10 @@ async function draw(compact = false, projects: Project[] = PROJECTS) {
 const tabs = () => [...container.querySelectorAll<HTMLElement>(".ptabs__tab")];
 const marks = () => tabs().map((one) => one.querySelector(".ptabs__mark")!.textContent);
 const names = () => tabs().map((one) => one.querySelector(".ptabs__name")?.textContent ?? null);
+const counts = () => tabs().map((one) => one.querySelector(".ptabs__count")?.textContent ?? null);
+/** What a tab with panes open is read out as, written from the dictionary rather than in English. */
+const spoken = (name: string, panes: number) =>
+  tf("face.tabPanes", { name, panes: tn("face.panes", panes) });
 
 beforeEach(() => {
   project.mockReset();
@@ -86,11 +90,12 @@ describe("the project tabs", () => {
     await draw(true);
     expect(names()).toEqual([null, null]);
     expect(marks()).toEqual(["a", "t"]);
-    expect(tabs().map((one) => one.getAttribute("aria-label"))).toEqual(["amenbo", "the site"]);
+    expect(tabs().map((one) => one.getAttribute("aria-label")))
+      .toEqual([spoken("amenbo", 1), spoken("the site", 1)]);
   });
 
   // What a project shows for itself, where somebody gave it one (`AMB-D-838`). It stands in the mark's
-  // place rather than beside it — that place is the whole of a compact tab.
+  // place rather than beside it — that place is the whole of what a compact tab says it is.
   it("draws the image a project was given in place of its colour and its letter", async () => {
     await draw(false, MARKED);
     expect(marks()).toEqual(["a", ""]);
@@ -111,7 +116,7 @@ describe("the project tabs", () => {
   it("still draws it once the names are folded away", async () => {
     await draw(true, MARKED);
     expect(tabs()[1].querySelector(".ptabs__icon")).not.toBeNull();
-    expect(tabs()[1].getAttribute("aria-label")).toBe("the site");
+    expect(tabs()[1].getAttribute("aria-label")).toBe(spoken("the site", 1));
   });
 
   it("asks for the other width, and says which one it is offering", async () => {
@@ -129,5 +134,29 @@ describe("the project tabs", () => {
     expect(back.querySelector("svg")!.getAttribute("data-icon")).toBe("foldRight");
     await act(async () => { back.click(); });
     expect(folded).toHaveBeenLastCalledWith(false);
+  });
+
+  // How many panes the project has open, so a reader can tell where the work is without going into
+  // each project to look. It is the frames, whatever is running in them.
+  it("says how many panes a project has open", async () => {
+    await draw();
+    expect(counts()).toEqual(["1", "1"]);
+    expect(tabs()[0].getAttribute("aria-label")).toBe(spoken("amenbo", 1));
+  });
+
+  // A project nobody has opened a terminal in would otherwise carry a nought to read for nothing,
+  // and its name would be read out with a count that counts nothing.
+  it("leaves the count off a project with nothing open", async () => {
+    const archive = { id: 3, name: "the archive", color: "#888888", icon: null };
+    const withEmpty = [...PROJECTS, archive] as unknown as Project[];
+    await draw(false, withEmpty);
+    expect(counts()).toEqual(["1", "1", null]);
+    expect(tabs()[2].getAttribute("aria-label")).toBe("the archive");
+  });
+
+  // Folding takes the names, not the count: the number is why a folded column can still be read.
+  it("keeps the count once the names are folded away", async () => {
+    await draw(true);
+    expect(counts()).toEqual(["1", "1"]);
   });
 });

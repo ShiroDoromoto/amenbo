@@ -545,6 +545,7 @@ export const fr: Translation = {
     "face.railFolders": "Dossiers",
     "face.tabsCompact": "Masquer les noms",
     "face.tabsNamed": "Afficher les noms",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Volets à l'écran",
     "face.paneOrient": "Disposition des deux volets",
     "face.paneAcross": "Côte à côte",

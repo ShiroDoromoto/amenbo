@@ -524,6 +524,7 @@ export const hi: Translation = {
     "face.railFolders": "फ़ोल्डर",
     "face.tabsCompact": "नाम छिपाएँ",
     "face.tabsNamed": "नाम दिखाएँ",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "स्क्रीन पर पैन",
     "face.paneOrient": "दो पैन की व्यवस्था",
     "face.paneAcross": "अगल-बगल",

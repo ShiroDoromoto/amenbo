@@ -524,6 +524,7 @@ export const tr: Translation = {
     "face.railFolders": "Klasörler",
     "face.tabsCompact": "Adları gizle",
     "face.tabsNamed": "Adları göster",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Ekrandaki bölme sayısı",
     "face.paneOrient": "İki bölmenin düzeni",
     "face.paneAcross": "Yan yana",

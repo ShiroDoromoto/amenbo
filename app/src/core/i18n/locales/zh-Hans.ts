@@ -524,6 +524,7 @@ export const zhHans: Translation = {
     "face.railFolders": "文件夹",
     "face.tabsCompact": "隐藏名称",
     "face.tabsNamed": "显示名称",
+    "face.tabPanes": "{name}，{panes}",
     "face.paneCount": "屏幕上的窗格数",
     "face.paneOrient": "两个窗格的排布",
     "face.paneAcross": "左右并排",

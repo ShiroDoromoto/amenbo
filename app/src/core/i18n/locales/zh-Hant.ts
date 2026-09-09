@@ -524,6 +524,7 @@ export const zhHant: Translation = {
     "face.railFolders": "資料夾",
     "face.tabsCompact": "隱藏名稱",
     "face.tabsNamed": "顯示名稱",
+    "face.tabPanes": "{name}，{panes}",
     "face.paneCount": "畫面上的窗格數",
     "face.paneOrient": "兩個窗格的排列",
     "face.paneAcross": "左右並排",

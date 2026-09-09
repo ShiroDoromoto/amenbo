@@ -545,6 +545,7 @@ export const it: Translation = {
     "face.railFolders": "Cartelle",
     "face.tabsCompact": "Nascondi i nomi",
     "face.tabsNamed": "Mostra i nomi",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Riquadri sullo schermo",
     "face.paneOrient": "Disposizione dei due riquadri",
     "face.paneAcross": "Affiancati",

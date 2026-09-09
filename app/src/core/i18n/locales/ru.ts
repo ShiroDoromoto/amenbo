@@ -553,6 +553,7 @@ export const ru: Translation = {
     "face.railFolders": "Папки",
     "face.tabsCompact": "Скрывать названия",
     "face.tabsNamed": "Показывать названия",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Панелей на экране",
     "face.paneOrient": "Расположение двух панелей",
     "face.paneAcross": "Рядом",

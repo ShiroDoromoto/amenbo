@@ -53,7 +53,10 @@ const RETIRED_NAMES_META: &str = "talk.frame_names";
 /// drawn on has the rest of what is happening to fit on it beside the name. The bound is here rather
 /// than at the two doors because it is one rule about names, and the window gives what is left of a
 /// long one an ellipsis rather than the room.
-const NAME_LIMIT: usize = 80;
+///
+/// It is public because it is also the bound every provider's own rename has to clear: a name cut to
+/// this length is one [`crate::harness::Rename`] can hand on without asking (`AMB-D-872`).
+pub const NAME_LIMIT: usize = 80;
 
 /// Who named a frame. The order of the variants is the order of their authority: a naming may replace
 /// one of its own rank or lower, never a higher one.

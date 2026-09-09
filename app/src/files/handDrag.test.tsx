@@ -29,6 +29,8 @@ let running: string[];
 /** The pane the pointer is over, as the face would draw the surface on it. */
 let overFrame: string | null;
 let press: ((wholes: string[], event: unknown) => void) | null;
+/** Whether the tree is still drawing the row, which is what a scroll under a held pointer decides. */
+let rowThere: boolean;
 
 function Face() {
   const drag = useHandDrag(
@@ -40,10 +42,10 @@ function Face() {
   // One row and two panes. The panes answer for what is under the pointer, which in a laid-out
   // browser is what `elementFromPoint` would have found.
   return createElement("div", null,
-    createElement("li", {
+    rowThere ? createElement("li", {
       className: "files__item", id: "row",
       onPointerDown: (e: never) => press?.(["/work/a/notes.md"], e),
-    }, "notes.md"),
+    }, "notes.md") : null,
     createElement("div", { [HAND_ATTR]: "1", id: "one" }),
     createElement("div", { [HAND_ATTR]: "2", id: "two" }));
 }
@@ -69,6 +71,20 @@ async function to(kind: "pointermove" | "pointerup" | "pointercancel", x: number
   });
 }
 
+/** Stop drawing the row, the way the tree's window does when the list scrolls under a held row. */
+async function unmountRow() {
+  rowThere = false;
+  await act(async () => { root.render(createElement(Face)); });
+}
+
+/** A release the window hears, which is all there is left once the row has gone. */
+async function releaseOnWindow(x: number, y: number) {
+  await act(async () => {
+    window.dispatchEvent(pointer("pointerup", x, y));
+    await new Promise((r) => setTimeout(r, 20));
+  });
+}
+
 /** The row travels far enough to become a drag, over whatever `under` is answering with. */
 async function carryTo(x: number) {
   await to("pointermove", x, 100);
@@ -77,6 +93,7 @@ async function carryTo(x: number) {
 beforeEach(() => {
   landed = [];
   running = ["1", "2"];
+  rowThere = true;
   press = null;
   overFrame = null;
   container = document.createElement("div");
@@ -195,6 +212,42 @@ describe("letting a row go", () => {
 
     await to("pointerup", 300, 100);
     expect(landed).toEqual([]);
+  });
+
+  /**
+   * The tree draws a window of its lines at a time, so a list that scrolls under a held row takes
+   * that row out of the document. The gesture is the person's and not the row's, so it goes on
+   * (`AMB-T-4619`).
+   */
+  it("carries on after the row it was taken from stops being drawn", async () => {
+    await down(100, 100);
+    under(document.getElementById("one"));
+    await carryTo(300);
+    await unmountRow();
+
+    under(document.getElementById("two"));
+    await releaseOnWindow(300, 100);
+    expect(landed, "the row that stopped being drawn was never handed to the pane")
+      .toEqual([["2", ["/work/a/notes.md"]]]);
+    expect(document.querySelector(".files__ghost"), "the ghost stayed on the page").toBeNull();
+    expect(document.body.classList.contains("is-dragging")).toBe(false);
+  });
+
+  /** What the stuck gesture cost was every press after it: `held` stayed full and turned them away. */
+  it("takes the next row up after one stopped being drawn mid-carry", async () => {
+    await down(100, 100);
+    under(document.getElementById("one"));
+    await carryTo(300);
+    await unmountRow();
+    await releaseOnWindow(300, 100);
+
+    rowThere = true;
+    await act(async () => { root.render(createElement(Face)); });
+    await down(100, 100);
+    under(document.getElementById("one"));
+    await carryTo(300);
+    await to("pointerup", 300, 100);
+    expect(landed.length, "no row could be taken up again").toBe(2);
   });
 
   /** The press outliving the gesture would leave the page marked as dragging with nothing held. */

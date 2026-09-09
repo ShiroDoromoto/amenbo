@@ -115,13 +115,16 @@ export function useHandDrag(
       if (frame !== 0) cancelAnimationFrame(frame);
       ghost?.node.remove();
       document.body.classList.remove("is-dragging");
-      row.removeEventListener("pointermove", move);
-      row.removeEventListener("pointerup", up);
-      row.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
       window.removeEventListener("contextmenu", noMenu, true);
       if (row.hasPointerCapture(pointerId)) row.releasePointerCapture(pointerId);
       setOverFrame(null);
     };
+
+    /** Whether an event is the pointer this gesture is holding — the window hears every one. */
+    const mine = (e: PointerEvent) => e.pointerId === pointerId;
 
     // 🚨 Without it a right click during the drag freezes the gesture on macOS, which delivers no
     // pointer event at all until the menu is dismissed (`../screens/boardDrag`).
@@ -153,6 +156,7 @@ export function useHandDrag(
     };
 
     const move = (e: PointerEvent) => {
+      if (!mine(e)) return;
       at = { x: e.clientX, y: e.clientY };
       if (ghost === null) {
         if (!draggedFar(grabbedAt, at)) return;
@@ -166,6 +170,7 @@ export function useHandDrag(
     };
 
     const up = (e: PointerEvent) => {
+      if (!mine(e)) return;
       const dragged = ghost !== null;
       const to = { x: e.clientX, y: e.clientY };
       stop();
@@ -175,11 +180,19 @@ export function useHandDrag(
       if (over !== null && can.current(over)) land.current(over, wholes);
     };
 
-    const cancel = () => stop();
+    const cancel = (e: PointerEvent) => { if (mine(e)) stop(); };
 
-    row.addEventListener("pointermove", move);
-    row.addEventListener("pointerup", up);
-    row.addEventListener("pointercancel", cancel);
+    // 🚨 Hung on the window and not on the row, because **the row does not outlive the gesture**.
+    // The tree draws a window of its lines at a time (`./FolderTree`), so a list that scrolls under
+    // a held pointer takes the grabbed row out of the document. Listeners that went with it could
+    // end the gesture only if the browser fired one last `pointercancel` at the node it had just
+    // removed — WebKit does, and that unstated favour was all that held this together. Where it is
+    // not done, `stop` never runs: the ghost stays on the page, `is-dragging` stays on the body,
+    // and `held` stays full, which turns every later press away until the page is reloaded
+    // (`AMB-T-4619`). The window is there for as long as the press is, whatever becomes of the row.
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
     window.addEventListener("contextmenu", noMenu, true);
     held.current = { stop };
   }, []);

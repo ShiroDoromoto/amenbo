@@ -2917,6 +2917,17 @@ pub struct TalkFrameDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) written: Option<String>,
+    /// Whether this place came back with a way into what was running in it (`AMB-D-869`).
+    ///
+    /// **It travels one way only.** The host answers it as the arrangement comes back, and the
+    /// window reads it to know which places to open without being pressed (`AMB-T-4641`); an
+    /// arrangement sent the other way says nothing about it, because the handle it stands for is
+    /// never a window's to hold (`crate::frames::TalkFace`).
+    ///
+    /// A place with no way back — a plain shell, a line the reader registered (`AMB-D-794`) — comes
+    /// back false and is drawn as the place it is, with the way in on it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) resumes: bool,
 }
 
 /// **The store's identity, in the parts a reader has to tell apart** (`AMB-D-856`). It was one string

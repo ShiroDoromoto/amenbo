@@ -200,7 +200,7 @@ describe("where a pane works", () => {
 
   it("is learned from the session for a pane that took one up rather than starting it", () => {
     const adopted = openedIn({ ...EMPTY_LAYOUT, project: 1, frames: [
-      { id: "1", project: 1, session: null, folder: null, agent: null, written: "" },
+      { id: "1", project: 1, session: null, folder: null, agent: null, resumes: false, written: "" },
     ], nextId: 2 }, "1", "s1", null, "claude");
     // What is running comes off the session as well, and by the same reasoning: a pane that adopted
     // one never asked for it.
@@ -390,6 +390,38 @@ describe("an arrangement kept between runs", () => {
     // nobody can account for.
     const bare = restored({ count: 2, nextId: 3, frames: [{ id: "1", project: 1 }] }, 1);
     expect(bare.frames[0]!.agent).toBeNull();
+  });
+
+  it("marks the place that came back holding a way into what was running in it", () => {
+    // What the mark is for is the press it spares: the face opens such a place without being asked
+    // (`AMB-D-869`), and every other place is drawn with the way in on it.
+    const back = restored({
+      count: 2,
+      nextId: 3,
+      project: 1,
+      frames: [
+        { id: "1", project: 1, folder: "/work/repo", agent: "claude", resumes: true },
+        { id: "2", project: 1, folder: "/work/repo", agent: "claude" },
+        // A plain shell: the row says nothing was left to come back to, however it is marked.
+        { id: "3", project: 1, folder: "/work/repo", resumes: true },
+      ],
+    }, 1);
+    expect(back.frames.map((one) => one.resumes)).toEqual([true, false, false]);
+  });
+
+  it("stops calling a place one that came back, once a terminal has started in it", () => {
+    // A page turned away from and back again mounts the pane afresh, and a mark left standing would
+    // read as a second reason to start something there.
+    const back = restored({
+      count: 2,
+      nextId: 2,
+      project: 1,
+      frames: [{ id: "1", project: 1, folder: "/work/repo", agent: "claude", resumes: true }],
+    }, 1);
+    const open = openedIn(back, "1", "s1", "/work/repo", "claude");
+    expect(open.frames[0]!.resumes).toBe(false);
+    // And it is not written down: what the mark stands for is a handle the window never holds.
+    expect(laidOut(open).frames[0]).not.toHaveProperty("resumes");
   });
 
   it("puts a pane whose project nothing recorded where the person is looking", () => {

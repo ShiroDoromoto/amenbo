@@ -81,6 +81,7 @@ vi.mock("./terminal", () => ({
         agent?: string | null;
         adopt?: boolean;
         session?: string | null;
+        resume?: string | null;
       },
     ) => {
       hoisted.panes.push(start);
@@ -247,6 +248,41 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
     expect(hoisted.panes).toEqual([
       { adopt: false, frame: "7", cwd: "/work/here", agent: "codex-cli" },
     ]);
+  });
+
+  it("opens a place that came back on what was running in it, and asks nothing on the way", async () => {
+    // The press this spares is what `AMB-D-869` is about: where the pane works and what runs in it
+    // were both answered a run ago, so nothing is probed, nothing is drawn to choose from, and the
+    // answer is not written down again as though somebody had just made it.
+    hoisted.answers = [wake({ offered: ["claude-code"], settled: "claude-code" })];
+    const root = document.createElement("div");
+    document.body.replaceChildren(root);
+    await mountAgentFrame(
+      root,
+      "en",
+      events,
+      { frame: "3", cwd: "/work/here", adopt: false, resume: "claude-code" },
+      7,
+    );
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(hoisted.panes).toEqual([
+      { adopt: false, frame: "3", cwd: "/work/here", agent: "claude-code" },
+    ]);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_probe");
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_chose");
+  });
+
+  it("asks where a place that came back has no folder to come back to", async () => {
+    // A row with no folder is one nothing could be started in, so the invitation stands rather than
+    // a pane opening in whatever this process is standing in.
+    hoisted.answers = [wake({ offered: ["claude-code"], settled: "claude-code" })];
+    const root = document.createElement("div");
+    document.body.replaceChildren(root);
+    await mountAgentFrame(root, "en", events, { frame: "3", adopt: false, resume: "claude-code" }, 7);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(hoisted.panes).toEqual([]);
   });
 
   it("leaves the invitation standing when the dialog is cancelled", async () => {

@@ -177,6 +177,10 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
                     folder: pane.folder.clone(),
                     agent: pane.agent.clone(),
                     written: None,
+                    // The one thing this run knows about the place that the window cannot work out:
+                    // whether the last run left a way into what was running in it. The window opens
+                    // those without being pressed (`AMB-T-4641`).
+                    resumes: pane.resume.is_some(),
                 })
                 .collect(),
             // Which pane was being worked in is this run's: it is where a reader is looking, and the
@@ -347,6 +351,7 @@ mod tests {
             folder: Some("/work/repo".to_string()),
             agent: agent.map(str::to_string),
             written: Some("half a sentence".to_string()),
+            resumes: false,
         }
     }
 

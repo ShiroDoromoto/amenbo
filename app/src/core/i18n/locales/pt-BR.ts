@@ -546,6 +546,7 @@ export const ptBR: Translation = {
     "face.railFolders": "Pastas",
     "face.tabsCompact": "Ocultar os nomes",
     "face.tabsNamed": "Mostrar os nomes",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Painéis na tela",
     "face.paneOrient": "Disposição dos dois painéis",
     "face.paneAcross": "Lado a lado",

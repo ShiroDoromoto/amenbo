@@ -1,8 +1,8 @@
-import { type Layout } from "../talk/layout";
+import { type Layout, panesOf } from "../talk/layout";
 import { inkOn, initialOf } from "./projectMark";
 import type { Project } from "../mock/types";
 import { Icon } from "../components/Icon";
-import { t } from "../core/i18n";
+import { t, tf, tn } from "../core/i18n";
 
 /**
  * The projects, down the edge of the face, as the tabs the whole screen is switched with
@@ -26,10 +26,19 @@ import { t } from "../core/i18n";
  * is about this column alone and is pressed once and left.
  *
  * **An image, where the project has one.** A person can register one in the project's settings
- * (`AMB-D-838`, `AMB-D-839`), and it stands in the mark's place rather than beside it: the mark is the
- * one thing on a compact tab, and a picture next to a letter for the same project would be saying it
- * twice in the width there is for saying it once. Nothing is registered for most projects and nothing
- * has to be — the colour and the letter are what they keep.
+ * (`AMB-D-838`, `AMB-D-839`), and it stands in the mark's place rather than beside it: the mark is
+ * the whole of what a compact tab says about which project it is, and a picture next to a letter for
+ * the same project would be saying it twice in the width there is for saying it once. Nothing is
+ * registered for most projects and nothing has to be — the colour and the letter are what they keep.
+ *
+ * **How many panes are open, on the tab.** A project holds its own panes, and a tab that says only
+ * which project it is leaves a reader to open each one to find out where the work is. The number is
+ * the frames the project has (`panesOf`) — the places, not what is running in them: whether the
+ * program in a frame is still working is not something this side can tell, and a badge that claimed
+ * to know would be reading an AI's own word for it (`AMB-D-862`). It is drawn the way the task
+ * face's sidebar draws its own counts, so the same project reads the same on both faces
+ * (`AMB-D-848`), and in the neutral colour rather than the accent: the accent is the inbox saying
+ * come and look, and a pane count is not asking for anything.
  *
  * **The tabs scroll and the control does not.** A machine with a project for every folder it has ever
  * opened must not push the way back to the names off the bottom of the screen. What scrolls past the
@@ -61,6 +70,10 @@ export function ProjectTabs({
           // the colour is left off underneath it: a picture with somebody's colour showing through its
           // corners is the colour looking like part of the picture.
           const icon = project.icon;
+          // The panes this project has open. Zero is not drawn: a project nobody has opened a
+          // terminal in would otherwise carry a nought on every tab, which is a mark to read for
+          // nothing.
+          const panes = panesOf(layout, project.id).length;
           return (
             <button
               key={project.id}
@@ -68,9 +81,13 @@ export function ProjectTabs({
               // Going to a project, the way the row of pages goes to a page: the one on the screen is
               // where the reader already is.
               aria-current={shown ? "page" : undefined}
-              // The name is said whether or not it is drawn: compact, the mark is the only thing on
-              // the tab, and a colour is not something a reader can be asked to read out.
-              aria-label={project.name}
+              // The name is said whether or not it is drawn: compact, nothing on the tab names the
+              // project, and a colour is not something a reader can be asked to read out. The count
+              // is said with it, because a label on the button is the whole of what is read out —
+              // the badge inside it is never reached — and the number is half of what the tab says.
+              aria-label={panes === 0
+                ? project.name
+                : tf("face.tabPanes", { name: project.name, panes: tn("face.panes", panes) })}
               title={project.name}
               onClick={() => onProject(project.id)}
             >
@@ -82,6 +99,7 @@ export function ProjectTabs({
                 {icon === null ? initialOf(project.name) : <img className="ptabs__icon" src={icon} alt="" />}
               </span>
               {!compact && <span className="ptabs__name">{project.name}</span>}
+              {panes > 0 && <span className="ptabs__count">{panes}</span>}
             </button>
           );
         })}

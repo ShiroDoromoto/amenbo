@@ -527,6 +527,7 @@ export const th: Translation = {
     "face.railFolders": "โฟลเดอร์",
     "face.tabsCompact": "ซ่อนชื่อ",
     "face.tabsNamed": "แสดงชื่อ",
+    "face.tabPanes": "{name} {panes}",
     "face.paneCount": "จำนวนบานหน้าต่างบนหน้าจอ",
     "face.paneOrient": "การจัดวางสองบานหน้าต่าง",
     "face.paneAcross": "เรียงข้างกัน",

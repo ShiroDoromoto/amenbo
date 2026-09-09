@@ -550,6 +550,7 @@ export const uk: Translation = {
     "face.railFolders": "Теки",
     "face.tabsCompact": "Приховувати назви",
     "face.tabsNamed": "Показувати назви",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Панелей на екрані",
     "face.paneOrient": "Розташування двох панелей",
     "face.paneAcross": "Поруч",

@@ -56,6 +56,7 @@ vi.mock("../core/mutations", async (original) => ({
 }));
 
 import { TerminalFace } from "./TerminalFace";
+import { tf, tn } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -114,8 +115,8 @@ describe("the terminal face with no project on the machine", () => {
     expect(hoisted.mounts, "and the pane opens in what it chose").toEqual(["/work/workshop"]);
     expect(
       container.querySelector(".ptabs__tab")?.getAttribute("aria-label"),
-      "the project the folder raised is on the tabs",
-    ).toBe("workshop");
+      "the project the folder raised is on the tabs, with the pane it opened counted",
+    ).toBe(tf("face.tabPanes", { name: "workshop", panes: tn("face.panes", 1) }));
   });
 
   // Cancelling raises nothing, and leaves the way in where it was: a reader who changed their mind is

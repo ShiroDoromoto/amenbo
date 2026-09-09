@@ -545,6 +545,7 @@ export const es: Translation = {
     "face.railFolders": "Carpetas",
     "face.tabsCompact": "Ocultar los nombres",
     "face.tabsNamed": "Mostrar los nombres",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Paneles en pantalla",
     "face.paneOrient": "Disposición de los dos paneles",
     "face.paneAcross": "Uno al lado del otro",

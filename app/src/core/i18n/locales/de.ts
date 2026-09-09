@@ -534,6 +534,7 @@ export const de: Translation = {
     "face.railFolders": "Ordner",
     "face.tabsCompact": "Namen ausblenden",
     "face.tabsNamed": "Namen zeigen",
+    "face.tabPanes": "{name}, {panes}",
     "face.paneCount": "Bereiche auf dem Bildschirm",
     "face.paneOrient": "Anordnung der zwei Bereiche",
     "face.paneAcross": "Nebeneinander",

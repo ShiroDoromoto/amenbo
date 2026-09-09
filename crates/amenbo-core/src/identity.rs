@@ -8,6 +8,7 @@
 //! encryption (FileVault / BitLocker).
 
 use std::path::Path;
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
@@ -69,11 +70,20 @@ impl Identity {
 /// The UUID of the machine we are on. `AMENBO_HW_ID` overrides it, so development can pretend to be
 /// another machine. The value is read from **the hardware**, not from a file on disk — a file would be
 /// copied along with a clone.
+///
+/// Asked of the OS on the first call and kept for the life of the process (`AMB-D-868`). The hardware
+/// does not change under a running process, so the answer cannot either; asking costs a process launch
+/// on macOS (`ioreg`) and on Windows (PowerShell), which [`crate::Store::open_at`] would otherwise pay
+/// on every single write. The CLI is one process per command, so it stays at the one ask it always had.
 pub fn live_hw() -> String {
-    if let Some(v) = crate::env::hw_id() {
-        return v.to_string_lossy().into_owned();
-    }
-    platform_hw().unwrap_or_else(|| "unknown".to_string())
+    static HW: OnceLock<String> = OnceLock::new();
+    HW.get_or_init(|| {
+        if let Some(v) = crate::env::hw_id() {
+            return v.to_string_lossy().into_owned();
+        }
+        platform_hw().unwrap_or_else(|| "unknown".to_string())
+    })
+    .clone()
 }
 
 #[cfg(target_os = "macos")]

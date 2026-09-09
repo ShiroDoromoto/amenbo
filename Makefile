@@ -1015,9 +1015,21 @@ gui:
 ## the GUI_DEV_* block above), and the tick's label with them. The inline --configs are merged over
 ## the file, so one recipe covers all three shapes; with both unset the names merely restate what
 ## tauri.dev.conf.json already says.
+## `--bundles app` names the one thing anything downstream reads. Everything that takes this build
+## takes the .app — install-gui-dev below, devtool's devgui install (devtool/devgui_vm.go), and the
+## theme preview's mac leg, which packs the .app with ditto (.github/workflows/_theme-preview.yml).
+## Nothing reads the dmg tauri would otherwise write beside it, and writing it is not free: it turns
+## hdiutil over the whole bundle, and hdiutil is one thing the machine has one of. Several dev
+## builds at once contend over it and lose — `hdiutil create` answers "Resource busy" while another
+## build holds it, which takes the whole bundle step down with it and is what two of four parallel
+## builds died of on 2026-09-09. The production dmg is a different recipe with a different path
+## (dist-gui, under target/<triple>/) and is untouched, since nothing there runs four at a time. Told
+## on the command line rather than in a config, because GUI_DEV_CONFIG is also read by the Linux
+## container and the Windows preview leg, where the target to keep is the AppImage and the NSIS —
+## which is why the Linux build states its own the same way (scripts/docker/build-linux-gui.sh).
 gui-dev:
 	@scripts/write-tick-plist.sh $(TICK_LABEL_DEV) $(GUI_DEV_DATA)
-	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --config src-tauri/tauri.dev.conf.json --config '$(GUI_DEV_CONFIG)' $(call tick-config,$(TICK_LABEL_DEV))
+	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --bundles app --config src-tauri/tauri.dev.conf.json --config '$(GUI_DEV_CONFIG)' $(call tick-config,$(TICK_LABEL_DEV))
 	@# Tauri emits an ad-hoc (linker-signed) .app whose CDHash changes every rebuild,
 	@# re-prompting the keychain each cycle. Sign with the stable local identity so
 	@# one "Always Allow" survives future rebuilds (matches install/install-dev).

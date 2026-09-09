@@ -3242,6 +3242,24 @@ const REGISTRY: &[OpSpec] = &[
     // It is one op and not two — the caret put where it goes, and then the typing — because on this
     // face they are one move, the same reasoning `name` is one op for.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "edit", required: &["types"], refs: &[], strings: &["types"], binds: false },
+    // The same typing, with the way out pressed straight after it — one step, because the whole of
+    // what it is about is the gap between the two.
+    //
+    // The draft page keeps what is typed on it without being asked, and it keeps it a moment after the
+    // typing stops (`app/src/files/MemoPage.tsx`). So a road that typed in one step and left in the
+    // next would be walking the moment's quiet, not the way out: every step here is handed over and
+    // photographed before the next one starts, and the page has written and settled long before the
+    // operator reaches the door. Said as one movement, what the door is asked to carry is a sentence
+    // the page has not written yet.
+    //
+    // `how` is which door, and the two arrive by different roads inside the app. `menu` is the app's
+    // own way out — the item `⌘Q` reaches — which ends every window there is; `split-window` is the
+    // close on the window a terminal was split out into, which ends that window alone while the app
+    // stands. A road that walked one would leave the other's half unproved, the unwritten sentence
+    // being handed over separately on each.
+    //
+    // `types` is the reader's own words, for the reason `edit`'s are.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "edit-and-leave", required: &["types", "how"], refs: &[], strings: &["types", "how"], binds: false },
     // The same box filled from the clipboard instead of from the keyboard. It is a separate op and
     // not `edit` with the words left out, because a road cannot spell what goes in: what arrives is
     // whatever the last copy put there, and on the road this exists for that is a path the run

@@ -2952,6 +2952,26 @@ impl Instructor {
                 "Click into the text of the file, put the caret at the very end of it, press Enter and type \"{}\" on the new line.",
                 req(with, "types")?
             ),
+            // The same typing with the way out on the end of it, said as one movement because that is
+            // what it has to be. The page writes what is on it after a moment's quiet, so an operator
+            // who stops to read what they typed walks a road that was already green before this one
+            // was written — and the sentence saying so is in the instruction, since nothing else can
+            // tell the two apart afterwards: what the store holds is the same either way.
+            (Domain::Files, "edit-and-leave") => {
+                let door = match req(with, "how")? {
+                    "menu" => "ask Amenbo to end from its own menu — the item ⌘Q reaches, and not the machine's own way of forcing an application to stop. Nothing is asked and the app ends, there being no terminal open to lose, and the run then brings another up on the same store",
+                    "split-window" => "press the close at the corner of this window — the one the terminal was split out into, not the board behind it. That window goes and the app stays, the board still standing",
+                    other => {
+                        return Err(format!(
+                            "action `edit-and-leave` does not know the way out `{other}` — it is menu or split-window"
+                        ))
+                    }
+                };
+                format!(
+                    "Click into the draft page, put the caret at the end of what is on it, press Enter and type \"{}\" on the new line — and then, without pausing, {door}. **The two are one movement.** Do not stop to read back what you typed: the page keeps what is on it by itself after a moment's quiet, and a pause long enough to read is a pause long enough for that to have happened — which leaves this step proving what another road already proves.",
+                    req(with, "types")?
+                )
+            }
             // The same box filled from the clipboard. Where the caret goes is said the way the typing
             // says it, and for the same reason: what is already in the file is half of what the road
             // reads afterwards. What arrives is not named, because a road cannot name it — that is the
@@ -5706,12 +5726,19 @@ fn ends_the_run(step: &Step) -> bool {
 ///
 /// It is asked of the step rather than declared in the scenario, for the reason [`ends_the_run`] is:
 /// an answer that takes the door takes it, and a road that could say otherwise would be reading a
-/// window nothing had left standing. Two steps do it — a `quit` nothing was asked about
-/// (`asks: false`), and an `answer-quit` answered anything but `cancel`, an omitted answer included.
+/// window nothing had left standing. Three steps do it — a `quit` nothing was asked about
+/// (`asks: false`), an `answer-quit` answered anything but `cancel`, an omitted answer included, and
+/// a `files edit-and-leave` taken through the menu, which is that same first door pressed with
+/// something still unwritten on the page.
 fn goes_out_the_door(step: &Step) -> bool {
     match step {
         Step::Action { domain: Domain::Store, op, with, .. } if op == "quit" => {
             with.get("asks").and_then(|v| v.as_bool()) == Some(false)
+        }
+        // The draft page's way out, which is the same door with something unwritten still on the
+        // page: `menu` ends the app and `split-window` ends one window of two.
+        Step::Action { domain: Domain::Files, op, with, .. } if op == "edit-and-leave" => {
+            with.get("how").and_then(|v| v.as_str()) == Some("menu")
         }
         Step::Action { domain: Domain::Store, op, with, .. } if op == "answer-quit" => {
             with.get("answer").and_then(|v| v.as_str()) != Some("cancel")
@@ -5724,12 +5751,21 @@ fn goes_out_the_door(step: &Step) -> bool {
 /// window a step is pressed in and the window its shot is taken of come apart.
 ///
 /// It is asked of the step rather than declared in the scenario, for the reason [`ends_the_run`] is:
-/// a road names the window the operator stands at, and folding the terminal back is pressed in the
-/// window that goes away. Left to the road, the field would have to mean two things at once — the
+/// a road names the window the operator stands at, and both ways out of a split window — the control
+/// that folds it back, and the close at its own corner — are pressed in the window that goes away. Left to the road, the field would have to mean two things at once — the
 /// window to press in, and the window to shoot — and the second would be unanswerable here, because
 /// the window that is left is the app's one window and a road says that by saying nothing.
 fn closes_its_window(step: &Step) -> bool {
-    matches!(step, Step::Action { domain: Domain::Terminal, op, .. } if op == "fold-back")
+    match step {
+        Step::Action { domain: Domain::Terminal, op, .. } if op == "fold-back" => true,
+        // The same window shut by its own corner rather than by the control that folds it back. What
+        // is left standing is the board, which is the app's one window again — so the shot goes where
+        // the fold's does, and for the same reason.
+        Step::Action { domain: Domain::Files, op, with, .. } if op == "edit-and-leave" => {
+            with.get("how").and_then(|v| v.as_str()) == Some("split-window")
+        }
+        _ => false,
+    }
 }
 
 /// Whether two shots are the same picture, byte for byte.
@@ -9380,6 +9416,68 @@ steps_gui:
             handed[1]
         );
         assert_eq!(outcome.records[1].window.as_deref(), Some("Amenbo — "));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The draft page's own way out, on both of its doors. The two are one op and the harness reads
+    /// them apart: through the menu the app goes and another is brought up after the step is handed
+    /// over, and on the split window's close nothing restarts and the shot moves to the board.
+    #[test]
+    fn leaving_the_draft_page_takes_whichever_door_the_step_named() {
+        let s = load(
+            r#"
+id: sample
+title: A sentence typed on the draft page outlives the window it was typed in
+steps_gui:
+  - type: action
+    domain: files
+    op: edit-and-leave
+    window: "Amenbo — "
+    with: { types: SCENARIO a line, how: split-window }
+  - type: action
+    domain: files
+    op: edit-and-leave
+    with: { types: SCENARIO another line, how: menu }
+"#,
+        );
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-leave-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let aimed: RefCell<Vec<Option<String>>> = RefCell::new(Vec::new());
+        let done: RefCell<Vec<String>> = RefCell::new(Vec::new());
+        walk(
+            &s,
+            &dir,
+            |window, p| {
+                aimed.borrow_mut().push(window.map(str::to_string));
+                done.borrow_mut().push("shot".to_string());
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| unreachable!("no step on this road is judged by reading a shot"),
+            nothing_on_the_tree,
+            nothing_on_the_menu,
+            |b| {
+                done.borrow_mut().push(format!("handed {}", b.index));
+                Ok(())
+            },
+            || {
+                done.borrow_mut().push("ran again".to_string());
+                Ok(())
+            },
+            nothing_to_read,
+            unheard,
+        )
+        .expect("walk");
+
+        assert_eq!(
+            *done.borrow(),
+            vec!["handed 0", "shot", "handed 1", "ran again", "shot"],
+            "the window's close restarts nothing; the menu's is the app going, and it comes back \
+             after the operator has been asked to watch it go"
+        );
+        // And where the camera stands: off the window that was closed, and on the one window there
+        // is by the time the app is up again.
+        assert_eq!(*aimed.borrow(), vec![None, None]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

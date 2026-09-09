@@ -269,6 +269,12 @@ pub struct Launch {
     /// A column for the same reason the flags are: every one of the six has a way, they spell it
     /// differently, and what a row of the table cannot become is a branch in the code.
     pub switch: Switch,
+    /// How a pane already running this provider is asked to change its own session name, or `None`
+    /// where the provider has no such command ([`Rename`], `AMB-D-872`).
+    ///
+    /// A column for the same reason [`switch`](Launch::switch) is one: four of the six have a way,
+    /// and the two that do not are rows rather than an exception written into the code that types it.
+    pub rename: Option<Rename>,
     /// Whether this row has been watched starting the provider on a real machine (`AMB-T-3819`).
     ///
     /// Every row is written from the product's own documentation, and that is not the same as having
@@ -361,6 +367,35 @@ pub fn switching(launch: &Launch, model: Option<&str>) -> Switching {
     }
 }
 
+/// What a running pane is asked to change its own session name with — the provider's own slash
+/// command, typed into it the way a person would type it (`AMB-D-872`).
+///
+/// **Amenbo's card is the name; this is the copy.** A provider that titles its own sessions takes the
+/// title from what it was told, and every pane Amenbo opens is told the same opening instruction — so
+/// that provider's own list of sessions comes back reading the same title down the column. Typing the
+/// card in as a rename is what parts them there.
+///
+/// Unlike [`Switch`] there is no branch on where the name goes: all four were watched taking it on
+/// the command's own line (`AMB-T-4652`), so nothing here answers [`Carries`].
+pub struct Rename {
+    /// What is typed — `/rename` for all four of the ones that have it.
+    pub command: &'static str,
+    /// How long a name this provider takes, in characters, or `None` where none was found.
+    ///
+    /// It is measured rather than documented: Copilot refuses at 101 and says so, and the other
+    /// three took 127 characters without a word (`AMB-T-4652`). Amenbo's own names are cut to
+    /// [`crate::frames::NAME_LIMIT`] before they get here, which is under every bound in the table —
+    /// the column is what keeps that true when a row is added.
+    pub limit: Option<usize>,
+    /// Whether the pane's terminal title (OSC 0) moves with the name, or only the provider's own
+    /// list of sessions does.
+    ///
+    /// Codex is the row this is false on: it renames the thread and leaves the title on the folder's
+    /// name (`AMB-T-4652`). It is said here because the two faces of one rename are what a reader
+    /// compares, and a face that promised both would be wrong on that pane.
+    pub titles: bool,
+}
+
 /// Every AI Amenbo knows how to start, in the order a face offers them — the launch catalog
 /// (`AMB-D-791`). Wider than [`HARNESSES`]: a provider earns a row here by being startable, whether or
 /// not its session-start hook is one Amenbo can write.
@@ -387,6 +422,9 @@ pub static LAUNCHES: &[Launch] = &[
             carries: Carries::Named,
             keeps: Some("~/.claude/settings.json"),
         },
+        // Watched renaming the thread and the title both, and taking the name on the line
+        // (`AMB-T-4652`).
+        rename: Some(Rename { command: "/rename", limit: None, titles: true }),
         confirmed: true,
     },
     Launch {
@@ -409,6 +447,9 @@ pub static LAUNCHES: &[Launch] = &[
             carries: Carries::Picker,
             keeps: Some("~/.codex/config.toml"),
         },
+        // The one row the rename is half-seen on: the thread takes the name, the terminal title
+        // stays on the folder it was started in (`AMB-T-4652`).
+        rename: Some(Rename { command: "/rename", limit: None, titles: false }),
         confirmed: true,
     },
     Launch {
@@ -426,6 +467,9 @@ pub static LAUNCHES: &[Launch] = &[
         // The one provider whose switch is session-only by design: its own picker says so, and the
         // default is moved by a different command (`/config model`) that Amenbo does not send.
         switch: Switch { command: "/model", carries: Carries::Named, keeps: None },
+        // The only one that answers with a bound: 101 characters is refused in its own words
+        // (`AMB-T-4652`), counted in characters rather than bytes.
+        rename: Some(Rename { command: "/rename", limit: Some(100), titles: true }),
         confirmed: true,
     },
     Launch {
@@ -447,6 +491,9 @@ pub static LAUNCHES: &[Launch] = &[
         // change nothing. What opens is a two-step picker, and remembering the answer past this
         // session is a toggle inside it that starts off.
         switch: Switch { command: "/model", carries: Carries::Picker, keeps: None },
+        // No such command at all — typed in, it goes to the model as a sentence and is answered as
+        // one (`AMB-T-4652`), which is why this is `None` rather than a row with a spelling.
+        rename: None,
         confirmed: true,
     },
     Launch {
@@ -473,6 +520,9 @@ pub static LAUNCHES: &[Launch] = &[
             carries: Carries::Filter,
             keeps: Some("~/.local/share/opencode/opencode.db"),
         },
+        // The second one with no rename: the command is not offered, and the title it shows comes
+        // from whatever it was first said (`AMB-T-4652`).
+        rename: None,
         confirmed: true,
     },
     Launch {
@@ -497,6 +547,9 @@ pub static LAUNCHES: &[Launch] = &[
             carries: Carries::Named,
             keeps: Some("~/.cursor/cli-config.json"),
         },
+        // Takes the name on the line and moves both faces, saying nothing on the screen about it
+        // (`AMB-T-4652`).
+        rename: Some(Rename { command: "/rename", limit: None, titles: true }),
         // Written from the documentation and never run — the tool is not on the machine the other five
         // were tried on (`AMB-T-3838`).
         confirmed: false,
@@ -1143,6 +1196,58 @@ mod tests {
                 !switching(launch, Some("a-model")).line.contains("a-model"),
                 "{id} puts the name where the provider reads it as a prompt",
             );
+        }
+    }
+
+    /// A row that offers a rename offers a command a pane takes, and a bound Amenbo's own names clear.
+    ///
+    /// The bound is the half worth holding. Amenbo cuts a name to [`crate::frames::NAME_LIMIT`] and
+    /// hands it over without measuring it again, so a row added with a shorter bound than that would
+    /// be refused on a reader's pane rather than here (`AMB-T-4652`).
+    #[test]
+    fn a_rename_that_is_offered_takes_a_slash_and_a_name_cut_to_the_label_s_length() {
+        for launch in LAUNCHES {
+            let Some(rename) = &launch.rename else { continue };
+            assert!(
+                rename.command.starts_with('/'),
+                "{}: {} is not a command a provider's input box takes",
+                launch.id,
+                rename.command
+            );
+            if let Some(limit) = rename.limit {
+                assert!(
+                    limit >= crate::frames::NAME_LIMIT,
+                    "{}: a name of {} characters is handed over unmeasured and this row cuts at {limit}",
+                    launch.id,
+                    crate::frames::NAME_LIMIT
+                );
+            }
+        }
+    }
+
+    /// The four that were watched renaming, and the two that have no such command, named on their own.
+    ///
+    /// The one above holds whatever the table says; this one holds what the table says, so that
+    /// giving OpenCode or Gemini a spelling nobody measured fails here rather than sending a sentence
+    /// to a model (`AMB-T-4652`).
+    #[test]
+    fn only_the_providers_measured_taking_a_rename_are_ever_typed_at() {
+        for id in ["claude-code", "codex-cli", "github-copilot", "cursor"] {
+            let rename = find_launch(id).unwrap().rename.as_ref().expect(id);
+            assert_eq!(rename.command, "/rename", "{id}");
+        }
+        for id in ["opencode", "gemini-cli"] {
+            assert!(find_launch(id).unwrap().rename.is_none(), "{id} has no rename to type");
+        }
+        // The measured differences, each on the row it was measured on: Copilot is the only bound,
+        // and Codex the only one whose terminal title stays where it was.
+        assert_eq!(find_launch("github-copilot").unwrap().rename.as_ref().unwrap().limit, Some(100));
+        assert!(!find_launch("codex-cli").unwrap().rename.as_ref().unwrap().titles);
+        for id in ["claude-code", "codex-cli", "cursor"] {
+            assert_eq!(find_launch(id).unwrap().rename.as_ref().unwrap().limit, None, "{id}");
+        }
+        for id in ["claude-code", "github-copilot", "cursor"] {
+            assert!(find_launch(id).unwrap().rename.as_ref().unwrap().titles, "{id}");
         }
     }
 

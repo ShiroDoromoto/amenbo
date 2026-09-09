@@ -165,6 +165,20 @@ export function MemoPage({ projectId }: { projectId: number }) {
     box.current?.setSelectionRange(where, where);
   });
 
+  // **What an open IME conversion puts in the field is not yet what was typed** (`AMB-T-4636`). In
+  // Japanese and the like, the characters under the mark are replaced whole at every key and the
+  // person has not yet said which reading they meant, so a key pressed mid-conversion shows and does
+  // nothing else: no settle is started and no unconfirmed string is written. Without this, a
+  // conversion runs past the 600ms settle at every phrase break and one sentence is kept five to
+  // fifteen times over.
+  //
+  // Shown, though — the field is controlled, so a render coming from anywhere else would otherwise
+  // put the text from before the conversion back underneath an open mark.
+  //
+  // **The end of the conversion is read from both sides, because the engines disagree on the order.**
+  // WebView2 sends the last `input` after `compositionend`, with `isComposing` already false on it;
+  // WKWebView and WebKitGTK send it before, still composing, and there is no later one to wait for.
+  // Whichever arrives second finds the same text in hand and only starts the settle again.
   const field = (
     <textarea
       {...asTyped}
@@ -172,7 +186,11 @@ export function MemoPage({ projectId }: { projectId: number }) {
       className="memo__field"
       value={text}
       aria-label={t("files.memo")}
-      onChange={(e) => typed(e.target.value)}
+      onChange={(e) => {
+        if ((e.nativeEvent as InputEvent).isComposing) setText(e.target.value);
+        else typed(e.target.value);
+      }}
+      onCompositionEnd={(e) => typed(e.currentTarget.value)}
     />
   );
 

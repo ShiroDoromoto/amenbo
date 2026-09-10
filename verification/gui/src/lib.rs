@@ -4633,6 +4633,26 @@ impl Instructor {
                 true => format!("Confirm what is drawn beside the panes says {}.", note(with)?),
                 false => format!("Confirm what is drawn beside the panes does not say {}.", note(with)?),
             },
+            // The line a stopped carry ends at, which comes up at the foot of the window and goes on
+            // its own. The step is read rather than done, and the reading has to be made while the
+            // line is still there — so the instruction says when to look rather than leaving it to be
+            // found after the fact.
+            //
+            // An eye's, though the row's name is written on the line: that same name is on the tree
+            // behind it, standing where the carry was made from. A reading of the shot would find it
+            // there and pass a build that said nothing at all, which is the one thing this step
+            // exists to catch.
+            (Domain::Files, "stopped") => match present(with) {
+                true => format!(
+                    "Watch the foot of the window as the step above is made: confirm a line comes up there naming \"{}\" and saying {}. It goes on its own after a few seconds and a press takes it away sooner, so read it where it stands rather than looking for it afterwards.",
+                    req(with, "name")?,
+                    why(with)?
+                ),
+                false => format!(
+                    "Watch the foot of the window as the step above is made: confirm nothing comes up there about \"{}\". The whole of the carry arrived, so there is nothing for that line to be about.",
+                    req(with, "name")?
+                ),
+            },
             // The keeping, read rather than pressed. Where `save` names the control by what it does,
             // this one asks whether it would do it — and the answer is in how it is drawn, so the line
             // asks the operator to say what they saw.
@@ -5260,6 +5280,21 @@ fn holding(with: &Args) -> String {
     match with.get("holding").and_then(|v| v.as_str()) {
         Some(name) => format!(", with a file named \"{name}\" in it,"),
         None => String::new(),
+    }
+}
+
+/// Why a carry stopped, named by what the line says rather than by its wording — the same reason
+/// `note` is named that way, and the same five Amenbo decided for itself (`app/src/files/stopped.ts`).
+/// What a filesystem refused comes back in that machine's own words, which no road can name.
+fn why(with: &Args) -> Result<&'static str, String> {
+    match with.get("why").and_then(|v| v.as_str()) {
+        Some("taken") => Ok("that a file of that name is in that folder already"),
+        Some("inside") => Ok("that a folder cannot be carried into itself"),
+        Some("nameless") => Ok("that there is nothing for the thing being carried to take its name from"),
+        Some("nobin") => Ok("that the drive it is on has no bin, so putting it there would leave no way back"),
+        Some("emptied") => Ok("that it is not in the bin any more"),
+        Some(other) => Err(format!("`why` does not know `{other}`")),
+        None => Err("arg `why` must say what stopped the carry".to_string()),
     }
 }
 
@@ -9417,6 +9452,49 @@ steps_gui:
         );
         assert_eq!(outcome.records[1].window.as_deref(), Some("Amenbo — "));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Why a carry stopped, and the two things that keep the step honest. It is read at the foot of
+    /// the window while the line is still up, because the line goes on its own — a step that left the
+    /// looking until afterwards would be asking for a screen that has moved. And it is left to an eye:
+    /// the row's name is written on that line, but it is on the tree behind it too, so a reading of
+    /// the shot would find it on a build that said nothing at all.
+    #[test]
+    fn a_carry_that_stopped_is_read_at_the_foot_of_the_window_by_an_eye() {
+        let s = load(
+            r#"
+id: sample
+title: A name the folder already holds stops a carry
+steps_gui:
+  - type: assert
+    domain: files
+    op: stopped
+    with: { name: watering.md, why: taken }
+  - type: assert
+    domain: files
+    op: stopped
+    with: { name: almanac.md, why: taken, present: false }
+"#,
+        );
+        let steps = s.steps(Driver::Gui);
+        let said = Instructor::new().render(&steps[0]).unwrap();
+        assert!(
+            said.contains("foot of the window") && said.contains("watering.md"),
+            "the line is read where it comes up, and it names the row it stopped on: {said}"
+        );
+        assert!(
+            said.contains("in that folder already"),
+            "and it says which of the five stopped the carry: {said}"
+        );
+        assert!(
+            Instructor::new().expectation(&steps[0]).is_none(),
+            "left to an eye: the row's name stands on the tree behind the line, so a reading settles nothing",
+        );
+        let none = Instructor::new().render(&steps[1]).unwrap();
+        assert!(
+            none.contains("nothing comes up") && none.contains("almanac.md"),
+            "and the absent half watches the same place for the same row: {none}"
+        );
     }
 
     /// The draft page's own way out, on both of its doors. The two are one op and the harness reads

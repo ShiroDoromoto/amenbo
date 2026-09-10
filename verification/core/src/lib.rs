@@ -3193,6 +3193,24 @@ const REGISTRY: &[OpSpec] = &[
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
+    // Why a carry stopped, said on the line that comes up at the foot of the window and goes on its
+    // own (`app/src/components/NoticeToast.tsx`). A carry is not one act — it takes the rows it was
+    // given in order and stops on the first that will not go — so what is on that line is the row it
+    // got to and the reason it got no further (`app/src/files/stopped.ts`).
+    //
+    // It is a line of its own rather than one of `says`'s: those stand beside the panes for as long
+    // as what they are about is true, and this one is said once, about an act, and goes. A road that
+    // read it as a standing line would be told to look where it never was.
+    //
+    // `why` names the reason the way `note` names a line — by what it says, not by its wording. The
+    // five are the ones Amenbo decided and can therefore say in any language; what a filesystem
+    // refused comes back as that machine's own sentence, in whatever language it was built with, and
+    // is nothing a road can name.
+    //
+    // `name` is the row it stopped on, and it is required for the reason a stopping is worth reading
+    // at all: a carry of several rows leaves some of them in the folder, and a line that named no row
+    // would leave the reader — and the road — unable to say which.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "stopped", required: &["name", "why"], refs: &[], strings: &["name", "why"], binds: false },
     // The way to keep what was typed, read as a control rather than pressed. A file the panel already
     // knows has moved under the reader cannot be saved from here — the mark it is holding is the one
     // the door refuses — so the control is shut, rather than taking a press that spends a round trip

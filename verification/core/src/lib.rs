@@ -2610,9 +2610,15 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "tidied-in-box", required: &["above", "below"], refs: &[], strings: &["above", "below", "on"], binds: false },
     // Sending what is written there, which is the press the whole box exists for.
     //
-    // `by` is which of the two presses makes it go — `return` in the box, or `button` beside it —
+    // `by` is which of the two presses makes it go — `key` in the box, or `button` beside it —
     // because they are two controls and not one written twice, and a road that only ever pressed one
-    // would leave the other unwalked. Left out, it is `return`.
+    // would leave the other unwalked. Left out, it is `key`.
+    //
+    // It is `key` rather than the key's own name because the name is the machine's: sending is the
+    // return held with this machine's own modifier, which is not the same one everywhere. Return on
+    // its own is a new line, which is what the box was made to allow —
+    // a road that still said `return` here would press the key that writes rather than the one that
+    // sends, and read a box that had grown a line instead of a pane that had been given one.
     //
     // What lands in the pane is the line whole, with a return after it: it is wrapped as a paste the
     // program is told to take entire, so a sentence with a line break in it arrives as a sentence
@@ -2633,6 +2639,14 @@ const REGISTRY: &[OpSpec] = &[
     // `key` is which press: `up`, `down`, `tab`, `escape` or `ctrl-c`. `ctrl-c` is the one held with
     // a modifier, and it is here because it is the press that means "stop", which is the reason a
     // person looks away from what they were writing.
+    //
+    // `holding` says the box is **not** emptied first, which two of those five are handed on
+    // regardless: escape and ctrl-c mean "stop", and a person reaching for one has
+    // usually started writing the next thing already — a box that took them by standing there would
+    // have taken away the only presses that answer what was just sent. The other three stay the
+    // empty box's alone, so asking for them while it holds something is refused rather than walked:
+    // that press is the box's own, and a road saying otherwise would be walking a rule that is not
+    // there.
     //
     // `onto` is which pane, named the way `write-to-pane` names one.
     //

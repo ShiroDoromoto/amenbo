@@ -59,6 +59,9 @@ const hoisted = vi.hoisted(() => ({
   /** Every carry the panel asked the host for, as it asked for it. */
   imported: [] as
     { paths: string[]; toRoot: string; to: string[]; effect: DropEffectDto }[],
+  /** Every carry inside the panel the host was asked for, as it was asked (`./handDrag`). */
+  carries: [] as
+    { how: "move" | "copy"; root: string; paths: string[][]; toRoot: string; to: string[] }[],
   /** What the host answers a carry with — the whole list arriving, unless a test says otherwise. */
   carried: { arrived: [] as string[], stopped: null } as FolderCarriedDto,
   /** What the host refuses a name with, where a test is about the refusal. */
@@ -214,6 +217,26 @@ vi.mock("./folder", () => ({
     to: string[],
   ): Promise<FolderCarriedDto> => {
     hoisted.asked.push(`clip-paste:${toRoot}:${to.join("/")}`);
+    return hoisted.carried;
+  },
+  folderMove: async (
+    _projectId: number,
+    root: string,
+    paths: string[][],
+    toRoot: string,
+    to: string[],
+  ): Promise<FolderCarriedDto> => {
+    hoisted.carries.push({ how: "move", root, paths, toRoot, to });
+    return hoisted.carried;
+  },
+  folderCopy: async (
+    _projectId: number,
+    root: string,
+    paths: string[][],
+    toRoot: string,
+    to: string[],
+  ): Promise<FolderCarriedDto> => {
+    hoisted.carries.push({ how: "copy", root, paths, toRoot, to });
     return hoisted.carried;
   },
   folderImport: async (
@@ -626,6 +649,7 @@ beforeEach(() => {
   // would turn it off for the next one (`./askBeforeTrash`).
   localStorage.clear();
   hoisted.imported = [];
+  hoisted.carries = [];
   hoisted.carried = { arrived: [], stopped: null };
   // Inside Tauri as far as the panel is concerned; without it there is no host to hear a drop from.
   (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};

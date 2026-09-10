@@ -56,13 +56,14 @@ import { asTyped } from "../core/keys";
 import { pushNotice } from "../core/notice";
 import { hostOs } from "../core/platform";
 import {
-  folderClipCopy, folderClipPaste, folderEntries, folderGitStatus, folderImport,
-  folderMake, folderRename, folderUnwatch, folderWatch, onFolderChanged,
+  folderClipCopy, folderClipPaste, folderCopy, folderEntries, folderGitStatus, folderImport,
+  folderMake, folderMove, folderRename, folderUnwatch, folderWatch, onFolderChanged,
 } from "./folder";
 import { stoppedLine } from "./stopped";
 import { FileMenu } from "./FileMenu";
 import { useTrash } from "./trash";
 import { fileAt } from "./fileUnder";
+import { type Held, watchCarry } from "./handDrag";
 import { gitMarks, type GitMark } from "./gitMark";
 import { sectionsOf } from "./sections";
 import { Icon } from "../components/Icon";
@@ -193,6 +194,11 @@ function segmentsOf(into: string): string[] {
   return into === "" ? [] : into.split("/");
 }
 
+/** Whether a row of `path` is already in the folder named by `into` — its parent being that folder. */
+function sameFolder(path: string[], into: string[]): boolean {
+  return path.length === into.length + 1 && into.every((name, i) => path[i] === name);
+}
+
 /**
  * The rows an act aimed at one row is about: the ones picked out, where that row is among them —
  * and the row alone, where it is not.
@@ -236,13 +242,17 @@ export function FolderTree({
    */
   onHandOver?: (wholes: string[]) => void;
   /**
-   * Take hold of a row, so it can be carried to a pane and let go there (`./handDrag`).
+   * Take hold of a row, so it can be carried and let go somewhere (`./handDrag`).
    *
-   * The gesture belongs to the face for the same reason `onHandOver` does — where a path lands is a
-   * pane's session, which the tree cannot see — so what this side does with it is hand it to every
-   * row it draws. With none handed down, the rows are what they were: things to open.
+   * **The gesture is one and its landings are two**, which is why the press goes up and one of the
+   * answers comes back down. A pane is the face's — where a path lands is a session the tree cannot
+   * see — so the press belongs to the face for the same reason `onHandOver` does. One of this
+   * panel's own folders is the panel's, and it hears about that landing itself (`watchCarry`), the
+   * way it hears about a drop from the desktop.
+   *
+   * With none handed down, the rows are what they were: things to open.
    */
-  onCarry?: (wholes: string[], event: RowPress<HTMLElement>) => void;
+  onCarry?: (held: Held, event: RowPress<HTMLElement>) => void;
 }) {
   // `0` names no project, which is what the folder read then answers with: none. A window with no
   // project on it draws the invitation, the same as one whose project has no folder.
@@ -360,6 +370,39 @@ export function FolderTree({
       stop?.();
       setLanding(null);
     };
+  }, [projectId, roots]);
+
+  // And the rows of this panel, carried by hand to one of its own folders (`./handDrag`).
+  //
+  // **The same landing as a drop from the desktop and a paste**, worked out from the same mark on
+  // the same row — what differs is only where the rows came from, and with them what a plain carry
+  // means. A drop from the desktop copies, because a move would take a file out of a place Amenbo
+  // does not answer for; both ends of this one are folders the project is bound to, so it moves, and
+  // the key held asks for the other (`./handDrag`, `crate::folder_write`).
+  //
+  // **Rows let go over the folder they are already in are let alone.** The host would answer that
+  // each of them is already there, which is a true sentence about a gesture that asked for nothing.
+  useEffect(() => {
+    if (projectId === null || sections.length === 0) return;
+    return watchCarry({
+      over: (el) => setLanding(landingOf(el)),
+      drop: (el, held, copy) => {
+        setLanding(null);
+        const at = landingOf(el);
+        if (at === null) return;
+        const into = segmentsOf(at.into);
+        if (at.root === held.root && held.paths.every((path) => sameFolder(path, into))) return;
+        const carry = copy ? folderCopy : folderMove;
+        void carry(projectId, held.root, held.paths, at.root, into)
+          .then((carried) => {
+            const line = stoppedLine(carried);
+            if (line !== null) pushNotice(line);
+          })
+          // The refusal is the host's own sentence, the same as a drop's: the folder having gone
+          // since the row was drawn is the whole of what it can be.
+          .catch((e: unknown) => pushNotice(errText(e)));
+      },
+    });
   }, [projectId, roots]);
 
   // The tree takes the focus once it has changed a folder, so that undo is the next thing a reader
@@ -562,9 +605,9 @@ function FolderSection({
    *  another folder — or where none is. The panel works out which section it belongs to, since it
    *  is the panel that knows what is open. */
   chosen: string | null;
-  /** Take hold of one of this folder's rows, to carry what the press is about to a pane
-   *  (`./handDrag`). */
-  onCarry?: (wholes: string[], event: RowPress<HTMLElement>) => void;
+  /** Take hold of one of this folder's rows, to carry what the press is about — to a pane, or to
+   *  one of this panel's own folders (`./handDrag`). */
+  onCarry?: (held: Held, event: RowPress<HTMLElement>) => void;
 }) {
   const [changes, setChanges] = useState<FolderChangesDto>(
     { root, capped: false, unwatched: false, gone: false },
@@ -970,8 +1013,9 @@ function Tree({
    * reading it, and without a mark it is one name among the rest.
    */
   chosen: string | null;
-  /** Take hold of a row, to carry what the press is about to a pane (`./handDrag`). */
-  onCarry?: (wholes: string[], event: RowPress<HTMLElement>) => void;
+  /** Take hold of a row, to carry what the press is about to a pane or to a folder
+   *  (`./handDrag`). */
+  onCarry?: (held: Held, event: RowPress<HTMLElement>) => void;
 }) {
   /**
    * The names of every folder on the screen, each with the reading of the section they were taken
@@ -1429,7 +1473,10 @@ function Tree({
             // way the menu already stands on the row it is about.
             onPointerDown={(e) => {
               e.currentTarget.focus();
-              onCarry?.(rowsAbout(picked, line.path).map((one) => fileAt(root, one)), e);
+              // Both ways round: the whole paths a pane is handed, and the rows as this panel knows
+              // them, which is what one of its own folders takes (`./handDrag`).
+              const paths = rowsAbout(picked, line.path);
+              onCarry?.({ wholes: paths.map((one) => fileAt(root, one)), root, paths }, e);
             }}
             // Stood on before the menu opens, because the row a menu is about is the row a reader
             // comes back to when it closes — and a right-click is not a press the browser moves the

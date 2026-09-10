@@ -254,6 +254,47 @@ export async function folderUntrash(): Promise<FolderRestoredDto | null> {
 }
 
 /**
+ * Move rows into another of the project's folders — the panel's own carry
+ * (`crate::folder_write::folder_move`).
+ *
+ * **What a plain carry inside the panel does.** Both ends are folders the project is bound to, so
+ * nothing is taken out of a place Amenbo does not answer for — which is the reason a drop from the
+ * desktop copies instead (`folderImport`).
+ *
+ * `paths` are the rows as the panel knows them, under `root`; `toRoot` and `to` are the folder they
+ * are aimed at, and the host proves both ends against the store rather than taking this side's word
+ * for them. The answer is a line through the list — the names that arrived, and the one it stopped
+ * on. Outside Tauri nothing moves and nothing arrives.
+ */
+export async function folderMove(
+  projectId: number,
+  root: string,
+  paths: string[][],
+  toRoot: string,
+  to: string[],
+): Promise<FolderCarriedDto> {
+  if (!inTauri()) return { arrived: [], stopped: null };
+  return await invoke<FolderCarriedDto>("folder_move", { projectId, root, paths, toRoot, to });
+}
+
+/**
+ * The same carry, leaving the rows where they are (`crate::folder_write::folder_copy`).
+ *
+ * What asks for this rather than a move is the key held as the row was let go — the platform's own,
+ * unlevelled (`./handDrag`).
+ */
+export async function folderCopy(
+  projectId: number,
+  root: string,
+  paths: string[][],
+  toRoot: string,
+  to: string[],
+): Promise<FolderCarriedDto> {
+  if (!inTauri()) return { arrived: [], stopped: null };
+  return await invoke<FolderCarriedDto>("folder_copy", { projectId, root, paths, toRoot, to });
+}
+
+/**
  * Bring files dropped in from the desktop into one of the project's folders
  * (`crate::folder_write::folder_import`).
  *

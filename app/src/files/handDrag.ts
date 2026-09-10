@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as RowPress } from "react";
 
+import { hostOs } from "../core/platform";
 import { draggedFar, elementUnder } from "../core/pointerDrag";
 
 /**
@@ -33,6 +34,89 @@ export const HAND_ATTR = "data-hand";
 /** The pane under a point, or none. */
 export function paneUnder(x: number, y: number): string | null {
   return elementUnder({ x, y }, HAND_ATTR)?.getAttribute(HAND_ATTR) ?? null;
+}
+
+/**
+ * The attribute a folder of the panel answers a carry on, holding the folder it is.
+ *
+ * **The same one a drop from the desktop and a paste land on** (`./FolderTree`): where a row goes
+ * when it is let go over the panel is worked out once, by the panel, whichever of the three gestures
+ * brought it there.
+ */
+export const INTO_ATTR = "data-into";
+
+/** The folder of the panel under a point, or none. */
+export function intoUnder(x: number, y: number): HTMLElement | null {
+  return elementUnder({ x, y }, INTO_ATTR);
+}
+
+/**
+ * What a press has taken hold of, said both ways round.
+ *
+ * The two ends of this gesture want different things of the same rows: a pane is handed whole paths
+ * and moves nothing (`AMB-D-820`), and a folder of the panel is handed the rows as the project knows
+ * them, because what it does is move or copy the files themselves.
+ */
+export interface Held {
+  /** Whole paths, for the pane that is handed words rather than files. */
+  wholes: string[];
+  /** The bound folder these rows are in, as the panel names it. */
+  root: string;
+  /** Their paths inside that folder, in the order the rows were taken. */
+  paths: string[][];
+}
+
+/**
+ * The panel's side of a row let go over one of its own folders — the half of this gesture the face
+ * does not own.
+ *
+ * **It is a subscription and not a callback down the tree** (`../core/notice`, `../core/hostDrop`),
+ * because the two ends of the carry belong to two different faces: the pane's landing is the talk
+ * face's, and where a file goes inside a project is the panel's own. The gesture is one at a time,
+ * so one watcher is all there ever is.
+ */
+export interface CarryWatch {
+  /** The folder under the pointer while a row is held, or nothing — what draws the highlight. It is
+   *  said only as the answer changes, rather than at every frame the pointer moves through. */
+  over: (into: HTMLElement | null) => void;
+  /** A row let go over a folder, and whether the keys held asked for a copy. */
+  drop: (into: HTMLElement, held: Held, copy: boolean) => void;
+}
+
+let watcher: CarryWatch | null = null;
+
+/** Take up the panel's side of the carry, and hand back the way to put it down. */
+export function watchCarry(watch: CarryWatch): () => void {
+  watcher = watch;
+  return () => {
+    if (watcher === watch) watcher = null;
+  };
+}
+
+/**
+ * Say that a carried row is over this folder of the panel, or over none — the gesture's own side of
+ * `watchCarry`, the way `pushNotice` is `subscribeNotice`'s (`../core/notice`).
+ */
+export function carriedOver(into: HTMLElement | null): void {
+  watcher?.over(into);
+}
+
+/** And that one was let go there, with what the keys held asked for. */
+export function carriedInto(into: HTMLElement, taken: Held, copy: boolean): void {
+  watcher?.drop(into, taken, copy);
+}
+
+/**
+ * Whether the keys held as a row was let go asked for a copy rather than a move.
+ *
+ * **The platform's own convention, unlevelled** (`crate::dropped`): a reader holding Option on a Mac
+ * is asking for a copy in every application they own, and Amenbo is not the one to teach them
+ * otherwise. What a plain carry does is the other one — both ends are the project's own folders, so
+ * a move takes nothing out of a place Amenbo does not answer for, which is what makes a drop from
+ * the desktop copy instead (`crate::folder_write`).
+ */
+function copyHeld(e: PointerEvent): boolean {
+  return hostOs() === "macos" ? e.altKey : e.ctrlKey;
 }
 
 /** What a row being carried looks like: the row's own node, following the pointer. */
@@ -77,8 +161,8 @@ export function useHandDrag(
   /** The pane the pointer is over while a row is held, or nothing — which is what draws the surface
    *  on that pane and on no other. */
   overFrame: string | null;
-  /** What a row hands its `pointerdown`, with the paths the press is about. */
-  press: (wholes: string[], event: RowPress<HTMLElement>) => void;
+  /** What a row hands its `pointerdown`, with what the press is about. */
+  press: (taken: Held, event: RowPress<HTMLElement>) => void;
 } {
   const [overFrame, setOverFrame] = useState<string | null>(null);
   // The gesture in flight. A ref rather than state: it moves with the pointer, and nothing on the
@@ -94,7 +178,7 @@ export function useHandDrag(
   // A press outliving the face would go on listening for a row that is gone.
   useEffect(() => () => held.current?.stop(), []);
 
-  const press = useCallback((wholes: string[], event: RowPress<HTMLElement>) => {
+  const press = useCallback((taken: Held, event: RowPress<HTMLElement>) => {
     // The main button only. A right press on a row is its menu, and taking it would put the row in
     // hand with no gesture to put it down.
     if (event.button !== 0) return;
@@ -117,6 +201,9 @@ export function useHandDrag(
     let ghost: Ghost | null = null;
     let at = grabbedAt;
     let frame = 0;
+    // The folder of the panel the pointer was last over, so the panel is told when that changes and
+    // not on every frame the pointer travels through one.
+    let overInto: HTMLElement | null = null;
 
     const stop = () => {
       held.current = null;
@@ -130,6 +217,10 @@ export function useHandDrag(
       window.removeEventListener("contextmenu", noMenu, true);
       if (row.hasPointerCapture(pointerId)) row.releasePointerCapture(pointerId);
       setOverFrame(null);
+      if (overInto !== null) {
+        overInto = null;
+        carriedOver(null);
+      }
     };
 
     /** Whether an event is the pointer this gesture is holding — the window hears every one. */
@@ -157,6 +248,13 @@ export function useHandDrag(
       place(ghost, at);
       const over = paneUnder(at.x, at.y);
       setOverFrame(over !== null && can.current(over) ? over : null);
+      // The panel's own folders, said only as the answer changes: what it draws is one row's
+      // highlight, and a frame that named the same folder again would draw it a second time.
+      const into = over === null ? intoUnder(at.x, at.y) : null;
+      if (into !== overInto) {
+        overInto = into;
+        carriedOver(into);
+      }
     };
 
     const look = () => {
@@ -186,7 +284,14 @@ export function useHandDrag(
       if (!dragged) return;
       window.addEventListener("click", noClick, { capture: true, once: true });
       const over = paneUnder(to.x, to.y);
-      if (over !== null && can.current(over)) land.current(over, wholes);
+      if (over !== null && can.current(over)) {
+        land.current(over, taken.wholes);
+        return;
+      }
+      // Or a folder of the panel it came from, which is the other thing this gesture can mean: there
+      // the rows are the files themselves rather than words about them (`./FolderTree`).
+      const into = intoUnder(to.x, to.y);
+      if (into !== null) carriedInto(into, taken, copyHeld(e));
     };
 
     const cancel = (e: PointerEvent) => { if (mine(e)) stop(); };

@@ -37,6 +37,7 @@ import { createRoot } from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { OpenInDto } from "./bindings/bindings";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { NoticeToast } from "./components/NoticeToast";
 import { currentLang, errText, t, tf } from "./core/i18n";
 import { invoke } from "./core/ipc";
 import { RefNavProvider, type RefNav } from "./core/refNav";
@@ -141,6 +142,10 @@ function TalkWindow() {
     <RefNavProvider value={nav}>
       <div className="talk">
         {elevated && <ElevationBand />}
+        {/* What the face has to say in passing — a folder import that stopped on a name, a pane that
+            would not start. The bus these arrive on drops what nobody is listening for, and until
+            this stood here nobody in this window was (`AMB-T-4668`). */}
+        <NoticeToast />
         <TerminalFace
           ownWindow
           // Fold the app back to one window. The board is told nothing: this window going is what

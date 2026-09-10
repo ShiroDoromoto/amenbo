@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "./shell/AppShell";
+import { NoticeToast } from "./components/NoticeToast";
 import { MigrationScreen } from "./screens/MigrationScreen";
 import { RestartGate } from "./screens/RestartGate";
 import { StoreProvider } from "./store/store";
@@ -75,6 +76,10 @@ export default function App() {
   return (
     <StoreProvider>
       <AppShell />
+      {/* The window's one transient line. Every window that draws puts one up — this one and the
+          terminal window both — because the bus it listens on drops what nobody is listening for
+          (`./components/NoticeToast`). */}
+      <NoticeToast />
     </StoreProvider>
   );
 }

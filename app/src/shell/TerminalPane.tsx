@@ -314,6 +314,31 @@ export function TerminalPane({
     void pressIntoTerminal(live, data).catch(() => {});
   };
 
+  /** What a press on this pane says, and where the keyboard goes because of it.
+   *
+   *  **A press that moves the focus puts the keyboard in the box** (`AMB-D-864`). The frame moving
+   *  and the keyboard moving are one thing to the person doing it: they pressed the pane they mean
+   *  to work in, and the next thing they do is write. Left to itself only the frame moved, and the
+   *  characters went on landing in the pane they came from — the same disagreement a drop had
+   *  before `AMB-T-4182` settled it there.
+   *
+   *  **Only the press that moves it.** A press inside the pane already being worked in is left
+   *  alone, so pressing the terminal is still how the keyboard is handed to the program running in
+   *  it. What decides is what the pane was before the press, which is what `focused` still says
+   *  here: `onFocus` is what changes it, and it is answered on the render after this one.
+   *
+   *  **A pane with nothing running in it has no box** to put the keyboard in, so nothing is moved
+   *  and it stays where the person left it.
+   *
+   *  It comes after the emulator has had the press — that one takes the keyboard on its own
+   *  mousedown, from an element inside this one — so this is the last word rather than the first.
+   */
+  const pressedOn = () => {
+    const moving = !focused;
+    onFocus(frame);
+    if (moving) boxRef.current?.focus();
+  };
+
   /** Whether a press now would stay in the box — which is what the mark beside it names. It is the
    *  keyboard and nothing else: an empty box holding it keeps every ordinary character, and hands on
    *  only the four presses that walk a history, complete a word or leave a menu, with `Ctrl+C`
@@ -504,7 +529,7 @@ export function TerminalPane({
     <div
       className={`slot${focused ? " slot--focused" : ""}${landed ? " slot--landed" : ""}`}
       data-hand={frame}
-      onMouseDown={() => onFocus(frame)}
+      onMouseDown={pressedOn}
     >
       {/* What is said about this terminal, and the one control the place has. They share the row
           because the row is what is said about this pane, and removing it is the last thing there is

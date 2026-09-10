@@ -87,8 +87,15 @@ afterEach(() => {
  * draft lives is half of what is pinned here — a pane holding its own would pass every test below
  * and still lose a sentence on the next page turn.
  */
-function Window({ autoStart = true, put }: { autoStart?: boolean; put?: (text: string) => void }) {
+function Window(
+  { autoStart = true, put, working = true }:
+    { autoStart?: boolean; put?: (text: string) => void; working?: boolean },
+) {
   const [written, setWritten] = useState("");
+  // Which pane is being worked in, which is the window's answer and not the pane's: the pane asks
+  // for it on a press and reads it back on the render after. A test that held it still could not
+  // tell a press that moved the frame from one that landed where it already was.
+  const [focused, setFocused] = useState(working);
   put?.(written);
   return createElement(TerminalPane, {
     frame: "1",
@@ -96,7 +103,7 @@ function Window({ autoStart = true, put }: { autoStart?: boolean; put?: (text: s
     names: new Map(),
     start: { cwd: "/work/here" },
     autoStart,
-    focused: true,
+    focused,
     written,
     onWrite: (_frame: string, text: string) => setWritten(text),
     onOpened: () => {},
@@ -105,14 +112,14 @@ function Window({ autoStart = true, put }: { autoStart?: boolean; put?: (text: s
     onClosed: () => {},
     onDrop: () => {},
     onName: () => {},
-    onFocus: () => {},
+    onFocus: () => setFocused(true),
   });
 }
 
-/** A pane on frame 1, working in `/work/here`. */
-async function pane(autoStart = true): Promise<void> {
+/** A pane on frame 1, working in `/work/here` — the pane being worked in unless `working` says not. */
+async function pane(autoStart = true, working = true): Promise<void> {
   await act(async () => {
-    root.render(createElement(Window, { autoStart, put: (text) => { hoisted.held = text; } }));
+    root.render(createElement(Window, { autoStart, working, put: (text) => { hoisted.held = text; } }));
   });
 }
 
@@ -136,6 +143,14 @@ const mark = () => container.querySelector<HTMLElement>(".compose__mark");
 const sendBtn = () => container.querySelector<HTMLButtonElement>(".compose__send");
 /** The box the emulator collects typing in, which is the terminal's own. */
 const typing = () => container.querySelector<HTMLTextAreaElement>(".termface__face textarea");
+/** The pane itself, which is what a press on any part of it reaches on its way up. */
+const slot = () => container.querySelector<HTMLElement>(".slot");
+
+/** Press on `el` the way a person putting the pointer down on it does. */
+async function pressOn(el: Element | null): Promise<void> {
+  await act(async () => { el?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true })); });
+  await act(async () => { await Promise.resolve(); });
+}
 
 /** Write `text` in the box, the way a person does — into the box that holds the keyboard. */
 async function write(text: string): Promise<void> {
@@ -380,5 +395,42 @@ describe("where a press goes", () => {
 
     expect(typing(), "the terminal's own box went missing").not.toBeNull();
     expect(box(), "the two boxes were taken for one").not.toBe(typing());
+  });
+});
+
+describe("a press that moves the pane being worked in", () => {
+  it("puts the keyboard in the box", async () => {
+    await pane(true, false);
+    await opened();
+
+    await pressOn(slot());
+
+    expect(document.activeElement, "the frame moved and the keyboard stayed where it was")
+      .toBe(box());
+  });
+
+  it("leaves the keyboard alone inside the pane already being worked in", async () => {
+    await pane();
+    await opened();
+    // A person pressing the terminal, which is how the keyboard is handed to the program in it.
+    await act(async () => { typing()?.focus(); });
+
+    await pressOn(typing());
+
+    expect(document.activeElement, "a press in the pane took the keyboard off the program")
+      .toBe(typing());
+  });
+
+  it("leaves the keyboard alone where the pane has nothing running in it", async () => {
+    await pane(false, false);
+    const elsewhere = document.createElement("textarea");
+    document.body.append(elsewhere);
+    elsewhere.focus();
+
+    await pressOn(slot());
+
+    expect(box(), "a place with nothing running in it drew somewhere to write").toBeNull();
+    expect(document.activeElement, "the keyboard was dropped on the page").toBe(elsewhere);
+    elsewhere.remove();
   });
 });

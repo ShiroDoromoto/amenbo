@@ -31,6 +31,19 @@
 # press the box hands on, so abandoning it walks one more of them and leaves a clean prompt for the
 # half that follows.
 #
+# ── Why a second pane is opened at the end ──────────────────────────────────────────────────────
+# Everything above is one pane, and one pane cannot say where the keyboard went. A person working in
+# two presses the one they mean and writes — the frame moving and the keyboard moving are one act to
+# them, and a build where only the frame moved leaves them typing into the pane they pressed away
+# from. So the last leg opens a second pane, presses the first, and reads the mark that says which
+# box has the keyboard.
+#
+# ── Why the mark is read rather than typed at ───────────────────────────────────────────────────
+# A character sent to find out where the keyboard is would be a character added to the line still
+# standing in that box, which the leg before this one has just read. The mark beside the box says the
+# same thing and takes nothing: the box tells the page as it takes the keyboard, and the mark is
+# drawn from that answer.
+#
 # ── Why the pane runs a shell ───────────────────────────────────────────────────────────────────
 # What is sent has to be answered by something that answers the same way every time. A folder with
 # an agent on it opens on the agent, and what an agent does with a line is the agent's own — so the
@@ -43,8 +56,10 @@ description: >
   box: it stands there with nothing run. Send it with return, and it reaches the terminal. Write a
   second and send it with the press beside the box instead. Then write a third, and leave the box by
   the first line's up arrow: the shell walks its history, and the third line is still standing in the
-  box. What is under test is that the box holds what is written until a person sends it, stays out of
-  the way while it is empty, and lets a person back to the program without losing what they wrote.
+  box. Then open a second pane and press back onto the first, and read which box the keyboard is in.
+  What is under test is that the box holds what is written until a person sends it, stays out of the
+  way while it is empty, lets a person back to the program without losing what they wrote, and comes
+  to hand in the pane a press moves the work to.
 
 given:
   - type: action
@@ -189,3 +204,67 @@ steps_gui:
     op: still-to-send
     with:
       shows: SCENARIO this third line is being left behind in the box
+
+  # ── The pane a press moves the work to ────────────────────────────────────────────────────────
+  # A second pane, opened where the first one was opened from. It is the one being worked in the
+  # moment it comes up, which is what makes the press below a press that moves the work.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # Typed at the terminal so this pane has words of its own to be named by. Both panes work in the
+  # one folder, and there is nothing else here to tell them apart by.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the second pane was opened beside the first
+
+  # The keyboard is in this pane now, and in its terminal rather than in its box: the line above was
+  # typed at the program. Read before the press, so what the press moves is a thing the road watched
+  # standing somewhere else first.
+  - type: assert
+    domain: terminal
+    op: keys-in-the-box
+    with:
+      on: SCENARIO the second pane was opened beside the first
+      present: false
+
+  # Back to the first pane, by a press and nothing more.
+  - type: action
+    domain: terminal
+    op: press-pane
+    with:
+      shows: SCENARIO this second line went by the press beside the box
+
+  # Where the press put the keyboard: in the box under the pane it moved the work to, so the next
+  # thing this person types is written where they pressed.
+  - type: assert
+    domain: terminal
+    op: keys-in-the-box
+    with:
+      on: SCENARIO this second line went by the press beside the box
+
+  # And the pane they left keeps none of it. Both boxes are read, because one of them saying yes is
+  # only half of what a person needs: a build that handed the keyboard to every box would pass the
+  # reading above.
+  - type: assert
+    domain: terminal
+    op: keys-in-the-box
+    with:
+      on: SCENARIO the second pane was opened beside the first
+      present: false
+
+  # And nothing was written or sent on the way: the third line stands in that box as it was left.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO this third line is being left behind in the box
+      on: SCENARIO this second line went by the press beside the box

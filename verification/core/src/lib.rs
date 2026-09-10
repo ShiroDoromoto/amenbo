@@ -2518,6 +2518,17 @@ const REGISTRY: &[OpSpec] = &[
     // `on` is which pane's box is being read, named the way `in-the-box`'s is. Left out, it is the
     // page's one pane.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "still-to-send", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
+    // Which box the keyboard is standing in, read off the mark drawn at the box's left. That mark
+    // is the keyboard and not a guess at it: the box tells the page it has it as it takes it, and
+    // the mark is drawn from that answer (`app/src/shell/TerminalPane.tsx`).
+    //
+    // **It is read rather than typed at.** A character sent to find out where the keyboard is would
+    // be a character added to whatever is standing in the box, and this road reads that line
+    // afterwards. The mark says the same thing and costs nothing.
+    //
+    // `on` is which pane's box, named the way `still-to-send`'s is; `present: false` is the other
+    // half — a box the keyboard has left, which draws the other mark.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "keys-in-the-box", required: &[], refs: &[], strings: &["on"], binds: false },
     // A **picture** on the clipboard put into that box. It is not `paste-image` with the box named:
     // that one lands in the terminal's own input line, and the two are reached by different presses
     // on Linux. A pane holds out for `Ctrl+Shift+V` there because `Ctrl+V` is `^V` to the program in
@@ -3051,10 +3062,16 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drag-side", required: &["side", "toward"], refs: &[], strings: &["side", "toward"], binds: false },
     // A press on a pane, meaning nothing but the press — a person going to that pane and to no other.
     //
-    // **Two roads read it, and both read the same fact.** It is what puts the reading column back to
-    // its narrow width, the next press outside that column saying where the reader is looking; and it
-    // is what ends a turn an agent handed over, the hand going up by declaration and coming down by
-    // the person arriving. Neither is about what the press does to the pane, which is nothing.
+    // **Three roads read it, and the first two read the same fact.** It is what puts the reading
+    // column back to its narrow width, the next press outside that column saying where the reader is
+    // looking; and it is what ends a turn an agent handed over, the hand going up by declaration and
+    // coming down by the person arriving. Neither is about what the press does to the pane.
+    //
+    // **The third is about exactly that.** A press on a pane that was not the one being worked in
+    // hands the keyboard to the box under it (`app/src/shell/TerminalPane.tsx`), so that what the
+    // person types next lands where they pressed rather than in the pane they came from — which is
+    // what `keys-in-the-box` reads. Nothing else in the pane moves, on that road or on the two
+    // above it.
     //
     // **It is not `type-line` with the typing left out.** That step's press is a way to reach the
     // input line and what it is about is the line; this one leaves the pane as it found it, and a

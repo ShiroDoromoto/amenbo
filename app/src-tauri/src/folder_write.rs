@@ -530,6 +530,19 @@ mod tests {
         assert_eq!(nameable("CON"), !cfg!(windows));
         assert_eq!(nameable("con.txt"), !cfg!(windows));
         assert_eq!(nameable("trailing."), !cfg!(windows));
+        // The rest of what only Windows refuses, said here rather than left to the reading of
+        // `windows_takes`: a name is turned away on the machine the file has to live on, and the
+        // one machine that turns these away is the one nobody develops on (`AMB-T-4674`).
+        assert_eq!(nameable("trailing "), !cfg!(windows));
+        for name in ["a<b.md", "a>b.md", "a\"b.md", "a|b.md", "a?b.md", "a*b.md"] {
+            assert_eq!(nameable(name), !cfg!(windows), "{name}");
+        }
+        assert_eq!(nameable("LPT9.md"), !cfg!(windows));
+        assert_eq!(nameable("a\u{1}b.md"), !cfg!(windows), "a control character");
+        // And what is not one of them, on every machine: the reserved names are whole stems, not
+        // prefixes, so a file that merely starts with one is a file.
+        assert!(nameable("console.md"));
+        assert!(nameable("COM10.md"), "the device names stop at nine");
     }
 
     /// A name in use is a name in use even when what is at the end of it is nothing: a link nobody

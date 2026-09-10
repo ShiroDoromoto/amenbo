@@ -107,6 +107,27 @@ impl TalkFace {
             log::warn!("could not write down the way back into frame {frame}: {e:?}");
         }
     }
+
+    /// Take back the way into a frame, where what was written down leads nowhere
+    /// (`crate::pty::pty_open`).
+    ///
+    /// **A handle earns its place by a session running under it, and one is written before the
+    /// program starts** — that is what keeps a quit in between from costing the pane its way back
+    /// ([`resumed_from`](Self::resumed_from)). The other side of writing early is a program that
+    /// never came up: the handle then names a session nothing ever made, and the next run opens the
+    /// pane on it and is refused in the same breath. Nothing gets better on the run after that, so
+    /// the row is cleared and the pane comes up on a session of its own instead.
+    pub fn gave_up(&self, frame: &str) {
+        if self.hints.lock().expect("resume hints lock").remove(frame).is_none() {
+            return;
+        }
+        let Some(layout) = self.layout.lock().expect("talk layout lock").clone() else {
+            return;
+        };
+        if let Err(e) = keep(self, &layout) {
+            log::warn!("could not take back the way into frame {frame}: {e:?}");
+        }
+    }
 }
 
 /// What this run calls the talk window's frames — the whole of it, since the window draws every frame
@@ -400,6 +421,21 @@ mod tests {
         let hints = face.hints.lock().unwrap();
         assert_eq!(hints.get("1").map(String::as_str), Some("0f9c"));
         assert_eq!(hints.get("2"), None);
+    }
+
+    /// A handle whose program never came up is taken back off the frame, and the frames beside it
+    /// keep theirs.
+    #[test]
+    fn a_way_back_that_leads_nowhere_is_taken_back() {
+        let face = TalkFace::default();
+        face.resumed_from("1", "0f9c".to_string());
+        face.resumed_from("2", "7b2e".to_string());
+
+        face.gave_up("1");
+
+        let hints = face.hints.lock().unwrap();
+        assert_eq!(hints.get("1"), None);
+        assert_eq!(hints.get("2").map(String::as_str), Some("7b2e"));
     }
 
     /// A place the window sends with no project is let go rather than kept under a guess: a pane is

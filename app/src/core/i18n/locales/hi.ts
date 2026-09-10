@@ -580,6 +580,7 @@ export const hi: Translation = {
     "face.more": "और",
     "face.compose": "इस पैन में लिखें",
     "face.composeSend": "भेजें",
+    "face.composeSendKeys": "भेजें ({keys})",
     "face.composePasses": "कुंजियाँ टर्मिनल पर जाती हैं",
     "face.composeKeeps": "यहाँ लिखा जा रहा है",
     "files.side": "पन्ना और फ़ाइलें",

@@ -583,6 +583,7 @@ export const id: Translation = {
     "face.more": "Lainnya",
     "face.compose": "Tulis ke panel ini",
     "face.composeSend": "Kirim",
+    "face.composeSendKeys": "Kirim ({keys})",
     "face.composePasses": "Tombol diteruskan ke terminal",
     "face.composeKeeps": "Sedang menulis di sini",
     "files.side": "Halaman dan berkas",

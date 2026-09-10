@@ -703,10 +703,17 @@ const ui = {
   "face.handHere": "Drop to paste the path",
   "face.more": "More",
   // The box under a pane, where a line is written before it is sent (`AMB-D-864`). The two marks are
-  // the same box in its two states: with nothing written the arrows, the tab and Escape go to the
-  // program, and with something written they belong to the box.
+  // the same box in its two states: with nothing written the arrows and the tab go to the program,
+  // and with something written they belong to the box. `Escape` and `Ctrl+C` go either way
+  // (`AMB-D-876`), which is what the marks do not try to say — they are about where the typing
+  // lands, and neither of those is typing.
   "face.compose": "Write to this pane",
   "face.composeSend": "Send",
+  // The same press, named with the keys that do the same thing (`AMB-D-876`). `{keys}` is the
+  // machine's own spelling — `⌘Enter` or `Ctrl+Enter` — and is not translated: it is the marks on
+  // the keyboard in front of the reader. It is a key of its own because the plain word above is
+  // still what a button that only sends is called (`../../../shell/PaneModel`).
+  "face.composeSendKeys": "Send ({keys})",
   "face.composePasses": "Keys go to the terminal",
   "face.composeKeeps": "Writing here",
   // The file face beside the terminal's pane: the project's folder, folded, with what git says

@@ -9,9 +9,13 @@
 // Which presses leave the box is decided by what is written in it and by nothing on the screen. An
 // empty box has no history to walk, no word to complete and nothing to escape from; a box holding a
 // half-written sentence has all three, and keeps them — except the ArrowUp on its first line, which
-// is the one road out and takes the keyboard with it.
+// is the one road out and takes the keyboard with it, and the two that stop what is running, which
+// leave whatever is written (`AMB-D-876`).
 import { describe, expect, it, vi } from "vitest";
-import { boxHeight, leavesForTerminal, passedOn, pressIntoTerminal, sendIntoTerminal } from "./terminal";
+import {
+  boxHeight, leavesForTerminal, passedOn, pressIntoTerminal, sendIntoTerminal, sendsWhatIsWritten,
+  stopsTheProgram,
+} from "./terminal";
 
 const hoisted = vi.hoisted(() => ({
   /** What crossed to the host, in the order it crossed. */
@@ -97,6 +101,63 @@ describe("which presses an empty box hands on", () => {
   });
 });
 
+describe("the press that sends what is written", () => {
+  // The machine's own modifier, and only that one: a person's fingers already know which key is the
+  // application's here, and the other machine's would be a second way to do it that nobody presses.
+  it("is the meta key on macOS and the control key on the other two", () => {
+    expect(sendsWhatIsWritten(press("Enter", { metaKey: true }), "macos")).toBe(true);
+    expect(sendsWhatIsWritten(press("Enter", { ctrlKey: true }), "macos"), "the Windows press sent on a Mac")
+      .toBe(false);
+    expect(sendsWhatIsWritten(press("Enter", { ctrlKey: true }), "windows")).toBe(true);
+    expect(sendsWhatIsWritten(press("Enter", { ctrlKey: true }), "other"), "Linux is the control side")
+      .toBe(true);
+    expect(sendsWhatIsWritten(press("Enter", { metaKey: true }), "windows")).toBe(false);
+  });
+
+  // The whole of what changed: Enter is a line and nothing else (`AMB-D-876`).
+  it("is never the Enter pressed on its own, which is another line", () => {
+    expect(sendsWhatIsWritten(press("Enter"), "macos")).toBe(false);
+    expect(sendsWhatIsWritten(press("Enter"), "windows")).toBe(false);
+    expect(sendsWhatIsWritten(press("Enter", { shiftKey: true }), "windows")).toBe(false);
+  });
+
+  it("is not a press held with anything further, which means somebody else's thing", () => {
+    expect(sendsWhatIsWritten(press("Enter", { metaKey: true, altKey: true }), "macos")).toBe(false);
+    expect(sendsWhatIsWritten(press("Enter", { metaKey: true, shiftKey: true }), "macos")).toBe(false);
+    expect(sendsWhatIsWritten(press("Enter", { ctrlKey: true, metaKey: true }), "windows")).toBe(false);
+  });
+
+  it("is not another key held with the same modifier", () => {
+    expect(sendsWhatIsWritten(press("a", { metaKey: true }), "macos")).toBe(false);
+    expect(sendsWhatIsWritten(press("Escape", { ctrlKey: true }), "windows")).toBe(false);
+  });
+});
+
+describe("the presses that stop what is running", () => {
+  // The exception to "what is written decides where a press goes": stopping is what a person reaches
+  // for because something went wrong, and by then the next line is usually half typed (`AMB-D-876`).
+  it("leave the box whatever is written in it", () => {
+    expect(stopsTheProgram(press("Escape"))).toBe("\x1b");
+    expect(stopsTheProgram(press("c", { ctrlKey: true }))).toBe("\x03");
+    expect(stopsTheProgram(press("C", { ctrlKey: true }))).toBe("\x03");
+  });
+
+  it("are those two alone, and every other press is the box's to answer for", () => {
+    expect(stopsTheProgram(press("ArrowUp")), "the history walked out of a written box").toBeNull();
+    expect(stopsTheProgram(press("Tab"))).toBeNull();
+    expect(stopsTheProgram(press("Enter"))).toBeNull();
+    expect(stopsTheProgram(press("a", { ctrlKey: true })), "select-all left the box").toBeNull();
+  });
+
+  // The modifier rules are the ones an empty box is read by, so the two roads cannot disagree about
+  // what a press held with something further means.
+  it("are not a press held with anything further", () => {
+    expect(stopsTheProgram(press("Escape", { shiftKey: true }))).toBeNull();
+    expect(stopsTheProgram(press("Escape", { metaKey: true }))).toBeNull();
+    expect(stopsTheProgram(press("c", { ctrlKey: true, shiftKey: true })), "the copy press").toBeNull();
+  });
+});
+
 describe("the way out of a box with something written in it", () => {
   /** Where the caret sits when a person has just written `text` and not moved. */
   const end = (text: string) => text.length;
@@ -124,6 +185,8 @@ describe("the way out of a box with something written in it", () => {
       .toBeNull();
     expect(leavesForTerminal(press("ArrowUp", { metaKey: true }), "a line", 6)).toBeNull();
     expect(leavesForTerminal(press("ArrowDown"), "a line", 6), "the way out went downwards").toBeNull();
+    // Escape leaves a written box by the other road, which is why it is not this one
+    // (`stopsTheProgram`).
     expect(leavesForTerminal(press("Escape"), "a line", 6)).toBeNull();
   });
 });

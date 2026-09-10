@@ -580,6 +580,7 @@ export const zhHant: Translation = {
     "face.more": "更多",
     "face.compose": "寫給此窗格",
     "face.composeSend": "傳送",
+    "face.composeSendKeys": "傳送（{keys}）",
     "face.composePasses": "按鍵交給終端機",
     "face.composeKeeps": "正在這裡輸入",
     "files.side": "便箋與檔案",

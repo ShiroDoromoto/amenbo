@@ -601,6 +601,7 @@ export const it: Translation = {
     "face.more": "Altro",
     "face.compose": "Scrivi in questo riquadro",
     "face.composeSend": "Invia",
+    "face.composeSendKeys": "Invia ({keys})",
     "face.composePasses": "I tasti vanno al terminale",
     "face.composeKeeps": "Stai scrivendo qui",
     "files.side": "Pagina e file",

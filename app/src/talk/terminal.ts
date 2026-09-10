@@ -291,8 +291,9 @@ export type Press = {
  *
  * **It is asked of a box with nothing in it** (`AMB-D-864`). What decides where a press goes is what
  * the person has written, not what is on the screen: a box holding a half-written sentence keeps its
- * own arrows, and an empty one has nothing to keep them for. The one press a written box hands on as
- * well is {@link leavesForTerminal}'s, which asks this for the bytes.
+ * own arrows, and an empty one has nothing to keep them for. Two roads out of a written box ask this
+ * for the bytes rather than deciding them again — {@link leavesForTerminal}'s one press, and the two
+ * that stop what is running ({@link stopsTheProgram}, `AMB-D-876`).
  *
  * `Ctrl+C` is here and `Ctrl` with anything else is not. It is the one press that means "stop what is
  * running", which is the reason a person looks away from what they were writing; the rest of the
@@ -305,6 +306,45 @@ export function passedOn(e: Press): string | null {
   }
   if (e.altKey || e.metaKey || e.shiftKey) return null;
   return PASSED_ON[e.key] ?? null;
+}
+
+/**
+ * Whether this press is the one that sends what is written in the box — `⌘Enter` on macOS and
+ * `Ctrl+Enter` everywhere else (`AMB-D-876`). It is about a press; {@link sendsTheSentence}, next to
+ * it in name only, is about a pane's own unsent opening line.
+ *
+ * **Enter alone is another line.** A box a long instruction is written in is a box Enter has to be
+ * usable in, and the send moved to the modifier rather than the newline moving to one: Shift-Enter
+ * was the newline and every second press of it is a press a person did not want to have to make.
+ *
+ * **The modifier is the machine's own.** macOS spells "the application's own key" `⌘` and the other
+ * two spell it `Ctrl`, so the one this reads is whichever the person's fingers already reach for.
+ * `hostOs()` places Linux as `other`, which is the Ctrl side of that line.
+ *
+ * Held with anything further, the press is not this one: what `Alt+Enter` or `⌘Ctrl+Enter` means is
+ * somebody else's, and a box that sent on them would be answering for a press it was not given.
+ */
+export function sendsWhatIsWritten(e: Press, os: HostOs = hostOs()): boolean {
+  if (e.key !== "Enter" || e.altKey || e.shiftKey) return false;
+  return os === "macos" ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+}
+
+/**
+ * What the terminal is given for a press that means "stop what is running" — `Escape` and `Ctrl+C` —
+ * or nothing where the press is not one of those (`AMB-D-876`).
+ *
+ * **These two leave whatever is written**, which is the one exception to a press going where the box
+ * decides ({@link passedOn}). Stopping is what a person reaches for *because* something went wrong,
+ * and by then they have usually started writing the next line — a box that swallowed the press would
+ * be swallowing it at exactly the moment it was meant. Neither key has anything to do in a textarea,
+ * so the exception costs the box nothing.
+ *
+ * The bytes and the modifier rules are {@link passedOn}'s, so the two roads cannot disagree about
+ * what `Ctrl+Shift+C` is.
+ */
+export function stopsTheProgram(e: Press): string | null {
+  const stopping = e.key === "Escape" || (e.ctrlKey && (e.key === "c" || e.key === "C"));
+  return stopping ? passedOn(e) : null;
 }
 
 /**

@@ -602,6 +602,7 @@ export const ptBR: Translation = {
     "face.more": "Mais",
     "face.compose": "Escreva neste painel",
     "face.composeSend": "Enviar",
+    "face.composeSendKeys": "Enviar ({keys})",
     "face.composePasses": "As teclas vão para o terminal",
     "face.composeKeeps": "Escrevendo aqui",
     "files.side": "Página e arquivos",

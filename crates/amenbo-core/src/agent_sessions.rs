@@ -1,11 +1,13 @@
 //! **Which sessions a provider has** — asked of the provider's own command, for the one row that
 //! will not be told a handle (`AMB-D-869`).
 //!
-//! Five of the six take the handle Amenbo decided as they start ([`crate::harness::Resume`]), and
+//! Four of the six take the handle Amenbo decided as they start ([`crate::harness::Resume`]), and
 //! there is nothing to ask them: the id is already written down before the program is running.
 //! OpenCode names its own — `ses_f7a6428cbffemn98kHpVwT8NEh` is not a shape anyone else could have
 //! chosen — so the pane is started, and the id it took is read back out of its own list afterwards
-//! (`AMB-T-4630`).
+//! (`AMB-T-4630`). The sixth is Gemini, which carries no handle at all: it restarts itself on the
+//! same argv, and its own list holds a session only once there is something in it to resume, so
+//! there is nothing to ask at the moment a pane starts (`AMB-T-4659`).
 //!
 //! **A public command, not a file of the provider's** (`AMB-D-747`). `opencode session list
 //! --format json` is documented and prints what the provider itself reads; the alternative was

@@ -278,8 +278,10 @@ pub struct Launch {
     /// How a pane running this provider comes back into the session it was running, or `None`
     /// where the way back is not a flag on the line ([`Resume`], `AMB-D-869`).
     ///
-    /// A column for the same reason [`rename`](Launch::rename) is one: five of the six take a
-    /// handle beside the opening prompt, and the sixth carries a home instead (`AMB-T-4640`).
+    /// A column for the same reason [`rename`](Launch::rename) is one: four of the six take a
+    /// handle beside the opening prompt, and the two that do not are rows rather than an exception —
+    /// Codex carries a home instead (`AMB-T-4640`), and Gemini carries nothing that survives its own
+    /// restart (`AMB-T-4659`).
     pub resume: Option<Resume>,
     /// Whether this row has been watched starting the provider on a real machine (`AMB-T-3819`).
     ///
@@ -405,18 +407,20 @@ pub struct Rename {
 /// How a pane comes back into the session it was running — the resume catalog's column
 /// (`AMB-D-869`).
 ///
-/// **Every one of the six has a way back, and no two of them spell it alike** (`AMB-T-4630`). What
-/// parts them is not the flag but who decides the handle: three take one Amenbo hands them as the
+/// **Five of the six have a way back, and no two of them spell it alike** (`AMB-T-4630`). What
+/// parts them is not the flag but who decides the handle: two take one Amenbo hands them as the
 /// session starts, one takes an unknown one and creates it, one names its own and has to be asked
 /// afterwards, and one is not a session id at all. So the column carries the two halves separately —
 /// [`back`](Resume::back) is the way in, [`issue`](Resume::issue) is who decides — and a provider
 /// with no way back at all is a row with `None` on it rather than a flag nothing takes.
 ///
-/// **The row for `codex` is `None` here, and it is not "no way back".** Its handle is a home of its
-/// own rather than an id on a line, which is an environment variable and a directory to keep
-/// (`AMB-T-4640`), and a flag column could hold neither.
+/// **`None` here is two different answers, and the rows say which.** Codex's handle is a home of its
+/// own rather than an id on a line — an environment variable and a directory to keep
+/// (`AMB-T-4640`), which a flag column could hold neither of. Gemini has the flags and cannot use
+/// them: it restarts itself on the same argv, so a handle on the line kills the second start
+/// (`AMB-T-4659`).
 pub struct Resume {
-    /// The flag the handle goes behind to come back into that session — `--resume` for four of
+    /// The flag the handle goes behind to come back into that session — `--resume` for three of
     /// them, `-s` for OpenCode.
     pub back: &'static str,
     /// How a handle Amenbo decided is put on the line as the session **starts**, or `None` where
@@ -434,7 +438,7 @@ pub struct Resume {
 /// being asked to come back into a session that does not exist yet.
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Issue {
-    /// A flag of the provider's own for it — `--session-id <uuid>`, which the three that have one
+    /// A flag of the provider's own for it — `--session-id <uuid>`, which the two that have one
     /// take beside the opening prompt.
     Flag(&'static str),
     /// The same flag as coming back. Cursor was watched creating a session under a handle it had
@@ -458,8 +462,9 @@ pub enum Handle<'a> {
 
 /// A handle for a session about to start on `launch`, where Amenbo is the one that decides it.
 ///
-/// `None` for the two rows it is not Amenbo's to decide: OpenCode names its own and is asked
-/// afterwards ([`Resume::ask`]), and Codex carries a home rather than an id (`AMB-T-4640`).
+/// `None` for the three rows it is not Amenbo's to decide: OpenCode names its own and is asked
+/// afterwards ([`Resume::ask`]), Codex carries a home rather than an id (`AMB-T-4640`), and Gemini
+/// takes no handle at all (`AMB-T-4659`).
 ///
 /// **A version 4 UUID, because that is the shape the providers were watched taking** — Claude Code
 /// refuses `--session-id` anything else, and the other two were only ever handed one
@@ -598,13 +603,21 @@ pub static LAUNCHES: &[Launch] = &[
         // No such command at all — typed in, it goes to the model as a sentence and is answered as
         // one (`AMB-T-4652`), which is why this is `None` rather than a row with a spelling.
         rename: None,
-        // Its `--help` names `latest` and a number, and a UUID from `--session-id` was watched
-        // making the round trip all the same (`AMB-T-4630`).
-        resume: Some(Resume {
-            back: "--resume",
-            issue: Some(Issue::Flag("--session-id")),
-            ask: None,
-        }),
+        // **The one row with both flags and no way back.** A UUID handed to `--session-id` was
+        // watched making the round trip (`AMB-T-4630`), and the flag is still unusable here: this
+        // provider runs as a supervisor over its own work process and re-spawns it on the *same*
+        // argv whenever it asks to restart — the trust prompt being answered, the auth type
+        // changing, a setting being written. The second start finds the session the first one
+        // already made and exits on it (`Session ID "…" already exists`, `AMB-T-4659`), taking the
+        // pane with it. Nothing Amenbo puts on that line survives, and standing the pane back up
+        // afterwards is the covering-for-a-provider `AMB-D-869` refuses.
+        //
+        // **`--resume` is no way in either.** A handle it has never seen is refused rather than
+        // created (Cursor's road), and a session it has just made is not in `--list-sessions` until
+        // there is something in it to resume — so the handle cannot be read back as the pane starts
+        // the way OpenCode's is. Reading it back later, once the conversation has content, is a
+        // road that stays open and is not this row's (`AMB-T-4659`).
+        resume: None,
         confirmed: true,
     },
     Launch {
@@ -743,8 +756,8 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 ///
 /// **`handle` is the session this pane is opened on, and `None` is a pane opened on none**
 /// ([`Handle`], `AMB-D-869`). It rides on the same line as the opening prompt rather than in a
-/// second move: all six take the two together, so a pane that comes back into a conversation is
-/// still told where it is working ([`Resume`]).
+/// second move: every row that takes a handle takes the two together, so a pane that comes back into
+/// a conversation is still told where it is working ([`Resume`]).
 pub fn opening(
     launch: &Launch,
     cmd: &str,
@@ -1291,9 +1304,11 @@ mod tests {
                 launch.id
             );
         }
-        // And the row whose way back is a home of its own rather than a handle on a line
-        // (`AMB-T-4640`).
+        // And the two rows with no way back on a line, for the two different reasons: Codex's is a
+        // home of its own rather than a handle (`AMB-T-4640`), and Gemini has the flags but restarts
+        // itself on the same argv, so a handle on the line kills the second start (`AMB-T-4659`).
         assert!(find_launch("codex-cli").unwrap().resume.is_none());
+        assert!(find_launch("gemini-cli").unwrap().resume.is_none());
     }
 
     /// A handle rides on the same line as the opening prompt, in front of it, and a pane opened on

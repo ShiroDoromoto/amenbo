@@ -1,11 +1,11 @@
 //! **Reading back the handle a provider named itself** — the running half of
 //! [`amenbo_core::agent_sessions`] (`AMB-D-869`).
 //!
-//! Four of the six are written down before they start: Amenbo decides the handle and hands it over
-//! on the launch line ([`amenbo_core::harness::issue`]). OpenCode is the fifth — it names its own —
+//! Three of the six are written down before they start: Amenbo decides the handle and hands it over
+//! on the launch line ([`amenbo_core::harness::issue`]). OpenCode is the fourth — it names its own —
 //! so the pane is started, and then its own list is asked which session appeared in that folder
-//! (`AMB-T-4630`). The sixth is Codex, whose way back is a home rather than an id and is not this
-//! module's (`AMB-T-4640`).
+//! (`AMB-T-4630`). The fifth is Codex, whose way back is a home rather than an id and is not this
+//! module's (`AMB-T-4640`), and the sixth is Gemini, which has no way back to read (`AMB-T-4659`).
 //!
 //! **Asked in the reader's own login shell** ([`crate::launch::asking`]), for the reason every other
 //! question about a provider is: the command has to be found the way the pane's shell finds it.

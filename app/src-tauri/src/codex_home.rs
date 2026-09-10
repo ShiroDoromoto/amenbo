@@ -23,15 +23,25 @@
 //! **What is made here is tidied here.** A home outlives the run because the pane does, so it is
 //! taken away when the pane is ([`crate::codex_home::forget`]) and what an ended run left behind is cleared by the next
 //! one ([`crate::codex_home::sweep`]) — the same shape `crate::pty::sweep` clears the drop boxes with.
+//!
+//! **No pane is pointed at one of these at the moment** (`AMB-T-4678`). A Codex session was watched
+//! not being recorded in a home of this shape, so `resume --last` had nothing to come back into
+//! (`AMB-T-4666`) — the way back came off the catalog row, and [`crate::codex_home::for_pane`] came
+//! off the launch path with it (`crate::pty::pty_open`). **This module is not dead code**:
+//! `AMB-T-4679` points at it again once a home is known to record what a pane said in it, and until
+//! then the two tidying doors are still called, for the homes runs before this one left behind.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 /// The variable Codex reads its own directory from.
 ///
+/// Nothing sets it while the way back is down (`AMB-T-4678`); it is held for `AMB-T-4679`.
+///
 /// It is a floor and not a setting, the way everything else a pane is started with is
 /// (`crate::launch`): a profile that exports `CODEX_HOME` is read after this is set and wins, and a
 /// reader who has one has pointed all of their Codexes at one place on purpose.
+#[allow(dead_code)]
 pub const ENV: &str = "CODEX_HOME";
 
 /// The catalog id of the one provider any of this is about
@@ -68,6 +78,10 @@ const SHARED: [&str; 7] =
 ///
 /// A frame id that is not a plain number is refused rather than made a directory for: it arrives from
 /// the window, and what a name would do here is write outside the directory this module answers for.
+///
+/// **Nobody calls this while the way back is down** (`AMB-T-4678`, the module's own note). It is
+/// kept whole rather than taken out, because `AMB-T-4679` is the row that calls it again.
+#[allow(dead_code)]
 pub fn for_pane(frame: &str, agent: Option<&str>) -> Option<PathBuf> {
     if agent != Some(CODEX) {
         return None;

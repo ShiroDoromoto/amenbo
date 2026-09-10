@@ -242,9 +242,9 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
     await mountAgentFrame(root, "en", events, { frame: "7" }, null);
     await chooseFolder(root);
 
-    // The press on the row is what starts it, and the place has to ride along: `codex` is resumed
-    // from a directory kept against the frame (`AMB-D-869`), so a pane started with no place named
-    // is one there is no way back into.
+    // The press on the row is what starts it, and both the place and the frame have to ride along:
+    // the way back into a conversation is written down against the frame (`AMB-D-869`), so a pane
+    // started without one is a pane there is no way back into.
     expect(hoisted.panes).toEqual([
       { adopt: false, frame: "7", cwd: "/work/here", agent: "codex-cli" },
     ]);

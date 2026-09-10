@@ -16,10 +16,22 @@
 #
 # The one thing it does name is a provider whose pane will **not** be in its conversation afterwards,
 # because the plain sentence promises every one of them will be
-# (`app/src-tauri/src/frames.rs`, `panes_without_a_way_back`). Every pane on this road is a plain
-# shell, which holds no conversation to come back to, so what every leg below reads is the plain
-# sentence. **The named half is not walked here**: there is no op that opens a pane on a chosen
-# provider, so nothing the operator can be told to do would put one on the screen.
+# (`app/src-tauri/src/frames.rs`, `panes_without_a_way_back`). Every pane on the legs about the
+# ledger is a plain shell, which holds no conversation to come back to, so what those legs read is
+# the plain sentence — said as an absence, because a build that named a provider there would be
+# frightening somebody off a quit that costs them nothing.
+#
+# ── Why the last leg opens on a named provider ───────────────────────────────────────────────────
+# The named half is the promise's other side, and it can only be walked on a pane whose provider has
+# no way back. Which providers those are is the catalog's answer and changes; what does not change is
+# that the machine this road stands up holds the catalog's own commands in its own order, so the leg
+# names one of them and the sentence is read for that name. The pane has to be **running** besides —
+# the question is only raised over something still going — which is why the stand-ins on this road
+# stay open rather than printing and ending.
+#
+# The provider written below is the one the catalog has no way back for today. The day it gains one
+# this leg goes red, and that is the road asking to be pointed at whichever provider is still without
+# — not a fault in the build (`crates/amenbo-core/src/harness.rs`, `LAUNCHES`, the `resume` field).
 #
 # ── Why both doors are walked ────────────────────────────────────────────────────────────────────
 # There are two ways out and they arrive by different roads. The menu's item is one this app wrote,
@@ -45,8 +57,9 @@ description: >
   terminal is about to go, names no task, and offers two answers. Stay, and nothing has happened: the
   app is still running and the task is still held. Ask again and go — the app ends and the reservation
   is still standing when it comes back. Then do the same through the other door, the close on the last
-  window, and that reservation stands too. Finally quit with no pane open at all, and nothing is
-  asked.
+  window, and that reservation stands too. Then quit with no pane open at all, and nothing is asked.
+  Finally open a pane on a provider that will not be in its conversation again, and read the question
+  naming it.
 
 given:
   - type: action
@@ -90,6 +103,18 @@ given:
     op: finish-creating
     with:
       target: shears
+
+  # The row of things a pane can be opened with, made the run's answer rather than the machine's: the
+  # catalog's own commands, in the catalog's own order, in front of whatever the operator has. Four of
+  # them, because the last leg opens on the fourth. They stay open rather than printing and ending —
+  # the way out asks about what is still running, and a stand-in that had already finished would leave
+  # nothing to be asked about.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 4
+      then: reads
 
 steps_gui:
   - type: action
@@ -142,6 +167,17 @@ steps_gui:
     with:
       how: menu
       asks: true
+
+  # The plain sentence, read for what it does not say. Every pane up is a shell, which holds no
+  # conversation and is not one of the panes this half of the promise is about — so the question
+  # singles nobody out. A build that named a provider here would be talking somebody out of a quit
+  # that costs them nothing.
+  - type: assert
+    domain: store
+    op: quit-names
+    with:
+      agent: Gemini CLI
+      present: false
 
   - type: action
     domain: store
@@ -303,3 +339,51 @@ steps_gui:
     with:
       how: menu
       asks: false
+
+  # ── And the half the plain sentence cannot say ──────────────────────────────────────────────────
+  # A pane on a provider with no way back, running. The machine this road stood up holds the
+  # catalog's own commands in the catalog's own order, so the name below is on the row whatever the
+  # operator has installed of their own.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Gemini CLI
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  - type: action
+    domain: store
+    op: quit
+    with:
+      how: menu
+      asks: true
+
+  # The goal this leg is here for. The sentence promises every pane comes back into its conversation;
+  # this one will not, and the question says whose it is rather than leaving the reader to find out
+  # at the next start.
+  - type: assert
+    domain: store
+    op: quit-names
+    with:
+      agent: Gemini CLI
+
+  - type: action
+    domain: store
+    op: answer-quit
+    with:
+      answer: leave

@@ -741,6 +741,21 @@ const REGISTRY: &[OpSpec] = &[
     // the harness brings another up in its place so there is still a window for the step to be shot
     // against.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "quit", required: &["asks"], refs: &[], strings: &["how"], binds: false },
+    // What that question says about the panes it is about to take. The plain sentence promises every
+    // one of them will be in its conversation again at the next start, and a pane whose provider has
+    // no way back breaks that promise — so the question names such a provider when one is open
+    // (`app/src-tauri/src/frames.rs`, `panes_without_a_way_back`).
+    //
+    // `agent` is the provider's own name as the screen draws it, and it is read off the shot rather
+    // than left to an eye: it is a product's name and not a word of the interface's, so it is the
+    // same letters whatever language the machine is set to, and the sentence around it is the one
+    // place on that screen the name appears. `present: false` is the other half and the one the
+    // plain sentence is read by — a build that named a provider whose panes all come back would be
+    // frightening a reader off a quit that costs them nothing.
+    //
+    // It is written between the question and the answer, because the question is what it reads: the
+    // road raises it with `quit`'s `asks: true`, which leaves it standing and presses nothing.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "quit-names", required: &["agent"], refs: &[], strings: &["agent"], binds: false },
     // The answer given to that question, and where the app actually goes. It is a step of its own
     // rather than an arg on the one above, because the question stands between them: the app is still
     // running with the box on its board, and what a road has there is a screen it can read. The way
@@ -2294,7 +2309,7 @@ const REGISTRY: &[OpSpec] = &[
     // Choosing an agent on the row without opening anything, which is what puts the model row under
     // it: a model is asked of one agent, so nothing is asked until one is on.
     //
-    // **It names no agent, and cannot.** Which agents are on the row is the machine's own
+    // **By default it names no agent, and cannot.** Which agents are on the row is the machine's own
     // (`opens-with`), so what this names is a position: the first thing on it. The row is drawn in
     // Amenbo's own order — the agents it lists, then anything registered here, then the plain shell
     // — so the first is a catalogued agent on every machine, and on a road that stood the machine up
@@ -2308,7 +2323,17 @@ const REGISTRY: &[OpSpec] = &[
     // the same reason the first one does — a machine stood up puts the catalog's first commands in
     // front of the `PATH`, and the row is drawn in the catalog's order whatever else the operator
     // has installed.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-start", required: &[], refs: &[], strings: &["at"], binds: false },
+    //
+    // **Unless the road stood the machine up.** `can-start` puts the catalog's own commands in front
+    // of the `PATH`, in the catalog's order, which is the one case where what is on the row is the
+    // run's answer rather than the machine's — so a road that laid that premise may say `agent` and
+    // name one. It is worth naming there because some roads are about a particular provider rather
+    // than about a position: what the way out says of a pane that will not be in its conversation
+    // afterwards is the provider's own name, and a road that has to read that name has to have
+    // chosen it. `agent` is the name drawn on the row, which is the provider's own and the same word
+    // in every language. Naming both it and `at` is refused: they are two ways of saying which one,
+    // and a step that said both would leave which of them won to the driver.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-start", required: &[], refs: &[], strings: &["at", "agent"], binds: false },
     // Naming the model that agent starts on. `name` is a name of the road's own, and `none` is the
     // choice that takes one back off — the agent starting on whatever its own settings say, which is
     // where everybody begins and is a choice rather than the absence of one.

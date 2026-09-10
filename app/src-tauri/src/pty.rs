@@ -978,12 +978,15 @@ pub fn pty_open(
     if let (Some(frame), Some(issued)) = (frame.as_deref(), issued.as_deref()) {
         face.resumed_from(frame, issued.to_string());
     }
-    // The frame to take the way back off again, should the program end in moments. Only where the
-    // handle rode in on the launch line: `codex` is pointed at a directory instead, which is derived
-    // from the frame afresh every time and is not a row a refusal could be traced to (`AMB-D-869`).
-    let on_the_line = frame
-        .clone()
-        .filter(|_| launch.is_some_and(|launch| launch.resume.is_some()));
+    // The frame to take the way back off again, should the program end in moments. Only where what
+    // is written down is a handle the line carries: `codex` comes back by a subcommand, and what is
+    // kept for it is the home the pane runs in — a place Amenbo made, not a claim that a
+    // conversation was ever had there (`AMB-D-869`, `crate::codex_home`).
+    let on_the_line = frame.clone().filter(|_| {
+        launch.is_some_and(|launch| {
+            launch.resume.as_ref().is_some_and(amenbo_core::harness::Resume::carries_a_handle)
+        })
+    });
     // Kept against the session, so a pane that adopts this terminal later can say what is running in
     // it. It is the id as it was asked for — a catalog row, or one of this device's registrations —
     // and which of the two it is stays the catalog's answer rather than being decided here.

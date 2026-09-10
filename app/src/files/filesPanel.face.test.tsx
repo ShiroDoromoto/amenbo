@@ -18,6 +18,7 @@ import {
 } from "./filesPanelKit";
 import { formatNumber, t, tf } from "../core/i18n";
 import { subscribeNotice } from "../core/notice";
+import { carriedInto, carriedOver, type Held } from "./handDrag";
 
 describe("the file face", () => {
   it("watches the project's folder, not a pane's", async () => {
@@ -646,4 +647,84 @@ describe("the file face", () => {
     expect(container.querySelector(".files__file--git-untracked")?.textContent).toContain("one.md");
   });
 
+});
+
+describe("a row of the panel carried to one of its own folders", () => {
+  /** The tree of the tests below: one folder, one file inside it, two files beside it. */
+  async function tree() {
+    hoisted.entries[""] = [
+      { name: "src", isDir: true, ignored: false },
+      { name: "note.md", isDir: false, ignored: false },
+    ];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
+    await drawOpen();
+    await click(button("src"));
+    await settle();
+  }
+
+  /** `note.md`, as a press on it takes hold of it (`./handDrag`). */
+  const note: Held = { wholes: [`${ROOT}/note.md`], root: ROOT, paths: [["note.md"]] };
+
+  /** Let a row go over the folder drawn for `into`, with or without the key that asks for a copy. */
+  const letGo = (into: string, copy = false) => act(async () => {
+    const el = container.querySelector<HTMLElement>(`[data-into="${into}"]`)!;
+    carriedInto(el, note, copy);
+    await new Promise((r) => setTimeout(r, 0));
+  });
+
+  it("moves it there, both halves of the landing travelling", async () => {
+    await tree();
+
+    await letGo("src");
+
+    expect(hoisted.carries).toEqual([{
+      how: "move", root: ROOT, paths: [["note.md"]], toRoot: ROOT, to: ["src"],
+    }]);
+  });
+
+  it("copies it instead where the key for a copy was held", async () => {
+    await tree();
+
+    await letGo("src", true);
+
+    expect(hoisted.carries.map((one) => one.how)).toEqual(["copy"]);
+  });
+
+  it("does nothing at all where it was let go over the folder it is already in", async () => {
+    await tree();
+
+    // The bound folder itself, which is where `note.md` sits. The host would answer that it is
+    // already there, which is a true sentence about a gesture that asked for nothing.
+    await letGo("");
+
+    expect(hoisted.carries).toEqual([]);
+  });
+
+  it("marks the folder under it, and lets the mark go with the gesture", async () => {
+    await tree();
+
+    await act(async () => {
+      carriedOver(container.querySelector<HTMLElement>('[data-into="src"]'));
+    });
+    expect(container.querySelector(".files__into")?.getAttribute("data-into")).toBe("src");
+
+    await act(async () => { carriedOver(null); });
+    expect(container.querySelector(".files__into, .files__row--into")).toBeNull();
+  });
+
+  it("says what stopped the carry, and says nothing of what went", async () => {
+    await tree();
+    hoisted.carried = { arrived: [], stopped: { name: "note.md", code: "taken", why: "" } };
+    const said: string[] = [];
+    const stop = subscribeNotice((line) => said.push(line));
+
+    await letGo("src");
+
+    stop();
+    // The folder is watched and is about to draw what arrived; what did not arrive is the only
+    // half of the answer nothing else on the screen would say.
+    expect(said).toEqual([
+      tf("files.dropStopped", { name: "note.md", why: t("files.stoppedTaken") }),
+    ]);
+  });
 });

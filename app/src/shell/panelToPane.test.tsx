@@ -13,13 +13,14 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PointerEvent as RowPress } from "react";
+import type { Held } from "../files/handDrag";
 import type { PaneStart } from "../talk/terminal";
 
 const hoisted = vi.hoisted(() => ({
   saved: null as unknown,
   running: [] as { session: string; folder: string | null }[],
   /** The gesture the face handed the panel, which every row of it would put on its press. */
-  carry: undefined as undefined | ((wholes: string[], event: RowPress<HTMLElement>) => void),
+  carry: undefined as undefined | ((taken: Held, event: RowPress<HTMLElement>) => void),
   /** Every paste the face asked for: the session it named, and the text. */
   pasted: [] as { session: string; text: string }[],
 }));
@@ -63,7 +64,7 @@ vi.mock("../core/snapshot", async (importOriginal) => ({
 // with what comes back. The rows are the tree's, and the tree is in the rail (`AMB-D-835`).
 vi.mock("../files/FolderTree", () => ({
   FolderTree: (props: {
-    onCarry?: (wholes: string[], event: RowPress<HTMLElement>) => void;
+    onCarry?: (taken: Held, event: RowPress<HTMLElement>) => void;
   }) => {
     hoisted.carry = props.onCarry;
     return null;
@@ -187,7 +188,12 @@ beforeEach(() => {
   row = document.createElement("li");
   row.textContent = "notes.md";
   row.addEventListener("pointerdown", (e) => {
-    hoisted.carry?.(["/work/a/notes.md"], e as unknown as RowPress<HTMLElement>);
+    // Said both ways round, the way a row of the tree says it (`../files/handDrag`). What a pane
+    // is handed is the whole path; the rest is for the panel's own folders.
+    hoisted.carry?.(
+      { wholes: ["/work/a/notes.md"], root: "/work/a", paths: [["notes.md"]] },
+      e as unknown as RowPress<HTMLElement>,
+    );
   });
   document.body.appendChild(row);
   root = createRoot(container);

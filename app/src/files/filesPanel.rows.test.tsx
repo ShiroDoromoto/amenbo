@@ -555,7 +555,9 @@ describe("the file face", () => {
 
   it("carries every picked row when the hand takes hold of one of them", async () => {
     const carried: string[][] = [];
-    await four({ onCarry: (wholes) => carried.push(wholes) });
+    // The whole paths, which are the half of what is taken hold of that a pane is handed
+    // (`./handDrag`).
+    await four({ onCarry: (taken) => carried.push(taken.wholes) });
     await clickWith(rowFor("a.md"), { ctrlKey: true });
     await clickWith(rowFor("c.md"), { ctrlKey: true });
     await act(async () => {

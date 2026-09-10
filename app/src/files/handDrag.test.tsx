@@ -13,7 +13,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { DRAG_SLOP } from "../core/pointerDrag";
-import { HAND_ATTR, paneUnder, useHandDrag } from "./handDrag";
+import { HAND_ATTR, type Held, INTO_ATTR, paneUnder, useHandDrag, watchCarry } from "./handDrag";
 
 /** jsdom lays nothing out, so what is under the pointer is stated rather than measured. */
 function under(el: Element | null): void {
@@ -22,13 +22,16 @@ function under(el: Element | null): void {
 
 let container: HTMLDivElement;
 let root: Root;
+/** The one row this page draws, said both ways round (`./handDrag`). */
+const ROW: Held = { wholes: ["/work/a/notes.md"], root: "/work/a", paths: [["notes.md"]] };
+
 /** What the face was told to do with landed rows. */
 let landed: [string, string[]][];
 /** Which panes have something running in them, which is what decides whether one takes a row. */
 let running: string[];
 /** The pane the pointer is over, as the face would draw the surface on it. */
 let overFrame: string | null;
-let press: ((wholes: string[], event: unknown) => void) | null;
+let press: ((taken: Held, event: unknown) => void) | null;
 /** Whether the tree is still drawing the row, which is what a scroll under a held pointer decides. */
 let rowThere: boolean;
 
@@ -44,15 +47,23 @@ function Face() {
   return createElement("div", null,
     rowThere ? createElement("li", {
       className: "files__item", id: "row",
-      onPointerDown: (e: never) => press?.(["/work/a/notes.md"], e),
+      onPointerDown: (e: never) => press?.(ROW, e),
     }, "notes.md") : null,
     createElement("div", { [HAND_ATTR]: "1", id: "one" }),
-    createElement("div", { [HAND_ATTR]: "2", id: "two" }));
+    createElement("div", { [HAND_ATTR]: "2", id: "two" }),
+    // And one folder of the panel the row came from, which is the gesture's other landing.
+    createElement("div", { [INTO_ATTR]: "src", "data-root": "/work/a", id: "into" }));
 }
 
 /** A press, a move and a release, as a browser delivers them through a captured pointer. */
-function pointer(kind: string, x: number, y: number, button = 0): PointerEvent {
-  const e = new MouseEvent(kind, { bubbles: true, clientX: x, clientY: y, button });
+function pointer(
+  kind: string,
+  x: number,
+  y: number,
+  button = 0,
+  held: MouseEventInit = {},
+): PointerEvent {
+  const e = new MouseEvent(kind, { bubbles: true, clientX: x, clientY: y, button, ...held });
   Object.defineProperty(e, "pointerId", { value: 7 });
   return e as PointerEvent;
 }
@@ -63,9 +74,14 @@ async function down(x: number, y: number, button = 0) {
   });
 }
 
-async function to(kind: "pointermove" | "pointerup" | "pointercancel", x: number, y: number) {
+async function to(
+  kind: "pointermove" | "pointerup" | "pointercancel",
+  x: number,
+  y: number,
+  held: MouseEventInit = {},
+) {
   await act(async () => {
-    document.getElementById("row")?.dispatchEvent(pointer(kind, x, y));
+    document.getElementById("row")?.dispatchEvent(pointer(kind, x, y, 0, held));
     // The hit test is deferred to a frame, which jsdom runs as a timer.
     await new Promise((r) => setTimeout(r, 20));
   });
@@ -298,5 +314,83 @@ describe("letting a row go", () => {
     expect(landed).toEqual([]);
     expect(document.querySelector(".files__ghost")).toBeNull();
     expect(document.body.classList.contains("is-dragging")).toBe(false);
+  });
+});
+
+describe("a row let go over a folder of the panel", () => {
+  /** What the panel was told, in the order it was told it. */
+  let over: (string | null)[];
+  let dropped: { into: string | null; taken: Held; copy: boolean }[];
+  let stop: (() => void) | null = null;
+
+  beforeEach(() => {
+    over = [];
+    dropped = [];
+    stop = watchCarry({
+      over: (into) => over.push(into?.getAttribute(INTO_ATTR) ?? null),
+      drop: (into, taken, copy) =>
+        dropped.push({ into: into.getAttribute(INTO_ATTR), taken, copy }),
+    });
+  });
+
+  afterEach(() => {
+    stop?.();
+    stop = null;
+  });
+
+  it("hands the panel the rows as the project knows them, and moves them by default", async () => {
+    await down(100, 100);
+    under(document.getElementById("into"));
+    await carryTo(300);
+
+    expect(over, "the folder under the pointer was not named").toEqual(["src"]);
+
+    await to("pointerup", 300, 100);
+
+    expect(dropped).toEqual([{ into: "src", taken: ROW, copy: false }]);
+    // And the highlight is put down with the gesture, whatever it landed on.
+    expect(over[over.length - 1]).toBeNull();
+  });
+
+  it("says a copy was asked for where the key for one was held", async () => {
+    await down(100, 100);
+    under(document.getElementById("into"));
+    await carryTo(300);
+
+    // jsdom reports no user agent this reads as macOS, so the key is the other two machines'.
+    await to("pointerup", 300, 100, { ctrlKey: true });
+
+    expect(dropped.map((one) => one.copy)).toEqual([true]);
+  });
+
+  it("names the folder only as the answer changes, not at every frame", async () => {
+    await down(100, 100);
+    under(document.getElementById("into"));
+    await carryTo(300);
+    await carryTo(320);
+    await carryTo(340);
+
+    expect(over, "the same folder was named again on every frame").toEqual(["src"]);
+  });
+
+  it("is a pane's, where the row came down on one", async () => {
+    await down(100, 100);
+    under(document.getElementById("two"));
+    await carryTo(300);
+    await to("pointerup", 300, 100);
+
+    expect(landed).toEqual([["2", ROW.wholes]]);
+    expect(dropped, "a row let go on a pane was carried into a folder as well").toEqual([]);
+  });
+
+  it("is nothing at all where the row came down on neither", async () => {
+    await down(100, 100);
+    under(document.getElementById("into"));
+    await carryTo(300);
+    under(null);
+    await to("pointerup", 400, 100);
+
+    expect(dropped).toEqual([]);
+    expect(landed).toEqual([]);
   });
 });

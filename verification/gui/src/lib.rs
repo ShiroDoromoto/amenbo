@@ -2718,16 +2718,22 @@ impl Instructor {
                     toward
                 )
             }
-            // A press on a pane and nothing else. What it is for is the column on the other side of
-            // the panes, so the line says plainly that nothing is typed: an operator who pressed the
-            // input line and carried on would be reading a face two steps had moved.
+            // A press on a pane and nothing else. What it is for is elsewhere — the column on the
+            // other side of the panes, or the box under this one — so the line says plainly that
+            // nothing is typed: an operator who pressed the input line and carried on would be
+            // reading a face two steps had moved.
+            //
+            // **The box under the pane is named as somewhere not to press.** A press there would put
+            // the keyboard in it by being a press into a text box, which is the browser's doing and
+            // not the face's, and the road reading where the keyboard went would go green on a build
+            // that never moved it.
             (Domain::Terminal, "press-pane") => {
                 let pane = match arg_str(with, "shows") {
                     Some(shows) => format!("the pane showing \"{shows}\""),
                     None => "the pane that has a terminal running in it".to_string(),
                 };
                 format!(
-                    "Click once on {pane} — on the terminal itself, not on the row above it — and type nothing. Nothing is sent and nothing in the pane changes: the press is a reader going to that pane, and what it is for is what happens elsewhere on the screen."
+                    "Click once on {pane} — on the terminal itself, not on the row above it and not in the box below it — and type nothing. Nothing is sent: the press is a reader going to that pane, and what it is for is what happens elsewhere on the screen."
                 )
             }
             // A file put in the folder from outside Amenbo, while the app is up. It is written as an
@@ -4246,6 +4252,23 @@ impl Instructor {
                     req(with, "above")?,
                     req(with, "below")?
                 )
+            }
+            // Which box the keyboard is in, read off the mark at the box's left. The two marks are
+            // described rather than named: which one is drawn is the whole reading, and the words in
+            // their tooltips are the interface's own in whatever language the machine is set to.
+            (Domain::Terminal, "keys-in-the-box") => {
+                let pane = match arg_str(with, "on") {
+                    Some(on) => format!("the pane showing \"{on}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                match present(with) {
+                    true => format!(
+                        "Under {pane}, look at the mark at the left-hand end of the box below the terminal: confirm it is the one drawn for a box that keeps what is typed — the writing mark, not the keyboard one the other box carries. That mark is the box saying it has the keyboard, so a person typing now would be writing there."
+                    ),
+                    false => format!(
+                        "Under {pane}, look at the mark at the left-hand end of the box below the terminal: confirm it is the one drawn for a box that hands presses on — the keyboard mark. The keyboard is somewhere else, so what is typed now does not go into that box."
+                    ),
+                }
             }
             // Which pane the reader is in, read as one thing off two marks. The frame says the face's
             // answer and the cursor says the browser's, and a road that read only the first would go
@@ -9494,6 +9517,44 @@ steps_gui:
         assert!(
             none.contains("nothing comes up") && none.contains("almanac.md"),
             "and the absent half watches the same place for the same row: {none}"
+        );
+    }
+
+    /// Which box the keyboard is in, read off the mark beside it and read on both boxes. The pane is
+    /// named the way every other reading of a box names one, and the step settles nothing by itself:
+    /// the two marks are one glyph apiece and a shot's reading has no word to look for, so it is left
+    /// to an eye like the other readings that part two things on one screen.
+    #[test]
+    fn which_box_has_the_keyboard_is_read_off_its_mark_by_an_eye() {
+        let s = load(
+            r#"
+id: sample
+title: A press moves the keyboard to the box of the pane it moves the work to
+steps_gui:
+  - type: assert
+    domain: terminal
+    op: keys-in-the-box
+    with: { on: SCENARIO the pane pressed }
+  - type: assert
+    domain: terminal
+    op: keys-in-the-box
+    with: { on: SCENARIO the pane left behind, present: false }
+"#,
+        );
+        let steps = s.steps(Driver::Gui);
+        let has = Instructor::new().render(&steps[0]).unwrap();
+        assert!(
+            has.contains("SCENARIO the pane pressed") && has.contains("keeps what is typed"),
+            "the box named is the pane's, and the mark read is the one for a box that holds it: {has}"
+        );
+        let has_not = Instructor::new().render(&steps[1]).unwrap();
+        assert!(
+            has_not.contains("SCENARIO the pane left behind") && has_not.contains("hands presses on"),
+            "and the other half reads the other mark on the other pane: {has_not}"
+        );
+        assert!(
+            Instructor::new().expectation(&steps[0]).is_none(),
+            "left to an eye: a mark is a glyph, and there is no word on the screen to read it by",
         );
     }
 

@@ -716,7 +716,9 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 }
 
 /// What `launch` is started with so that the launch instruction is the first thing said to it: the
-/// arguments that follow the program ([`Launch::command`]), in the order they are written.
+/// arguments that follow the program ([`Launch::command`]), in the order they are written — and,
+/// where the line comes back into a conversation that has already had one, the arguments without it
+/// (`handle` below).
 ///
 /// **An argument rather than something typed at the program**, because it is the certain route: the
 /// agent is handed this before it starts, so nothing about what it draws first can eat it, and it is
@@ -752,12 +754,28 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 ///
 /// It goes in front of the prompt, which is where all six were watched taking it (`AMB-T-4576`), and
 /// in front of [`prompt_flag`](Launch::prompt_flag) because that flag takes the argument straight
-/// after it.
+/// after it. **It is named on a line that comes back as well**: which model answers is as true of a
+/// conversation carried on as of one started.
 ///
 /// **`handle` is the session this pane is opened on, and `None` is a pane opened on none**
 /// ([`Handle`], `AMB-D-869`). It rides on the same line as the opening prompt rather than in a
-/// second move: every row that takes a handle takes the two together, so a pane that comes back into
-/// a conversation is still told where it is working ([`Resume`]).
+/// second move: every row that takes a handle takes the two together.
+///
+/// **A line that comes back into a conversation says nothing** ([`Handle::Back`], `AMB-T-4663`).
+/// The instruction is a first thing to say, and a conversation being resumed has already been said
+/// one: said again it arrives as a turn the person never took, and the agent spends it looking up
+/// what it was told the run before. The flag goes with it — [`prompt_flag`](Launch::prompt_flag)
+/// exists to take a prompt, and with no prompt behind it it would take whatever came next.
+///
+/// **A handle Amenbo has just decided is not that**, even on the row that starts a session under
+/// the flag it comes back on ([`Issue::Back`]): the session is being made here, so it is told where
+/// it is working. Nor are the two rows that take no handle on their line ([`Resume`] `None`):
+/// nothing on either line resumes anything, so every line they have is a session starting, and both
+/// are told where they are working.
+///
+/// **What a provider does with a handle it cannot find is still the provider's**: Cursor opens a new
+/// session and says nothing about it, and that session now starts unsaid as well. `AMB-D-869` left
+/// that row where it stands rather than covering for it, and this changes only what it is said.
 pub fn opening(
     launch: &Launch,
     cmd: &str,
@@ -769,12 +787,16 @@ pub fn opening(
         args.push(launch.model_flag.to_string());
         args.push(model.to_string());
     }
-    if let Some((flag, id)) = resuming(launch, handle) {
+    let way_back = resuming(launch, handle);
+    let carrying_on = way_back.is_some() && matches!(handle, Some(Handle::Back(_)));
+    if let Some((flag, id)) = way_back {
         args.push(flag.to_string());
         args.push(id.to_string());
     }
-    args.extend(launch.prompt_flag.map(str::to_string));
-    args.push(crate::agents::pane_instruction(cmd));
+    if !carrying_on {
+        args.extend(launch.prompt_flag.map(str::to_string));
+        args.push(crate::agents::pane_instruction(cmd));
+    }
     args
 }
 
@@ -1311,15 +1333,14 @@ mod tests {
         assert!(find_launch("gemini-cli").unwrap().resume.is_none());
     }
 
-    /// A handle rides on the same line as the opening prompt, in front of it, and a pane opened on
-    /// no session puts none there.
+    /// A handle rides on the same line the pane is opened with, in front of whatever follows it,
+    /// and a pane opened on no session puts none there.
     ///
     /// The empty case is the one worth a test: a flag with nothing behind it would be read as the
     /// prompt flag taking the instruction's place, so the pane would come up on a provider that was
     /// never told where it is working.
     #[test]
     fn a_handle_rides_in_front_of_the_prompt_and_no_session_puts_none_there() {
-        let said = crate::agents::pane_instruction("amenbo");
         for launch in LAUNCHES {
             let bare = opening(launch, "amenbo", None, None);
             assert!(!bare.iter().any(|arg| arg == "a-handle"), "{}", launch.id);
@@ -1329,12 +1350,9 @@ mod tests {
                 assert_eq!(opening(launch, "amenbo", None, Some(Handle::Back("a-handle"))), bare);
                 continue;
             };
-            let mut want = vec![resume.back.to_string(), "a-handle".to_string()];
-            want.extend(launch.prompt_flag.map(str::to_string));
-            want.push(said.clone());
             assert_eq!(
                 opening(launch, "amenbo", None, Some(Handle::Back("a-handle"))),
-                want,
+                vec![resume.back.to_string(), "a-handle".to_string()],
                 "{}",
                 launch.id
             );
@@ -1349,6 +1367,44 @@ mod tests {
                 // takes is read back afterwards (`crate::agent_sessions`).
                 None => assert_eq!(started, bare, "{}", launch.id),
             }
+        }
+    }
+
+    /// A line that comes back into a conversation says nothing, and a line that starts a session
+    /// says where it is working.
+    ///
+    /// The instruction is a first thing to say. Handed to a conversation already running it is a
+    /// turn the person never took, and the agent answers it — reading `agent --json` and naming the
+    /// pane again, every time the app comes up (`AMB-T-4663`). The prompt flag goes with it: left
+    /// on a line with no prompt behind it, it would take the handle or the model name as one.
+    #[test]
+    fn a_line_coming_back_says_nothing_and_one_starting_a_session_says_where_it_is_working() {
+        let said = crate::agents::pane_instruction("amenbo");
+        for launch in LAUNCHES {
+            let back = opening(launch, "amenbo", Some("a-model"), Some(Handle::Back("a-handle")));
+            let started = opening(launch, "amenbo", Some("a-model"), Some(Handle::New("a-handle")));
+            assert_eq!(started.last().map(String::as_str), Some(said.as_str()), "{}", launch.id);
+            // The model is named either way (`AMB-D-865`).
+            assert_eq!(back[0], launch.model_flag, "{}", launch.id);
+            assert_eq!(back[1], "a-model", "{}", launch.id);
+
+            let Some(resume) = launch.resume.as_ref() else {
+                // The two rows that take no handle on their line resume nothing on it, so every
+                // line they have is a session starting — Codex comes back by the directory it runs
+                // in (`app/src-tauri/src/codex_home.rs`) and Gemini does not come back at all
+                // (`AMB-T-4659`).
+                assert_eq!(back, started, "{}", launch.id);
+                continue;
+            };
+            assert!(!back.contains(&said), "{} says it again on the way back", launch.id);
+            if let Some(flag) = launch.prompt_flag {
+                assert!(
+                    !back.iter().any(|arg| arg == flag),
+                    "{} keeps a prompt flag with no prompt",
+                    launch.id
+                );
+            }
+            assert_eq!(back[2..], [resume.back.to_string(), "a-handle".to_string()], "{}", launch.id);
         }
     }
 

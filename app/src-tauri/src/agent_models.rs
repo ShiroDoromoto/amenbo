@@ -55,9 +55,22 @@ static ASKED: OnceLock<Mutex<HashMap<String, Vec<Model>>>> = OnceLock::new();
 /// empty list rather than a refusal: a command the reader registered themselves is a whole command
 /// line of their own (`AMB-D-794`), and Amenbo has no idea which program is inside it or how that one
 /// would be asked.
+///
+/// **Off the main thread.** A command with no `async` on it is run where the webview is drawn, and
+/// what this one does is a login shell, a provider starting up on top of it, and [`ASKING`] behind
+/// that — so the first press on a provider froze the whole window for as long as the answer took
+/// (`AMB-T-4661`). Only the first press ever pays it, which is exactly the press a person meets.
+///
+/// An ask that did not finish is the empty row every other way of failing here is: what the face
+/// does with no models is put up its own box, and that road is open whatever the reason.
 #[tauri::command]
-pub fn agent_models(agent: String) -> Vec<AgentModelDto> {
-    let Some(launch) = amenbo_core::harness::find_launch(&agent) else {
+pub async fn agent_models(agent: String) -> Vec<AgentModelDto> {
+    tauri::async_runtime::spawn_blocking(move || rows(&agent)).await.unwrap_or_default()
+}
+
+/// The row itself, on whichever thread asked for it — [`agent_models()`] without the door.
+fn rows(agent: &str) -> Vec<AgentModelDto> {
+    let Some(launch) = amenbo_core::harness::find_launch(agent) else {
         return Vec::new();
     };
     models(launch).into_iter().map(|one| AgentModelDto { id: one.id, label: one.label }).collect()
@@ -166,8 +179,8 @@ mod tests {
     /// reader registered is a command line of their own, and Amenbo cannot ask it anything.
     #[test]
     fn an_id_the_catalog_does_not_list_is_an_empty_row() {
-        assert!(agent_models("a-row-the-reader-wrote".to_string()).is_empty());
-        assert!(agent_models(amenbo_core::wake::SHELL.to_string()).is_empty());
+        assert!(rows("a-row-the-reader-wrote").is_empty());
+        assert!(rows(amenbo_core::wake::SHELL).is_empty());
     }
 
     /// A command that is not on this machine answers nothing, and does it without the ask failing —

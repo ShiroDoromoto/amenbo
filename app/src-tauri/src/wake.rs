@@ -33,6 +33,11 @@
 //! when a window opens and names nothing anyone can act on is noise in the one log that is meant to
 //! be read.
 //!
+//! **Both questions are put off the main thread**, for the same reason and against the same seconds:
+//! a command with no `async` on it is run where the webview is drawn, so the one window that pays
+//! for the probe would pay for it frozen (`AMB-T-4661`). What answers off a remembered probe is
+//! quick either way, and the road is the same one for both.
+//!
 //! **The webview never names a program.** What crosses is an id; the command it becomes is read on
 //! this side, out of [`amenbo_core::harness::LAUNCHES`] or out of this device's own registrations
 //! ([`amenbo_core::config::Config::custom_agents`]). A pane is a shell with a command line, so an id
@@ -87,22 +92,26 @@ const CHOSEN_EVENT: &str = "agent-chosen";
 /// before the board told it which one it was on — passes none, and gets the rank without a
 /// remembered answer on top of it.
 #[tauri::command]
-pub fn wake_probe(
+pub async fn wake_probe(
     app: tauri::AppHandle,
     folder: String,
     project: Option<i64>,
 ) -> Result<WakeDto, CmdError> {
-    let folder = resolve(folder)?;
-    let found = amenbo_core::harness::probe(&folder, amenbo_core::config::Paths::command_name());
-    let config = config()?;
-    let (candidates, reach) = weighed(&app, &found, config.custom_agents());
-    answer(
-        Some(folder.to_string_lossy().into_owned()),
-        candidates,
-        reach,
-        project,
-        &config,
-    )
+    tauri::async_runtime::spawn_blocking(move || -> Result<WakeDto, CmdError> {
+        let folder = resolve(folder)?;
+        let found = amenbo_core::harness::probe(&folder, amenbo_core::config::Paths::command_name());
+        let config = config()?;
+        let (candidates, reach) = weighed(&app, &found, config.custom_agents());
+        answer(
+            Some(folder.to_string_lossy().into_owned()),
+            candidates,
+            reach,
+            project,
+            &config,
+        )
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("asking this machine did not finish: {e}").into() })?
 }
 
 /// What a **project** opens its panes with, asked before there is a pane or a folder to ask about.
@@ -113,20 +122,24 @@ pub fn wake_probe(
 /// rather than refused — the reader is choosing what to open with, and a stale binding is not a
 /// reason to put a refusal in place of the choice.
 #[tauri::command]
-pub fn wake_choices(
+pub async fn wake_choices(
     app: tauri::AppHandle,
     project: Option<i64>,
     folders: Vec<String>,
 ) -> Result<WakeDto, CmdError> {
-    let command = amenbo_core::config::Paths::command_name();
-    let found: Vec<amenbo_core::harness::Wiring> = folders
-        .iter()
-        .filter_map(|one| std::fs::canonicalize(one).ok())
-        .flat_map(|one| amenbo_core::harness::probe(&one, command))
-        .collect();
-    let config = config()?;
-    let (candidates, reach) = weighed(&app, &found, config.custom_agents());
-    answer(None, candidates, reach, project, &config)
+    tauri::async_runtime::spawn_blocking(move || -> Result<WakeDto, CmdError> {
+        let command = amenbo_core::config::Paths::command_name();
+        let found: Vec<amenbo_core::harness::Wiring> = folders
+            .iter()
+            .filter_map(|one| std::fs::canonicalize(one).ok())
+            .flat_map(|one| amenbo_core::harness::probe(&one, command))
+            .collect();
+        let config = config()?;
+        let (candidates, reach) = weighed(&app, &found, config.custom_agents());
+        answer(None, candidates, reach, project, &config)
+    })
+    .await
+    .map_err(|e| -> CmdError { format!("asking this machine did not finish: {e}").into() })?
 }
 
 /// Ask this machine again, now, and keep what it says — the **search again** the face puts up where

@@ -2265,6 +2265,11 @@ const REGISTRY: &[OpSpec] = &[
     // stays open and prints back every line it is given. A road that **moves a running pane** to
     // another model needs the second, and for two reasons at once: there is no control on a frame
     // whose program has gone, and what says the move arrived is the program that was given it.
+    //
+    // One that stays also **says so when it is stopped**, in a word of its own printed as it goes
+    // (`amenbo_verify_cli::domain::terminal`). It is what lets a road read a press that ends a
+    // program: a program that died quietly leaves a mark and a fresh prompt, which are the two a
+    // shell was already drawing and nothing a shot can tell from the ones before the press.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "can-start", required: &["count"], refs: &[], strings: &["then"], binds: false },
     // Which face the one window is showing. Pressed rather than arrived at: the segments are the only
     // way between the two, and a road that could not name which it pressed could not say which face

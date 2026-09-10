@@ -1,0 +1,126 @@
+# Stopping what is running in a pane while the next line is already half written.
+#
+# The box under a pane takes the keys, and two of them go through it whatever is written there:
+# escape and control-C. A person reaching for "stop" has usually started writing the next thing
+# already, and a box that took those presses by standing there would have taken away the only answer
+# to what was just sent.
+#
+# ── What this road reads, and what the other one does ────────────────────────────────────────────
+# The exception has two halves, and no one program can answer for both. A program that survives the
+# press can say the box kept its line, and one that dies can say the press arrived — so the half
+# read here is the arrival, over a program that ends where it stands, and the half read over a shell
+# that lives through it is on the road where a line is written and sent.
+#
+# ── Why the program says so in a word of its own ─────────────────────────────────────────────────
+# A program that died quietly would leave the press unreadable. What a plain prompt draws for a
+# stopped program is a mark and a fresh prompt — the two it was already drawing — and a shot cannot
+# tell those from the ones that were there before the press. The stand-in this road opens a pane on
+# says it in a word instead, printed as it goes, and that word is on the screen only where the press
+# reached it.
+#
+# ── Why the box is read before the press and not after ───────────────────────────────────────────
+# The program ends on this press, and a pane with nothing running in it draws no box at all. So what
+# the box was holding is read while the program is still there: it is the premise of the press, and
+# reading it afterwards would be reading a box that had gone for a reason nothing here is about.
+#
+# ── Escape is not read here ──────────────────────────────────────────────────────────────────────
+# The same exception carries escape, and nothing on this road can say it arrived: a program that
+# reads lines never sees a press that ends none, and a plain prompt draws nothing for one. Reading
+# it takes a program that puts something on the screen to be escaped from, which is a road with a
+# menu in it rather than a word in a line.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no terminal road here and no gap in one. What is under test is which of two things on a
+# screen a key press reaches, and there is no line a binary could be asked for that would say it.
+id: stop-what-is-running-while-writing-the-next-line
+title: The press that stops reaches the program, whatever is standing in the box
+description: >
+  Open a pane on a program that stays and reads, write a line in the box under it without sending
+  it, and press control-C. The press goes past what is written, straight to the program, which says
+  so as it ends.
+
+given:
+  # A pane has to open somewhere, and one folder is what that takes.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lantern
+      dir: lampstore
+
+  # Two agents, which is the floor, standing in for what this machine can start. `then: reads` is
+  # what makes them stay open once they have printed — a program that ended by itself would leave
+  # nothing for the press to reach — and it is what makes one say it was stopped as it goes.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+      then: reads
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: the pane this road opens has to open in the folder this road named.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lantern
+
+  # The first of the row. Which agent it is is nothing this road is about — what it is about is a
+  # program that is running and can be stopped.
+  - type: action
+    domain: terminal
+    op: pick-start
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  # What the pane has not said yet. Without it, the word read after the press would be one that might
+  # have been on the screen the whole time for a reason nothing here is about.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO stopped
+      present: false
+
+  # The line the press is made over. It is written and left: what this road is about is a press made
+  # while the box is holding something, and a box emptied first would be walking the plain rule
+  # rather than its one exception.
+  - type: action
+    domain: terminal
+    op: write-to-pane
+    with:
+      text: SCENARIO the next line was already being written
+
+  # Read here and not after the press, because the press ends the program and a pane with nothing
+  # running in it draws no box: this is the premise of the press rather than its answer.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO the next line was already being written
+
+  # The press itself, made without touching what is written.
+  - type: action
+    domain: terminal
+    op: press-through
+    with:
+      key: ctrl-c
+      holding: true
+
+  # And the program says it was stopped. That word is the program's own, printed as it goes, so it is
+  # on the screen only where the press reached the thing it was aimed at — and not where the box took
+  # it, which is the fault this road is here for.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO stopped

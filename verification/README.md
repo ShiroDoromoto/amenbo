@@ -1478,6 +1478,11 @@ and prints back every line it is given, inside brackets so a road reads the whol
 piece of one. A road that **moves a running pane** needs it twice over — there is no model row on a
 frame whose program has gone, and what says the move arrived is the program that was given it.
 
+**One that stays also says so when it is stopped**, in a word of its own printed as it goes. It is
+what lets a road read a press that ends a program: what a plain prompt draws for a stopped one is a
+mark and a fresh prompt — the two it was already drawing — and a shot cannot tell those from the ones
+that were there before the press.
+
 **A premise that does not stand ends that scenario, red, on the line that failed, and the road is not
 walked at all.** Judging a road against a world half built says nothing about the road — every line it
 then wrote, passing or failing, would be about the wrong thing. It is that scenario's failure and not

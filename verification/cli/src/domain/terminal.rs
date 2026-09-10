@@ -84,6 +84,18 @@ const ARG: &str = "SCENARIO arg";
 /// off before the line is printed: they are the terminal's envelope and not what anybody typed.
 const SAID: &str = "SCENARIO said";
 
+/// The mark a stand-in prints when it is stopped where it stands, before it goes.
+///
+/// **A program that dies quietly is a press nobody can read.** What a stop does is end the thing
+/// running in the pane, and a shell prompt answers that with a mark and a fresh prompt — the same
+/// two it was already drawing, which a shot cannot tell from the ones before the press. So a
+/// stand-in that reads says so in a word of its own, and the road reads that word: the press
+/// arrived, and what answered it is the program it was aimed at.
+///
+/// It is printed from a trap on the interrupt rather than left to the shell, so what a road reads is
+/// the program's own last word rather than the absence of one.
+const STOPPED: &str = "SCENARIO stopped";
+
 /// What every model a stand-in answers with is called, before its number.
 ///
 /// The road's own word, for the reason a road never writes a real model name: the names on that row
@@ -216,6 +228,10 @@ fn program(command: &str, models: &[String], reads: bool) -> String {
     ));
     body.push_str(&format!("for arg in \"$@\"; do printf '{ARG} %s\\n' \"$arg\"; done\n"));
     if reads {
+        // And what it says on the way out, where a road stops it (`STOPPED`). The trap is set before
+        // the loop that reads: an interrupt arriving while a line is being waited for ends the wait,
+        // and the trap is what runs next.
+        body.push_str(&format!("trap \"printf '{STOPPED}\\n'; exit 130\" INT\n"));
         // The envelope comes off with `tr` and `sed` rather than a shell replacement, because what is
         // being cut is an escape byte: `tr -d` takes the escape itself and the two `sed` clauses take
         // what is left of the pair of markers.
@@ -489,6 +505,52 @@ mod tests {
         // And the bare line is not a piece of the named one, which is the whole of why the brackets
         // are there.
         assert!(!format!("{SAID} [/model {name}]").contains(&format!("{SAID} [/model]")));
+    }
+
+    /// And stopped where it stands, it says so before it goes.
+    ///
+    /// **A program that died quietly would leave the press unreadable.** What a stop does is end the
+    /// thing running in the pane, and what a shell prompt draws for one is a mark and a fresh prompt
+    /// — the two it was already drawing. So the word is the stand-in's own, printed from a trap, and
+    /// a road that pressed the key reads it off the pane.
+    ///
+    /// The signal is sent after a line has been read back, which is the moment the trap is known to
+    /// be standing: a signal that arrived while the program was still printing its hello would meet
+    /// the shell's own default and end it without a word.
+    #[test]
+    fn a_stand_in_that_reads_says_it_was_stopped_before_it_goes() {
+        use std::io::{BufRead as _, BufReader, Read as _, Write as _};
+
+        let session = crate::scratch::session("can-start-stopped-test", false).expect("a session");
+        stand_up(&session.tools, 2, 0, true).expect("a machine whose stand-ins stay and read");
+
+        let mut child = std::process::Command::new(session.tools.join("claude"))
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("the stand-in runs");
+        let mut writing = child.stdin.take().expect("it takes input");
+        writing.write_all(b"a line to be read back\n").expect("written");
+        let mut reading = BufReader::new(child.stdout.take().expect("it prints"));
+        let mut said = String::new();
+        while !said.contains(SAID) {
+            let mut line = String::new();
+            let read = reading.read_line(&mut line).expect("it goes on printing");
+            assert!(read > 0, "the stand-in ended before it read a line: {said}");
+            said.push_str(&line);
+        }
+
+        // The interrupt a person's key makes, sent the way anything outside a terminal sends one.
+        let sent = std::process::Command::new("kill")
+            .args(["-INT", &child.id().to_string()])
+            .status()
+            .expect("the signal goes");
+        assert!(sent.success(), "the stand-in was signalled");
+
+        let mut last = String::new();
+        reading.read_to_string(&mut last).expect("what it said on the way out");
+        child.wait().expect("it goes");
+        assert!(last.contains(STOPPED), "{said}{last}");
     }
 
     /// Left alone it ends, which is the pane every road before this one read.

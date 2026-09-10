@@ -6,7 +6,7 @@ import { t, tf } from "../core/i18n";
 import { openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
 import type { UpdateProgress } from "../core/mutations";
 import { DismissButton } from "./DismissButton";
-import { openPanes } from "../shell/openPanes";
+import { endingConfirm, openPanes } from "../shell/openPanes";
 import { confirmDialog } from "../core/dialog";
 
 // One line for the phase the in-app update is in — the hint that replaces `update.hint` while it runs. A download with
@@ -71,7 +71,7 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
   const onRestart = async () => {
     try {
       if (await openPanes() === 0) { await restartApp(); return; }
-      if (!await confirmDialog(t("restart.confirm"))) return;
+      if (!await confirmDialog(await endingConfirm("restart.confirm", "restart.confirmNotAll"))) return;
       await restartApp();
     } catch { /* the relaunch did not take; the banner stays up to retry */ }
   };

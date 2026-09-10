@@ -1,22 +1,26 @@
-// Dates, times and numbers — written by `Intl`, never by hand.
+// Dates, times, numbers and the joining of a list — written by `Intl`, never by hand.
 //
-// A date's shape, a relative time's wording and a number's separators are per-locale rules, and the
-// platform already carries all of them. Writing them here would mean carrying nineteen sets: nineteen
-// month orders, nineteen ways to say "3 days ago", nineteen grouping separators. So nothing in this
-// file spells any of that out — it picks the formatter and hands over the value.
+// A date's shape, a relative time's wording, a number's separators and the word between the last two
+// items of a list are per-locale rules, and the platform already carries all of them. Writing them
+// here would mean carrying nineteen sets: nineteen month orders, nineteen ways to say "3 days ago",
+// nineteen grouping separators, nineteen ways to say "A and B". So nothing in this file spells any of
+// that out — it picks the formatter and hands over the value.
 //
 // The locale is `dateLocale()`, the one tag the app already resolves: `config.date_locale` when it is
 // set, else the one that goes with the language. It is passed as a parameter with that default so a
-// test can pin it, and so a caller that already knows the locale does not resolve it twice.
+// test can pin it, and so a caller that already knows the locale does not resolve it twice. The one
+// exception is `listLabel`, which takes the language: what it joins are words inside a sentence, and
+// a sentence is written in the language the reader chose rather than in the locale their dates are.
 //
 // Formatters are cached because constructing one is the expensive half — these run inside render, one
 // call per row — while selecting from a built one is cheap.
-import { dateLocale } from "./lang";
+import { currentLang, dateLocale, type Lang } from "./lang";
 
 /** Built once per (locale, shape). The key is the locale plus the options it was asked for. */
 const dateTimeFormats = new Map<string, Intl.DateTimeFormat>();
 const numberFormats = new Map<string, Intl.NumberFormat>();
 const relativeFormats = new Map<string, Intl.RelativeTimeFormat>();
+const listFormats = new Map<string, Intl.ListFormat>();
 
 function dateTimeFormat(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   const key = `${locale}|${JSON.stringify(options)}`;
@@ -167,4 +171,21 @@ export function weekdayLabels(weekStart = 0, locale: string = dateLocale()): str
   const f = dateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
   const week = Array.from({ length: 7 }, (_, i) => f.format(new Date(WEEK_ANCHOR_SUNDAY + i * 86_400_000)));
   return [...week.slice(weekStart), ...week.slice(0, weekStart)];
+}
+
+/**
+ * The names run together as this language runs a list together: "A and B" in English, "A、B" in
+ * Japanese, "A und B" in German — and one name on its own, which every language writes the same way.
+ *
+ * It exists so a sentence that names a varying number of things needs one dictionary entry rather
+ * than one per length: the template holds the sentence and this holds the joining, which is the half
+ * that is a rule of the language rather than a thing to say (`AMB-T-4676`).
+ */
+export function listLabel(items: string[], lang: Lang = currentLang()): string {
+  let f = listFormats.get(lang);
+  if (!f) {
+    f = new Intl.ListFormat(lang, { style: "long", type: "conjunction" });
+    listFormats.set(lang, f);
+  }
+  return f.format(items);
 }

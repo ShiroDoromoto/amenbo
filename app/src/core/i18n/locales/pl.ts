@@ -339,6 +339,7 @@ export const pl: Translation = {
     "restart.button": "Uruchom ponownie",
     "restart.failed": "Nie udało się uruchomić ponownie. Zamknij Amenbo i otwórz je jeszcze raz.",
     "restart.confirm": "Uruchomić Amenbo ponownie? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, ale to, co w nich działało — nie.",
+    "restart.confirmNotAll": "Uruchomić Amenbo ponownie? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, poza panelami z {names}. To, co w nich działało, też nie wróci.",
 
     "restart.stuck.title": "Jeśli ponowne uruchomienie nie pomoże",
     "restart.stuck.intro": "To znaczy, że Amenbo na dysku wciąż jest stare. Nie ma drogi w dół — drogą powrotną jest kopia sprzed migracji, którą zostawiła aktualizacja.",
@@ -544,6 +545,7 @@ export const pl: Translation = {
     "face.drop": "Usuń ten panel",
     "face.dropConfirm": "Usunąć ten panel? Terminal w nim zostanie zakończony, a droga powrotna do tego, co tu powiedziano, zniknie razem z miejscem.",
     "quit.confirm": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, ale to, co w nich działało — nie.",
+    "quit.confirmNotAll": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, poza panelami z {names}. To, co w nich działało, też nie wróci.",
 
     "face.ended": "Program w tym terminalu zakończył działanie.",
     "face.projects": "Projekty",

@@ -338,6 +338,7 @@ export const ptBR: Translation = {
     "restart.button": "Reiniciar",
     "restart.failed": "Não foi possível reiniciar. Feche o Amenbo e abra de novo.",
     "restart.confirm": "Reiniciar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução; o que estava rodando nelas, não.",
+    "restart.confirmNotAll": "Reiniciar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução, exceto nos painéis com {names}. O que estava rodando nelas também não volta.",
 
     "restart.stuck.title": "Se reiniciar não resolver",
     "restart.stuck.intro": "Então o Amenbo no disco ainda é o antigo. Não há como voltar de versão — o caminho de volta é o backup pré-migração que a atualização deixou.",
@@ -540,6 +541,7 @@ export const ptBR: Translation = {
     "face.drop": "Remover este painel",
     "face.dropConfirm": "Remover este painel? O terminal nele é encerrado, e o caminho de volta ao que foi dito aqui vai junto com o lugar.",
     "quit.confirm": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução; o que estava rodando nelas, não.",
+    "quit.confirmNotAll": "Encerrar o Amenbo? Todos os terminais abertos são encerrados. As conversas voltam na próxima execução, exceto nos painéis com {names}. O que estava rodando nelas também não volta.",
 
     "face.ended": "O programa deste terminal foi encerrado.",
     "face.projects": "Projetos",

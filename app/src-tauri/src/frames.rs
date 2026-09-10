@@ -86,6 +86,49 @@ impl TalkFace {
         self.hints.lock().expect("resume hints lock").values().cloned().collect()
     }
 
+    /// The providers whose panes will **not** be in their conversation on the next run, in the order
+    /// the panes sit on the screen and each named once (`AMB-T-4676`).
+    ///
+    /// **It is counted rather than listed.** Which providers come back moves — a row gains a way
+    /// back, a pane loses the one it had — so a sentence naming any of them by hand would be true
+    /// until the next change and wrong afterwards. What is asked of each pane on the screen is the
+    /// two ways a place ends up with no way in:
+    ///
+    /// - its provider has no way back at all — the catalog row carries no `resume`
+    ///   ([`amenbo_core::harness::Launch`]);
+    /// - or the way into *this* place was taken back, because what was started in it never came up
+    ///   ([`gave_up`](Self::gave_up)).
+    ///
+    /// A place with nothing catalogued in it is not counted: a plain prompt and a line the reader
+    /// registered (`AMB-D-794`) hold no conversation to come back to, and neither has a name this
+    /// could put in front of somebody.
+    ///
+    /// **The one row that reads early is OpenCode**, which names its own session and is asked for it
+    /// seconds after the pane starts (`crate::pty::read_back`). Until that answer lands the place
+    /// holds no handle and is counted, which is what it is: asked in that moment, the pane has no
+    /// way in, and the reading failing outright is the same state that never resolves.
+    pub fn without_a_way_back(&self) -> Vec<&'static str> {
+        let layout = self.layout.lock().expect("talk layout lock");
+        let Some(layout) = layout.as_ref() else {
+            return Vec::new();
+        };
+        let hints = self.hints.lock().expect("resume hints lock");
+        let mut named: Vec<&'static str> = Vec::new();
+        for frame in &layout.frames {
+            let Some(launch) = frame.agent.as_deref().and_then(amenbo_core::harness::find_launch)
+            else {
+                continue;
+            };
+            if launch.resume.is_some() && hints.contains_key(&frame.id) {
+                continue;
+            }
+            if !named.contains(&launch.label) {
+                named.push(launch.label);
+            }
+        }
+        named
+    }
+
     /// Write down the handle a pane's provider is resumed from, as the pane is started
     /// (`crate::pty::pty_open`).
     ///
@@ -135,6 +178,20 @@ impl TalkFace {
 #[tauri::command]
 pub fn frame_names(face: tauri::State<'_, TalkFace>) -> Vec<FrameNameDto> {
     named(face.names.lock().expect("frame names lock").all())
+}
+
+/// The providers of the panes that will not come back into their conversation
+/// ([`TalkFace::without_a_way_back`]) — what every road that ends the whole process asks with
+/// (`app/src/shell/openPanes.ts`).
+///
+/// It is answered from here rather than worked out on the other side because neither half of it is
+/// the window's: which providers have a way back is the catalog's, and which places still hold one
+/// is this run's ([`TalkFace`]). An empty answer is the ordinary case — every pane comes back — and
+/// it is also what a window that has not laid a face out yet gets, which is the honest answer for a
+/// screen that has no panes behind it (`app/src/screens/RestartGate.tsx`).
+#[tauri::command]
+pub fn panes_without_a_way_back(face: tauri::State<'_, TalkFace>) -> Vec<&'static str> {
+    face.without_a_way_back()
 }
 
 /// Name one frame, and answer with the names as they now stand.
@@ -436,6 +493,45 @@ mod tests {
         let hints = face.hints.lock().unwrap();
         assert_eq!(hints.get("1"), None);
         assert_eq!(hints.get("2").map(String::as_str), Some("7b2e"));
+    }
+
+    /// The panes with no way in are named by their provider, once each and in the order they sit on
+    /// the screen — and a pane that comes back is not among them.
+    #[test]
+    fn the_panes_with_no_way_in_are_named_by_their_provider() {
+        let face = TalkFace::default();
+        *face.layout.lock().unwrap() = Some(layout(vec![
+            // Comes back: the row has a way back and the place still holds one.
+            frame("1", Some("claude-code")),
+            // No way back at all — the catalog row carries none (`AMB-T-4659`).
+            frame("2", Some("gemini-cli")),
+            // The way into this place was taken back: what was started in it never came up.
+            frame("3", Some("claude-code")),
+            // A second one of the same provider is not a second name.
+            frame("4", Some("gemini-cli")),
+            // A plain prompt holds no conversation to come back to.
+            frame("5", None),
+        ]));
+        face.hints.lock().unwrap().insert("1".to_string(), "0f9c".to_string());
+
+        assert_eq!(face.without_a_way_back(), vec!["Gemini CLI", "Claude Code"]);
+    }
+
+    /// Every pane coming back is the ordinary case, and it is an empty answer rather than a name.
+    #[test]
+    fn nothing_is_named_where_every_pane_comes_back() {
+        let face = TalkFace::default();
+        *face.layout.lock().unwrap() = Some(layout(vec![frame("1", Some("claude-code"))]));
+        face.hints.lock().unwrap().insert("1".to_string(), "0f9c".to_string());
+
+        assert!(face.without_a_way_back().is_empty());
+    }
+
+    /// A run where no window has laid a face out yet has no pane to answer for — the screen that
+    /// restarts before the app is up asks this too (`app/src/screens/RestartGate.tsx`).
+    #[test]
+    fn a_run_with_no_arrangement_names_nothing() {
+        assert!(TalkFace::default().without_a_way_back().is_empty());
     }
 
     /// A place the window sends with no project is let go rather than kept under a guess: a pane is

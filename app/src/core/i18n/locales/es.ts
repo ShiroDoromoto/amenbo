@@ -337,6 +337,7 @@ export const es: Translation = {
     "restart.button": "Reiniciar",
     "restart.failed": "No se pudo reiniciar. Cierra Amenbo y ábrelo otra vez.",
     "restart.confirm": "¿Reiniciar Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque; lo que estaban ejecutando, no.",
+    "restart.confirmNotAll": "¿Reiniciar Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque, salvo en los paneles con {names}. Lo que estaban ejecutando tampoco vuelve.",
 
     "restart.stuck.title": "Si reiniciar no basta",
     "restart.stuck.intro": "Entonces el Amenbo del disco sigue siendo el anterior. No hay vuelta atrás de versión: el camino de regreso es la copia previa a la migración que dejó la actualización.",
@@ -539,6 +540,7 @@ export const es: Translation = {
     "face.drop": "Quitar este panel",
     "face.dropConfirm": "¿Quitar este panel? La terminal que hay en él se cierra, y el camino de vuelta a lo que se dijo aquí se va con el sitio.",
     "quit.confirm": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque; lo que estaban ejecutando, no.",
+    "quit.confirmNotAll": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque, salvo en los paneles con {names}. Lo que estaban ejecutando tampoco vuelve.",
 
     "face.ended": "El programa de esta terminal ha terminado.",
     "face.projects": "Proyectos",

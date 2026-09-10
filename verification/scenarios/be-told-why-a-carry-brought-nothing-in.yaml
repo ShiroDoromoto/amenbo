@@ -1,0 +1,206 @@
+# A carry that stops on a name the folder already holds, and the line that says so.
+#
+# What a reader loses here if nothing is said is the file they already had. A paste that quietly
+# wrote over `watering.md` would look like it worked; a paste that quietly did nothing looks the
+# same as one that worked, too, until they go looking for what they carried. So the answer Amenbo
+# decided on is neither: the carry stops on the name, the file that was there is left alone, and the
+# reader is told which row it got to and why it got no further.
+#
+# ── Why both doors are walked on one road ────────────────────────────────────────────────────────
+# A paste and a drop are two gestures on one carry — the same landing, the same fence, the same
+# answer (`crate::folder_write::folder_clip_paste`). That they answer alike is not a thing a reader
+# can be told, only shown: they do one of the two on Monday and the other on Friday, and an app that
+# stopped one and overwrote on the other would have taught them something untrue in between. So the
+# road makes both onto the same name and reads the same line twice.
+#
+# ── Why the file that was there is read at the end ───────────────────────────────────────────────
+# The line at the foot of the window says the carry stopped. It does not say the file is intact —
+# a build that said so and wrote anyway would go green on the line alone. The two files are written
+# with different sentences for exactly this: the one read at the end is the folder's own, and the
+# one that never came in says so in its own words.
+#
+# ── Why a second file is carried in at the end ───────────────────────────────────────────────────
+# Every reading above is of a carry that stopped, and a build that stopped every carry there is
+# would walk them all. The last leg is the same key on the same folder with a name nobody holds:
+# it arrives, and nothing comes up at the foot of the window. What the road is about is the
+# difference between the two, which is why they are on one file.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road. A shell copying onto a name that is taken is the shell's own answer, and
+# Amenbo is the subject of none of it.
+id: be-told-why-a-carry-brought-nothing-in
+title: A file carried onto a name the folder already holds stops there, and the reader is told why
+description: >
+  Open the terminal face on a project whose folder holds a file, and carry a file of the same name in
+  from the machine — first with the paste key, then by dragging it. Neither comes in: a line at the
+  foot of the window names the row it stopped on and says the name is taken, and the file that was
+  already there still reads as itself. Then carry in a file whose name nobody holds: that one arrives
+  and nothing is said about it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # The name that will stop both carries, and the sentence that says which of the two files is
+  # standing in the folder at the end.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  # The same name, outside every folder the road binds. It never arrives, so its sentence is one the
+  # folder must never come to hold.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: watering.md
+      content: SCENARIO this one was copied from outside and never arrived
+
+  # And the file for the last leg, whose name the folder does not hold.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: almanac.md
+      content: SCENARIO the almanac was never in the greenhouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The panel beside the panes opens on the page a person writes on rather than on the folder, so the
+  # road asks for the half it is about before reading anything in it.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # The name is in the folder before anything is carried at it. Read first, so a run that stops later
+  # stops on a name that was taken rather than on a folder nobody can see.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  # ── through the keys ──────────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: repo
+    op: copy-outside
+    with:
+      path: watering.md
+
+  # Onto the row of the file it would land beside: a file's row belongs to the folder holding it, so
+  # standing on this one aims the paste at the folder that already holds the name.
+  - type: action
+    domain: files
+    op: paste
+    with:
+      name: watering.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: stopped
+    with:
+      name: watering.md
+      why: taken
+
+  # ── and by hand ───────────────────────────────────────────────────────────────────────────────
+  # The other gesture onto the same name. What is brought is the operator's own file — a drop reads
+  # the disk they are sitting at — and all this road asks of it is the name it carries.
+  - type: action
+    domain: files
+    op: drop-in
+    with:
+      as: file
+      brings: watering.md
+      name: watering.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: stopped
+    with:
+      name: watering.md
+      why: taken
+
+  # ── what is still in the folder ───────────────────────────────────────────────────────────────
+  # Neither carry arrived, so the file standing under that name is the one that was there before
+  # either of them: it says so in its own sentence, and the one that came from outside says another.
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: the seedlings are watered every second morning
+
+  # ── and the carry that does come in ───────────────────────────────────────────────────────────
+  # The list is back, standing the way it was left: the tree is the panel's to hold and reading a
+  # file does not take it away (`app/src/files/FilesPanel.tsx`).
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: repo
+    op: copy-outside
+    with:
+      path: almanac.md
+
+  # The same key, standing on the same row, aimed at the same folder. Only the name is different.
+  - type: action
+    domain: files
+    op: paste
+    with:
+      name: watering.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: stopped
+    with:
+      name: almanac.md
+      why: taken
+      present: false
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: almanac.md
+      section: tree

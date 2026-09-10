@@ -332,6 +332,7 @@ export const de: Translation = {
     "restart.button": "Neu starten",
     "restart.failed": "Neustart nicht möglich. Beende Amenbo und öffne es erneut.",
     "restart.confirm": "Amenbo neu starten? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, das, was in ihnen lief, nicht.",
+    "restart.confirmNotAll": "Amenbo neu starten? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, außer in den Bereichen mit {names}. Was in ihnen lief, kommt ebenfalls nicht zurück.",
 
     "restart.stuck.title": "Wenn ein Neustart nicht hilft",
     "restart.stuck.intro": "Dann ist das Amenbo auf der Platte noch das alte. Einen Weg zurück auf eine ältere Version gibt es nicht — der Rückweg ist die Sicherung von vor der Migration, die die Aktualisierung hinterlassen hat.",
@@ -528,6 +529,7 @@ export const de: Translation = {
     "face.drop": "Diesen Bereich entfernen",
     "face.dropConfirm": "Diesen Bereich entfernen? Das Terminal darin wird beendet, und der Weg zurück in das hier Gesagte geht mit dem Platz verloren.",
     "quit.confirm": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, das, was in ihnen lief, nicht.",
+    "quit.confirmNotAll": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, außer in den Bereichen mit {names}. Was in ihnen lief, kommt ebenfalls nicht zurück.",
 
     "face.ended": "Das Programm in diesem Terminal wurde beendet.",
     "face.projects": "Projekte",

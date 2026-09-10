@@ -561,6 +561,7 @@ pub fn run() {
       wake::wake_switch,
       agent_models::agent_models,
       frames::frame_names,
+      frames::panes_without_a_way_back,
       frames::name_frame,
       commands::project_memo,
       commands::set_project_memo,

@@ -5,6 +5,7 @@ import { TopBar } from "./TopBar";
 import { TerminalFace } from "./TerminalFace";
 import { useNavHistory, NO_SELECTION } from "./navHistory";
 import { isBlankSpaceClose } from "./outsideClose";
+import { endingConfirm } from "./openPanes";
 import { Sidebar } from "./Sidebar";
 import { BoardScreen } from "../screens/BoardScreen";
 import { ActivityFeed } from "../screens/ActivityFeed";
@@ -489,7 +490,9 @@ export function AppShell() {
 
   // The app was asked to end while terminals were still running (`crate::quit`). The host has already decided
   // there is something to lose; what is said here is what that is — every terminal open in the process, and
-  // nothing about what any of them was doing (`AMB-D-858`).
+  // nothing about what any of them was doing (`AMB-D-858`). The one thing it does name is the providers whose
+  // panes will not be in their conversation on the next run, because the plain sentence promises they all
+  // will be (`./openPanes`).
   useEffect(() => {
     if (!inTauri()) return;
     let unlisten: (() => void) | undefined;
@@ -498,7 +501,7 @@ export function AppShell() {
       .then(({ listen }) =>
         listen("quit://asked", () => {
           void (async () => {
-            if (!await confirmDialog(t("quit.confirm"))) return;
+            if (!await confirmDialog(await endingConfirm("quit.confirm", "quit.confirmNotAll"))) return;
             await invoke("app_quit");
           })();
         }),

@@ -332,6 +332,7 @@ export const vi: Translation = {
     "restart.button": "Khởi động lại",
     "restart.failed": "Không khởi động lại được. Hãy thoát Amenbo rồi mở lại.",
     "restart.confirm": "Khởi động lại Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, còn những gì đang chạy trong đó thì không.",
+    "restart.confirmNotAll": "Khởi động lại Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, trừ các khung đang chạy {names}. Những gì đang chạy trong đó cũng không trở lại.",
 
     "restart.stuck.title": "Nếu khởi động lại vẫn không được",
     "restart.stuck.intro": "Thì Amenbo trên đĩa vẫn là bản cũ. Không có đường hạ phiên bản — đường về là bản sao lưu trước khi chuyển đổi mà bản cập nhật để lại.",
@@ -521,6 +522,7 @@ export const vi: Translation = {
     "face.drop": "Bỏ khung này",
     "face.dropConfirm": "Bỏ khung này? Terminal trong đó sẽ kết thúc, và đường trở lại những gì đã nói ở đây cũng mất theo chỗ này.",
     "quit.confirm": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, còn những gì đang chạy trong đó thì không.",
+    "quit.confirmNotAll": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, trừ các khung đang chạy {names}. Những gì đang chạy trong đó cũng không trở lại.",
 
     "face.ended": "Chương trình trong terminal này đã kết thúc.",
     "face.projects": "Dự án",

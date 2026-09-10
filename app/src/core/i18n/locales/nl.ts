@@ -329,6 +329,7 @@ export const nl: Translation = {
     "restart.button": "Opnieuw starten",
     "restart.failed": "Opnieuw starten lukte niet. Sluit Amenbo af en open het opnieuw.",
     "restart.confirm": "Amenbo opnieuw starten? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, wat erin liep niet.",
+    "restart.confirmNotAll": "Amenbo opnieuw starten? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",
 
     "restart.stuck.title": "Als opnieuw starten niet helpt",
     "restart.stuck.intro": "Dan is de Amenbo op schijf nog steeds de oude. Terug naar een lagere versie kan niet — de weg terug is de back-up van vóór de migratie die de update heeft achtergelaten.",
@@ -518,6 +519,7 @@ export const nl: Translation = {
     "face.drop": "Dit deelvenster verwijderen",
     "face.dropConfirm": "Dit deelvenster verwijderen? De terminal erin wordt beëindigd, en de weg terug naar wat hier gezegd is verdwijnt met de plek.",
     "quit.confirm": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, wat erin liep niet.",
+    "quit.confirmNotAll": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",
 
     "face.ended": "Het programma in deze terminal is gestopt.",
     "face.projects": "Projecten",

@@ -352,6 +352,9 @@ const ui = {
   "restart.button": "Restart",
   "restart.failed": "Could not restart. Quit Amenbo and open it again.",
   "restart.confirm": "Restart Amenbo? Every terminal open in it ends. The conversations come back on the next run; what they were running does not.",
+  // Restarting ends every terminal the same way quitting does, so it says the same thing about the
+  // panes that will not be in their conversation afterwards (`quit.confirmNotAll`).
+  "restart.confirmNotAll": "Restart Amenbo? Every terminal open in it ends. The conversations come back on the next run, apart from the panes running {names}. What they were running does not come back either.",
   "restart.stuck.title": "If restarting does not help",
   "restart.stuck.intro": "Then the Amenbo on disk is still the old one. There is no downgrade — the way back is the pre-migration backup the update left behind.",
   "restart.stuck.how": "Either install the newer version (the GUI and the CLI ship together), or restore from that backup on the command line:",
@@ -590,6 +593,12 @@ const ui = {
   // because that is a real loss — and because one of the six writes a standing approval down as a
   // refusal when it is killed (`AMB-T-4630`).
   "quit.confirm": "Quit Amenbo? Every terminal open in it ends. The conversations come back on the next run; what they were running does not.",
+  // The same question where a pane on the screen will **not** be in its conversation on the next run
+  // (`AMB-T-4676`). Which panes those are is counted rather than written down here — a provider with
+  // no way back, or a place whose way in was taken back (`crate::frames::TalkFace::without_a_way_back`)
+  // — so this stays true as providers gain a way back and lose one. `{names}` is the providers, run
+  // together the way this language runs a list together (`../format`).
+  "quit.confirmNotAll": "Quit Amenbo? Every terminal open in it ends. The conversations come back on the next run, apart from the panes running {names}. What they were running does not come back either.",
   // The OS notification a pane raises when its turn has come and nobody is looking at the terminal
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.

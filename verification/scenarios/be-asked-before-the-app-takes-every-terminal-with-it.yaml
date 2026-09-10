@@ -1,15 +1,25 @@
 # The way out of the app says a terminal is about to go, and lets the reader go or stay.
 #
 # **Ending the app ends every terminal in it at once.** A session is the process's — not a window's
-# and not a pane's — so the gesture that ends Amenbo takes down every agent that was running, and none
-# of them comes back on the next launch (`app/src-tauri/src/quit.rs`). Nothing afterwards can notice
-# that happened, so the only place it can be said is in front of the gesture.
+# and not a pane's — so the gesture that ends Amenbo takes down every agent that was running, and what
+# any of them was in the middle of doing does not come back (`app/src-tauri/src/quit.rs`). The talk
+# itself does: each place is opened again on the session it was left in
+# (`app/src-tauri/src/frames.rs`). Nothing
+# afterwards can notice the running was lost, so the only place it can be said is in front of the
+# gesture.
 #
-# ── Why nothing is named ─────────────────────────────────────────────────────────────────────────
+# ── Why no task is named ─────────────────────────────────────────────────────────────────────────
 # The question says a terminal is going and nothing about what any of them was doing. What tied a
 # pane to a task was a key the world could rewrite behind the pane, so a box naming what was about
 # to be lost named as often work somebody had already finished elsewhere. What survives the app is on
 # the ledger, which is where this road reads it.
+#
+# The one thing it does name is a provider whose pane will **not** be in its conversation afterwards,
+# because the plain sentence promises every one of them will be
+# (`app/src-tauri/src/frames.rs`, `panes_without_a_way_back`). Every pane on this road is a plain
+# shell, which holds no conversation to come back to, so what every leg below reads is the plain
+# sentence. **The named half is not walked here**: there is no op that opens a pane on a chosen
+# provider, so nothing the operator can be told to do would put one on the screen.
 #
 # ── Why both doors are walked ────────────────────────────────────────────────────────────────────
 # There are two ways out and they arrive by different roads. The menu's item is one this app wrote,

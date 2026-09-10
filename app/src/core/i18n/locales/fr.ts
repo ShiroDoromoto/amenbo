@@ -337,6 +337,7 @@ export const fr: Translation = {
     "restart.button": "Redémarrer",
     "restart.failed": "Impossible de redémarrer. Quittez Amenbo et rouvrez-le.",
     "restart.confirm": "Redémarrer Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, pas ce qu'elles exécutaient.",
+    "restart.confirmNotAll": "Redémarrer Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, sauf dans les volets qui font tourner {names}. Ce qu'elles exécutaient ne revient pas non plus.",
 
     "restart.stuck.title": "Si redémarrer ne suffit pas",
     "restart.stuck.intro": "Alors l'Amenbo sur le disque est encore l'ancien. Il n'y a pas de retour en arrière de version — le chemin du retour, c'est la sauvegarde d'avant migration laissée par la mise à jour.",
@@ -539,6 +540,7 @@ export const fr: Translation = {
     "face.drop": "Supprimer ce volet",
     "face.dropConfirm": "Supprimer ce volet ? Le terminal qui s'y trouve se termine, et le chemin de retour vers ce qui s'y est dit s'en va avec la place.",
     "quit.confirm": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, pas ce qu'elles exécutaient.",
+    "quit.confirmNotAll": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, sauf dans les volets qui font tourner {names}. Ce qu'elles exécutaient ne revient pas non plus.",
 
     "face.ended": "Le programme de ce terminal s'est arrêté.",
     "face.projects": "Projets",

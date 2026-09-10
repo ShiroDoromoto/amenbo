@@ -332,6 +332,7 @@ export const id: Translation = {
     "restart.button": "Mulai ulang",
     "restart.failed": "Tidak bisa memulai ulang. Tutup Amenbo lalu buka lagi.",
     "restart.confirm": "Mulai ulang Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, tetapi yang sedang berjalan di dalamnya tidak.",
+    "restart.confirmNotAll": "Mulai ulang Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, kecuali di panel yang menjalankan {names}. Yang sedang berjalan di dalamnya juga tidak kembali.",
 
     "restart.stuck.title": "Kalau memulai ulang tidak menolong",
     "restart.stuck.intro": "Berarti Amenbo di disk masih yang lama. Tidak ada jalan turun versi — jalan kembalinya adalah cadangan pra-migrasi yang ditinggalkan pembaruan itu.",
@@ -521,6 +522,7 @@ export const id: Translation = {
     "face.drop": "Hapus panel ini",
     "face.dropConfirm": "Hapus panel ini? Terminal di dalamnya berakhir, dan jalan kembali ke percakapan di sini ikut hilang bersama tempatnya.",
     "quit.confirm": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, tetapi yang sedang berjalan di dalamnya tidak.",
+    "quit.confirmNotAll": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, kecuali di panel yang menjalankan {names}. Yang sedang berjalan di dalamnya juga tidak kembali.",
 
     "face.ended": "Program di terminal ini telah berhenti.",
     "face.projects": "Proyek",

@@ -11,7 +11,10 @@
 //! **What is asked is whether a terminal is going, and never what one was doing** (`AMB-D-858`).
 //! Tying a pane to a task went through a key the world could rewrite behind the pane, so a question
 //! naming what was about to be lost named as often work somebody had already finished elsewhere.
-//! A reservation left standing is on the ledger, where `amenbo task list` finds it.
+//! A reservation left standing is on the ledger, where `amenbo task list` finds it. The one thing
+//! the sentence does name is a provider whose pane will not be in its conversation afterwards, which
+//! is the promise above holding for every pane but that one
+//! (`crate::frames::panes_without_a_way_back`, `AMB-T-4676`).
 //!
 //! **The question is the board's, not this side's.** The sentence is in the reader's language, and
 //! the dictionary is the front end's (`AMB-D-396` carves out the menu bar and nothing else). So this
@@ -48,7 +51,9 @@ pub const QUIT_ID: &str = "quit";
 /// Told to the board when the app was asked to end and something is still running in a pane.
 ///
 /// Carries nothing. Whether there is anything to lose was settled on this side before it was sent,
-/// and what the question says beyond that is the same sentence every time.
+/// and the sentence is the board's to compose — it asks this side for the panes with no way back
+/// itself ([`crate::frames::panes_without_a_way_back`]), which is the one road the two ways out of
+/// the app share with the way out of *this build* of it (`app/src/shell/openPanes.ts`).
 pub const QUIT_ASKED_EVENT: &str = "quit://asked";
 
 /// Told to every window once the app is ending for certain: write what is unwritten and say so.

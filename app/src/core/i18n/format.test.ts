@@ -10,7 +10,8 @@ const snap = { language: null as string | null, dateLocale: null as string | nul
 vi.mock("../snapshot", () => ({ getSnapshot: () => snap }));
 
 import {
-  dueLabel, exactLabel, formatDay, formatDayTime, formatNumber, monthLabel, weekdayLabels, whenLabel,
+  dueLabel, exactLabel, formatDay, formatDayTime, formatNumber, listLabel, monthLabel, weekdayLabels,
+  whenLabel,
 } from "./format";
 import { tf, tn } from "./index";
 import { de } from "./locales/de";
@@ -174,5 +175,27 @@ describe("the locale the formatters default to", () => {
   it("is the language's own when it is not", () => {
     snap.language = "ja";
     expect(monthLabel(2026, 5)).toBe("2026年6月");
+  });
+});
+
+// A list is joined by a rule of the language, not by a separator kept in nineteen dictionaries: the
+// word between the last two items is "and" in English, nothing at all in Japanese, and each language
+// puts its own commas in (`AMB-T-4676`).
+describe("names run together as a list", () => {
+  it("takes the language, not the date locale", () => {
+    snap.language = "ja";
+    snap.dateLocale = "en-US";
+    expect(listLabel(["Gemini CLI", "OpenCode"])).toBe("Gemini CLI、OpenCode");
+  });
+
+  it("puts the language's own word between the last two", () => {
+    expect(listLabel(["Gemini CLI", "OpenCode"], "en")).toBe("Gemini CLI and OpenCode");
+    expect(listLabel(["Gemini CLI", "OpenCode"], "de")).toBe("Gemini CLI und OpenCode");
+    expect(listLabel(["Gemini CLI", "OpenCode", "Cursor"], "en"))
+      .toBe("Gemini CLI, OpenCode, and Cursor");
+  });
+
+  it("writes one name as the name", () => {
+    expect(listLabel(["Gemini CLI"], "en")).toBe("Gemini CLI");
   });
 });

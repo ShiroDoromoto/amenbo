@@ -18,7 +18,7 @@ import { currentLang, normalizeLang, t, tf } from "../core/i18n";
 import { inTauri } from "../core/snapshot";
 import { Icon } from "../components/Icon";
 import { NoCli } from "../components/NoCli";
-import { openPanes } from "../shell/openPanes";
+import { endingConfirm, openPanes } from "../shell/openPanes";
 import { confirmDialog } from "../core/dialog";
 
 /**
@@ -54,7 +54,8 @@ export function RestartGate() {
       // noticed long after startup, written by another process (`../core/formatAhead`) — and starting
       // again ends every one of them for good. So the confirmation, which is what every way out of the
       // app asks and the whole of what any of them asks (`../shell/openPanes`).
-      if (await openPanes() > 0 && !await confirmDialog(t("restart.confirm", lang))) return;
+      if (await openPanes() > 0
+        && !await confirmDialog(await endingConfirm("restart.confirm", "restart.confirmNotAll", lang))) return;
       await invoke("restart_app");
       setFailed(true);
     } catch {

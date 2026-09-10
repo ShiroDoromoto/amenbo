@@ -610,6 +610,13 @@ fn since_epoch_ms() -> i64 {
         .map_or(0, |since| i64::try_from(since.as_millis()).unwrap_or(0))
 }
 
+/// How long a program started on a handle has to last before the handle is believed.
+///
+/// A provider handed a session id it cannot use says so and exits, which takes well under a second;
+/// one that came up stays up for as long as somebody is talking to it. Five seconds sits past the
+/// first and nowhere near the second.
+const BELIEVED_AFTER: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// Watch for the session this pane opened to appear in its provider's own list, and write the
 /// handle down on the frame's row (`AMB-D-869`).
 ///
@@ -928,6 +935,9 @@ pub fn pty_open(
     let session = new_session();
     let started_at = amenbo_core::time::Timestamp::now().to_rfc3339_z();
     let opened_at = since_epoch_ms();
+    // Read against a clock that only goes forwards, because what it is asked is how long the program
+    // lasted — a wall clock moved between the two readings would answer with the move.
+    let opened = std::time::Instant::now();
     let size = PtySize {
         rows,
         cols,
@@ -963,6 +973,12 @@ pub fn pty_open(
     if let (Some(frame), Some(issued)) = (frame.as_deref(), issued.as_deref()) {
         face.resumed_from(frame, issued.to_string());
     }
+    // The frame to take the way back off again, should the program end in moments. Only where the
+    // handle rode in on the launch line: `codex` is pointed at a directory instead, which is derived
+    // from the frame afresh every time and is not a row a refusal could be traced to (`AMB-D-869`).
+    let on_the_line = frame
+        .clone()
+        .filter(|_| launch.is_some_and(|launch| launch.resume.is_some()));
     // Kept against the session, so a pane that adopts this terminal later can say what is running in
     // it. It is the id as it was asked for — a catalog row, or one of this device's registrations —
     // and which of the two it is stays the catalog's answer rather than being decided here.
@@ -1047,11 +1063,21 @@ pub fn pty_open(
         // round trip to the webview. Its exit status says nothing a person needs: what a terminal
         // ends with is what is on the screen, which the pane already has.
         let _ = child.wait();
-        app.state::<Terminals>()
+        // Whether the registry still held it says who ended it: `pty_close` takes the entry out
+        // before it kills, so an entry still here is a program that ended on its own.
+        let itself = app
+            .state::<Terminals>()
             .0
             .lock()
             .expect("terminals lock")
-            .remove(&id);
+            .remove(&id)
+            .is_some();
+        // A program that ended by itself within moments of starting never got as far as a session,
+        // so the handle written down for it is taken back before it can refuse the next run too
+        // (`crate::frames::TalkFace::gave_up`).
+        if let Some(frame) = on_the_line.filter(|_| itself && opened.elapsed() < BELIEVED_AFTER) {
+            app.state::<crate::frames::TalkFace>().gave_up(&frame);
+        }
         let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, &id);
     });
 

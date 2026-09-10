@@ -276,12 +276,12 @@ pub struct Launch {
     /// and the two that do not are rows rather than an exception written into the code that types it.
     pub rename: Option<Rename>,
     /// How a pane running this provider comes back into the session it was running, or `None`
-    /// where the way back is not a flag on the line ([`Resume`], `AMB-D-869`).
+    /// where it has no way back at all ([`Resume`], `AMB-D-869`).
     ///
-    /// A column for the same reason [`rename`](Launch::rename) is one: four of the six take a
-    /// handle beside the opening prompt, and the two that do not are rows rather than an exception —
-    /// Codex carries a home instead (`AMB-T-4640`), and Gemini carries nothing that survives its own
-    /// restart (`AMB-T-4659`).
+    /// A column for the same reason [`rename`](Launch::rename) is one: five of the six come back,
+    /// four of them behind a handle and Codex by a subcommand (`AMB-T-4665`), and the one that does
+    /// not is a row rather than an exception — Gemini carries nothing that survives its own restart
+    /// (`AMB-T-4659`).
     pub resume: Option<Resume>,
     /// Whether this row has been watched starting the provider on a real machine (`AMB-T-3819`).
     ///
@@ -408,27 +408,52 @@ pub struct Rename {
 /// (`AMB-D-869`).
 ///
 /// **Five of the six have a way back, and no two of them spell it alike** (`AMB-T-4630`). What
-/// parts them is not the flag but who decides the handle: two take one Amenbo hands them as the
-/// session starts, one takes an unknown one and creates it, one names its own and has to be asked
-/// afterwards, and one is not a session id at all. So the column carries the two halves separately —
-/// [`back`](Resume::back) is the way in, [`issue`](Resume::issue) is who decides — and a provider
-/// with no way back at all is a row with `None` on it rather than a flag nothing takes.
+/// parts them is not the spelling but who decides which session: three take a handle Amenbo hands
+/// them as the session starts, one takes an unknown one and creates it, one names its own and has
+/// to be asked afterwards, and one is not told at all. So the column carries the halves separately
+/// — [`back`](Resume::back) is the way in, [`issue`](Resume::issue) is who decides.
 ///
-/// **`None` here is two different answers, and the rows say which.** Codex's handle is a home of its
-/// own rather than an id on a line — an environment variable and a directory to keep
-/// (`AMB-T-4640`), which a flag column could hold neither of. Gemini has the flags and cannot use
+/// **`None` here is the row that cannot come back at all.** Gemini has the flags and cannot use
 /// them: it restarts itself on the same argv, so a handle on the line kills the second start
 /// (`AMB-T-4659`).
 pub struct Resume {
-    /// The flag the handle goes behind to come back into that session — `--resume` for three of
-    /// them, `-s` for OpenCode.
-    pub back: &'static str,
+    /// How the line is put back into the session it was running ([`Back`]).
+    pub back: Back,
     /// How a handle Amenbo decided is put on the line as the session **starts**, or `None` where
-    /// the provider names its own and it has to be read back afterwards ([`ask`](Resume::ask)).
+    /// nothing is put there — the provider names its own and it has to be read back afterwards
+    /// ([`ask`](Resume::ask)), or it is not a handle the line carries at all ([`Back::Words`]).
     pub issue: Option<Issue>,
     /// How this provider is asked which sessions it has, for the row that names its own — or `None`
-    /// where Amenbo decides the handle and has nothing to ask.
+    /// where the answer is not something to go and ask for.
     pub ask: Option<crate::agent_sessions::Ask>,
+}
+
+/// What a line says to come back into a session with (`AMB-D-869`).
+///
+/// **The two are not the same move.** A handle names one session out of all of them, so it goes
+/// beside everything else the line carries; a subcommand is what the program is being asked to do,
+/// so it comes first and nothing may go in front of it.
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Back {
+    /// The flag a handle goes behind — `--resume` for three of them, `-s` for OpenCode.
+    Behind(&'static str),
+    /// Words at the head of the line, with no handle anywhere on it. Codex's `resume --last` means
+    /// "the newest session recorded in the home this pane was started in", so what picks the
+    /// session is the environment and not the line (`app/src-tauri/src/codex_home.rs`,
+    /// `AMB-T-4665`).
+    Words(&'static [&'static str]),
+}
+
+impl Resume {
+    /// Whether a handle written down for this row is one the line carries — a session id the
+    /// provider is asked for by name.
+    ///
+    /// It is the question a caller holding a written-down handle asks before believing it names a
+    /// session: what is kept for a [`Words`](Back::Words) row is the place the pane runs in, and a
+    /// place is not a claim that a conversation was ever had there.
+    pub fn carries_a_handle(&self) -> bool {
+        matches!(self.back, Back::Behind(_))
+    }
 }
 
 /// Who decides the handle a session starts under (`AMB-T-4630`).
@@ -463,8 +488,8 @@ pub enum Handle<'a> {
 /// A handle for a session about to start on `launch`, where Amenbo is the one that decides it.
 ///
 /// `None` for the three rows it is not Amenbo's to decide: OpenCode names its own and is asked
-/// afterwards ([`Resume::ask`]), Codex carries a home rather than an id (`AMB-T-4640`), and Gemini
-/// takes no handle at all (`AMB-T-4659`).
+/// afterwards ([`Resume::ask`]), Codex is told nothing on its line and comes back by the home it
+/// runs in ([`Back::Words`], `AMB-T-4640`), and Gemini takes no handle at all (`AMB-T-4659`).
 ///
 /// **A version 4 UUID, because that is the shape the providers were watched taking** — Claude Code
 /// refuses `--session-id` anything else, and the other two were only ever handed one
@@ -519,7 +544,7 @@ pub static LAUNCHES: &[Launch] = &[
         // Takes the id of the session it is about to make, and refuses anything that is not a
         // UUID. Coming back on one it has no record of is an error and exit 1 (`AMB-T-4630`).
         resume: Some(Resume {
-            back: "--resume",
+            back: Back::Behind("--resume"),
             issue: Some(Issue::Flag("--session-id")),
             ask: None,
         }),
@@ -548,9 +573,12 @@ pub static LAUNCHES: &[Launch] = &[
         // The one row the rename is half-seen on: the thread takes the name, the terminal title
         // stays on the folder it was started in (`AMB-T-4652`).
         rename: Some(Rename { command: "/rename", limit: None, titles: false }),
-        // The way back here is a home of its own rather than a handle on the line — an environment
-        // variable and a directory to keep, which is `AMB-T-4640`'s and not a flag column's.
-        resume: None,
+        // The one row that comes back by a subcommand. Which session it is stays the home the pane
+        // was started in — an environment variable and a directory to keep (`AMB-T-4640`) — so the
+        // line has only to say "the last one", and there is no handle on it to be wrong
+        // (`AMB-T-4665`). Nothing is issued and nothing is asked for the same reason: the place
+        // decides, and Amenbo already made the place.
+        resume: Some(Resume { back: Back::Words(&["resume", "--last"]), issue: None, ask: None }),
         confirmed: true,
     },
     Launch {
@@ -575,7 +603,7 @@ pub static LAUNCHES: &[Launch] = &[
         // know is the one row that neither stops nor carries on quietly: it says so in the pane and
         // then stands there as a new session (`AMB-T-4630`).
         resume: Some(Resume {
-            back: "--resume",
+            back: Back::Behind("--resume"),
             issue: Some(Issue::Flag("--session-id")),
             ask: None,
         }),
@@ -651,7 +679,7 @@ pub static LAUNCHES: &[Launch] = &[
         // started and the id is read back out of the provider's own list afterwards
         // (`AMB-T-4630`).
         resume: Some(Resume {
-            back: "-s",
+            back: Back::Behind("-s"),
             issue: None,
             ask: Some(crate::agent_sessions::Ask {
                 args: &["session", "list", "--format", "json"],
@@ -689,7 +717,7 @@ pub static LAUNCHES: &[Launch] = &[
         // that starts a session and the line that comes back into one are the same
         // (`AMB-T-4630`). **A handle it cannot find is a new session and no word about it** — the
         // one row that fails silently, and `AMB-D-869` leaves it there rather than covering for it.
-        resume: Some(Resume { back: "--resume", issue: Some(Issue::Back), ask: None }),
+        resume: Some(Resume { back: Back::Behind("--resume"), issue: Some(Issue::Back), ask: None }),
         // Written from the documentation and never run — the tool is not on the machine the other five
         // were tried on (`AMB-T-3838`).
         confirmed: false,
@@ -769,9 +797,13 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 ///
 /// **A handle Amenbo has just decided is not that**, even on the row that starts a session under
 /// the flag it comes back on ([`Issue::Back`]): the session is being made here, so it is told where
-/// it is working. Nor are the two rows that take no handle on their line ([`Resume`] `None`):
-/// nothing on either line resumes anything, so every line they have is a session starting, and both
-/// are told where they are working.
+/// it is working. Nor is the row that has no way back at all ([`Resume`] `None`): nothing on that
+/// line resumes anything, so every line it has is a session starting.
+///
+/// **The row that comes back by a subcommand is silent on the way back like the rest**
+/// ([`Back::Words`]). Two reasons meet on it: the conversation it lands in has been told already,
+/// and `codex resume` reads a bare argument as the session to open — so a sentence put there would
+/// not be a prompt at all, it would be a session name nothing answers to (`AMB-T-4665`).
 ///
 /// **What a provider does with a handle it cannot find is still the provider's**: Cursor opens a new
 /// session and says nothing about it, and that session now starts unsaid as well. `AMB-D-869` left
@@ -783,13 +815,18 @@ pub fn opening(
     handle: Option<Handle<'_>>,
 ) -> Vec<String> {
     let mut args: Vec<String> = Vec::new();
+    let way_back = resuming(launch, handle);
+    let carrying_on = way_back.is_some() && matches!(handle, Some(Handle::Back(_)));
+    // A subcommand is what the program is being asked to do, so it goes at the head and the model
+    // and the prompt follow it — `codex resume --last -m <model>`, never the other way about.
+    if let Some(Put::Head(words)) = way_back {
+        args.extend(words.iter().map(|word| (*word).to_string()));
+    }
     if let Some(model) = model.map(str::trim).filter(|name| !name.is_empty()) {
         args.push(launch.model_flag.to_string());
         args.push(model.to_string());
     }
-    let way_back = resuming(launch, handle);
-    let carrying_on = way_back.is_some() && matches!(handle, Some(Handle::Back(_)));
-    if let Some((flag, id)) = way_back {
+    if let Some(Put::Beside(flag, id)) = way_back {
         args.push(flag.to_string());
         args.push(id.to_string());
     }
@@ -800,21 +837,38 @@ pub fn opening(
     args
 }
 
-/// The flag a handle goes behind on this row's launch line, and the handle — or nothing where this
-/// row puts none there.
+/// Where this row's way back goes on the line — the answer [`resuming`] gives.
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+enum Put<'a> {
+    /// A subcommand at the head of the line ([`Back::Words`]), with nothing in front of it.
+    Head(&'static [&'static str]),
+    /// A handle behind a flag ([`Back::Behind`]), beside everything else the line carries.
+    Beside(&'static str, &'a str),
+}
+
+/// What this row's launch line says to come back into a session, and where it goes — or nothing
+/// where this line resumes nothing.
 ///
-/// Three ways to have nothing, and they are different things: the pane is being opened on no
-/// session at all, the row has no way back on a line ([`Launch::resume`]), or the row names its own
-/// handle and the one it will name is not known yet ([`Resume::ask`]). None of them is a flag with
-/// an empty value, which is what every provider would refuse.
-fn resuming<'a>(launch: &Launch, handle: Option<Handle<'a>>) -> Option<(&'static str, &'a str)> {
+/// Four ways to have nothing, and they are different things: the pane is being opened on no session
+/// at all, the row has no way back ([`Launch::resume`]), the row names its own handle and the one it
+/// will name is not known yet ([`Resume::ask`]), or the row comes back by a subcommand and so has no
+/// handle to start a session under. None of them is a flag with an empty value, which is what every
+/// provider would refuse.
+fn resuming<'a>(launch: &Launch, handle: Option<Handle<'a>>) -> Option<Put<'a>> {
     let resume = launch.resume.as_ref()?;
-    match handle? {
-        Handle::Back(id) => Some((resume.back, id)),
-        Handle::New(id) => match resume.issue? {
-            Issue::Flag(flag) => Some((flag, id)),
-            Issue::Back => Some((resume.back, id)),
+    match (handle?, resume.back) {
+        // What names the session for a subcommand row is not on the line, so the handle written down
+        // for it is not read here — it is the place the pane runs in, which the caller has already
+        // pointed it at (`app/src-tauri/src/codex_home.rs`).
+        (Handle::Back(_), Back::Words(words)) => Some(Put::Head(words)),
+        (Handle::Back(id), Back::Behind(flag)) => Some(Put::Beside(flag, id)),
+        // A handle Amenbo decided, for a session about to be made under it. A subcommand row issues
+        // none — there is nowhere on its line for one — so its `issue` is `None` and this falls out.
+        (Handle::New(id), Back::Behind(back)) => match resume.issue? {
+            Issue::Flag(flag) => Some(Put::Beside(flag, id)),
+            Issue::Back => Some(Put::Beside(back, id)),
         },
+        (Handle::New(_), Back::Words(_)) => None,
     }
 }
 
@@ -1306,30 +1360,47 @@ mod tests {
         }
     }
 
-    /// Every row that has a way back spells it as a flag, and the row that names its own handle is
-    /// the only one with something to ask.
+    /// Every row that comes back behind a handle spells the way in as a flag, every row that comes
+    /// back by a subcommand spells it as words, and the row that names its own handle is the only
+    /// one with something to ask.
     ///
     /// The pairing is what makes the column readable without a branch: a row Amenbo decides the
-    /// handle for has nothing to ask, and a row it does not has no way to be told one.
+    /// handle for has nothing to ask, a row it does not has no way to be told one, and a row with no
+    /// handle on its line has neither.
     #[test]
-    fn every_row_with_a_way_back_spells_it_as_a_flag() {
+    fn every_row_spells_its_way_back_the_way_its_column_says() {
         for launch in LAUNCHES {
             let Some(resume) = launch.resume.as_ref() else { continue };
-            assert!(resume.back.starts_with('-'), "{}: {} is not a flag", launch.id, resume.back);
+            match resume.back {
+                Back::Behind(flag) => {
+                    assert!(flag.starts_with('-'), "{}: {flag} is not a flag", launch.id);
+                    assert_eq!(
+                        resume.issue.is_none(),
+                        resume.ask.is_some(),
+                        "{}: who decides the handle and what is asked disagree",
+                        launch.id
+                    );
+                }
+                // A subcommand is what the program is asked to do, so none of it is a flag — and
+                // there is no handle on that line for Amenbo to decide or to go and ask about.
+                Back::Words(words) => {
+                    assert!(!words.is_empty(), "{}: comes back on no words at all", launch.id);
+                    assert!(!words[0].starts_with('-'), "{}: {} is a flag", launch.id, words[0]);
+                    assert!(resume.issue.is_none(), "{} issues a handle it cannot carry", launch.id);
+                    assert!(resume.ask.is_none(), "{} asks about a handle it has none of", launch.id);
+                }
+            }
             if let Some(Issue::Flag(flag)) = resume.issue {
                 assert!(flag.starts_with('-'), "{}: {flag} is not a flag", launch.id);
             }
-            assert_eq!(
-                resume.issue.is_none(),
-                resume.ask.is_some(),
-                "{}: who decides the handle and what is asked disagree",
-                launch.id
-            );
         }
-        // And the two rows with no way back on a line, for the two different reasons: Codex's is a
-        // home of its own rather than a handle (`AMB-T-4640`), and Gemini has the flags but restarts
-        // itself on the same argv, so a handle on the line kills the second start (`AMB-T-4659`).
-        assert!(find_launch("codex-cli").unwrap().resume.is_none());
+        // Codex is the subcommand row: which session it is stays the home it runs in, so the line
+        // says only "the last one" (`AMB-T-4640`, `AMB-T-4665`).
+        let codex = find_launch("codex-cli").unwrap().resume.as_ref().expect("codex comes back");
+        assert_eq!(codex.back, Back::Words(&["resume", "--last"]));
+        assert!(!codex.carries_a_handle());
+        // And the one row with no way back at all: Gemini has the flags but restarts itself on the
+        // same argv, so a handle on the line kills the second start (`AMB-T-4659`).
         assert!(find_launch("gemini-cli").unwrap().resume.is_none());
     }
 
@@ -1350,22 +1421,34 @@ mod tests {
                 assert_eq!(opening(launch, "amenbo", None, Some(Handle::Back("a-handle"))), bare);
                 continue;
             };
-            assert_eq!(
-                opening(launch, "amenbo", None, Some(Handle::Back("a-handle"))),
-                vec![resume.back.to_string(), "a-handle".to_string()],
-                "{}",
-                launch.id
-            );
+            let back = opening(launch, "amenbo", None, Some(Handle::Back("a-handle")));
+            match resume.back {
+                Back::Behind(flag) => {
+                    assert_eq!(back, vec![flag.to_string(), "a-handle".to_string()], "{}", launch.id);
+                }
+                // The subcommand row is handed a handle and puts none of it on the line: what it
+                // carries is the words, at the head, and nothing else at all.
+                Back::Words(words) => {
+                    assert_eq!(back, words.iter().map(|w| (*w).to_string()).collect::<Vec<_>>());
+                    assert!(!back.iter().any(|arg| arg == "a-handle"), "{}", launch.id);
+                }
+            }
 
             // And a handle Amenbo has just decided goes behind whichever flag this row starts a
             // session under — its own, or the same one it comes back on.
             let started = opening(launch, "amenbo", None, Some(Handle::New("a-handle")));
-            match resume.issue {
-                Some(Issue::Flag(flag)) => assert_eq!(started[0], flag, "{}", launch.id),
-                Some(Issue::Back) => assert_eq!(started[0], resume.back, "{}", launch.id),
-                // The row that names its own is started with nothing on the line: the handle it
-                // takes is read back afterwards (`crate::agent_sessions`).
-                None => assert_eq!(started, bare, "{}", launch.id),
+            match (resume.issue, resume.back) {
+                (Some(Issue::Flag(flag)), _) => assert_eq!(started[0], flag, "{}", launch.id),
+                (Some(Issue::Back), Back::Behind(flag)) => {
+                    assert_eq!(started[0], flag, "{}", launch.id);
+                }
+                (Some(Issue::Back), Back::Words(_)) => {
+                    unreachable!("{}: a subcommand row has no handle to issue", launch.id)
+                }
+                // The rows that decide no handle are started with nothing on the line: OpenCode's is
+                // read back afterwards (`crate::agent_sessions`), and the subcommand row is starting
+                // a session rather than coming back to one.
+                (None, _) => assert_eq!(started, bare, "{}", launch.id),
             }
         }
     }
@@ -1384,15 +1467,13 @@ mod tests {
             let back = opening(launch, "amenbo", Some("a-model"), Some(Handle::Back("a-handle")));
             let started = opening(launch, "amenbo", Some("a-model"), Some(Handle::New("a-handle")));
             assert_eq!(started.last().map(String::as_str), Some(said.as_str()), "{}", launch.id);
-            // The model is named either way (`AMB-D-865`).
-            assert_eq!(back[0], launch.model_flag, "{}", launch.id);
-            assert_eq!(back[1], "a-model", "{}", launch.id);
+            // The model is named either way (`AMB-D-865`) — wherever on the line this row puts it.
+            assert!(back.iter().any(|arg| arg == launch.model_flag), "{}", launch.id);
+            assert!(back.iter().any(|arg| arg == "a-model"), "{}", launch.id);
 
             let Some(resume) = launch.resume.as_ref() else {
-                // The two rows that take no handle on their line resume nothing on it, so every
-                // line they have is a session starting — Codex comes back by the directory it runs
-                // in (`app/src-tauri/src/codex_home.rs`) and Gemini does not come back at all
-                // (`AMB-T-4659`).
+                // The one row with no way back resumes nothing on its line, so every line it has is
+                // a session starting — Gemini does not come back at all (`AMB-T-4659`).
                 assert_eq!(back, started, "{}", launch.id);
                 continue;
             };
@@ -1404,8 +1485,48 @@ mod tests {
                     launch.id
                 );
             }
-            assert_eq!(back[2..], [resume.back.to_string(), "a-handle".to_string()], "{}", launch.id);
+            match resume.back {
+                Back::Behind(flag) => {
+                    // The model is named first, and the handle follows it.
+                    assert_eq!(back[0], launch.model_flag, "{}", launch.id);
+                    assert_eq!(back[2..], [flag.to_string(), "a-handle".to_string()], "{}", launch.id);
+                }
+                // The subcommand comes first and the model follows it: `codex resume --last -m …`,
+                // because what goes in front of a subcommand is not read as one.
+                Back::Words(words) => {
+                    assert_eq!(back[..words.len()], *words, "{}", launch.id);
+                    assert_eq!(back[words.len()], launch.model_flag, "{}", launch.id);
+                    assert_eq!(back[words.len() + 1], "a-model", "{}", launch.id);
+                    assert_eq!(back.len(), words.len() + 2, "{}", launch.id);
+                }
+            }
         }
+    }
+
+    /// Codex's line, both ways round, spelled out.
+    ///
+    /// The generic tests read the column and would pass on a row that said the wrong words. This one
+    /// is the line itself, because it is what a person's conversation hangs on: a pane opening for
+    /// the first time is a session starting and is told where it is working, and a pane coming back
+    /// asks for the last session in the home it was pointed at and says nothing else at all
+    /// (`AMB-T-4665`).
+    #[test]
+    fn a_codex_pane_starts_plainly_and_comes_back_by_asking_for_the_last_session() {
+        let codex = find_launch("codex-cli").expect("the catalog lists it");
+        let said = crate::agents::pane_instruction("amenbo");
+
+        let first = opening(codex, "amenbo", Some("a-model"), None);
+        assert_eq!(first, ["-m", "a-model", said.as_str()]);
+
+        // The home is what the handle is, and none of it reaches the line.
+        let back = opening(codex, "amenbo", Some("a-model"), Some(Handle::Back("/homes/7")));
+        assert_eq!(back, ["resume", "--last", "-m", "a-model"]);
+
+        // And with no model chosen, the line is the subcommand and nothing else.
+        assert_eq!(
+            opening(codex, "amenbo", None, Some(Handle::Back("/homes/7"))),
+            ["resume", "--last"]
+        );
     }
 
     /// A handle is minted for every row Amenbo decides one for, and for no other — and it is a

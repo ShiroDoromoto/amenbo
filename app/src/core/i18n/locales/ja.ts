@@ -838,7 +838,7 @@ export const ja: Translation = {
     // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
     folder_link: "これは別のファイルへのリンクです。リンクの先はこのプロジェクトのフォルダの外かもしれないので、Amenbo はたどりません。",
     folder_taken: "{name} は既にあります。",
-    folder_name: "この機械は {name} という名前を受け付けません。",
+    folder_name: "{name} という名前は、この環境では使えません。",
     folder_make: "{name} を作れませんでした: {reason}",
     folder_rename: "{name} に変えられませんでした: {reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named

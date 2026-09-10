@@ -3564,6 +3564,18 @@ const REGISTRY: &[OpSpec] = &[
     // `remove-pane` name one. It is what the road is about — a page with one pane cannot tell "where
     // it landed" from "where the reader was" — so unlike those two it is not optional.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "carry-to-pane", required: &["name", "section", "onto"], refs: &[], strings: &["name", "onto", "section"], binds: false },
+    // The same gesture ending on a folder of this panel rather than on a pane, which is the one
+    // landing where the file itself moves. What a pane is handed is words about a file — a path, put
+    // in the line the person types into — and what a folder is handed is the file, so a road that
+    // walked one has said nothing about the other.
+    //
+    // `into` is the folder it is let go over, named the way every row here is named. `how` is what
+    // the keys asked for: left out is the plain carry, which moves — both ends are folders the
+    // project is bound to, so nothing is taken out of a place Amenbo does not answer for — and
+    // `how: copy` is the platform's own key for a copy, held as the row is let go. Which key that is
+    // stays the driver's to say: it is the reader's own machine's, and a road that named one would
+    // be wrong on the other two.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "carry-to-folder", required: &["name", "section", "into"], refs: &[], strings: &["how", "into", "name", "section"], binds: false },
     // And what the press left. No shot settles it, and that is the point rather than a gap: what a
     // hand-over ends in is off Amenbo's own window — an application that came forward, or an
     // operating system's chooser drawn by the system — and the run shoots the window under test. The

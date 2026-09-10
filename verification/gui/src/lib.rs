@@ -3242,6 +3242,28 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "onto")?
             ),
+            // And the same hold, let go over a folder of this panel instead. It is the one landing
+            // where the file itself moves, so the line says which folder lights up before the hand
+            // opens — a carry let go a row too high or too low is a different act with the same
+            // gesture, and nothing afterwards would tell the two apart.
+            //
+            // **The key is named by what the reader's own machine spells it as**, not by one key:
+            // the copy is Option here and Control on the other two, and that is the platform's
+            // convention rather than Amenbo's to level (`app/src/files/handDrag.ts`).
+            (Domain::Files, "carry-to-folder") => format!(
+                "In {}, press and hold on the row \"{}\" and drag it — without letting go — onto the folder \"{}\": that folder, and no row above or below it, is the one the panel marks. Let go there{}.",
+                section(with)?,
+                req(with, "name")?,
+                req(with, "into")?,
+                match with.get("how").and_then(|v| v.as_str()) {
+                    // Held as the hand opens rather than as it takes hold: what the keys asked for is
+                    // read at the moment the row is let go (`app/src/files/handDrag.ts`), and a step
+                    // that said "hold it and drag" would have an operator let go of it on the way.
+                    Some("copy") => ", holding the key this machine copies a dragged file with as you do — Option on macOS, Control on Windows and Linux",
+                    Some(other) => return Err(format!("`how` does not know `{other}` — it is copy")),
+                    None => "",
+                }
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }

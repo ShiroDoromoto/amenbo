@@ -1,0 +1,213 @@
+# Moving a file to another folder without leaving Amenbo, by carrying its row there.
+#
+# It is the one gesture in the file panel where the file itself moves. Every other hand-over from a
+# row is words about a file — a path pasted into a pane, a path on the clipboard — and Amenbo moves
+# no bytes for any of them. Let go over a folder of this same panel, the row is the file: what a
+# reader would otherwise open a file manager for.
+#
+# ── Why a plain carry moves, and the key copies ──────────────────────────────────────────────────
+# A file dragged in from the machine is copied, because a move would take it out of a place Amenbo
+# does not answer for. Both ends of this one are folders the project is bound to, so nothing is taken
+# out of anywhere: it moves, and the key the reader's own machine copies a dragged file with asks for
+# the other. Which key that is belongs to the machine and not to Amenbo, so the road says "the key
+# this machine copies with" and the driver's line names it.
+#
+# ── Why a folder is shut before the copy is read ─────────────────────────────────────────────────
+# A copy carries the name it came from, so both rows say the same thing and a reading of the screen
+# cannot tell which one it found. The folder holding the first is shut, which puts the name on the
+# screen once — and then the copy is read where it landed, and the original where it stayed.
+#
+# ── What is not read here ────────────────────────────────────────────────────────────────────────
+# A carry let go over the folder the row is already in asks for nothing and does nothing. What says
+# so is the line at the foot of the window not coming up — and a line that comes up nowhere reads
+# the same as a line that had nothing to say. So that reading belongs on the road where the panel's
+# own lines are read, and is left out here rather than written as a green that says nothing.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no terminal road here and no gap in one. What is under test is a hand holding a row over
+# a folder: where it is let go is the whole of the act, and there is no line a binary could be asked
+# for that would say it.
+id: put-a-file-in-another-folder
+title: A row carried onto a folder of the panel puts the file itself there
+description: >
+  Open the file panel on a project's folder and carry a row onto another folder in it: the file moves
+  there, leaving nothing where it was. Carried again with the key this machine copies a dragged file
+  with, it lands in a third folder and stays where it was as well.
+
+given:
+  # One project, bound to one folder. Everything below is read off the panel drawn for it.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Workshop
+      dir: workshop
+
+  # The row that is carried, standing in the bound folder itself.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: workshop
+      path: seeds.csv
+      content: |
+        SCENARIO,sown
+        beans,Tuesday
+
+  # The folder it is moved into, with something already in it — a folder with nothing in it draws
+  # nothing when it opens, and a road that opened one could not tell it apart from a folder it had
+  # failed to open at all.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: workshop
+      path: notes/watering.md
+      content: |
+        SCENARIO the greenhouse is watered on Tuesdays
+
+  # And the folder the copy lands in, for the same reason.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: workshop
+      path: keep/kept.md
+      content: |
+        SCENARIO what is kept is kept here
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project's folder the panel draws, pressed rather than assumed.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Workshop
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # Where the row stands before it is carried. Without it, "it is not there any more" would be said
+  # of a row that might never have been drawn for any reason at all.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: seeds.csv
+      section: tree
+      present: true
+
+  # The carry itself, let go over a folder rather than over a pane.
+  - type: action
+    domain: files
+    op: carry-to-folder
+    with:
+      name: seeds.csv
+      section: tree
+      into: notes
+
+  # The half a copy would not do: the row is gone from where it was, which is what makes a plain
+  # carry a move. `notes` is still shut, so nothing that name could be found in is on the screen.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: seeds.csv
+      section: tree
+      present: false
+
+  # And the half a move shares with one: the file is in the folder it was carried to.
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: seeds.csv
+      section: tree
+      present: true
+
+  # ── The same gesture, asking for a copy ───────────────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: carry-to-folder
+    with:
+      name: seeds.csv
+      section: tree
+      into: keep
+      how: copy
+
+  # The folder the row was carried from, shut. A copy carries the name it came from, so both rows
+  # say the same thing — and a reading of the screen finds a name rather than a row. Shut, the name
+  # is on the screen once, and the two steps below can say which of the two they found.
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+      open: false
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: seeds.csv
+      section: tree
+      present: false
+
+  # The copy, where it landed.
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: keep
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: seeds.csv
+      section: tree
+      present: true
+
+  # And the original, where it stayed — which is the whole of what the key asked for. The folder it
+  # is in is opened again with the copy's shut, so the name on the screen is this one.
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: keep
+      open: false
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: seeds.csv
+      section: tree
+      present: true

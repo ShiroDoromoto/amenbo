@@ -10,6 +10,8 @@ import {
   pressIntoTerminal,
   quotedPaths,
   sendIntoTerminal,
+  sendsWhatIsWritten,
+  stopsTheProgram,
 } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row } from "../talk/nameplate";
@@ -21,8 +23,9 @@ import { Menu, MenuItem } from "../components/Menu";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
 import type { SessionSaidDto } from "../bindings/bindings";
-import { currentLang, errText, t } from "../core/i18n";
+import { currentLang, errText, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
+import { hostOs } from "../core/platform";
 import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
 
@@ -273,17 +276,20 @@ export function TerminalPane({
   };
 
   /**
-   * What a press in the box means, which is decided by what is in the box and by nothing else
-   * (`AMB-D-864`).
+   * What a press in the box means, which is decided by what is in the box and by two presses that
+   * do not ask (`AMB-D-864`, `AMB-D-876`).
    *
-   * **Enter sends and Shift-Enter is another line**, whatever is written — those two are the box's
-   * however empty it is, because a box that sent nothing on Enter would be a box that swallowed the
-   * press. An Enter that is settling a conversion is not a send (`../core/keys`).
+   * **Enter is another line and the send is `⌘/Ctrl+Enter`** (`../talk/terminal`), the box's either
+   * way however empty it is. An Enter that is settling a conversion is neither (`../core/keys`), so
+   * it is asked about before anything is done with the press.
+   *
+   * **`Escape` and `Ctrl+C` go to the program whatever is written.** They are the exception the rule
+   * below makes, and they keep the keyboard where it is: stopping something is not leaving the
+   * sentence, and a person who reaches for one of these usually means to carry on writing.
    *
    * **Everything else is the box's only while something is written in it.** An empty box has no
-   * history to walk, no word to complete and nothing to escape from, so the presses that mean those
-   * things go to the program instead and the person keeps them without leaving the box
-   * (`../talk/terminal`).
+   * history to walk and no word to complete, so the presses that mean those things go to the program
+   * instead and the person keeps them without leaving the box.
    *
    * **The one way out of a written box is the ArrowUp on its first line.** It moves the keyboard to
    * the terminal and goes there itself, so a menu the program is drawing is walked by the one press
@@ -292,22 +298,26 @@ export function TerminalPane({
    */
   const pressed = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (isEnterSubmit(e)) {
-      if (e.shiftKey) return;
-      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (!sendsWhatIsWritten(e)) return;
       e.preventDefault();
       void send();
       return;
     }
-    if (live !== null) {
-      const out = leavesForTerminal(e, written, e.currentTarget.selectionStart);
-      if (out !== null) {
-        e.preventDefault();
-        focusTerminal(paneRef.current);
-        void pressIntoTerminal(live, out).catch(() => {});
-        return;
-      }
+    if (live === null) return;
+    const stop = stopsTheProgram(e);
+    if (stop !== null) {
+      e.preventDefault();
+      void pressIntoTerminal(live, stop).catch(() => {});
+      return;
     }
-    if (written !== "" || live === null) return;
+    const out = leavesForTerminal(e, written, e.currentTarget.selectionStart);
+    if (out !== null) {
+      e.preventDefault();
+      focusTerminal(paneRef.current);
+      void pressIntoTerminal(live, out).catch(() => {});
+      return;
+    }
+    if (written !== "") return;
     const data = passedOn(e);
     if (data === null) return;
     e.preventDefault();
@@ -343,8 +353,23 @@ export function TerminalPane({
    *  keyboard and nothing else: an empty box holding it keeps every ordinary character, and hands on
    *  only the four presses that walk a history, complete a word or leave a menu, with `Ctrl+C`
    *  (`../talk/terminal`). Asking what is written as well named the terminal while a person was
-   *  typing the first character of a line into the box. */
+   *  typing the first character of a line into the box.
+   *
+   *  **`Escape` and `Ctrl+C` are outside what it names** (`AMB-D-876`): they go to the program from
+   *  a written box too, and the mark goes on saying the box. What it is about is where the *typing*
+   *  lands, and neither of those two is typing. */
   const keysHere = typing;
+
+  /** What the press beside the box is called, with the keys that do the same thing in it
+   *  (`AMB-D-876`). The two spellings are the machine's own — `⌘Enter` where the application's key
+   *  is `⌘`, `Ctrl+Enter` on the other two — and neither is translated: they are the marks on the
+   *  keyboard in front of the reader.
+   *
+   *  It is a key of its own rather than the plain "Send", which is still what a button that only
+   *  sends is called (`./PaneModel`). */
+  const sendLabel = tf("face.composeSendKeys", {
+    keys: hostOs() === "macos" ? "⌘Enter" : "Ctrl+Enter",
+  });
 
   useEffect(() => {
     if (!running) return;
@@ -699,8 +724,8 @@ export function TerminalPane({
             className="compose__send"
             type="button"
             disabled={written === ""}
-            title={t("face.composeSend")}
-            aria-label={t("face.composeSend")}
+            title={sendLabel}
+            aria-label={sendLabel}
             onClick={() => { void send(); }}
           >
             <Icon name="arrowUp" />

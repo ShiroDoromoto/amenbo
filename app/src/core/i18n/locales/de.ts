@@ -590,6 +590,7 @@ export const de: Translation = {
     "face.more": "Mehr",
     "face.compose": "In diesen Bereich schreiben",
     "face.composeSend": "Senden",
+    "face.composeSendKeys": "Senden ({keys})",
     "face.composePasses": "Tasten gehen ans Terminal",
     "face.composeKeeps": "Hier wird geschrieben",
     "files.side": "Seite und Dateien",

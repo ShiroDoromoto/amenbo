@@ -468,8 +468,9 @@ input[type="color"] {
   display: flex; align-items: flex-end; gap: var(--s-2);
   padding: var(--s-1) var(--s-2);
   /* Dashed while nothing is written, because that is the state where the keyboard is not really
-     here: the arrows, the tab and Escape are handed to the program. The border goes solid the moment
-     something is written, which is one of the three things that change together. */
+     here: the arrows and the tab are handed to the program, and so is everything else the box has
+     nothing to do with. The border goes solid the moment something is written, which is one of the
+     three things that change together. */
   border: 1px dashed var(--c-rule); border-radius: var(--r-md);
   background: var(--c-surface);
 }
@@ -506,9 +507,10 @@ input[type="color"] {
 /* The border around the whole box already says where the typing is going, and the machine's own ring
    inside it would be a second line saying the same thing a millimetre in. */
 .compose__box:focus-visible { outline: none; }
-/* Sent by press as well as by Enter, for the reader who has just written with the mouse in hand. It
-   is dead while there is nothing to send, which is the third of the three things that change
-   together. */
+/* Sent by press as well as by the keys, for the reader who has just written with the mouse in hand.
+   It is dead while there is nothing to send, which is the third of the three things that change
+   together. What it is called says the keys, because Enter is a line here and nothing about the box
+   would tell a reader that (`../shell/TerminalPane`). */
 .compose__send {
   flex: 0 0 auto;
   display: inline-flex; align-items: center;

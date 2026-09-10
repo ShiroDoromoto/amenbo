@@ -180,6 +180,10 @@ async function pressed(key: string, held: KeyboardEventInit = {}): Promise<boole
 /** What was written to the terminal, in the order it went. */
 const wrote = () => hoisted.asked.filter((one) => one.cmd === "pty_write").map((one) => one.args.data);
 
+/** What is held down to send what is written (`AMB-D-876`). It is the control key here because jsdom
+ *  reports no user agent this app places on macOS, which is the same answer Windows and Linux get. */
+const SEND = { ctrlKey: true };
+
 describe("the box under a pane", () => {
   it("is not there before a terminal is", async () => {
     await pane(false);
@@ -216,12 +220,12 @@ describe("the box under a pane", () => {
 });
 
 describe("sending what was written", () => {
-  it("goes out on Enter, as a paste with the return behind it", async () => {
+  it("goes out on the send press, as a paste with the return behind it", async () => {
     await pane();
     await opened();
     await write("run the tests");
 
-    expect(await pressed("Enter"), "the newline was typed into the box as well").toBe(true);
+    expect(await pressed("Enter", SEND), "the newline was typed into the box as well").toBe(true);
     expect(wrote()).toEqual(["\x1b[200~run the tests\x1b[201~", "\r"]);
   });
 
@@ -229,18 +233,22 @@ describe("sending what was written", () => {
     await pane();
     await opened();
     await write("run the tests");
-    await pressed("Enter");
+    await pressed("Enter", SEND);
 
     expect(hoisted.asked.map((one) => one.cmd)).toEqual(["pty_write", "pty_write", "pty_brief"]);
   });
 
-  it("is another line on Shift-Enter, and nothing crosses", async () => {
+  // The whole of what `AMB-D-876` moved: a long instruction is written with Enter like anything
+  // else, and nothing crosses until the send press is made.
+  it("is another line on Enter, and on Shift-Enter, and nothing crosses", async () => {
     await pane();
     await opened();
     await write("first line");
 
+    expect(await pressed("Enter"), "the newline was taken from the box").toBe(false);
     expect(await pressed("Enter", { shiftKey: true }), "the newline was taken from the box").toBe(false);
     expect(wrote(), "half a sentence went out").toEqual([]);
+    expect(box()?.value, "the box was emptied by a press that sends nothing").toBe("first line");
   });
 
   it("empties the box once the line has gone", async () => {
@@ -248,7 +256,7 @@ describe("sending what was written", () => {
     await opened();
     await write("run the tests");
 
-    await pressed("Enter");
+    await pressed("Enter", SEND);
 
     expect(box()?.value, "the next sentence would have been the tail of this one").toBe("");
     expect(hoisted.held, "the window went on holding a line that had been sent").toBe("");
@@ -263,7 +271,7 @@ describe("sending what was written", () => {
     const ipc = await import("../core/ipc");
     vi.mocked(ipc.invoke).mockRejectedValueOnce(new Error("that terminal is not there any more"));
 
-    await pressed("Enter");
+    await pressed("Enter", SEND);
 
     expect(box()?.value, "the only copy of what was written was thrown away").toBe("run the tests");
   });
@@ -281,7 +289,7 @@ describe("sending what was written", () => {
     await pane();
     await opened();
 
-    await pressed("Enter");
+    await pressed("Enter", SEND);
 
     expect(wrote(), "an empty line was sent").toEqual([]);
     expect(sendBtn()?.disabled, "the press to send was alive with nothing to send").toBe(true);
@@ -350,6 +358,35 @@ describe("where a press goes", () => {
     await pressed("c", { ctrlKey: true });
 
     expect(wrote()).toEqual(["\x03"]);
+  });
+
+  // The one exception to "what is written decides where a press goes" (`AMB-D-876`): a person
+  // reaches for these because something went wrong, and by then the next line is half typed.
+  it("hands the stopping keys on from a written box too, and leaves the line where it is", async () => {
+    await pane();
+    await opened();
+    await write("half a sentence");
+
+    expect(await pressed("Escape"), "the box swallowed the press that stops what is running").toBe(true);
+    expect(await pressed("c", { ctrlKey: true })).toBe(true);
+
+    expect(wrote()).toEqual(["\x1b", "\x03"]);
+    expect(box()?.value, "stopping something threw away what was being written").toBe("half a sentence");
+  });
+
+  // Stopping is not leaving the sentence: the ArrowUp on the first line is the road that moves the
+  // keyboard, and these two are not it.
+  it("leaves the keyboard in the box the stopping keys were pressed in", async () => {
+    await pane();
+    await opened();
+    await write("half a sentence");
+    box()?.focus();
+
+    await pressed("Escape");
+
+    expect(document.activeElement, "the keyboard went with the press").toBe(box());
+    expect(mark()?.title, "the mark stopped naming the box a person was still writing in")
+      .toBe(t("face.composeKeeps"));
   });
 
   it("says which of the two the keyboard is answering to, and changes as the keyboard moves", async () => {

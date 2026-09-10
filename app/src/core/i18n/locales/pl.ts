@@ -606,6 +606,7 @@ export const pl: Translation = {
     "face.more": "Więcej",
     "face.compose": "Napisz w tym panelu",
     "face.composeSend": "Wyślij",
+    "face.composeSendKeys": "Wyślij ({keys})",
     "face.composePasses": "Klawisze trafiają do terminala",
     "face.composeKeeps": "Piszesz tutaj",
     "files.side": "Strona i pliki",

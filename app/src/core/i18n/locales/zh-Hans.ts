@@ -580,6 +580,7 @@ export const zhHans: Translation = {
     "face.more": "更多",
     "face.compose": "写给此窗格",
     "face.composeSend": "发送",
+    "face.composeSendKeys": "发送（{keys}）",
     "face.composePasses": "按键交给终端",
     "face.composeKeeps": "正在这里输入",
     "files.side": "便笺与文件",

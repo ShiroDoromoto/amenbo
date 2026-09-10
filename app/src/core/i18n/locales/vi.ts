@@ -583,6 +583,7 @@ export const vi: Translation = {
     "face.more": "Thêm",
     "face.compose": "Viết vào khung này",
     "face.composeSend": "Gửi",
+    "face.composeSendKeys": "Gửi ({keys})",
     "face.composePasses": "Phím đi tới terminal",
     "face.composeKeeps": "Đang viết ở đây",
     "files.side": "Trang ghi và tệp",

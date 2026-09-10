@@ -609,6 +609,7 @@ export const ru: Translation = {
     "face.more": "Ещё",
     "face.compose": "Написать в эту панель",
     "face.composeSend": "Отправить",
+    "face.composeSendKeys": "Отправить ({keys})",
     "face.composePasses": "Клавиши идут в терминал",
     "face.composeKeeps": "Пишете здесь",
     "files.side": "Страница и файлы",

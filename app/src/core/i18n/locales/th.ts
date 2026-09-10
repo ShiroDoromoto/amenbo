@@ -583,6 +583,7 @@ export const th: Translation = {
     "face.more": "เพิ่มเติม",
     "face.compose": "เขียนถึงบานหน้าต่างนี้",
     "face.composeSend": "ส่ง",
+    "face.composeSendKeys": "ส่ง ({keys})",
     "face.composePasses": "ปุ่มจะไปที่เทอร์มินัล",
     "face.composeKeeps": "กำลังเขียนที่นี่",
     "files.side": "หน้าบันทึกและไฟล์",

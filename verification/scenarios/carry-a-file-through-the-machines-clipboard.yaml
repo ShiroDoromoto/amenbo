@@ -24,6 +24,11 @@
 # manager wrote. Nothing is lost by binning it — the clipboard was used and finished with, and what
 # is being asked about is the copy.
 #
+# ── Where the name is already taken ──────────────────────────────────────────────────────────────
+# Both halves here carry a name the folder at the far end does not hold, which is the carry that
+# arrives. The one that does not — a paste onto a name already standing there — stops on it and says
+# so, and is its own road (`be-told-why-a-carry-brought-nothing-in`).
+#
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no second road. A shell copies a file with `cp`, which goes nowhere near a clipboard.
 id: carry-a-file-through-the-machines-clipboard

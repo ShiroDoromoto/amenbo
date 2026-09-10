@@ -5,8 +5,7 @@ import * as mut from "../core/mutations";
 import { markTaskSeen } from "../core/readReceipts";
 import { archiveInboxItem, unarchiveInboxItem } from "../core/inboxArchive";
 import { errText } from "../core/i18n";
-import { subscribeNotice } from "../core/notice";
-import { Icon } from "../components/Icon";
+import { pushNotice } from "../core/notice";
 import type { ActivityItem, Facet, Priority, Status } from "../mock/types";
 
 /**
@@ -14,7 +13,7 @@ import type { ActivityItem, Facet, Priority, Status } from "../mock/types";
  * does not read task lists — each view pulls its own window through the task_page hooks in core/reads, which is what
  * keeps memory bounded. Mutators delegate to core/mutations: under Tauri they invoke a per-action command and apply
  * the snapshot it returns; in a plain browser they fall back to mutating the mock cache. Failures (a write conflict,
- * say) surface as a transient toast.
+ * say) go to the notice bus, and the window's own toast says them (`components/NoticeToast`).
  */
 interface Store {
   listActivity(): ActivityItem[];
@@ -141,7 +140,6 @@ export function useStore(): Store {
  */
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [activity, setActivity] = useState<ActivityItem[]>(() => getSnapshot().activity.map((a) => ({ ...a })));
-  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     return subscribe(() => {
@@ -149,20 +147,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  useEffect(() => {
-    if (!notice) return;
-    const id = setTimeout(() => setNotice(null), 4000);
-    return () => clearTimeout(id);
-  }, [notice]);
-
-  useEffect(() => subscribeNotice(setNotice), []);
-
-  // Surface a mutator failure (a rejected write, say) as a toast. setNotice is the stable reference useState returns,
-  // so run is stable too — it never depends on activity.
+  // Surface a mutator failure (a rejected write, say) as a toast — pushed onto the notice bus, which the toast of
+  // whichever window this is takes it off (`components/NoticeToast`). run holds nothing of its own, so it is stable —
+  // it never depends on activity.
   const run = useCallback((p: Promise<void>): void => {
     p.catch((e) => {
       console.error("[amenbo] mutation failed:", e);
-      setNotice(errText(e));
+      pushNotice(errText(e));
     });
   }, []);
 
@@ -172,7 +163,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const runOk = useCallback((p: Promise<void>): Promise<boolean> => {
     return p.then(() => true).catch((e) => {
       console.error("[amenbo] mutation failed:", e);
-      setNotice(errText(e));
+      pushNotice(errText(e));
       return false;
     });
   }, []);
@@ -180,7 +171,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const runResult = useCallback(<T,>(p: Promise<T>): Promise<T | null> => {
     return p.catch((e): null => {
       console.error("[amenbo] mutation failed:", e);
-      setNotice(errText(e));
+      pushNotice(errText(e));
       return null;
     });
   }, []);
@@ -238,14 +229,5 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
   }), [activity, run, runOk, runResult]);
 
-  return (
-    <Ctx.Provider value={store}>
-      {children}
-      {notice && (
-        <div className="toast toast--warn" role="alert" onClick={() => setNotice(null)}>
-          <Icon name="warning" /> {notice}
-        </div>
-      )}
-    </Ctx.Provider>
-  );
+  return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

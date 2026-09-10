@@ -697,9 +697,14 @@ fn started_as(agent: &str, handle: Option<Handle<'_>>) -> Result<Started, CmdErr
 /// How one catalogued agent is started: the program, with the launch instruction handed to it as its
 /// opening prompt (`AMB-T-3596`) — so a row out of the catalog is owed nothing afterwards.
 ///
-/// **Every terminal this window opens gets it, and it is never put to the person first.** It is
-/// plumbing — the sentence that points an agent at `agent --json` — and a pane that asked before
-/// sending it would be asking whether the person wants their AI to know where it is working.
+/// **A pane coming back into a conversation is handed no prompt**, having been said its first
+/// sentence the run before ([`amenbo_core::harness::opening`], `AMB-T-4663`): the line carries the
+/// handle and the model and stops there.
+///
+/// **Every terminal this window opens on a session of its own gets it, and it is never put to the
+/// person first.** It is plumbing — the sentence that points an agent at `agent --json` — and a pane
+/// that asked before sending it would be asking whether the person wants their AI to know where it
+/// is working.
 ///
 /// The instruction names the binary this build is ([`amenbo_core::config::Paths::command_name`]), so
 /// a dev-channel window starts agents on the dev channel's own command rather than on the production

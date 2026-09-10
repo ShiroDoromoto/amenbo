@@ -10,9 +10,6 @@ mod blobproto;
 /// The machine's own clipboard, holding files rather than words — what `⌘C` and `⌘V` mean in the
 /// file panel (`AMB-D-796`).
 mod clipboard;
-/// A directory of its own for the Codex in each pane, so "the last session" in it is that
-/// pane's and no other's (`AMB-D-869`).
-mod codex_home;
 mod commands;
 mod diag;
 mod dto;
@@ -77,6 +74,9 @@ mod menu;
 /// migration becomes an app that hangs in silence. So the window comes up first, as the migration
 /// screen, while `migrate::gate()` blocks every path that would open the store.
 mod migrate;
+/// A directory of its own for the AI in each pane, so "the last session" in it is that pane's and
+/// no other's (`AMB-D-869`, `AMB-D-875`).
+mod pane_home;
 mod perf;
 /// The long-lived mount of the plugin observation dispatcher: the drive the write seam runs after each
 /// mutating command, over the store's own cursor (`AMB-D-380`), and the one this app makes as it comes up
@@ -287,10 +287,11 @@ pub fn run() {
       // What an earlier run left in the temporary directory when it ended without closing its terminals.
       // Off the launch path: it is a scan of a directory, and nothing here waits on it.
       std::thread::spawn(pty::sweep);
-      // And the codex homes of panes that are no longer in the arrangement — what a run that ended
-      // with terminals open could not take away itself (`crate::codex_home`). Off the launch path for
-      // the same reason: it reads the store and then a directory, and nothing here waits on it.
-      std::thread::spawn(codex_home::sweep);
+      // And the per-pane homes of panes that are no longer in the arrangement — what a run that
+      // ended with terminals open could not take away itself (`crate::pane_home`). Off the launch
+      // path for the same reason: it reads the store and then a directory, and nothing here waits on
+      // it.
+      std::thread::spawn(pane_home::sweep);
       // And the directory a removed feature left in app-data. Amenbo wrote a row there for every status
       // move made inside a pane, to say which pane was holding which task; nothing writes or reads it
       // any more, so what is left is bytes with nothing in the tree to explain them. Removed once, on

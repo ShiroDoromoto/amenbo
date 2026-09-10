@@ -407,17 +407,17 @@ pub struct Rename {
 /// How a pane comes back into the session it was running — the resume catalog's column
 /// (`AMB-D-869`).
 ///
-/// **Four of the six have a way back, and no two of them spell it alike** (`AMB-T-4630`). What
+/// **Five of the six have a way back, and no two of them spell it alike** (`AMB-T-4630`). What
 /// parts them is not the spelling but who decides which session: three take a handle Amenbo hands
-/// them as the session starts, one of those three takes an unknown one and creates it, and one
-/// names its own and has to be asked afterwards. So the column carries the halves separately —
+/// them as the session starts, one of those three takes an unknown one and creates it, one names
+/// its own and has to be asked afterwards, and one is told nothing at all and comes back to
+/// whatever the home it was pointed at last held. So the column carries the halves separately —
 /// [`back`](Resume::back) is the way in, [`issue`](Resume::issue) is who decides.
 ///
-/// **`None` here is a row that cannot come back**, and the two on it are there for different
-/// reasons. Gemini has the flags and cannot use them: it restarts itself on the same argv, so a
-/// handle on the line kills the second start (`AMB-T-4659`). Codex could and is not asked to for
-/// now — what it comes back into is not recorded where Amenbo points it (`AMB-T-4666`), so asking
-/// would open a new conversation without saying so (`AMB-T-4678`, put back by `AMB-T-4679`).
+/// **`None` here is a row that cannot come back.** Codex is the one on it, and not for want of a
+/// spelling: what it comes back into is not recorded where Amenbo points it (`AMB-T-4666`), so
+/// asking would open a new conversation without saying so (`AMB-T-4678`, put back by
+/// `AMB-T-4679`).
 pub struct Resume {
     /// How the line is put back into the session it was running ([`Back`]).
     pub back: Back,
@@ -439,14 +439,12 @@ pub struct Resume {
 pub enum Back {
     /// The flag a handle goes behind — `--resume` for three of them, `-s` for OpenCode.
     Behind(&'static str),
-    /// Words at the head of the line, with no handle anywhere on it. Codex's `resume --last` means
-    /// "the newest session recorded in the home this pane was started in", so what picks the
-    /// session is the environment and not the line (`app/src-tauri/src/codex_home.rs`,
-    /// `AMB-T-4665`).
-    ///
-    /// **No row spells its way back this way at the moment.** Codex was the one, and it is down
-    /// until a home is known to record what a pane said in it (`AMB-T-4678`, `AMB-T-4679`) — so
-    /// this variant and everything that reads it stand ready rather than in use.
+    /// Words at the head of the line, with no handle anywhere on it — a subcommand on one row and a
+    /// flag with a word behind it on another, which is why what is kept here is words rather than
+    /// either. Gemini's `--resume latest` means "the newest session recorded in the home this pane
+    /// was started in", so what picks the session is the environment and not the line
+    /// (`app/src-tauri/src/pane_home.rs`, `AMB-D-875`). Codex's `resume --last` means the same
+    /// thing and is down for now (`AMB-T-4678`, put back by `AMB-T-4679`).
     Words(&'static [&'static str]),
 }
 
@@ -459,6 +457,17 @@ impl Resume {
     /// place is not a claim that a conversation was ever had there.
     pub fn carries_a_handle(&self) -> bool {
         matches!(self.back, Back::Behind(_))
+    }
+
+    /// Whether what comes back for this row is the place the pane runs in rather than anything on
+    /// its line — the question a caller asks before going to the trouble of making that place.
+    ///
+    /// It is the exact other side of [`carries_a_handle`](Resume::carries_a_handle), and it is
+    /// asked of the catalog rather than of the provider's name: a row whose way back is taken down
+    /// stops being given a home by the same sentence that stops it being asked to come back
+    /// (`app/src-tauri/src/pane_home.rs`, `AMB-T-4678`).
+    pub fn comes_back_by_a_place(&self) -> bool {
+        matches!(self.back, Back::Words(_))
     }
 }
 
@@ -494,8 +503,9 @@ pub enum Handle<'a> {
 /// A handle for a session about to start on `launch`, where Amenbo is the one that decides it.
 ///
 /// `None` for the three rows it is not Amenbo's to decide: OpenCode names its own and is asked
-/// afterwards ([`Resume::ask`]), and Codex and Gemini have no way back to be handed one for
-/// ([`Launch::resume`], `AMB-T-4659`, `AMB-T-4678`).
+/// afterwards ([`Resume::ask`]), Gemini is told nothing on its line and comes back by the home it
+/// runs in ([`Back::Words`], `AMB-D-875`), and Codex has no way back to be handed one for
+/// ([`Launch::resume`], `AMB-T-4678`).
 ///
 /// **A version 4 UUID, because that is the shape the providers were watched taking** — Claude Code
 /// refuses `--session-id` anything else, and the other two were only ever handed one
@@ -644,21 +654,21 @@ pub static LAUNCHES: &[Launch] = &[
         // No such command at all — typed in, it goes to the model as a sentence and is answered as
         // one (`AMB-T-4652`), which is why this is `None` rather than a row with a spelling.
         rename: None,
-        // **The one row with both flags and no way back.** A UUID handed to `--session-id` was
-        // watched making the round trip (`AMB-T-4630`), and the flag is still unusable here: this
-        // provider runs as a supervisor over its own work process and re-spawns it on the *same*
-        // argv whenever it asks to restart — the trust prompt being answered, the auth type
-        // changing, a setting being written. The second start finds the session the first one
-        // already made and exits on it (`Session ID "…" already exists`, `AMB-T-4659`), taking the
-        // pane with it. Nothing Amenbo puts on that line survives, and standing the pane back up
-        // afterwards is the covering-for-a-provider `AMB-D-869` refuses.
+        // **The row that comes back by a place** (`AMB-D-875`). No handle can go on this line at
+        // all: this provider runs as a supervisor over its own work process and re-spawns it on the
+        // *same* argv whenever it asks to restart — the trust prompt being answered, the auth type
+        // changing, a setting being written — and the second start exits on the session the first
+        // one already made (`Session ID "…" already exists`, `AMB-T-4659`), taking the pane with
+        // it. Reading a handle back afterwards is no road either: `--list-sessions` names sessions
+        // by index and summary within one working folder, so two panes on one repository cannot be
+        // told apart in it (`AMB-T-4664`).
         //
-        // **`--resume` is no way in either.** A handle it has never seen is refused rather than
-        // created (Cursor's road), and a session it has just made is not in `--list-sessions` until
-        // there is something in it to resume — so the handle cannot be read back as the pane starts
-        // the way OpenCode's is. Reading it back later, once the conversation has content, is a
-        // road that stays open and is not this row's (`AMB-T-4659`).
-        resume: None,
+        // So which session it is stays the home the pane was started in — a variable and a
+        // directory to keep (`app/src-tauri/src/pane_home.rs`) — and the line has only to ask for
+        // the latest one, with no handle on it to be wrong. Nothing is issued and nothing is asked
+        // for the same reason: the place decides, and Amenbo already made the place. A home with no
+        // conversation in it answers plainly with a new one (`AMB-T-4677`).
+        resume: Some(Resume { back: Back::Words(&["--resume", "latest"]), issue: None, ask: None }),
         confirmed: true,
     },
     Launch {
@@ -872,7 +882,7 @@ fn resuming<'a>(launch: &Launch, handle: Option<Handle<'a>>) -> Option<Put<'a>> 
     match (handle?, resume.back) {
         // What names the session for a subcommand row is not on the line, so the handle written down
         // for it is not read here — it is the place the pane runs in, which the caller has already
-        // pointed it at (`app/src-tauri/src/codex_home.rs`).
+        // pointed it at (`app/src-tauri/src/pane_home.rs`).
         (Handle::Back(_), Back::Words(words)) => Some(Put::Head(words)),
         (Handle::Back(id), Back::Behind(flag)) => Some(Put::Beside(flag, id)),
         // A handle Amenbo decided, for a session about to be made under it. A subcommand row issues
@@ -1394,11 +1404,13 @@ mod tests {
                         launch.id
                     );
                 }
-                // A subcommand is what the program is asked to do, so none of it is a flag — and
-                // there is no handle on that line for Amenbo to decide or to go and ask about.
+                // What is asked for here is said in full at the head of the line — a subcommand on
+                // one row and a flag with a word behind it on another — and there is no handle on
+                // that line for Amenbo to decide or to go and ask about, the place being what
+                // decides which session it is.
                 Back::Words(words) => {
                     assert!(!words.is_empty(), "{}: comes back on no words at all", launch.id);
-                    assert!(!words[0].starts_with('-'), "{}: {} is a flag", launch.id, words[0]);
+                    assert!(words.iter().all(|word| !word.is_empty()), "{}: an empty word", launch.id);
                     assert!(resume.issue.is_none(), "{} issues a handle it cannot carry", launch.id);
                     assert!(resume.ask.is_none(), "{} asks about a handle it has none of", launch.id);
                 }
@@ -1407,14 +1419,16 @@ mod tests {
                 assert!(flag.starts_with('-'), "{}: {flag} is not a flag", launch.id);
             }
         }
-        // The two rows with no way back, each for its own reason: Gemini has the flags and restarts
-        // itself on the same argv, so a handle on the line kills the second start (`AMB-T-4659`);
-        // Codex is asked for none while a home is not known to record what was said in it, since
-        // asking would open a new conversation and say nothing about it (`AMB-T-4666`,
-        // `AMB-T-4678`).
-        for id in ["gemini-cli", "codex-cli"] {
-            assert!(find_launch(id).unwrap().resume.is_none(), "{id}");
-        }
+        // The row that comes back by a place: Gemini is handed nothing, because a handle on its
+        // line kills the start it makes of itself (`AMB-T-4659`) and a list that names sessions by
+        // index cannot tell two panes on one folder apart (`AMB-D-875`).
+        let gemini = find_launch("gemini-cli").unwrap().resume.as_ref().expect("gemini comes back");
+        assert_eq!(gemini.back, Back::Words(&["--resume", "latest"]));
+        assert!(gemini.comes_back_by_a_place() && !gemini.carries_a_handle());
+        // And the one row with no way back at all, which is not for want of a spelling: what Codex
+        // comes back into is not recorded where Amenbo points it, so asking would open a new
+        // conversation and say nothing about it (`AMB-T-4666`, `AMB-T-4678`).
+        assert!(find_launch("codex-cli").unwrap().resume.is_none());
     }
 
     /// A handle rides on the same line the pane is opened with, in front of whatever follows it,
@@ -1539,6 +1553,32 @@ mod tests {
 
         // And with no model chosen, the line is the instruction and nothing else.
         assert_eq!(opening(codex, "amenbo", None, Some(Handle::Back("/homes/7"))), [said.as_str()]);
+    }
+
+    /// Gemini's line, both ways round, spelled out.
+    ///
+    /// The generic tests read the column and would pass on a row that said the wrong words. This one
+    /// is the line itself, because it is what a person's conversation hangs on: a pane opening for
+    /// the first time is a session starting and is told where it is working, and a pane coming back
+    /// asks for the latest session in the home it was pointed at and says nothing else at all
+    /// (`AMB-D-875`).
+    #[test]
+    fn a_gemini_pane_starts_plainly_and_comes_back_by_asking_for_the_latest_session() {
+        let gemini = find_launch("gemini-cli").expect("the catalog lists it");
+        let said = crate::agents::pane_instruction("amenbo");
+
+        let first = opening(gemini, "amenbo", Some("a-model"), None);
+        assert_eq!(first, ["-m", "a-model", "-i", said.as_str()]);
+
+        // The home is what the handle is, and none of it reaches the line.
+        let back = opening(gemini, "amenbo", Some("a-model"), Some(Handle::Back("/homes/7")));
+        assert_eq!(back, ["--resume", "latest", "-m", "a-model"]);
+
+        // And with no model chosen, the line is the way back and nothing else.
+        assert_eq!(
+            opening(gemini, "amenbo", None, Some(Handle::Back("/homes/7"))),
+            ["--resume", "latest"]
+        );
     }
 
     /// A handle is minted for every row Amenbo decides one for, and for no other — and it is a

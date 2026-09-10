@@ -979,9 +979,9 @@ pub fn pty_open(
         face.resumed_from(frame, issued.to_string());
     }
     // The frame to take the way back off again, should the program end in moments. Only where what
-    // is written down is a handle the line carries: a row that came back by a subcommand would keep
-    // the place the pane runs in instead, and a place is not a claim that a conversation was ever
-    // had there (`AMB-D-869`). No row spells it that way while Codex's is down (`AMB-T-4678`).
+    // is written down is a handle the line carries: Gemini's row keeps the place the pane runs in
+    // instead, and a place is not a claim that a conversation was ever had there (`AMB-D-869`,
+    // `AMB-D-875`).
     let on_the_line = frame.clone().filter(|_| {
         launch.is_some_and(|launch| {
             launch.resume.as_ref().is_some_and(amenbo_core::harness::Resume::carries_a_handle)
@@ -994,17 +994,18 @@ pub fn pty_open(
     let run = started.as_ref().map(|s| s.line.as_str());
     let mut cmd = launch::command(folder.clone(), run);
     cmd.env(SESSION_ENV, &session);
-    // **Codex was pointed at a home of its own here, and is not any more** (`AMB-T-4678`). The home
-    // was what made "the last session" this pane's own, and a session was then watched not being
-    // recorded in one at all (`AMB-T-4666`) — so the way back came off the catalog row, and making
-    // the home came off with it. Kept apart, the home would cost `AMB-D-869`'s price on its own:
-    // Codex writes a folder's `trust_level` back through the linked `config.toml` into the reader's
-    // own `~/.codex`, which is a price paid for a way back this pane no longer has.
-    //
-    // `crate::codex_home` stands as it is for `AMB-T-4679` to point at again. What it still does is
-    // clear up: homes made by a run from before this are taken away with their pane
-    // (`crate::frames`) and swept when no pane can return to them.
-
+    // A row that is resumed by a directory rather than by a name is pointed at one of its own, and
+    // the path goes down on that frame's row (`AMB-D-869`, `AMB-D-875`, `crate::pane_home`). Which
+    // rows those are is the catalog's answer and not this one's: a way back that is taken down takes
+    // the home with it, so nothing is made for a pane that could not come back to it
+    // (`AMB-T-4678`). Every other provider is given nothing here — their way back is a session id on
+    // the launch line.
+    if let Some(frame) = frame.as_deref() {
+        if let Some((env, home)) = crate::pane_home::for_pane(frame, agent_id.as_deref()) {
+            cmd.env(env, &home);
+            face.resumed_from(frame, home.to_string_lossy().into_owned());
+        }
+    }
     // The drop box is made here rather than left for the first statement to make, so that a pane which
     // cannot be spoken to is one the surface layer refuses in from the start: with no directory named,
     // every verb fails loudly inside the terminal instead of writing where nothing is watching.

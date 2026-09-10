@@ -2184,12 +2184,12 @@ impl Instructor {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
                 };
-                let press = match arg_str(with, "by").unwrap_or("return") {
-                    "return" => "with the keyboard still in that box, press return",
+                let press = match arg_str(with, "by").unwrap_or("key") {
+                    "key" => "with the keyboard still in that box, hold the key this machine sends with — command on this Mac — and press return. Return on its own is a new line and not a send, so do not press it alone",
                     "button" => "press the control at the right-hand end of that box, the one that came alive when something was written in it",
                     other => {
                         return Err(format!(
-                            "action `send-written` does not know the press `{other}` — it is return or button"
+                            "action `send-written` does not know the press `{other}` — it is key or button, and the key is return held with this machine's own modifier rather than return alone"
                         ))
                     }
                 };
@@ -2205,7 +2205,8 @@ impl Instructor {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane that has a terminal running in it".to_string(),
                 };
-                let press = match req(with, "key")? {
+                let key = req(with, "key")?;
+                let press = match key {
                     "up" => "press the up arrow",
                     "down" => "press the down arrow",
                     "tab" => "press tab",
@@ -2217,6 +2218,20 @@ impl Instructor {
                         ))
                     }
                 };
+                // The two that go through whatever is written, and the three that are the empty
+                // box's alone. A road asking for one of the three over a box it has not emptied is
+                // asking for a press the box answers itself, so it is refused here rather than
+                // handed to an operator as an instruction that contradicts the rule under test.
+                if flagged(with, "holding") {
+                    if !matches!(key, "escape" | "ctrl-c") {
+                        return Err(format!(
+                            "action `press-through` was asked for `{key}` over a box it is holding something in — that press is the box's own there, and only escape and ctrl-c go through whatever is written"
+                        ));
+                    }
+                    return Ok(format!(
+                        "At the box under {pane}, leaving what is written in it exactly where it is — do not empty it and do not add to it — {press}. The press is not the box's, and it is not the box's whether or not anything is written there: it goes to the program running in the terminal above."
+                    ));
+                }
                 format!(
                     "Click into the box under {pane} and make sure nothing at all is written in it — where something is, select it and delete it. Then {press}. The press is not the box's: it goes to the program running in the terminal above, and what answers it is that program."
                 )
@@ -9656,6 +9671,59 @@ steps_gui:
         assert!(
             Instructor::new().expectation(&steps[0]).is_none(),
             "left to an eye: a mark is a glyph, and there is no word on the screen to read it by",
+        );
+    }
+
+    /// The two presses the box's rule was changed around. Sending is return held with a
+    /// modifier, so the line names the pair and says what return alone now does — a road that pressed
+    /// return would grow a line in the box and read a pane that had been given nothing. And the presses
+    /// that mean "stop" are handed on over a box with something in it, which the other three are not:
+    /// asking for one of those is refused rather than turned into an instruction that contradicts the
+    /// rule under test.
+    #[test]
+    fn the_send_is_a_held_return_and_the_stop_goes_through_a_written_box() {
+        let s = load(
+            r#"
+id: sample
+title: A line written under a pane, sent and stopped
+steps_gui:
+  - type: action
+    domain: terminal
+    op: send-written
+  - type: action
+    domain: terminal
+    op: press-through
+    with: { key: ctrl-c, holding: true }
+  - type: action
+    domain: terminal
+    op: press-through
+    with: { key: escape }
+  - type: action
+    domain: terminal
+    op: press-through
+    with: { key: up, holding: true }
+"#,
+        );
+        let steps = s.steps(Driver::Gui);
+        let sent = Instructor::new().render(&steps[0]).unwrap();
+        assert!(
+            sent.contains("hold the key this machine sends with") && sent.contains("Return on its own is a new line"),
+            "the send names the pair and what return alone does: {sent}"
+        );
+        let stopped = Instructor::new().render(&steps[1]).unwrap();
+        assert!(
+            stopped.contains("leaving what is written in it exactly where it is"),
+            "the stop is pressed over the line rather than after emptying it: {stopped}"
+        );
+        let emptied = Instructor::new().render(&steps[2]).unwrap();
+        assert!(
+            emptied.contains("make sure nothing at all is written in it"),
+            "and without `holding` the box is emptied first, as it always was: {emptied}"
+        );
+        let refused = Instructor::new().render(&steps[3]).unwrap_err();
+        assert!(
+            refused.contains("that press is the box's own"),
+            "one of the other three over a written box is refused, and says why: {refused}"
         );
     }
 

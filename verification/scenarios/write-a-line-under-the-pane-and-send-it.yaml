@@ -31,6 +31,16 @@
 # press the box hands on, so abandoning it walks one more of them and leaves a clean prompt for the
 # half that follows.
 #
+# ── Why the stop is walked over a written box, and what it does not prove ───────────────────────
+# Escape and ctrl-c are the exception to the rule above: they go to the program whatever is written,
+# because they are the presses that mean "stop" and somebody reaching for one has usually begun the
+# next line already. What a plain prompt can answer for is that the line survived the
+# press — read below — and no more than that: a shell draws nothing at all in answer to escape, and
+# what it draws for ctrl-c is a mark and a fresh prompt that a reading cannot tell from the words
+# already on the pane. **So the arrival is not read here.** A road that could read it would have to
+# open the pane on a program that visibly ends, and that is not this road: what is sent here has to
+# be answered the same way every time, which is why the pane is taken down to a shell.
+#
 # ── Why a second pane is opened at the end ──────────────────────────────────────────────────────
 # Everything above is one pane, and one pane cannot say where the keyboard went. A person working in
 # two presses the one they mean and writes — the frame moving and the keyboard moving are one act to
@@ -139,12 +149,14 @@ steps_gui:
     with:
       shows: SCENARIO this line is written and has not been sent anywhere
 
-  # ── Sent with return ──────────────────────────────────────────────────────────────────────────
+  # ── Sent with the keys ────────────────────────────────────────────────────────────────────────
+  # Return held with this machine's own modifier. Return alone writes a new line, which is what the
+  # box was made to allow, so the send is the two together.
   - type: action
     domain: terminal
     op: send-written
     with:
-      by: return
+      by: key
 
   # It reached the program: the shell was given the line, echoed it, and did not know the command.
   # What is read is the line itself, which is on the pane because the terminal put it there.
@@ -199,6 +211,28 @@ steps_gui:
       shows: SCENARIO this second line went by the press beside the box
 
   # And nothing was paid for the way out. The third line is where it was written, still unsent.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO this third line is being left behind in the box
+
+  # ── And the press that stops, made over a line half written ───────────────────────────────────
+  # The state the two readings above leave is the one this half wants: a line the shell is holding on
+  # its own input line, and a line standing unsent in the box. The press that abandons the first is
+  # made without emptying the second, which is the one exception to the box's rule —
+  # somebody reaching for "stop" has usually started writing the next thing already, and a box that
+  # took the press by standing there would have taken away the only answer to what was just sent.
+  - type: action
+    domain: terminal
+    op: press-through
+    with:
+      key: ctrl-c
+      holding: true
+
+  # What the box was holding is where it was. That is the half of the exception a prompt can answer
+  # for: the press cost the line nothing, so the way out of a mis-sent line is one a person can take
+  # without losing the one they were writing.
   - type: assert
     domain: terminal
     op: still-to-send

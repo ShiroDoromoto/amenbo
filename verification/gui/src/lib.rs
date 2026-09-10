@@ -1065,6 +1065,13 @@ impl Instructor {
             // A row on the file face, and the words an opened file draws. Both are read off the shot
             // as the road wrote them: a file's name is a name the road gave it, and what is inside is
             // what the road put there.
+            // The provider named in the question the way out raises. It is a product's own name and
+            // not a word of the interface's — the same letters whatever language the machine is set
+            // to — and the sentence is the one place on that screen it stands, so both halves are a
+            // reading: named, it is on the shot; not named, it is nowhere on it.
+            (Domain::Store, "quit-names") => {
+                Some(Expectation { text: arg_str(with, "agent")?.to_string(), present: present(with) })
+            }
             (Domain::Files, "listed") => {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
@@ -1996,6 +2003,21 @@ impl Instructor {
             // rule every reading of this row is written to (`opens-with`). What the operator is told
             // to expect afterwards is the row appearing — a frame that drew no model row here is the
             // fault this step catches on its own.
+            // Named rather than counted along, which a road may do once it has stood the machine up:
+            // the row then holds the catalog's own commands, so the name is one the operator will
+            // find on it. Said as the row draws it, which is the provider's own name.
+            (Domain::Terminal, "pick-start") if arg_str(with, "agent").is_some() => {
+                if with.contains_key("at") {
+                    return Err(
+                        "action `pick-start` was given both `agent` and `at` — they are two ways of saying which thing on the row, and a step that said both would leave the choosing to whoever read it"
+                            .to_string(),
+                    );
+                }
+                format!(
+                    "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose **{}** on that row by its name, and press nothing else. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run.",
+                    req(with, "agent")?
+                )
+            }
             (Domain::Terminal, "pick-start") => match arg_str(with, "at").unwrap_or("first") {
                 "first" =>
                     "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row of things a pane can be opened with. Choose the **first** thing on that row, and press nothing else: the row is drawn in Amenbo's own order — the agents it lists, then any command registered on this machine, then the plain shell — so the first of them is one of the agents whatever this machine has on it. Do not press what opens the pane. Confirm a second row comes up under the one you chose on, asking which model that agent starts on, and that under it the frame writes out the line the press would run."
@@ -3233,6 +3255,18 @@ impl Instructor {
             // A nudge came up by itself, or has gone. Nothing is pressed here and nothing is opened —
             // what is under test is that the offer arrives unasked, on a device that has been used
             // enough for it, so the line is the screen as the app left it.
+            // What the question standing there says about the panes it is about to take. Read on the
+            // screen the step above left up, which is why nothing was pressed there.
+            (Domain::Store, "quit-names") => match present(with) {
+                true => format!(
+                    "Read the question that is up and confirm it names **{}** — the provider whose panes will not be in their conversation again after this. The rest of the sentence is the interface's own; what is being read is that this name is in it.",
+                    req(with, "agent")?
+                ),
+                false => format!(
+                    "Read the question that is up and confirm **{}** is nowhere in it. Every pane it is about comes back into its conversation at the next start, so there is no provider for the sentence to single out.",
+                    req(with, "agent")?
+                ),
+            },
             (Domain::Store, "nudge") => match present(with) {
                 true => format!(
                     "Confirm the offer that came up by itself asks \"{}\" — nothing was pressed to bring it up.",
@@ -9452,6 +9486,73 @@ steps_gui:
         );
         assert_eq!(outcome.records[1].window.as_deref(), Some("Amenbo — "));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The way out's question, on the half the plain sentence cannot say. Two things are held down
+    /// here: a pane can be opened on a **named** provider once the road has stood the machine up, and
+    /// the question is read for that name — off the shot, because a provider's name is a product's own
+    /// and the same letters in every language, and the board the question comes up on carries it
+    /// nowhere else. The absent half is the plain sentence, read the same way.
+    #[test]
+    fn the_way_out_is_read_for_the_provider_whose_panes_do_not_come_back() {
+        let s = load(
+            r#"
+id: sample
+title: The way out names a pane that will not be in its conversation again
+steps_gui:
+  - type: action
+    domain: terminal
+    op: pick-start
+    with: { agent: Gemini CLI }
+  - type: assert
+    domain: store
+    op: quit-names
+    with: { agent: Gemini CLI }
+  - type: assert
+    domain: store
+    op: quit-names
+    with: { agent: Gemini CLI, present: false }
+"#,
+        );
+        let steps = s.steps(Driver::Gui);
+        let picked = Instructor::new().render(&steps[0]).unwrap();
+        assert!(
+            picked.contains("Gemini CLI") && picked.contains("by its name"),
+            "the row is chosen by the provider's name rather than by a position: {picked}"
+        );
+        let named = Instructor::new().render(&steps[1]).unwrap();
+        assert!(
+            named.contains("Gemini CLI") && named.contains("not be in their conversation"),
+            "and the question is read for that name: {named}"
+        );
+        assert_eq!(
+            Instructor::new().expectation(&steps[1]).map(|e| (e.text, e.present)),
+            Some(("Gemini CLI".to_string(), true)),
+            "read off the shot, both halves"
+        );
+        assert_eq!(
+            Instructor::new().expectation(&steps[2]).map(|e| (e.text, e.present)),
+            Some(("Gemini CLI".to_string(), false)),
+        );
+    }
+
+    /// Two ways of saying which thing on the row is a step that has said nothing: the driver refuses
+    /// it rather than picking one, which would be the road's choice made by whoever read it.
+    #[test]
+    fn a_row_chosen_by_both_a_name_and_a_position_is_refused() {
+        let s = load(
+            r#"
+id: sample
+title: A road that names the agent and counts along the row at once
+steps_gui:
+  - type: action
+    domain: terminal
+    op: pick-start
+    with: { agent: Gemini CLI, at: second }
+"#,
+        );
+        let told = Instructor::new().render(&s.steps(Driver::Gui)[0]).unwrap_err();
+        assert!(told.contains("both `agent` and `at`"), "and it says which two: {told}");
     }
 
     /// Why a carry stopped, and the two things that keep the step honest. It is read at the foot of

@@ -758,7 +758,7 @@ export const zhHans: Translation = {
     "onboard.s1title": "把文件夹接到项目上",
     "onboard.s1a": "会在那个文件夹里放入 ", "onboard.s1b": "（本地的关联）和 ", "onboard.s1c": "。在那里启动的 AI 就能操作这个项目。",
     "onboard.s2title": "请你的 AI 动手",
-    "onboard.s2body": "创建完成的页面，以及还什么都没有的看板，会在那个文件夹里为你打开终端。若你更想用自己的终端，同样的请求文本一按即出，粘贴即可。",
+    "onboard.s2body": "创建项目的最后一个页面，以及还什么都没有的看板，都会在那个文件夹里为你打开终端。若你更想用自己的终端，同样的请求文本一按即出，粘贴即可。",
     "onboard.s3title": "接下来只管扔任务",
     "onboard.s3body": "把任务分配给 AI，它就会自行开始并推进。一切都会出现在动态流里。",
     "list.empty": "没有符合条件的任务", "list.emptyInbox": "没有等着你（和你的 AI）处理的事",

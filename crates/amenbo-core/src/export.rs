@@ -269,12 +269,19 @@ const CANCEL_POLL_ROWS: u64 = 256;
 /// rule that has to judge each row is a rule that can be got wrong once; a table nobody streams cannot
 /// leak the row nobody remembered.
 ///
-/// The other three are here for a different reason: they are **this machine's**, not this project's
+/// The rest are here for a different reason: they are **this machine's**, not this project's
 /// (`AMB-D-856`). `binding_project_dir` holds the file paths of the folders bound here, and the two
 /// answers say what was decided on this device — none of it means anything in a copy somewhere else, and
 /// the paths are the person's own. They are on the change feed, because a screen here does have to hear
 /// them change ([`crate::store_engine::schema::FEED_PLAIN_TABLES`]); this list is what keeps that from
 /// also putting them on a road out.
+///
+/// `notify_target` is that same class (`AMB-D-885`): the shelf of connections belongs to the device, its
+/// credentials are in `secret` and stay here, and what is left — a relay's hostname, the account it is
+/// reached as — is the person's own and works nowhere else. `project_notify_target` follows it, because a
+/// selection names a row of a table that stays home, and a join with an end outside the window stays home
+/// by the rule every join out of here follows. What the project itself says — whether it notifies, and
+/// which of the thirteen it reports — is the project's content and travels with it.
 ///
 /// **The change feed's carrier road is held to this list too**
 /// ([`crate::store::Store::sync_changes`]). It carries no values at all, so nothing here is a credential
@@ -285,7 +292,15 @@ const CANCEL_POLL_ROWS: u64 = 256;
 /// them there would mean typing every credential in again after each restore. It copies the database
 /// file whole ([`crate::archive`]), so it never walks this list.
 pub const WITHHELD_ON_THE_WAY_OUT: &[&str] =
-    &["plugin_secret", "secret", "binding_project_dir", "hook_optout", "harness_consent"];
+    &[
+        "plugin_secret",
+        "secret",
+        "notify_target",
+        "project_notify_target",
+        "binding_project_dir",
+        "hook_optout",
+        "harness_consent",
+    ];
 
 /// The registry a road out walks: every dataset except [`WITHHELD_ON_THE_WAY_OUT`]. One list, walked by
 /// the export and by the sync snapshot alike — `AMB-D-581` draws `AMB-D-434`'s line straight through to

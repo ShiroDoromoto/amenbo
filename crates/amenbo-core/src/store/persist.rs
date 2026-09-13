@@ -711,6 +711,104 @@ impl Store {
         self.write_one(&[], |tx| crate::ops::secret::forget_owner(tx, area, owner_id))
     }
 
+    /// Add a notification target to the device's shelf (one operation = one transaction, `AMB-D-885`).
+    ///
+    /// **Unguarded by project reach**, as the device layer's plugin writes are: the shelf belongs to the
+    /// device and to no project, so there is no project to hold the write to. What contains it is the
+    /// row's own shape — a name and a kind, no project's content anywhere in reach.
+    pub fn notify_target_add(
+        &mut self,
+        kind: crate::model::NotifyKind,
+        name: &str,
+    ) -> Result<crate::model::NotifyTarget> {
+        self.write_one(&[], |tx| crate::ops::notify::add_target(tx, kind, name))
+    }
+
+    /// Rename a notification target (one operation = one transaction).
+    pub fn notify_target_rename(
+        &mut self,
+        id: i64,
+        name: &str,
+    ) -> Result<crate::model::NotifyTarget> {
+        self.write_one(&[], |tx| crate::ops::notify::rename_target(tx, id, name))
+    }
+
+    /// Write a mail target's SMTP connection — everything but the password, which is a
+    /// [`Self::set_secret`] (one operation = one transaction). Refused on a Slack target.
+    pub fn notify_target_set_mail_connection(
+        &mut self,
+        id: i64,
+        conn: crate::ops::notify::MailConnection,
+    ) -> Result<crate::model::NotifyTarget> {
+        self.write_one(&[], |tx| crate::ops::notify::set_mail_connection(tx, id, conn))
+    }
+
+    /// Move the default mark onto this target — where a **newly created** project starts out pointing
+    /// (one operation = one transaction). The projects already standing keep their own selection.
+    pub fn notify_target_set_default(&mut self, id: i64) -> Result<crate::model::NotifyTarget> {
+        self.write_one(&[], |tx| crate::ops::notify::set_default(tx, id))
+    }
+
+    /// Delete a notification target, the selections that hold it and the credential it kept (one
+    /// operation = one transaction). Returns the projects that lost it, in id order — read before the
+    /// rows go, since afterwards nobody can be asked.
+    pub fn notify_target_delete(&mut self, id: i64) -> Result<Vec<i64>> {
+        self.write_one(&[], |tx| crate::ops::notify::delete_target(tx, id))
+    }
+
+    /// Turn one project's notifications on or off (one operation = one transaction). Off keeps the
+    /// targets and the events where they are. Returns whether anything changed.
+    pub fn project_notify_set_enabled(&mut self, project_id: i64, enabled: bool) -> Result<bool> {
+        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+            crate::ops::notify::set_enabled(tx, project_id, enabled)
+        })
+    }
+
+    /// Write where one project's mail is addressed (one operation = one transaction). Returns whether
+    /// anything changed.
+    pub fn project_notify_set_mail_to(&mut self, project_id: i64, mail_to: &str) -> Result<bool> {
+        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+            crate::ops::notify::set_mail_to(tx, project_id, mail_to)
+        })
+    }
+
+    /// Send one project's notifications through one more target (one operation = one transaction).
+    /// Idempotent. Returns whether anything changed.
+    pub fn project_notify_select_target(
+        &mut self,
+        project_id: i64,
+        target_id: i64,
+    ) -> Result<bool> {
+        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+            crate::ops::notify::select_target(tx, project_id, target_id).map(|(_, created)| created)
+        })
+    }
+
+    /// Stop sending one project's notifications through one target (one operation = one transaction).
+    /// The target stays on the shelf. Returns whether anything changed.
+    pub fn project_notify_deselect_target(
+        &mut self,
+        project_id: i64,
+        target_id: i64,
+    ) -> Result<bool> {
+        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+            crate::ops::notify::deselect_target(tx, project_id, target_id)
+        })
+    }
+
+    /// Tick or untick one of the thirteen events a project reports (one operation = one transaction).
+    /// An unknown name is refused. Returns whether anything changed.
+    pub fn project_notify_set_event(
+        &mut self,
+        project_id: i64,
+        event: &str,
+        on: bool,
+    ) -> Result<bool> {
+        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+            crate::ops::notify::set_event(tx, project_id, event, on)
+        })
+    }
+
     /// What a write at one plugin layer is guarded against (`AMB-D-601`). A project's row is that project's
     /// content, so it is `WriteTarget::Project` and an AI outside its binding is refused. The device row is
     /// no project's, so there is no project to hold it to — the containment left is that the row's whole

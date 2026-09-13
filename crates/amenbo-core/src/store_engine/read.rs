@@ -5720,6 +5720,160 @@ pub fn secret_value(
     }
 }
 
+
+// ───────────────────────── notification targets and the project rows that select them ─────────────────────────
+
+/// The `notify_target` with this id (`AMB-D-885`).
+pub fn notify_target(conn: &Connection, id: i64) -> Result<Option<crate::model::NotifyTarget>> {
+    super::hydrate::row_by_id(conn, "notify_target", id, super::hydrate::notify_target_row)
+}
+
+/// Every notification target on this device, `id` ascending — the shelf, in the order the targets were
+/// raised. There is no `order_key` here and no reordering with it: the shelf is short, and a row is
+/// found by its kind and its name rather than by where it sits.
+pub fn notify_targets(conn: &Connection) -> Result<Vec<crate::model::NotifyTarget>> {
+    super::hydrate::rows(conn, "notify_target", super::hydrate::notify_target_row)
+}
+
+/// The ids of every notification target, `id` ascending.
+pub fn notify_target_ids(conn: &Connection) -> Result<Vec<i64>> {
+    const C: col::notify_target::Cols = col::notify_target::ALL;
+    select_ids(conn, C.id, None)
+}
+
+/// The target a newly created project starts out pointing at, or `None` when no target is marked
+/// (`AMB-D-885`). At most one row carries the mark — [`crate::ops::notify`] moves it rather than raising
+/// a second — and the `id` order pins the pick if a store ever carries two.
+pub fn default_notify_target_id(conn: &Connection) -> Result<Option<i64>> {
+    const C: col::notify_target::Cols = col::notify_target::ALL;
+    first_id(conn, C.id, &Pred::eq(C.is_default, true))
+}
+
+/// The ids of every target **other than** `id` that carries the default mark — what a
+/// [`crate::ops::notify`] write clears so the mark stays on one row.
+pub fn other_default_notify_target_ids(conn: &Connection, id: i64) -> Result<Vec<i64>> {
+    const C: col::notify_target::Cols = col::notify_target::ALL;
+    select_ids(conn, C.id, Some(&Pred::eq(C.is_default, true).and(Pred::ne(C.id, id))))
+}
+
+/// The live `project_notify` row id for this project, or `None` when the project has never been set up
+/// — the lookup that makes writing one an upsert. `UNIQUE (project_id)` guarantees at most one.
+pub fn project_notify_row_id(conn: &Connection, project_id: i64) -> Result<Option<i64>> {
+    const C: col::project_notify::Cols = col::project_notify::ALL;
+    first_id(conn, C.id, &Pred::eq(C.project_id, project_id))
+}
+
+/// The `project_notify` row with this id.
+pub fn project_notify_row_by_id(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::ProjectNotify>> {
+    super::hydrate::row_by_id(conn, "project_notify", id, super::hydrate::project_notify_row)
+}
+
+/// One project's notification row, or `None` when it has never been set up (`AMB-D-885`). `None` is not
+/// "off": a project that has been set up and switched off has a row whose `enabled` is false, and the
+/// targets and events it chose are still standing beside it.
+pub fn project_notify(
+    conn: &Connection,
+    project_id: i64,
+) -> Result<Option<crate::model::ProjectNotify>> {
+    match project_notify_row_id(conn, project_id)? {
+        Some(id) => project_notify_row_by_id(conn, id),
+        None => Ok(None),
+    }
+}
+
+/// The live `project_notify_target` row id for `(project_id, target_id)`, or `None` — what makes
+/// selecting a target idempotent and deselecting it a lookup. `UNIQUE (project_id, target_id)`
+/// guarantees at most one.
+pub fn project_notify_target_id(
+    conn: &Connection,
+    project_id: i64,
+    target_id: i64,
+) -> Result<Option<i64>> {
+    const C: col::project_notify_target::Cols = col::project_notify_target::ALL;
+    first_id(
+        conn,
+        C.id,
+        &Pred::eq(C.project_id, project_id).and(Pred::eq(C.target_id, target_id)),
+    )
+}
+
+/// The targets one project's notifications are carried by, `id` ascending — whole rows, read through the
+/// table's own `UNIQUE (project_id, target_id)`, whose leading column is the one sought here.
+pub fn project_notify_targets(
+    conn: &Connection,
+    project_id: i64,
+) -> Result<Vec<crate::model::ProjectNotifyTarget>> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM project_notify_target WHERE project_id = ?1 ORDER BY id")
+        .map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map([project_id], super::hydrate::project_notify_target_row)
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
+/// The `project_notify_target` row ids that name one target, across every project — the rows a delete
+/// has to clear before the target itself can go (`target_id` is `RESTRICT`), sought through
+/// `project_notify_target_by_target`.
+pub fn project_notify_target_ids_for_target(
+    conn: &Connection,
+    target_id: i64,
+) -> Result<Vec<i64>> {
+    const C: col::project_notify_target::Cols = col::project_notify_target::ALL;
+    select_ids(conn, C.id, Some(&Pred::eq(C.target_id, target_id)))
+}
+
+/// Which projects a target carries the notifications of — the count a screen puts before a delete ("two
+/// projects use this"). Ids, ascending, one per project: a project selects a target at most once
+/// (`UNIQUE (project_id, target_id)`), so the rows are already the answer.
+pub fn projects_using_notify_target(conn: &Connection, target_id: i64) -> Result<Vec<i64>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT project_id FROM project_notify_target WHERE target_id = ?1 ORDER BY project_id",
+        )
+        .map_err(StoreEngineError::from)?;
+    let ids = stmt
+        .query_map([target_id], |r| r.get::<_, i64>(0))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(ids)
+}
+
+/// The live `project_notify_event` row id for `(project_id, event)`, or `None` — what makes ticking an
+/// event idempotent and unticking it a lookup. `UNIQUE (project_id, event)` guarantees at most one.
+pub fn project_notify_event_id(
+    conn: &Connection,
+    project_id: i64,
+    event: &str,
+) -> Result<Option<i64>> {
+    const C: col::project_notify_event::Cols = col::project_notify_event::ALL;
+    first_id(conn, C.id, &Pred::eq(C.project_id, project_id).and(Pred::eq(C.event, event)))
+}
+
+/// The events one project reports, `id` ascending — whole rows, sought through the table's own
+/// `UNIQUE (project_id, event)`. An empty answer is the project reporting nothing, which is an answer a
+/// person can give (`AMB-D-885`); whether the project has been set up at all is [`project_notify`]'s.
+pub fn project_notify_events(
+    conn: &Connection,
+    project_id: i64,
+) -> Result<Vec<crate::model::ProjectNotifyEvent>> {
+    let mut stmt = conn
+        .prepare("SELECT * FROM project_notify_event WHERE project_id = ?1 ORDER BY id")
+        .map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map([project_id], super::hydrate::project_notify_event_row)
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
 /// The live `plugin_enable` row id for `(project_id, plugin)`, or `None` — the lookup behind both writes,
 /// since enabling is "ensure the row" and disabling is "delete it" (`AMB-D-434`). `project_id` is the layer
 /// ([`at_layer`]); `plugin_enable_pair` guarantees at most one project row and `plugin_enable_device` at

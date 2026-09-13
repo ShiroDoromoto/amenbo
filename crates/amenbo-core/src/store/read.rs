@@ -472,6 +472,48 @@ impl Store {
         )?)
     }
 
+    /// Every notification target on this device, in the order they were raised (`AMB-D-885`) — the
+    /// shelf. No credential comes with them: a screen asks whether a field is set, and the plaintext is
+    /// read at the moment the feature connects.
+    pub fn notify_targets(&self) -> Result<Vec<crate::model::NotifyTarget>> {
+        Ok(crate::store_engine::read::notify_targets(self.engine.conn())?)
+    }
+
+    /// One notification target, or `None` when no row carries the id.
+    pub fn notify_target(&self, id: i64) -> Result<Option<crate::model::NotifyTarget>> {
+        Ok(crate::store_engine::read::notify_target(self.engine.conn(), id)?)
+    }
+
+    /// Which projects a target carries the notifications of — what a screen puts in front of a delete
+    /// ("two projects use this, and both lose it"). Ids, ascending.
+    pub fn projects_using_notify_target(&self, target_id: i64) -> Result<Vec<i64>> {
+        Ok(crate::store_engine::read::projects_using_notify_target(self.engine.conn(), target_id)?)
+    }
+
+    /// One project's notification row, or `None` when the project has never been set up (`AMB-D-885`).
+    /// `None` is not "off": a project switched off has a row, and the targets and events it chose are
+    /// still standing beside it.
+    pub fn project_notify(&self, project_id: i64) -> Result<Option<crate::model::ProjectNotify>> {
+        Ok(crate::store_engine::read::project_notify(self.engine.conn(), project_id)?)
+    }
+
+    /// The targets one project's notifications are carried by.
+    pub fn project_notify_targets(
+        &self,
+        project_id: i64,
+    ) -> Result<Vec<crate::model::ProjectNotifyTarget>> {
+        Ok(crate::store_engine::read::project_notify_targets(self.engine.conn(), project_id)?)
+    }
+
+    /// The events one project reports. Empty is the project reporting nothing, which is an answer a
+    /// person can give — whether it has been set up at all is [`Self::project_notify`]'s.
+    pub fn project_notify_events(
+        &self,
+        project_id: i64,
+    ) -> Result<Vec<crate::model::ProjectNotifyEvent>> {
+        Ok(crate::store_engine::read::project_notify_events(self.engine.conn(), project_id)?)
+    }
+
     /// Whether this layer holds a plugin's gate open (`AMB-D-434` / `AMB-D-601`) — the row's presence, which
     /// is the whole answer ([`crate::plugin_trust::effective_enabled_in`] is the boundary's name for it).
     pub fn plugin_enabled_in_project(&self, project_id: Option<i64>, plugin: &str) -> Result<bool> {

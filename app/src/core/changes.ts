@@ -71,6 +71,15 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   // will ask whether a field is set — the notification shelf, the Viewer's pane — arrive with the features
   // themselves, and each names its scope here when it does.
   secret: [],
+  // The notification tables (`AMB-D-885`): the device's shelf of targets, and the three a project's own
+  // row is written on. Folded to nothing for `secret`'s reason rather than a different one — nothing on
+  // screen draws them yet, so no query goes stale when one moves, and falling to gap would buy a full
+  // re-read for a change nobody can see. The two screens that will draw them — the shelf under the
+  // device's settings, the notification pane under a project's — name their scope here when they arrive.
+  notify_target: [],
+  project_notify: [],
+  project_notify_target: [],
+  project_notify_event: [],
   // This device's own tables (`AMB-D-856`). None of them travels anywhere, and all three are written by
   // the CLI and drawn here: the folders a project is bound to, and the two answers given for it. They
   // fold to the project they are about, which is the surface each of them is on.

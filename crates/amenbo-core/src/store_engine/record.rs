@@ -23,7 +23,8 @@ use rusqlite::types::Value;
 use crate::model::{
     ActorKind, Attachment, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionTaskLink,
-    Dimension, DimensionValue, PluginConfigValue, PluginEnabledProject, PluginSecret, Project, Secret,
+    Dimension, DimensionValue, NotifyTarget, PluginConfigValue, PluginEnabledProject, PluginSecret,
+    Project, ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret,
     Task,
     TaskComment, TaskCommit, TaskDependency, TaskDimensionValue,
 };
@@ -240,6 +241,67 @@ pub fn secret(s: &Secret) -> Record {
             ],
             &s.created_at,
             &s.updated_at,
+        ),
+    )
+}
+
+pub fn notify_target(t: &NotifyTarget) -> Record {
+    Record::new(
+        "notify_target",
+        t.id,
+        with_audit(
+            vec![
+                ("kind", tv(t.kind.as_str())),
+                ("name", tv(&t.name)),
+                ("is_default", bv(t.is_default)),
+                // Mail-mode, and Null on a Slack target — the kind above is what says which.
+                ("smtp_host", ov(&t.smtp_host)),
+                ("smtp_port", kv_opt(&t.smtp_port)),
+                ("smtp_user", ov(&t.smtp_user)),
+                ("mail_from", ov(&t.mail_from)),
+            ],
+            &t.created_at,
+            &t.updated_at,
+        ),
+    )
+}
+
+pub fn project_notify(n: &ProjectNotify) -> Record {
+    Record::new(
+        "project_notify",
+        n.id,
+        with_audit(
+            vec![
+                ("project_id", kv(n.project_id)),
+                ("enabled", bv(n.enabled)),
+                ("mail_to", tv(&n.mail_to)),
+            ],
+            &n.created_at,
+            &n.updated_at,
+        ),
+    )
+}
+
+pub fn project_notify_target(t: &ProjectNotifyTarget) -> Record {
+    Record::new(
+        "project_notify_target",
+        t.id,
+        with_audit(
+            vec![("project_id", kv(t.project_id)), ("target_id", kv(t.target_id))],
+            &t.created_at,
+            &t.updated_at,
+        ),
+    )
+}
+
+pub fn project_notify_event(e: &ProjectNotifyEvent) -> Record {
+    Record::new(
+        "project_notify_event",
+        e.id,
+        with_audit(
+            vec![("project_id", kv(e.project_id)), ("event", tv(&e.event))],
+            &e.created_at,
+            &e.updated_at,
         ),
     )
 }

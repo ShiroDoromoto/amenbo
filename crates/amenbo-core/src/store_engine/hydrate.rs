@@ -31,8 +31,9 @@ use crate::model::{
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
-    DimensionRole, DimensionValue, PluginConfigValue, PluginEnabledProject, PluginSecret, Priority,
-    Secret, SecretArea,
+    DimensionRole, DimensionValue, NotifyKind, NotifyTarget, PluginConfigValue,
+    PluginEnabledProject, PluginSecret, Priority,
+    ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret, SecretArea,
     Project, Subtype, Task, TaskComment, TaskCommit, TaskDependency,
     TaskDimensionValue, TaskStatus, View,
 };
@@ -236,6 +237,61 @@ pub(super) fn secret_row(r: &Row) -> rusqlite::Result<Secret> {
         owner_id: get(r, C.owner_id)?,
         field_key: get(r, C.field_key)?,
         value: get(r, C.value)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn notify_target_row(r: &Row) -> rusqlite::Result<NotifyTarget> {
+    const C: col::notify_target::Cols = col::notify_target::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(NotifyTarget {
+        id: get(r, C.id)?,
+        kind: enum_req(r, C.kind, NotifyKind::parse)?,
+        name: get(r, C.name)?,
+        is_default: get(r, C.is_default)?,
+        // Mail-mode, and None on a Slack target — the kind above is what says which.
+        smtp_host: get(r, C.smtp_host)?,
+        smtp_port: get(r, C.smtp_port)?,
+        smtp_user: get(r, C.smtp_user)?,
+        mail_from: get(r, C.mail_from)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn project_notify_row(r: &Row) -> rusqlite::Result<ProjectNotify> {
+    const C: col::project_notify::Cols = col::project_notify::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(ProjectNotify {
+        id: get(r, C.id)?,
+        project_id: get(r, C.project_id)?,
+        enabled: get(r, C.enabled)?,
+        mail_to: get(r, C.mail_to)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn project_notify_target_row(r: &Row) -> rusqlite::Result<ProjectNotifyTarget> {
+    const C: col::project_notify_target::Cols = col::project_notify_target::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(ProjectNotifyTarget {
+        id: get(r, C.id)?,
+        project_id: get(r, C.project_id)?,
+        target_id: get(r, C.target_id)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn project_notify_event_row(r: &Row) -> rusqlite::Result<ProjectNotifyEvent> {
+    const C: col::project_notify_event::Cols = col::project_notify_event::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(ProjectNotifyEvent {
+        id: get(r, C.id)?,
+        project_id: get(r, C.project_id)?,
+        event: get(r, C.event)?,
         created_at,
         updated_at,
     })

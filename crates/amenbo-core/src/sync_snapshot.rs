@@ -172,6 +172,11 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         // closed to one project is exactly the reader that must not learn what the whole device holds.
         "plugin_config" => "project_id = ?1",
         "plugin_enable" => "project_id = ?1",
+        // What a project says about its own notifications (`AMB-D-885`): whether it notifies, and which
+        // of the thirteen it reports. The shelf it sends through is the device's and never travels
+        // (`export::WITHHELD_ON_THE_WAY_OUT`), so neither does the selection that names it.
+        "project_notify" => "project_id = ?1",
+        "project_notify_event" => "project_id = ?1",
 
         // Hangs on one parent.
         "task_comment" => "task_id IN (SELECT id FROM task WHERE project_id = ?1)",

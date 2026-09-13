@@ -976,9 +976,17 @@ pub fn pty_open(
     };
     let pair = native_pty_system().openpty(size).map_err(failed)?;
 
+    // Resolved first, so a pane opened on a relative or linked name runs where the reader meant —
+    // then spelled the way everything outside this process reads a path. On Windows `canonicalize`
+    // answers in the verbatim form (`\\?\C:\…`), which no shell takes: `CMD.EXE` says UNC paths
+    // are not supported and falls back to the Windows directory, so the pane opens and works
+    // somewhere the reader never chose (`AMB-D-703`, `AMB-T-4733`). It is the same spelling the
+    // provider then writes its own session row under, which is what `read_back` below matches a
+    // pane's way back on.
     let folder = cwd
         .map(|dir| std::fs::canonicalize(dir).map_err(failed))
-        .transpose()?;
+        .transpose()?
+        .map(|dir| crate::folder_fence::plain(&dir).into_owned());
 
     // The way back into what this frame was running. A frame that came back with a handle for this
     // provider is opened on it; one that has none is opened on a handle issued here and written

@@ -839,11 +839,12 @@ The everyday banner is not this and is never in the way: those are drawn by
 `NotificationCenter`, which keeps a window the size of the display up at all times
 and lets presses through it.
 
-### `devtool vm golden [--refresh]`
+### `devtool vm golden [--refresh | --prepare]`
 
 Reports on the image clones are cut from — is the base pulled, is the golden
 there, is the key where it is looked for — and with `--refresh` takes the base
-again (`tart pull`) and cuts the golden from it anew.
+again (`tart pull`) and cuts the golden from it anew. `--prepare` is the step
+after that one, run on the golden while it is up.
 
 The base is a third party's (`ghcr.io/cirruslabs/macos-tahoe-base`): SIP disabled,
 TCC granted to `/usr/libexec/sshd-keygen-wrapper`, Gatekeeper off — none of which
@@ -854,7 +855,49 @@ Only the way the golden is made would change to move off it.
   refusing afterwards would have spent it for nothing.
 - **Enrolling the key is left to a person, and named rather than done.** It takes
   the image's password, which is a credential to type. `--refresh` prints the
-  `ssh-copy-id` line to run and says to stop the golden again afterwards.
+  `ssh-copy-id` line to run, and then the `--prepare` that finishes the golden.
+
+Cutting a golden is therefore three steps, and the last is `--prepare`:
+
+```sh
+devtool vm golden --refresh                     # pull the base, cut the golden
+tart run amenbo-golden --no-graphics            # start it, only to be prepared
+ssh-copy-id -i ~/.ssh/amenbo-vm.pub admin@$(tart ip amenbo-golden)
+devtool vm golden --prepare                     # …and it stops the golden itself
+```
+
+`--prepare` gives the guest **the Japanese input method**, and turns **live
+conversion off** in it.
+
+- **Why any of it.** The base image ships U.S. and the character palette and
+  nothing else, so a screen in there cannot be typed at through an input method
+  at all — and most of the world writes through one, a word being held by it, on
+  the screen and in no field, until a person settles it. That gap is what
+  `keep-the-word-the-keyboard-was-taken-away-from` is about, and without this
+  there is no way to stand in it. The input method is installed in the image the
+  whole time; it has to be enabled.
+- **Why in the golden.** It is written into the account's preferences, so it is in
+  the image clones are cut from and every clone comes up with it. Nothing has to
+  be restarted for it: the session takes the change as it is made. Writing the
+  preference into a running clone and restarting `loginwindow` to pick it up is
+  the road that was tried first, and it left the guest taking clicks and no keys
+  at all.
+- **Why live conversion is off.** Left on — which is how a Mac ships — the input
+  method converts as the keys arrive, so what stands unsettled is a guess made out
+  of a dictionary and what has been typed on that machine before. A road reading
+  it back would be reading the input method's guess rather than the build's
+  behaviour, and it would move under the road. Off, what stands there is the
+  reading as it was typed, which is a thing a road can name.
+- **U.S. is left selected**, so that a second input method being available changes
+  nothing about the ground every other road is walked on. Selecting one is the
+  road's own move (`screen input-source`).
+- **The tool goes in and comes out again.** It is compiled on the host and sent
+  the way the screen tool is, and deleted before the golden is stopped: the golden
+  holds no copy of a tool this tree changes.
+
+`devtool vm status` says whether the running clone carries the input method, so a
+clone cut from a golden prepared before this is told apart from one that can walk
+that road.
 
 ### One screen, two roles
 

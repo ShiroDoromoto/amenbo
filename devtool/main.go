@@ -82,7 +82,7 @@ Usage:
   devtool vm pull          <remote…> <local>
   devtool vm screen
   devtool vm dismiss
-  devtool vm golden        [--refresh]
+  devtool vm golden        [--refresh | --prepare]
   devtool vm verify seed    [<path.pkg>] [--from-run <run id>] [--system-wide]
   devtool vm verify install [<path.pkg>] [--from-run <run id>]
   devtool vm verify run    <scenario.yaml>

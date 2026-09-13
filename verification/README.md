@@ -443,8 +443,8 @@ asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
 The screen tool is the input primitive too, called by whoever drives the screen between steps: its
 `find` / `click-named` / `right-click-named` / `dblclick-named` / `point-named` / `click` /
-`right-click` / `dblclick` / `point` / `drag` / `type` / `key` / `scroll` / `set-date` carry out the action steps the
-checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
+`right-click` / `dblclick` / `point` / `drag` / `type` / `key` / `input-source` / `compose` / `scroll` /
+`set-date` carry out the action steps the checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
 at all — the proof it waits for is a shot it throws away, since an app the system has taken up is
 not yet an app with a window, and a walk that started between the two would fail on its first step.
 An app that never draws one inside a minute is reported as that, and one that exits on the way up is
@@ -494,6 +494,24 @@ screen goes on moving after the shot — opening the right pane pushes a column 
 pixels. Anything wide swallows both, which is why aiming works until it is aimed at something small:
 the board's `＋` and the view tabs read as unreachable elements until the arithmetic was suspected
 instead.
+
+**A word written through an input method is typed, not handed over.** `type` sends the characters
+themselves, which walks around every input method there is — so a road driven by it alone never
+stands in the gap most of the world writes in, where a key reaches an input method rather than the
+program and what has been typed is held on the screen and in no field. `input-source <id>` is the
+keyboard switched to one that converts, and `compose <reading>` writes a reading through whichever is
+selected by pressing the keys that reading is typed with, leaving the word standing under its mark
+with nothing settled. The returns that accept it and send it are the road's own presses (`key 36`),
+and how many it takes is half of what `send-a-word` reads.
+Only an input source the machine has **enabled** can be selected, and the VM the GUI is verified in
+carries the Japanese one because its golden image was prepared with it (`devtool vm golden
+--prepare`); `input-source` with a name that is not enabled refuses and prints the ones that are.
+`input-source` also takes the app in front away and brings it back, because an app types in the
+source it was last activated under and does not follow one selected from outside — measured on this
+tree's own app, where the switch was made and said and the word still went in as its own romaji.
+**A word left standing draws a window of the app's own**, untitled, for the candidates the input
+method is offering: while one stands, the app has two windows and every line aimed at it has to say
+`--window <title>` rather than name the pid alone.
 
 **What the tree holds is not what the window shows.** A webview keeps a row it has scrolled out of
 sight in the tree, named and framed like anything else, and the frame stands past the window's edge.
@@ -588,7 +606,8 @@ cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml 
 
 A screen road is walked by somebody, always. The run prints the step it is about to shoot and waits
 for a line on stdin; between the two, the screen belongs to whoever is driving — carry the step out
-by hand, or with the screen tool's `click-named` / `drag` / `type` / `key` / `scroll` / `set-date`, and send the line
+by hand, or with the screen tool's `click-named` / `drag` / `type` / `key` / `input-source` / `compose` /
+`scroll` / `set-date`, and send the line
 once the screen is standing where the step says it should. There is no flag for running it any other way.
 A step that names the key this machine copies or pastes with is `key 8 --cmd` and `key 9 --cmd`:
 the modifier is a flag on the press rather than a key held around it, so nothing stays down between

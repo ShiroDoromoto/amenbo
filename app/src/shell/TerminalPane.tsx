@@ -790,7 +790,7 @@ export function TerminalPane({
             box (`../talk/layout`) — so a sentence left half-written comes back when it is opened
             again, and the press that folds it says so meanwhile. */}
         {live !== null && !folded && (
-          <div className={`compose${written === "" ? "" : " compose--writing"}`}>
+          <div className="compose">
             <textarea
               ref={boxRef}
               className="compose__box"

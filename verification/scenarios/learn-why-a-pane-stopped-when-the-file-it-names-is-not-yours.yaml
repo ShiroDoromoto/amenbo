@@ -1,0 +1,125 @@
+# A pane opens, the program in it stops at once, and what it printed on the way out tells the reader
+# to go and set something in a file that will never be read again.
+#
+# Amenbo gives each pane a home of its own, so two panes of one provider do not share a conversation.
+# A provider that stops over a file it was pointed at there names *that* path in its message — a
+# directory thrown away with the pane. The message is true and its address is not, and a reader who
+# follows it sets what they were asked to, opens another pane, and is told the same thing again.
+#
+# ── What this road defends ───────────────────────────────────────────────────────────────────────
+# That the pane names the file the reader actually has. Nothing on the screen looks wrong without it:
+# the program's message is its own, correctly worded and correctly placed, and the only thing amiss
+# is a path nobody can act on. A build that stopped saying which file it really is would read exactly
+# like this one to anybody not trying it.
+#
+# And that it stays quiet about everything else. What a program leaves on the screen is the whole of
+# why it stopped, so the ending is read a second time on another provider leaving the very same
+# status — where there is nothing Amenbo knows that the reader does not, and the pane says only that
+# the program ended. A build that had learnt to explain endings in general would pass the first
+# reading and fail this one.
+#
+# ── Why the machine is stood up first ────────────────────────────────────────────────────────────
+# Because a provider that stops like this on the machine the gate runs on is a provider the operator
+# happens not to have set up, which is nothing a road can arrange. The premise puts programs in front
+# of the `PATH` that print what they are and leave with a status the road named — the one this
+# provider was measured leaving with no authentication method set — so the ending is the same ending
+# everywhere this runs, and no account has to be in any particular state for it.
+#
+# The whole catalog is stood up rather than the two: the providers are named on this road, and a name
+# is only on the row where that agent was found.
+#
+# The world is empty apart from the place to work: a pane has to open somewhere, and one folder is
+# what that takes.
+id: learn-why-a-pane-stopped-when-the-file-it-names-is-not-yours
+title: A pane that stopped over a file names the reader's own, not the one made for the pane
+description: >
+  Stand a machine up with the whole catalog of agents on it, each leaving with the status this
+  provider was measured leaving with when no authentication method is set. Open the terminal face,
+  choose Gemini CLI and press open: the program comes up, prints, and stops. The pane says it ended —
+  and names your own settings file, which is not the path the program printed on its way out. Take
+  that pane away, choose Claude Code, and open a pane on that instead: it leaves with the same status
+  and the pane says only that it ended, because there is nothing there Amenbo knows that you do not.
+
+given:
+  # The folder is named on the project rather than bound beside it, for the reason every terminal road
+  # names one: a pane has to open somewhere, and two folders is a question this road is not asking.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lantern
+      dir: lampstore
+    as: lantern
+
+  # The whole catalog, because this road names two of them and each has to be on the row. No models
+  # are asked for: what is read here is an ending, and a row of candidates is another road's.
+  #
+  # 41 is the status Gemini CLI 0.59.0 was measured leaving with where the home it was pointed at
+  # holds no authentication method — the ending this road is about, and the one the pane has a word
+  # for.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 6
+      exits: 41
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and the
+  # pane this road opens has to open in the folder this road named.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lantern
+
+  # ── The provider whose ending Amenbo has a word for ───────────────────────────────────────────
+  # Named rather than counted along, which the premise earns: what the pane says is settled by which
+  # provider stopped, so a road that took a position would be reading whatever was there.
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Gemini CLI
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  - type: assert
+    domain: terminal
+    op: ended
+    with:
+      names: ~/.gemini/settings.json
+
+  # ── And the same ending on another provider, which it has no word for ─────────────────────────
+  # The pane goes, so the frame the next agent is chosen on is a frame and not a pane.
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with:
+      shows: standing in for gemini
+
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Claude Code
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  # The status is the one the road named, so it is the very same number the reading above was made
+  # on. What is different is the provider, and a number means nothing without one.
+  - type: assert
+    domain: terminal
+    op: ended
+    with:
+      names: none

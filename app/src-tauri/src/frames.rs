@@ -417,8 +417,8 @@ fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
     Ok(())
 }
 
-/// Let go of the handles of panes the arrangement no longer has, and of whatever they were holding
-/// open.
+/// Let go of what the run is holding for the panes the arrangement no longer has — the handle each
+/// was resumed from, the model it was started under, and the name it was called by.
 ///
 /// A pane that is closed is closed for good: its row goes with it ([`panes_of`] keeps only the places
 /// the window sent), so a handle left behind here would be one nothing could ever hand back. For most
@@ -437,6 +437,7 @@ fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) {
         false
     });
     face.models.lock().expect("pane models lock").retain(|frame, _| here.contains(frame.as_str()));
+    face.names.lock().expect("frame names lock").retain(|frame| here.contains(frame));
 }
 
 /// The panes as they are written down: what the window sent about each place, and beside it the two
@@ -569,6 +570,21 @@ mod tests {
         let hints = face.hints.lock().unwrap();
         assert_eq!(hints.get("1").map(String::as_str), Some("0f9c"));
         assert_eq!(hints.get("2"), None);
+    }
+
+    /// A pane the arrangement no longer has is also a pane whose name goes with it, and the frames
+    /// beside it keep theirs.
+    #[test]
+    fn a_pane_that_is_gone_lets_go_of_its_name() {
+        let face = TalkFace::default();
+        face.names.lock().unwrap().name("1", "the migration", NamedBy::Person);
+        face.names.lock().unwrap().name("2", "the other one", NamedBy::Session);
+
+        forget_dropped(&face, &layout(vec![frame("1", Some("claude"))]));
+
+        let names = face.names.lock().unwrap();
+        assert_eq!(names.all()["1"].name, "the migration");
+        assert_eq!(names.all().get("2"), None);
     }
 
     /// A handle whose program never came up is taken back off the frame, and the frames beside it

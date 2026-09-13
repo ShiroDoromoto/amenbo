@@ -135,6 +135,17 @@ impl FrameNames {
         }
         &self.0
     }
+
+    /// Let go of the names of the frames the window no longer has, keeping only those `here` says are
+    /// still on the screen.
+    ///
+    /// A frame that is closed is closed for good, and the name it was called by goes with it — the
+    /// same way as everything else the run is holding for that frame
+    /// (`app/src-tauri/src/frames.rs`). What is written down is unaffected either way: a name is kept
+    /// on its frame's row, and a row the window no longer sends is not written at all.
+    pub fn retain(&mut self, here: impl Fn(&str) -> bool) {
+        self.0.retain(|frame, _| here(frame.as_str()));
+    }
 }
 
 /// How one project's page is split.

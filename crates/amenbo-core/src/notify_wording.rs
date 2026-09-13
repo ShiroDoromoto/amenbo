@@ -17,6 +17,10 @@
 //! **Four slots and never more.** Three of them hold something this module must not translate — the
 //! name the reader gave their AI, the record's own ref, a project's slug or an assignee's facet — and
 //! the fourth is an event name off the wire.
+//!
+//! **A subject is worded here too, and separately** ([`subject_what`], [`subject_count`]). It is not the
+//! line shortened: a line says who did what to which record, a subject says only what happened. Both are
+//! read out of the same dictionary, so the two halves of one message cannot end up in two languages.
 
 use crate::notify_wording_table::{Wording, WORDINGS};
 use crate::plugin_payload::name;
@@ -61,6 +65,66 @@ pub fn line(language: &str, said: &Said<'_>) -> String {
         .replace("{what}", said.what)
         .replace("{state}", said.state.unwrap_or_default())
         .replace("{event}", said.event)
+}
+
+/// **What a subject says one event was** — the same event as [`line()`], in the fewest words that still
+/// say it.
+///
+/// A line says who did what to which record; a subject says only what happened, the record's own ref
+/// following it. That is not the same sentence shortened: a subject is read in a strip that shows thirty
+/// or forty characters, and the half of it that would survive a cut is the half the reader already knows.
+///
+/// `state` is the second thing the event names, already in the reader's words ([`status_word`]) — the
+/// only slot a subject phrase carries, and the one that decides which of the two forms a status change
+/// is said in. Without it the bare form is said, rather than a phrase left hanging on its preposition.
+/// An event with no phrase of its own is named by its own code, which beats a blank subject for a caller
+/// that hands one over.
+pub fn subject_what(language: &str, event: &str, state: Option<&str>) -> String {
+    let key = subject_key(event, state.is_some());
+    match says(language, key).or_else(|| says(language, subject_key(event, false))) {
+        Some(template) => template.replace("{state}", state.unwrap_or_default()),
+        None => event.to_string(),
+    }
+}
+
+/// **What a subject says a burst was** — how many, since by then the one thing the events still have in
+/// common is the project and their number.
+///
+/// Two forms and never more. Most languages outside Europe change nothing at one, and the ones that do
+/// change it once; the fuller plural families are dodged by the wording itself ("Обновления: {n}"), which
+/// is what keeps this from having to carry a rule per language. `countOne` is written in every dictionary
+/// even where it repeats `count`, so a correction to one cannot leave the other behind.
+///
+/// It counts one as readily as five: a line an older build left carries no event to name, and a message
+/// carrying that single line has nothing to say but how many.
+pub fn subject_count(language: &str, n: usize) -> String {
+    let key = if n == 1 { "subject.countOne" } else { "subject.count" };
+    let template = says(language, key)
+        .or_else(|| says(language, "subject.count"))
+        .unwrap_or("{n} updates");
+    template.replace("{n}", &n.to_string())
+}
+
+/// Which key a subject phrase is written under. A fourteenth event has none, and
+/// [`subject_what()`] names it by its code rather than saying nothing.
+fn subject_key(event: &str, elaborated: bool) -> &'static str {
+    match (event, elaborated) {
+        (name::TASK_CREATED, _) => "subject.taskCreated",
+        (name::TASK_STATUS_CHANGED, true) => "subject.statusChanged",
+        (name::TASK_STATUS_CHANGED, false) => "subject.statusChangedBare",
+        (name::TASK_DONE, _) => "subject.taskDone",
+        (name::TASK_REJECTED, _) => "subject.taskRejected",
+        (name::TASK_ASSIGNED, _) => "subject.taskAssigned",
+        (name::TASK_MOVED, _) => "subject.taskMoved",
+        (name::TASK_DELETED, _) => "subject.taskDeleted",
+        (name::DECISION_ACCEPTED, _) => "subject.decisionAccepted",
+        (name::DECISION_REJECTED, _) => "subject.decisionRejected",
+        (name::COMMENT_ADDED, _) => "subject.commentAdded",
+        (name::COMMENT_REMOVED, _) => "subject.commentRemoved",
+        (name::TASK_DUE, _) => "subject.taskDue",
+        (name::TASK_DUE_TOMORROW, _) => "subject.taskDueTomorrow",
+        _ => "subject.unknown",
+    }
 }
 
 /// The line a test message carries — the one sentence here no event produces, since somebody pressed
@@ -159,6 +223,20 @@ mod tests {
             }
             assert!(lookup(row.says, "test").is_some(), "{code} has no test line");
             assert!(lookup(row.says, "unknown").is_some(), "{code} has no unknown line");
+            for event in V1_EVENTS {
+                if event == name::STORE_CHANGED {
+                    continue;
+                }
+                let key = subject_key(event, false);
+                assert!(
+                    lookup(row.says, key).is_some(),
+                    "{code} has no subject phrase for {event} ({key})"
+                );
+            }
+            // Both forms, even where they are the same words: what keeps a correction to one from
+            // leaving the other saying what the language no longer says.
+            assert!(lookup(row.says, "subject.count").is_some(), "{code} cannot count");
+            assert!(lookup(row.says, "subject.countOne").is_some(), "{code} cannot count one");
         }
     }
 
@@ -170,7 +248,7 @@ mod tests {
         for row in WORDINGS {
             for (key, template) in row.says {
                 let Some(reference) = lookup(english.says, key) else { continue };
-                for slot in ["{who}", "{what}", "{state}", "{event}"] {
+                for slot in ["{who}", "{what}", "{state}", "{event}", "{n}"] {
                     assert_eq!(
                         template.contains(slot),
                         reference.contains(slot),
@@ -233,5 +311,54 @@ mod tests {
     #[test]
     fn a_status_with_no_word_is_shown_as_it_came() {
         assert_eq!(status_word("ja", "parked"), "parked");
+    }
+
+    /// A subject says what happened and stops there — no actor, no record. The line beside it is the
+    /// one that says those, and a subject repeating them would spend its thirty readable characters
+    /// on what the reader can already see.
+    #[test]
+    fn a_subject_says_what_happened_and_nothing_else() {
+        assert_eq!(subject_what("ja", name::TASK_DONE, None), "タスクを完了");
+        assert_eq!(subject_what("en", name::TASK_DONE, None), "Task finished");
+    }
+
+    /// The one slot a subject phrase carries is the state, and it is filled with Amenbo's own word —
+    /// the same one the line uses, so the two halves of a message name a state the same way.
+    #[test]
+    fn a_status_change_names_the_status_in_the_subject_too() {
+        let state = status_word("ja", "done");
+        assert_eq!(subject_what("ja", name::TASK_STATUS_CHANGED, Some(&state)), "タスクのステータスを完了に変更");
+    }
+
+    /// Without the state the bare form is said rather than a phrase hanging on its preposition — an
+    /// older build's row carries no status to name.
+    #[test]
+    fn a_status_change_with_no_status_leaves_no_hole() {
+        let said = subject_what("en", name::TASK_STATUS_CHANGED, None);
+        assert!(!said.contains('{'), "{said}");
+        assert_eq!(said, "Task status changed");
+    }
+
+    /// A fourteenth event names itself here as well, which beats a subject that says nothing.
+    #[test]
+    fn an_event_with_no_phrase_names_itself() {
+        assert_eq!(subject_what("en", "task.invented", None), "task.invented");
+    }
+
+    /// One is said its own way where a language says it its own way, and the same way where it does
+    /// not — which is most of them.
+    #[test]
+    fn a_count_of_one_is_said_the_way_the_language_says_it() {
+        assert_eq!(subject_count("en", 1), "1 update");
+        assert_eq!(subject_count("en", 4), "4 updates");
+        assert_eq!(subject_count("ja", 1), "更新 1件");
+        assert_eq!(subject_count("ja", 4), "更新 4件");
+    }
+
+    /// A language with no row of its own counts in English, rather than counting in nothing.
+    #[test]
+    fn a_language_with_no_row_counts_in_english() {
+        assert_eq!(subject_count("is", 3), subject_count("en", 3));
+        assert_eq!(subject_what("is", name::TASK_DUE, None), subject_what("en", name::TASK_DUE, None));
     }
 }

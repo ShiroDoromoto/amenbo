@@ -1077,6 +1077,29 @@ const ui = {
   "notify.say.taskDueTomorrow": "{what} is due tomorrow",
   "notify.say.unknown": "{who} acted on {what} ({event})",
   "notify.say.test": "Test message from Amenbo — this project reports here.",
+  // The subject's own vocabulary: what happened, in the fewest words that still say it. It is shorter
+  // than the sentences above on purpose — a line says who did what to which record, and a subject says
+  // only what happened, the record's ref following it.
+  // `count` is what a message carrying a burst says instead, and `countOne` is what that says at one.
+  // Every language writes both: where a numeral changes nothing — which is most of them outside Europe
+  // — the two are the same words, and saying so here is what keeps a correction to one from leaving the
+  // other behind.
+  "notify.say.subject.taskCreated": "Task created",
+  "notify.say.subject.statusChanged": "Task moved to {state}",
+  "notify.say.subject.statusChangedBare": "Task status changed",
+  "notify.say.subject.taskDone": "Task finished",
+  "notify.say.subject.taskRejected": "Task decided against",
+  "notify.say.subject.taskAssigned": "Task reassigned",
+  "notify.say.subject.taskMoved": "Task moved",
+  "notify.say.subject.taskDeleted": "Task deleted",
+  "notify.say.subject.decisionAccepted": "Decision accepted",
+  "notify.say.subject.decisionRejected": "Decision rejected",
+  "notify.say.subject.commentAdded": "Comment added",
+  "notify.say.subject.commentRemoved": "Comment removed",
+  "notify.say.subject.taskDue": "Task due",
+  "notify.say.subject.taskDueTomorrow": "Task due tomorrow",
+  "notify.say.subject.count": "{n} updates",
+  "notify.say.subject.countOne": "{n} update",
 };
 
 // code → template (`{name}` interpolated from the error's fields). Only the codes whose full

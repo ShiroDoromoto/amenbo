@@ -2598,6 +2598,12 @@ const REGISTRY: &[OpSpec] = &[
     // real answers to ran a script off the network. A reading that could not tell the
     // two apart would go green over exactly that.
     //
+    // **`present: false` here has to be words that are nowhere on the window.** The input line, the
+    // output above it and Amenbo's box under it are one screen and one shot, and what parts them is
+    // the sentence the operator is given rather than the reading — so a road asking that a line it
+    // has just *sent* is not in the input line is asking for the absence of words the program then
+    // put up a row higher, which no shot of a right screen can give.
+    //
     // `on` is which pane's line is being read, named by the words a road typed into it. Left out, it
     // is the page's one pane — a road with two says which, the same way it says which one to type
     // into.

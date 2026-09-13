@@ -11,6 +11,7 @@ import {
 import { useAgentHookWiring } from "./AgentHookWiringRow";
 import { McpSetup } from "./McpSetup";
 import { PluginCrossingRow } from "../components/PluginCrossingRow";
+import { ProjectNotifySection } from "./ProjectNotifySection";
 import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
 import { invoke } from "../core/ipc";
@@ -248,6 +249,11 @@ export function ProjectSettingsScreen({
         {inTauri() && <HarnessSection projectId={projectId} onOpenMcp={onOpenMcp} />}
 
         {inTauri() && <PluginsSection projectId={projectId} />}
+
+        {/* What this project does with the device's shelf of notification targets (`AMB-D-885`) — the
+            switch, which targets carry it, what it reports. The connections themselves are the device's
+            and are written in its own settings, so nothing here asks for one. */}
+        {inTauri() && <ProjectNotifySection projectId={projectId} />}
 
         <div className="settings__section">
           <div className="settings__h">{t("projset.danger")}</div>

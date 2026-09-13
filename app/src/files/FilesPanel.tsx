@@ -24,7 +24,8 @@ import { fileUrl } from "../core/fileUrl";
 import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
-  folderEncodings, folderRead, folderSave, folderUnwatch, folderWatch, onFolderChanged,
+  folderEncodings, folderRead, folderSave, folderUnwatch, folderWatch, nextWatchTag,
+  onFolderChanged,
 } from "./folder";
 import { FileMenu } from "./FileMenu";
 import { useTrash } from "./trash";
@@ -664,14 +665,18 @@ function FileReader({
         // save then says, to somebody who asked for it.
         .catch(() => {});
     };
+    // Which mount of this column is asking. The tree in the rail watches the same folder, and a
+    // reader closing the file they had open is not the tree letting go of it (`./folder`,
+    // `AMB-T-4823`).
+    const tag = nextWatchTag();
     // Subscribed before the watch is asked for, the same order the tree takes: the first thing the
     // folder does could happen while the host is still walking it.
     const listening = onFolderChanged((changes) => { if (alive && changes.root === root) look(); });
-    void folderWatch(projectId, root).catch(() => {});
+    void folderWatch(projectId, root, "file", tag).catch(() => {});
     return () => {
       alive = false;
       void listening.then((stop) => stop());
-      void folderUnwatch(root);
+      void folderUnwatch(root, "file", tag);
     };
   }, [projectId, root, path.join("/"), tracked, asked]);
 

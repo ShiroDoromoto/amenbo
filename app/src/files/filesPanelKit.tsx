@@ -34,6 +34,9 @@ const hoisted = vi.hoisted(() => ({
    *  what names its own folder, so a stand-in that kept only the last would answer for one section
    *  and drop the news of every other. */
   takers: [] as ((changes: FolderChangesDto) => void)[],
+  // Every watch put up and taken down, in order — who asked, and which mount of them.
+  watchers: [] as { how: "watch" | "unwatch"; root: string; watcher: string; tag: number }[],
+  tags: 0,
   watching: { root: "", capped: false, unwatched: false, gone: false } as FolderChangesDto,
   /** What one named folder answers with, where a test gives several folders different news. */
   perRoot: {} as Record<string, FolderChangesDto>,
@@ -153,11 +156,21 @@ vi.mock("@tauri-apps/api/webview", () => ({
 }));
 
 vi.mock("./folder", () => ({
-  folderWatch: async (projectId: number, root: string): Promise<FolderChangesDto> => {
+  nextWatchTag: () => { hoisted.tags += 1; return hoisted.tags; },
+  // The part of the face and the mount of it are recorded too: what a watch is taken down for is
+  // the whole of what `AMB-T-4823` turned on, and a road that only saw the folder could not tell
+  // the tree letting go from the column letting go.
+  folderWatch: async (
+    projectId: number, root: string, watcher: string, tag: number,
+  ): Promise<FolderChangesDto> => {
     hoisted.asked.push(`watch:${projectId}:${root}`);
+    hoisted.watchers.push({ how: "watch", root, watcher, tag });
     return hoisted.perRoot[root] ?? hoisted.watching;
   },
-  folderUnwatch: async (root: string) => { hoisted.asked.push(`unwatch:${root}`); },
+  folderUnwatch: async (root: string, watcher: string, tag: number) => {
+    hoisted.asked.push(`unwatch:${root}`);
+    hoisted.watchers.push({ how: "unwatch", root, watcher, tag });
+  },
   folderGitStatus: async (_projectId: number, root: string): Promise<GitEntryDto[]> => {
     hoisted.asked.push(`git:${root}`);
     return hoisted.git[root] ?? [];
@@ -620,6 +633,7 @@ export async function drawOpen(props: Partial<Props> = {}) {
 
 beforeEach(() => {
   hoisted.asked = [];
+  hoisted.watchers = [];
   hoisted.editing = [];
   hoisted.shown = [];
   hoisted.typing = null;

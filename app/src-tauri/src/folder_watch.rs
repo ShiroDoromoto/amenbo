@@ -95,11 +95,29 @@ enum Wake {
 #[derive(Default)]
 pub struct FolderWatches(Mutex<HashMap<String, Live>>);
 
-/// A watch that is up — or rather the one thing holding it up: the flag its thread reads to learn
-/// that it is not. Dropping this is how a watch is taken down, which is what makes replacing the
-/// entry in the registry enough.
+/// Which mount of which part of which window asked for a watch: the window's own label, the name
+/// the part goes by, and the count that tells one mount of it from the next ([`Live::askers`]).
+type Who = (String, String, u64);
+
+/// A watch that is up: the flag its thread reads to learn that it is not, and who it is up for.
+///
+/// **More than one part of one face watches the same folder.** The tree in the rail and the column
+/// reading a file are both about a bound folder, and they come and go on their own — a reader who
+/// closes the file they had open would otherwise take down the watch the tree is still listening
+/// to, and the tree would go on drawing what the folder held at that moment with nothing left to
+/// tell it otherwise (`AMB-T-4823`). So the askers are counted, and the watch comes down when the
+/// last of them leaves rather than when the first one says so.
+///
+/// **The count in a `Who` is which mount asked, not who asked.** A part that remounts asks again
+/// and lets its old mount go, and the two messages reach the host in either order: answering to
+/// the name alone, the older one would take down the watch the newer one had just put up. The
+/// count is the asker's own, so a window reloaded starts it again and writes over what the page
+/// before it left — which is what keeps this list as short as the number of places that watch,
+/// rather than as long as the number of times they have been drawn.
 struct Live {
     stop: Arc<AtomicBool>,
+    /// The mounts this watch is up for, by the part of the face that asked.
+    askers: HashMap<(String, String), u64>,
 }
 
 impl Drop for Live {
@@ -108,12 +126,54 @@ impl Drop for Live {
     }
 }
 
+impl FolderWatches {
+    /// Put an asker on a folder's watch. Answers with the flag a new thread is to read, or nothing
+    /// where one is already running — a second asker is one more listener, not one more walk of
+    /// the tree, and every window hears what the one thread says ([`told`]).
+    fn joined(&self, root: &str, who: Who) -> Option<Arc<AtomicBool>> {
+        let (label, part, tag) = who;
+        let mut registry = self.0.lock().expect("the watch registry");
+        if let Some(live) = registry.get_mut(root) {
+            live.askers.insert((label, part), tag);
+            return None;
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        registry.insert(
+            root.to_string(),
+            Live { stop: Arc::clone(&stop), askers: HashMap::from([((label, part), tag)]) },
+        );
+        Some(stop)
+    }
+
+    /// Take an asker off a folder's watch, and the watch down with the last of them.
+    ///
+    /// **A mount that has already been replaced takes nothing down.** What is up belongs to
+    /// whoever asked last, and a message carrying any other count is one whose sender is gone.
+    fn left(&self, root: &str, who: &Who) {
+        let (label, part, tag) = who;
+        let mut registry = self.0.lock().expect("the watch registry");
+        let Some(live) = registry.get_mut(root) else { return };
+        let named = (label.clone(), part.clone());
+        if live.askers.get(&named) != Some(tag) {
+            return;
+        }
+        live.askers.remove(&named);
+        if live.askers.is_empty() {
+            registry.remove(root);
+        }
+    }
+}
+
 /// Start watching one of a project's folders and answer with what is in it now.
 ///
-/// Asking again for the same folder is not a second watch: the one that is up is taken down first,
-/// so a face that remounts (a language change rebuilds the interface) leaves nothing behind it.
+/// Asking again for a folder that is already watched is not a second watch: the asker is written
+/// down beside the one that is up, and what the thread finds is told to every window ([`told`]).
 /// **Asking for a different folder adds one**, since a project's folders are drawn side by side and
 /// each of them moves on its own (`AMB-D-778`).
+///
+/// `watcher` is the part of the face asking — the tree, the column reading a file — and `tag` is
+/// which mount of it. Both come back in [`folder_unwatch`], and neither is the host's to guess:
+/// the window is, which is why it is taken here rather than sent ([`Live`]).
 ///
 /// A folder that is not there is refused here rather than answered for: what a face draws for one
 /// it cannot find is a question about a folder it already knows the project is bound to. A folder
@@ -122,9 +182,12 @@ impl Drop for Live {
 #[tauri::command]
 pub fn folder_watch(
     app: tauri::AppHandle,
+    window: tauri::Window,
     watches: tauri::State<'_, FolderWatches>,
     project_id: i64,
     root: String,
+    watcher: String,
+    tag: u64,
 ) -> Result<FolderChangesDto, CmdError> {
     let dir = crate::folder_fence::root_of(project_id, &root)?;
     let scan = crate::folder_walk::scan(&dir);
@@ -136,21 +199,32 @@ pub fn folder_watch(
         gone: false,
     };
 
-    let stop = Arc::new(AtomicBool::new(false));
-    let live = Live { stop: Arc::clone(&stop) };
-    // This folder's old watch comes down as its `Live` is dropped, and no other folder's is touched.
-    watches.0.lock().expect("the watch registry").insert(root, live);
+    let Some(stop) = watches.joined(&root, (window.label().to_string(), watcher, tag)) else {
+        // One is already running on this folder. The walk above is still what this asker is
+        // answered with: what it wants is the folder as it stands now, not as it stood when
+        // somebody else asked.
+        return Ok(first);
+    };
 
     let held = first.clone();
     std::thread::spawn(move || run(&dir, held, &stop, &|changes| told(&app, changes)));
     Ok(first)
 }
 
-/// Stop watching one folder. The face calls this for each folder it drew as it goes away; the
-/// others keep running, and asking for the same folder again replaces its watch rather than this.
+/// Stop watching one folder, for the one mount that is saying so.
+///
+/// The face calls this for each folder each of its parts drew as that part goes away. The watch
+/// itself comes down only with the last asker, and a mount that has already been replaced takes
+/// nothing down ([`Live`]) — the two are what keep one part of the face from blinding another.
 #[tauri::command]
-pub fn folder_unwatch(watches: tauri::State<'_, FolderWatches>, root: String) {
-    watches.0.lock().expect("the watch registry").remove(&root);
+pub fn folder_unwatch(
+    window: tauri::Window,
+    watches: tauri::State<'_, FolderWatches>,
+    root: String,
+    watcher: String,
+    tag: u64,
+) {
+    watches.left(&root, &(window.label().to_string(), watcher, tag));
 }
 
 /// The thread behind one watch: install, wait, scan, tell — until the flag says the face has gone.
@@ -502,6 +576,12 @@ mod tests {
         assert!(woken, "a write under the root is what the watch is for");
     }
 
+    /// One window, one part of it, one mount of that part — what a `Who` is built out of in these
+    /// tests, where the window is the only one there is.
+    fn who(part: &str, tag: u64) -> Who {
+        ("main".to_string(), part.to_string(), tag)
+    }
+
     /// Taking one folder's watch down is that folder's own business: what stops is its thread, and
     /// the others go on. Dropping the entry is the whole of the mechanism, which is why the
     /// registry holds one per folder rather than one for the app.
@@ -510,31 +590,77 @@ mod tests {
         let watches = FolderWatches::default();
         let mut flags = HashMap::new();
         for root in ["/work/repo", "/work/plugins"] {
-            let stop = Arc::new(AtomicBool::new(false));
-            flags.insert(root, Arc::clone(&stop));
-            watches.0.lock().expect("the registry").insert(root.to_string(), Live { stop });
+            let stop = watches.joined(root, who("tree", 1)).expect("the first asker starts one");
+            flags.insert(root, stop);
         }
 
-        watches.0.lock().expect("the registry").remove("/work/repo");
+        watches.left("/work/repo", &who("tree", 1));
         assert!(flags["/work/repo"].load(Ordering::Relaxed), "the one taken down stops");
         assert!(!flags["/work/plugins"].load(Ordering::Relaxed), "the other one does not");
         assert_eq!(watches.0.lock().expect("the registry").len(), 1);
     }
 
-    /// Asking again for a folder that is already watched replaces its watch instead of laying a
-    /// second one over it — the face that remounts is the same face looking at the same folder.
+    /// Asking again for a folder that is already watched lays no second watch over it — the same
+    /// thread is already telling every window what that folder does ([`told`]).
     #[test]
-    fn asking_again_for_a_folder_replaces_its_watch() {
+    fn asking_again_for_a_folder_adds_no_second_watch() {
         let watches = FolderWatches::default();
-        let first = Arc::new(AtomicBool::new(false));
-        let second = Arc::new(AtomicBool::new(false));
-        let mut registry = watches.0.lock().expect("the registry");
-        registry.insert("/work/repo".to_string(), Live { stop: Arc::clone(&first) });
-        registry.insert("/work/repo".to_string(), Live { stop: Arc::clone(&second) });
+        assert!(watches.joined("/work/repo", who("tree", 1)).is_some(), "the first starts one");
+        assert!(watches.joined("/work/repo", who("file", 1)).is_none(), "the second joins it");
+        assert_eq!(watches.0.lock().expect("the registry").len(), 1);
+    }
 
-        assert!(first.load(Ordering::Relaxed), "the one that was up is told to stop");
-        assert!(!second.load(Ordering::Relaxed));
-        assert_eq!(registry.len(), 1);
+    /// The whole of what `AMB-T-4823` was: the column reading a file and the tree in the rail watch
+    /// the same folder, and a reader closing the file took the tree's watch down with it. Nothing
+    /// then woke the tree — it went on drawing what the folder held at that moment, and only
+    /// folding a folder shut and opening it again put the rows right.
+    #[test]
+    fn one_part_of_the_face_letting_go_leaves_the_others_watching() {
+        let watches = FolderWatches::default();
+        let stop = watches.joined("/work/repo", who("tree", 1)).expect("the tree starts one");
+        assert!(watches.joined("/work/repo", who("file", 1)).is_none());
+
+        watches.left("/work/repo", &who("file", 1));
+        assert!(!stop.load(Ordering::Relaxed), "the tree is still looking at this folder");
+        assert_eq!(watches.0.lock().expect("the registry").len(), 1);
+
+        watches.left("/work/repo", &who("tree", 1));
+        assert!(stop.load(Ordering::Relaxed), "the last one out takes the watch down");
+        assert!(watches.0.lock().expect("the registry").is_empty());
+    }
+
+    /// A part that remounts asks again and lets its old mount go, and the two messages arrive in
+    /// whichever order the host gets to them. Answering to the name alone, the older one would take
+    /// down the watch the newer one had just put up.
+    #[test]
+    fn a_mount_that_has_been_replaced_takes_nothing_down() {
+        let watches = FolderWatches::default();
+        let stop = watches.joined("/work/repo", who("tree", 1)).expect("the first mount starts one");
+        // The new mount asks before the old one has been let go of.
+        assert!(watches.joined("/work/repo", who("tree", 2)).is_none());
+
+        watches.left("/work/repo", &who("tree", 1));
+        assert!(!stop.load(Ordering::Relaxed), "the mount that is drawn is still watching");
+        assert_eq!(watches.0.lock().expect("the registry").len(), 1);
+
+        watches.left("/work/repo", &who("tree", 2));
+        assert!(stop.load(Ordering::Relaxed));
+    }
+
+    /// Two windows drawing the same folder are two askers, not one said twice: one of them closing
+    /// is not the other one closing.
+    #[test]
+    fn two_windows_on_one_folder_are_two_askers() {
+        let watches = FolderWatches::default();
+        let stop = watches
+            .joined("/work/repo", ("main".to_string(), "tree".to_string(), 1))
+            .expect("the first window starts one");
+        assert!(watches
+            .joined("/work/repo", ("talk".to_string(), "tree".to_string(), 1))
+            .is_none());
+
+        watches.left("/work/repo", &("main".to_string(), "tree".to_string(), 1));
+        assert!(!stop.load(Ordering::Relaxed), "the other window is still drawing it");
     }
 
     /// A folder that is removed is not a folder with nothing in it, and the difference is the

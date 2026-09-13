@@ -694,13 +694,20 @@ standing here and signed in with the credential standing here.
   reading that has to be able to hold it against the build on their own machine.
   Updates are turned off in the guest for the same reason.
 - **Four things have to be true before a pane opens on it**, and `up` says all
-  four: the binary is there; `~/.local/bin` is on the interactive shell's `PATH`
-  (the installer says so and does not do it, and a pane is a login *and*
-  interactive shell); onboarding is behind it and `/` is trusted, so the first
+  four: the binary is there; `~/.local/bin` is on the **end** of the interactive
+  shell's `PATH` (the installer says so and does not do it, and a pane is a login
+  *and* interactive shell); onboarding is behind it and `/` is trusted, so the first
   screen in the pane is a prompt rather than a question; and the login keychain
   holds the credential. Trust is read up the tree, which is why `/` is what is
   trusted — a run's folder is made while the run is going, and nothing here can
   be told its name in advance.
+- **The `PATH` line goes on the end, and is rewritten on every raise.** The
+  screen roads hand the guest a directory of their own in front of the `PATH` and
+  stand programs up in there under these same names, so a profile that prepended
+  `~/.local/bin` would take `claude` back and a road reading a stand-in would be
+  reading this install instead. Nothing is lost by being last: a clone carries no
+  other `claude`, and the road that wants this one stands nothing up. The line is
+  taken out before it is written, so a clone raised before it moved is corrected.
 - **`~/.claude.json` is written over whatever is there**, because the install
   leaves one of its own: a write that stood back for a file already present
   wrote nothing, and the guest asked its theme question on the pane's first

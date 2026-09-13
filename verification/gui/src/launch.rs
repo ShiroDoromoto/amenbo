@@ -99,6 +99,13 @@ fn start(exe: &Path, store: &Session) -> Result<Child, String> {
 /// answered. Nothing is taken out, because a `PATH` handed over is only a starting point: the probe
 /// is a login shell reading the operator's profile, and what that profile adds is theirs.
 ///
+/// **In front here is not in front where it counts.** What the app starts a pane as is a login *and*
+/// interactive shell, and the profile that shell reads runs after this is handed over — an operator
+/// whose profile puts `~/.local/bin` first takes the name back, and the road opens their install
+/// (measured 2026-09-14). Nothing here can hold that; what holds it is the premise refusing to
+/// stand where a name is answered from outside the run (`amenbo_verify_cli::domain::terminal`), and
+/// a machine the roads are walked on carrying its own agents behind the `PATH` it hands over.
+///
 /// A harness that could not read its own `PATH` hands over the directory alone, which is a machine
 /// with the stand-ins and nothing else — a poorer answer than the truth, and never a wrong one.
 fn tooled_path(tools: &Path) -> OsString {

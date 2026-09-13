@@ -3010,3 +3010,53 @@ pub struct StoreSignatureDto {
     /// `PRAGMA data_version`, as text.
     pub(crate) version: String,
 }
+
+/// **One connection this device can send a notification through, under a name** (`AMB-D-885`) — a row on
+/// the shelf, and what the form that opens over it starts filled in with.
+///
+/// **The credential is never here.** A Slack target's webhook URL and a mail target's SMTP password are
+/// `secret` rows — the table no road out of the store walks — and reading one back into a webview would
+/// put a copy of it in the place that decision keeps it out of. `secretSet` says whether one is held,
+/// which is all the form needs to mask the box and all the shelf needs to say the row can send.
+///
+/// It is also why the shelf's line under a Slack target's name is not its URL: two Slack targets are told
+/// apart by the name they were given (`amenbo_core::model::NotifyTarget::name`), and a mail target has a
+/// server and an account that are not secret to show instead.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyTargetDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    /// What carries the message — and which of the fields below mean anything.
+    #[ts(type = "\"slack\" | \"mail\"")]
+    pub(crate) kind: &'static str,
+    /// The name the person gave it, which is its whole identity on a project's screen.
+    pub(crate) name: String,
+    /// Does a newly created project start out pointing at this one? At most one row carries it.
+    pub(crate) is_default: bool,
+    /// The relay a mail target hands the message to. Absent on a Slack target, and on a mail one
+    /// nobody has filled in yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) smtp_host: Option<String>,
+    /// The port that relay listens on. Mail-mode.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub(crate) smtp_port: Option<i64>,
+    /// The account to authenticate as. Mail-mode.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) smtp_user: Option<String>,
+    /// The address the message is sent from. Mail-mode; absent falls back to the account.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) mail_from: Option<String>,
+    /// Whether this target holds its credential — a Slack webhook URL, a mail password. The value
+    /// itself never leaves core.
+    pub(crate) secret_set: bool,
+    /// How many projects have selected this target. It is read for the delete, which says what the
+    /// press costs before it is made; afterwards there is nobody left to ask.
+    #[ts(type = "number")]
+    pub(crate) projects_using: usize,
+}

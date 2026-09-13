@@ -5400,6 +5400,156 @@ fn refuse_update_leaving_required_unset(
     ))
 }
 
+// ───────────────────────────── the device's notification shelf ─────────────────────────────
+
+/// Shape one target into the row a screen draws (`AMB-D-885`), asking the store the two things the row
+/// itself does not carry: whether the credential is held, and how many projects have selected it.
+///
+/// The plaintext is read and thrown away here. It is the one place a face's answer is built from it, and
+/// what crosses is the `bool` — the value stays in core, where `AMB-D-884` keeps it.
+fn notify_target_row(
+    store: &Store,
+    target: &amenbo_core::model::NotifyTarget,
+) -> Result<NotifyTargetDto, CmdError> {
+    use amenbo_core::model::SecretArea;
+    Ok(NotifyTargetDto {
+        id: target.id,
+        kind: target.kind.as_str(),
+        name: target.name.clone(),
+        is_default: target.is_default,
+        smtp_host: target.smtp_host.clone(),
+        smtp_port: target.smtp_port,
+        smtp_user: target.smtp_user.clone(),
+        mail_from: target.mail_from.clone(),
+        secret_set: store
+            .secret_value(None, SecretArea::Notify, Some(target.id), notify_secret_key(target.kind))?
+            .is_some(),
+        projects_using: store.projects_using_notify_target(target.id)?.len(),
+    })
+}
+
+/// Which `secret` field a target of this kind keeps its credential under. The kind decides it, so no
+/// caller passes a key in and no face ever names one.
+fn notify_secret_key(kind: amenbo_core::model::NotifyKind) -> &'static str {
+    use amenbo_core::model::{NotifyKind, NotifyTarget};
+    match kind {
+        NotifyKind::Slack => NotifyTarget::SLACK_WEBHOOK_URL,
+        NotifyKind::Mail => NotifyTarget::SMTP_PASSWORD,
+    }
+}
+
+/// The row the shelf is drawn from, read after a write so the screen redraws from the store rather than
+/// from what it hoped it had written.
+fn notify_target_after_write(store: &Store, id: i64) -> Result<NotifyTargetDto, CmdError> {
+    let target = store
+        .notify_target(id)?
+        .ok_or_else(|| amenbo_core::Error::not_found(format!("notification target {id}")))?;
+    notify_target_row(store, &target)
+}
+
+/// **The device's shelf** (`AMB-D-885`) — every notification target, in the order they were raised.
+///
+/// It belongs to the device and to no project, so it is asked for without one and answers the same
+/// wherever the screen is standing. The connection a row shows is only the part that is not a
+/// credential; [`NotifyTargetDto`] says why.
+#[tauri::command]
+pub fn notify_targets() -> Result<Vec<NotifyTargetDto>, CmdError> {
+    let store = open_store_read()?;
+    store.notify_targets()?.iter().map(|t| notify_target_row(&store, t)).collect()
+}
+
+/// Raise a target on the shelf under a name (`AMB-D-885`). The connection is written afterwards, through
+/// [`notify_target_save`] — which is what gives the credential a row to hang off.
+///
+/// **The first one ever raised carries the default mark**, core's doing: there is nothing else it could
+/// point at. `kind` is one of the two the model declares; anything else is refused here rather than
+/// stored, so no row can exist whose kind nothing knows how to send through.
+#[tauri::command]
+pub fn notify_target_add(kind: String, name: String) -> Result<NotifyTargetDto, CmdError> {
+    let parsed = amenbo_core::model::NotifyKind::parse(&kind).ok_or_else(|| {
+        amenbo_core::Error::invalid(format!(
+            "'{kind}' is not a kind a notification target can be (slack, mail)"
+        ))
+    })?;
+    with_store_mut(|store| {
+        let target = store.notify_target_add(parsed, &name)?;
+        notify_target_row(store, &target)
+    })
+}
+
+/// Save one target's connection — the form is filled in whole, so it is written whole.
+///
+/// **The kind is the row's, never the caller's.** A mail target takes the SMTP fields and a Slack one has
+/// none, so the four are not even looked at for a Slack row: core refuses them there, and sending them
+/// anyway would make the refusal depend on what a screen happened to leave in its state.
+///
+/// `secret` is the credential — a Slack webhook URL, a mail password — and the three answers it can
+/// carry are deliberately three: absent leaves what is held alone (which is what a form full of masked
+/// boxes means when nobody typed in one), empty clears it, and a value replaces it. Where it goes is
+/// [`notify_secret_key`]'s to say.
+#[tauri::command]
+pub fn notify_target_save(
+    id: i64,
+    name: String,
+    smtp_host: Option<String>,
+    smtp_port: Option<i64>,
+    smtp_user: Option<String>,
+    mail_from: Option<String>,
+    secret: Option<String>,
+) -> Result<NotifyTargetDto, CmdError> {
+    use amenbo_core::model::{NotifyKind, SecretArea};
+    with_store_mut(|store| {
+        let kind = store
+            .notify_target(id)?
+            .ok_or_else(|| amenbo_core::Error::not_found(format!("notification target {id}")))?
+            .kind;
+        store.notify_target_rename(id, &name)?;
+        if kind == NotifyKind::Mail {
+            store.notify_target_set_mail_connection(
+                id,
+                amenbo_core::ops::notify::MailConnection {
+                    smtp_host: blank_is_unset(smtp_host),
+                    smtp_port,
+                    smtp_user: blank_is_unset(smtp_user),
+                    mail_from: blank_is_unset(mail_from),
+                },
+            )?;
+        }
+        if let Some(value) = secret {
+            let trimmed = value.trim();
+            let write = if trimmed.is_empty() { None } else { Some(trimmed) };
+            store.set_secret(None, SecretArea::Notify, Some(id), notify_secret_key(kind), write)?;
+        }
+        notify_target_after_write(store, id)
+    })
+}
+
+/// A box a person left empty is an unset field and not an empty one — the same reading the rest of the
+/// settings face takes, and what keeps `smtp_user: Some("")` (which means "authenticate as nobody") out
+/// of a row that was simply never filled in.
+fn blank_is_unset(field: Option<String>) -> Option<String> {
+    field.map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+}
+
+/// Move the default mark onto this target — where a **newly created** project starts out pointing
+/// (`AMB-D-885`). The projects already standing keep the selection they made, which is what keeps the
+/// mark from becoming a tier.
+#[tauri::command]
+pub fn notify_target_set_default(id: i64) -> Result<NotifyTargetDto, CmdError> {
+    with_store_mut(|store| {
+        let target = store.notify_target_set_default(id)?;
+        notify_target_row(store, &target)
+    })
+}
+
+/// Delete a target, and with it every project's selection of it and the credential it held. Answers with
+/// the projects that lost it, in id order — the same count the screen showed in front of the press, read
+/// once more on the way out so what is reported is what actually went.
+#[tauri::command]
+pub fn notify_target_delete(id: i64) -> Result<Vec<i64>, CmdError> {
+    with_store_mut(|store| Ok(store.notify_target_delete(id)?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

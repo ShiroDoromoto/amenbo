@@ -100,6 +100,19 @@
   --c-git-added: #2b9d5b;
   --c-git-untracked: #7d7a2c;
 
+  /* ----- what carries a notification (`AMB-D-885`) -----
+     The ground a notification target's tile is drawn on, one per kind. Off the ladder like the two
+     above and like `--c-human`: the tile says which kind a row is, and the word beside it says the
+     same, so a reader who cannot tell the grounds apart loses nothing.
+
+     They do not flip with the theme. A kind's colour is the service's own — Slack's aubergine, a
+     relay's slate — and a value that moved between themes would be a different service's colour in
+     one of them. The glyph on them is plain white for the same reason (`components.css`).
+
+     A kind added later is one line here and one glyph in `NotifyTargetsSetting`. */
+  --k-slack: #611f69;
+  --k-mail: #4e6a7d;
+
   /* ----- the step a mark takes -----
      What a colour says is what the mark asks of its reader — not what happened to produce it.
      Named after the event instead (blocked, warning, notice, error, stale, outdated) the names

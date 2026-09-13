@@ -20,6 +20,7 @@ import { DataProgressModal } from "../components/DataProgressModal";
 import { facetColor, FacetAvatar, identiconSeed } from "../components/atoms";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { asksBeforeTrash, setAsksBeforeTrash } from "../files/askBeforeTrash";
+import { NotifyTargetsSetting } from "./NotifyTargetsSetting";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { Icon } from "../components/Icon";
 
@@ -51,6 +52,16 @@ export function SettingsScreen() {
         </div>
         <LanguageSetting />
         <DefaultViewSetting />
+      </Category>
+
+      {/* The device's shelf of notification targets (`AMB-D-885`). It is here and not in a project's
+          settings because a connection is the device's: a project selects from this shelf rather than
+          holding a webhook of its own, so a URL that changes is one edit. What a project does with the
+          shelf — on or off, which targets, which of the thirteen it reports — is the project's own
+          screen. */}
+      <Category title={t("settings.notifyTargets")}>
+        <span className="settings__fine">{t("settings.notifyTargetsNote")}</span>
+        <NotifyTargetsSetting />
       </Category>
 
       {/* The file panel's own question. It is here rather than beside the panel because the only other

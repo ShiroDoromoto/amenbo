@@ -262,7 +262,7 @@ export function TerminalPane({
   const send = async () => {
     if (live === null || written === "") return;
     try {
-      await sendIntoTerminal(live, written);
+      await sendIntoTerminal(live, written, inPane);
     } catch (e: unknown) {
       // The terminal having ended between the writing and the send is the whole of what this can be.
       // What was written stays in the box: it did not go, and a box emptied on a refusal would have
@@ -556,189 +556,200 @@ export function TerminalPane({
       data-hand={frame}
       onMouseDown={pressedOn}
     >
-      {/* What is said about this terminal, and the one control the place has. They share the row
-          because the row is what is said about this pane, and removing it is the last thing there is
-          to say. The control is drawn whether or not anything is running: a frame kept from the last
-          run has no session and is still a place somebody has to be able to get rid of. */}
-      <div className="slot__bar">
-        {/* The line above the pane, which is empty until there is a session to say something about
-            — and holds the row's width open either way, so the control does not walk across it.
-            It stays up while a name is being typed in its place, out of sight rather than out of
-            the page: what draws it was put there once and lives longer than any one naming
-            (`../talk/plate`). */}
-        <div className={`slot__plate${naming ? " slot__plate--behind" : ""}`} ref={labelRef} />
-        {/* Where the name is typed, standing in the line's own place. Enter is the word taken and
-            Escape is the row left as it was; leaving the box is the same as Escape, because a
-            reader who has gone somewhere else has not said what to call this pane. */}
-        {naming && (
-          <input
-            ref={nameField}
-            className="slot__rename"
-            defaultValue={names.get(frame) ?? ""}
-            autoFocus
-            aria-label={t("face.rename")}
-            {...asTyped}
-            onKeyDown={(e) => {
-              if (isEnterSubmit(e)) {
-                e.preventDefault();
-                const text = e.currentTarget.value.trim();
-                // A person's word is the last one on a frame, and an empty box is not a word: it
-                // would otherwise take the name off a pane the agent had named (`../talk/frames`).
-                if (text) onName(frame, text, "person");
-                setNaming(false);
-              }
-              if (e.key === "Escape") setNaming(false);
-            }}
-            onBlur={() => setNaming(false)}
-          />
-        )}
-        {/* What the row can do besides end the place. It is a menu rather than a row of buttons so
-            that a face split four ways does not draw the same button four times over.
+      {/* Everything this pane is, in one frame — the name row, the terminal, the box a line is
+          written in, and the model row. It is the frame and not the terminal that says where the
+          keyboard is (`../styles/global.css`): the box and the model row are as much what a press
+          is answering to as the terminal is, and a mark drawn around the terminal alone left them
+          outside it.
 
-            **It is drawn only while a terminal is running**, and it is the one way in to naming a
-            pane (`AMB-D-838`) — so an empty frame has no name. A place nobody has opened anything in
-            is a place there is nothing to call. */}
-        {live !== null && (
-          <button
-            className="slot__more"
-            title={t("face.more")}
-            aria-label={t("face.more")}
-            aria-haspopup="menu"
-            onClick={(e) => setMenuAt({ x: e.clientX, y: e.clientY })}
-          >
-            <Icon name="more" />
-          </button>
-        )}
-        <button
-          className="slot__end"
-          title={t("face.drop")}
-          aria-label={t("face.drop")}
-          onClick={() => { void drop(); }}
-        >
-          <Icon name="close" />
-        </button>
-      </div>
-      {menuAt !== null && live !== null && (
-        <Menu at={menuAt} onClose={() => setMenuAt(null)}>
-          {/* The other way in, for a reader whose file is not somewhere they can drag it from. It
-              ends where the drop ends: the path the thing is at is put in front of the agent.
-              It is two items because the machine's picker takes `directory` as a yes or a no —
-              one window cannot offer both — so the choice is made before the window opens
-              (`../core/dialog`). */}
-          <MenuItem
-            onClick={() => {
-              setMenuAt(null);
-              void pickFiles().then((paths) => handOver(live, paths));
-            }}
-          >
-            <Icon name="document" />
-            {t("files.pasteFilePath")}
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              setMenuAt(null);
-              void pickFolders().then((paths) => handOver(live, paths));
-            }}
-          >
-            <Icon name="folder" />
-            {t("files.pasteFolderPath")}
-          </MenuItem>
-          {/* Held off from the two above because it is not their kind: they hand the terminal
-              something, and this is about the place the terminal is drawn in. The row is where a
-              person names a pane, because the row is the one thing on the face that belongs to the
-              frame rather than to the session in it (`AMB-D-838`). */}
-          <MenuItem
-            apart
-            onClick={() => {
-              setMenuAt(null);
-              setNaming(true);
-            }}
-          >
-            <Icon name="pencil" />
-            {t("face.rename")}
-          </MenuItem>
-        </Menu>
-      )}
-      {/* The receiving surface, drawn over the pane while something hangs on it and never otherwise —
-          a file from the desktop, which this pane hears about itself, or a row of the panel, which
-          the face is carrying and says so (`../files/handDrag`). It takes no pointer events: what is
-          under the drag has to stay the pane, or the point being resolved would land on the surface
-          itself and the highlight would flicker itself away. */}
-      {(handing || offered) && <div className="slot__handing">{t("face.handHere")}</div>}
-      {running
-        ? (
-          <>
-            {ended && <span className="termface__note">{t("face.ended")}</span>}
-            <div className="termface__face" ref={paneRef} />
-          </>
-        )
-        : (
-          <button className="slot__open" onClick={() => setRunning(true)}>
-            {t("face.open")}
-          </button>
-        )}
-      {/* Where a person writes a line for whatever is running in this pane (`AMB-D-864`). It is the
-          app's own box rather than the program's, which is what buys undo, redo and select-all in a
-          pane whatever CLI is in it — the keys for those differ per CLI and one of them has no undo
-          at all (`AMB-T-4575`), and a textarea has all three from the browser.
-
-          **It stands under the terminal in the same column, and pushes it up.** Nothing is drawn
-          over the pane: a terminal is told how many rows it has and goes on writing into every one
-          of them, so a box covering the bottom would cover the line a program was asking a question
-          on (`AMB-D-864`).
-
-          **It is drawn while a terminal is running and does not move for the keyboard.** A box that
-          appeared when it was written in would change the pane's height at the moment a person
-          started typing, and every change of height wakes the program inside to repaint
-          (`../talk/terminal`). */}
-      {live !== null && (
-        <div className={`compose${written === "" ? "" : " compose--writing"}`}>
-          {/* Which of the two the keyboard is answering to, said as the keyboard moves rather than
-              after the fact. What it names is where a press goes, and that is the box for as long as
-              the box is the thing being typed at — an empty one included, which keeps the characters
-              and hands on the few presses it has nothing to do with (`keysHere`).
-
-              A box the keyboard has left is the other way round, whatever is written in it, and the
-              mark follows that too: the way out and a click into the terminal both take the keyboard
-              away and leave the line where it is. */}
-          <span className="compose__mark" title={t(keysHere ? "face.composeKeeps" : "face.composePasses")}>
-            <Icon
-              name={keysHere ? "pencil" : "keyboard"}
-              label={t(keysHere ? "face.composeKeeps" : "face.composePasses")}
+          The surface a drag is caught on and the menu are in here with them and belong to no row:
+          both are placed against the slot rather than laid out in it, so the frame's flow never
+          sees them and what they cover is still the whole slot. */}
+      <div className="slot__frame">
+        {/* What is said about this terminal, and the one control the place has. They share the row
+            because the row is what is said about this pane, and removing it is the last thing there is
+            to say. The control is drawn whether or not anything is running: a frame kept from the last
+            run has no session and is still a place somebody has to be able to get rid of. */}
+        <div className="slot__bar">
+          {/* The line above the pane, which is empty until there is a session to say something about
+              — and holds the row's width open either way, so the control does not walk across it.
+              It stays up while a name is being typed in its place, out of sight rather than out of
+              the page: what draws it was put there once and lives longer than any one naming
+              (`../talk/plate`). */}
+          <div className={`slot__plate${naming ? " slot__plate--behind" : ""}`} ref={labelRef} />
+          {/* Where the name is typed, standing in the line's own place. Enter is the word taken and
+              Escape is the row left as it was; leaving the box is the same as Escape, because a
+              reader who has gone somewhere else has not said what to call this pane. */}
+          {naming && (
+            <input
+              ref={nameField}
+              className="slot__rename"
+              defaultValue={names.get(frame) ?? ""}
+              autoFocus
+              aria-label={t("face.rename")}
+              {...asTyped}
+              onKeyDown={(e) => {
+                if (isEnterSubmit(e)) {
+                  e.preventDefault();
+                  const text = e.currentTarget.value.trim();
+                  // A person's word is the last one on a frame, and an empty box is not a word: it
+                  // would otherwise take the name off a pane the agent had named (`../talk/frames`).
+                  if (text) onName(frame, text, "person");
+                  setNaming(false);
+                }
+                if (e.key === "Escape") setNaming(false);
+              }}
+              onBlur={() => setNaming(false)}
             />
-          </span>
-          <textarea
-            ref={boxRef}
-            className="compose__box"
-            rows={1}
-            value={written}
-            placeholder={t("face.compose")}
-            aria-label={t("face.compose")}
-            {...asTyped}
-            onChange={(e) => onWrite(frame, e.currentTarget.value)}
-            onKeyDown={pressed}
-            onFocus={() => setTyping(true)}
-            onBlur={() => setTyping(false)}
-          />
+          )}
+          {/* What the row can do besides end the place. It is a menu rather than a row of buttons so
+              that a face split four ways does not draw the same button four times over.
+
+              **It is drawn only while a terminal is running**, and it is the one way in to naming a
+              pane (`AMB-D-838`) — so an empty frame has no name. A place nobody has opened anything in
+              is a place there is nothing to call. */}
+          {live !== null && (
+            <button
+              className="slot__more"
+              title={t("face.more")}
+              aria-label={t("face.more")}
+              aria-haspopup="menu"
+              onClick={(e) => setMenuAt({ x: e.clientX, y: e.clientY })}
+            >
+              <Icon name="more" />
+            </button>
+          )}
           <button
-            className="compose__send"
-            type="button"
-            disabled={written === ""}
-            title={sendLabel}
-            aria-label={sendLabel}
-            onClick={() => { void send(); }}
+            className="slot__end"
+            title={t("face.drop")}
+            aria-label={t("face.drop")}
+            onClick={() => { void drop(); }}
           >
-            <Icon name="arrowUp" />
+            <Icon name="close" />
           </button>
         </div>
-      )}
-      {/* Which model the program in this pane is answering on, and the press that moves it
-          (`./PaneModel`, `AMB-D-865`). It is under the box rather than over the terminal for the
-          reason the box itself is: a terminal writes into every row it was told it has.
+        {menuAt !== null && live !== null && (
+          <Menu at={menuAt} onClose={() => setMenuAt(null)}>
+            {/* The other way in, for a reader whose file is not somewhere they can drag it from. It
+                ends where the drop ends: the path the thing is at is put in front of the agent.
+                It is two items because the machine's picker takes `directory` as a yes or a no —
+                one window cannot offer both — so the choice is made before the window opens
+                (`../core/dialog`). */}
+            <MenuItem
+              onClick={() => {
+                setMenuAt(null);
+                void pickFiles().then((paths) => handOver(live, paths));
+              }}
+            >
+              <Icon name="document" />
+              {t("files.pasteFilePath")}
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                setMenuAt(null);
+                void pickFolders().then((paths) => handOver(live, paths));
+              }}
+            >
+              <Icon name="folder" />
+              {t("files.pasteFolderPath")}
+            </MenuItem>
+            {/* Held off from the two above because it is not their kind: they hand the terminal
+                something, and this is about the place the terminal is drawn in. The row is where a
+                person names a pane, because the row is the one thing on the face that belongs to the
+                frame rather than to the session in it (`AMB-D-838`). */}
+            <MenuItem
+              apart
+              onClick={() => {
+                setMenuAt(null);
+                setNaming(true);
+              }}
+            >
+              <Icon name="pencil" />
+              {t("face.rename")}
+            </MenuItem>
+          </Menu>
+        )}
+        {/* The receiving surface, drawn over the pane while something hangs on it and never otherwise —
+            a file from the desktop, which this pane hears about itself, or a row of the panel, which
+            the face is carrying and says so (`../files/handDrag`). It takes no pointer events: what is
+            under the drag has to stay the pane, or the point being resolved would land on the surface
+            itself and the highlight would flicker itself away. */}
+        {(handing || offered) && <div className="slot__handing">{t("face.handHere")}</div>}
+        {running
+          ? (
+            <>
+              {ended && <span className="termface__note">{t("face.ended")}</span>}
+              <div className="termface__face" ref={paneRef} />
+            </>
+          )
+          : (
+            <button className="slot__open" onClick={() => setRunning(true)}>
+              {t("face.open")}
+            </button>
+          )}
+        {/* Where a person writes a line for whatever is running in this pane (`AMB-D-864`). It is the
+            app's own box rather than the program's, which is what buys undo, redo and select-all in a
+            pane whatever CLI is in it — the keys for those differ per CLI and one of them has no undo
+            at all (`AMB-T-4575`), and a textarea has all three from the browser.
 
-          **It draws nothing for a pane whose program Amenbo cannot name** — the plain shell, and a
-          command the reader registered — so the row is absent rather than dead there. */}
-      {live !== null && <PaneModel frame={frame} session={live} agent={inPane} />}
+            **It stands under the terminal in the same column, and pushes it up.** Nothing is drawn
+            over the pane: a terminal is told how many rows it has and goes on writing into every one
+            of them, so a box covering the bottom would cover the line a program was asking a question
+            on (`AMB-D-864`).
+
+            **It is drawn while a terminal is running and does not move for the keyboard.** A box that
+            appeared when it was written in would change the pane's height at the moment a person
+            started typing, and every change of height wakes the program inside to repaint
+            (`../talk/terminal`). */}
+        {live !== null && (
+          <div className={`compose${written === "" ? "" : " compose--writing"}`}>
+            {/* Which of the two the keyboard is answering to, said as the keyboard moves rather than
+                after the fact. What it names is where a press goes, and that is the box for as long as
+                the box is the thing being typed at — an empty one included, which keeps the characters
+                and hands on the few presses it has nothing to do with (`keysHere`).
+
+                A box the keyboard has left is the other way round, whatever is written in it, and the
+                mark follows that too: the way out and a click into the terminal both take the keyboard
+                away and leave the line where it is. */}
+            <span className="compose__mark" title={t(keysHere ? "face.composeKeeps" : "face.composePasses")}>
+              <Icon
+                name={keysHere ? "pencil" : "keyboard"}
+                label={t(keysHere ? "face.composeKeeps" : "face.composePasses")}
+              />
+            </span>
+            <textarea
+              ref={boxRef}
+              className="compose__box"
+              rows={1}
+              value={written}
+              placeholder={t("face.compose")}
+              aria-label={t("face.compose")}
+              {...asTyped}
+              onChange={(e) => onWrite(frame, e.currentTarget.value)}
+              onKeyDown={pressed}
+              onFocus={() => setTyping(true)}
+              onBlur={() => setTyping(false)}
+            />
+            <button
+              className="compose__send"
+              type="button"
+              disabled={written === ""}
+              title={sendLabel}
+              aria-label={sendLabel}
+              onClick={() => { void send(); }}
+            >
+              <Icon name="arrowUp" />
+            </button>
+          </div>
+        )}
+        {/* Which model the program in this pane is answering on, and the press that moves it
+            (`./PaneModel`, `AMB-D-865`). It is under the box rather than over the terminal for the
+            reason the box itself is: a terminal writes into every row it was told it has.
+
+            **It draws nothing for a pane whose program Amenbo cannot name** — the plain shell, and a
+            command the reader registered — so the row is absent rather than dead there. */}
+        {live !== null && <PaneModel frame={frame} session={live} agent={inPane} />}
+      </div>
     </div>
   );
 }

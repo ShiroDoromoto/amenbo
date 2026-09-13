@@ -13,8 +13,8 @@
 // leave whatever is written (`AMB-D-876`).
 import { describe, expect, it, vi } from "vitest";
 import {
-  boxHeight, leavesForTerminal, passedOn, pressIntoTerminal, sendIntoTerminal, sendsWhatIsWritten,
-  stopsTheProgram,
+  boxHeight, leavesForTerminal, passedOn, pauseBeforeTheReturn, pressIntoTerminal, sendIntoTerminal,
+  sendsWhatIsWritten, stopsTheProgram,
 } from "./terminal";
 
 const hoisted = vi.hoisted(() => ({
@@ -37,7 +37,7 @@ describe("sending a line a person wrote", () => {
   it("pastes it, sends the return behind it, and asks for the sentence the pane may owe", async () => {
     hoisted.asked = [];
 
-    await sendIntoTerminal("session-7", "run the tests");
+    await sendIntoTerminal("session-7", "run the tests", "claude-code");
 
     expect(hoisted.asked).toEqual([
       { cmd: "pty_write", args: { session: "session-7", data: "\x1b[200~run the tests\x1b[201~" } },
@@ -49,10 +49,48 @@ describe("sending a line a person wrote", () => {
   it("keeps the newlines in one message rather than sending that many lines", async () => {
     hoisted.asked = [];
 
-    await sendIntoTerminal("session-7", "first line\nsecond line");
+    await sendIntoTerminal("session-7", "first line\nsecond line", "claude-code");
 
     expect(hoisted.asked[0]?.args.data, "the paste stopped wrapping what was written")
       .toBe("\x1b[200~first line\nsecond line\x1b[201~");
+  });
+
+  // The return still goes exactly once, and still behind the paste. What the pause changes is only
+  // when — a return inside Gemini's cushion is rewritten to a Shift-Enter, and the message the person
+  // pressed send on stays in the provider's input box (`AMB-T-4704`, `AMB-D-879`).
+  it("leaves the pane's agent its cushion before the return, and still sends one", async () => {
+    hoisted.asked = [];
+
+    const began = Date.now();
+    await sendIntoTerminal("session-7", "run the tests", "gemini-cli");
+
+    expect(Date.now() - began, "the return went inside the cushion")
+      .toBeGreaterThanOrEqual(pauseBeforeTheReturn("gemini-cli"));
+    expect(hoisted.asked.filter((one) => one.args.data === "\r"), "one return and no more")
+      .toHaveLength(1);
+    expect(hoisted.asked.map((one) => one.cmd)).toEqual(["pty_write", "pty_write", "pty_brief"]);
+  });
+});
+
+describe("how long a pane's agent is left before the return", () => {
+  it("waits for nobody the measurement found reads it straight away", () => {
+    expect(pauseBeforeTheReturn("claude-code")).toBe(0);
+    expect(pauseBeforeTheReturn("codex-cli")).toBe(0);
+  });
+
+  it("waits out the cushion of the one provider measured having one", () => {
+    expect(pauseBeforeTheReturn("gemini-cli")).toBe(50);
+  });
+
+  // A pane running no agent, one running something the reader registered themselves, and the
+  // catalogued agents nobody measured. Assuming no cushion costs them a message that does not go,
+  // and assuming one costs a twentieth of a second (`AMB-D-879`).
+  it("waits for a pane it has no measurement for, rather than assuming there is nothing to wait for", () => {
+    expect(pauseBeforeTheReturn(null)).toBe(50);
+    expect(pauseBeforeTheReturn("a-shell-somebody-registered")).toBe(50);
+    for (const id of ["github-copilot", "opencode", "cursor"]) {
+      expect(pauseBeforeTheReturn(id), id).toBe(50);
+    }
   });
 });
 

@@ -1539,6 +1539,16 @@ standing up: it is where the first run has a question to put. A profile that reb
 scratch instead of adding to it drops the directory, and that shows as the road failing to find the
 row it stood up rather than as a quiet pass.
 
+**And a name the machine already answers for is a name the run does not get.** The directory is
+handed over before the pane's shell starts and the profile is read after, so one line putting the
+operator's own `~/.local/bin` in front is the whole of it: `claude` is their install, and the
+stand-in written under that name is never reached. Nothing on the row says so — a road that only
+counts what a pane can be opened with passes either way — and what changes is every road reading a
+stand-in's own behaviour, which becomes a road about whatever that operator happens to have. So the
+premise asks, after it has written them, what a pane's own shell answers for each of those names, and
+refuses to stand where the answer is not the program it just wrote. A machine these roads are walked
+on therefore keeps its own agents *behind* the `PATH` it hands a run, never in front of it.
+
 **`models` is the second question those stand-ins answer**: how many models each of them comes back
 with when the frame asks what that agent can be started on. Left off it is none, which is a stand-in
 that says what it is and stops — the row then draws the shape a provider with no list door gives.

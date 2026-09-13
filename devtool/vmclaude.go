@@ -26,9 +26,17 @@ import (
 //
 //  1. the binary is there — at the host's own version, so the guest is not answering for a build
 //     the operator does not have;
-//  2. `~/.local/bin` is on the interactive shell's `PATH` — the installer says so and does not do
-//     it, and a pane is started as a login *and* interactive shell (`app/src-tauri/src/launch.rs`),
-//     so `~/.zshrc` is the file that decides whether the probe finds anything;
+//  2. `~/.local/bin` is on the interactive shell's `PATH`, and on the **end** of it — the installer
+//     says so and does not do it, and a pane is started as a login *and* interactive shell
+//     (`app/src-tauri/src/launch.rs`), so `~/.zshrc` is the file that decides whether the probe
+//     finds anything. The end rather than the front, because the other roads hand the guest a
+//     directory of their own in front of the `PATH` and stand programs up in it under these same
+//     names: a profile that prepended would take `claude` back, and the road reading a stand-in's
+//     behaviour would be reading this install instead (measured 2026-09-14). Nothing is lost by being
+//     last — a clone carries no other `claude`, and the road that wants this one stands nothing up.
+//     `~/.zprofile` is cleared of the same directory for the same reason: the golden carries a line
+//     putting it in front, and `/etc/zprofile`'s `path_helper` has already moved what a run handed
+//     over to the back of the `PATH` by the time either file is read;
 //  3. onboarding is behind it and the folder is trusted — otherwise the first screen in the pane is
 //     a question, not a prompt. Trust is read up the tree, so trusting `/` covers a run's
 //     throwaway folder, whose path nothing here can know in advance;
@@ -54,8 +62,13 @@ const (
 	// claudeGuestKeychain is the guest account's login keychain, named in full because a reach over
 	// ssh has to unlock it before it can be written to.
 	claudeGuestKeychain = vmGuestHome + "/Library/Keychains/login.keychain-db"
-	// claudeGuestShellRC is the file a pane's shell reads its `PATH` out of.
+	// claudeGuestShellRC is the file a pane's shell reads its `PATH` out of last, which is why the
+	// line that puts this install on the end of it goes here.
 	claudeGuestShellRC = vmGuestHome + "/.zshrc"
+	// claudeGuestProfile is the file read before it, and the golden carries a line in there putting
+	// `~/.local/bin` in *front*. It is cleared rather than written to: a front is what this whole
+	// arrangement exists to avoid.
+	claudeGuestProfile = vmGuestHome + "/.zprofile"
 )
 
 // claudeSeeded is what the guest was left holding, for the line that reports it.
@@ -146,9 +159,11 @@ const claudeGuestSettings = `{"hasCompletedOnboarding":true,"installMethod":"nat
 // guestClaude is the one reach into the guest that does all four halves, and answers with what is
 // standing there afterwards.
 //
-// Two of them are conditional and two are not. The binary is installed when the version differs and
-// the `PATH` line is appended when it is absent, so a raise onto an already seeded clone is one
-// round trip that downloads nothing.
+// Two of them are conditional and two are not. The binary is installed when the version differs, so
+// a raise onto an already seeded clone is one round trip that downloads nothing. The `PATH` line is
+// taken out and written again rather than left where it is: a clone raised before the line moved to
+// the end of the `PATH` is carrying the old one, and a raise is the only thing that would ever
+// correct it.
 //
 // **`~/.claude.json` is written every time, and written over whatever is there.** Only a file
 // already standing could be merged into, and the install puts one there itself — a first raise that
@@ -184,7 +199,8 @@ if [ "$standing" != %[2]q ]; then
 else
   echo standing
 fi
-grep -q '.local/bin' %[4]s 2>/dev/null || printf '%%s\n' 'export PATH="$HOME/.local/bin:$PATH"' >> %[4]s
+sed -i '' -e '/\.local\/bin/d' %[4]s %[11]s 2>/dev/null || true
+printf '%%s\n' 'export PATH="$PATH:$HOME/.local/bin"' >> %[4]s
 printf '%%s\n' %[6]q > %[5]s
 security unlock-keychain -p %[7]q %[8]s
 security delete-generic-password -a %[9]q -s %[10]q >/dev/null 2>&1 || true
@@ -193,7 +209,7 @@ security add-generic-password -A -a %[9]q -s %[10]q -w "$cred"
 `,
 		claudeGuestBin, version, claudeInstaller, claudeGuestShellRC,
 		claudeGuestConfig, claudeGuestSettings,
-		vmPassword, claudeGuestKeychain, vmUser, claudeService)
+		vmPassword, claudeGuestKeychain, vmUser, claudeService, claudeGuestProfile)
 }
 
 // readGuestClaude takes the script's two markers off its output: whether this raise installed

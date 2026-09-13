@@ -24,6 +24,18 @@
 //! count a road asks for is a floor, and the shape that can be stood up is "more than one thing to
 //! open with". That is the shape worth having: it is the one the first run is read on.
 //!
+//! **And a name the machine already answers for is a name the run does not get.** The directory is
+//! handed over before the shell starts and the profile is read after, so one line putting the
+//! operator's own `~/.local/bin` in front is the whole of it: `claude` is their install, and the
+//! stand-in written under that name is never reached. Nothing on the row says so — a road that
+//! counts what a pane can be opened with passes either way — and what changes is every road that
+//! reads a stand-in's own behaviour, which becomes a road about whatever that operator happens to
+//! have — a run measured on 2026-09-14 opened their real Claude Code and left it running. So the
+//! premise asks, after it has written them, what a pane's own shell answers for each of those names
+//! ([`nothing_else_answers`]) and refuses to stand where the answer is not the program it just
+//! wrote. A machine these roads are walked on therefore carries its own agents *behind* the `PATH`
+//! it hands a run, never in front of it (`devtool/vmclaude.go`).
+//!
 //! **The stand-ins answer two things, and a road says how much of the second it wants.** The first is
 //! what they were always for: a program is on the `PATH` under an agent's name, so the build finds it
 //! and draws the row. The second is the question the frame puts to an agent once it is chosen — which
@@ -61,6 +73,7 @@
 //! argument is printed on a line of its own, marked ([`ARG`]), so a road reads back the name it wrote
 //! and never a spelling belonging to one tool.
 
+use std::ffi::OsString;
 use std::path::Path;
 
 use amenbo_scenario::{Args, Domain};
@@ -272,6 +285,113 @@ fn program(command: &str, models: &[String], on: Option<&str>, exits: i64, reads
     body
 }
 
+/// The front of the catalog `count` of them is taken off, as far as the catalog goes.
+///
+/// One reading for both halves of the premise: what [`stand_up`] writes and what
+/// [`nothing_else_answers`] asks the machine about have to be the same names, or the guard would be
+/// watching a row nobody stood up.
+fn named(count: i64) -> &'static [&'static str] {
+    let want = usize::try_from(count).unwrap_or(0).min(COMMANDS.len());
+    &COMMANDS[..want]
+}
+
+/// The shell a pane is opened as, read the way the app reads it.
+///
+/// The account database rather than `SHELL`, because that is what the app asks
+/// (`app/src-tauri/src/launch.rs`): `SHELL` describes the shell of whatever session set it, and a
+/// harness reached over ssh is a session that may have set none. Asking the wrong shell would be
+/// asking about a different profile than the pane reads, and a guard that reads a different machine
+/// than the road walks is worse than no guard. `SHELL` and `/bin/sh` are what is left where the
+/// database will not answer.
+fn pane_shell() -> OsString {
+    let asked = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(
+            r#"u=$(id -un)
+s=$(getent passwd "$u" 2>/dev/null | cut -d: -f7)
+[ -n "$s" ] || s=$(dscl . -read /Users/"$u" UserShell 2>/dev/null | sed 's/^UserShell: //')
+printf '%s' "$s""#,
+        )
+        .output()
+        .ok()
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|said| !said.is_empty());
+    match asked {
+        Some(shell) => OsString::from(shell),
+        None => std::env::var_os("SHELL").unwrap_or_else(|| OsString::from("/bin/sh")),
+    }
+}
+
+/// Where this machine answers each of `named` from, asked the way a pane asks.
+///
+/// The `PATH` handed over is not the one a program in a pane runs under: a pane is a login *and*
+/// interactive shell (`app/src-tauri/src/launch.rs`), and the profile that shell reads runs after
+/// the handover. So the same shell is started here with the run's own directory in front, and what
+/// it answers is what a pane would find. Each name comes back with what `command -v` said, which is
+/// empty where nothing answered at all.
+fn answered_from(tools: &Path, named: &[&str]) -> Result<Vec<(String, String)>, String> {
+    let mut path = OsString::from(tools);
+    if let Some(inherited) = std::env::var_os("PATH") {
+        path.push(":");
+        path.push(inherited);
+    }
+    let asks: Vec<String> = named
+        .iter()
+        .map(|name| format!("printf '%s\\t%s\\n' '{name}' \"$(command -v '{name}' 2>/dev/null)\""))
+        .collect();
+    let shell = pane_shell();
+    let out = std::process::Command::new(&shell)
+        .args(["-l", "-i", "-c"])
+        .arg(asks.join("\n"))
+        .env("PATH", &path)
+        .output()
+        .map_err(|e| {
+            format!("could not ask {} what this machine answers for: {e}", shell.to_string_lossy())
+        })?;
+    let said = String::from_utf8_lossy(&out.stdout);
+    Ok(said
+        .lines()
+        .filter_map(|line| line.split_once('\t'))
+        .map(|(name, at)| (name.to_string(), at.to_string()))
+        .collect())
+}
+
+/// The names among `answers` the run did not get — what answered was written somewhere other than
+/// `tools`, or nothing answered and the run's own directory is not on the `PATH` at all.
+fn taken_from(tools: &Path, answers: &[(String, String)]) -> Vec<String> {
+    answers
+        .iter()
+        .filter(|(_, at)| !Path::new(at).starts_with(tools))
+        .map(|(name, at)| match at.is_empty() {
+            true => format!("{name}: nothing answered"),
+            false => format!("{name}: {at}"),
+        })
+        .collect()
+}
+
+/// Whether the programs just written under `tools` are the ones a pane would reach by those names.
+///
+/// This is the premise's reach, and it is a question about the machine rather than about what was
+/// written: a road reading a stand-in's own behaviour reads the operator's install instead where one
+/// stands under the same name, and reads it without anything going wrong on the way. So the failure
+/// is put here, where it names the program that won.
+fn nothing_else_answers(tools: &Path, named: &[&str]) -> Result<(), String> {
+    let taken = taken_from(tools, &answered_from(tools, named)?);
+    if taken.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "`can-start` wrote its stand-ins in {}, and a pane's own shell answers for {} of those \
+         names from somewhere else — {}. The profile that shell reads runs after the directory is \
+         handed over, so a road opening one of these would open what the operator installed: the \
+         row reads right and the program behind it is a real agent. Walk these roads on a machine \
+         that carries its own agents behind the `PATH` it hands a run, never in front of it.",
+        tools.display(),
+        taken.len(),
+        taken.join("; ")
+    ))
+}
+
 /// Put `count` of them in `tools`, each answering with `models` of them, and say what was stood up.
 ///
 /// The first of the catalog rather than a road's pick: which agents are on the row is nothing this
@@ -320,7 +440,7 @@ fn stand_up(
              and 0 (the default) is a program that ended having done what it was started for"
         ));
     }
-    let named = &COMMANDS[..want];
+    let named = named(count);
     let names = model_names(models);
     let standing = usize::try_from(on).ok().filter(|at| *at > 0).and_then(|at| names.get(at - 1));
     for command in named {
@@ -414,14 +534,12 @@ impl Driver<'_> {
                         ))
                     }
                 };
-                Ok(Outcome::action(stand_up(
-                    &self.session.tools,
-                    req_i64(with, "count")?,
-                    models,
-                    on,
-                    exits,
-                    reads,
-                )?))
+                let count = req_i64(with, "count")?;
+                let said = stand_up(&self.session.tools, count, models, on, exits, reads)?;
+                // Written is not reached. What a road opens under one of these names is whatever the
+                // pane's own shell answers for it, and an install of the same name answers first.
+                nothing_else_answers(&self.session.tools, named(count))?;
+                Ok(Outcome::action(said))
             }
             _ => Err(unmapped(Domain::Terminal, op)),
         }
@@ -725,6 +843,39 @@ mod tests {
         let session = crate::scratch::session("can-start-exits-over-test", false).expect("a session");
         let err = stand_up(&session.tools, 2, 0, 0, 256, false).expect_err("0 to 255");
         assert!(err.contains("0 to 255"), "{err}");
+    }
+
+    /// The reach the premise claims: a name written in the run's own directory is the one a pane's
+    /// own shell answers for. Asked about a name no machine carries, so what is read is the route
+    /// rather than what the operator installed.
+    #[test]
+    fn a_pane_shell_answers_from_the_run_for_a_name_nothing_installs() {
+        let session = crate::scratch::session("can-start-reach-test", false).expect("a session");
+        let name = "scenario-no-such-agent";
+        write_program(&session.tools.join(name), "#!/bin/sh\nexit 0\n").expect("it is written");
+
+        let answers = answered_from(&session.tools, &[name]).expect("the shell answers");
+
+        assert_eq!(answers.len(), 1, "one name asked, one answered: {answers:?}");
+        assert_eq!(answers[0].0, name);
+        assert_eq!(taken_from(&session.tools, &answers), Vec::<String>::new(), "{answers:?}");
+    }
+
+    /// An install of the same name is what a road would open, so it is what the premise refuses on:
+    /// the one written elsewhere and the one nothing answered for are both names the run lost.
+    #[test]
+    fn a_name_answered_from_outside_the_run_is_a_name_the_run_lost() {
+        let tools = Path::new("/tmp/a-run-of-its-own/tools");
+        let answers = vec![
+            ("claude".to_string(), "/opt/an-install-of-their-own/bin/claude".to_string()),
+            ("codex".to_string(), tools.join("codex").display().to_string()),
+            ("copilot".to_string(), String::new()),
+        ];
+
+        let taken = taken_from(tools, &answers);
+
+        let won = "claude: /opt/an-install-of-their-own/bin/claude";
+        assert_eq!(taken, vec![won, "copilot: nothing answered"]);
     }
 
     /// Started rather than asked, a stand-in prints what it was started with — one argument to a

@@ -32,12 +32,18 @@ func TestGuestClaudeScriptAsksForTheHostsVersion(t *testing.T) {
 	}
 }
 
-// TestGuestClaudeScriptAppendsThePathLineOnlyOnce covers what makes a second raise harmless: the
-// line is appended only where there is none, so a clone raised ten times has one.
-func TestGuestClaudeScriptAppendsThePathLineOnlyOnce(t *testing.T) {
+// TestGuestClaudeScriptPutsThePathLineAtTheEndAndOnlyOnce covers two things one line has to hold.
+// It is taken out before it is written, so a clone raised ten times carries one of it and a clone
+// raised before the line moved is corrected. And `~/.local/bin` goes on the end of the `PATH`: the
+// screen roads hand the guest a directory of their own in front of it and stand programs up in
+// there under these same names, so a profile that prepended would take `claude` back.
+func TestGuestClaudeScriptPutsThePathLineAtTheEndAndOnlyOnce(t *testing.T) {
 	script := guestClaudeScript("2.1.270")
-	if !strings.Contains(script, "grep -q '.local/bin' "+claudeGuestShellRC) {
-		t.Errorf("the PATH line is appended without asking whether it is already there:\n%s", script)
+	if !strings.Contains(script, "sed -i '' -e '/\\.local\\/bin/d' "+claudeGuestShellRC) {
+		t.Errorf("the PATH line is written beside whatever is already there:\n%s", script)
+	}
+	if !strings.Contains(script, `'export PATH="$PATH:$HOME/.local/bin"'`) {
+		t.Errorf("the guest's own agent goes in front of a run's own directory:\n%s", script)
 	}
 }
 

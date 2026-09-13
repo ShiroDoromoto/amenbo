@@ -823,6 +823,33 @@ export const id: Translation = {
     "detail.premiseChangedHint": "Premis yang bergerak setelah Anda memesan ini — baru disematkan, atau tidak lagi selesai (kesiapannya ditarik)",
     "detail.premiseAdded": "Disematkan setelah Anda memesan ini",
     "detail.premiseReopened": "Berhenti selesai setelah Anda memesan ini — dibuka lagi atau digantikan (tautannya lebih tua)",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who} membuat {what}",
+    "notify.say.statusChanged": "{who} mengubah {what} menjadi {state}",
+    "notify.say.statusChangedBare": "{who} mengubah status {what}",
+    "notify.say.taskDone": "{who} menyelesaikan {what}",
+    "notify.say.taskRejected": "{who} memutuskan tidak mengerjakan {what}",
+    "notify.say.taskAssigned": "{who} menugaskan {what} ke {state}",
+    "notify.say.taskAssignedBare": "{who} menugaskan {what}",
+    "notify.say.taskMoved": "{who} memindahkan {what} ke {state}",
+    "notify.say.taskMovedBare": "{who} memindahkan {what} ke proyek lain",
+    "notify.say.taskDeleted": "{who} menghapus {what}",
+    "notify.say.decisionAccepted": "{who} menerima {what}",
+    "notify.say.decisionRejected": "{who} menolak {what}",
+    "notify.say.commentAdded": "{who} mengomentari {what}",
+    "notify.say.commentAddedBare": "{who} menambahkan {what}",
+    "notify.say.commentRemoved": "{who} menarik komentar pada {what}",
+    "notify.say.commentRemovedBare": "{who} menarik {what}",
+    "notify.say.taskDue": "{what} sudah jatuh tempo",
+    "notify.say.taskDueTomorrow": "{what} jatuh tempo besok",
+    "notify.say.unknown": "{who} melakukan sesuatu pada {what} ({event})",
+    "notify.say.test": "Pesan uji dari Amenbo — proyek ini melapor ke sini.",
   },
 
   err: {

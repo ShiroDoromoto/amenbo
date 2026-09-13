@@ -1020,6 +1020,33 @@ const ui = {
   "detail.premiseChangedHint": "Premises that moved after you reserved this — pinned on, or no longer settled (readiness withdrawn)",
   "detail.premiseAdded": "Pinned on after you reserved this",
   "detail.premiseReopened": "Stopped being settled after you reserved this — reopened or superseded (the link is older)",
+  // What a notification says one event was, said the same way to every carrier a project reports
+  // through. Four slots and never more: who drove the write, which record it was, the second thing the
+  // event names (a status, an assignee, a project), and the event's own name where there are no words
+  // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+  //
+  // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+  // and the `Bare` one is what is said when it did not arrive.
+  "notify.say.taskCreated": "{who} created {what}",
+  "notify.say.statusChanged": "{who} moved {what} to {state}",
+  "notify.say.statusChangedBare": "{who} moved {what}",
+  "notify.say.taskDone": "{who} finished {what}",
+  "notify.say.taskRejected": "{who} decided against {what}",
+  "notify.say.taskAssigned": "{who} assigned {what} to {state}",
+  "notify.say.taskAssignedBare": "{who} assigned {what}",
+  "notify.say.taskMoved": "{who} moved {what} into {state}",
+  "notify.say.taskMovedBare": "{who} moved {what} to another project",
+  "notify.say.taskDeleted": "{who} deleted {what}",
+  "notify.say.decisionAccepted": "{who} accepted {what}",
+  "notify.say.decisionRejected": "{who} rejected {what}",
+  "notify.say.commentAdded": "{who} added a comment on {what}",
+  "notify.say.commentAddedBare": "{who} added {what}",
+  "notify.say.commentRemoved": "{who} took back a comment on {what}",
+  "notify.say.commentRemovedBare": "{who} took back {what}",
+  "notify.say.taskDue": "{what} is due",
+  "notify.say.taskDueTomorrow": "{what} is due tomorrow",
+  "notify.say.unknown": "{who} acted on {what} ({event})",
+  "notify.say.test": "Test message from Amenbo — this project reports here.",
 };
 
 // code → template (`{name}` interpolated from the error's fields). Only the codes whose full

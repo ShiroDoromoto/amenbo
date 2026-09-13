@@ -858,6 +858,33 @@ export const uk: Translation = {
     "detail.premiseChangedHint": "Засади, що зрушили після вашого резервування — щойно прикріплені або вже не вирішені (готовність відкликано)",
     "detail.premiseAdded": "Прикріплено після вашого резервування",
     "detail.premiseReopened": "Перестало бути вирішеним після вашого резервування — відкрито знову або замінено (зв'язок старіший)",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who} створив {what}",
+    "notify.say.statusChanged": "{who} перевів {what} у статус {state}",
+    "notify.say.statusChangedBare": "{who} змінив статус {what}",
+    "notify.say.taskDone": "{who} завершив {what}",
+    "notify.say.taskRejected": "{who} вирішив не робити {what}",
+    "notify.say.taskAssigned": "{who} призначив {state} відповідальним за {what}",
+    "notify.say.taskAssignedBare": "{who} призначив відповідального за {what}",
+    "notify.say.taskMoved": "{who} перемістив {what} до {state}",
+    "notify.say.taskMovedBare": "{who} перемістив {what} до іншого проєкту",
+    "notify.say.taskDeleted": "{who} видалив {what}",
+    "notify.say.decisionAccepted": "{who} прийняв {what}",
+    "notify.say.decisionRejected": "{who} відхилив {what}",
+    "notify.say.commentAdded": "{who} прокоментував {what}",
+    "notify.say.commentAddedBare": "{who} додав {what}",
+    "notify.say.commentRemoved": "{who} відкликав коментар до {what}",
+    "notify.say.commentRemovedBare": "{who} відкликав {what}",
+    "notify.say.taskDue": "Термін {what} настав",
+    "notify.say.taskDueTomorrow": "Термін {what} — завтра",
+    "notify.say.unknown": "{who} щось зробив з {what} ({event})",
+    "notify.say.test": "Тестове повідомлення від Amenbo — цей проєкт звітує сюди.",
   },
 
   err: {

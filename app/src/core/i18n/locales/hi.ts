@@ -821,6 +821,33 @@ export const hi: Translation = {
     "detail.premiseChangedHint": "वे आधार जो आपके आरक्षित करने के बाद हिले — नए जुड़े, या अब तय नहीं रहे (तैयारी वापस ले ली गई)",
     "detail.premiseAdded": "आपके आरक्षित करने के बाद जोड़ा गया",
     "detail.premiseReopened": "आपके आरक्षित करने के बाद तय नहीं रहा — फिर खोला गया या अधिक्रमित हुआ (कड़ी उससे पुरानी है)",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who} ने {what} बनाया",
+    "notify.say.statusChanged": "{who} ने {what} को {state} किया",
+    "notify.say.statusChangedBare": "{who} ने {what} की स्थिति बदली",
+    "notify.say.taskDone": "{who} ने {what} पूरा किया",
+    "notify.say.taskRejected": "{who} ने {what} न करने का तय किया",
+    "notify.say.taskAssigned": "{who} ने {what} {state} को सौंपा",
+    "notify.say.taskAssignedBare": "{who} ने {what} सौंपा",
+    "notify.say.taskMoved": "{who} ने {what} को {state} में डाला",
+    "notify.say.taskMovedBare": "{who} ने {what} को दूसरे प्रोजेक्ट में डाला",
+    "notify.say.taskDeleted": "{who} ने {what} मिटाया",
+    "notify.say.decisionAccepted": "{who} ने {what} स्वीकार किया",
+    "notify.say.decisionRejected": "{who} ने {what} अस्वीकार किया",
+    "notify.say.commentAdded": "{who} ने {what} पर टिप्पणी की",
+    "notify.say.commentAddedBare": "{who} ने {what} जोड़ा",
+    "notify.say.commentRemoved": "{who} ने {what} पर की टिप्पणी वापस ली",
+    "notify.say.commentRemovedBare": "{who} ने {what} वापस लिया",
+    "notify.say.taskDue": "{what} की समय-सीमा आ गई है",
+    "notify.say.taskDueTomorrow": "{what} की समय-सीमा कल है",
+    "notify.say.unknown": "{who} ने {what} पर कुछ किया ({event})",
+    "notify.say.test": "Amenbo से परीक्षण संदेश — यह प्रोजेक्ट यहीं बताएगा।",
   },
 
   err: {

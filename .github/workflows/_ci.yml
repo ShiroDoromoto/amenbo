@@ -1068,7 +1068,7 @@ jobs:
           guards/check-prose.sh
 
   tree-guards:
-    name: Tree guards (internal-note refs, test prose, CLI shim, change scopes, CLI name, product name, sidecar name, dev self-update, TS derive, GUI inputs, token contrast)
+    name: Tree guards (internal-note refs, test prose, CLI shim, change scopes, CLI name, product name, sidecar name, dev self-update, TS derive, GUI inputs, token contrast, notification wording)
     runs-on: ubuntu-latest
     # Backstop for the local pre-commit hook, which runs the first two scans over
     # staged additions only. All have fixed patterns — no secret needed. The rest
@@ -1146,6 +1146,19 @@ jobs:
         run: |
           chmod +x guards/check-token-contrast.sh
           guards/check-token-contrast.sh
+
+      # The one guard here that runs a generator rather than a scan, so it wants the node the
+      # generator is written for — the dictionaries are TypeScript, and an older node reads them as
+      # syntax errors rather than as modules. The guard skips quietly with no node at all, so without
+      # this it would pass by not running.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Assert the baked notification wording is what the dictionaries generate
+        run: |
+          chmod +x guards/check-notify-wording-fresh.sh
+          guards/check-notify-wording-fresh.sh
 
   # The one check the merge target requires. Every job above feeds it, so its verdict is the whole
   # workflow's verdict — and what the ruleset pins is a single name that does not move when a job is

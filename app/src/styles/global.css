@@ -491,9 +491,9 @@ input[type="color"] {
    `flex: 0 0 auto` is what makes the terminal above give the room up, since that one is `flex: 1`. */
 .compose {
   flex: 0 0 auto;
-  /* The two marks sit on the last line rather than in the middle of the box: once what is written
-     runs to several lines, a send button floating halfway up the sentence reads as belonging to the
-     line beside it. */
+  /* The send button sits on the last line rather than in the middle of the box: once what is
+     written runs to several lines, a button floating halfway up the sentence reads as belonging to
+     the line beside it. */
   display: flex; align-items: flex-end; gap: var(--s-2);
   padding: var(--s-1) var(--s-2);
   /* **No edge of its own, written in or not.** What tells this box from the terminal above it is

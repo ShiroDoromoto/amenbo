@@ -4397,9 +4397,12 @@ impl Instructor {
                     req(with, "below")?
                 )
             }
-            // Which box the keyboard is in, read off the mark at the box's left. The two marks are
-            // described rather than named: which one is drawn is the whole reading, and the words in
-            // their tooltips are the interface's own in whatever language the machine is set to.
+            // Which box the keyboard is in, read off the caret the box carries. Nothing stands beside
+            // the box to say it: the box holds the caret for as long as the keyboard is in it, and the
+            // press on the band under it draws one picture in both states
+            // (`app/src/shell/TerminalPane.tsx`). A caret is dark for half of every second, so both
+            // halves ask for a second's watching rather than a glance — the absent half above all,
+            // where a blink and nothing at all look the same.
             (Domain::Terminal, "keys-in-the-box") => {
                 let pane = match arg_str(with, "on") {
                     Some(on) => format!("the pane showing \"{on}\""),
@@ -4407,10 +4410,10 @@ impl Instructor {
                 };
                 match present(with) {
                     true => format!(
-                        "Under {pane}, look at the mark at the left-hand end of the box below the terminal — the one on the box's own row, and not the press on the band under it, which draws the same two pictures: confirm it is the one drawn for a box that keeps what is typed — the writing mark, not the keyboard one the other box carries. That mark is the box saying it has the keyboard, so a person typing now would be writing there."
+                        "Under {pane}, look into the box below the terminal for the caret — the upright line that blinks where the next character would land. Confirm it is standing there, watching for a second or two rather than glancing, since a caret is dark half the time. The caret is the box saying it has the keyboard, so a person typing now would be writing there."
                     ),
                     false => format!(
-                        "Under {pane}, look at the mark at the left-hand end of the box below the terminal — the one on the box's own row, and not the press on the band under it, which draws the same two pictures: confirm it is the one drawn for a box that hands presses on — the keyboard mark. The keyboard is somewhere else, so what is typed now does not go into that box."
+                        "Under {pane}, look into the box below the terminal and confirm no caret is standing in it — nothing blinking where a character would land, watched for a second or two rather than glanced at, since a caret between blinks looks like none at all. The keyboard is somewhere else, so what is typed now does not go into that box. Whatever is already written in the box stays where it was and is not this reading."
                     ),
                 }
             }
@@ -9795,12 +9798,12 @@ steps_gui:
         );
     }
 
-    /// Which box the keyboard is in, read off the mark beside it and read on both boxes. The pane is
+    /// Which box the keyboard is in, read off the caret in it and read on both boxes. The pane is
     /// named the way every other reading of a box names one, and the step settles nothing by itself:
-    /// the two marks are one glyph apiece and a shot's reading has no word to look for, so it is left
-    /// to an eye like the other readings that part two things on one screen.
+    /// a caret is a line a pixel wide that blinks, and a shot's reading has no word to look for, so
+    /// it is left to an eye like the other readings that part two things on one screen.
     #[test]
-    fn which_box_has_the_keyboard_is_read_off_its_mark_by_an_eye() {
+    fn which_box_has_the_keyboard_is_read_off_its_caret_by_an_eye() {
         let s = load(
             r#"
 id: sample
@@ -9819,17 +9822,18 @@ steps_gui:
         let steps = s.steps(Driver::Gui);
         let has = Instructor::new().render(&steps[0]).unwrap();
         assert!(
-            has.contains("SCENARIO the pane pressed") && has.contains("keeps what is typed"),
-            "the box named is the pane's, and the mark read is the one for a box that holds it: {has}"
+            has.contains("SCENARIO the pane pressed") && has.contains("Confirm it is standing there"),
+            "the box named is the pane's, and what is read is the caret standing in it: {has}"
         );
         let has_not = Instructor::new().render(&steps[1]).unwrap();
         assert!(
-            has_not.contains("SCENARIO the pane left behind") && has_not.contains("hands presses on"),
-            "and the other half reads the other mark on the other pane: {has_not}"
+            has_not.contains("SCENARIO the pane left behind")
+                && has_not.contains("confirm no caret is standing in it"),
+            "and the other half reads the same caret away on the other pane: {has_not}"
         );
         assert!(
             Instructor::new().expectation(&steps[0]).is_none(),
-            "left to an eye: a mark is a glyph, and there is no word on the screen to read it by",
+            "left to an eye: a caret is a blinking line, and there is no word on the screen to read it by",
         );
     }
 

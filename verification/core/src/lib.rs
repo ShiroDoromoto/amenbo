@@ -2656,19 +2656,21 @@ const REGISTRY: &[OpSpec] = &[
     // `on` is which pane's box is being read, named the way `in-the-box`'s is. Left out, it is the
     // page's one pane.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "still-to-send", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
-    // Which box the keyboard is standing in, read off the mark drawn at the box's left. That mark
-    // is the keyboard and not a guess at it: the box tells the page it has it as it takes it, and
-    // the mark is drawn from that answer (`app/src/shell/TerminalPane.tsx`).
+    // Which box the keyboard is standing in, read off the caret the box carries. That caret is the
+    // keyboard and not a guess at it: a box takes the caret as it takes the keyboard and loses it
+    // with it, and nothing is drawn beside the box to say the same thing twice
+    // (`app/src/shell/TerminalPane.tsx`).
     //
     // **It is read rather than typed at.** A character sent to find out where the keyboard is would
     // be a character added to whatever is standing in the box, and this road reads that line
-    // afterwards. The mark says the same thing and costs nothing.
+    // afterwards. The caret says the same thing and costs nothing.
     //
-    // **It is the mark on the box's own row.** The press that opens and folds the box draws the same
-    // two pictures on the band under it (`open-box`), so the reading says which row it is made on.
+    // **A caret blinks**, so both halves of the reading are watched for a second rather than
+    // glanced at — the absent half above all, where a caret between blinks and no caret at all look
+    // the same.
     //
     // `on` is which pane's box, named the way `still-to-send`'s is; `present: false` is the other
-    // half — a box the keyboard has left, which draws the other mark.
+    // half — a box the keyboard has left, which carries no caret.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "keys-in-the-box", required: &[], refs: &[], strings: &["on"], binds: false },
     // A **picture** on the clipboard put into that box. It is not `paste-image` with the box named:
     // that one lands in the terminal's own input line, and the two are reached by different presses

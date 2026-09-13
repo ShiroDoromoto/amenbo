@@ -105,15 +105,15 @@ given:
       target: shears
 
   # The row of things a pane can be opened with, made the run's answer rather than the machine's: the
-  # catalog's own commands, in the catalog's own order, in front of whatever the operator has. Four of
-  # them, because the last leg opens on the fourth. They stay open rather than printing and ending —
-  # the way out asks about what is still running, and a stand-in that had already finished would leave
-  # nothing to be asked about.
+  # catalog's own commands, in the catalog's own order, in front of whatever the operator has. Two of
+  # them, which is the floor, and the provider the last leg opens on is the second. They stay open
+  # rather than printing and ending — the way out asks about what is still running, and a stand-in
+  # that had already finished would leave nothing to be asked about.
   - type: action
     domain: terminal
     op: can-start
     with:
-      count: 4
+      count: 2
       then: reads
 
 steps_gui:
@@ -176,7 +176,7 @@ steps_gui:
     domain: store
     op: quit-names
     with:
-      agent: Gemini CLI
+      agent: Codex CLI
       present: false
 
   - type: action
@@ -360,7 +360,7 @@ steps_gui:
     domain: terminal
     op: pick-start
     with:
-      agent: Gemini CLI
+      agent: Codex CLI
 
   - type: action
     domain: terminal
@@ -380,7 +380,7 @@ steps_gui:
     domain: store
     op: quit-names
     with:
-      agent: Gemini CLI
+      agent: Codex CLI
 
   - type: action
     domain: store

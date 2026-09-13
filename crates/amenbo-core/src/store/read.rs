@@ -453,6 +453,25 @@ impl Store {
         )?)
     }
 
+    /// One of Amenbo's own secret fields at this layer, or `None` when it is unset (`AMB-D-884`) — read
+    /// from the table no road out of the store carries. The only caller that wants the plaintext is the
+    /// feature connecting with it; a face asks whether it is set and stops there.
+    pub fn secret_value(
+        &self,
+        project_id: Option<i64>,
+        area: crate::model::SecretArea,
+        owner_id: Option<i64>,
+        field_key: &str,
+    ) -> Result<Option<String>> {
+        Ok(crate::store_engine::read::secret_value(
+            self.engine.conn(),
+            project_id,
+            area,
+            owner_id,
+            field_key,
+        )?)
+    }
+
     /// Whether this layer holds a plugin's gate open (`AMB-D-434` / `AMB-D-601`) — the row's presence, which
     /// is the whole answer ([`crate::plugin_trust::effective_enabled_in`] is the boundary's name for it).
     pub fn plugin_enabled_in_project(&self, project_id: Option<i64>, plugin: &str) -> Result<bool> {

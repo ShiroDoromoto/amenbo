@@ -7,11 +7,14 @@
 //! dimensions before the project row itself) and equally the rows hanging off them: comments, dependency
 //! edges, commit anchors, dimension values, assignments, decision links. Each of those is a row a person
 //! can point at, and a row deleted by a constraint is deleted where no code can see it — so what goes must
-//! go through an op that read its id first (`AMB-D-403`). Only Amenbo's own per-project settings
-//! (`plugin_config` / `plugin_enable`) ride the schema, having nothing to tell.
+//! go through an op that read its id first (`AMB-D-403`). Only Amenbo's own settings — the per-project
+//! ones (`plugin_config` / `plugin_enable`) and the credentials beside them (`secret`) — ride the schema,
+//! having nothing to tell.
 //!
-//! The polymorphic `attachment` (a reference discriminated by `target_type`) is the one child no constraint
-//! *could* cover; the delete op sweeps its own with [`sweep_polymorphic`], ahead of the row it hangs off.
+//! The polymorphic children are the ones no constraint *could* cover: `attachment` (a reference
+//! discriminated by `target_type`) and a `secret`'s `owner_id` (discriminated by `area`). The delete op
+//! sweeps its own — [`sweep_polymorphic`] for the first, [`secret::forget_owner`] for the second — ahead
+//! of the row they hang off.
 //!
 //! **Mutations issue SQL straight at the source of truth (the read-model).** Every mutator takes only the
 //! [`WriteTx`] (`BEGIN IMMEDIATE`) the caller opened, and reads both its `before` snapshot and any existence
@@ -27,6 +30,7 @@ pub mod plugin_config;
 pub mod plugin_enable;
 pub mod plugin_secret;
 pub mod project;
+pub mod secret;
 pub mod task;
 pub mod user;
 

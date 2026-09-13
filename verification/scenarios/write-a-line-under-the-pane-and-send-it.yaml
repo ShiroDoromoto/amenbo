@@ -37,11 +37,11 @@
 # ── Why the arrow is walked first ───────────────────────────────────────────────────────────────
 # The box is empty when a pane has just been opened and at no other point on this road, so the press
 # that only an empty box hands on is walked before anything is written. It is read twice over: the
-# shell walked its history, and the mark says the keyboard left with the press. `ctrl-c` after it is
-# the road tidying up as much as anything: the recalled line is standing at the prompt, and it is the
-# fifth press the box hands on, so abandoning it walks one more of them and leaves a clean prompt for
-# the half that follows — and that press puts the keyboard back in the box, because it is asked for
-# over a box the operator clicks into first.
+# shell walked its history, and the box lost its caret, which says the keyboard left with the press.
+# `ctrl-c` after it is the road tidying up as much as anything: the recalled line is standing at the
+# prompt, and it is the fifth press the box hands on, so abandoning it walks one more of them and
+# leaves a clean prompt for the half that follows — and that press puts the keyboard back in the
+# box, because it is asked for over a box the operator clicks into first.
 #
 # ── Why the stop is walked over a written box, and what it does not prove ───────────────────────
 # Escape and ctrl-c are the exception to the rule above: they go to the program whatever is written,
@@ -57,14 +57,13 @@
 # Everything above is one pane, and one pane cannot say where the keyboard went. A person working in
 # two presses the one they mean and writes — the frame moving and the keyboard moving are one act to
 # them, and a build where only the frame moved leaves them typing into the pane they pressed away
-# from. So the last leg opens a second pane, presses the first, and reads the mark that says which
-# box has the keyboard.
+# from. So the last leg opens a second pane, presses the first, and reads which of the two boxes the
+# caret is standing in.
 #
-# ── Why the mark is read rather than typed at ───────────────────────────────────────────────────
+# ── Why the caret is read rather than typed at ──────────────────────────────────────────────────
 # A character sent to find out where the keyboard is would be a character added to the line still
-# standing in that box, which the leg before this one has just read. The mark beside the box says the
-# same thing and takes nothing: the box tells the page as it takes the keyboard, and the mark is
-# drawn from that answer.
+# standing in that box, which the leg before this one has just read. The caret in the box says the
+# same thing and takes nothing: a box takes the caret as it takes the keyboard and loses it with it.
 #
 # ── Why the pane runs a shell ───────────────────────────────────────────────────────────────────
 # What is sent has to be answered by something that answers the same way every time. A folder with
@@ -125,7 +124,7 @@ steps_gui:
     domain: terminal
     op: open-box
 
-  # Nothing has been clicked since, so what the mark says here is what opening the box did. Read
+  # Nothing has been clicked since, so where the caret stands here is what opening the box did. Read
   # before the line below is typed, which is the last moment nothing else has moved the keyboard.
   - type: assert
     domain: terminal
@@ -288,7 +287,7 @@ steps_gui:
     op: open-shell
 
   # This pane's box too, and before a word is typed at it: the readings at the end of the road are of
-  # two marks, and a pane still folded draws neither of them. The box comes to hand with the keyboard
+  # two boxes, and a pane still folded draws neither of them. The box comes to hand with the keyboard
   # in it, which the line below then takes away again — that order is the point, because what those
   # readings rest on is a box that is there and does not have the keyboard.
   - type: action

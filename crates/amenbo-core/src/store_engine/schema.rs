@@ -58,8 +58,8 @@
 //! | what the row is | example | `ON DELETE` |
 //! |---|---|---|
 //! | a concept someone can point at | a comment, a dependency edge, a decision↔task link, a commit anchor, a classification value | `RESTRICT` (+ the delete op takes the children first) |
-//! | Amenbo's own settings for a project | `plugin_config`, `plugin_secret`, `plugin_enable`, `hook_optout`, `harness_consent` | `CASCADE` |
-//! | the same settings, written at the **device** layer (`AMB-D-601`) | a `plugin_config` / `plugin_secret` / `plugin_enable` row whose `project_id` is NULL | the cascade never reaches them — no project holds them |
+//! | Amenbo's own settings for a project | `plugin_config`, `plugin_secret`, `plugin_enable`, `secret`, `hook_optout`, `harness_consent` | `CASCADE` |
+//! | the same settings, written at the **device** layer (`AMB-D-601`) | a `plugin_config` / `plugin_secret` / `plugin_enable` / `secret` row whose `project_id` is NULL | the cascade never reaches them — no project holds them |
 //! | optional entity reference (keep the child, drop the reference) | none in the registry today | `SET NULL` |
 //!
 //! So `RESTRICT` is what holds the ops to the rule: leave a child behind and the parent's `DELETE` stops
@@ -836,6 +836,36 @@ datasets! {
         project_id: fk_opt("project", "CASCADE"),
         plugin: col(REQ),
     }
+
+    // **A secret one of Amenbo's own features holds**, at one layer (`AMB-D-884`): the connection a
+    // notification target sends through (`AMB-D-885`), the keys the Viewer's server is reached and sealed
+    // with (`AMB-D-886`). Before this there was nowhere in the body for one to live — `config.json` says
+    // of itself that it holds no secrets, and the three features that needed one were plugins, keeping
+    // theirs in `plugin_secret`. That table goes with the mechanism; this one takes over what it was for.
+    //
+    // **A whole table, so the exclusion cannot rot** — `plugin_secret`'s reason, and the same one here.
+    // Keeping a credential beside the ordinary settings and filtering "the rows that are secret" would put
+    // the judgement on every path that ever reads a setting, and the next path would be written by someone
+    // who did not know to ask. This table is named in `crate::export::WITHHELD_ON_THE_WAY_OUT`, so no road
+    // out walks it — most sharply the sync snapshot, which would otherwise carry the Viewer's
+    // `encryption_key` to the very server that key seals. `backup`/`restore` carry it, copying the file
+    // whole: that road leads back to the same person's machine, and dropping the rows there would mean
+    // typing every credential in again.
+    //
+    // The address is `(project_id, area, owner_id, field_key)`, unique as `secret_address` with the device
+    // row's own partial index (`secret_address_device`). **`project_id` is the layer** — a project's id, or
+    // NULL for the device row — exactly as `plugin_secret`'s is. **`area` is the feature** whose secret it
+    // is, closed to the features that hold one. **`owner_id` is the row inside that area** that holds it (a
+    // notification target's id), or NULL where the area itself does — the Viewer keeps one set of keys per
+    // device with no row under them. No `REFERENCES` can hold `owner_id`: which table it names is `area`'s
+    // to say, as `attachment.target_id`'s is `target_type`'s, so a delete op sweeps it by hand.
+    secret {
+        project_id: fk_opt("project", "CASCADE"),
+        area: enum_col("notify", "viewer"),
+        owner_id: col(INT_OPT),
+        field_key: col(REQ),
+        value: col(REQ),
+    }
 }
 
 /// Look up a dataset by name. A dataset's key and its table are the same word (`AMB-D-807`), so this
@@ -1275,6 +1305,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS plugin_enable_pair ON plugin_enable(project_id
 CREATE UNIQUE INDEX IF NOT EXISTS plugin_config_device ON plugin_config(plugin, field_key) WHERE project_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS plugin_secret_device ON plugin_secret(plugin, field_key) WHERE project_id IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS plugin_enable_device ON plugin_enable(plugin) WHERE project_id IS NULL;
+-- One secret per (layer, area, owner, field): the address is the natural key, so the write boundary
+-- upserts a credential by finding this row rather than appending a second. `owner_id` is nullable — the
+-- Viewer's keys hang off no row — and SQLite counts NULLs in an index as distinct, which would let a
+-- second copy of the same device-wide secret in beside the first; `COALESCE(owner_id, 0)` is what closes
+-- that, `0` being a value no row's id ever is. The device layer needs the same restatement `plugin_secret`
+-- does, and for the same reason: its `project_id` is NULL, so the general index says nothing about it.
+CREATE UNIQUE INDEX IF NOT EXISTS secret_address ON secret(project_id, area, COALESCE(owner_id, 0), field_key);
+CREATE UNIQUE INDEX IF NOT EXISTS secret_address_device ON secret(area, COALESCE(owner_id, 0), field_key) WHERE project_id IS NULL;
 -- A plugin's queue, read the only way it is ever read: that plugin's own rows, oldest first. The pair is
 -- the whole query (`plugin` seeks, `id` orders), so the runner reads its head without scanning the rows
 -- queued for every other plugin, and the fan-out's "which plugins have work" seek stays on the index too.

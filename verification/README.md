@@ -912,6 +912,11 @@ up open. The keyboard is in the box either way. `write-to-pane` writes a line in
 reads that line standing there with nothing run — the half that parts the box from the terminal's own
 input line — and `send-written` sends it, `by: key` or `by: button` naming which of the two
 presses, because they are two controls and a road that walked one would leave the other unpressed.
+**What parts those two readings is the sentence an operator is given and never the reading**, the box
+and the terminal being on one screen and one shot — so `present: false` on either of them has to name
+words that are nowhere on that window at all. Words a working build merely puts *somewhere else* —
+the line that was sent, standing above as what the program was given — are words the reading finds,
+and a road asking for their absence is a road that cannot go green however right the screen is.
 The key is return held with this machine's own modifier rather than return alone, which the box
 writes a new line with.
 `press-through` is the other half of the box's rule: a press made in it **while nothing is written**
@@ -1566,11 +1571,13 @@ other ending, which is nearly all of them and the half that catches a build expl
 general. `learn-why-a-pane-stopped-when-the-file-it-names-is-not-yours` walks both, on two providers
 leaving the very same status.
 
-**`then` is what a stand-in does once it has printed.** `ends` is the default and is the pane every
-road but two reads: the output standing on the screen and nothing running in it. `reads` keeps it open
-and prints back every line it is given, inside brackets so a road reads the whole line and never a
-piece of one. A road that **moves a running pane** needs it twice over — there is no model row on a
-frame whose program has gone, and what says the move arrived is the program that was given it.
+**`then` is what a stand-in does once it has printed.** `ends` is the default: the output standing on
+the screen and nothing running in it. `reads` keeps it open and prints back every line it is given,
+inside brackets so a road reads the whole line and never a piece of one. **A road that reads anything
+drawn under a running pane asks for it** — the row under a pane is drawn only while there is a program
+in that pane, and a frame whose program has gone offers to open another one instead. A road that
+**moves a running pane** needs it twice over: what says the move arrived is the program that was given
+it.
 
 **One that stays also says so when it is stopped**, in a word of its own printed as it goes. It is
 what lets a road read a press that ends a program: what a plain prompt draws for a stopped one is a

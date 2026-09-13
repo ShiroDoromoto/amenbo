@@ -52,12 +52,17 @@ given:
 
   # Two agents, which is the floor, and three models each — short enough that the row draws the whole
   # answer, which is the shape being read here.
+  #
+  # `reads` rather than the default: the row under a pane is read here, and a pane whose program has
+  # printed and gone has no row under it to read — what stands there instead is the frame offering to
+  # open another one.
   - type: action
     domain: terminal
     op: can-start
     with:
       count: 2
       models: 3
+      then: reads
 
 steps_gui:
   - type: action

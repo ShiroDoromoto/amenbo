@@ -63,6 +63,10 @@ given:
   # The whole catalog, because this road names three of them and each has to be on the row. Three
   # models each — short enough that the row draws the whole answer — and the second of those three is
   # the one the two that can say so say they are on.
+  #
+  # `reads` rather than the default: the row under a pane is read here, and a pane whose program has
+  # printed and gone has no row under it to read — what stands there instead is the frame offering to
+  # open another one.
   - type: action
     domain: terminal
     op: can-start
@@ -70,6 +74,7 @@ given:
       count: 6
       models: 3
       on: 2
+      then: reads
 
 steps_gui:
   - type: action

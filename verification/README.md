@@ -1506,6 +1506,16 @@ harness's own. That is how a road reads a model choice back off the program rath
 Amenbo drew: the name is on a line by itself, so what is read is the road's own word and never a flag
 spelled one tool's way.
 
+**`exits` is what a stand-in leaves with**, and left off it is nothing wrong, which is how every road
+before it read one ending. A road says it where the *ending* is the reading: a pane says the program
+stopped whatever the status, and for a handful of statuses it also says what the stopping was about —
+the ones a provider leaves over a file Amenbo pointed at a home of its own making, whose own message
+then names that home rather than the reader's file. `terminal ended` is the reading, and `names` is
+the file the pane should be saying instead of the one the program printed; `names: none` is every
+other ending, which is nearly all of them and the half that catches a build explaining endings in
+general. `learn-why-a-pane-stopped-when-the-file-it-names-is-not-yours` walks both, on two providers
+leaving the very same status.
+
 **`then` is what a stand-in does once it has printed.** `ends` is the default and is the pane every
 road but two reads: the output standing on the screen and nothing running in it. `reads` keeps it open
 and prints back every line it is given, inside brackets so a road reads the whole line and never a

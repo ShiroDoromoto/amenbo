@@ -41,6 +41,12 @@
 //! road about a provider's own default needs: the two naming one, and the four naming none. Left
 //! off, nobody says, which is the machine every road before this one stood up.
 //!
+//! **And a road may say what one leaves with.** A stand-in ends successfully unless `exits` names
+//! another status, which is how a road stands up an ending a provider's own number is the whole
+//! answer to: the pane says the program ended, and for a few numbers it says what the ending was
+//! about (`app/src/talk/terminal.ts`). The number is the road's own here, and it is written as the
+//! provider writes it.
+//!
 //! **A road may also ask them to stay and read.** Left alone a stand-in prints and ends, which is the
 //! pane every road before this one read: the output stands on the screen and nothing is running. A
 //! pane whose model is *moved* has to still be running — there is no control on a frame whose program
@@ -234,7 +240,7 @@ fn list_door(command: &str, models: &[String], on: Option<&str>) -> Option<(Stri
 /// The order is the order it prints in, and the list door is first because it ends there: a run that
 /// answered the ask has been asked a question, not started as a pane, and saying it is a stand-in
 /// afterwards would put a line of English in the middle of a JSON document.
-fn program(command: &str, models: &[String], on: Option<&str>, reads: bool) -> String {
+fn program(command: &str, models: &[String], on: Option<&str>, exits: i64, reads: bool) -> String {
     let mut body = "#!/bin/sh\n".to_string();
     if let Some((asked, answer)) = list_door(command, models, on) {
         // The answer is written between the marks with its own last newline taken off: the heredoc
@@ -260,6 +266,9 @@ fn program(command: &str, models: &[String], on: Option<&str>, reads: bool) -> S
             "while IFS= read -r line; do\n               said=$(printf '%s' \"$line\" | tr -d '\\033' | sed -e 's/\\[200~//g' -e 's/\\[201~//g')\n               printf '{SAID} [%s]\\n' \"$said\"\ndone\n"
         ));
     }
+    // Last, and written even for the plain ending: a script that fell off its end would leave
+    // whatever the line before it did, which is the shell's answer rather than the road's.
+    body.push_str(&format!("exit {exits}\n"));
     body
 }
 
@@ -268,7 +277,14 @@ fn program(command: &str, models: &[String], on: Option<&str>, reads: bool) -> S
 /// The first of the catalog rather than a road's pick: which agents are on the row is nothing this
 /// premise is about — what it is about is how many — and a road naming one would be a road about a
 /// tool.
-fn stand_up(tools: &Path, count: i64, models: i64, on: i64, reads: bool) -> Result<String, String> {
+fn stand_up(
+    tools: &Path,
+    count: i64,
+    models: i64,
+    on: i64,
+    exits: i64,
+    reads: bool,
+) -> Result<String, String> {
     if count < 2 {
         return Err(format!(
             "`can-start` takes a count of 2 or more, not {count} — it puts programs in front of the \
@@ -298,15 +314,22 @@ fn stand_up(tools: &Path, count: i64, models: i64, on: i64, reads: bool) -> Resu
              which they are on"
         ));
     }
+    if !(0..=255).contains(&exits) {
+        return Err(format!(
+            "`can-start` was asked to have the stand-ins leave with {exits} — a status is 0 to 255, \
+             and 0 (the default) is a program that ended having done what it was started for"
+        ));
+    }
     let named = &COMMANDS[..want];
     let names = model_names(models);
     let standing = usize::try_from(on).ok().filter(|at| *at > 0).and_then(|at| names.get(at - 1));
     for command in named {
-        write_program(&tools.join(command), &program(command, &names, standing.map(String::as_str), reads))?;
+        let body = program(command, &names, standing.map(String::as_str), exits, reads);
+        write_program(&tools.join(command), &body)?;
     }
     Ok(format!(
         "this machine can start {want} of the agents Amenbo knows ({}), each answering with {models} \
-         models it can be started on{}{}",
+         models it can be started on{}{}{}",
         named.join(", "),
         match standing {
             Some(one) => format!(" and the two that can say so saying they are on {one}"),
@@ -315,6 +338,10 @@ fn stand_up(tools: &Path, count: i64, models: i64, on: i64, reads: bool) -> Resu
         match reads {
             true => " and staying open to read what is typed at it",
             false => "",
+        },
+        match exits {
+            0 => String::new(),
+            n => format!(" and leaving with {n}"),
         }
     ))
 }
@@ -366,6 +393,13 @@ impl Driver<'_> {
                     None => 0,
                     Some(_) => req_i64(with, "on")?,
                 };
+                // What one leaves with. A road says it where the ending itself is what is being read:
+                // the pane says a program ended whatever the status, and a few statuses are a
+                // provider's whole answer to why.
+                let exits = match with.get("exits") {
+                    None => 0,
+                    Some(_) => req_i64(with, "exits")?,
+                };
                 // What a stand-in does once it has printed. `ends` is what every road before this one
                 // stood up — the output on the screen and nothing running — and `reads` is the pane a
                 // road moves to another model, which needs a program still there to move.
@@ -385,6 +419,7 @@ impl Driver<'_> {
                     req_i64(with, "count")?,
                     models,
                     on,
+                    exits,
                     reads,
                 )?))
             }
@@ -430,7 +465,7 @@ mod tests {
     #[test]
     fn the_asked_for_agents_are_standing_and_runnable() {
         let session = crate::scratch::session("can-start-test", false).expect("a throwaway session");
-        let said = stand_up(&session.tools, 2, 0, 0, false).expect("two is a machine it can stand up");
+        let said = stand_up(&session.tools, 2, 0, 0, 0, false).expect("two is a machine it can stand up");
 
         for command in &COMMANDS[..2] {
             let at = session.tools.join(command);
@@ -448,7 +483,7 @@ mod tests {
     fn a_count_below_two_is_refused_because_nothing_here_can_take_an_install_away() {
         let session = crate::scratch::session("can-start-floor-test", false).expect("a session");
         for count in [-1, 0, 1] {
-            let err = stand_up(&session.tools, count, 0, 0, false).expect_err("a floor, never a ceiling");
+            let err = stand_up(&session.tools, count, 0, 0, 0, false).expect_err("a floor, never a ceiling");
             assert!(err.contains("2 or more"), "{err}");
         }
     }
@@ -458,7 +493,7 @@ mod tests {
     fn more_agents_than_there_are_is_refused() {
         let session = crate::scratch::session("can-start-over-test", false).expect("a session");
         let asked = COMMANDS.len() as i64 + 1;
-        let err = stand_up(&session.tools, asked, 0, 0, false).expect_err("there are only so many");
+        let err = stand_up(&session.tools, asked, 0, 0, 0, false).expect_err("there are only so many");
         assert!(err.contains(&COMMANDS.len().to_string()), "{err}");
     }
 
@@ -466,7 +501,7 @@ mod tests {
     #[test]
     fn more_models_than_the_names_can_carry_is_refused() {
         let session = crate::scratch::session("can-start-models-over-test", false).expect("a session");
-        let err = stand_up(&session.tools, 2, MOST_MODELS + 1, 0, false).expect_err("two digits is the width");
+        let err = stand_up(&session.tools, 2, MOST_MODELS + 1, 0, 0, false).expect_err("two digits is the width");
         assert!(err.contains(&MOST_MODELS.to_string()), "{err}");
     }
 
@@ -475,7 +510,7 @@ mod tests {
     #[test]
     fn an_agent_asked_for_no_models_answers_its_list_door_with_nothing_of_the_kind() {
         let session = crate::scratch::session("can-start-no-models-test", false).expect("a session");
-        stand_up(&session.tools, 2, 0, 0, false).expect("a machine with two agents on it");
+        stand_up(&session.tools, 2, 0, 0, 0, false).expect("a machine with two agents on it");
 
         let said = ran(&session.tools.join("claude"), &["--help"]);
         assert!(said.contains("standing in for claude"), "{said}");
@@ -488,7 +523,7 @@ mod tests {
     #[test]
     fn each_agent_answers_its_own_list_door_in_its_own_shape() {
         let session = crate::scratch::session("can-start-models-test", false).expect("a session");
-        stand_up(&session.tools, COMMANDS.len() as i64, 2, 0, false).expect("the whole catalog");
+        stand_up(&session.tools, COMMANDS.len() as i64, 2, 0, 0, false).expect("the whole catalog");
         let first = format!("{MODEL}01");
         let second = format!("{MODEL}02");
 
@@ -536,7 +571,7 @@ mod tests {
     #[test]
     fn a_stand_in_asked_to_stay_prints_back_every_line_it_is_given_whole() {
         let session = crate::scratch::session("can-start-reads-test", false).expect("a session");
-        stand_up(&session.tools, 2, 3, 0, true).expect("a machine whose stand-ins stay and read");
+        stand_up(&session.tools, 2, 3, 0, 0, true).expect("a machine whose stand-ins stay and read");
 
         let name = format!("{MODEL}02");
         let typed = format!("\u{1b}[200~/model {name}\u{1b}[201~\n\u{1b}[200~/model\u{1b}[201~\n");
@@ -563,7 +598,7 @@ mod tests {
         use std::io::{BufRead as _, BufReader, Read as _, Write as _};
 
         let session = crate::scratch::session("can-start-stopped-test", false).expect("a session");
-        stand_up(&session.tools, 2, 0, 0, true).expect("a machine whose stand-ins stay and read");
+        stand_up(&session.tools, 2, 0, 0, 0, true).expect("a machine whose stand-ins stay and read");
 
         let mut child = std::process::Command::new(session.tools.join("claude"))
             .stdin(std::process::Stdio::piped())
@@ -598,7 +633,7 @@ mod tests {
     #[test]
     fn a_stand_in_left_alone_ends_rather_than_waiting_to_be_typed_at() {
         let session = crate::scratch::session("can-start-ends-test", false).expect("a session");
-        stand_up(&session.tools, 2, 0, 0, false).expect("a machine with two agents on it");
+        stand_up(&session.tools, 2, 0, 0, 0, false).expect("a machine with two agents on it");
         let printed = said_to(&session.tools.join("claude"), "a line nobody reads\n");
         assert!(!printed.contains(SAID), "{printed}");
     }
@@ -609,7 +644,7 @@ mod tests {
     #[test]
     fn the_two_that_can_say_which_model_they_are_on_say_it_and_the_rest_do_not() {
         let session = crate::scratch::session("can-start-on-test", false).expect("a session");
-        stand_up(&session.tools, COMMANDS.len() as i64, 3, 2, false).expect("the whole catalog");
+        stand_up(&session.tools, COMMANDS.len() as i64, 3, 2, 0, false).expect("the whole catalog");
         let second = format!("{MODEL}02");
 
         // Cursor says it in the label of the row itself, beside the name.
@@ -637,7 +672,7 @@ mod tests {
     #[test]
     fn a_machine_nobody_was_told_about_says_which_model_nowhere() {
         let session = crate::scratch::session("can-start-not-on-test", false).expect("a session");
-        stand_up(&session.tools, COMMANDS.len() as i64, 3, 0, false).expect("the whole catalog");
+        stand_up(&session.tools, COMMANDS.len() as i64, 3, 0, 0, false).expect("the whole catalog");
 
         let rows = ran(&session.tools.join("cursor-agent"), &["--list-models"]);
         assert!(!rows.contains("(current, default)"), "{rows}");
@@ -650,8 +685,46 @@ mod tests {
     #[test]
     fn being_on_a_model_that_is_not_in_the_row_is_refused() {
         let session = crate::scratch::session("can-start-on-over-test", false).expect("a session");
-        let err = stand_up(&session.tools, 2, 3, 4, false).expect_err("three is the whole row");
+        let err = stand_up(&session.tools, 2, 3, 4, 0, false).expect_err("three is the whole row");
         assert!(err.contains("model 4 of the 3"), "{err}");
+    }
+
+    /// What a stand-in leaves with, where a road said so — and the list door answering all the same,
+    /// because being asked a question is not being started as a pane.
+    #[test]
+    fn a_stand_in_leaves_with_the_status_the_road_named() {
+        let session = crate::scratch::session("can-start-exits-test", false).expect("a session");
+        stand_up(&session.tools, 2, 3, 0, 41, false).expect("a machine whose stand-ins die");
+
+        let out = std::process::Command::new(session.tools.join("claude"))
+            .output()
+            .expect("the stand-in runs");
+        assert_eq!(out.status.code(), Some(41));
+
+        // Asked rather than started, it answers and leaves with nothing wrong: a road reads the row
+        // of models on a machine whose panes die, which is the shape this premise is for.
+        let help = ran(&session.tools.join("claude"), &["--help"]);
+        assert!(help.contains(&format!("{MODEL}01")), "{help}");
+    }
+
+    /// Left unsaid, a stand-in ends the way every road before this one read it ending.
+    #[test]
+    fn a_stand_in_nobody_asked_about_leaves_with_nothing_wrong() {
+        let session = crate::scratch::session("can-start-exits-none-test", false).expect("a session");
+        stand_up(&session.tools, 2, 0, 0, 0, false).expect("a machine with two agents on it");
+
+        let out = std::process::Command::new(session.tools.join("claude"))
+            .output()
+            .expect("the stand-in runs");
+        assert_eq!(out.status.code(), Some(0));
+    }
+
+    /// A status no process can leave with is a road writing something it will never read back.
+    #[test]
+    fn a_status_outside_what_a_process_leaves_with_is_refused() {
+        let session = crate::scratch::session("can-start-exits-over-test", false).expect("a session");
+        let err = stand_up(&session.tools, 2, 0, 0, 256, false).expect_err("0 to 255");
+        assert!(err.contains("0 to 255"), "{err}");
     }
 
     /// Started rather than asked, a stand-in prints what it was started with — one argument to a
@@ -659,7 +732,7 @@ mod tests {
     #[test]
     fn a_stand_in_prints_what_it_was_started_with_one_argument_to_a_line() {
         let session = crate::scratch::session("can-start-args-test", false).expect("a session");
-        stand_up(&session.tools, 2, 3, 0, false).expect("a machine with a row of models on it");
+        stand_up(&session.tools, 2, 3, 0, 0, false).expect("a machine with a row of models on it");
 
         let name = format!("{MODEL}02");
         let printed = ran(&session.tools.join("claude"), &["--model", &name, "an opening sentence"]);

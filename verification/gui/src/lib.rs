@@ -4358,6 +4358,19 @@ impl Instructor {
                 "Confirm the pane showing \"{}\" is the one being worked in: its frame is the one drawn picked out from the rest, and the block where you would type in it is filled in — the pane the keyboard is not in draws that block as an outline.",
                 req(with, "shows")?
             ),
+            // What the pane says about the ending, read on the line the pane draws for it and never
+            // in the program's own output above: the two are a line apart on the screen and a road
+            // that took the wrong one would be reading the provider.
+            (Domain::Terminal, "ended") => match req(with, "names")? {
+                "none" => format!(
+                    "Read what {pane} says now that the program in it has stopped — the pane's own line about the ending, above where the program was running and not part of what it printed. Confirm it says the program ended and nothing further: no file is named there and no reason is given. Whatever the program itself printed is its own and is not this reading.",
+                    pane = named_pane(with),
+                ),
+                names => format!(
+                    "Read what {pane} says now that the program in it has stopped — the pane's own line about the ending, above where the program was running and not part of what it printed. Confirm it also names `{names}`, which is a file of your own. The program printed a path of its own just above; it is a different one, inside a folder made for this pane, and a line naming that one instead has this reading failing.",
+                    pane = named_pane(with),
+                ),
+            },
             (Domain::Terminal, "pane") => match present(with) {
                 true => format!(
                     "Confirm the line \"{}\" is on the screen, on the pane that printed it — the same pane, drawn here. What is on a pane stays where it was printed, so a pane whose terminal has since ended still carries it.",

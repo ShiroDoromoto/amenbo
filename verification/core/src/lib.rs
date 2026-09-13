@@ -2790,6 +2790,20 @@ const REGISTRY: &[OpSpec] = &[
     // in its input line unsent, so a character typed to find out where the keyboard is would be a
     // character added to the path — the road would be editing the very thing the step before it read.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "worked-in", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // What the pane says once the program in it has stopped — and, for the few endings Amenbo had a
+    // hand in, which of the reader's own files the ending is about.
+    //
+    // **Nearly every ending is `names: none`, and that is the reading to walk first.** What a program
+    // leaves on the screen is the whole of why it stopped, so a pane that added an account of its own
+    // would be talking over it. A build that started explaining ordinary endings would be drawing
+    // something no road would otherwise catch, the line being right in every other way.
+    //
+    // **The exception is an ending Amenbo helped cause.** A pane is given a home of its own so two
+    // panes of one provider do not share a conversation, and a provider that stops over a file it was
+    // pointed at there names *that* path — a directory thrown away with the pane. A reader who
+    // follows the message edits a file nobody will read again, so `names` is the file it should have
+    // said, and reading it is reading which file was named rather than the sentence around it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "ended", required: &["names"], refs: &[], strings: &["names", "shows"], binds: false },
     // Ending the terminal in the pane. It is the only way out — a pane going away is a pane moving,
     // and the session outlives it — so it is also the only way a road reaches the state that follows
     // one: what a pane says once nothing is running in it any more.

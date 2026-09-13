@@ -565,12 +565,17 @@ input[type="color"] {
 /* The row under the box, where the model the program is answering on is moved (`../shell/PaneModel`).
    It is the slot's last band and the quietest of them: what the pane is for is what is running in it,
    and this is one press about that. `position: relative` is what the popover above is placed against
-   — it opens upwards, because this row is already at the bottom of the pane. */
+   — it opens upwards, because this row is already at the bottom of the pane.
+
+   `min-height` is the height the press gives it — a 16px mark with the button's own 4px above and
+   below — held from underneath so the band is the same one under every pane. A pane whose program
+   Amenbo cannot name has no model press in it (`AMB-D-794`), and a row that collapsed there would
+   move the controls beside it from pane to pane (`AMB-D-889`). */
 .modelrow {
   position: relative;
   flex: 0 0 auto;
   display: flex; align-items: center; gap: var(--s-2);
-  min-width: 0;
+  min-width: 0; min-height: calc(var(--icon-sm) + var(--s-1) * 2);
   padding: 0 var(--s-2);
   font-size: var(--fs-xs);
 }

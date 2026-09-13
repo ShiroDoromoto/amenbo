@@ -805,8 +805,10 @@ export function TerminalPane({
             (`./PaneModel`, `AMB-D-865`). It is under the box rather than over the terminal for the
             reason the box itself is: a terminal writes into every row it was told it has.
 
-            **It draws nothing for a pane whose program Amenbo cannot name** — the plain shell, and a
-            command the reader registered — so the row is absent rather than dead there. */}
+            **The row stands under every pane, the press in it only where there is a model to name** —
+            the plain shell and a command the reader registered have none, so the band is there and
+            empty rather than missing. What else belongs on it opens and shuts the box above
+            (`AMB-D-889`), and that has to sit in the same place from pane to pane. */}
         {live !== null && <PaneModel frame={frame} session={live} agent={inPane} />}
       </div>
     </div>

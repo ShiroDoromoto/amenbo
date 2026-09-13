@@ -44,9 +44,12 @@ import { Icon } from "../components/Icon";
  * quietly moved somebody's default would be Amenbo writing a provider's settings through the back
  * door, and `AMB-D-440` refuses that at the front.
  *
- * **It is drawn for a catalogued provider and for nothing else.** A pane running a command the reader
- * registered is a pane whose program Amenbo cannot name (`AMB-D-794`), and the plain shell has no
- * model at all — for both, the host answers with no road and this row is not there.
+ * **The row stands under every pane; the press in it is only for a catalogued provider.** A pane
+ * running a command the reader registered is a pane whose program Amenbo cannot name (`AMB-D-794`),
+ * and the plain shell has no model at all — for both, the host answers with no road and the press is
+ * not drawn. The row itself still is, at the height it has anywhere else: what else stands in it
+ * opens and shuts the box above (`AMB-D-889`), and a control that moved with the pane it belongs to
+ * would be a control the reader has to look for.
  */
 export function PaneModel({ frame, session, agent }: {
   /** The place this row stands in (`../talk/layout`) — what the model it settles is written down
@@ -60,7 +63,7 @@ export function PaneModel({ frame, session, agent }: {
 }) {
   const askId = useId();
   // How this provider is moved, asked without a model: the command, where the name may go, and where
-  // the machine keeps the change. Null is both "not asked yet" and "no road" — the row is not drawn
+  // the machine keeps the change. Null is both "not asked yet" and "no road" — the press is not drawn
   // either way, and the two are told apart by nothing the reader would see.
   const [how, setHow] = useState<AgentSwitchDto | null>(null);
   // Whether the candidates are on the screen. The list is asked for when it opens and not before: the
@@ -229,8 +232,6 @@ export function PaneModel({ frame, session, agent }: {
     }
   };
 
-  if (how === null) return null;
-
   // What the row draws. A short answer is the row itself; a long one is drawn as far as the row goes
   // and the box above it reaches the rest; a provider with no list at all draws what was chosen for
   // it before, which is the whole of what anybody can offer for one.
@@ -239,7 +240,7 @@ export function PaneModel({ frame, session, agent }: {
   const drawn = models !== null && models.length === 0 ? kept?.history ?? [] : narrowed.slice(0, MANY);
   // What a press does, in the provider's own terms. Three sentences because the providers take three
   // roads, and a reader judging the press is judging which of the three they are on.
-  const sends = tf(
+  const sends = how === null ? "" : tf(
     how.carries === "named" ? "face.modelSendsNamed"
       : how.carries === "filter" ? "face.modelSendsFilter"
         : "face.modelSendsPicker",
@@ -248,97 +249,101 @@ export function PaneModel({ frame, session, agent }: {
 
   return (
     <div className="modelrow" ref={mine}>
-      <button
-        className={`modelrow__now${open ? " modelrow__now--open" : ""}`}
-        type="button"
-        aria-expanded={open}
-        title={t("face.modelSwitch")}
-        onClick={() => {
-          // Coming back to the row is the one moment the provider's picker is certainly done with.
-          setWaiting(false);
-          setOpen(!open);
-        }}
-      >
-        <Icon name="robot" label={t("face.modelSwitch")} />
-        {now?.label ?? on?.label ?? t("face.modelHere")}
-      </button>
-      {/* What the row did, in place of the model it cannot claim. The providers whose picker opens
-          leave the choosing to the person, and until they have made it there is nothing here that is
-          true about the model — so what is said is that the terminal is waiting for one. */}
-      {waiting && <span className="modelrow__note" role="status">{t("face.modelPicking")}</span>}
-      {failed !== null && <span className="modelrow__failed" role="alert">{failed}</span>}
-      {open && (
-        <div className="modelpick">
-          <p className="slot__ask" id={`${askId}-model`}>{t("face.whichModelNow")}</p>
-          {models === null
-            ? <p className="slot__note" role="status">{t("face.modelsChecking")}</p>
-            : (
-              <>
-                {/* The box, in the two shapes it takes. Over a long list it narrows; where there is no
-                    list at all it is the answer itself, and what was chosen before stands under it as
-                    the only candidates anybody has. */}
-                {models.length > MANY && (
-                  <label className="slot__field">
-                    <span>{t("face.modelFind")}</span>
-                    <input {...asTyped} autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} />
-                  </label>
+      {how !== null && (
+        <>
+          <button
+            className={`modelrow__now${open ? " modelrow__now--open" : ""}`}
+            type="button"
+            aria-expanded={open}
+            title={t("face.modelSwitch")}
+            onClick={() => {
+              // Coming back to the row is the one moment the provider's picker is certainly done with.
+              setWaiting(false);
+              setOpen(!open);
+            }}
+          >
+            <Icon name="robot" label={t("face.modelSwitch")} />
+            {now?.label ?? on?.label ?? t("face.modelHere")}
+          </button>
+          {/* What the row did, in place of the model it cannot claim. The providers whose picker opens
+              leave the choosing to the person, and until they have made it there is nothing here that is
+              true about the model — so what is said is that the terminal is waiting for one. */}
+          {waiting && <span className="modelrow__note" role="status">{t("face.modelPicking")}</span>}
+          {failed !== null && <span className="modelrow__failed" role="alert">{failed}</span>}
+          {open && (
+            <div className="modelpick">
+              <p className="slot__ask" id={`${askId}-model`}>{t("face.whichModelNow")}</p>
+              {models === null
+                ? <p className="slot__note" role="status">{t("face.modelsChecking")}</p>
+                : (
+                  <>
+                    {/* The box, in the two shapes it takes. Over a long list it narrows; where there is no
+                        list at all it is the answer itself, and what was chosen before stands under it as
+                        the only candidates anybody has. */}
+                    {models.length > MANY && (
+                      <label className="slot__field">
+                        <span>{t("face.modelFind")}</span>
+                        <input {...asTyped} autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} />
+                      </label>
+                    )}
+                    {models.length === 0 && (
+                      <label className="slot__field">
+                        <span>{t("face.modelName")}</span>
+                        <input
+                          {...asTyped}
+                          autoFocus
+                          value={typed}
+                          onChange={(e) => setTyped(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (!isEnterSubmit(e)) return;
+                            e.preventDefault();
+                            const name = typed.trim();
+                            if (name !== "") void move({ id: name, label: name });
+                          }}
+                        />
+                      </label>
+                    )}
+                    <div className="slot__starts" role="group" aria-labelledby={`${askId}-model`}>
+                      {drawn.map((one) => (
+                        <button
+                          key={one.id}
+                          className="slot__start"
+                          type="button"
+                          onClick={() => { void move(one); }}
+                        >
+                          {one.label}
+                        </button>
+                      ))}
+                      {/* The one press for a name nobody can offer a pill for. It is beside the row rather
+                          than in the box, because what the box holds is a name and what this is, is
+                          sending it. */}
+                      {models.length === 0 && typed.trim() !== "" && (
+                        <button
+                          className="slot__start"
+                          type="button"
+                          onClick={() => { void move({ id: typed.trim(), label: typed.trim() }); }}
+                        >
+                          {t("face.composeSend")}
+                        </button>
+                      )}
+                    </div>
+                    {/* Said rather than left to be noticed: a row that stops at its own length looks like
+                        the whole answer, and the reader would never learn the box above reaches the rest. */}
+                    {narrowed.length > drawn.length && models.length > 0 && (
+                      <p className="slot__note">{tf("face.modelsMore", { n: narrowed.length - drawn.length })}</p>
+                    )}
+                  </>
                 )}
-                {models.length === 0 && (
-                  <label className="slot__field">
-                    <span>{t("face.modelName")}</span>
-                    <input
-                      {...asTyped}
-                      autoFocus
-                      value={typed}
-                      onChange={(e) => setTyped(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (!isEnterSubmit(e)) return;
-                        e.preventDefault();
-                        const name = typed.trim();
-                        if (name !== "") void move({ id: name, label: name });
-                      }}
-                    />
-                  </label>
-                )}
-                <div className="slot__starts" role="group" aria-labelledby={`${askId}-model`}>
-                  {drawn.map((one) => (
-                    <button
-                      key={one.id}
-                      className="slot__start"
-                      type="button"
-                      onClick={() => { void move(one); }}
-                    >
-                      {one.label}
-                    </button>
-                  ))}
-                  {/* The one press for a name nobody can offer a pill for. It is beside the row rather
-                      than in the box, because what the box holds is a name and what this is, is
-                      sending it. */}
-                  {models.length === 0 && typed.trim() !== "" && (
-                    <button
-                      className="slot__start"
-                      type="button"
-                      onClick={() => { void move({ id: typed.trim(), label: typed.trim() }); }}
-                    >
-                      {t("face.composeSend")}
-                    </button>
-                  )}
-                </div>
-                {/* Said rather than left to be noticed: a row that stops at its own length looks like
-                    the whole answer, and the reader would never learn the box above reaches the rest. */}
-                {narrowed.length > drawn.length && models.length > 0 && (
-                  <p className="slot__note">{tf("face.modelsMore", { n: narrowed.length - drawn.length })}</p>
-                )}
-              </>
-            )}
-          {/* What the press puts in the pane, before it is pressed. */}
-          <p className="slot__runs">{sends}</p>
-          {/* And where this machine keeps it afterwards, for the providers that keep it anywhere. It
-              is the reader's own file, so it is named rather than described. */}
-          {how.keeps !== null && (
-            <p className="slot__note">{tf("face.modelKeeps", { path: how.keeps })}</p>
+              {/* What the press puts in the pane, before it is pressed. */}
+              <p className="slot__runs">{sends}</p>
+              {/* And where this machine keeps it afterwards, for the providers that keep it anywhere. It
+                  is the reader's own file, so it is named rather than described. */}
+              {how.keeps !== null && (
+                <p className="slot__note">{tf("face.modelKeeps", { path: how.keeps })}</p>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

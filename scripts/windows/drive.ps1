@@ -32,6 +32,9 @@
       click     x, y                  left click there
       dblclick  x, y                  double click there
       rclick    x, y                  right click there
+      drag      x, y, tox, toy        press there, move to the second point, let go
+      drop-file x, y, paths           bring those files in from outside and let them go there
+                [fromx, fromy]        where the drag is picked up from (default: the top middle)
       type      text                  send it as keystrokes (SendKeys syntax)
       key       text                  the same door, named for single keys ("{ENTER}")
       sleep     ms                    wait
@@ -46,6 +49,14 @@
     it, or a `name` (the process name, no .exe) resolved at the step itself. The name
     is what a plan that starts the program uses, since a pid the same plan just
     printed cannot be written into it beforehand.
+
+    `drag` and `drop-file` are two gestures and not one with a file on it. `drag` walks
+    a pressed pointer across the desktop, which is what moves something already inside a
+    window; nothing travels with it, so a window is told a pointer went past and no more.
+    `drop-file` begins a real OLE dragging session, which is the only thing a drop target
+    answers — and only a process with a window on screen may begin one, so this puts one
+    up at the point the press starts from. The mouse is pressed and moved for real either
+    way, because the session tracks the machine's own pointer and not a message.
 
     `pid` is a property on the action object, never a variable: `$pid` is read-only
     in PowerShell. `op` is spelled `op` and not `do` for the same class of reason —
@@ -94,6 +105,98 @@ public class AmenboU {
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
   public static string Title(IntPtr h) { var sb = new StringBuilder(512); GetWindowTextW(h, sb, 512); return sb.ToString(); }
+}
+"@
+
+# The half a posted pointer cannot do. What crosses the screen when a file is dragged in is an OLE
+# **dragging session** — a data object travelling with the pointer — and a pointer on its own carries
+# none: `drag` walks one over a window and the window is told nothing at all. Only a process with a
+# window on screen may begin one, so this puts up a small one at the point the press starts from and
+# begins the session there.
+#
+# `DoDragDrop` is modal and tracks the machine's own mouse until the button comes up, so the pressing
+# and the moving are a thread of their own behind it. The button is pressed **before** the call: a
+# session begun with nothing held down ends in the same breath, and what it would report is a drop
+# nobody made.
+#
+# **The press has to land on that window and on nothing else.** One that reaches the window under it
+# instead is taken by whatever that window does with a held button — a text selection, a tab being
+# torn off — and it takes the pointer with it: the session then tracks for as long as the button is
+# down and comes back having been offered to nobody (measured, twice). So the window is raised,
+# activated and given the capture before the press, with a pause after each: it has to be realized on
+# screen, and a form that has only been asked to show is not yet there.
+#
+# It is eight pixels across at a twentieth of its colour, which is as close to not being there as a
+# window that has to exist can be, and it is taken down in a `finally` so a session that throws does
+# not leave one sitting over somebody's screen.
+#
+# Both assemblies are named: `Add-Type`'s default references carry neither, and a class that uses
+# one without saying so does not compile at all.
+Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing @"
+using System;
+using System.Collections.Specialized;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Windows.Forms;
+public class AmenboDrag {
+  [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] static extern void mouse_event(uint f, uint x, uint y, uint d, IntPtr e);
+  const uint LEFTDOWN = 0x0002, LEFTUP = 0x0004;
+
+  /// Walk the pressed pointer from where it is to (x, y), in steps small enough that the far side
+  /// reads a crossing rather than a jump: a drop target lights on the moves it is sent, and one that
+  /// arrives in a single leap is one it never saw coming.
+  public static void Walk(int fromX, int fromY, int x, int y, int steps) {
+    for (int i = 1; i <= steps; i++) {
+      SetCursorPos(fromX + (x - fromX) * i / steps, fromY + (y - fromY) * i / steps);
+      Thread.Sleep(20);
+    }
+    for (int i = 0; i < 6; i++) { SetCursorPos(x, y); Thread.Sleep(80); }
+  }
+
+  public static string Drop(string[] paths, int fromX, int fromY, int x, int y) {
+    var data = new DataObject();
+    var names = new StringCollection();
+    foreach (var one in paths) names.Add(one);
+    data.SetFileDropList(names);
+
+    var form = new Form {
+      FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, TopMost = true,
+      StartPosition = FormStartPosition.Manual, Location = new System.Drawing.Point(fromX, fromY),
+      Size = new System.Drawing.Size(8, 8), Opacity = 0.05,
+    };
+    try {
+      form.Show();
+      form.Activate();
+      form.BringToFront();
+      Application.DoEvents();
+      Thread.Sleep(300);
+      SetCursorPos(fromX + 4, fromY + 4);
+      Thread.Sleep(200);
+      mouse_event(LEFTDOWN, 0, 0, 0, IntPtr.Zero);
+      Thread.Sleep(200);
+      Application.DoEvents();
+      form.Capture = true;
+      // Behind the modal call, because that call is what tracks the pointer this thread moves.
+      var hand = new Thread(() => {
+        Walk(fromX + 4, fromY + 4, x, y, 24);
+        Thread.Sleep(200);
+        mouse_event(LEFTUP, 0, 0, 0, IntPtr.Zero);
+      });
+      hand.SetApartmentState(ApartmentState.STA);
+      hand.Start();
+      var began = DateTime.UtcNow;
+      var took = form.DoDragDrop(data, DragDropEffects.Copy | DragDropEffects.Link | DragDropEffects.Move);
+      hand.Join(5000);
+      // How long it tracked, beside what it came back with. A session that never began returns the
+      // same word as one nobody took — and the two are told apart by nothing else: a crossing takes
+      // about a second, and a call that ends in the same breath never held the pointer at all.
+      return took.ToString() + " in " + ((int)(DateTime.UtcNow - began).TotalMilliseconds) + "ms";
+    } finally {
+      form.Close();
+      form.Dispose();
+    }
+  }
 }
 "@
 
@@ -195,6 +298,29 @@ foreach ($a in $steps) {
             [AmenboU]::mouse_event($MOUSE_RIGHTDOWN, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 60
             [AmenboU]::mouse_event($MOUSE_RIGHTUP, 0, 0, 0, [IntPtr]::Zero)
             "rclick $($a.x),$($a.y)"
+        }
+        "drag" {
+            [void][AmenboU]::SetCursorPos($a.x, $a.y); Start-Sleep -Milliseconds 120
+            [AmenboU]::mouse_event($MOUSE_LEFTDOWN, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 120
+            [AmenboDrag]::Walk($a.x, $a.y, $a.tox, $a.toy, 24)
+            [AmenboU]::mouse_event($MOUSE_LEFTUP, 0, 0, 0, [IntPtr]::Zero)
+            "drag $($a.x),$($a.y) -> $($a.tox),$($a.toy)"
+        }
+        "drop-file" {
+            # Where the drag is picked up from. It is somewhere other than where it is let go — a
+            # crossing of no distance is one the far side never sees begin — and the top middle of
+            # the desktop is that for a drop aimed at something a person is looking at. A plan whose
+            # target is up there names its own.
+            $fromX = if ($null -ne $a.fromx) { $a.fromx } else { [System.Windows.Forms.SystemInformation]::VirtualScreen.Width / 2 }
+            $fromY = if ($null -ne $a.fromy) { $a.fromy } else { 4 }
+            $paths = @($a.paths)
+            $missing = @($paths | Where-Object { -not (Test-Path -LiteralPath $_) })
+            if ($missing.Count -gt 0) {
+                "drop-file: no such file: $($missing -join ', ')"
+            } else {
+                $took = [AmenboDrag]::Drop([string[]]$paths, [int]$fromX, [int]$fromY, $a.x, $a.y)
+                "drop-file $($paths -join ', ') -> $($a.x),$($a.y) : $took"
+            }
         }
         "type" { [System.Windows.Forms.SendKeys]::SendWait($a.text); "type" }
         "key" { [System.Windows.Forms.SendKeys]::SendWait($a.text); "key $($a.text)" }

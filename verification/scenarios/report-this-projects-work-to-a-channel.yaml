@@ -1,0 +1,140 @@
+# Setting a project up to report, and being able to read back where its notifications go.
+#
+# The road exists because the setup is deliberately in two places: the connection is
+# written once on the device, under a name, and each project selects from that shelf. What that buys
+# is one edit when a webhook changes — and what it costs is a reader who has written the connection
+# and still has nothing sending, because the second half is on another screen. So the road walks both
+# halves and then reads the answer back from the project's side, which is where somebody asking
+# "where does this go?" actually stands.
+#
+# The credential is the part nobody can check afterwards. It goes into a masked box and is never read
+# back by anything, so what the shelf can say is that one is held — and that is exactly what decides
+# whether the target can send at all. A road that only wrote it and moved on would be green on a
+# build that dropped it on the floor.
+#
+# Nothing here sends. A message would need a channel somebody owns and a relay that would take it,
+# and a release gate resting on whether a third party answered today is a gate resting on nothing.
+# What is walked is everything up to the sending; whether the far side takes it is the next road's.
+id: report-this-projects-work-to-a-channel
+title: A project is set up to report to a channel, and where its notifications go can be read back
+description: >
+  Raise a connection on the device's shelf, write its credential, then switch this project on, select
+  that connection and choose an event — and read both halves back. What is under test is the split
+  itself: a build where the two halves did not meet would take every step and report nothing, and the
+  only place that shows is the project's own answer naming the target the device holds.
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+
+steps_cli:
+  # The device's half. Raising and connecting are two steps because that is the order the store takes
+  # them in: the credential needs a row to hang off.
+  - type: action
+    domain: notify
+    op: raise
+    with:
+      kind: slack
+      name: SCENARIO SEED — the team's channel
+    as: channel
+
+  - type: action
+    domain: notify
+    op: connect
+    with:
+      target: channel
+      secret: https://hooks.slack.com/services/T00SCENARIO/B00SCENARIO/notarealwebhookvalue
+
+  # Read before the project is touched at all: a credential that did not land is a target that cannot
+  # send, and every step after this would pass without it.
+  - type: assert
+    domain: notify
+    op: shelved
+    with:
+      target: channel
+      credential: true
+
+  # The project's half.
+  - type: action
+    domain: notify
+    op: report
+    with:
+      on: true
+
+  - type: action
+    domain: notify
+    op: carry
+    with:
+      target: channel
+      on: true
+
+  - type: action
+    domain: notify
+    op: choose
+    with:
+      event: task.done
+      on: true
+
+  # The answer a reader gets when they ask where this project's notifications go — the switch, the
+  # target the device holds, and one of the events it reports, in one reading.
+  - type: assert
+    domain: notify
+    op: reports
+    with:
+      on: true
+      target: channel
+      event: task.done
+
+steps_gui:
+  - type: action
+    domain: notify
+    op: raise
+    with:
+      kind: slack
+      name: SCENARIO SEED — the team's channel
+    as: channel
+
+  - type: action
+    domain: notify
+    op: connect
+    with:
+      target: channel
+      secret: https://hooks.slack.com/services/T00SCENARIO/B00SCENARIO/notarealwebhookvalue
+
+  - type: assert
+    domain: notify
+    op: shelved
+    with:
+      target: channel
+      credential: true
+
+  - type: action
+    domain: notify
+    op: report
+    with:
+      on: true
+
+  - type: action
+    domain: notify
+    op: carry
+    with:
+      target: channel
+      on: true
+
+  - type: action
+    domain: notify
+    op: choose
+    with:
+      event: task.done
+      on: true
+
+  - type: assert
+    domain: notify
+    op: reports
+    with:
+      on: true
+      target: channel
+      event: task.done

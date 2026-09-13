@@ -274,6 +274,16 @@ pub enum Domain {
     /// The screen's alone. Reading a file at a shell is `cat`, and there is nothing about that
     /// Amenbo is the subject of.
     Files,
+    /// Where a project's notifications go: the connections this device can send through, and the
+    /// selection a project makes from them. A domain of its own because the two halves are kept in
+    /// two places on purpose — the connection on the device, the choosing on the project — and a
+    /// road that means to prove one goes where the other says has to walk both.
+    ///
+    /// **Nothing here posts.** A road that sent would need a channel somebody owns and a relay that
+    /// would take it, and a release gate that reached either would be a gate holding a release on
+    /// whether a third party answered today. What is walked is everything up to the sending: the
+    /// shelf, the selection, and the check that reads the settings without a message leaving.
+    Notify,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2218,6 +2228,38 @@ const REGISTRY: &[OpSpec] = &[
     // for one would be a command written for this harness rather than for a reader. So the wake is
     // the assert — it carries out one hour's turn and judges what came back, which is exactly what a
     // scheduler would have got.
+    // ---- notifications: the device's shelf, and what a project sends through it ----
+    // Raising is one step and connecting is the next, because that is the order the store takes them
+    // in: a credential needs a row to hang off, so there is no shape where a target arrives complete.
+    // It binds, since everything after it names the target it raised.
+    OpSpec { kind: Kind::Action, domain: Domain::Notify, op: "raise", required: &["kind", "name"], refs: &[], strings: &["kind", "name"], binds: true },
+    // The connection, written whole the way a form saves it. `secret` is the credential — a webhook
+    // URL, a mail password — and it is a `with` key like any other here because a scenario is a
+    // document nobody's real one belongs in: what a road writes is a value shaped like one.
+    OpSpec { kind: Kind::Action, domain: Domain::Notify, op: "connect", required: &["target"], refs: &["target"], strings: &["secret", "smtp_host", "smtp_user", "mail_from"], binds: false },
+    // Where a newly created project starts out pointing. It changes nothing about the projects
+    // already standing, which is the half a road has to walk to tell a default from a tier.
+    OpSpec { kind: Kind::Action, domain: Domain::Notify, op: "mark-default", required: &["target"], refs: &["target"], binds: false, strings: &[] },
+    OpSpec { kind: Kind::Action, domain: Domain::Notify, op: "remove", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // The project's own switch. Apart from the selection on purpose: a fortnight away is one move,
+    // and the settings are still standing on the way back.
+    OpSpec { kind: Kind::Action, domain: Domain::Notify, op: "report", required: &["on"], refs: &[], strings: &[], binds: false },
+    // One target carrying this project's notifications, or no longer. A project may carry several,
+    // which is what lets one reach a channel and an inbox at once.
+    OpSpec { kind: Kind::Action, domain: Domain::Notify, op: "carry", required: &["target", "on"], refs: &["target"], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Notify, op: "address", required: &["to"], refs: &[], strings: &["to"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Notify, op: "choose", required: &["event", "on"], refs: &[], strings: &["event"], binds: false },
+    // Asserts. The shelf row is read for the one thing the connection cannot say for itself — whether
+    // a credential is held — because that is what decides whether the target can send at all, and the
+    // value is never read back by anybody.
+    OpSpec { kind: Kind::Assert, domain: Domain::Notify, op: "shelved", required: &["target", "credential"], refs: &["target"], strings: &[], binds: false },
+    // What this project does with the shelf. `target` and `event` are each read where the step names
+    // one, so a road can say "on, through this, reporting that" in the three steps it is three facts.
+    OpSpec { kind: Kind::Assert, domain: Domain::Notify, op: "reports", required: &["on"], refs: &["target"], strings: &["event"], binds: false },
+    // Whether the settings are usable, read without a message leaving. What that can mean is the
+    // kind's — a relay is connected to, a webhook has the shape of its URL read — so a road saying
+    // "usable" of a Slack target is saying the smaller thing on purpose.
+    OpSpec { kind: Kind::Assert, domain: Domain::Notify, op: "usable", required: &["target", "yes"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "woken", required: &["purpose", "carried_out"], refs: &[], strings: &["purpose"], binds: false },
     // What the run did to the registration the scheduler holds, read and never written. **No op here
     // registers one**: a registration is written outside the throwaway store this run makes — into

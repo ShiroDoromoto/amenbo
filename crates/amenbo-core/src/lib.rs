@@ -38,6 +38,8 @@ pub mod mcp_probe;
 pub mod mcp_request;
 pub mod migrate;
 pub mod model;
+pub mod notify_mail;
+pub mod notify_smtp;
 pub mod nudge;
 pub mod store_engine;
 pub mod sys;

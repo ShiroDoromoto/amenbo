@@ -67,6 +67,7 @@ dependencies = [
  "proptest",
  "pulldown-cmark",
  "rusqlite",
+ "rustls",
  "self-replace",
  "serde",
  "serde_json",
@@ -77,6 +78,7 @@ dependencies = [
  "tracing",
  "unicode-normalization",
  "ureq",
+ "webpki-roots",
  "windows-sys 0.61.2",
  "zip",
 ]

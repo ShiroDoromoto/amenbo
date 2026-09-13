@@ -1,0 +1,150 @@
+# How to work in a folder is Amenbo's own answer, and a good deal of it is git's.
+#
+# The entry point hands a reader a way of working: cut a checkout for each task, record the commit's
+# SHA on it afterwards, offer the lint hooks. Every one of those needs a repository, and plenty of
+# people who keep work in Amenbo have no repository anywhere near the folder they keep it in.
+#
+# ── What this road defends ───────────────────────────────────────────────────────────────────────
+# That advice nobody can act on is not handed over. A reader told to cut a worktree in a folder git
+# has never touched is being told to do something there is nothing to do it with — and once one line
+# reads that way, the whole of the rest reads as advice meant for somebody else.
+#
+# And that the gate is fine enough not to throw away the line that survives. One cycle here is git's
+# from end to end and comes off whole; another has a single step that stands without a repository —
+# the lint reads a path or what is typed at it and opens no repository at all — and that step is the
+# only recommendation on this road that reaches a reader without one. A build gating whole cycles
+# only would pass the first half of this and lose exactly that line.
+#
+# ── Why two folders ──────────────────────────────────────────────────────────────────────────────
+# Because "not handed over" means nothing on its own: a build that had never had the advice would
+# read the same. So the same readings are made twice — once where git has never been and once in a
+# repository — and the difference between them is the gate.
+#
+# The folders are bound rather than merely made. What settles the answer is the folder holding the
+# pointer the run resolved, so a reading taken anywhere else is a reading about somewhere else, and
+# one taken where nothing is bound is a third state that is not this road's.
+id: be-told-how-to-work-here-without-being-told-to-use-git
+title: A reader whose folder git has never touched is not handed the parts of the way of working that need it
+description: >
+  Stand up a project with two folders on it: one lying on the disk as any folder does, and one that
+  is a git repository. Ask the entry point how to work, standing in each. In the plain folder the
+  cycle about cutting a checkout per task is not there at all, and the cycle about what leaves the
+  store has lost the step that records a commit's SHA and the one that offers the lint hooks — while
+  the step that lints what is leaving is still there, because it needs no repository. In the
+  repository all four are there. Nothing is written and nothing is pressed: what is under test is
+  what a reader is handed.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  # The folder git has never been near. Bound, because the answer is read off the folder holding the
+  # pointer and not off wherever the command happened to be run.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: greenhouse
+
+  # And the same again, made a repository. It is bound first for the same reason, and the repository
+  # is cut inside it rather than around it: what the gate looks at is this folder.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: vineyard
+      project: greenhouse
+
+  - type: action
+    domain: repo
+    op: git-init
+    with:
+      dir: vineyard
+
+steps_cli:
+  # ── The folder git has never touched ──────────────────────────────────────────────────────────
+  # The whole cycle, which is git's from end to end: there is nothing in it for a reader with no
+  # repository, so none of it is handed over.
+  - type: assert
+    domain: repo
+    op: agent-cycle
+    with:
+      dir: orchard
+      cycle: worktree
+      present: false
+
+  # The other cycle is still handed over, because one of its steps stands without a repository. Read
+  # before the steps inside it: a build that dropped this whole would fail here rather than three
+  # readings further down, and the difference is worth having in the report.
+  - type: assert
+    domain: repo
+    op: agent-cycle
+    with:
+      dir: orchard
+      cycle: commit
+      present: true
+
+  # And that step is the one that survived. It is the reading with the most in it: everything else
+  # here is advice being taken away, and this is the line that has to be left.
+  - type: assert
+    domain: repo
+    op: agent-cycle
+    with:
+      dir: orchard
+      cycle: commit
+      step: lint-what-leaves
+      present: true
+
+  # The two beside it are gone. One records a SHA there is none of; the other writes into a
+  # repository's own frame.
+  - type: assert
+    domain: repo
+    op: agent-cycle
+    with:
+      dir: orchard
+      cycle: commit
+      step: anchor-the-sha
+      present: false
+
+  - type: assert
+    domain: repo
+    op: agent-cycle
+    with:
+      dir: orchard
+      cycle: commit
+      step: install-the-hooks
+      present: false
+
+  # ── And the repository, where every one of them is handed over ────────────────────────────────
+  # Without this the readings above are worth nothing: a build carrying none of this advice at all
+  # would answer them exactly the same way.
+  - type: assert
+    domain: repo
+    op: agent-cycle
+    with:
+      dir: vineyard
+      cycle: worktree
+      present: true
+
+  - type: assert
+    domain: repo
+    op: agent-cycle
+    with:
+      dir: vineyard
+      cycle: commit
+      step: anchor-the-sha
+      present: true
+
+  - type: assert
+    domain: repo
+    op: agent-cycle
+    with:
+      dir: vineyard
+      cycle: commit
+      step: install-the-hooks
+      present: true

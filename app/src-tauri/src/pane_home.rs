@@ -21,12 +21,20 @@
 //! point rather than a copy: settings the person edits by hand go on working, and so does an
 //! authentication that is refreshed.
 //!
-//! **The same link carries writes back out.** Codex writes a folder's `trust_level` into the
+//! **What a pane settles reaches back out.** Codex writes a folder's `trust_level` into the
 //! `config.toml` it is pointed at, and Gemini writes a folder it has been trusted with into
 //! `trustedFolders.json`, so trusting a folder in a pane reaches the reader's own file — as does
-//! anything else settled there. That is the price of sharing the file, and it is `AMB-D-869`'s and
-//! `AMB-D-875`'s to have paid; what is owed here is that the lists below are not widened without the
-//! same question being asked again.
+//! anything else settled there. That is the price of the file a pane reads being the reader's own,
+//! reached by a link or by a path alike, and it is `AMB-D-869`'s and `AMB-D-875`'s to have paid;
+//! what is owed here is that the lists below are not widened without the same question being asked
+//! again.
+//!
+//! **One file is pointed at rather than shared.** Gemini replaces `trustedFolders.json` — a
+//! temporary file and a rename — and a link does not survive that on Windows, where a hard one is
+//! the only kind this process can make (`AMB-D-878`). A pane told where the reader keeps the file
+//! reads the one file there has ever been, so there is nothing for the replacing to break. The
+//! answer is the same on every operating system: a symbolic link would have done on macOS, and one
+//! row that says this once is worth more than a branch that buys nothing.
 //!
 //! **What is made here is tidied here.** A home outlives the run because the pane does, so it is
 //! taken away when the pane is ([`crate::pane_home::forget`]) and what an ended run left behind is
@@ -75,6 +83,17 @@ struct Kind {
     /// is a file that will not be shared until this list says so, which is the cost `AMB-D-869`
     /// accepted for not reading its internals.
     shared: &'static [&'static str],
+    /// What each home is told the path of, in the reader's own directory, instead of being given a
+    /// link to it — the variable, and the name under [`Kind::theirs`].
+    ///
+    /// It is for the files the provider **replaces** rather than writes into: a temporary file and
+    /// a rename leave a link pointing at what used to be there. A path names the file however often
+    /// it is rewritten, so nothing has to survive the rewriting — and writes still reach the
+    /// reader's own file, which is [`Kind::shared`]'s price and not a further one.
+    ///
+    /// Unlike a shared name, a file the reader has none of is still pointed at: the provider makes
+    /// the file where it is told to, and a variable left out would send it back to the home.
+    points: &'static [(&'static str, &'static str)],
 }
 
 /// Every provider that comes back by the place it was started in, in the catalog's order.
@@ -90,6 +109,7 @@ const KINDS: &[Kind] = &[
         // are gone from the pane; take `cache` and `models_cache.json` out and the home is 29MB
         // instead of 2.3 (`AMB-T-4633`).
         shared: &["auth.json", "config.toml", "skills", "prompts", "cache", "plugins", "models_cache.json"],
+        points: &[],
     },
     Kind {
         agent: "gemini-cli",
@@ -97,13 +117,15 @@ const KINDS: &[Kind] = &[
         theirs: ".gemini",
         homes: "gemini-homes",
         inside: ".gemini",
-        // Two of these are the difference between a pane and a stopped one (`AMB-T-4677`): without
-        // `settings.json` it exits on the auth method it cannot read, and without
-        // `trustedFolders.json` it exits on a folder it has not been told to trust — and its TUI
-        // asks about the folder every time. The third is for the machines with no keychain to keep
-        // a token in: there the provider writes one into the home it was pointed at, which is this
-        // one and not the reader's, so an authentication would be asked for again per pane.
-        shared: &["settings.json", "trustedFolders.json", "gemini-credentials.json"],
+        // Without `settings.json` the pane is a stopped one (`AMB-T-4677`): it exits on the auth
+        // method it cannot read. The other is for the machines with no keychain to keep a token in:
+        // there the provider writes one into the home it was pointed at, which is this one and not
+        // the reader's, so an authentication would be asked for again per pane.
+        shared: &["settings.json", "gemini-credentials.json"],
+        // The third thing the pane stops without — it exits on a folder it has not been told to
+        // trust, and its TUI asks about the folder every time (`AMB-T-4677`) — and the one the
+        // provider replaces rather than writes into, so it is pointed at (`AMB-D-878`).
+        points: &[("GEMINI_CLI_TRUSTED_FOLDERS_PATH", "trustedFolders.json")],
     },
 ];
 
@@ -121,7 +143,9 @@ fn kind_of(agent: Option<&str>) -> Option<&'static Kind> {
 }
 
 /// The home the AI in this frame runs in, made and linked the first time it is asked for, with the
-/// variable it is told about it by — and nothing at all for a pane running anything else.
+/// variables the pane is started with: the one it is told its home by, and one for each file it is
+/// pointed at where the reader keeps it ([`Kind::points`]). Nothing at all for a pane running
+/// anything else.
 ///
 /// **Keyed by the frame rather than by the session**, because what comes back is the place: a pane
 /// resumed in the next run is the same frame with a new process in it, and the home it is pointed at
@@ -130,18 +154,32 @@ fn kind_of(agent: Option<&str>) -> Option<&'static Kind> {
 ///
 /// A frame id that is not a plain number is refused rather than made a directory for: it arrives from
 /// the window, and what a name would do here is write outside the directory this module answers for.
-pub fn for_pane(frame: &str, agent: Option<&str>) -> Option<(&'static str, PathBuf)> {
+pub fn for_pane(frame: &str, agent: Option<&str>) -> Option<(Vec<(&'static str, PathBuf)>, PathBuf)> {
     let kind = kind_of(agent)?;
     if frame.is_empty() || !frame.bytes().all(|byte| byte.is_ascii_digit()) {
         log::warn!("no {} home for frame {frame:?}: a frame is a number", kind.agent);
         return None;
     }
     let home = homes_root(kind)?.join(frame);
-    if home.is_dir() {
-        return Some((kind.env, home));
-    }
     let theirs = amenbo_core::env::home_dir().map(|dir| dir.join(kind.theirs));
-    make(kind, &home, theirs.as_deref()).map(|home| (kind.env, home))
+    // A home that is already there is the one that comes back, links and all; only the first ask
+    // makes one. The variables are read off the row either way — they are what the pane is started
+    // with, not something the making leaves behind.
+    let home = if home.is_dir() { home } else { make(kind, &home, theirs.as_deref())? };
+    Some((vars(kind, home.clone(), theirs.as_deref()), home))
+}
+
+/// The variables a pane with this home is started with, in the order [`Kind`] gives them.
+///
+/// **A reader's own directory that cannot be resolved leaves only the home.** There is no path to
+/// point the pane at, and a variable set to a guess would send the provider somewhere nobody keeps
+/// anything.
+fn vars(kind: &Kind, home: PathBuf, theirs: Option<&Path>) -> Vec<(&'static str, PathBuf)> {
+    let mut vars = vec![(kind.env, home)];
+    if let Some(theirs) = theirs {
+        vars.extend(kind.points.iter().map(|(var, name)| (*var, theirs.join(name))));
+    }
+    vars
 }
 
 /// Take one pane's home away, once the pane is gone (`crate::frames`).
@@ -293,7 +331,7 @@ mod tests {
     /// differently on Windows.
     fn theirs(kind: &Kind) -> PathBuf {
         let dir = amenbo_scratch::scratch("pane-theirs").join(kind.agent);
-        for name in kind.shared {
+        for name in kind.shared.iter().chain(kind.points.iter().map(|(_, name)| name)) {
             let at = dir.join(name);
             if name.contains('.') {
                 std::fs::create_dir_all(dir.as_path()).unwrap();
@@ -386,7 +424,52 @@ mod tests {
         make(kind, &home, Some(&theirs)).unwrap();
 
         assert!(home.join(".gemini/settings.json").symlink_metadata().is_err());
-        assert!(home.join(".gemini/trustedFolders.json").symlink_metadata().is_ok());
+        assert!(home.join(".gemini/gemini-credentials.json").symlink_metadata().is_ok());
+    }
+
+    /// The file the provider replaces is not linked into the home at all: the pane is told where the
+    /// reader keeps it, and reads the one file there has ever been (`AMB-D-878`).
+    #[test]
+    fn the_file_the_provider_replaces_is_pointed_at_rather_than_linked() {
+        let kind = kind(GEMINI);
+        let theirs = theirs(kind);
+        let home = amenbo_scratch::scratch("pane-home-pointed").join("7");
+
+        make(kind, &home, Some(&theirs)).unwrap();
+
+        assert!(home.join(".gemini/trustedFolders.json").symlink_metadata().is_err());
+        assert_eq!(
+            vars(kind, home.clone(), Some(&theirs)),
+            vec![
+                (kind.env, home),
+                ("GEMINI_CLI_TRUSTED_FOLDERS_PATH", theirs.join("trustedFolders.json")),
+            ]
+        );
+    }
+
+    /// A file that is pointed at is pointed at whether or not the reader has one yet — the provider
+    /// makes it where it is told to, and a variable left out would send it into the pane's home.
+    #[test]
+    fn a_file_the_reader_has_none_of_is_still_pointed_at() {
+        let kind = kind(GEMINI);
+        let theirs = theirs(kind);
+        std::fs::remove_file(theirs.join("trustedFolders.json")).unwrap();
+        let home = amenbo_scratch::scratch("pane-home-pointed-missing").join("7");
+
+        assert_eq!(
+            vars(kind, home.clone(), Some(&theirs)).get(1),
+            Some(&("GEMINI_CLI_TRUSTED_FOLDERS_PATH", theirs.join("trustedFolders.json")))
+        );
+    }
+
+    /// A machine whose home directory cannot be resolved leaves the pane with its own home and
+    /// nothing else: there is no path to name.
+    #[test]
+    fn a_pane_with_no_readers_directory_is_told_its_home_alone() {
+        let kind = kind(GEMINI);
+        let home = amenbo_scratch::scratch("pane-home-unpointed").join("7");
+
+        assert_eq!(vars(kind, home.clone(), None), vec![(kind.env, home)]);
     }
 
     /// A home is made once. Asked for again, the same directory comes back with the reader's own

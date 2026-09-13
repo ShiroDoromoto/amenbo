@@ -999,14 +999,17 @@ pub fn pty_open(
     let mut cmd = launch::command(folder.clone(), run);
     cmd.env(SESSION_ENV, &session);
     // A row that is resumed by a directory rather than by a name is pointed at one of its own, and
-    // the path goes down on that frame's row (`AMB-D-869`, `AMB-D-875`, `crate::pane_home`). Which
-    // rows those are is the catalog's answer and not this one's: a way back that is taken down takes
-    // the home with it, so nothing is made for a pane that could not come back to it
-    // (`AMB-T-4678`). Every other provider is given nothing here — their way back is a session id on
-    // the launch line.
+    // the path goes down on that frame's row (`AMB-D-869`, `AMB-D-875`, `crate::pane_home`). More
+    // than one variable can come back: a file the provider replaces is named where the reader keeps
+    // it instead of being shared into the home (`AMB-D-878`). Which rows these are is the catalog's
+    // answer and not this one's: a way back that is taken down takes the home with it, so nothing is
+    // made for a pane that could not come back to it (`AMB-T-4678`). Every other provider is given
+    // nothing here — their way back is a session id on the launch line.
     if let Some(frame) = frame.as_deref() {
-        if let Some((env, home)) = crate::pane_home::for_pane(frame, agent_id.as_deref()) {
-            cmd.env(env, &home);
+        if let Some((vars, home)) = crate::pane_home::for_pane(frame, agent_id.as_deref()) {
+            for (var, path) in &vars {
+                cmd.env(var, path);
+            }
             face.resumed_from(frame, home.to_string_lossy().into_owned());
         }
     }

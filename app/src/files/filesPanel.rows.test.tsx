@@ -629,6 +629,16 @@ describe("the file face", () => {
     expect(rows().filter((one) => one.tabIndex === 0)).toHaveLength(1);
   });
 
+  /** A tree bound beside others is carried clean past the box they all scroll in, and what it
+   *  leaves behind is the height of the whole tree and no more. A spacer taller than that pushes
+   *  the sections under it down as fast as the reader scrolls, so the panel stops moving and the
+   *  rows judder in 22px steps (`AMB-T-4726`). */
+  it("leaves behind no more height than the tree has, once it is past the top of the box", async () => {
+    await tall(200);
+    expect(rows()).toHaveLength(0);
+    expect(spacers()).toEqual([`${100 * 22}px`]);
+  });
+
   it("moves the box to a row a key named from outside the window", async () => {
     const box = await tall(20);
     expect(rows().some((one) => labelOf(one) === "f099.md")).toBe(false);

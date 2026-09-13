@@ -700,8 +700,9 @@ pub static LAUNCHES: &[Launch] = &[
         // conversation in it answers plainly with a new one (`AMB-T-4677`).
         resume: Some(Resume { back: Back::Words(&["--resume", "latest"]), issue: None, ask: None }),
         // Restores nothing: a line that says no model comes back on this machine's default, which is
-        // not what the pane was running. So this line names one, and `AMB-T-4698` is what makes the
-        // name the pane's own rather than the provider's (`AMB-T-4694`).
+        // not what the pane was running. So this line names one, and the name it is handed is the
+        // pane's own rather than the provider's (`AMB-T-4694`, `AMB-T-4698` —
+        // `crate::frames::SavedPane::model`).
         model_on_the_way_back: true,
         confirmed: true,
     },

@@ -564,6 +564,7 @@ pub fn run() {
       frames::frame_names,
       frames::panes_without_a_way_back,
       frames::name_frame,
+      frames::frame_on_model,
       commands::project_memo,
       commands::set_project_memo,
       frames::talk_layout,

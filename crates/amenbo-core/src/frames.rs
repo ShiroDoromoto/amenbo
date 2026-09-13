@@ -234,6 +234,22 @@ pub struct SavedPane {
     /// in.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resume: Option<String>,
+    /// The model this pane was last known to be answering on — the spelling the provider takes, and
+    /// `None` for a pane opened on whatever the provider's own settings had.
+    ///
+    /// **It is the pane's and not the agent's** (`AMB-T-4698`). What model an agent comes up on is
+    /// kept against the agent ([`crate::config::Config::model_for`]), which is the right answer for
+    /// a pane about to be opened and the wrong one for a pane coming back: choosing another model in
+    /// one pane would otherwise decide what every other pane of that provider resumes on. So the
+    /// name that went on this pane's line goes down here, beside the handle it comes back by, and it
+    /// is that name the next run hands back to the one provider that does not restore its own
+    /// ([`crate::harness::Launch::model_on_the_way_back`]).
+    ///
+    /// **What is written in the pane is not in it.** A person who types the provider's own model
+    /// command into the terminal has changed something Amenbo never sees, and reading it back off
+    /// the screen is the one thing a pane exists not to do (`AMB-D-747`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 /// Which way the two panes of a two-pane page sit: side by side, or one above the other.
@@ -418,6 +434,7 @@ mod tests {
                 agent: Some("claude".into()),
                 name: Some(FrameName { name: "the migration".into(), by: Person }),
                 resume: Some("0f9c-…".into()),
+                model: Some("opus".into()),
             }],
             next_id: 3,
         };
@@ -444,6 +461,7 @@ mod tests {
                 agent: None,
                 name: None,
                 resume: None,
+                model: None,
             }],
             next_id: 2,
         };
@@ -453,6 +471,7 @@ mod tests {
         assert!(!written.contains("agent"), "nothing was started in it: {written}");
         assert!(!written.contains("name"), "nobody has named it: {written}");
         assert!(!written.contains("resume"), "and there is no way back into it: {written}");
+        assert!(!written.contains("model"), "nor a model it was put on: {written}");
         assert_eq!(saved_layout(&engine).unwrap(), Some(kept));
     }
 
@@ -469,6 +488,7 @@ mod tests {
             agent: None,
             name: None,
             resume: None,
+            model: None,
         };
         engine
             .set_meta(

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type { AgentModelDto, AgentModelKeptDto, AgentSwitchDto } from "../bindings/bindings";
+import type {
+  AgentModelDto, AgentModelKeptDto, AgentModelListDto, AgentSwitchDto,
+} from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { errText, t, tf } from "../core/i18n";
@@ -115,8 +117,8 @@ export function PaneModel({ session, agent }: {
       .catch(() => {});
     // A read that failed is an empty row, the same as a provider that would not answer: the other
     // road is always open, which is to type the provider's own command in the pane (`AMB-D-865`).
-    void invoke<AgentModelDto[]>("agent_models", { agent })
-      .then((said) => { if (alive) setModels(said); })
+    void invoke<AgentModelListDto>("agent_models", { agent })
+      .then((said) => { if (alive) setModels(said.models); })
       .catch(() => { if (alive) setModels([]); });
     return () => { alive = false; };
   }, [open, agent]);

@@ -151,6 +151,26 @@ history: Array<AgentModelDto>,
 flag: string | null, };
 
 /**
+ * What an agent answered when it was asked what it can be started on (`AMB-D-865`).
+ *
+ * **`current` is read and never written.** It is the model the agent comes up on when it is handed
+ * no model flag, as the agent itself says — so a face can put a name where it would otherwise draw
+ * "the agent's own default" and nothing more. Two of the six say which that is; for the rest it is
+ * `null`, which is "the agent did not say" and never "there isn't one". Keeping it as this device's
+ * choice would put the name on every launch and turn "whatever the agent is on" into "whatever it
+ * was on the day this was read" (`amenbo_core::agent_models::Answer`).
+ */
+export type AgentModelListDto = { 
+/**
+ * Everything the agent offered, in the order it gave them.
+ */
+models: Array<AgentModelDto>, 
+/**
+ * The `id` of the one it is on now, or `null` where it did not say.
+ */
+current: string | null, };
+
+/**
  * Where a model's name may go when a running pane is moved (`amenbo_core::harness::Carries`).
  */
 export type AgentSwitchCarriesDto = "named" | "picker" | "filter";

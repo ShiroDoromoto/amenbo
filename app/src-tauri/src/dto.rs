@@ -2172,6 +2172,24 @@ pub struct AgentModelDto {
     pub(crate) label: String,
 }
 
+/// What an agent answered when it was asked what it can be started on (`AMB-D-865`).
+///
+/// **`current` is read and never written.** It is the model the agent comes up on when it is handed
+/// no model flag, as the agent itself says — so a face can put a name where it would otherwise draw
+/// "the agent's own default" and nothing more. Two of the six say which that is; for the rest it is
+/// `null`, which is "the agent did not say" and never "there isn't one". Keeping it as this device's
+/// choice would put the name on every launch and turn "whatever the agent is on" into "whatever it
+/// was on the day this was read" (`amenbo_core::agent_models::Answer`).
+#[derive(Default, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModelListDto {
+    /// Everything the agent offered, in the order it gave them.
+    pub(crate) models: Vec<AgentModelDto>,
+    /// The `id` of the one it is on now, or `null` where it did not say.
+    pub(crate) current: Option<String>,
+}
+
 /// What a model choice this device has already made looks like to a face (`AMB-D-865`).
 ///
 /// **Two lists, because they answer two different questions.** `chosen` is what the next pane opened

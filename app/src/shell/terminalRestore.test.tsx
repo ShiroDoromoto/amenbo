@@ -235,8 +235,11 @@ describe("a window that reads an arrangement with panes in it", () => {
       nextId: 3,
       project: 1,
       frames: [
-        { id: "1", project: 1, folder: "/work/repo" },
-        { id: "2", project: 1, folder: "/work/repo", agent: "claude" },
+        // And which way the box under each was left, written both ways round: a row without it is a
+        // row from before it was kept, and reading one back is what the machine's habit answers
+        // (`AMB-D-890`).
+        { id: "1", project: 1, folder: "/work/repo", composeOpen: false },
+        { id: "2", project: 1, folder: "/work/repo", agent: "claude", composeOpen: false },
       ],
       splitOut: "1",
     });

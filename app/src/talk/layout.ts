@@ -175,6 +175,7 @@ export type SavedLayout = {
     written?: string;
     inserted?: string[];
     resumes?: boolean;
+    composeOpen?: boolean;
   }[];
   /** The pane being worked in when the arrangement was last written. It is what the window split out
    *  of this face comes up on, so the reader lands where they left rather than on the first place of
@@ -251,6 +252,24 @@ export type Frame = {
    * is the list that is asked about (`./terminal`).
    */
   readonly inserted: readonly string[];
+  /**
+   * Whether the box under this pane is open (`AMB-D-890`).
+   *
+   * **It is here for the reason the draft is**: the pane comes and goes — a page turned, a count
+   * changed, the tasks face brought up, the terminal put in a window of its own — and a reader who
+   * opened the box did not ask for it to shut at any of those. Kept in the drawing, it went down
+   * with every one of them.
+   *
+   * **It goes on to the store, which the draft does not** (`app/src-tauri/src/frames.rs`). A
+   * half-written sentence is the moment's and is better gone than stale; which panes a person writes
+   * in is how they work, and does not go stale.
+   *
+   * **What a pane starts as is the machine's, and what it is now is this** (`AMB-D-889`,
+   * `../core/composeStartsOpen`). The habit answers a pane being made and a row that came back
+   * without this; after that the pane is the one the reader left. Read again later, a press in one
+   * pane would fold another, and each fold wakes the program in it to repaint (`AMB-D-864`).
+   */
+  readonly composeOpen: boolean;
 };
 
 /** The arrangement of the terminal face, as it stands. */
@@ -388,7 +407,12 @@ function withFrame(layout: Layout, frame: string, change: (was: Frame) => Frame)
  * moment where a frame exists with the question still on it. The new pane is the one being worked in
  * and the screen moves to the page it landed on, because a person who opened a pane is looking at it.
  */
-export function openedFrame(layout: Layout, project: number, folder: string | null): { layout: Layout; frame: Frame } {
+export function openedFrame(
+  layout: Layout,
+  project: number,
+  folder: string | null,
+  composeOpen = false,
+): { layout: Layout; frame: Frame } {
   const frame: Frame = {
     id: String(layout.nextId),
     project,
@@ -399,6 +423,10 @@ export function openedFrame(layout: Layout, project: number, folder: string | nu
     resumes: false,
     written: "",
     inserted: [],
+    // The one moment the machine's habit is asked (`Frame.composeOpen`). The caller is what knows it
+    // — this module reads nothing of its own — and a caller that does not say opens the pane folded,
+    // which is where `AMB-D-889` starts one.
+    composeOpen,
   };
   const next: Layout = {
     ...layout,
@@ -439,6 +467,18 @@ export function writing(
         ? []
         : [...was.inserted, ...put.filter((path) => !was.inserted.includes(path))],
   }));
+}
+
+/**
+ * The box under a pane opened or folded away, which is the press on that pane's own band
+ * (`Frame.composeOpen`).
+ *
+ * **It moves this pane and no other.** What the next pane will start as is the machine's answer and
+ * is written down beside the theme (`../core/composeStartsOpen`); a pane already on the screen is
+ * left where its reader put it, the box taking room from the terminal above it.
+ */
+export function folding(layout: Layout, frame: string, open: boolean): Layout {
+  return withFrame(layout, frame, (was) => ({ ...was, composeOpen: open }));
 }
 
 export function openedIn(
@@ -712,6 +752,11 @@ export function laidOut(layout: Layout): SavedLayout {
       // apart, and the window this is written for is the one the draft is being carried to
       // (`Frame.inserted`).
       ...(frame.inserted.length === 0 ? {} : { inserted: [...frame.inserted] }),
+      // Written both ways round rather than left out on one of them: this is an answer with two
+      // sides, and a row missing it is a row that predates it — which the reading back answers with
+      // the machine's habit, and would answer a folded pane with on the day the habit is to open
+      // (`restored`).
+      composeOpen: frame.composeOpen,
     })),
     // The pane being worked in, written down for the window the terminal is split out into: the
     // press says nothing, so where the reader was is theirs to read back out of the shape.
@@ -732,7 +777,7 @@ export function laidOut(layout: Layout): SavedLayout {
  * one: a pane whose project nothing records is put where the person is rather than dropped, and where
  * there is nowhere to put it there is nothing to draw.
  */
-export function restored(saved: SavedLayout, onto: number | null): Layout {
+export function restored(saved: SavedLayout, onto: number | null, composeOpen = false): Layout {
   const splits = answers(saved.splits);
   const frames: Frame[] = [];
   for (const frame of saved.frames) {
@@ -755,6 +800,9 @@ export function restored(saved: SavedLayout, onto: number | null): Layout {
       // Kept only where the body it was put into came too: an empty box holds nothing, so a path
       // remembered over one would have the next send wait out an agent with no file to read.
       inserted: (frame.written ?? "") === "" ? [] : (frame.inserted ?? []),
+      // The box as the reader left it (`AMB-D-890`). A row from before this was kept has no answer
+      // of its own, so it opens on the machine's habit — which is what every pane did until then.
+      composeOpen: frame.composeOpen ?? composeOpen,
     });
   }
   const first = frames[0];

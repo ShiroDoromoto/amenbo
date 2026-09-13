@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneEvents } from "../talk/terminal";
 import { pauseBeforeTheReturn } from "../talk/terminal";
 import { t } from "../core/i18n";
-import { setComposeStartsOpen } from "../core/composeStartsOpen";
+import { composeStartsOpen, setComposeStartsOpen } from "../core/composeStartsOpen";
 import { TerminalPane } from "./TerminalPane";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -94,10 +94,15 @@ afterEach(() => {
  * and still lose a sentence on the next page turn.
  */
 function Window(
-  { autoStart = true, put, working = true }:
-    { autoStart?: boolean; put?: (text: string) => void; working?: boolean },
+  { autoStart = true, put, working = true, open }:
+    { autoStart?: boolean; put?: (text: string) => void; working?: boolean; open?: boolean },
 ) {
   const [written, setWritten] = useState("");
+  // And whether the box is open, which is the window's too (`AMB-D-890`). Seeded from this machine's
+  // habit the way the face seeds a pane it is opening, so a test that sets the habit first still
+  // gets the pane it asked for — and held here after, so a press moves this pane and outlives the
+  // drawing.
+  const [composeOpen, setComposeOpen] = useState(() => open ?? composeStartsOpen());
   // Which pane is being worked in, which is the window's answer and not the pane's: the pane asks
   // for it on a press and reads it back on the render after. A test that held it still could not
   // tell a press that moved the frame from one that landed where it already was.
@@ -112,6 +117,8 @@ function Window(
     focused,
     written,
     onWrite: (_frame: string, text: string) => setWritten(text),
+    composeOpen,
+    onFold: (_frame: string, open: boolean) => setComposeOpen(open),
     onOpened: () => {},
     onSaid: () => {},
     onPath: () => {},
@@ -122,10 +129,14 @@ function Window(
   });
 }
 
-/** A pane on frame 1, working in `/work/here` — the pane being worked in unless `working` says not. */
-async function pane(autoStart = true, working = true): Promise<void> {
+/** A pane on frame 1, working in `/work/here` — the pane being worked in unless `working` says not.
+ *  `open` is the window's answer about the box, for the one test that is about where that answer
+ *  comes from; every other one lets the machine's habit seed it, the way the face does. */
+async function pane(autoStart = true, working = true, open?: boolean): Promise<void> {
   await act(async () => {
-    root.render(createElement(Window, { autoStart, working, put: (text) => { hoisted.held = text; } }));
+    root.render(createElement(Window, {
+      autoStart, working, open, put: (text) => { hoisted.held = text; },
+    }));
   });
 }
 
@@ -227,6 +238,18 @@ describe("the press that folds the box away", () => {
     expect(box(), "the pane came up with the box already open").toBeNull();
     expect(fold()?.getAttribute("aria-expanded")).toBe("false");
     expect(fold()?.title).toBe(t("face.composeOpen"));
+  });
+
+  // The habit answers a pane being opened and nothing after it (`AMB-D-890`): what this pane is now
+  // is the window's, so the box is still open in the window a terminal is split out into and in the
+  // next run. A pane holding its own answer would have folded itself at every one of those.
+  it("draws the window's answer, and not this machine's", async () => {
+    setComposeStartsOpen(false);
+    await pane(true, true, true);
+    await opened();
+
+    expect(box(), "the pane read the habit over what the window told it").not.toBeNull();
+    expect(fold()?.getAttribute("aria-expanded")).toBe("true");
   });
 
   it("opens the box, and shuts it again", async () => {

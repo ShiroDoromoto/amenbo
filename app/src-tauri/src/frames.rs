@@ -338,6 +338,9 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
                     folder: pane.folder.clone(),
                     agent: pane.agent.clone(),
                     written: None,
+                    // Which way the reader left this pane's box, so it comes back the way they left
+                    // it rather than the way their habit would make it now (`AMB-D-890`).
+                    compose_open: pane.compose_open,
                     // The one thing this run knows about the place that the window cannot work out:
                     // whether the last run left a way into what was running in it. The window opens
                     // those without being pressed (`AMB-T-4641`).
@@ -462,6 +465,7 @@ fn panes_of(face: &TalkFace, layout: &TalkLayoutDto) -> Vec<SavedPane> {
                 name: names.all().get(&frame.id).cloned(),
                 resume: hints.get(&frame.id).cloned(),
                 model: models.get(&frame.id).cloned(),
+                compose_open: frame.compose_open,
             })
         })
         .collect()
@@ -522,6 +526,7 @@ mod tests {
             agent: agent.map(str::to_string),
             written: Some("half a sentence".to_string()),
             resumes: false,
+            compose_open: Some(true),
         }
     }
 
@@ -670,6 +675,7 @@ mod tests {
                 name: None,
                 resume: Some("0f9c".to_string()),
                 model: Some("opus".to_string()),
+                compose_open: None,
             }],
             next_id: 2,
         });
@@ -703,6 +709,7 @@ mod tests {
                 name: None,
                 resume: Some("/homes/1".to_string()),
                 model: Some("gemini-2.5-pro".to_string()),
+                compose_open: None,
             }],
             next_id: 2,
         });
@@ -755,6 +762,7 @@ mod tests {
                 name: Some(FrameName { name: "the migration".to_string(), by: NamedBy::Person }),
                 resume: Some("0f9c".to_string()),
                 model: None,
+                compose_open: None,
             }],
             next_id: 2,
         };

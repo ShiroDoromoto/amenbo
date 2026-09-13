@@ -4,7 +4,7 @@ import {
   ACROSS, acrossIn, addPane, closedFrame, closedIn, COUNTS, DEFAULT_COUNT, DEFAULT_ORIENT,
   EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo, movedWithin, openedFrame, openedIn,
   ORIENTS, orientable, pageCount, pageOfFrame, pageShape, paneIn, panesOf, reordered, restored,
-  roomOnPage, setCount, setOrient, slotsOf, writing, type Layout,
+  roomOnPage, setCount, setOrient, slotsOf, writing, folding, type Layout,
 } from "./layout";
 
 /** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one.
@@ -209,6 +209,7 @@ describe("where a pane works", () => {
         resumes: false,
         written: "",
         inserted: [],
+        composeOpen: false,
       },
     ], nextId: 2 }, "1", "s1", null, "claude");
     // What is running comes off the session as well, and by the same reasoning: a pane that adopted
@@ -341,9 +342,11 @@ describe("an arrangement kept between runs", () => {
     expect(kept.count).toBe(layout.count);
     expect(kept.frames).toEqual([
       // What was started in each, which is the half of a row a folder cannot carry: the second is at
-      // a plain prompt, and a prompt has nothing to name.
-      { id: "1", project: 1, folder: "/work/1", agent: "claude" },
-      { id: "2", project: 1, folder: "/work/1" },
+      // a plain prompt, and a prompt has nothing to name. And which way the box under each was left,
+      // written both ways round because a row without it is a row from before it was kept
+      // (`AMB-D-890`).
+      { id: "1", project: 1, folder: "/work/1", agent: "claude", composeOpen: false },
+      { id: "2", project: 1, folder: "/work/1", composeOpen: false },
     ]);
     // What was running is not in it at all: a session died with the last run, and a pane drawn as
     // though it were still there would be the window saying something untrue.
@@ -658,6 +661,56 @@ describe("what is written in the box under a pane", () => {
     const { frames: _typed, ...rest } = laidOut(layout);
     const { frames: _empty, ...was } = laidOut(writing(layout, layout.frames[0]!.id, ""));
     expect(rest).toEqual(was);
+  });
+});
+
+// The box is opened by a press on one pane's band, and what that press answers is that pane
+// (`AMB-D-890`). A pane is taken down and drawn again all through a run — a page turned, a count
+// changed, the terminal put in a window of its own — and a reader who opened the box did not ask for
+// it to shut at any of those; nor did the readers of every other pane on the screen.
+describe("whether the box under a pane is open", () => {
+  /** Two panes in one project, with the box opened under the first. */
+  function opened() {
+    const layout = withPanes(2);
+    const frame = layout.frames[0]!.id;
+    return { layout: folding(layout, frame, true), frame };
+  }
+
+  it("is folded in a place that has just been opened, where nothing says otherwise", () => {
+    expect(openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/repo").frame.composeOpen).toBe(false);
+  });
+
+  it("is what the caller says a place is being opened with", () => {
+    expect(openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/repo", true).frame.composeOpen).toBe(true);
+  });
+
+  it("is kept against the pane the press was made in, and no other", () => {
+    const { layout, frame } = opened();
+    expect(layout.frames.find((one) => one.id === frame)?.composeOpen).toBe(true);
+    expect(layout.frames.find((one) => one.id !== frame)?.composeOpen).toBe(false);
+  });
+
+  it("stays through the moves that take a pane down and draw it again", () => {
+    const { layout, frame } = opened();
+    const away = setCount(goPage(goPage(layout, 2), 1), 4);
+    expect(away.frames.find((one) => one.id === frame)?.composeOpen).toBe(true);
+  });
+
+  // The arrangement is how the board and the window a terminal is split out into hand the face over,
+  // and it is what goes on to the store as well — so this is read back in both of those.
+  it("crosses in the arrangement, both ways round", () => {
+    const { layout, frame } = opened();
+    const back = restored(laidOut(layout), null);
+    expect(back.frames.find((one) => one.id === frame)?.composeOpen).toBe(true);
+    expect(back.frames.find((one) => one.id !== frame)?.composeOpen).toBe(false);
+  });
+
+  // A row written before this was kept has no answer of its own. What it opens on is this machine's
+  // habit, which is what every pane opened on until then (`../core/composeStartsOpen`).
+  it("opens on the habit where a row from an older build has no answer", () => {
+    const older = { count: 2 as const, nextId: 2, project: 1, frames: [{ id: "1", project: 1 }] };
+    expect(restored(older, null).frames[0]?.composeOpen).toBe(false);
+    expect(restored(older, null, true).frames[0]?.composeOpen).toBe(true);
   });
 });
 

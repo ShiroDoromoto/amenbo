@@ -11,7 +11,7 @@ import {
   frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
 } from "../talk/frames";
 import {
-  addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject,
+  addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folding, goPage, goProject,
   laidOut, movedTo, openedFrame, openedIn, ORIENTS, orientable, pageCount, pageShape,
   paneIn, panesOf, reordered, restored, roomOnPage, setCount, setOrient, slotsOf, writing,
   type Count, type Layout,
@@ -25,6 +25,7 @@ import {
 import { FilesPanel, openKey, type OpenFile, type Typed } from "../files/FilesPanel";
 import { FolderTree } from "../files/FolderTree";
 import { fileUnderAny } from "../files/fileUnder";
+import { composeStartsOpen } from "../core/composeStartsOpen";
 import { isBlankSpaceClose } from "./outsideClose";
 import { useHandDrag } from "../files/handDrag";
 import { Icon } from "../components/Icon";
@@ -386,7 +387,7 @@ export function TerminalFace({
           // carried the older answer would put the face back to having no project, and the page
           // draws nothing at all while it has none, so the way in would be gone from a face that
           // had one a moment ago (`AMB-T-4398`).
-          let next = saved === null ? was : restored(saved, was.project);
+          let next = saved === null ? was : restored(saved, was.project, composeStartsOpen());
           // The project the reader was looking at, for the face that was not told one — the window
           // the terminal was split out into, which has no ledger to have taken one from, and the
           // board on a launch, where the project it opens the ledger at is nobody's answer about the
@@ -407,7 +408,7 @@ export function TerminalFace({
             const frame = free ?? (next.project === null
               ? null
               : (() => {
-                const made = openedFrame(next, next.project, session.folder);
+                const made = openedFrame(next, next.project, session.folder, composeStartsOpen());
                 next = made.layout;
                 return made.frame;
               })());
@@ -590,7 +591,7 @@ export function TerminalFace({
   const openPane = useCallback((project: number, folder: string, agent: string | null) => {
     setAsking(null);
     setLayout((was) => {
-      const made = openedFrame(was, project, folder);
+      const made = openedFrame(was, project, folder, composeStartsOpen());
       startNow.current.add(made.frame.id);
       if (agent !== null) startWith.current.set(made.frame.id, agent);
       return made.layout;
@@ -729,7 +730,7 @@ export function TerminalFace({
         setLayout((was) => {
           const open = paneIn(was, project, dir);
           if (open) return focusOn(was, open.id);
-          const made = openedFrame(was, project, dir);
+          const made = openedFrame(was, project, dir, composeStartsOpen());
           // The same mark a press on the empty frame leaves (`openPane`): this frame is one a person
           // pressed for, so the pane opens rather than offering to.
           startNow.current.add(made.frame.id);
@@ -1264,6 +1265,8 @@ export function TerminalFace({
                     written={frame.written}
                     inserted={frame.inserted}
                     onWrite={(id, text, put) => setLayout((was) => writing(was, id, text, put))}
+                    composeOpen={frame.composeOpen}
+                    onFold={(id, open) => setLayout((was) => folding(was, id, open))}
                   />
                 ))}
                 {asking !== null && (

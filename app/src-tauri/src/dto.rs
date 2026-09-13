@@ -2971,6 +2971,16 @@ pub struct TalkFrameDto {
     /// back false and is drawn as the place it is, with the way in on it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub(crate) resumes: bool,
+    /// Whether the box under this pane is open (`AMB-D-890`). Absent in an arrangement written before
+    /// it was carried, which the window answers for.
+    ///
+    /// **It rides the arrangement for the reason the draft does** — that is how the two windows hand
+    /// the face over — **and it goes on to the store as well**, which the draft does not: a
+    /// half-written sentence is the moment's, and which panes a reader writes in outlives the run
+    /// (`amenbo_core::frames::SavedPane::compose_open`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) compose_open: Option<bool>,
 }
 
 /// **The store's identity, in the parts a reader has to tell apart** (`AMB-D-856`). It was one string

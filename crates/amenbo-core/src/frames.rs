@@ -261,6 +261,18 @@ pub struct SavedPane {
     /// the screen is the one thing a pane exists not to do (`AMB-D-747`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Whether the box under this pane is open (`AMB-D-890`).
+    ///
+    /// **It is the pane's, and the habit it starts from is the machine's.** What a pane *about to be
+    /// opened* comes up as is the answer this machine last gave, kept beside the theme rather than
+    /// here (`app/src/core/composeStartsOpen.ts`, `AMB-D-889`). What a pane already made is stands
+    /// here, so one put in a window of its own, moved to another page or come back to after a run is
+    /// the pane the reader left — and not the one their habit would make now.
+    ///
+    /// `None` is a row written before this was kept. The window opens such a pane on the habit, which
+    /// is the only answer there is for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compose_open: Option<bool>,
 }
 
 /// Which way the two panes of a two-pane page sit: side by side, or one above the other.
@@ -446,6 +458,7 @@ mod tests {
                 name: Some(FrameName { name: "the migration".into(), by: Person }),
                 resume: Some("0f9c-…".into()),
                 model: Some("opus".into()),
+                compose_open: Some(true),
             }],
             next_id: 3,
         };
@@ -473,6 +486,7 @@ mod tests {
                 name: None,
                 resume: None,
                 model: None,
+                compose_open: None,
             }],
             next_id: 2,
         };
@@ -483,6 +497,10 @@ mod tests {
         assert!(!written.contains("name"), "nobody has named it: {written}");
         assert!(!written.contains("resume"), "and there is no way back into it: {written}");
         assert!(!written.contains("model"), "nor a model it was put on: {written}");
+        assert!(
+            !written.contains("composeOpen"),
+            "nor which way the box under it was left, on a row that never said: {written}"
+        );
         assert_eq!(saved_layout(&engine).unwrap(), Some(kept));
     }
 
@@ -500,6 +518,7 @@ mod tests {
             name: None,
             resume: None,
             model: None,
+            compose_open: None,
         };
         engine
             .set_meta(

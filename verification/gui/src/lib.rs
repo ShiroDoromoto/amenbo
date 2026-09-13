@@ -2796,6 +2796,16 @@ impl Instructor {
                 req(with, "path")?,
                 req(with, "dir")?
             ),
+            // The picture a road asks for by size rather than by name. A premise draws it before the
+            // app is up, and this is what an operator would be told if a road ever put it mid-walk:
+            // the size is the point, so the size is what is said, and how they get a file that big
+            // is theirs.
+            (Domain::Repo, "write-picture") => format!(
+                "Outside Amenbo — in a file manager or another terminal — put a picture file called \"{}\" of at least {} megabytes inside the folder the road calls \"{}\". What it depicts does not matter; how large it is does. Do not touch Amenbo while you do.",
+                req(with, "path")?,
+                count(with, "megabytes")?,
+                req(with, "dir")?
+            ),
             // The two halves of the clipboard that happen outside Amenbo. They are the operator's own
             // file manager, named as loosely as the rest of the outside is: what matters is that the
             // clipboard was used by something that is not this window, not which application it was.

@@ -854,6 +854,17 @@ const REGISTRY: &[OpSpec] = &[
     // reachable by writing inside it. Left out, the file lands in the run's own folder.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path", "dir"], binds: false },
+    // And bytes too big to keep on a shelf. A road about what a provider does with a **large**
+    // picture needs one of a named size, and the smallest that walks such a road is over four
+    // megabytes — six times the largest file this repository tracks, and about seven per cent on its
+    // pack, carried by everyone who ever clones it for one road. So the size is said and the run
+    // draws it: nothing is added to the tree, and a road can ask for twenty megabytes the day the
+    // provider's threshold moves.
+    //
+    // `megabytes` is a count and not a word, which is why it is not among the strings: what the
+    // lint is watching for there is a value YAML typed by its shape, and this one is meant to be a
+    // number.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-picture", required: &["path", "megabytes"], refs: &[], strings: &["path", "dir"], binds: false },
     // The clipboard filled from outside Amenbo, which is the only way a road can put a real one in
     // front of the panel. It is not stood up in a premise: what is under test is the machine's own
     // clipboard, and a premise that filled it with something other than a file manager would be
@@ -3684,6 +3695,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // road cannot make a file at all — every move it has is a move on a record — so a road that needs
     // one lying on the disk has no other way to arrive at it.
     (Domain::Repo, "copy-fixture"),
+    // And the same for bytes no shelf should hold. A picture of a named size is drawn rather than
+    // tracked, and drawing one is not a move on any screen: there is no command in Amenbo that
+    // makes a file, so a road needing a large one on the disk has no other way to arrive at it.
+    (Domain::Repo, "write-picture"),
     // And one of those names being a link instead of a file. Amenbo makes no link and has no command
     // that would — a face that refuses to follow one is all it ever does about them — so the world a
     // road about that refusal opens on is one no face reaches.

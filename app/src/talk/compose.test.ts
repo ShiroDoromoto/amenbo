@@ -58,14 +58,29 @@ describe("sending a line a person wrote", () => {
   // The return still goes exactly once, and still behind the paste. What the pause changes is only
   // when — a return inside Gemini's cushion is rewritten to a Shift-Enter, and the message the person
   // pressed send on stays in the provider's input box (`AMB-T-4704`, `AMB-D-879`).
+  //
+  // What is read here is when the return crosses, on a clock the test moves itself. A wall clock
+  // read either side of the wait answers a millisecond short of the cushion often enough to turn
+  // other people's runs red, because the wait is counted on a clock that only goes forward and
+  // `Date.now()` is the time of day rounded to the millisecond (`AMB-T-4731`).
   it("leaves the pane's agent its cushion before the return, and still sends one", async () => {
     hoisted.asked = [];
+    const cushion = pauseBeforeTheReturn("gemini-cli");
+    vi.useFakeTimers();
 
-    const began = Date.now();
-    await sendIntoTerminal("session-7", "run the tests", "gemini-cli");
+    try {
+      const sending = sendIntoTerminal("session-7", "run the tests", "gemini-cli");
 
-    expect(Date.now() - began, "the return went inside the cushion")
-      .toBeGreaterThanOrEqual(pauseBeforeTheReturn("gemini-cli"));
+      await vi.advanceTimersByTimeAsync(cushion - 1);
+      expect(hoisted.asked.map((one) => one.args.data), "the return went before the cushion was out")
+        .not.toContain("\r");
+
+      await vi.advanceTimersByTimeAsync(1);
+      await sending;
+    } finally {
+      vi.useRealTimers();
+    }
+
     expect(hoisted.asked.filter((one) => one.args.data === "\r"), "one return and no more")
       .toHaveLength(1);
     expect(hoisted.asked.map((one) => one.cmd)).toEqual(["pty_write", "pty_write", "pty_brief"]);

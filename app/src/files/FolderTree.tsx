@@ -57,7 +57,7 @@ import { pushNotice } from "../core/notice";
 import { hostOs } from "../core/platform";
 import {
   folderClipCopy, folderClipPaste, folderCopy, folderEntries, folderGitStatus, folderImport,
-  folderMake, folderMove, folderRename, folderUnwatch, folderWatch, onFolderChanged,
+  folderMake, folderMove, folderRename, folderUnwatch, folderWatch, nextWatchTag, onFolderChanged,
 } from "./folder";
 import { stoppedLine } from "./stopped";
 import { FileMenu } from "./FileMenu";
@@ -653,6 +653,10 @@ function FolderSection({
   useEffect(() => {
     if (!bound) return;
     let alive = true;
+    // Which mount of the tree this is. The column reading a file watches the same folder, and the
+    // two let go of it at their own moments — a watch taken down by name alone would leave whoever
+    // is still drawing the folder with nothing to wake them (`./folder`, `AMB-T-4823`).
+    const tag = nextWatchTag();
     // Subscribed before the watch is asked for: the first thing the folder does could happen while
     // the host is still walking it, and a listener set up afterwards would miss exactly that.
     // Every watched folder is told about through the one listener, so an answer about another
@@ -662,7 +666,7 @@ function FolderSection({
       setChanges(fresh);
       setMoved((n) => n + 1);
     });
-    void folderWatch(projectId, root)
+    void folderWatch(projectId, root, "tree", tag)
       .then((now) => { if (alive) setChanges(now); })
       .catch(() => {
         if (alive) setChanges({ root, capped: false, unwatched: false, gone: false });
@@ -670,7 +674,7 @@ function FolderSection({
     return () => {
       alive = false;
       void listening.then((stop) => stop());
-      void folderUnwatch(root);
+      void folderUnwatch(root, "tree", tag);
     };
   }, [projectId, root, bound]);
 

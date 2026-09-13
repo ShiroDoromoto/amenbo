@@ -123,6 +123,26 @@ describe("the file face", () => {
     expect(container.textContent).not.toContain("main.rs");
   });
 
+  it("lets one part of the face let go of a folder the other is still watching", async () => {
+    hoisted.file = aFile({ text: "# A heading", encoding: "UTF-8", digest: "before" });
+    await drawOpen();
+    await openFile(button("a.md"));
+    await settle();
+    // Both halves are on the one folder now: the tree draws it, and the column is reading a file
+    // out of it. Each watches for itself, because either can be on the screen without the other.
+    expect(hoisted.watchers.filter((one) => one.how === "watch").map((one) => one.watcher))
+      .toEqual(expect.arrayContaining(["tree", "file"]));
+
+    hoisted.watchers = [];
+    await click(container.querySelector<HTMLElement>(".files__tabclose"));
+    await settle();
+    // Only the column's own comes down. Taken down by the folder's name alone, this took the
+    // tree's watch with it — and the tree then went on drawing what the folder held at that
+    // moment, with nothing left to wake it (`AMB-T-4823`).
+    expect(hoisted.watchers.filter((one) => one.how === "unwatch").map((one) => one.watcher))
+      .toEqual(["file"]);
+  });
+
   it("takes its watch down when the face goes away", async () => {
     await draw();
     await act(async () => { root.unmount(); });

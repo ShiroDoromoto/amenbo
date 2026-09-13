@@ -38,16 +38,38 @@ export async function folderEntries(
 }
 
 /**
+ * Which mount of a watcher is asking. Counted here rather than in the host, because what it tells
+ * apart is two mounts of the same part of this page and nothing outside it — a page reloaded starts
+ * again at one and writes over what the page before it left (`crate::folder_watch`).
+ */
+let mounts = 0;
+
+/** The next one. One per run of the effect that watches, and the same one when it lets go. */
+export function nextWatchTag(): number {
+  mounts += 1;
+  return mounts;
+}
+
+/**
  * Start watching one of a project's folders, and take what is in it now.
  *
- * Asking again for the same folder replaces its watch, so a face that remounts leaves no watch
- * behind it — and the one call is both the subscription and the first answer, which is what keeps
- * the panel from drawing an empty list for the length of a walk. **Asking for a different folder
- * adds one**: the folders a project is bound to are watched side by side, not one at a time.
+ * The one call is both the subscription and the first answer, which is what keeps the panel from
+ * drawing an empty list for the length of a walk. **Asking for a different folder adds one**: the
+ * folders a project is bound to are watched side by side, not one at a time.
+ *
+ * **More than one part of this face watches the same folder**, so each says which part it is
+ * (`watcher`) and which mount of it (`tag`, from {@link nextWatchTag}) — and hands both back to
+ * {@link folderUnwatch}. Asking again for a folder somebody is already watching lays no second
+ * watch over it: the host's one thread tells every window (`crate::folder_watch`).
  */
-export async function folderWatch(projectId: number, root: string): Promise<FolderChangesDto> {
+export async function folderWatch(
+  projectId: number,
+  root: string,
+  watcher: string,
+  tag: number,
+): Promise<FolderChangesDto> {
   if (!inTauri()) return { root, capped: false, unwatched: false, gone: false };
-  return await invoke<FolderChangesDto>("folder_watch", { projectId, root });
+  return await invoke<FolderChangesDto>("folder_watch", { projectId, root, watcher, tag });
 }
 
 /**
@@ -66,10 +88,17 @@ export async function folderGitStatus(
   return await invoke<GitEntryDto[]>("folder_git_status", { projectId, root });
 }
 
-/** Stop watching one folder. Called for each folder the face drew as it goes away. */
-export async function folderUnwatch(root: string): Promise<void> {
+/**
+ * Stop watching one folder, for the one mount that is saying so.
+ *
+ * Called for each folder a part of the face drew as that part goes away, with the `watcher` and
+ * `tag` it watched under. The watch itself comes down with the last part still on it: a reader
+ * closing the file they had open is not the tree in the rail letting go of the same folder
+ * (`crate::folder_watch`).
+ */
+export async function folderUnwatch(root: string, watcher: string, tag: number): Promise<void> {
   if (!inTauri()) return;
-  await invoke<void>("folder_unwatch", { root });
+  await invoke<void>("folder_unwatch", { root, watcher, tag });
 }
 
 /**

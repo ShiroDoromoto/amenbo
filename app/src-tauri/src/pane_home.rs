@@ -36,6 +36,12 @@
 //! answer is the same on every operating system: a symbolic link would have done on macOS, and one
 //! row that says this once is worth more than a branch that buys nothing.
 //!
+//! **One file is copied in rather than shared, and only where a link will not do.** Codex replaces
+//! `config.toml` the same way and offers no variable to name it with, so on Windows a pane is given
+//! a copy of the reader's, taken again on every open. What that keeps is the person's model and
+//! servers reaching the pane; what it gives up is the pane's own writes coming back. macOS and Linux
+//! keep the link, which survives the replacing and gives up neither (`AMB-D-878`).
+//!
 //! **What is made here is tidied here.** A home outlives the run because the pane does, so it is
 //! taken away when the pane is ([`crate::pane_home::forget`]) and what an ended run left behind is
 //! cleared by the next one ([`crate::pane_home::sweep`]) — the same shape `crate::pty::sweep` clears the drop boxes with. Both doors
@@ -94,6 +100,33 @@ struct Kind {
     /// Unlike a shared name, a file the reader has none of is still pointed at: the provider makes
     /// the file where it is told to, and a variable left out would send it back to the home.
     points: &'static [(&'static str, &'static str)],
+    /// Which of [`Kind::shared`] the provider **replaces** rather than writes into — a temporary
+    /// file and a rename.
+    ///
+    /// A symbolic link is resolved afresh every time it is read and comes through that; the hard
+    /// link Windows is given is a second name for the file that was there, and is left on it
+    /// (`AMB-D-878`). So on Windows these are carried in as copies instead, on every open rather
+    /// than on the open that made the home — and only one direction is kept. What the person chose
+    /// reaches the pane; what the pane settles afterwards does not come back.
+    copied: &'static [&'static str],
+}
+
+impl Kind {
+    /// The shared names this operating system reaches through a link — everything, less what it
+    /// copies in instead.
+    fn linked(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.shared.iter().copied().filter(|name| !self.copied_here().contains(name))
+    }
+
+    /// The names this operating system carries in as copies. Nothing at all where a link survives
+    /// the file it names being replaced, which is everywhere but Windows (`AMB-D-878`).
+    fn copied_here(&self) -> &'static [&'static str] {
+        if cfg!(windows) {
+            self.copied
+        } else {
+            &[]
+        }
+    }
 }
 
 /// Every provider that comes back by the place it was started in, in the catalog's order.
@@ -110,6 +143,11 @@ const KINDS: &[Kind] = &[
         // instead of 2.3 (`AMB-T-4633`).
         shared: &["auth.json", "config.toml", "skills", "prompts", "cache", "plugins", "models_cache.json"],
         points: &[],
+        // Codex replaces `config.toml` — on an `mcp add`, and on a plain `codex exec`, which adds
+        // the folder's `trust_level` (`AMB-T-4696`). What is wanted of the file is the reader's
+        // model and servers reaching the pane, and a copy carries that however often it is
+        // rewritten (`AMB-D-878`).
+        copied: &["config.toml"],
     },
     Kind {
         agent: "gemini-cli",
@@ -126,6 +164,9 @@ const KINDS: &[Kind] = &[
         // trust, and its TUI asks about the folder every time (`AMB-T-4677`) — and the one the
         // provider replaces rather than writes into, so it is pointed at (`AMB-D-878`).
         points: &[("GEMINI_CLI_TRUSTED_FOLDERS_PATH", "trustedFolders.json")],
+        // Gemini's own replaced file is the one above: it is named by a variable rather than
+        // carried in, because the provider offers one to name it with.
+        copied: &[],
     },
 ];
 
@@ -166,6 +207,12 @@ pub fn for_pane(frame: &str, agent: Option<&str>) -> Option<(Vec<(&'static str, 
     // makes one. The variables are read off the row either way — they are what the pane is started
     // with, not something the making leaves behind.
     let home = if home.is_dir() { home } else { make(kind, &home, theirs.as_deref())? };
+    // The copies are carried in here rather than in `make`, so that the open which found the home
+    // already there brings them too: what they are for is the reader's file as it is now, and a
+    // copy taken on the open that made the home would be as old as the pane.
+    if let Some(theirs) = theirs.as_deref() {
+        copy_in(kind.copied_here(), &home.join(kind.inside), theirs);
+    }
     Some((vars(kind, home.clone(), theirs.as_deref()), home))
 }
 
@@ -245,7 +292,7 @@ fn make(kind: &Kind, home: &Path, theirs: Option<&Path>) -> Option<PathBuf> {
         return None;
     }
     if let Some(theirs) = theirs {
-        for name in kind.shared {
+        for name in kind.linked() {
             let from = theirs.join(name);
             // What the reader does not have is not linked to: a link to nothing is a path the
             // provider would read as a file it cannot open, rather than as a file that is not there.
@@ -258,6 +305,35 @@ fn make(kind: &Kind, home: &Path, theirs: Option<&Path>) -> Option<PathBuf> {
         }
     }
     Some(home.to_path_buf())
+}
+
+/// Carry the reader's own copy of each of these into a pane's home, replacing what an earlier open
+/// left there.
+///
+/// **What is standing there is taken away before anything is written.** It may be the hard link an
+/// earlier build left at that name, and a copy onto that is a copy onto the reader's own file —
+/// opened for truncation and then read from, which empties it rather than shares it. Removing the
+/// name first costs nothing in the ordinary case and is the whole of the difference in that one.
+///
+/// **A reader with none of their own leaves the pane with none either.** The copy an earlier open
+/// took is not what the file is now; it is what it was before the person deleted it.
+fn copy_in(names: &[&str], into: &Path, theirs: &Path) {
+    for name in names {
+        let at = into.join(name);
+        if at.exists() {
+            if let Err(e) = std::fs::remove_file(&at) {
+                log::warn!("{name} is not carried into {}: {e}", into.display());
+                continue;
+            }
+        }
+        let from = theirs.join(name);
+        if !from.exists() {
+            continue;
+        }
+        if let Err(e) = std::fs::copy(&from, &at) {
+            log::warn!("{name} is not carried into {}: {e}", into.display());
+        }
+    }
 }
 
 /// One entry of the reader's own directory, reached from inside a pane's home.
@@ -377,7 +453,7 @@ mod tests {
         }
     }
 
-    /// A home is empty of the provider's own state and full of the reader's: each shared name is
+    /// A home is empty of the provider's own state and full of the reader's: each linked name is
     /// reached through it, and reading one reaches the reader's own file.
     #[test]
     fn a_home_shares_what_the_reader_configured() {
@@ -386,12 +462,12 @@ mod tests {
             let home = amenbo_scratch::scratch("pane-home").join(kind.agent).join("7");
 
             assert_eq!(make(kind, &home, Some(&theirs)).as_deref(), Some(home.as_path()));
-            for name in kind.shared {
+            for name in kind.linked() {
                 let at = home.join(kind.inside).join(name);
                 // Reading through it reaches the reader's own — the entry itself where it is a
                 // file, and what is inside it where the shared name is a directory.
                 let read = if name.contains('.') { at.clone() } else { at.join("one") };
-                assert_eq!(std::fs::read_to_string(&read).unwrap(), *name, "{}: {name}", kind.agent);
+                assert_eq!(std::fs::read_to_string(&read).unwrap(), name, "{}: {name}", kind.agent);
                 shares(&at, &theirs.join(name));
             }
         }
@@ -460,6 +536,76 @@ mod tests {
             vars(kind, home.clone(), Some(&theirs)).get(1),
             Some(&("GEMINI_CLI_TRUSTED_FOLDERS_PATH", theirs.join("trustedFolders.json")))
         );
+    }
+
+    /// The file the provider replaces and offers no variable for is carried in as a copy, and only
+    /// where a link would not survive the replacing (`AMB-D-878`).
+    #[test]
+    fn the_file_that_is_copied_in_is_left_linked_where_a_link_lasts() {
+        let kind = kind(CODEX);
+
+        assert_eq!(kind.copied, ["config.toml"]);
+        let linked: Vec<_> = kind.linked().collect();
+        if cfg!(windows) {
+            assert_eq!(kind.copied_here(), kind.copied);
+            assert!(!linked.contains(&"config.toml"), "{linked:?}");
+        } else {
+            assert!(kind.copied_here().is_empty());
+            assert!(linked.contains(&"config.toml"), "{linked:?}");
+        }
+    }
+
+    /// A copy is taken again on every open, so a pane that was made runs ago is still given what the
+    /// person has chosen since.
+    #[test]
+    fn a_copy_is_what_the_readers_file_is_now() {
+        let theirs = amenbo_scratch::scratch("pane-copy-theirs");
+        let into = amenbo_scratch::scratch("pane-copy-home");
+        std::fs::write(theirs.join("config.toml"), "the model they chose first").unwrap();
+        copy_in(&["config.toml"], &into, &theirs);
+        std::fs::write(theirs.join("config.toml"), "the model they chose since").unwrap();
+
+        copy_in(&["config.toml"], &into, &theirs);
+
+        assert_eq!(
+            std::fs::read_to_string(into.join("config.toml")).unwrap(),
+            "the model they chose since"
+        );
+    }
+
+    /// What is standing at the name is taken away before the copy is written. An earlier build left
+    /// a hard link there, and writing onto that is writing into the reader's own file — which is
+    /// emptied rather than shared.
+    #[test]
+    fn a_copy_does_not_reach_back_through_a_link_an_earlier_build_made() {
+        let theirs = amenbo_scratch::scratch("pane-copy-linked-theirs");
+        let into = amenbo_scratch::scratch("pane-copy-linked-home");
+        let own = theirs.join("config.toml");
+        std::fs::write(&own, "the model they chose").unwrap();
+        std::fs::hard_link(&own, into.join("config.toml")).unwrap();
+
+        copy_in(&["config.toml"], &into, &theirs);
+
+        assert_eq!(std::fs::read_to_string(&own).unwrap(), "the model they chose");
+        // And what stands there afterwards is the pane's own file rather than a second name for the
+        // reader's: what the pane settles in it stays in the pane.
+        std::fs::write(into.join("config.toml"), "what the pane settled").unwrap();
+        assert_eq!(std::fs::read_to_string(&own).unwrap(), "the model they chose");
+    }
+
+    /// A file the reader has deleted leaves the pane with none either, rather than with the copy an
+    /// earlier open took of it.
+    #[test]
+    fn a_copy_goes_when_the_reader_has_none_of_their_own() {
+        let theirs = amenbo_scratch::scratch("pane-copy-gone-theirs");
+        let into = amenbo_scratch::scratch("pane-copy-gone-home");
+        std::fs::write(theirs.join("config.toml"), "the model they chose").unwrap();
+        copy_in(&["config.toml"], &into, &theirs);
+        std::fs::remove_file(theirs.join("config.toml")).unwrap();
+
+        copy_in(&["config.toml"], &into, &theirs);
+
+        assert!(!into.join("config.toml").exists());
     }
 
     /// A machine whose home directory cannot be resolved leaves the pane with its own home and

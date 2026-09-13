@@ -69,6 +69,9 @@ let root: Root;
 let read: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  // Where a pane's box starts is this machine's answer and outlives a test
+  // (`../core/composeStartsOpen`), so each one gets the machine nobody has pressed anything on.
+  localStorage.clear();
   hoisted.events = null;
   hoisted.paths = [];
   hoisted.wrote = "/tmp/amenbo-pasted-7a/pasted-0a0b0c0d.png";

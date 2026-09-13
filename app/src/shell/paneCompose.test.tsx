@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneEvents } from "../talk/terminal";
 import { pauseBeforeTheReturn } from "../talk/terminal";
 import { t } from "../core/i18n";
+import { setComposeStartsOpen } from "../core/composeStartsOpen";
 import { TerminalPane } from "./TerminalPane";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -73,6 +74,9 @@ beforeEach(() => {
   hoisted.events = null;
   hoisted.asked = [];
   hoisted.held = "";
+  // Where a pane's box starts is this machine's answer and outlives a test (`../core/
+  // composeStartsOpen`), so each one gets the machine nobody has pressed anything on.
+  localStorage.clear();
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -261,6 +265,48 @@ describe("the press that folds the box away", () => {
     await opened();
 
     expect(fold()?.className).not.toContain("panerow__fold--holding");
+  });
+
+  // A reader who works in the box was otherwise pressing this on every pane they opened
+  // (`../core/composeStartsOpen`). What is remembered is this machine's, not the project's.
+  it("is what the next pane on this machine starts as", async () => {
+    await pane();
+    await opened();
+    await folds();
+
+    // The same pane put up again, which is what opening one after this press is.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await pane();
+    await opened();
+
+    expect(box(), "the pane opened folded after the reader had said otherwise").not.toBeNull();
+    expect(fold()?.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("goes back to folded for the next pane on the press that folds one", async () => {
+    await pane();
+    await writing();
+    await folds();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await pane();
+    await opened();
+
+    expect(box(), "the pane opened with a box the reader had folded away").toBeNull();
+  });
+
+  // A press in one pane is not an answer about the panes already on the screen: the box takes room
+  // from the terminal above it, and a pane that folded itself would wake the program inside it to
+  // repaint at a moment nobody asked it to (`AMB-D-864`).
+  it("leaves a pane already on the screen where its own reader put it", async () => {
+    await pane();
+    await writing();
+
+    setComposeStartsOpen(false);
+
+    expect(box(), "a pane already open folded itself under the reader").not.toBeNull();
   });
 });
 

@@ -107,6 +107,9 @@ async function mount(ownWindow: boolean) {
 }
 
 beforeEach(() => {
+  // Where a pane's box starts is this machine's answer and outlives a test
+  // (`../core/composeStartsOpen`), so each one gets the machine nobody has pressed anything on.
+  localStorage.clear();
   // The face measures the window to work out whether the columns beside the panes are columns at all
   // (`../talk/columns`). jsdom's window is 1024, which is genuinely too narrow for two panes and two
   // columns — so a test that reads what is beside the panes says it is on a wide screen.

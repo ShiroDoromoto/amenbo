@@ -1,0 +1,172 @@
+# A message with a picture in it, written in the box under a pane and actually sent.
+#
+# Amenbo pastes what was written and sends a return behind it. How long it waits in between is the
+# pane's agent's, and for Claude Code it is 1300ms — but only where a picture Amenbo put into the
+# body is still standing in it. The agent reads the picture off the line before it looks at the
+# return, and a return that arrives while it is still reading is taken as a newline: the message does
+# not go, and the person is left looking at their own words in the agent's input box wondering what
+# they pressed wrong.
+#
+# ── Why this cannot be read anywhere but here ───────────────────────────────────────────────────
+# The wait is a number measured against one version of one product. Nothing in the code knows when
+# that version moves, and no unit test can: what is being waited for happens inside somebody else's
+# program, on a machine with that program on it. A road is the only thing that finds out — so when
+# the day comes that 1300ms is not enough, this is what says so, and it says so before anybody ships.
+#
+# ── Why the pane opens on a real agent ──────────────────────────────────────────────────────────
+# The stand-ins a stood-up machine puts in front of the `PATH` answer and stop. They do not read
+# pictures, so nothing about them takes time, so a road walked against one would be green whatever
+# the wait was — including none. So no machine is stood up here: the row is drawn in the catalog's
+# order off whatever the operator really has, and the first of them is the one this road is about.
+# It costs the operator's own account one turn, which is what it costs to know.
+#
+# ── Why the picture is asked for by size ────────────────────────────────────────────────────────
+# Under about four megabytes the agent takes the picture in fast enough that a return sent with no
+# wait at all still lands, so a road walked with a small one goes green on a build that waits for
+# nothing. The size is what puts the road inside the window the wait exists for. It is drawn by the
+# run rather than kept on the fixtures shelf: a file that large tracked in this repository would be
+# carried by everyone who ever clones it, for this road alone.
+#
+# ── Why three readings and not one ──────────────────────────────────────────────────────────────
+# "It went" and "it did not go" look nearly alike, and one reading tells them apart in the wrong
+# direction. The words are on the screen either way — sent, they stand above as the turn that was
+# taken; unsent, they stand below in the agent's own input box. So what is read is where they are:
+#
+#   - Amenbo's box is empty, which says Amenbo believes it sent them;
+#   - the agent's own input line does not hold them, which is the reading the whole road turns on —
+#     this is exactly what is there when the return arrived too early;
+#   - the pane holds them, which says they arrived somewhere rather than being lost on the way.
+#
+# The middle one alone would pass on a build that never sent anything at all, and the last one alone
+# passes on the failure this road exists for. Together there is nowhere left to be wrong.
+#
+# ── Why the words are the road's own and not the path ───────────────────────────────────────────
+# What the paste puts in the box is a path in this run's throwaway directory, which is different
+# every run and which no reading can name. The sentence written beside it is the road's, so it is the
+# sentence the three readings look for — and it is carried in the same message as the picture, which
+# is what makes the message one the wait applies to.
+#
+# ── The screen road alone ───────────────────────────────────────────────────────────────────────
+# There is no second road. The box under a pane is drawn in the webview, the clipboard is not
+# something a shell holds, and the thing under test is a wait between two writes that only ever
+# happen on a press.
+id: send-a-message-with-a-picture-in-it
+title: A message with a picture in it goes when it is sent, rather than sitting in the agent's input box
+description: >
+  Open a pane on the first agent this machine has. Write a line in the box Amenbo draws under it,
+  paste a large picture in beside it, and send the two together. The message goes: Amenbo's box is
+  empty, the agent's own input line is empty of it, and the pane above holds what was sent.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+    as: orchard
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: orchard
+
+  # The picture, drawn rather than kept: what matters about it is that it is large enough for the
+  # agent to spend time on. It lands in the run's own folder — outside every folder this road binds —
+  # so what reaches the box can only have come through the clipboard. The run says where that folder
+  # is before the first step is handed over.
+  - type: action
+    domain: repo
+    op: write-picture
+    with:
+      path: orchard-in-the-rain.png
+      megabytes: 6
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The first thing on the row, which is the catalog's own order against what this machine really
+  # has. No model is named under it: what the agent comes up on is the reader's own setting, and a
+  # road naming one would be a road about somebody's account.
+  - type: action
+    domain: terminal
+    op: pick-start
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  # ── The message, written and not yet sent ─────────────────────────────────────────────────────
+  # The words the three readings below rest on. They are written first so the paste goes in beside
+  # them, which is the shape a person's message really has: a sentence, and a picture with it.
+  - type: action
+    domain: terminal
+    op: write-to-pane
+    with:
+      text: SCENARIO the orchard rows after the rain
+
+  - type: action
+    domain: repo
+    op: copy-image-outside
+    with:
+      path: orchard-in-the-rain.png
+
+  - type: action
+    domain: terminal
+    op: paste-image-into-box
+
+  # Both halves are standing in Amenbo's box, unsent. Read before the press, because everything
+  # after it is about where these words went — and a press that had nothing to send would leave all
+  # three readings below saying the right thing for the wrong reason.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO the orchard rows after the rain
+
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: ".png"
+
+  # ── Sent ──────────────────────────────────────────────────────────────────────────────────────
+  - type: action
+    domain: terminal
+    op: send-written
+    with:
+      by: key
+
+  # Amenbo's own box let go of it, which is Amenbo saying it sent the message. On its own this says
+  # nothing about whether the agent took it — the box is emptied on the near side of the wait.
+  - type: assert
+    domain: terminal
+    op: still-to-send
+    with:
+      shows: SCENARIO the orchard rows after the rain
+      present: false
+
+  # **The reading the road is for.** The agent's own input line — the row a person types at inside
+  # the pane — is empty of the message. This is exactly where the words sit when the return arrived
+  # while the agent was still reading the picture: the message did not go, and nothing else on the
+  # screen looks wrong.
+  - type: assert
+    domain: terminal
+    op: in-the-box
+    with:
+      shows: SCENARIO the orchard rows after the rain
+      present: false
+
+  # And they arrived rather than being lost between the two. The agent puts what it was given above
+  # its input line as the turn that was taken, which is the one place the words can be and the
+  # message have gone.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the orchard rows after the rain

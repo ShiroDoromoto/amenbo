@@ -586,6 +586,8 @@ export const nl: Translation = {
     "face.composeSendKeys": "Verzenden ({keys})",
     "face.composePasses": "Toetsen gaan naar de terminal",
     "face.composeKeeps": "Hier wordt geschreven",
+    "face.composeOpen": "Schrijfvak openen",
+    "face.composeFold": "Schrijfvak inklappen",
     "files.side": "Pagina en bestanden",
     "files.memo": "De pagina",
     "files.memoTyping": "Aan het typen",

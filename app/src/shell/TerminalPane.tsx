@@ -185,6 +185,12 @@ export function TerminalPane({
   // (`../talk/terminal`), and so does a person clicking the terminal, and the mark follows both
   // rather than go on naming the box.
   const [typing, setTyping] = useState(false);
+  // Whether the box under this pane is folded away (`AMB-D-889`). **Every pane comes up folded**, and
+  // where the reader last left it is not remembered yet (`AMB-T-4791`) — so a pane opened now is a
+  // pane whose presses go to the program, which is what a pane is before anybody asks for anything
+  // else. A person who writes paragraphs opens it, and a slash command typed at a CLI needs the
+  // characters to reach the program to be completed at all, which a box in front of them would stop.
+  const [folded, setFolded] = useState(true);
   // The box itself, which is measured rather than told how tall to be: how many lines a sentence
   // takes is the browser's answer, not one this can work out from the characters.
   const boxRef = useRef<HTMLTextAreaElement>(null);
@@ -348,19 +354,24 @@ export function TerminalPane({
 
   /** What a press on this pane says, and where the keyboard goes because of it.
    *
-   *  **A press that moves the focus puts the keyboard in the box** (`AMB-D-864`). The frame moving
+   *  **A press that moves the focus hands the keyboard on with it** (`AMB-D-864`). The frame moving
    *  and the keyboard moving are one thing to the person doing it: they pressed the pane they mean
-   *  to work in, and the next thing they do is write. Left to itself only the frame moved, and the
+   *  to work in, and the next thing they do is type. Left to itself only the frame moved, and the
    *  characters went on landing in the pane they came from — the same disagreement a drop had
    *  before `AMB-T-4182` settled it there.
+   *
+   *  **Where it lands is whether the box is open** (`AMB-D-889`). A folded pane has no box to put it
+   *  in and is a pane being worked through its program, so the keyboard goes to the terminal — which
+   *  is also where a press on the terminal itself would have left it, and this is what keeps a press
+   *  landing anywhere else in the pane from ending somewhere different.
    *
    *  **Only the press that moves it.** A press inside the pane already being worked in is left
    *  alone, so pressing the terminal is still how the keyboard is handed to the program running in
    *  it. What decides is what the pane was before the press, which is what `focused` still says
    *  here: `onFocus` is what changes it, and it is answered on the render after this one.
    *
-   *  **A pane with nothing running in it has no box** to put the keyboard in, so nothing is moved
-   *  and it stays where the person left it.
+   *  **A pane with nothing running in it has neither** a box nor a terminal to put the keyboard in,
+   *  so nothing is moved and it stays where the person left it.
    *
    *  It comes after the emulator has had the press — that one takes the keyboard on its own
    *  mousedown, from an element inside this one — so this is the last word rather than the first.
@@ -368,7 +379,9 @@ export function TerminalPane({
   const pressedOn = () => {
     const moving = !focused;
     onFocus(frame);
-    if (moving) boxRef.current?.focus();
+    if (!moving) return;
+    if (folded) focusTerminal(paneRef.current);
+    else boxRef.current?.focus();
   };
 
   /** Whether a press now would stay in the box — which is what the mark beside it names. It is the
@@ -480,9 +493,14 @@ export function TerminalPane({
     // — a change of either would be a different pane, and the face gives that one a different key.
   }, [running]);
 
-  // The keyboard, at the moment a terminal opens here. What a person does next in a place they just
-  // opened is write, and the box is where they write (`AMB-D-864`) — left to itself the keyboard is
-  // on the page, and the first thing typed goes nowhere.
+  // The keyboard, at the moment a terminal opens here and at every fold after it. What a person does
+  // next in a place they just opened is type, and where that lands is whether the box is open
+  // (`AMB-D-864`, `AMB-D-889`) — left to itself the keyboard is on the page, and the first thing
+  // typed goes nowhere.
+  //
+  // **The fold is a second reason to answer this.** Opening the box is asking to write in it, and
+  // shutting it takes away the thing the keyboard was in — a press after that has nowhere to go
+  // unless the terminal is given it back here.
   //
   // **It is answered here rather than in `opened`**, which runs a render too early: the box is drawn
   // by the render that learns the session, so there is nothing to put the keyboard in until this one.
@@ -492,12 +510,13 @@ export function TerminalPane({
   // themselves is the one being worked in — opening a place moves the frame to it (`../talk/layout`)
   // — so the pane that should take it is the pane that has it.
   //
-  // Opening is the whole of it. A pane that becomes the one being worked in later was pressed, and
+  // Those two are the whole of it. A pane that becomes the one being worked in later was pressed, and
   // the press has already said where the keyboard goes (`pressedOn`).
   useEffect(() => {
     if (live === null || !focused) return;
-    boxRef.current?.focus();
-  }, [live]);
+    if (folded) focusTerminal(paneRef.current);
+    else boxRef.current?.focus();
+  }, [live, folded]);
 
   // A naming reaches every row, not only the one it happened in: the rail renames a pane that is not
   // the one being worked in, and the row above that pane is where the answer shows.
@@ -562,6 +581,10 @@ export function TerminalPane({
   // paste nothing at all, so the clipboard is asked when `Ctrl+V` is pressed (`../core/clipFiles`).
   // `Ctrl+V` and not `Ctrl+Shift+V`: this is a box a person writes in, and there is no program here
   // to hand a control character to. On the other two machines that listener is never put on.
+  //
+  // **The fold is one of the reasons to do this again** (`AMB-D-889`): both doors are put on the box
+  // itself, and a box that has just been opened is a different element from the one the listeners
+  // were put on — left off the list, the first pane anybody folds never takes a paste again.
   useEffect(() => {
     const box = boxRef.current;
     if (box === null || live === null) return;
@@ -594,7 +617,7 @@ export function TerminalPane({
       stopPaste();
       stopPress();
     };
-  }, [frame, live]);
+  }, [frame, live, folded]);
 
   // And the caret put back, before the browser has drawn the box the sentence came back down into.
   useLayoutEffect(() => {
@@ -759,8 +782,13 @@ export function TerminalPane({
             **It is drawn while a terminal is running and does not move for the keyboard.** A box that
             appeared when it was written in would change the pane's height at the moment a person
             started typing, and every change of height wakes the program inside to repaint
-            (`../talk/terminal`). */}
-        {live !== null && (
+            (`../talk/terminal`).
+
+            **It is there while the reader has it open, and folded away otherwise** (`AMB-D-889`).
+            What is written in it survives the fold — it belongs to the window rather than to this
+            box (`../talk/layout`) — so a sentence left half-written comes back when it is opened
+            again, and the press that folds it says so meanwhile. */}
+        {live !== null && !folded && (
           <div className={`compose${written === "" ? "" : " compose--writing"}`}>
             {/* Which of the two the keyboard is answering to, said as the keyboard moves rather than
                 after the fact. What it names is where a press goes, and that is the box for as long as
@@ -801,15 +829,39 @@ export function TerminalPane({
             </button>
           </div>
         )}
-        {/* Which model the program in this pane is answering on, and the press that moves it
-            (`./PaneModel`, `AMB-D-865`). It is under the box rather than over the terminal for the
-            reason the box itself is: a terminal writes into every row it was told it has.
+        {/* The pane's own band, under the box rather than over the terminal for the reason the box
+            itself is: a terminal writes into every row it was told it has.
 
-            **The row stands under every pane, the press in it only where there is a model to name** —
-            the plain shell and a command the reader registered have none, so the band is there and
-            empty rather than missing. What else belongs on it opens and shuts the box above
-            (`AMB-D-889`), and that has to sit in the same place from pane to pane. */}
-        {live !== null && <PaneModel frame={frame} session={live} agent={inPane} />}
+            **It stands under every running pane and keeps its height whatever is in it.** The press
+            that folds the box is here, and a band that shrank when there was no model to name beside
+            it would move that press from pane to pane (`AMB-D-889`). The model is the other thing on
+            it and is drawn only where the host has a road (`./PaneModel`, `AMB-D-865`). */}
+        {live !== null && (
+          <div className="panerow">
+            {/* Open or shut, and nothing else (`AMB-D-889`). The mark says which of the two it is
+                rather than what the press would do — the box is either in front of the reader or it
+                is not, and that is what they are looking at when they reach for this.
+
+                **The press is the button and the mark is inside it.** A hit area on the drawing
+                itself is a hit area that is swapped out under the pointer the moment it is used, and
+                the click that was half-way through lands on nothing.
+
+                **It says when it is holding something nobody can see.** A pane folded over a
+                half-written sentence looks exactly like one folded over an empty box, and the
+                sentence is still there and still unsent (`../talk/layout`). */}
+            <button
+              className={`panerow__fold${written === "" ? "" : " panerow__fold--holding"}`}
+              type="button"
+              aria-expanded={!folded}
+              title={t(folded ? "face.composeOpen" : "face.composeFold")}
+              aria-label={t(folded ? "face.composeOpen" : "face.composeFold")}
+              onClick={() => setFolded(!folded)}
+            >
+              <Icon name={folded ? "keyboard" : "pencil"} />
+            </button>
+            <PaneModel frame={frame} session={live} agent={inPane} />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -596,6 +596,8 @@ export const de: Translation = {
     "face.composeSendKeys": "Senden ({keys})",
     "face.composePasses": "Tasten gehen ans Terminal",
     "face.composeKeeps": "Hier wird geschrieben",
+    "face.composeOpen": "Feld zum Schreiben öffnen",
+    "face.composeFold": "Feld einklappen",
     "files.side": "Seite und Dateien",
     "files.memo": "Die Seite",
     "files.memoTyping": "Wird getippt",

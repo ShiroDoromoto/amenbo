@@ -586,6 +586,8 @@ export const zhHant: Translation = {
     "face.composeSendKeys": "傳送（{keys}）",
     "face.composePasses": "按鍵交給終端機",
     "face.composeKeeps": "正在這裡輸入",
+    "face.composeOpen": "開啟輸入框",
+    "face.composeFold": "收合輸入框",
     "files.side": "便箋與檔案",
     "files.memo": "便箋",
     "files.memoTyping": "輸入中",

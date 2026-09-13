@@ -586,6 +586,8 @@ export const zhHans: Translation = {
     "face.composeSendKeys": "发送（{keys}）",
     "face.composePasses": "按键交给终端",
     "face.composeKeeps": "正在这里输入",
+    "face.composeOpen": "打开输入框",
+    "face.composeFold": "收起输入框",
     "files.side": "便笺与文件",
     "files.memo": "便笺",
     "files.memoTyping": "输入中",

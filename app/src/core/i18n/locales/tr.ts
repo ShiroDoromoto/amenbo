@@ -586,6 +586,8 @@ export const tr: Translation = {
     "face.composeSendKeys": "Gönder ({keys})",
     "face.composePasses": "Tuşlar terminale gider",
     "face.composeKeeps": "Burada yazıyorsunuz",
+    "face.composeOpen": "Yazma kutusunu aç",
+    "face.composeFold": "Yazma kutusunu kapat",
     "files.side": "Sayfa ve dosyalar",
     "files.memo": "Sayfa",
     "files.memoTyping": "Yazılıyor",

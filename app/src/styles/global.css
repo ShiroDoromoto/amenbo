@@ -562,22 +562,43 @@ input[type="color"] {
    the disc sits over is that ground, so the mark reads as the shape left open in it. */
 .compose__send:disabled { background: var(--c-rule); color: var(--c-pane-frame); }
 
-/* The row under the box, where the model the program is answering on is moved (`../shell/PaneModel`).
-   It is the slot's last band and the quietest of them: what the pane is for is what is running in it,
-   and this is one press about that. `position: relative` is what the popover above is placed against
-   — it opens upwards, because this row is already at the bottom of the pane.
+/* The slot's last band, and the quietest of them: what the pane is for is what is running in it, and
+   these are two small presses about that (`../shell/TerminalPane`). It holds the press that folds the
+   box above and, where there is one, the model the program is answering on.
 
-   `min-height` is the height the press gives it — a 16px mark with the button's own 4px above and
+   `min-height` is the height one of those presses gives it — a 16px mark with its own 4px above and
    below — held from underneath so the band is the same one under every pane. A pane whose program
-   Amenbo cannot name has no model press in it (`AMB-D-794`), and a row that collapsed there would
-   move the controls beside it from pane to pane (`AMB-D-889`). */
-.modelrow {
-  position: relative;
+   Amenbo cannot name has no model press in it (`AMB-D-794`), and a band that shrank there would move
+   the fold press from pane to pane (`AMB-D-889`). */
+.panerow {
   flex: 0 0 auto;
   display: flex; align-items: center; gap: var(--s-2);
   min-width: 0; min-height: calc(var(--icon-sm) + var(--s-1) * 2);
   padding: 0 var(--s-2);
   font-size: var(--fs-xs);
+}
+/* Open or shut, drawn as the mark alone: it stands under a terminal, and a filled control there would
+   read as part of what the program is drawing. */
+.panerow__fold {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: var(--s-1) 0;
+  border: 0; background: none;
+  color: var(--c-text-muted);
+}
+.panerow__fold:hover { color: var(--c-text); }
+/* Folded over a sentence nobody can see. It is the same teal the box's own edge comes up in while
+   something is written in it, because it is saying the same thing from the outside. */
+.panerow__fold--holding, .panerow__fold--holding:hover { color: var(--c-accent); }
+
+/* Where the model the program is answering on is moved (`../shell/PaneModel`). `position: relative`
+   is what the popover above is placed against — it opens upwards, because this is already at the
+   bottom of the pane. */
+.modelrow {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex; align-items: center; gap: var(--s-2);
+  min-width: 0;
 }
 /* The press, drawn as a word rather than as a button: it stands under a terminal, and a filled
    control there would read as part of what the program is drawing. The name is cut rather than
@@ -605,7 +626,7 @@ input[type="color"] {
    to repaint for a press that is about to close (`../shell/TerminalPane`).
    It opens upwards and from the left edge, which is where the press is. */
 .modelpick {
-  position: absolute; left: var(--s-2); bottom: 100%; z-index: 20;
+  position: absolute; left: 0; bottom: 100%; z-index: 20;
   display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
   width: max-content; max-width: min(28rem, calc(100% - var(--s-4)));
   max-height: 22rem; overflow-y: auto;

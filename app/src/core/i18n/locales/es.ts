@@ -607,6 +607,8 @@ export const es: Translation = {
     "face.composeSendKeys": "Enviar ({keys})",
     "face.composePasses": "Las teclas van a la terminal",
     "face.composeKeeps": "Escribiendo aquí",
+    "face.composeOpen": "Abrir el cuadro para escribir",
+    "face.composeFold": "Plegar el cuadro",
     "files.side": "Página y archivos",
     "files.memo": "La página",
     "files.memoTyping": "Escribiendo",

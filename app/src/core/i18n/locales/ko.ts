@@ -585,6 +585,8 @@ export const ko: Translation = {
     "face.composeSendKeys": "보내기 ({keys})",
     "face.composePasses": "키는 터미널로",
     "face.composeKeeps": "여기에 쓰는 중",
+    "face.composeOpen": "쓰는 칸 열기",
+    "face.composeFold": "쓰는 칸 접기",
     "files.side": "메모와 파일",
     "files.memo": "메모",
     "files.memoTyping": "입력 중",

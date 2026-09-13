@@ -195,10 +195,10 @@ describe("the box under a pane", () => {
     await opened();
 
     expect(box(), "a running pane had nowhere to write a line").not.toBeNull();
-    // The slot is one column: the row, the terminal, the box. The box being last is what makes the
-    // terminal give room up rather than be covered.
-    const slot = container.querySelector(".slot")!;
-    expect(slot.lastElementChild?.className).toContain("compose");
+    // The pane's frame is one column: the row, the terminal, the box. The box being last is what
+    // makes the terminal give room up rather than be covered.
+    const frame = container.querySelector(".slot__frame")!;
+    expect(frame.lastElementChild?.className).toContain("compose");
   });
 
   it("goes with the terminal, because there is nothing left to write to", async () => {

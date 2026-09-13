@@ -52,8 +52,9 @@ INKS = [
     "--c-text", "--c-text-muted", "--c-accent", "--c-accent-text",
     "--c-done", "--c-human", "--c-ai", "--c-stop", "--c-heed",
 ]
-# The grounds an ink can land on — the three steps and the hover laid over them.
-GROUNDS = ["--c-bg", "--c-surface", "--c-sunken", "--c-hover"]
+# The grounds an ink can land on — the three steps, the hover laid over them, and the pane frame the
+# rows under a terminal are written on.
+GROUNDS = ["--c-bg", "--c-surface", "--c-sunken", "--c-hover", "--c-pane-frame"]
 # A fill and the ink it carries; the pair is read together and travels together.
 FILLS = [("--c-accent", "--c-on-accent"), ("--c-heed", "--c-on-heed"), ("--c-stop", "--c-on-stop")]
 # The outline of a control, which has to be found before the control can be used.

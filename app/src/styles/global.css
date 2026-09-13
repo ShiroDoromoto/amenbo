@@ -168,7 +168,10 @@ input[type="color"] {
 .termface__pane {
   flex: 1; min-height: 0;
   padding: var(--s-3);
-  border: 1px solid var(--c-rule);
+  /* **Drawn and invisible.** What says where the focus is is the frame around the whole pane
+     (`.slot__frame`), so this one has no colour to add — but it keeps its room: this is the element
+     xterm.js measures, and 2px off its height is a row the program inside is no longer told it has. */
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--c-pane-bg);
   color-scheme: dark;
@@ -339,6 +342,32 @@ input[type="color"] {
 /* One slot. It holds the label row and the pane under it. There is one per pane and no more — what is
    not open is not a box on the screen (`../talk/layout`). */
 .slot { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+/* Everything this pane is, inside one frame: the name row, the terminal, the box a line is written
+   in, and the model row (`../shell/TerminalPane`).
+
+   **The frame is what says where the focus is**, rather than the terminal's own edge. Drawn around
+   the terminal alone, the box and the model row stood outside the mark for "the keyboard is here"
+   while being exactly what the keyboard is answering to — and the edge was the third teal line
+   across a pane already carrying the box's own and whatever the program draws.
+
+   **A ground of its own, under all four.** The box a line is written in used to be told from the
+   terminal by a border; standing on this step it is told by the ground instead, which is the line
+   that does not cross the pane.
+
+   **Nothing is clipped to the corner.** `overflow: hidden` would round the children and take the
+   panel that drops out of the name row with it (`.plate-peek`), which hangs past the bottom of the
+   pane on purpose. The corner is the frame's own, and the padding is what keeps a child off it. */
+.slot__frame {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; gap: var(--s-1);
+  padding: var(--s-1);
+  /* Held at a width the unfocused pane gives no colour to, for the reason the terminal's is: the
+     frame is what the pane's height is shared out from, and a border that appeared on focus would
+     move every row in it. A face split four ways would otherwise be four grey rectangles. */
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: var(--c-pane-frame);
+}
 /* The surface a file is handed to the pane on, drawn over the whole slot while a drag hangs on it
    (`../shell/TerminalPane`). It takes no pointer events: the host resolves the point it was given
    against whatever is under it, and a surface that answered would hide the pane from its own
@@ -467,14 +496,14 @@ input[type="color"] {
      line beside it. */
   display: flex; align-items: flex-end; gap: var(--s-2);
   padding: var(--s-1) var(--s-2);
-  /* Dashed while nothing is written, because that is the state where the keyboard is not really
-     here: the arrows and the tab are handed to the program, and so is everything else the box has
-     nothing to do with. The border goes solid the moment something is written, which is one of the
-     three things that change together. */
-  border: 1px dashed var(--c-rule); border-radius: var(--r-md);
-  background: var(--c-surface);
+  /* **No edge of its own while nothing is written.** What tells this box from the terminal above it
+     is the frame's ground it stands on (`.slot__frame`), and a dashed rule there was the second of
+     three teal-ish lines running across a focused pane. The room is kept rather than the colour, so
+     that writing the first character moves nothing: the edge comes up teal the moment something is
+     written, alongside the mark beside it and the press at the end of the row. */
+  border: 1px solid transparent; border-radius: var(--r-md);
 }
-.compose--writing { border-style: solid; border-color: var(--c-accent); }
+.compose--writing { border-color: var(--c-accent); }
 /* Which of the two the keyboard is answering to. It is a mark rather than a sentence because the row
    it sits on is as wide as a pane in a face split four ways, and it carries its words in a title for
    the reader who stops on it. */
@@ -568,7 +597,7 @@ input[type="color"] {
   background: var(--c-surface); box-shadow: var(--shadow-md);
 }
 
-.slot--focused .termface__pane { border-color: var(--c-accent); }
+.slot--focused .slot__frame { border-color: var(--c-accent); }
 /* Where a path just landed. The pane the row's menu hands a file to is the one being worked in, which
    is not where the reader's eye is — they were in the panel, and the page may have turned since they
    last looked at a pane — so the pane says the path arrived rather than leaving them to find it

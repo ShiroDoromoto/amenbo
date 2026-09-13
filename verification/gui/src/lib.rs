@@ -4365,12 +4365,6 @@ impl Instructor {
             // this reading — clearing the pane is how the words in the box are made the only ones on
             // the shot — and a sentence claiming an untouched terminal would have such an operator
             // mark a working build red.
-            //
-            // **The mark beside the box is not read here.** It says where the keyboard is
-            // (`app/src/shell/TerminalPane.tsx`), and a line stays in the box long after the
-            // keyboard has left it — the face is switched away and back, the pane is split out into
-            // a window of its own — so a sentence asking the operator for the mark as well would
-            // have them mark a working build red at every one of those steps.
             (Domain::Terminal, "still-to-send") => {
                 let pane = match arg_str(with, "on") {
                     Some(on) => format!("the pane showing \"{on}\""),

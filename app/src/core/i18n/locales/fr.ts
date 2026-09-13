@@ -605,8 +605,6 @@ export const fr: Translation = {
     "face.compose": "Écrire dans ce volet",
     "face.composeSend": "Envoyer",
     "face.composeSendKeys": "Envoyer ({keys})",
-    "face.composePasses": "Les touches vont au terminal",
-    "face.composeKeeps": "Écriture ici",
     "face.composeOpen": "Ouvrir la zone d'écriture",
     "face.composeFold": "Replier la zone d'écriture",
     "files.side": "Page et fichiers",

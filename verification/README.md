@@ -789,6 +789,18 @@ provider reads that and decides whether to take the picture in — and the small
 four megabytes, which is six times the largest file this repository tracks. So it is noise, written
 into deflate blocks that are *stored* rather than compressed, and it comes out a little over the
 size that was asked for however small a real encoder would have made it.
+**`agent-cycle` reads the entry point rather than the folder**, and it is here because what settles
+its answer is: how to work in a folder is Amenbo's own recommendation, and a good deal of it needs a
+repository. `cycle` names one of the cycles `agent --json` hands over and `present` says whether it
+should be there at all; `step` narrows it to one line inside that cycle, because the gate is finer
+than a cycle — one whose every line is git's comes off whole, and one carrying a single line that
+stands without a repository keeps that line alone. `dir` is where the reader is standing, and it is
+required: the answer is settled by the folder holding the pointer the run resolved, so a reading
+taken anywhere else is about somewhere else, and one taken where nothing is bound is a third state.
+`be-told-how-to-work-here-without-being-told-to-use-git` makes each reading twice, in a plain folder
+and in a repository — without the second half a build that had never carried the advice at all would
+read the same.
+
 `wire-ai` is the same kind of stand-in one tier up: Amenbo
 hands over the text that starts a folder's AI on it and writes no settings file itself, so the road
 past that point exists only if someone pastes — and it pastes what the build under test handed over,

@@ -1487,6 +1487,28 @@ const REGISTRY: &[OpSpec] = &[
     // The repository-side gates: what the lint found in a file, and what is in a hook slot.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "lint", required: &["path", "hits"], refs: &[], strings: &["path"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "hooks", required: &["hook", "state"], refs: &[], strings: &["hook", "state"], binds: false },
+    // What `agent --json` recommends here, read by whether a named cycle — or a named step inside one
+    // — is in what the reader was handed. `present: false` is the reading with the weight in it.
+    //
+    // **Advice a reader cannot act on is worse than none.** How to work in a folder is Amenbo's own
+    // answer, and a good deal of it is git's: cutting a checkout per task, anchoring a commit's SHA,
+    // offering the hooks. A reader whose folder git has never touched is told to do things there is
+    // nothing to do them with, and the whole of the rest reads as advice from somewhere else.
+    //
+    // **The gate is per step and not only per cycle**, which is why `step` is here. A cycle whose
+    // every line is git's comes off whole; one with a single line that stands without git — the lint
+    // reads a path and standard input, and opens no repository — is kept for that line alone. Read at
+    // the cycle's grain only, a build that dropped the cycle whole would pass, and the one
+    // recommendation that reaches this reader would be gone.
+    //
+    // **It is a reading of the entry point and not of a source file.** What is under test is what the
+    // shipped binary hands a reader standing in their own folder, which is where the folder is
+    // actually looked at; the tables the advice is built from are held by tests inside the build.
+    //
+    // `dir` is that folder, and it is required rather than defaulted: what gates the advice is the
+    // folder holding the pointer the run resolved, and a road that left it unsaid would be reading a
+    // place where nothing is bound — a third state, and not the one this is about.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "agent-cycle", required: &["cycle", "present", "dir"], refs: &[], strings: &["cycle", "step", "dir"], binds: false },
     // Whether anything in this folder starts its AI on Amenbo at session start (`wired`), and — while
     // nothing does — which provider the folder is told about by name (`tool`). The two are one
     // question asked from either end: the answer Amenbo carries on every response until the paste

@@ -341,6 +341,49 @@ impl Driver<'_> {
                     ),
                 ))
             }
+            // What the entry point recommends here. The cycles are named by id, and a step inside one
+            // by its own — read across both halves of a cycle, because which half a line sits in is
+            // how strongly it is put and not whether it was handed over.
+            //
+            // A cycle nobody dropped is a key in `cycles`; a dropped one is not there at all, which
+            // is the same nothing a reader gets. So both readings are the same lookup, and `present`
+            // is which of them the road expects.
+            "agent-cycle" => {
+                let cycle = req_str(with, "cycle")?;
+                let step = with.get("step").and_then(serde_yaml::Value::as_str);
+                let want = req_bool(with, "present")?;
+                // Run where the reader is standing. What gates the advice is the folder holding the
+                // pointer this invocation resolved, so a run made anywhere else is answering about
+                // somewhere else — and a run made where nothing is bound is answering about nothing
+                // being bound, which is a third state and not this reading.
+                let at = self.folder(with)?;
+                let v = self.run_json_in(&at, &["agent", "--json"])?;
+                let held = &v["cycles"][cycle];
+                let found = match step {
+                    None => !held.is_null(),
+                    Some(one) => ["backbone", "optional"].iter().any(|half| {
+                        held[half]
+                            .as_array()
+                            .map(Vec::as_slice)
+                            .unwrap_or(&[])
+                            .iter()
+                            .any(|row| row["id"].as_str() == Some(one))
+                    }),
+                };
+                let named = match step {
+                    None => format!("cycle `{cycle}`"),
+                    Some(one) => format!("step `{one}` of cycle `{cycle}`"),
+                };
+                Ok(Outcome::assert(
+                    found == want,
+                    format!(
+                        "{named} is {} in what `agent --json` hands a reader in that folder (expected {}, {})",
+                        if found { "there" } else { "not there" },
+                        if want { "there" } else { "not there" },
+                        if found == want { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             // Whether this folder starts its AI on Amenbo, read off the report Amenbo carries on
             // every response until it does. There is no command that answers this on its own, and
             // that is the design: the answer travels on whatever the reader was already running, so

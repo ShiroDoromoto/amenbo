@@ -427,6 +427,70 @@ pub struct PluginSecret {
     pub updated_at: Timestamp,
 }
 
+/// Which of Amenbo's own features a [`Secret`] belongs to (`AMB-D-884`). Closed, because the features
+/// that hold a credential are the body's own and are added one deliberate step at a time — a new one
+/// widens this and the column's `CHECK` together.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SecretArea {
+    /// A notification target's connection — a Slack webhook, an SMTP password (`AMB-D-885`).
+    #[default]
+    Notify,
+    /// The Viewer's server: the token it is reached with, the key its rows are sealed with
+    /// (`AMB-D-886`).
+    Viewer,
+}
+
+impl SecretArea {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SecretArea::Notify => "notify",
+            SecretArea::Viewer => "viewer",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<SecretArea> {
+        match s {
+            "notify" => Some(SecretArea::Notify),
+            "viewer" => Some(SecretArea::Viewer),
+            _ => None,
+        }
+    }
+}
+
+/// **A secret one of Amenbo's own features holds, at one layer** (`AMB-D-884`). The body had no place for
+/// a credential until this: `config.json` holds none by its own account, and the features that needed one
+/// were plugins, keeping theirs in [`PluginSecret`] — the table that goes with the mechanism.
+///
+/// A table of its own rather than a flag on a settings row, for [`PluginSecret`]'s reason: an exclusion
+/// stated once, about a whole table, holds for the path nobody remembered to teach. It is named in
+/// [`crate::export::WITHHELD_ON_THE_WAY_OUT`], so no road out of the store carries it; a backup does,
+/// copying the file whole, because that road leads back to the same person's own machine.
+///
+/// The value is never handed to a face. A screen asks whether a field is set and stops there; the
+/// plaintext is read at the moment the feature connects.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Secret {
+    pub id: i64,
+    /// The project this secret belongs to, or `None` for the device row. Both layers are real here: a
+    /// notification target and the Viewer are the device's, and a project may still hold one of its own.
+    pub project_id: Option<i64>,
+    /// Which feature holds it.
+    pub area: SecretArea,
+    /// The row inside that area the secret hangs off — a notification target's id — or `None` where the
+    /// area itself holds it (the Viewer's keys hang off no row). Polymorphic: which table it names is
+    /// `area`'s to say, so no constraint holds it and the delete op sweeps it.
+    #[serde(default)]
+    pub owner_id: Option<i64>,
+    /// The field's key (spelled out because `key` is a SQLite keyword).
+    pub field_key: String,
+    /// The secret value, in plaintext — at-rest secrecy is the OS's full-disk encryption, the same
+    /// delegation the truth source itself makes.
+    pub value: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 /// A **plugin's enable gate at one layer** (`AMB-D-434` / `AMB-D-601`). One row per `(layer, plugin)`: this
 /// project — or this device — has the plugin **on**. The row is the whole answer: there is no other tier to
 /// inherit from or veto, so absence is simply off, and turning it off deletes the row rather than storing a

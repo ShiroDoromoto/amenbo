@@ -260,11 +260,14 @@ const CANCEL_POLL_ROWS: u64 = 256;
 
 /// Datasets no road out of this store carries, by their stable name (`AMB-D-434`).
 ///
-/// A plugin's secrets are the one thing here that is a credential in plain text, and every road out is
+/// The first two are the credentials in plain text — a plugin's (`plugin_secret`) and Amenbo's own
+/// (`secret`: a notification target's connection, the Viewer's keys, `AMB-D-884`) — and every road out is
 /// one-way: the export lands in another tool's hands and stays there, and the sync snapshot
-/// ([`crate::sync_snapshot`]) lands wherever a carrier plugin puts it. So the whole table stays home on
-/// all of them. Table-level and not row-level on purpose — a rule that has to judge each row is a rule
-/// that can be got wrong once; a table nobody streams cannot leak the row nobody remembered.
+/// ([`crate::sync_snapshot`]) lands wherever its carrier puts it. The Viewer's is the sharpest case of
+/// that: the key its snapshot is sealed with would otherwise ride the snapshot to the server it seals it
+/// against. So the whole table stays home on all of them. Table-level and not row-level on purpose — a
+/// rule that has to judge each row is a rule that can be got wrong once; a table nobody streams cannot
+/// leak the row nobody remembered.
 ///
 /// The other three are here for a different reason: they are **this machine's**, not this project's
 /// (`AMB-D-856`). `binding_project_dir` holds the file paths of the folders bound here, and the two
@@ -282,7 +285,7 @@ const CANCEL_POLL_ROWS: u64 = 256;
 /// them there would mean typing every credential in again after each restore. It copies the database
 /// file whole ([`crate::archive`]), so it never walks this list.
 pub const WITHHELD_ON_THE_WAY_OUT: &[&str] =
-    &["plugin_secret", "binding_project_dir", "hook_optout", "harness_consent"];
+    &["plugin_secret", "secret", "binding_project_dir", "hook_optout", "harness_consent"];
 
 /// The registry a road out walks: every dataset except [`WITHHELD_ON_THE_WAY_OUT`]. One list, walked by
 /// the export and by the sync snapshot alike — `AMB-D-581` draws `AMB-D-434`'s line straight through to

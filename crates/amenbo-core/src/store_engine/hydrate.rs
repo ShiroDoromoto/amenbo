@@ -32,6 +32,7 @@ use crate::model::{
     DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
     DimensionRole, DimensionValue, PluginConfigValue, PluginEnabledProject, PluginSecret, Priority,
+    Secret, SecretArea,
     Project, Subtype, Task, TaskComment, TaskCommit, TaskDependency,
     TaskDimensionValue, TaskStatus, View,
 };
@@ -216,6 +217,23 @@ pub(super) fn plugin_secret_row(r: &Row) -> rusqlite::Result<PluginSecret> {
         id: get(r, C.id)?,
         project_id: get(r, C.project_id)?,
         plugin: get(r, C.plugin)?,
+        field_key: get(r, C.field_key)?,
+        value: get(r, C.value)?,
+        created_at,
+        updated_at,
+    })
+}
+
+pub(super) fn secret_row(r: &Row) -> rusqlite::Result<Secret> {
+    const C: col::secret::Cols = col::secret::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(Secret {
+        id: get(r, C.id)?,
+        project_id: get(r, C.project_id)?,
+        area: enum_req(r, C.area, SecretArea::parse)?,
+        // Polymorphic (an unconstrained key, not `fk!`): which table it names is `area`'s to say, and
+        // NULL says the area itself holds the secret.
+        owner_id: get(r, C.owner_id)?,
         field_key: get(r, C.field_key)?,
         value: get(r, C.value)?,
         created_at,

@@ -426,16 +426,20 @@ mod tests {
         );
     }
 
-    /// The plugin secrets are withheld from the snapshot, and by the export's own list rather than a
-    /// second one beside it (`AMB-D-434`, drawn through by `AMB-D-581`).
+    /// Both secret tables are withheld from the snapshot, and by the export's own list rather than a
+    /// second one beside it (`AMB-D-434`, drawn through by `AMB-D-581`). `secret` is the sharper of the
+    /// two (`AMB-D-884`): the Viewer's `encryption_key` lives there, and the snapshot it would ride is the
+    /// one that key seals — carrying it would hand the server the key to everything it holds.
     #[test]
-    fn a_snapshot_carries_no_plugin_secret() {
-        assert!(export::WITHHELD_ON_THE_WAY_OUT.contains(&"plugin_secret"));
-        assert!(!export::datasets_carried_out().iter().any(|d| d.name == "plugin_secret"));
-        assert!(
-            DATASETS.iter().any(|d| d.name == "plugin_secret"),
-            "the dataset still exists — it is the road out that leaves it, not the schema",
-        );
+    fn a_snapshot_carries_no_secret() {
+        for name in ["plugin_secret", "secret"] {
+            assert!(export::WITHHELD_ON_THE_WAY_OUT.contains(&name));
+            assert!(!export::datasets_carried_out().iter().any(|d| d.name == name));
+            assert!(
+                DATASETS.iter().any(|d| d.name == name),
+                "the dataset still exists — it is the road out that leaves it, not the schema",
+            );
+        }
     }
 
     fn scratch(tag: &str) -> std::path::PathBuf {
@@ -1073,7 +1077,7 @@ mod tests {
         };
         let db = store_file(&dir);
 
-        for name in ["plugin_secret", "change_feed", "not_a_dataset"] {
+        for name in ["plugin_secret", "secret", "change_feed", "not_a_dataset"] {
             let mut buf = Vec::new();
             let err = records_from(&db, Reach::window(mine), name, &[1], &mut buf).unwrap_err();
             assert!(

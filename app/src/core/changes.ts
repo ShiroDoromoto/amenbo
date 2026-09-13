@@ -65,6 +65,12 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   plugin_enable: ["plugins"],
   plugin_config: ["plugins"],
   plugin_secret: ["plugins"],
+  // Amenbo's own credentials (`AMB-D-884`). Folded to nothing on purpose, which is not the same as
+  // unlisted: a value here is never drawn, so no query on screen goes stale when one is written, and
+  // falling to gap would buy a full re-read of everything for a change nobody can see. The screens that
+  // will ask whether a field is set — the notification shelf, the Viewer's pane — arrive with the features
+  // themselves, and each names its scope here when it does.
+  secret: [],
   // This device's own tables (`AMB-D-856`). None of them travels anywhere, and all three are written by
   // the CLI and drawn here: the folders a project is bound to, and the two answers given for it. They
   // fold to the project they are about, which is the surface each of them is on.

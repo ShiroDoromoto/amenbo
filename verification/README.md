@@ -775,7 +775,8 @@ the other two.
 
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
 a file there (what an attachment ingests, what the lint is pointed at), `copy-fixture` puts one
-there from `fixtures/`, and `git-init` makes the folder a git repository, which is the only way the
+there from `fixtures/`, `write-picture` draws one of a named size in `megabytes`, and `git-init`
+makes the folder a git repository, which is the only way the
 hook slots are real enough to write into. That one takes the same `dir` the first two do, and a road
 reading what git says about a folder on screen needs it: the colours are drawn on the face of the
 folder a project is **bound** to, and a repository anywhere else leaves every row of it bare.
@@ -783,6 +784,11 @@ folder a project is **bound** to, and a repository anywhere else leaves every ro
 reaches: until something is committed git names the whole folder and never the paths inside it, so a
 folder git is quiet about while a file in it is new — which is what a folded row on the tree answers
 for — does not exist on the near side of a commit.
+A picture is drawn rather than shelved because the roads that need one turn on its **size** — the
+provider reads that and decides whether to take the picture in — and the smallest that walks is over
+four megabytes, which is six times the largest file this repository tracks. So it is noise, written
+into deflate blocks that are *stored* rather than compressed, and it comes out a little over the
+size that was asked for however small a real encoder would have made it.
 `wire-ai` is the same kind of stand-in one tier up: Amenbo
 hands over the text that starts a folder's AI on it and writes no settings file itself, so the road
 past that point exists only if someone pastes — and it pastes what the build under test handed over,

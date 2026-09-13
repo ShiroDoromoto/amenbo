@@ -7,7 +7,7 @@ use std::process::Command;
 
 use amenbo_scenario::{Args, Domain};
 
-use crate::{req_bool, req_str, unmapped, Driver, Outcome};
+use crate::{req_bool, req_i64, req_str, unmapped, Driver, Outcome};
 
 impl Driver<'_> {
     pub(crate) fn repo_action(&mut self, op: &str, with: &Args) -> Result<Outcome, String> {
@@ -66,6 +66,39 @@ impl Driver<'_> {
                     "copied the fixture {from} to {} ({} bytes)",
                     full.display(),
                     bytes.len()
+                )))
+            }
+            // A picture of a named size, drawn here rather than kept on the fixtures shelf. What a
+            // road asks for is the size — the provider behaviour under test turns on it, and the
+            // smallest that walks is over four megabytes, which is not a thing to add to a tree
+            // everyone clones.
+            //
+            // **It is noise, and it is stored rather than compressed.** A drawing would come out a
+            // few kilobytes however many pixels it had, and the file has to *be* the size it was
+            // asked for — what reads it is a provider deciding whether to take the picture in.
+            // `megabytes` counts 1024 × 1024, so a road that named the size in the smaller
+            // megabyte gets at least what it asked for and never less.
+            //
+            // `dir` says where it lands, the way `write-file`'s does and for the same reason.
+            "write-picture" => {
+                let path = req_str(with, "path")?;
+                let megabytes = req_i64(with, "megabytes")?;
+                if megabytes < 1 {
+                    return Err(format!("`megabytes: {megabytes}` — a picture is at least one"));
+                }
+                let full = match with.get("dir") {
+                    Some(_) => self.folder(with)?.join(self.inside(path)?),
+                    None => self.in_session(path)?,
+                };
+                if let Some(dir) = full.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                }
+                let png = noise_png(megabytes as u64 * 1024 * 1024);
+                std::fs::write(&full, &png).map_err(|e| format!("could not write {path}: {e}"))?;
+                Ok(Outcome::action(format!(
+                    "drew {} ({} bytes, {megabytes}MiB of noise)",
+                    full.display(),
+                    png.len()
                 )))
             }
             // A name in that folder that is a link rather than a file. `path` is the name and `to`
@@ -431,4 +464,163 @@ fn symlink(target: &Path, at: &Path) -> Result<(), String> {
             at.display(),
         )
     })
+}
+
+/// A valid PNG of at least `bytes`, filled with noise.
+///
+/// **Written out by hand because what is wanted is the size.** Every encoder's job is to make a
+/// picture small, and the roads this serves turn on a file being large — a provider reads the size
+/// off the bytes and decides whether to take the picture in. So the pixels are noise, which nothing
+/// can shrink, and the deflate stream is made of *stored* blocks, which shrink nothing by
+/// definition: the file comes out a little over the asked-for size rather than a few kilobytes
+/// under it, whatever library is on the machine.
+///
+/// The picture itself is 1024 pixels wide and as tall as the size asks for, in eight-bit RGB.
+/// Nothing reads what it depicts.
+fn noise_png(bytes: u64) -> Vec<u8> {
+    const WIDTH: u32 = 1024;
+    let row = 1 + WIDTH as usize * 3; // the filter byte, then the pixels
+    let height = (bytes as usize).div_ceil(row).max(1) as u32;
+
+    // The rows, each opening with the byte that says it was not filtered — which is the nought it
+    // already holds — and the rest of it noise.
+    let mut raw = vec![0u8; height as usize * row];
+    let mut seed: u32 = 0x9e37_79b9;
+    for line in raw.chunks_mut(row) {
+        for byte in line.iter_mut().skip(1) {
+            // A plain linear congruential step — the numbers only have to be unalike, and it is
+            // written out rather than pulled in so the harness keeps the dependencies it has.
+            seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            *byte = (seed >> 16) as u8;
+        }
+    }
+
+    let mut png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+    let mut ihdr = Vec::with_capacity(13);
+    ihdr.extend(WIDTH.to_be_bytes());
+    ihdr.extend(height.to_be_bytes());
+    ihdr.extend([8, 2, 0, 0, 0]); // eight bits a channel, truecolour, and no interlacing
+    chunk(&mut png, b"IHDR", &ihdr);
+    chunk(&mut png, b"IDAT", &stored_zlib(&raw));
+    chunk(&mut png, b"IEND", &[]);
+    png
+}
+
+/// One PNG chunk: its length, its name, its bytes, and the check over the last two.
+fn chunk(png: &mut Vec<u8>, name: &[u8; 4], data: &[u8]) {
+    png.extend((data.len() as u32).to_be_bytes());
+    png.extend(name);
+    png.extend(data);
+    let mut crc = Vec::with_capacity(4 + data.len());
+    crc.extend(name);
+    crc.extend(data);
+    png.extend(crc32(&crc).to_be_bytes());
+}
+
+/// `raw` as a zlib stream whose deflate blocks are all *stored* — the one encoding that is allowed
+/// to make nothing smaller, which is the whole reason it is used here.
+fn stored_zlib(raw: &[u8]) -> Vec<u8> {
+    let mut out = vec![0x78, 0x01]; // deflate, a 32KiB window, no preset dictionary
+    let mut rest = raw;
+    loop {
+        let take = rest.len().min(u16::MAX as usize);
+        let (block, after) = rest.split_at(take);
+        out.push(u8::from(after.is_empty())); // the last block says so; the type is stored
+        out.extend((take as u16).to_le_bytes());
+        out.extend((!(take as u16)).to_le_bytes());
+        out.extend(block);
+        rest = after;
+        if rest.is_empty() {
+            break;
+        }
+    }
+    out.extend(adler32(raw).to_be_bytes());
+    out
+}
+
+/// The check PNG puts on a chunk.
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = !0u32;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xedb8_8320 & (!(crc & 1)).wrapping_add(1));
+        }
+    }
+    !crc
+}
+
+/// The check zlib puts on the stream it carried.
+fn adler32(bytes: &[u8]) -> u32 {
+    let (mut a, mut b) = (1u32, 0u32);
+    for byte in bytes {
+        a = (a + u32::from(*byte)) % 65521;
+        b = (b + a) % 65521;
+    }
+    (b << 16) | a
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Walk a PNG chunk by chunk, answering with each one's name — and failing on the first whose
+    /// check does not match what is in it.
+    ///
+    /// It is written here rather than reached for because the point is to read the file the way a
+    /// stranger would: a decoder of our own making that agreed with a writer of our own making
+    /// would prove only that the two agree. What this asks is the format's own question — does the
+    /// length say where the next chunk starts, and does the check match the bytes.
+    fn chunks(png: &[u8]) -> Vec<String> {
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n", "not a PNG at all");
+        let mut names = Vec::new();
+        let mut at = 8;
+        while at < png.len() {
+            let len = u32::from_be_bytes(png[at..at + 4].try_into().unwrap()) as usize;
+            let name = String::from_utf8(png[at + 4..at + 8].to_vec()).unwrap();
+            let end = at + 8 + len;
+            let said = u32::from_be_bytes(png[end..end + 4].try_into().unwrap());
+            assert_eq!(crc32(&png[at + 4..end]), said, "the check on {name} does not match it");
+            names.push(name);
+            at = end + 4;
+        }
+        assert_eq!(at, png.len(), "the last chunk ends somewhere other than the file does");
+        names
+    }
+
+    /// A picture asked for by size is a real PNG, and it is at least the size it was asked for.
+    ///
+    /// **The size is the whole reason this op exists**: what reads these files is a provider
+    /// deciding whether a picture is large enough to take in, and one that came out a few kilobytes
+    /// would walk every road green while proving nothing.
+    #[test]
+    fn a_picture_asked_for_by_size_is_a_png_and_is_at_least_that_large() {
+        let asked = 4 * 1024 * 1024;
+        let png = noise_png(asked);
+
+        assert_eq!(chunks(&png), ["IHDR", "IDAT", "IEND"]);
+        assert!(png.len() as u64 >= asked, "{} bytes for {asked}", png.len());
+        // And not wildly over it either: what is paid for the stored blocks and the chunk headers
+        // is a fraction of a per cent, and a road asking for twenty megabytes gets twenty.
+        assert!(png.len() as u64 <= asked + asked / 100, "{} bytes for {asked}", png.len());
+    }
+
+    /// And it is noise, which is what keeps it that large: a drawing of one colour would come back
+    /// from any re-encoding as a few kilobytes, and the size is what the roads turn on.
+    #[test]
+    fn what_is_drawn_is_noise_rather_than_a_picture_that_would_compress_away() {
+        let png = noise_png(1024 * 1024);
+        let pixels = &png[png.len() / 3..png.len() / 3 + 4096];
+        let distinct: std::collections::BTreeSet<u8> = pixels.iter().copied().collect();
+        assert!(distinct.len() > 200, "only {} distinct bytes in a run of noise", distinct.len());
+    }
+
+    /// The smallest size a road may ask for still comes out a picture with a row in it.
+    #[test]
+    fn the_smallest_picture_a_road_may_ask_for_is_still_a_png() {
+        let png = noise_png(1);
+        assert_eq!(chunks(&png), ["IHDR", "IDAT", "IEND"]);
+        // The signature, the chunk's length and name, then the width — so the height starts here.
+        assert_eq!(u32::from_be_bytes(png[20..24].try_into().unwrap()), 1, "fewer than one row");
+    }
 }

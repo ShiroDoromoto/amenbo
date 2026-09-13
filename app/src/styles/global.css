@@ -539,15 +539,28 @@ input[type="color"] {
 /* Sent by press as well as by the keys, for the reader who has just written with the mouse in hand.
    It is dead while there is nothing to send, which is the third of the three things that change
    together. What it is called says the keys, because Enter is a line here and nothing about the box
-   would tell a reader that (`../shell/TerminalPane`). */
+   would tell a reader that (`../shell/TerminalPane`).
+
+   **A disc, and not an outline that fades.** An arrow sunk to the muted colour said the press could
+   not be made and stopped saying there was a press there at all — on the one row where a reader who
+   has written a line has to find one. So the shape stands in both states and only the filling
+   changes.
+
+   **Grey while it is dead, and not the accent faded.** A disc that were always teal would leave a
+   teal mark on every pane of a face split four ways, and teal on this face is what says which pane
+   is being worked in (`.slot--focused`) — four of them says nothing at all. The room it takes is the
+   mark inside it and a ring of `--s-1` all round, which is what makes 24. */
 .compose__send {
   flex: 0 0 auto;
-  display: inline-flex; align-items: center;
-  padding: 0 var(--s-1);
-  border: 0; background: transparent;
-  color: var(--c-accent); font-size: var(--fs-md); line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  padding: 0; border: 0; border-radius: 50%;
+  background: var(--c-accent); color: var(--c-on-accent);
+  font-size: var(--fs-md); line-height: 1;
 }
-.compose__send:disabled { color: var(--c-text-muted); opacity: 0.5; }
+/* The arrow in the dead one is the ground the frame is drawn on rather than a grey of its own: what
+   the disc sits over is that ground, so the mark reads as the shape left open in it. */
+.compose__send:disabled { background: var(--c-rule); color: var(--c-pane-frame); }
 
 /* The row under the box, where the model the program is answering on is moved (`../shell/PaneModel`).
    It is the slot's last band and the quietest of them: what the pane is for is what is running in it,

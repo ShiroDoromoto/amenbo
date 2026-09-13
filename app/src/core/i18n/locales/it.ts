@@ -605,8 +605,6 @@ export const it: Translation = {
     "face.compose": "Scrivi in questo riquadro",
     "face.composeSend": "Invia",
     "face.composeSendKeys": "Invia ({keys})",
-    "face.composePasses": "I tasti vanno al terminale",
-    "face.composeKeeps": "Stai scrivendo qui",
     "face.composeOpen": "Apri il riquadro per scrivere",
     "face.composeFold": "Richiudi il riquadro",
     "files.side": "Pagina e file",

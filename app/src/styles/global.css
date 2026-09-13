@@ -500,18 +500,10 @@ input[type="color"] {
      is the frame's ground it stands on (`.slot__frame`), and a dashed rule there was the second of
      three teal-ish lines running across a focused pane. The room is kept rather than the colour, so
      that writing the first character moves nothing: the edge comes up teal the moment something is
-     written, alongside the mark beside it and the press at the end of the row. */
+     written, alongside the press at the end of the row. */
   border: 1px solid transparent; border-radius: var(--r-md);
 }
 .compose--writing { border-color: var(--c-accent); }
-/* Which of the two the keyboard is answering to. It is a mark rather than a sentence because the row
-   it sits on is as wide as a pane in a face split four ways, and it carries its words in a title for
-   the reader who stops on it. */
-.compose__mark {
-  flex: 0 0 auto; display: inline-flex; align-items: center;
-  color: var(--c-text-muted);
-}
-.compose--writing .compose__mark { color: var(--c-accent); }
 /* One line high until something is written, and never taller than what is written needs. The height
    is set from here in pixels (`../shell/TerminalPane`), which is why nothing sets it below: it is
    measured against what the box holds and against the rows the terminal is keeping, and a rule here

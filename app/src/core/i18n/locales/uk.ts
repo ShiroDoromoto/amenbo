@@ -610,8 +610,6 @@ export const uk: Translation = {
     "face.compose": "Написати в цю панель",
     "face.composeSend": "Надіслати",
     "face.composeSendKeys": "Надіслати ({keys})",
-    "face.composePasses": "Клавіші йдуть у термінал",
-    "face.composeKeeps": "Пишете тут",
     "face.composeOpen": "Відкрити поле для введення",
     "face.composeFold": "Згорнути поле введення",
     "files.side": "Сторінка і файли",

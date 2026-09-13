@@ -613,8 +613,6 @@ export const ru: Translation = {
     "face.compose": "Написать в эту панель",
     "face.composeSend": "Отправить",
     "face.composeSendKeys": "Отправить ({keys})",
-    "face.composePasses": "Клавиши идут в терминал",
-    "face.composeKeeps": "Пишете здесь",
     "face.composeOpen": "Открыть поле для ввода",
     "face.composeFold": "Свернуть поле ввода",
     "files.side": "Страница и файлы",

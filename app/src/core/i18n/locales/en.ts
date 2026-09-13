@@ -704,11 +704,7 @@ const ui = {
   "face.rename": "Rename this pane",
   "face.handHere": "Drop to paste the path",
   "face.more": "More",
-  // The box under a pane, where a line is written before it is sent (`AMB-D-864`). The two marks are
-  // the same box in its two states: with nothing written the arrows and the tab go to the program,
-  // and with something written they belong to the box. `Escape` and `Ctrl+C` go either way
-  // (`AMB-D-876`), which is what the marks do not try to say — they are about where the typing
-  // lands, and neither of those is typing.
+  // The box under a pane, where a line is written before it is sent (`AMB-D-864`).
   "face.compose": "Write to this pane",
   "face.composeSend": "Send",
   // The same press, named with the keys that do the same thing (`AMB-D-876`). `{keys}` is the
@@ -716,12 +712,11 @@ const ui = {
   // the keyboard in front of the reader. It is a key of its own because the plain word above is
   // still what a button that only sends is called (`../../../shell/PaneModel`).
   "face.composeSendKeys": "Send ({keys})",
-  "face.composePasses": "Keys go to the terminal",
-  "face.composeKeeps": "Writing here",
   // The press on the pane's own band that opens and shuts that box (`AMB-D-889`). Two keys rather
-  // than one: the mark on it says which of the two states the box is in, and the words say what the
-  // press would do — a reader who stops on a folded pane is asking how to get the box back, not
-  // being told again that it is folded.
+  // than one because the words say what the press would do, and that differs by which state the box
+  // is in — a reader who stops on a folded pane is asking how to get the box back, not being told
+  // again that it is folded. The mark on the press is the same drawing in both states, so these
+  // words are the only place the difference is said.
   "face.composeOpen": "Open the box to write in",
   "face.composeFold": "Fold the box away",
   // The file face beside the terminal's pane: the project's folder, folded, with what git says

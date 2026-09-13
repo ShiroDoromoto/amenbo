@@ -167,8 +167,6 @@ async function closed(): Promise<void> {
 
 /** The box a line is written in, while the pane draws one. */
 const box = () => container.querySelector<HTMLTextAreaElement>(".compose__box");
-/** The mark that says which of the two the keyboard is answering to. */
-const mark = () => container.querySelector<HTMLElement>(".compose__mark");
 /** The press that sends what is written. */
 const sendBtn = () => container.querySelector<HTMLButtonElement>(".compose__send");
 /** The box the emulator collects typing in, which is the terminal's own. */
@@ -486,7 +484,6 @@ describe("where a press goes", () => {
     expect(await pressed("ArrowUp"), "the press stayed in the box").toBe(true);
     expect(wrote(), "the way out reached the program as something else").toEqual(["\x1b[A"]);
     expect(document.activeElement, "the keyboard stayed in the box the press left").toBe(typing());
-    expect(mark()?.title, "the mark went on naming a box the keyboard had left").toBe(t("face.composePasses"));
   });
 
   it("keeps them once something is written", async () => {
@@ -507,7 +504,6 @@ describe("where a press goes", () => {
     expect(wrote(), "the way out reached the program as something else").toEqual(["\x1b[A"]);
     expect(document.activeElement, "the keyboard stayed in the box the press left").toBe(typing());
     expect(box()?.value, "what was written was thrown away on the way out").toBe("half a sentence");
-    expect(mark()?.title, "the mark went on naming a box the presses had left").toBe(t("face.composePasses"));
   });
 
   it("walks up through what is written until the first line, and leaves from there", async () => {
@@ -557,40 +553,9 @@ describe("where a press goes", () => {
     await pressed("Escape");
 
     expect(document.activeElement, "the keyboard went with the press").toBe(box());
-    expect(mark()?.title, "the mark stopped naming the box a person was still writing in")
-      .toBe(t("face.composeKeeps"));
   });
 
-  it("says which of the two the keyboard is answering to, and changes as the keyboard moves", async () => {
-    await pane();
-    await writing();
-    // A person pressing the terminal, which is how the keyboard is handed to the program in it. A
-    // pane opens with the keyboard in the box (`./TerminalPane`), so it is taken off there first —
-    // what is read below is the mark following it back.
-    await act(async () => { typing()?.focus(); });
-
-    expect(mark()?.title).toBe(t("face.composePasses"));
-    await write("half a sentence");
-    expect(mark()?.title).toBe(t("face.composeKeeps"));
-  });
-
-  it("names the box as soon as the keyboard is in it, nothing written yet", async () => {
-    await pane();
-    await writing();
-
-    // A person clicking into the box before they have typed anything. Every character they are about
-    // to type is the box's, so the mark that names the terminal would be untrue from here on.
-    await act(async () => { box()?.focus(); });
-
-    expect(mark()?.title, "the mark named the terminal while the box held the keyboard")
-      .toBe(t("face.composeKeeps"));
-    // And what the empty box does hand on is unchanged: the mark says where a press goes, and it is
-    // not what decides it.
-    expect(await pressed("ArrowUp"), "the press stayed in the box").toBe(true);
-    expect(wrote(), "the history an empty box hands on never reached the program").toEqual(["\x1b[A"]);
-  });
-
-  it("names the terminal again once the keyboard goes there, line still written", async () => {
+  it("leaves the written line where it is when the keyboard goes to the terminal", async () => {
     await pane();
     await writing();
     await write("half a sentence");
@@ -598,7 +563,6 @@ describe("where a press goes", () => {
     // A person clicking into the terminal, which takes the keyboard and leaves the line alone.
     await act(async () => { box()?.blur(); });
 
-    expect(mark()?.title, "the mark named a box the presses no longer reach").toBe(t("face.composePasses"));
     expect(box()?.value, "the line went with the keyboard").toBe("half a sentence");
   });
 

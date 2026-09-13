@@ -191,12 +191,6 @@ export function TerminalPane({
   // in a window over the pane: what is being named is the line the box stands in.
   const [naming, setNaming] = useState(false);
   const nameField = useRef<HTMLInputElement>(null);
-  // Whether the box is the one holding the keyboard, which is the whole of what the mark beside the
-  // box says: a press is the box's while the box is the thing being typed at, and the terminal's
-  // otherwise. The way out leaves a written box with the keyboard on the terminal
-  // (`../talk/terminal`), and so does a person clicking the terminal, and the mark follows both
-  // rather than go on naming the box.
-  const [typing, setTyping] = useState(false);
   // Whether the box under this pane is folded away (`AMB-D-889`). A pane whose reader has never said
   // comes up folded — its presses go to the program, which is what a pane is before anybody asks for
   // anything else: a person who writes paragraphs opens it, and a slash command typed at a CLI needs
@@ -330,7 +324,7 @@ export function TerminalPane({
    * It moves the keyboard to the terminal and goes there itself, so a menu the program is drawing is
    * walked by the one press rather than by a press to leave and a press to move — and what is walked
    * can then be chosen, which an empty box's handed-on ArrowUp left no way to do. What is written
-   * stays where it is, and the mark beside the box goes on saying the way back.
+   * stays where it is.
    */
   const pressed = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (isEnterSubmit(e)) {
@@ -401,17 +395,6 @@ export function TerminalPane({
     if (folded) focusTerminal(paneRef.current);
     else boxRef.current?.focus();
   };
-
-  /** Whether a press now would stay in the box — which is what the mark beside it names. It is the
-   *  keyboard and nothing else: an empty box holding it keeps every ordinary character, and hands on
-   *  only the four presses that walk a history, complete a word or leave a menu, with `Ctrl+C`
-   *  (`../talk/terminal`). Asking what is written as well named the terminal while a person was
-   *  typing the first character of a line into the box.
-   *
-   *  **`Escape` and `Ctrl+C` are outside what it names** (`AMB-D-876`): they go to the program from
-   *  a written box too, and the mark goes on saying the box. What it is about is where the *typing*
-   *  lands, and neither of those two is typing. */
-  const keysHere = typing;
 
   /** What the press beside the box is called, with the keys that do the same thing in it
    *  (`AMB-D-876`). The two spellings are the machine's own — `⌘Enter` where the application's key
@@ -808,20 +791,6 @@ export function TerminalPane({
             again, and the press that folds it says so meanwhile. */}
         {live !== null && !folded && (
           <div className={`compose${written === "" ? "" : " compose--writing"}`}>
-            {/* Which of the two the keyboard is answering to, said as the keyboard moves rather than
-                after the fact. What it names is where a press goes, and that is the box for as long as
-                the box is the thing being typed at — an empty one included, which keeps the characters
-                and hands on the few presses it has nothing to do with (`keysHere`).
-
-                A box the keyboard has left is the other way round, whatever is written in it, and the
-                mark follows that too: the way out and a click into the terminal both take the keyboard
-                away and leave the line where it is. */}
-            <span className="compose__mark" title={t(keysHere ? "face.composeKeeps" : "face.composePasses")}>
-              <Icon
-                name={keysHere ? "pencil" : "keyboard"}
-                label={t(keysHere ? "face.composeKeeps" : "face.composePasses")}
-              />
-            </span>
             <textarea
               ref={boxRef}
               className="compose__box"
@@ -832,8 +801,6 @@ export function TerminalPane({
               {...asTyped}
               onChange={(e) => onWrite(frame, e.currentTarget.value)}
               onKeyDown={pressed}
-              onFocus={() => setTyping(true)}
-              onBlur={() => setTyping(false)}
             />
             <button
               className="compose__send"
@@ -856,9 +823,11 @@ export function TerminalPane({
             it and is drawn only where the host has a road (`./PaneModel`, `AMB-D-865`). */}
         {live !== null && (
           <div className="panerow">
-            {/* Open or shut, and nothing else (`AMB-D-889`). The mark says which of the two it is
-                rather than what the press would do — the box is either in front of the reader or it
-                is not, and that is what they are looking at when they reach for this.
+            {/* Open or shut, and nothing else (`AMB-D-889`). Which of the two it is, is said by
+                `aria-expanded` and by the box standing there or not — so the mark is the same
+                drawing in both states and names the press rather than the state. A mark that
+                changed with the state was a second thing the reader had to read to learn what they
+                were already looking at.
 
                 **The press is the button and the mark is inside it.** A hit area on the drawing
                 itself is a hit area that is swapped out under the pointer the moment it is used, and
@@ -882,7 +851,7 @@ export function TerminalPane({
                 setComposeStartsOpen(folded);
               }}
             >
-              <Icon name={folded ? "keyboard" : "pencil"} />
+              <Icon name="keyboard" />
             </button>
             <PaneModel frame={frame} session={live} agent={inPane} />
           </div>

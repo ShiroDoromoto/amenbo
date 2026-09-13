@@ -583,8 +583,6 @@ export const ko: Translation = {
     "face.compose": "이 페인에 쓰기",
     "face.composeSend": "보내기",
     "face.composeSendKeys": "보내기 ({keys})",
-    "face.composePasses": "키는 터미널로",
-    "face.composeKeeps": "여기에 쓰는 중",
     "face.composeOpen": "쓰는 칸 열기",
     "face.composeFold": "쓰는 칸 접기",
     "files.side": "메모와 파일",

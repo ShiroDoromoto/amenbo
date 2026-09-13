@@ -408,6 +408,19 @@ pub enum Command {
         store: String,
     },
 
+    /// The entry point a **notification sender** is launched through: it posts one drive's worth of
+    /// messages and exits (`AMB-D-885`, `AMB-D-352`). Hidden because Amenbo launches it — never a hand.
+    ///
+    /// The messages arrive on stdin, already worded, because a burst is a paragraph of text and a command
+    /// line is a place with a length limit and every process list on the machine reading it. The store is
+    /// an argument for the reason a plugin runner's is: it posts through the connections of the store the
+    /// drive that launched it drove.
+    #[command(hide = true)]
+    NotifySender {
+        /// the base directory of the store whose connections to post through (app-data, or `AMENBO_HOME`)
+        store: String,
+    },
+
     /// Manage the git hooks that run `amenbo lint`: `pre-commit` for the staged diff, and `commit-msg`
     /// for the message, which is the only place git offers it. Installing writes into your git plumbing,
     /// which Amenbo does not do unasked: it asks once — for the lint as a feature, on this device — and

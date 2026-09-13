@@ -38,6 +38,7 @@ pub mod mcp_probe;
 pub mod mcp_request;
 pub mod migrate;
 pub mod model;
+pub mod notify_dispatch;
 pub mod notify_mail;
 pub mod notify_wording;
 mod notify_wording_table;

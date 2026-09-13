@@ -110,7 +110,7 @@ pub fn drive_persisted(
         Some(launcher) => crate::plugin_runner::start(engine, launcher)?,
         None => Vec::new(),
     };
-    Ok(Delivered { cursor: fanned.cursor, runners, replies, gapped: fanned.gapped })
+    Ok(Delivered { cursor: fanned.cursor, runners, replies, gapped: fanned.gapped, seen: fanned.seen })
 }
 
 /// What a flush moved: the drive it made, and what each queue it worked got through (`AMB-T-2470`).

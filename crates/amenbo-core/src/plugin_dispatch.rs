@@ -214,6 +214,10 @@ pub struct Delivered {
     /// never queued. The cursor is resynced to the head. A caller may log this (`AMB-D-361`); delivery being
     /// best-effort, it is not an error (`AMB-D-352`).
     pub gapped: bool,
+    /// **Every event this drive walked** — the fan-out's [`FannedOut::seen`], carried out so the caller can
+    /// hand it to whatever else observes a write (`AMB-D-885`). Empty on a pass that read nothing, and on a
+    /// retention gap.
+    pub seen: Vec<crate::notify_dispatch::Happened>,
 }
 
 /// What one [`fan_out`] pass moved: how far it read, how much it queued, the replying hooks it could not
@@ -233,6 +237,15 @@ pub struct FannedOut {
     /// Retention had trimmed past the cursor: nothing was queued for the lost span, and the cursor is
     /// resynced to the head.
     pub gapped: bool,
+    /// **Every event this pass walked**, recognised ones only, in the order they fired — handed on rather
+    /// than left to be read again (`AMB-D-885`).
+    ///
+    /// The outbox is reclaimed on the same transaction that queues, so a second reader coming back for
+    /// these afterwards would find them gone; and giving it a cursor of its own would mean the reclaim
+    /// could only run once both had passed, which is a coupling neither reader asked for. So the walk is
+    /// made once and what it saw is carried out. Who does what with them is the caller's
+    /// ([`crate::notify_dispatch`]); nothing here knows a notification exists.
+    pub seen: Vec<crate::notify_dispatch::Happened>,
 }
 
 /// **Fan out** the outbox onto the subscribed plugins' queues — the first layer of delivery (`AMB-D-399`).
@@ -268,6 +281,7 @@ pub fn fan_out(
     let mut cursor = cursor;
     let mut queued = 0usize;
     let mut replies: Vec<Hook> = Vec::new();
+    let mut seen: Vec<crate::notify_dispatch::Happened> = Vec::new();
     loop {
         match events_since(conn, cursor, DELIVER_PAGE)? {
             OutboxSlice::Gap => {
@@ -284,6 +298,7 @@ pub fn fan_out(
                     queued: 0,
                     replies: Vec::new(),
                     gapped: true,
+                    seen: Vec::new(),
                 });
             }
             OutboxSlice::Events { rows, more } => {
@@ -303,6 +318,16 @@ pub fn fan_out(
                     // otherwise route its older events to its new home. `None` is a real answer (a record
                     // in no project, or a row from before the column), and a resolver that needs a project
                     // fires nothing without one (`AMB-D-434`).
+                    // Carried before the subscribers are asked, because it is not their answer: an event
+                    // nobody observes is still an event a project may report.
+                    seen.push(crate::notify_dispatch::Happened {
+                        event: row.event.clone(),
+                        record_id: row.record_id,
+                        project: row.project,
+                        actor: row.actor.clone(),
+                        new_state: row.new_state.clone(),
+                        parent: row.parent,
+                    });
                     for sub in subs.resolve(payload.event, row.project, face) {
                         if sub.reply {
                             // A replying hook (CLI-only, `AMB-D-383`) never joins a queue: its stderr is the
@@ -348,7 +373,7 @@ pub fn fan_out(
     // `AMB-D-399` moves off the plugins' critical path: the outbox is reclaimed at the fan-out's speed, not
     // at the slowest plugin's.
     crate::store_engine::outbox::trim_fanned_out(conn, cursor)?;
-    Ok(FannedOut { cursor, queued, replies, gapped: false })
+    Ok(FannedOut { cursor, queued, replies, gapped: false, seen })
 }
 
 /// Run the `reply:true` hooks a fan-out could not queue, and collect what they said (`AMB-D-383`).

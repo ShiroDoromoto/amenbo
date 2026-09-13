@@ -46,6 +46,18 @@ pub const RUNNER_ARGV: &[&str] = &[RUNNER_FLAG];
 /// directory. Named here because [`crate::runner_argv`] reads them back off `argv` in that order.
 pub const RUNNER_ARGS: usize = 3;
 
+/// The same door, for a **notification sender** (`AMB-D-885`): this executable, re-run to post one drive's
+/// worth of messages and exit. An app started this way puts up no window either, and the only caller is
+/// Amenbo itself.
+pub const SENDER_FLAG: &str = "--notify-sender";
+
+/// The argv prefix core re-runs this executable through to send. Core follows it with [`SENDER_ARGS`] of
+/// its own — the store's base directory, and nothing else: the messages come over stdin.
+pub const SENDER_ARGV: &[&str] = &[SENDER_FLAG];
+
+/// The one argument core appends after [`SENDER_ARGV`] — the store's base directory.
+pub const SENDER_ARGS: usize = 1;
+
 /// Drive the dispatcher once over everything committed since the store's cursor, and store where it
 /// advanced to. Call it after a mutating command committed, on that command's still-open store.
 pub fn drive(store: &Store) {
@@ -64,7 +76,7 @@ pub fn drive(store: &Store) {
     // The returned `Delivered` is dropped here: the runners it names are processes of their own, and this
     // face never had a `reply:true` subscriber to surface (`AMB-D-383`). The cursor it advanced to is
     // already stored.
-    if let Err(e) = store.drive_plugins_persisted(Face::Gui, &subscribers, RUNNER_ARGV) {
+    if let Err(e) = store.drive_plugins_persisted(Face::Gui, &subscribers, RUNNER_ARGV, SENDER_ARGV) {
         log::warn!("could not dispatch the plugin observation hooks: {e}");
     }
 }
@@ -95,7 +107,7 @@ pub fn resume() {
         }
     };
     let subscribers = EnabledSubscribers::new(&installed, &store);
-    if let Err(e) = store.resume_plugin_delivery(Face::Gui, &subscribers, RUNNER_ARGV) {
+    if let Err(e) = store.resume_plugin_delivery(Face::Gui, &subscribers, RUNNER_ARGV, SENDER_ARGV) {
         log::warn!("could not resume the plugin observation hooks: {e}");
     }
 }

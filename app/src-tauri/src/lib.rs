@@ -193,6 +193,30 @@ pub fn run_plugin_runner() -> bool {
     true
 }
 
+/// The store a notification sender was launched over, if this process was one — read off `argv` behind
+/// [`plugin_dispatch::SENDER_FLAG`], the same exact, positional match the runner's is.
+fn sender_argv() -> Option<String> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 + plugin_dispatch::SENDER_ARGS || args[1] != plugin_dispatch::SENDER_FLAG {
+        return None;
+    }
+    Some(args[2].clone())
+}
+
+/// Post one drive's worth of notifications and return, instead of starting the app (`AMB-D-885`). `true`
+/// when that is what happened, which is the caller's signal to start nothing else.
+///
+/// The app sends for the notifications it queued itself, for the reason it runs its own plugin runners: one
+/// binary per face, and no second one to ship or to keep in step.
+#[must_use = "start the app only when this says the process was not launched as a sender"]
+pub fn run_notify_sender() -> bool {
+    let Some(store) = sender_argv() else {
+        return false;
+    };
+    amenbo_core::notify_dispatch::send_process(store.into());
+    true
+}
+
 /// The `platforms` key this build asks the update manifest for — the machine's, not the build's
 /// (`AMB-D-551`).
 ///

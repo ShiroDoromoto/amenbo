@@ -1,0 +1,150 @@
+# The way out names the provider whose pane has lost its way back, and names nobody else.
+#
+# **Ending the app ends every terminal in it at once, and the question in front of that gesture
+# promises the talk itself comes back** — each place opened again on the session it was left in
+# (`app/src-tauri/src/frames.rs`). That promise has an exception, and the exception is what this road
+# walks: where a pane holds no way back, the question says so by the provider's own name
+# (`crate::frames::TalkFace::without_a_way_back`, `app/src/shell/openPanes.ts`).
+#
+# The plain half of the same sentence — every pane comes back, so nobody is named — is walked by
+# `be-asked-before-the-app-takes-every-terminal-with-it`, which is also where what the answers do to
+# the ledger is read. Nothing of that is repeated here: this road is the named half alone.
+#
+# ── Why a pane is made to lose its way back rather than found without one ───────────────────────
+# **Every row in the catalog has a way back** (`crates/amenbo-core/src/harness.rs`, `LAUNCHES`, the
+# `resume` field), so there is no provider left to open a pane on and read a name over. The other
+# source is the one this road stands up: a handle is written down as the pane starts, before the
+# program is up, so that a quit arriving in between still leaves the pane a way back
+# (`TalkFace::resumed_from`) — and the price of writing it early is a program that never came up. The
+# handle then names a session nothing ever made, so it is taken back and the pane is left with no way
+# in (`TalkFace::gave_up`, `crate::pty`).
+#
+# **It is the rows whose way back is a handle on the line that this can happen to** — Claude Code,
+# GitHub Copilot CLI and Cursor (`amenbo_core::harness::Resume::carries_a_handle`). The other three
+# come back by the place the pane runs in, which is made whether or not a conversation was ever had
+# there, so nothing is written down early and nothing has to be taken back.
+#
+# ── Why the machine is stood up with stand-ins that end ─────────────────────────────────────────
+# `can-start` leaves its stand-ins printing and ending, which is this road's whole premise: a pane
+# opened on one is a program that came up and was gone within moments, which is exactly the pane
+# whose handle is taken back. The premise also puts the catalog's own commands in the catalog's own
+# order, which is what lets a road name one of them rather than count along the row.
+#
+# **Which of the three is named is not a free choice, and GitHub Copilot CLI is the one.** The
+# premise only ever *adds*: a pane runs its program through a login shell, and the profile that
+# shell reads puts the operator's own directories back in front of the one the run stood up — so
+# where the operator has that tool installed, the pane opens on theirs and it stays running. A road
+# that reads the row is right either way; this one reads what the program did, so it has to be on a
+# row nothing of the operator's answers for.
+#
+# ── Why a second pane is standing ───────────────────────────────────────────────────────────────
+# **No terminal open means no question.** The stand-in's pane holds nothing running by the time the
+# way out is asked for, so on its own it would be quit with nothing in the way and the sentence would
+# never be drawn. The plain shell beside it is what keeps the question standing — and it carries no
+# name of its own into it, holding no conversation to come back to.
+id: be-told-which-pane-will-not-come-back-before-the-app-ends
+title: The way out names the provider whose pane has lost its way back
+description: >
+  Open a plain shell in one pane and, beside it, a pane on a catalogued provider whose program ends
+  the moment it starts — which is the pane whose way back is taken away again. Ask Amenbo to end, and
+  the question raised over the shell still running names that provider: this one place will not be in
+  its conversation when the app comes back.
+
+given:
+  # One project, and the one folder creating it links. A second folder bound beside it would put the
+  # question of which of them the pane works in where the press is, and that question is another
+  # road's (`open-a-pane-where-a-project-keeps-more-than-one-folder`).
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Foundry
+
+  # The row of things a pane can be opened with, made the run's answer rather than the machine's.
+  # Three of them, which is as far along the catalog as the provider this road opens on. They print
+  # and end — the default — because a program that ended moments after it started is the whole of
+  # what puts a pane on this road.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 3
+      then: ends
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
+  # that read a screen it had not put itself on would be reading somebody else's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Foundry
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  # Down to a plain shell, and it is this pane that keeps the question standing: a shell is still
+  # running when the way out is asked for, and it holds no conversation, so it puts no name into the
+  # sentence of its own.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # Room for the pane beside it. A project nobody has answered for is drawn at one pane, and a page
+  # with no room on it draws no frame for the steps below to set.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  # And beside it, the pane this road is about. The frame is set to the provider and nothing is
+  # pressed yet — what the press will run is the line the frame writes out under the row.
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: GitHub Copilot CLI
+
+  # The press. The program comes up on a handle Amenbo wrote down as it started, prints, and is gone
+  # — so the handle names a session nothing ever made, and it is taken back.
+  - type: action
+    domain: terminal
+    op: open-start
+
+  # The window is named because the question is a second one: while it stands the app has two on
+  # screen, and a shot that took whichever was in front would be a picture of a screen nobody stood
+  # at. The question is drawn over the board, so the board is what is shot.
+  - type: action
+    domain: store
+    op: quit
+    window: Amenbo
+    with:
+      how: menu
+      asks: true
+
+  # The goal. One pane on the screen has no way into a conversation, and the question says whose it
+  # is rather than leaving the reader to guess which of the panes it means.
+  - type: assert
+    domain: store
+    op: quit-names
+    window: Amenbo
+    with:
+      agent: GitHub Copilot CLI
+      present: true
+
+  - type: action
+    domain: store
+    op: answer-quit
+    window: Amenbo
+    with:
+      answer: leave

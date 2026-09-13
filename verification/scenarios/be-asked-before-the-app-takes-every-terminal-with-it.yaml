@@ -35,7 +35,7 @@
 #
 # The named half is still the product's, and the road to walk it is a pane whose way in was taken
 # back rather than a provider that never had one (`crate::frames::TalkFace::gave_up`). That is a road
-# of its own and is written down as one.
+# of its own: `be-told-which-pane-will-not-come-back-before-the-app-ends`.
 #
 # ── Why both doors are walked ────────────────────────────────────────────────────────────────────
 # There are two ways out and they arrive by different roads. The menu's item is one this app wrote,

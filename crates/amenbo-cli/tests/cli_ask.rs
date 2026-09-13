@@ -133,7 +133,7 @@ impl Ask {
 
     /// A git repository in the run's own folder, which is what gives the lint's question its slots.
     fn git_repo(&self) {
-        let out = Command::new("git")
+        let out = amenbo_scratch::command("git")
             .args(["init", "-q"])
             .current_dir(&self.home)
             .output()

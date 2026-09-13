@@ -3,7 +3,6 @@
 
 mod harness;
 
-use std::process::Command;
 
 use serde_json::Value;
 
@@ -54,7 +53,7 @@ fn lint(cwd: &std::path::Path, home: &std::path::Path, args: &[&str], stdin: Opt
 /// to stdout, so a commit that fails that way reports an empty message and a bare non-zero code, which is
 /// exactly how the flake this helper now describes managed to stay unreadable.
 fn git(dir: &std::path::Path, args: &[&str]) {
-    let out = Command::new("git").current_dir(dir).args(args).output().expect("failed to run git");
+    let out = amenbo_scratch::command("git").current_dir(dir).args(args).output().expect("failed to run git");
     assert!(
         out.status.success(),
         "git {args:?} exited {code}\nstdout: {stdout}\nstderr: {stderr}",
@@ -467,11 +466,11 @@ fn agent_hook_snippet_json_carries_the_request_the_configuration_and_its_destina
 fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "Alice"]);
-    let real_git = String::from_utf8(Command::new("/usr/bin/env").args(["which", "git"]).output().unwrap().stdout)
+    let real_git = String::from_utf8(amenbo_scratch::command("/usr/bin/env").args(["which", "git"]).output().unwrap().stdout)
         .unwrap()
         .trim()
         .to_string();
-    Command::new(&real_git).current_dir(&cli.home).args(["init", "-q"]).output().unwrap();
+    amenbo_scratch::command(&real_git).current_dir(&cli.home).args(["init", "-q"]).output().unwrap();
 
     let shim_dir = cli.home.join("shim");
     std::fs::create_dir_all(&shim_dir).unwrap();
@@ -515,7 +514,7 @@ fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
 /// Resolve the real `git` on this machine, the way the probe test does.
 #[cfg(unix)]
 fn real_git_path() -> String {
-    String::from_utf8(Command::new("/usr/bin/env").args(["which", "git"]).output().unwrap().stdout)
+    String::from_utf8(amenbo_scratch::command("/usr/bin/env").args(["which", "git"]).output().unwrap().stdout)
         .unwrap()
         .trim()
         .to_string()

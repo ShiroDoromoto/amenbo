@@ -1190,6 +1190,60 @@ report: MigrationDoneDto | null,
 error: { code: string; message_en: string; fields: Record<string, unknown> | null } | null, };
 
 /**
+ * **One connection this device can send a notification through, under a name** (`AMB-D-885`) — a row on
+ * the shelf, and what the form that opens over it starts filled in with.
+ *
+ * **The credential is never here.** A Slack target's webhook URL and a mail target's SMTP password are
+ * `secret` rows — the table no road out of the store walks — and reading one back into a webview would
+ * put a copy of it in the place that decision keeps it out of. `secretSet` says whether one is held,
+ * which is all the form needs to mask the box and all the shelf needs to say the row can send.
+ *
+ * It is also why the shelf's line under a Slack target's name is not its URL: two Slack targets are told
+ * apart by the name they were given (`amenbo_core::model::NotifyTarget::name`), and a mail target has a
+ * server and an account that are not secret to show instead.
+ */
+export type NotifyTargetDto = { id: number, 
+/**
+ * What carries the message — and which of the fields below mean anything.
+ */
+kind: "slack" | "mail", 
+/**
+ * The name the person gave it, which is its whole identity on a project's screen.
+ */
+name: string, 
+/**
+ * Does a newly created project start out pointing at this one? At most one row carries it.
+ */
+isDefault: boolean, 
+/**
+ * The relay a mail target hands the message to. Absent on a Slack target, and on a mail one
+ * nobody has filled in yet.
+ */
+smtpHost?: string, 
+/**
+ * The port that relay listens on. Mail-mode.
+ */
+smtpPort?: number, 
+/**
+ * The account to authenticate as. Mail-mode.
+ */
+smtpUser?: string, 
+/**
+ * The address the message is sent from. Mail-mode; absent falls back to the account.
+ */
+mailFrom?: string, 
+/**
+ * Whether this target holds its credential — a Slack webhook URL, a mail password. The value
+ * itself never leaves core.
+ */
+secretSet: boolean, 
+/**
+ * How many projects have selected this target. It is read for the delete, which says what the
+ * press costs before it is made; afterwards there is nobody left to ask.
+ */
+projectsUsing: number, };
+
+/**
  * A folder to work in and the project it belongs to — the first loop's one press, on its way from
  * the ledger to the terminal face (`app/src/components/FirstLoop.tsx`).
  *

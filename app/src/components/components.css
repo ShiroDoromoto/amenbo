@@ -393,6 +393,10 @@ body.is-dragging { user-select: none; }
    keeps them apart is that a premise nobody can pass is drawn one step above it. */
 .chip--block { white-space: nowrap; cursor: default; }
 .chip--official { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-on-accent); }
+/* A chip that marks one row among its like — the target a new project starts out pointing at. Quieter
+   than `--official`, which fills: this one names a row already in a list the reader is reading, so it
+   is a tint rather than a stamp. */
+.chip--accent { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); }
 /* A status said as a filled chip, the fill naming which status it is (`statusColor`, kept beside the
    two places that draw it). White on a colour, so it reads as a stamp on the title rather than as one
    more word after it, and rounder than the chips it can sit beside for the same reason. The white is
@@ -790,6 +794,38 @@ button.feed__target:hover { color: var(--c-accent); }
    step class on a doctor line, the tick on a DoneNote, the page's own colour on the rest. `.meta` and
    `.hint` would each overrule that with muted. */
 .settings__fine { font-size: var(--fs-xs); }
+/* The right-hand half of a settings row when what is there is more than one line: the control, the
+   fine print under it, and whatever the row asks for beside them. The rows that are a label and one
+   control need none of this and do not wear it. */
+.settings__v { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+
+/* ---------- the device's notification shelf (`screens/NotifyTargetsSetting`) ---------- */
+/* Rows of connection, read down the left edge. A shelf and not a table: every row carries the same
+   four things, and the only column that has to line up is the kind. */
+.shelf { display: flex; flex-direction: column; border: 1px solid var(--c-rule); border-radius: var(--r-sm); overflow: hidden; }
+.shelf__row { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); background: var(--c-surface); }
+.shelf__row + .shelf__row { border-top: 1px solid var(--c-rule); }
+.shelf__row:hover { background: var(--c-hover); }
+.shelf__kind { width: 96px; flex: none; }
+.shelf__grow { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.shelf__name { font-weight: var(--fw-medium); }
+.shelf__sub { font-size: var(--fs-xs); color: var(--c-text-muted); overflow-wrap: anywhere; }
+
+/* What carries a notification, said twice: a ground colour with a glyph on it, and the word. The tile
+   alone stops being readable once there are four kinds, and the word alone cannot be skimmed down a
+   column — so a new kind costs one `--k-*` and one glyph, and nothing else moves.
+   The glyph's white is plain rather than `--c-on-accent`, for `.chip--status`'s reason: these grounds
+   are the same in both themes, so what reads on them is too. */
+.kind { display: inline-flex; align-items: center; gap: var(--s-2); flex: none; }
+.kind__tile {
+  width: 22px; height: 22px; border-radius: var(--r-sm); flex: none;
+  display: grid; place-items: center;
+  color: #fff; font-size: var(--fs-xs); font-weight: var(--fw-bold); line-height: 1;
+}
+.kind__name { font-size: var(--fs-xs); color: var(--c-text-muted); white-space: nowrap; }
+.k-slack .kind__tile { background: var(--k-slack); }
+.k-mail .kind__tile { background: var(--k-mail); }
+
 /* Profile avatar preview: a 48px circular base (registered image or identicon). */
 .avatar-preview {
   display: inline-flex; width: 48px; height: 48px; flex: none;

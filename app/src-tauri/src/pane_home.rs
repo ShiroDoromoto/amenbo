@@ -67,7 +67,8 @@ struct Kind {
     /// (`AMB-T-4677`). So the path a link is made at is the home and this, and the difference is a
     /// word in a row rather than a branch.
     inside: &'static str,
-    /// What each home shares with the reader's own, by symbolic link.
+    /// What each home shares with the reader's own. How one is reached is [`link`]'s to say — the
+    /// spelling differs by operating system, and on one of them by whether the name is a directory.
     ///
     /// **Measured rather than documented**: each of these was watched being needed
     /// (`AMB-T-4633`, `AMB-T-4677`). A provider adding a file to its directory in some later version
@@ -195,11 +196,10 @@ fn homes_root(kind: &Kind) -> Option<PathBuf> {
 ///
 /// **A link that fails is a warning and not a refusal.** What it costs is one of the things in
 /// [`Kind::shared`]: a pane that logs in again, or comes up without the reader's skills. That is
-/// worth saying in the log and is not worth refusing to open a terminal over — and on Windows, where
-/// a symbolic link needs a privilege this process deliberately does not ask for (`crate::launch`),
-/// it is the ordinary outcome rather than the odd one. **What that costs is not the same on both
-/// rows**: Codex opens without its links and Gemini stops on the first two of its, so the Windows
-/// answer for this row is `AMB-T-4687`'s to give.
+/// worth saying in the log and is not worth refusing to open a terminal over. **What it costs is not
+/// the same on both rows**: Codex opens without its links and Gemini does not open at all, stopping
+/// on the first two of its. Which is why [`link`] is spelled the way it is on Windows, where until
+/// `AMB-D-878` this was the ordinary outcome rather than the odd one.
 fn make(kind: &Kind, home: &Path, theirs: Option<&Path>) -> Option<PathBuf> {
     let into = home.join(kind.inside);
     if let Err(e) = std::fs::create_dir_all(&into) {
@@ -228,14 +228,26 @@ fn link(from: &Path, at: &Path) -> std::io::Result<()> {
     std::os::unix::fs::symlink(from, at)
 }
 
-/// The same, on the operating system that spells a link to a directory differently from a link to a
-/// file and refuses both to a process holding no privilege for them.
+/// The same, on the operating system where a symbolic link is the one kind a standard user cannot
+/// make.
+///
+/// `symlink_dir` and `symlink_file` need a privilege this process deliberately does not ask for
+/// (`crate::launch`), so with developer mode off they made not one link of the seven and the pane
+/// came up on an empty home — a Codex asking to be logged into again, a Gemini that would not open
+/// (`AMB-T-4643`). A junction and a hard link were measured being made, and followed, by that same
+/// standard user, so a directory is reached by the one and a file by the other (`AMB-D-878`).
+///
+/// **A hard link is a second name for the reader's file rather than a pointer to it.** Editing
+/// through either name reaches the other, which is what the sharing is for; replacing the file does
+/// not, and the two entries a provider replaces rather than edits are `AMB-T-4706`'s and
+/// `AMB-T-4707`'s to take out of this list. It also has to be made on the drive the file is already
+/// on — the reader's home and Amenbo's app-data both sit under `%USERPROFILE%`.
 #[cfg(windows)]
 fn link(from: &Path, at: &Path) -> std::io::Result<()> {
     if from.is_dir() {
-        std::os::windows::fs::symlink_dir(from, at)
+        junction::create(from, at)
     } else {
-        std::os::windows::fs::symlink_file(from, at)
+        std::fs::hard_link(from, at)
     }
 }
 
@@ -294,6 +306,30 @@ mod tests {
         dir
     }
 
+    /// Assert that one entry of a home is the reader's own rather than a copy of it — which is what
+    /// the sharing is for, and the one thing every way of spelling it has in common.
+    ///
+    /// The spelling is not common to them: a symbolic link on Unix, and on Windows a junction where
+    /// the shared name is a directory and a hard link where it is a file (`AMB-D-878`). A hard link
+    /// is not a link to anything and does not read back as one, so asking after the kind of the
+    /// entry would be asking a different question on each. What is asked instead is the reach —
+    /// something written at the reader's end is read at the pane's.
+    fn shares(at: &Path, theirs: &Path) {
+        let (written, read) = if theirs.is_dir() {
+            (theirs.join("later"), at.join("later"))
+        } else {
+            (theirs.to_path_buf(), at.to_path_buf())
+        };
+        std::fs::write(&written, "written at the reader's end").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&read).unwrap_or_default(),
+            "written at the reader's end",
+            "{} does not reach {}",
+            at.display(),
+            theirs.display()
+        );
+    }
+
     /// Every provider these homes are made for is one the catalog has a row for — so a rename there
     /// is a test failure rather than a pane that silently stops getting a home.
     #[test]
@@ -314,13 +350,11 @@ mod tests {
             assert_eq!(make(kind, &home, Some(&theirs)).as_deref(), Some(home.as_path()));
             for name in kind.shared {
                 let at = home.join(kind.inside).join(name);
-                let kind_of_file = at.symlink_metadata().unwrap().file_type();
-                assert!(kind_of_file.is_symlink(), "{}: {name} is a link", kind.agent);
-                assert_eq!(std::fs::read_link(&at).unwrap(), theirs.join(name));
-                // And reading through the link reaches the reader's own — the entry itself where it
-                // is a file, and what is inside it where the shared name is a directory.
-                let read = if name.contains('.') { at } else { at.join("one") };
+                // Reading through it reaches the reader's own — the entry itself where it is a
+                // file, and what is inside it where the shared name is a directory.
+                let read = if name.contains('.') { at.clone() } else { at.join("one") };
                 assert_eq!(std::fs::read_to_string(&read).unwrap(), *name, "{}: {name}", kind.agent);
+                shares(&at, &theirs.join(name));
             }
         }
     }
@@ -336,7 +370,7 @@ mod tests {
 
         make(kind, &home, Some(&theirs)).unwrap();
 
-        assert!(home.join(".gemini/settings.json").symlink_metadata().unwrap().file_type().is_symlink());
+        shares(&home.join(".gemini/settings.json"), &theirs.join("settings.json"));
         assert!(home.join("settings.json").symlink_metadata().is_err(), "shared at the home itself");
     }
 
@@ -370,26 +404,34 @@ mod tests {
         make(kind, &home, Some(&theirs)).unwrap();
 
         assert_eq!(std::fs::read_to_string(&talk).unwrap(), "a conversation");
-        assert_eq!(
-            std::fs::read_link(home.join(".gemini/settings.json")).unwrap(),
-            theirs.join("settings.json")
-        );
+        shares(&home.join(".gemini/settings.json"), &theirs.join("settings.json"));
     }
 
     /// A home goes when its pane does, and the reader's own directory is not followed on the way out
-    /// — what is removed is the links, never what they point at.
+    /// — what is removed is the entries, never what they are a second name for.
+    ///
+    /// **Both rows, because the shared names that are directories are only on one of them.** On
+    /// Windows those are junctions, and a removal that walked into one would empty the reader's own
+    /// skills and prompts rather than the pane's way to them.
     #[test]
     fn a_pane_that_is_gone_takes_its_home_and_nothing_else() {
-        let kind = kind(GEMINI);
-        let theirs = theirs(kind);
-        let root = amenbo_scratch::scratch("pane-homes-gone");
-        let home = root.join("7");
-        make(kind, &home, Some(&theirs)).unwrap();
+        for kind in KINDS {
+            let theirs = theirs(kind);
+            let root = amenbo_scratch::scratch("pane-homes-gone").join(kind.agent);
+            let home = root.join("7");
+            make(kind, &home, Some(&theirs)).unwrap();
 
-        forget_in(&root, &home);
+            forget_in(&root, &home);
 
-        assert!(!home.exists());
-        assert!(theirs.join("settings.json").exists(), "the reader's own is untouched");
+            assert!(!home.exists(), "{}", kind.agent);
+            for name in kind.shared {
+                let at = theirs.join(name);
+                assert!(at.exists(), "{}: the reader's own {name} is untouched", kind.agent);
+                if at.is_dir() {
+                    assert!(at.join("one").exists(), "{}: and so is what is in it", kind.agent);
+                }
+            }
+        }
     }
 
     /// A handle that names nothing under the root is let go of rather than acted on — which is every

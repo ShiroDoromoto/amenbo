@@ -200,6 +200,16 @@ windows = { version = "0.62", features = [
   "Win32_UI_Shell",
 ] }
 windows-core = "0.62"
+# How a directory is shared into a pane's home on this OS (`crate::pane_home`). A symbolic link needs
+# a privilege this process does not ask for, and measured on a standard user with developer mode off
+# it made not one of the seven; a junction was made, and followed, by that same user. Writing the
+# reparse point by hand is a page of unsafe with a byte layout nothing in this tree can compile, let
+# alone run — the Windows branch is built only at a public-CI release — so the risk is bought off
+# with a crate instead. It pins `windows-sys` to the 0.61 named below and `scopeguard` is already in
+# this lock, so nothing else is compiled for it. Default features off: the one feature it has names a
+# different privilege to take where opening the new directory is refused, which a home made under
+# this app's own app-data does not hit.
+junction = { version = "2", default-features = false }
 # Asks whether the drive is remote (a network drive) (`store_watch`), and whether this process holds an
 # administrator's token (`launch`) — elevation is what stops a terminal reaching anything scoop installed.
 # Same version tauri already pulls in.

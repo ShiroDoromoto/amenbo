@@ -78,6 +78,7 @@ async function handOver(session: string, paths: string[]) {
  */
 export function TerminalPane({
   frame, project, names, start, autoStart, focused, landed = false, offered = false, written,
+  inserted = [],
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
@@ -138,7 +139,10 @@ export function TerminalPane({
   written: string;
   /** What is in the box now, on its way to the window that holds it. Said as it is written and again
    *  with nothing in it once a line has gone. */
-  onWrite: (frame: string, written: string) => void;
+  onWrite: (frame: string, written: string, put?: readonly string[]) => void;
+  /** The paths Amenbo put into this box, still standing in what is written (`../talk/layout`). They
+   *  are what the send waits the pane's agent out for (`../talk/terminal`, `AMB-D-879`). */
+  inserted?: readonly string[];
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
@@ -262,7 +266,7 @@ export function TerminalPane({
   const send = async () => {
     if (live === null || written === "") return;
     try {
-      await sendIntoTerminal(live, written, inPane);
+      await sendIntoTerminal(live, written, inPane, inserted);
     } catch (e: unknown) {
       // The terminal having ended between the writing and the send is the whole of what this can be.
       // What was written stays in the box: it did not go, and a box emptied on a refusal would have
@@ -522,20 +526,28 @@ export function TerminalPane({
     // At the caret, taking the selection with it, which is what every other paste into a text box
     // does. What is written is read off the box rather than off `written`, so a listener that
     // outlives a keystroke still reads the sentence as it stands.
-    const insert = (arrived: string) => {
+    // `put` names the paths of what was inserted, where what was inserted is paths: they are
+    // remembered beside the body so that the send can wait the pane's agent out for the file it will
+    // stop to read (`../talk/layout`, `AMB-D-879`).
+    const insert = (arrived: string, put: readonly string[] = []) => {
       if (arrived === "") return;
       const from = box.selectionStart;
       const to = box.selectionEnd;
-      on.current.onWrite(frame, box.value.slice(0, from) + arrived + box.value.slice(to));
+      on.current.onWrite(frame, box.value.slice(0, from) + arrived + box.value.slice(to), put);
       caret.current = from + arrived.length;
     };
     const writeImage = (bytes: Uint8Array, mime: string) => writesPastedImage(bytes, mime, live);
     const stopPaste = takesPastedFiles(
       box,
-      (paths, words) => insert(paths.length > 0 ? quotedPaths(paths) : words),
+      (paths, words) => (paths.length > 0 ? insert(quotedPaths(paths), paths) : insert(words)),
       writeImage,
     );
-    const stopPress = takesPastedImages(box, writeImage, (paths) => insert(quotedPaths(paths)), "textbox");
+    const stopPress = takesPastedImages(
+      box,
+      writeImage,
+      (paths) => insert(quotedPaths(paths), paths),
+      "textbox",
+    );
     return () => {
       stopPaste();
       stopPress();

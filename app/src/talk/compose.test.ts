@@ -94,6 +94,50 @@ describe("how long a pane's agent is left before the return", () => {
   });
 });
 
+// The one agent that stops to read a file the body names, and drops the return that arrives while it
+// is reading (`AMB-T-4714`, `AMB-D-879`). What settles it is whether Amenbo put the path there and
+// whether the body still holds it — never what the path looks like.
+describe("how long the agent that reads what a body names is left", () => {
+  const PICTURE = "/tmp/amenbo-pasted-7a/pasted-0a0b0c0d.png";
+
+  it("waits out the reading where a path Amenbo put in is still standing in the body", () => {
+    expect(pauseBeforeTheReturn("claude-code", `'${PICTURE}' look at this`, [PICTURE])).toBe(1300);
+  });
+
+  // Put in at the caret and then written over, or deleted: there is no file to be read, so there is
+  // nothing to wait out.
+  it("waits for nothing where the body no longer holds it", () => {
+    expect(pauseBeforeTheReturn("claude-code", "look at this", [PICTURE])).toBe(0);
+    expect(pauseBeforeTheReturn("claude-code", "", [PICTURE])).toBe(0);
+  });
+
+  // A path the person typed themselves is not one Amenbo can vouch for, and the body that comes of
+  // it is sent the way any other body is (`AMB-D-879`).
+  it("waits for nothing where the path in the body is one the person wrote", () => {
+    expect(pauseBeforeTheReturn("claude-code", `look at ${PICTURE}`, [])).toBe(0);
+  });
+
+  // What went into the box is the path quoted, and a name with a `'` in it is not written there
+  // character for character (`quotedPath`). Either spelling standing in the body is the file being
+  // named, so either is waited out.
+  it("waits out the reading whichever spelling of the path is standing", () => {
+    const apostrophe = "/work/it's a shot.png";
+    expect(pauseBeforeTheReturn("claude-code", "'/work/it'\\''s a shot.png' look", [apostrophe]))
+      .toBe(1300);
+    // And the same path with the quotes taken off, which the agent reads all the more readily.
+    expect(pauseBeforeTheReturn("claude-code", `look at ${apostrophe}`, [apostrophe])).toBe(1300);
+  });
+
+  // The second condition is this agent's alone. The others were measured reading a named file
+  // without dropping the return, and the cushion one of them has is its own.
+  it("leaves every other pane the wait it already had", () => {
+    const body = `'${PICTURE}' look at this`;
+    expect(pauseBeforeTheReturn("codex-cli", body, [PICTURE])).toBe(0);
+    expect(pauseBeforeTheReturn("gemini-cli", body, [PICTURE])).toBe(50);
+    expect(pauseBeforeTheReturn(null, body, [PICTURE])).toBe(50);
+  });
+});
+
 describe("handing a press on to the program", () => {
   it("writes it as it stands, with nothing wrapped round it", async () => {
     hoisted.asked = [];

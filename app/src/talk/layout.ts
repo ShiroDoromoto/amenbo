@@ -167,7 +167,15 @@ export type SavedLayout = {
    *  other window: a half-written sentence is the window's, and what the host writes down is the
    *  place (`app/src-tauri/src/frames.rs`), so an arrangement read at the start of a run carries
    *  panes and no drafts. */
-  frames: { id: string; project?: number; folder?: string; agent?: string; written?: string; resumes?: boolean }[];
+  frames: {
+    id: string;
+    project?: number;
+    folder?: string;
+    agent?: string;
+    written?: string;
+    inserted?: string[];
+    resumes?: boolean;
+  }[];
   /** The pane being worked in when the arrangement was last written. It is what the window split out
    *  of this face comes up on, so the reader lands where they left rather than on the first place of
    *  the first project (`AMB-D-753`). Read by that window and never by the board: which pane is
@@ -226,6 +234,23 @@ export type Frame = {
    * and is never written down.
    */
   readonly written: string;
+  /**
+   * The paths Amenbo itself put into the box under this pane, as far as they are still standing in
+   * what is written (`../shell/TerminalPane`).
+   *
+   * **It is what the pane's agent is waited out for** (`./terminal`, `AMB-D-879`). Claude Code reads
+   * a file a pasted body names, and drops a return that arrives while it is reading — so a send with
+   * one of these still in it is left a longer pause than a send without. What is asked is whether
+   * Amenbo put the path there, never whether the path looks like a picture: the agent's own way of
+   * finding one is its own, and three of them disagree about it (`AMB-T-4719`).
+   *
+   * **It travels with the draft and is forgotten with it.** A path only means anything beside the
+   * body it was put into, so the two move together — to the window a terminal is split out into, and
+   * out of both on the send that empties the box. A path the person deleted while going on writing
+   * is left here until then: what is asked at the send is whether the body still holds it, and this
+   * is the list that is asked about (`./terminal`).
+   */
+  readonly inserted: readonly string[];
 };
 
 /** The arrangement of the terminal face, as it stands. */
@@ -373,6 +398,7 @@ export function openedFrame(layout: Layout, project: number, folder: string | nu
     // Made in this run, so there is nothing to come back into.
     resumes: false,
     written: "",
+    inserted: [],
   };
   const next: Layout = {
     ...layout,
@@ -393,9 +419,26 @@ export function openedFrame(layout: Layout, project: number, folder: string | nu
  * Emptied by the send, which is what makes the next sentence a sentence of its own rather than the
  * tail of the one before it, and left alone by everything else — a pane taken down for a page turn
  * has not been written in, it has been put away.
+ *
+ * `put` names the paths Amenbo has just put into the body, where this write is one of those
+ * (`Frame.inserted`). They are let go of when the box is emptied and kept through everything else:
+ * an empty box holds nothing, and whether one is still standing in a body that is not empty is asked
+ * at the send, which is where the answer is wanted and where the quoting is understood (`./terminal`).
  */
-export function writing(layout: Layout, frame: string, written: string): Layout {
-  return withFrame(layout, frame, (was) => ({ ...was, written }));
+export function writing(
+  layout: Layout,
+  frame: string,
+  written: string,
+  put: readonly string[] = [],
+): Layout {
+  return withFrame(layout, frame, (was) => ({
+    ...was,
+    written,
+    inserted:
+      written === ""
+        ? []
+        : [...was.inserted, ...put.filter((path) => !was.inserted.includes(path))],
+  }));
 }
 
 export function openedIn(
@@ -665,6 +708,10 @@ export function laidOut(layout: Layout): SavedLayout {
       // Left out where the box is empty, the way the folder is: what is written down is what there
       // is to say, and an empty box has nothing.
       ...(frame.written === "" ? {} : { written: frame.written }),
+      // And what Amenbo put into that body goes with it, for the same reason: the two mean nothing
+      // apart, and the window this is written for is the one the draft is being carried to
+      // (`Frame.inserted`).
+      ...(frame.inserted.length === 0 ? {} : { inserted: [...frame.inserted] }),
     })),
     // The pane being worked in, written down for the window the terminal is split out into: the
     // press says nothing, so where the reader was is theirs to read back out of the shape.
@@ -705,6 +752,9 @@ export function restored(saved: SavedLayout, onto: number | null): Layout {
       // window sends carries none, and a place in it is one this run has already opened.
       resumes: frame.resumes === true && frame.folder !== undefined && frame.agent !== undefined,
       written: frame.written ?? "",
+      // Kept only where the body it was put into came too: an empty box holds nothing, so a path
+      // remembered over one would have the next send wait out an agent with no file to read.
+      inserted: (frame.written ?? "") === "" ? [] : (frame.inserted ?? []),
     });
   }
   const first = frames[0];

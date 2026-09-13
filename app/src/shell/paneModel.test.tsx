@@ -19,7 +19,13 @@ import { PaneModel } from "./PaneModel";
 const hoisted = vi.hoisted(() => ({
   /** How each agent is moved, as the host answers `wake_switch` — an agent not named here has no
       road, which is what a registered command and an unknown id both come back as. */
-  switches: {} as Record<string, { command: string; carries: "named" | "picker" | "filter"; keeps: string | null }>,
+  switches: {} as Record<string, {
+    command: string;
+    carries: "named" | "picker" | "filter";
+    keeps: string | null;
+    /** Left out where the write reaches the reader's own file, which is every row but one. */
+    comesBack?: boolean;
+  }>,
   /** What each agent's own command answers when it is asked which models it can be started on. */
   models: {} as Record<string, { id: string; label: string }[]>,
   /** What this device already remembers for each agent. */
@@ -62,6 +68,7 @@ vi.mock("../core/ipc", () => ({
       const name = model?.trim() ?? "";
       const settled: AgentSwitchDto = {
         ...how,
+        comesBack: how.comesBack ?? true,
         line: how.carries === "named" && name !== "" ? `${how.command} ${name}` : how.command,
         then: how.carries === "filter" && name !== "" ? name : null,
         settles: how.carries === "named" && name !== "",
@@ -308,6 +315,25 @@ describe("what the reader is told before they press", () => {
 
     expect(container.textContent).toContain("~/.cursor/cli-config.json");
     expect(container.textContent, "the command going in was not said").toContain("/model");
+  });
+
+  it("says the change stays in the pane where a write cannot reach the file", async () => {
+    // Windows hands a Codex pane a copy of `config.toml` rather than the file itself (`AMB-D-878`),
+    // so the press moves nobody's default and what it wrote is gone by the next open. The file is
+    // still named: saying nothing would read as the provider changing only this session, which is a
+    // different thing and not what happens here (`AMB-D-894`).
+    hoisted.switches["codex-cli"] = {
+      command: "/model",
+      carries: "picker",
+      keeps: "~/.codex/config.toml",
+      comesBack: false,
+    };
+    await draw("codex-cli");
+    await open();
+
+    expect(container.textContent).toContain("~/.codex/config.toml");
+    expect(container.textContent).toContain("does not move");
+    expect(container.textContent, "the reader was told their own default moves").not.toContain("also moves");
   });
 
   it("says nothing about a file for the provider that changes only this session", async () => {

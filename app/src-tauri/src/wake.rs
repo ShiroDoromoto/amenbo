@@ -429,6 +429,10 @@ pub fn wake_switch(agent: String, model: Option<String>) -> Option<AgentSwitchDt
             amenbo_core::harness::Carries::Filter => AgentSwitchCarriesDto::Filter,
         },
         keeps: launch.switch.keeps.map(str::to_string),
+        comes_back: match launch.switch.keeps {
+            Some(path) => crate::pane_home::writes_come_back(&agent, path),
+            None => true,
+        },
         line: switching.line,
         then: switching.then,
         settles: switching.settles,

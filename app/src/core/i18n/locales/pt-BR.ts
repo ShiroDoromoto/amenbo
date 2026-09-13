@@ -594,6 +594,7 @@ export const ptBR: Translation = {
     "face.modelSendsPicker": "Escreve só {command} no painel. O seletor dele abre, e escolher é com você.",
     "face.modelSendsFilter": "Escreve {command} no painel e depois o nome no campo de busca dele. Confirmar é com você.",
     "face.modelKeeps": "Isso também muda o seu próprio padrão, em {path}.",
+    "face.modelKeepsPane": "Fica só neste painel: o seu próprio padrão, em {path}, não muda, e a alteração some quando este painel abrir de novo.",
     "face.startSave": "Salvar",
     "face.startCancel": "Cancelar",
     "face.startEdit": "Editar",

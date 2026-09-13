@@ -516,6 +516,141 @@ pub enum Command {
         #[command(subcommand)]
         sub: PluginCmd,
     },
+
+    /// Notifications: the connections this device can send through, and what this project reports
+    /// (`AMB-D-885`).
+    ///
+    /// A connection is written **here once, under a name** — the device's shelf — and a project selects
+    /// from it. So a webhook that changes is one edit rather than one per project, and reading where a
+    /// project's notifications go takes one place.
+    ///
+    /// With no sub-command it shows both halves: the shelf, and what the bound project does with it.
+    Notify {
+        #[command(subcommand)]
+        sub: Option<NotifyCmd>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NotifyCmd {
+    /// The device's shelf of connections — add, change, mark, remove, and try one.
+    Target {
+        #[command(subcommand)]
+        sub: NotifyTargetCmd,
+    },
+
+    /// Start reporting from this project, through whatever it has selected.
+    On,
+
+    /// Stop reporting from this project. The selection and the events stay where they are, so a fortnight
+    /// away costs one command and finds the settings standing on the way back.
+    Off,
+
+    /// Send this project's notifications through one more target.
+    Use {
+        /// the target on the shelf (`notify target list` says which)
+        target: i64,
+    },
+
+    /// Stop sending this project's notifications through one target. The target stays on the shelf.
+    Unuse {
+        /// the target on the shelf
+        target: i64,
+    },
+
+    /// Where a mail target's message is addressed, as several addresses on one line separated by commas.
+    /// Empty falls back to the account the relay authenticates as.
+    To {
+        /// the addresses, comma-separated (empty clears them)
+        addresses: String,
+    },
+
+    /// Start or stop reporting one event (`task.done`, `task.due`, …). `notify` with no sub-command lists
+    /// the ones this project may report.
+    Event {
+        /// the event's name, as the catalog spells it
+        name: String,
+        /// report it (default), or `--off` to stop
+        #[arg(long)]
+        off: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NotifyTargetCmd {
+    /// Every connection on this device's shelf, in the order they were raised.
+    List,
+
+    /// Raise a connection under a name. The connection itself is written afterwards (`notify target set`),
+    /// which is what gives its credential a row to hang off.
+    ///
+    /// The first one ever raised carries the default mark, there being nothing else a new project could
+    /// point at.
+    Add {
+        /// what carries it
+        #[arg(long, value_parser = ["slack", "mail"])]
+        kind: String,
+        /// the name a project's settings offers it under
+        name: String,
+    },
+
+    /// Write one target's connection. Only what is named is written; everything else stays.
+    ///
+    /// **The credential is `--secret`**, and `-` reads it from stdin — a webhook URL or a password on the
+    /// command line is visible in the process list and lands in shell history. An empty value clears it.
+    Set {
+        /// the target on the shelf
+        target: i64,
+        /// the name it is offered under
+        #[arg(long)]
+        name: Option<String>,
+        /// the relay a mail target hands the message to
+        #[arg(long)]
+        smtp_host: Option<String>,
+        /// the port that relay listens on (587 on nearly every provider)
+        #[arg(long)]
+        smtp_port: Option<i64>,
+        /// the account to authenticate as; empty for a relay that asks for none
+        #[arg(long)]
+        smtp_user: Option<String>,
+        /// the address to send from; empty falls back to the account
+        #[arg(long)]
+        mail_from: Option<String>,
+        /// the credential — a Slack webhook URL, a mail password. `-` reads it from stdin
+        #[arg(long)]
+        secret: Option<String>,
+    },
+
+    /// Move the default mark — where a **newly created** project starts out pointing. The projects already
+    /// standing keep the selection they made.
+    Default {
+        /// the target on the shelf
+        target: i64,
+    },
+
+    /// Remove a target, and with it every project's selection of it and the credential it held.
+    ///
+    /// It asks first, and says how many projects lose it — the global `--yes` answers ahead of the ask.
+    Rm {
+        /// the target on the shelf
+        target: i64,
+    },
+
+    /// Ask whether the connection is usable, without sending anything.
+    ///
+    /// How much that means is the kind's: a mail relay is connected to and the account offered to it, a
+    /// Slack webhook has only the shape of its URL read — it has no door but posting, and a webhook
+    /// revoked yesterday still has the shape.
+    Check {
+        /// the target on the shelf
+        target: i64,
+    },
+
+    /// Send one message through it, which is the only thing that answers whether it still works.
+    Test {
+        /// the target on the shelf
+        target: i64,
+    },
 }
 
 #[derive(Subcommand, Debug)]

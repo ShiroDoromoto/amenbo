@@ -3,11 +3,27 @@
 // system from rewriting the characters themselves.
 import type { KeyboardEvent } from "react";
 
+/**
+ * Whether the input method is still using this press.
+ *
+ * **A press made mid-conversion is the input method's and nobody else's.** Writing Japanese, Chinese
+ * or Korean puts an editor between the keyboard and the field: the keys walk a list of candidates,
+ * accept one, or take the conversion back, and every one of them fires `keydown` looking exactly
+ * like the key it is spelled with. `isComposing` is how the page says so, and keyCode 229 is the
+ * same answer from an environment too old to have the flag.
+ *
+ * The emulator is already guarded — it is handed the press the terminal's own composition helper
+ * lets through — so this is for the fields the app reads presses off itself.
+ */
+export function isComposing(e: KeyboardEvent): boolean {
+  return e.nativeEvent.isComposing || e.keyCode === 229;
+}
+
 // The IME-safe test for a "submit" Enter. In CJK input the Enter that accepts a conversion also fires keydown, so
-// `nativeEvent.isComposing` (plus keyCode 229 for older environments) rejects it, and only an Enter that really means
-// submit or next returns true. Modified Enter (⌘/Ctrl+Enter and friends) is each caller's own call.
+// {@link isComposing} rejects it, and only an Enter that really means submit or next returns true.
+// Modified Enter (⌘/Ctrl+Enter and friends) is each caller's own call.
 export function isEnterSubmit(e: KeyboardEvent): boolean {
-  return e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229;
+  return e.key === "Enter" && !isComposing(e);
 }
 
 /**

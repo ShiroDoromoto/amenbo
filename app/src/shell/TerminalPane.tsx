@@ -25,7 +25,7 @@ import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
 import type { SessionSaidDto } from "../bindings/bindings";
 import { currentLang, errText, t, tf } from "../core/i18n";
-import { asTyped, isEnterSubmit } from "../core/keys";
+import { asTyped, isComposing, isEnterSubmit } from "../core/keys";
 import { hostOs } from "../core/platform";
 import { Icon } from "../components/Icon";
 import { PaneModel } from "./PaneModel";
@@ -315,6 +315,16 @@ export function TerminalPane({
       return;
     }
     if (live === null) return;
+    // Everything below this hands the press to the program, and a press the input method is still
+    // using is not one to hand anywhere: it is walking a list of candidates, accepting one or taking
+    // the conversion back, and it only looks like `Escape`, `ArrowUp` or `Enter` from outside. The
+    // terminal beside this box is guarded by the emulator's own composition helper, and this is the
+    // same guard for the box, which reads its presses itself (`AMB-T-4777`).
+    //
+    // It is the one thing above the two that leave whatever is written (`AMB-D-876`): those go to
+    // the program because neither has anything to do in a textarea, and mid-conversion `Escape` has
+    // — it takes the conversion back.
+    if (isComposing(e)) return;
     const stop = stopsTheProgram(e);
     if (stop !== null) {
       e.preventDefault();

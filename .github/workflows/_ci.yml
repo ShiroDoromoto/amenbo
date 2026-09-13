@@ -1122,6 +1122,11 @@ jobs:
           chmod +x guards/check-ts-derive.sh
           guards/check-ts-derive.sh
 
+      - name: Assert every child a test starts goes through one door
+        run: |
+          chmod +x guards/check-test-spawn.sh
+          guards/check-test-spawn.sh
+
       - name: Assert every source the GUI reads from outside app/ opens the gui gate
         run: |
           chmod +x guards/check-gui-inputs.sh

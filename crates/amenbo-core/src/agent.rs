@@ -760,7 +760,7 @@ const CYCLES: &[Cycle] = &[
     },
     Cycle {
         id: Cyc::Commit,
-        when: "You are about to commit, or to send text out of this store some other way (a PR body, an issue, a message).",
+        when: "You are about to send text out of this store — a commit message or a diff, a PR body, an issue, a message.",
         backbone: &[
             Step {
                 id: "lint-what-leaves",
@@ -768,7 +768,7 @@ const CYCLES: &[Cycle] = &[
                 trigger: None,
                 commands: &[Cmd::Lint],
                 cycles: &[],
-                prose: "Lint what is leaving, before it leaves: the staged diff, and the commit message. It reports and never edits, so a ref it names is yours to rewrite out of the text.",
+                prose: "Lint what is leaving, before it leaves: with no arguments the staged diff, and by path or `--stdin` any other text on its way out. It reports and never edits, so a ref it names is yours to rewrite out of the text.",
             },
             Step {
                 id: "anchor-the-sha",
@@ -878,6 +878,44 @@ pub fn drop_cycle(spec: &mut Value, cycle: Cyc) {
                     drop_branch(items, cycle);
                 }
             }
+        }
+    }
+}
+
+/// The steps only someone with git can carry out, named one by one because the cycle they sit in is
+/// not all one audience. `commit` is that case: linting what leaves this store is the same advice
+/// either way — `lint` opens no store and reads a path or stdin — while anchoring a commit's SHA on
+/// a task, and wiring git's own hook slots, are not things a reader without git can do. `AMB-D-335`
+/// keeps advice nobody can act on out of the document; where the line runs through a cycle rather
+/// than around it, it is drawn here instead of by [`drop_cycle`].
+///
+/// A pair here is a spelling, not a type, so `every_git_only_step_is_written` is what holds it
+/// against the steps as written — a step renamed out from under this table would otherwise go on
+/// reaching a reader who cannot run it.
+const GIT_ONLY: &[(Cyc, &str)] = &[(Cyc::Commit, "anchor-the-sha"), (Cyc::Commit, "install-the-hooks")];
+
+/// [`GIT_ONLY`] taken out of an already-built spec, for a run with no git in play. The numbering of
+/// what is left closes up, so the reader is handed 0, 1, 2… rather than a run with a hole in it
+/// where something they were never shown used to sit.
+pub fn drop_git_only_steps(spec: &mut Value) {
+    let Some(Value::Object(cycles)) = spec.get_mut("cycles") else { return };
+    for (cycle, id) in GIT_ONLY {
+        let Some(Value::Object(cyc)) = cycles.get_mut(cycle.key()) else { continue };
+        for bucket in ["backbone", "optional"] {
+            let Some(Value::Array(items)) = cyc.get_mut(bucket) else { continue };
+            items.retain(|step| step["id"].as_str() != Some(*id));
+            renumber(items);
+        }
+    }
+}
+
+/// `n` closed up over one bucket: a step that carries a place gets the place it now sits at. An
+/// `optional` item carries none and is left alone, which is why this asks rather than assumes.
+fn renumber(items: &mut [Value]) {
+    for (at, step) in items.iter_mut().enumerate() {
+        let Some(map) = step.as_object_mut() else { continue };
+        if map.contains_key("n") {
+            map.insert("n".to_string(), json!(at));
         }
     }
 }
@@ -2407,6 +2445,64 @@ mod tests {
             let branches = emitted["cycles"].as_array().cloned().unwrap_or_default();
             assert!(!branches.contains(&json!("worktree")), "{run}.{} still branches to it", step.id);
             assert!(!branches.is_empty() || emitted.get("cycles").is_none(), "an emptied branch was left as []");
+        }
+    }
+
+    /// Discipline: every pair in [`GIT_ONLY`] names a step that is actually written. A `Cyc` the
+    /// compiler checks and an id it does not is half a reference, and the half it does not check is
+    /// the one that rots — a step renamed here would leave the table pointing at nothing, and the
+    /// run would go on handing a reader without git a line they cannot run.
+    #[test]
+    fn every_git_only_step_is_written() {
+        for (cycle, id) in GIT_ONLY {
+            assert!(
+                every_step().any(|(run, step)| run == cycle.key() && step.id == *id),
+                "GIT_ONLY names {}.{id}, and no step is written there",
+                cycle.key()
+            );
+        }
+    }
+
+    /// A run with no git keeps the advice it can act on and loses the rest. `commit` is the cycle
+    /// the line runs through: the lint step stands, because linting a file or piped text needs no
+    /// checkout, and the two steps that do need one are gone.
+    #[test]
+    fn a_run_without_git_keeps_the_lint_step_and_drops_the_git_ones() {
+        let mut spec = build();
+        for (cycle, id) in GIT_ONLY {
+            assert!(find_step(&mut spec, cycle.key(), id).is_some(), "{id} is not there to drop");
+        }
+
+        drop_git_only_steps(&mut spec);
+
+        for (cycle, id) in GIT_ONLY {
+            assert!(find_step(&mut spec, cycle.key(), id).is_none(), "{id} survived the drop");
+        }
+        assert!(
+            find_step(&mut spec, Cyc::Commit.key(), "lint-what-leaves").is_some(),
+            "the advice that holds without git went with the advice that does not"
+        );
+    }
+
+    /// What is left of a bucket is numbered from where it now sits. A hole in the run reads as a
+    /// piece gone missing, which is exactly the impression a reader who was never meant to see the
+    /// step should not be given.
+    #[test]
+    fn dropping_a_step_closes_up_the_numbering() {
+        let mut spec = build();
+        drop_git_only_steps(&mut spec);
+        for (key, cycle) in spec["cycles"].as_object().expect("cycles is an object") {
+            if key == "description" {
+                continue;
+            }
+            for bucket in ["backbone", "optional"] {
+                let items = cycle[bucket].as_array().expect("a bucket is an array");
+                for (at, step) in items.iter().enumerate() {
+                    if step.get("n").is_some() {
+                        assert_eq!(step["n"], json!(at), "{key}.{} is numbered off its place", step["id"]);
+                    }
+                }
+            }
         }
     }
 

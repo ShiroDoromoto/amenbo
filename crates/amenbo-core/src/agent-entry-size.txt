@@ -7,7 +7,7 @@ capabilities     8142
 commandDetail    568
 commands         1970
 conventions      5502
-cycles           13560
+cycles           13611
 filterGrammar    5183
 inspect          150
 mode             10
@@ -17,5 +17,5 @@ principles       350
 schemaVersion    3
 updateAvailable  5
 version          7
-TOTAL            44807
-TOTAL_IN_A_PANE  45322
+TOTAL            44858
+TOTAL_IN_A_PANE  45373

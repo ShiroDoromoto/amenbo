@@ -758,7 +758,7 @@ export const zhHant: Translation = {
     "onboard.s1title": "把資料夾接到專案上",
     "onboard.s1a": "會在那個資料夾裡放入 ", "onboard.s1b": "（本地的連結）與 ", "onboard.s1c": "。在那裡啟動的 AI 就能操作這個專案。",
     "onboard.s2title": "請你的 AI 動手",
-    "onboard.s2body": "建立完成的頁面，以及還什麼都沒有的看板，會在那個資料夾裡為你開啟終端機。若你更想用自己的終端機，同樣的請求文字按一下就會出現，貼上即可。",
+    "onboard.s2body": "建立專案的最後一個頁面，以及還什麼都沒有的看板，都會在那個資料夾裡為你開啟終端機。若你更想用自己的終端機，同樣的請求文字按一下就會出現，貼上即可。",
     "onboard.s3title": "接下來只管丟任務",
     "onboard.s3body": "把任務指派給 AI，它就會自行開始並推進。一切都會出現在動態流裡。",
     "list.empty": "沒有符合條件的任務", "list.emptyInbox": "沒有等著你（和你的 AI）處理的事",

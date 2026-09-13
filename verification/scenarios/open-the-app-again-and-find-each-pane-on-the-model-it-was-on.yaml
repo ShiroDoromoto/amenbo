@@ -1,0 +1,205 @@
+# A conversation comes back with the model it was being had on, and a second pane of the same
+# provider does not decide that for it.
+#
+# What model an agent comes up on is kept against the agent, which is the right answer for a pane
+# about to be opened and the wrong one for a pane coming back: two panes of one provider would then
+# both resume on whichever model was chosen last, and one of the two readers would find their
+# conversation answering as somebody else's. So each pane keeps a model of its own, and that is the
+# name its launch line carries the next run.
+#
+# ── Why two panes and not one ────────────────────────────────────────────────────────────────────
+# Because one proves nothing. A single pane resuming on the model it was opened on reads the same
+# whether the name came from the pane or from the agent — they hold the same value there. The fault
+# only shows where the two disagree, which takes a second pane on a second model: after it, the
+# agent's answer is the second name, and the first pane is the one with something of its own to say.
+#
+# ── Why the provider is this one ─────────────────────────────────────────────────────────────────
+# Because it is the only one whose line carries a model on the way back. Five of the six bring the
+# conversation's own model with it and are handed none, which is a road of its own and not this one —
+# and one this harness has no reading for yet, there being no way here to say a name is absent from a
+# pane. This one restores nothing, so a line that said no model would put the pane on the machine's
+# default: a working screen, drawn without complaint, and not the conversation the reader left.
+# Naming it here is what parts the two.
+#
+# ── Why the reading is the program's own words ───────────────────────────────────────────────────
+# What a pane was started with is not on the screen anywhere else: the launch line is gone by the
+# time the first byte is drawn, and a row that named a model off it would be the same build saying
+# so twice. The stand-in prints every argument it was given, one to a line, so what is read is the
+# name itself — never the flag in front of it, which is a different word on each provider.
+#
+# The row under the pane is read as well, and it is a different question: what the reader can see
+# about a pane they have come back to. A pane that resumed on the right model while its row said
+# nothing would send them to the provider's own screen to find out.
+id: open-the-app-again-and-find-each-pane-on-the-model-it-was-on
+title: Two panes of one provider come back on the models they were each on, rather than both on whichever was chosen last
+description: >
+  Stand a machine up whose agents answer with three models each, and open two panes on the same
+  provider — the first on one of its models, the second on another. Each prints what it was started
+  with, and each names its own. End the run and open the app again on the same store: both places
+  come back with their conversations resumed, without anything being pressed, and each pane names
+  the model it was on before — the first one still on the first model, though the last choice made
+  on that agent was the second. The row under each pane says the same name.
+
+given:
+  # One project with a folder on it, for the reason every terminal road names one: a pane has to open
+  # somewhere, and two folders is a question this road is not asking.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lantern
+      dir: lampstore
+    as: lantern
+
+  # Four agents, because the provider this road is about is the fourth of the catalog's own order, and
+  # three models each — short enough that the row draws the whole answer, so a name can be pressed.
+  #
+  # `reads` rather than the default: a pane whose program has ended has no model row under it, and the
+  # row is half of what is read here. It also keeps the panes standing up to the moment the run ends,
+  # which is the screen this road means to come back to.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 4
+      models: 3
+      then: reads
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and the
+  # panes this road opens have to open in the folder it named.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lantern
+
+  # ── The first pane, on the first of the two models ───────────────────────────────────────────
+  # Named rather than taken by position, because this road is about one provider and not about
+  # wherever it sits on the row: it is the one whose launch line carries a model on the way back.
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Gemini CLI
+
+  - type: action
+    domain: terminal
+    op: pick-model
+    with:
+      name: scenario-model-02
+      how: press
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO arg scenario-model-02
+
+  # ── The second pane, on the other model ──────────────────────────────────────────────────────
+  # Two to a page, which is what makes a second place to open in. One pane is already standing, so
+  # there is exactly one way in on the page and the presses below are unambiguous.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Gemini CLI
+
+  # The second name, and the whole of what makes this road worth walking: from here on the answer
+  # kept against the agent is this one, so a build that read the agent's answer on the way back would
+  # bring both panes up on it.
+  - type: action
+    domain: terminal
+    op: pick-model
+    with:
+      name: scenario-model-03
+      how: press
+
+  - type: action
+    domain: terminal
+    op: open-start
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO arg scenario-model-03
+
+  # ── The run ends here, and another comes up on the same store ────────────────────────────────
+  # Nothing is pressed for it — the app is the run's own, and ending it is the harness's.
+  - type: action
+    domain: store
+    op: run-again
+
+  # Where a fresh launch opens is not the road's to know, so it presses for the face and the project
+  # it reads rather than reading whichever the app came up on.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lantern
+
+  # Both places came back with their conversations resumed, and neither was pressed for: a page still
+  # offering a way in would be a page one of the panes did not come back to, and the readings below
+  # would be about a box with nothing in it.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 2
+      empty: 0
+
+  # ── And each is on the model it was on ───────────────────────────────────────────────────────
+  # The first pane, which is the one with something of its own to say: the last choice made on this
+  # agent was the other name, so a pane brought back on the agent's answer would be printing that one
+  # instead and this line would find no pane at all.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO arg scenario-model-02
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO arg scenario-model-03
+
+  # And what a reader can see of it without going into the pane. The row is read on both, because the
+  # fault it is watching for is the same one: a row that took its name from the agent would say the
+  # second model under both panes.
+  - type: assert
+    domain: terminal
+    op: answers-on
+    with:
+      shows: SCENARIO arg scenario-model-02
+      model: scenario-model-02
+
+  - type: assert
+    domain: terminal
+    op: answers-on
+    with:
+      shows: SCENARIO arg scenario-model-03
+      model: scenario-model-03

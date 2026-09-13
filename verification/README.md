@@ -1038,15 +1038,24 @@ changes only the session in front of the reader — three of the six rewrite a f
 hand and a fourth keeps it in a database, so a control that moved somebody's default without saying so
 would be Amenbo writing a provider's settings through the back door. `switch-model` presses one, and
 its `how` is `pick-model`'s three shapes for the same reason: the candidates are drawn from the same
-answer. `answers-on` reads the row afterwards — a name where the provider's own command settles the
-model in one line, `waiting` where it opens a picker instead and the choosing is the person's, and
-`none` before anything has moved it. **Nothing on any of these reads the pane's screen**: three of the
+answer. `answers-on` reads the row under a running pane — the model that pane is on. A name is what it says
+where Amenbo knows one: the name that went on the pane's launch line, or the one it sent on a line
+this provider settles the model with. `waiting` is where the press opened the provider's own picker
+instead and the choosing is the person's; `none` is a pane there is no name for at all, which is one
+started on no model. **Nothing on any of these reads the pane's screen**: three of the
 six say in words that the model changed and three change a value on a status line and say nothing, so
 a build reading either would be parsing a provider's own screen.
 
 `move-a-running-pane-to-another-model` walks the provider that takes the name on its line, and reads
 the line back **off the program** — `terminal can-start`'s `then: reads` is what leaves one running to
-read it with. `leave-the-choosing-to-a-provider-that-charges-for-a-named-line` walks the other kind,
+read it with. `open-the-app-again-and-find-each-pane-on-the-model-it-was-on` is the third of that set and the one
+that crosses a run. Each pane keeps a model of its own, so two panes of one provider come back on the
+two models they were each on rather than both on whichever was chosen last — which takes two panes to
+read at all, the fault being invisible where the pane's answer and the agent's are the same value. It
+walks the one provider whose line carries a model on the way back; the other five bring the
+conversation's own with it and are handed none, and that half is not walked here because there is no
+reading on this face for a name being *absent* from a pane.
+`leave-the-choosing-to-a-provider-that-charges-for-a-named-line` walks the other kind,
 and is the road worth the most on this face: two of the six take `/model <name>` as a prompt, reach
 their own servers and bill the reader for the answer, so what has to be read is that the name is *not*
 on the line. It is read whole — the stand-in prints what it was given inside brackets, so `[/model]`

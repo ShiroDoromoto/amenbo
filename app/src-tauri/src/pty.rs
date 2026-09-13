@@ -706,7 +706,11 @@ fn started_as(agent: &str, handle: Option<Handle<'_>>) -> Result<Started, CmdErr
 ///
 /// **A pane coming back into a conversation is handed no prompt**, having been said its first
 /// sentence the run before ([`amenbo_core::harness::opening`], `AMB-T-4663`): the line carries the
-/// handle and the model and stops there.
+/// handle, and after that only what the provider would not bring back on its own. **The model is
+/// one of the things it would**: of the rows that come back, Gemini is the only one told which
+/// model, the rest coming back on the model the conversation was being had on — where a name put
+/// here overrides what the person chose rather than agreeing with it
+/// ([`amenbo_core::harness::Launch::model_on_the_way_back`], `AMB-T-4694`).
 ///
 /// **Every terminal this window opens on a session of its own gets it, and it is never put to the
 /// person first.** It is plumbing — the sentence that points an agent at `agent --json` — and a pane

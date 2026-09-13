@@ -57,6 +57,20 @@ updates:
           - minor
           - patch
     # majors fall outside the group => one PR each.
+    ignore:
+      # `windows` and `windows-core` are one contract, and the bot can only see them as two
+      # crates. An interface the `windows` crate hands over implements the `Interface` trait of
+      # the `windows-core` it was built against, while this crate's `#[implement]` expands
+      # against the `windows-core` in the manifest — so a bump that moves one and not the other
+      # puts two crates called `windows-core` in the graph and stops `crate::trash` compiling.
+      # It happened: windows-core 0.100.0 was taken alone on 2026-09-12, with no `windows` past
+      # 0.62.2 to pair with, and the Windows leg went red that night. A patch bump stays inside
+      # the same requirement as `windows`, so those still come through; anything wider is a
+      # migration for a person to do, moving both lines at once.
+      - dependency-name: windows-core
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
 
   # GUI npm project.
   - package-ecosystem: npm

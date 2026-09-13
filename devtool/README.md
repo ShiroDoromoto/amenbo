@@ -671,6 +671,55 @@ sent the way the screen tool is. It is not a verb on `scripts/screen.swift`
 because that one runs on a developer's own Mac as well, and something that
 reconfigures a display does not belong next to click and type there.
 
+#### The agent the guest comes up with
+
+One pre-distribution road opens a pane on the first agent the machine really has
+and reads what that agent does with a message that has a picture in it
+(`verification/scenarios/send-a-message-with-a-picture-in-it.yaml`). The stand-ins
+a stood-up machine puts in front of the `PATH` do not read pictures, so that road
+is only worth walking against the product itself — and a clone cut from a bare
+macOS has none. Measured during the 24.3.0 check: the row's first entry was
+`shell`, and the road's own sentence came back as
+`zsh: command not found: SCENARIO`.
+
+So `up` puts **this machine's own Claude Code** into the clone, at the version
+standing here and signed in with the credential standing here.
+
+- **It is not baked into the golden**, and the credential is why. An image
+  carrying a signed-in account hands that account to everyone who ever cuts a
+  clone from it, and a token baked into an image is stale by the time the image
+  is used. Written into the clone as it is raised, neither happens.
+- **The version is the host's, not the latest.** What the road reports is that a
+  wait measured against one version has stopped being enough, and an operator
+  reading that has to be able to hold it against the build on their own machine.
+  Updates are turned off in the guest for the same reason.
+- **Four things have to be true before a pane opens on it**, and `up` says all
+  four: the binary is there; `~/.local/bin` is on the interactive shell's `PATH`
+  (the installer says so and does not do it, and a pane is a login *and*
+  interactive shell); onboarding is behind it and `/` is trusted, so the first
+  screen in the pane is a prompt rather than a question; and the login keychain
+  holds the credential. Trust is read up the tree, which is why `/` is what is
+  trusted — a run's folder is made while the run is going, and nothing here can
+  be told its name in advance.
+- **`~/.claude.json` is written over whatever is there**, because the install
+  leaves one of its own: a write that stood back for a file already present
+  wrote nothing, and the guest asked its theme question on the pane's first
+  screen. What is lost is a throwaway guest's own accumulation.
+- **The credential is written again on every raise**, as a delete and an add
+  rather than an update — widening the access list of a standing keychain item
+  is something the keychain asks a person about, and there is nobody at that
+  screen.
+- **Nothing here stops a raise.** A host with no `claude`, a locked keychain or a
+  guest that could not reach the installer is said out loud and gone on from:
+  almost everything built on the VM has nothing to do with agents, and the one
+  road that needs it fails on its own asserts. `vm status` says which version is
+  in there, or that there is none.
+- **It costs one turn of the operator's own account** each time that road is
+  walked, which is what that road was written knowing it would cost.
+
+A first raise onto a clone with nothing in it takes about 18s for this; a raise
+onto one already holding it is a single round trip.
+
 ### `devtool vm exec [--shell] -- <command…>` / `devtool vm push <local…> <remote>` / `devtool vm pull <remote…> <local>`
 
 Reach into the running clone. `exec` runs a command in there with this process's

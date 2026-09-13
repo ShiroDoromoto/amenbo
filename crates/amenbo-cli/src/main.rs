@@ -1330,6 +1330,14 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             unreachable!("handled before open")
         }
         Command::Plugin { sub } => return plugin_cmd(&mut store, flags, sub),
+        // Notifications: the device's shelf and what this project reports through it (`AMB-D-885`). The
+        // writes ride the dispatch seam like every other, so a target raised here is on the shelf before
+        // the next write goes looking for it.
+        Command::Notify { sub } => {
+            return cmd::outbox::with_dispatch(&mut store, |store| {
+                cmd::notify::notify(store, flags, sub)
+            })
+        }
         Command::Config { sub } => return config(&mut store, flags, sub),
         Command::Status { scope } => {
             let result = store.status(&scope).map_err(CliError::from)?;

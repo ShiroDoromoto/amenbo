@@ -53,6 +53,10 @@ pub fn add(tx: &WriteTx<'_>, input: NewProject) -> Result<Project> {
         updated_at: now,
     };
     emit_create(tx, record::project(&project))?;
+    // The project's notification settings are written at birth, not read as a fallback later
+    // (`AMB-D-885`): the marked target says where a project *starts*, and from here on this project's
+    // own rows are the whole answer to where its notifications go.
+    crate::ops::notify::init_project(tx, project.id)?;
     Ok(project)
 }
 

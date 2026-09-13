@@ -491,6 +491,152 @@ pub struct Secret {
     pub updated_at: Timestamp,
 }
 
+/// **What a notification is carried by** (`AMB-D-885`) — the kind a [`NotifyTarget`] is. It decides which
+/// of the target's connection columns mean anything, and which credential the target keeps in [`Secret`].
+/// Closed, because a new kind is a deliberate step: it widens this, the column's `CHECK`, and the shelf's
+/// colour and glyph together.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NotifyKind {
+    /// A Slack channel, reached by an incoming webhook. The URL *is* the channel, so it is the whole
+    /// connection — and a credential, so it is held in `secret` under
+    /// [`NotifyTarget::SLACK_WEBHOOK_URL`] rather than on the row.
+    #[default]
+    Slack,
+    /// An SMTP relay. Server, port, account and sender sit on the row; only the password is held in
+    /// `secret` ([`NotifyTarget::SMTP_PASSWORD`]).
+    Mail,
+}
+
+impl NotifyKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            NotifyKind::Slack => "slack",
+            NotifyKind::Mail => "mail",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<NotifyKind> {
+        match s {
+            "slack" => Some(NotifyKind::Slack),
+            "mail" => Some(NotifyKind::Mail),
+            _ => None,
+        }
+    }
+}
+
+/// **One connection this device can send a notification through, under a name** (`AMB-D-885`).
+///
+/// It belongs to the device and to no project. A webhook is written here once and every project that
+/// wants it **selects** it ([`ProjectNotifyTarget`]), so a URL that changes is one edit rather than one
+/// per project. The shape that was turned down is a device default each project overrides: that gives
+/// every field an inherited/overridden state of its own, and reading where a project's notifications
+/// actually go then takes two screens.
+///
+/// **The credential is not on this row.** A Slack target's webhook URL and a mail target's SMTP password
+/// are [`Secret`] rows addressed `(None, SecretArea::Notify, Some(id), field_key)` — the table no road
+/// out of the store walks. What stays here is what a screen may draw: the kind, the name, and the parts
+/// of a mail connection that are not a password.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct NotifyTarget {
+    pub id: i64,
+    /// What carries the message — and which of the columns below mean anything.
+    pub kind: NotifyKind,
+    /// The name the person gave it. This is how a project's screen offers it, so it is the target's
+    /// whole identity there: two Slack webhooks are told apart by nothing else.
+    pub name: String,
+    /// Is this the target a newly created project starts out pointing at? At most one row holds it
+    /// ([`crate::ops::notify`] moves the mark rather than raising a second). Not an inherited value: it
+    /// decides where a project **starts**, and from then on the project's own selection is the whole
+    /// answer — which is what keeps "default" from becoming a tier.
+    pub is_default: bool,
+    /// The relay a mail target hands the message to. `None` on a Slack target, which has no such field
+    /// at all — the two kinds share this table the way `attachment`'s two modes share theirs.
+    pub smtp_host: Option<String>,
+    /// The port that relay listens on (587 on nearly every provider). Mail-mode.
+    pub smtp_port: Option<i64>,
+    /// The account to authenticate as, written out in full. Mail-mode; empty where the relay asks for
+    /// neither account nor password.
+    pub smtp_user: Option<String>,
+    /// The address the message is sent from. Mail-mode; empty falls back to the account, which is what
+    /// most providers will accept.
+    pub mail_from: Option<String>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+impl NotifyTarget {
+    /// The `secret` field key a Slack target's incoming-webhook URL is held under.
+    pub const SLACK_WEBHOOK_URL: &'static str = "webhook_url";
+    /// The `secret` field key a mail target's SMTP password is held under.
+    pub const SMTP_PASSWORD: &'static str = "smtp_password";
+}
+
+/// **One project's notification row** (`AMB-D-885`): whether it notifies at all, and where its mail is
+/// addressed. Which targets carry it is [`ProjectNotifyTarget`] and what it reports is
+/// [`ProjectNotifyEvent`] — both sets rather than columns, so one project reaches a Slack channel and an
+/// inbox at once, which the per-carrier shape could not write.
+///
+/// **`enabled` is not "is a target selected".** They are deliberately apart: someone going away for a
+/// fortnight stops the notifications with one switch and finds the settings still standing on the way
+/// back. And it is one switch rather than two steps: a feature of the body runs nobody else's code, so
+/// there is no consent for a second switch to be (`AMB-D-434`).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ProjectNotify {
+    pub id: i64,
+    pub project_id: i64,
+    /// Does this project notify? Off keeps the targets and the events where they are.
+    pub enabled: bool,
+    /// Where a mail target's message is addressed — several addresses on one line, separated by commas,
+    /// as the person typed them. Empty falls back to the target's own account.
+    ///
+    /// The project's and not the target's, because it answers **who is told**, which is this project's
+    /// business, while the target answers what carries it. It is also the one field here a kind decides
+    /// the meaning of: a project with no mail target among its selection has no use for it.
+    pub mail_to: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **A target this project's notifications are carried by** (`AMB-D-885`) — one row per
+/// `(project, target)`. A set and not a column: `AMB-D-885` keeps Slack and mail in one feature, and the
+/// thing that makes them one is that a project answers "where" with as many targets as it likes.
+///
+/// It names the project directly rather than the [`ProjectNotify`] row, as [`ProjectNotifyEvent`] does:
+/// all three hang off the project, so deleting one takes all three the same way and no order between
+/// them has to be remembered.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ProjectNotifyTarget {
+    pub id: i64,
+    pub project_id: i64,
+    /// The [`NotifyTarget`] that carries it.
+    pub target_id: i64,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// **An event this project reports** (`AMB-D-885`) — one row per `(project, event)`, naming one of the
+/// thirteen in [`crate::plugin_payload::V1_EVENTS`] that say what happened. Six of them are what a
+/// project starts with (`AMB-D-714`).
+///
+/// `store.changed` is not among the thirteen and is refused here: it says only that *something* moved,
+/// which is a signal for a mirror to re-read on and nothing a person can be told.
+///
+/// **No rows is an answer**, not an unset: the [`ProjectNotify`] row's existence is what says the
+/// project has been set up, so a project that ticked every box off reports nothing and stays on.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ProjectNotifyEvent {
+    pub id: i64,
+    pub project_id: i64,
+    /// The event's name, as [`crate::plugin_payload::name`] spells it (`task.done`). Text rather than a
+    /// fourth copy of the catalog: the names are one versioned set that belongs to `plugin_payload`, the
+    /// column's `CHECK` states which of them this column admits, and `ops::notify` holds the two to each
+    /// other.
+    pub event: String,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 /// A **plugin's enable gate at one layer** (`AMB-D-434` / `AMB-D-601`). One row per `(layer, plugin)`: this
 /// project — or this device — has the plugin **on**. The row is the whole answer: there is no other tier to
 /// inherit from or veto, so absence is simply off, and turning it off deletes the row rather than storing a

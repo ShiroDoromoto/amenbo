@@ -612,6 +612,78 @@ pub const STEPS: &[Step] = &[
                  ON secret(area, COALESCE(owner_id, 0), field_key) WHERE project_id IS NULL;",
         ),
     },
+    Step {
+        to: 38,
+        name: "add the notification tables — the device's targets, and each project's row",
+        // `AMB-D-885`: mail and Slack become one feature, whose connections sit on the device under a name
+        // and whose projects select from them. Four tables' worth of settings had nowhere to live: the
+        // plugins kept theirs in `plugin_config`, which goes with the mechanism.
+        //
+        // **The version is what this step is for**, exactly as v37's is. Genesis is
+        // `CREATE TABLE IF NOT EXISTS` over the registry and runs at every open, so an existing store grows
+        // these tables on its next one with nothing to backfill — carrying what the plugins wrote across is
+        // a program of its own, not a step in this chain. What a store cannot do for itself is say which
+        // shape it is now in, and the frozen shapes are dated here (`super::schema_frozen`).
+        //
+        // The DDL is repeated in frozen text rather than referenced, as every step's is: the registry may
+        // rename a column tomorrow, and what this step added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS notify_target (\
+                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, \
+                 kind TEXT NOT NULL DEFAULT '' CHECK(kind IN ('', 'slack', 'mail')), \
+                 name TEXT NOT NULL DEFAULT '', \
+                 is_default BOOLEAN NOT NULL DEFAULT 0 CHECK(is_default IN (0, 1)), \
+                 smtp_host TEXT, \
+                 smtp_port BIGINT, \
+                 smtp_user TEXT, \
+                 mail_from TEXT, \
+                 created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+                 updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')\
+             );\
+             CREATE TABLE IF NOT EXISTS project_notify (\
+                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, \
+                 project_id BIGINT NOT NULL DEFAULT 0 REFERENCES project(id) \
+                     ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED, \
+                 enabled BOOLEAN NOT NULL DEFAULT 0 CHECK(enabled IN (0, 1)), \
+                 mail_to TEXT NOT NULL DEFAULT '', \
+                 created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+                 updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+                 UNIQUE (project_id)\
+             );\
+             CREATE TABLE IF NOT EXISTS project_notify_target (\
+                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, \
+                 project_id BIGINT NOT NULL DEFAULT 0 REFERENCES project(id) \
+                     ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED, \
+                 target_id BIGINT NOT NULL DEFAULT 0 REFERENCES notify_target(id) \
+                     ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED, \
+                 created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+                 updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+                 UNIQUE (project_id, target_id)\
+             );\
+             CREATE TABLE IF NOT EXISTS project_notify_event (\
+                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, \
+                 project_id BIGINT NOT NULL DEFAULT 0 REFERENCES project(id) \
+                     ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED, \
+                 event TEXT NOT NULL DEFAULT '' CHECK(event IN ('', 'task.created', \
+                     'task.status_changed', 'task.done', 'task.rejected', 'task.assigned', \
+                     'task.moved', 'task.deleted', 'decision.accepted', 'decision.rejected', \
+                     'comment.added', 'comment.removed', 'task.due', 'task.due_tomorrow')), \
+                 created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+                 updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+                 UNIQUE (project_id, event)\
+             );\
+             CREATE INDEX IF NOT EXISTS project_notify_target_by_target \
+                 ON project_notify_target(target_id);",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to

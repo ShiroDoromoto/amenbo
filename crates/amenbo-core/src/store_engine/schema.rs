@@ -866,6 +866,106 @@ datasets! {
         field_key: col(REQ),
         value: col(REQ),
     }
+
+    // **One connection this device can send a notification through, under a name** (`AMB-D-885`). The
+    // device's and no project's: a webhook is written here once and every project that wants it selects
+    // it (`project_notify_target`), so a URL that changes is one edit. The shape turned down was a device
+    // default each project overrides — which gives every field an inherited/overridden state, and puts
+    // the answer to "where do this project's notifications go" on two screens.
+    //
+    // **No credential is on this row.** A Slack target's webhook URL and a mail target's SMTP password
+    // are `secret` rows under `(NULL, 'notify', <this id>, <field>)`, the table no road out walks. What
+    // stays here is what a screen may draw.
+    //
+    // `kind` decides which of the columns mean anything: the four mail-mode ones are NULL on a Slack
+    // target, which shares this table the way `attachment`'s two modes share theirs. A Slack target has
+    // no column of its own at all — its whole connection is the secret.
+    //
+    // `is_default` marks the one target a newly created project starts out pointing at. Not a tier and
+    // not an inherited value: it decides where a project *starts*, after which the project's own
+    // selection is the whole answer. At most one row carries it, which `ops::notify` holds by moving the
+    // mark rather than raising a second — a `UNIQUE` cannot say "at most one true" and a partial index on
+    // a column a create passes through as `0` would fight the field-by-field write.
+    //
+    // The name is not unique. Two targets may be called the same thing and are told apart on the shelf by
+    // their kind and the connection beside it, which is what the row shows anyway; a `UNIQUE` on a
+    // required text column would also collide on the `''` a create passes through.
+    notify_target {
+        kind: enum_col("slack", "mail"),
+        name: col(REQ),
+        is_default: bool_col,
+        smtp_host: col(OPT),
+        smtp_port: col(INT_OPT),
+        smtp_user: col(OPT),
+        mail_from: col(OPT),
+    }
+
+    // **One project's notification row** (`AMB-D-885`): whether it notifies, and where its mail goes. The
+    // targets it sends through and the events it reports are the two tables below — sets, not columns, so
+    // one project reaches a Slack channel and an inbox at once.
+    //
+    // `enabled` is deliberately not "is a target selected": someone away for a fortnight stops the
+    // notifications with one switch and finds the settings still standing afterwards. And it is one switch
+    // rather than two steps — a feature of the body runs nobody else's code, so there is no consent for a
+    // second switch to be (`AMB-D-434`).
+    //
+    // `mail_to` is the project's and not the target's because it answers *who is told*, while the target
+    // answers what carries it — the one place `AMB-D-434`'s ban on the same setting in two tiers does not
+    // bite, there being no second copy of it anywhere.
+    //
+    // One row per project (`UNIQUE (project_id)`), and CASCADE for the reason `plugin_config`'s is: this
+    // is Amenbo's own setting *about* the project, with nothing to tell when the project it is about goes.
+    project_notify {
+        project_id: fk("project", "CASCADE"),
+        enabled: bool_col,
+        mail_to: col(REQ),
+    } => "UNIQUE (project_id)"
+
+    // **A target this project's notifications are carried by** (`AMB-D-885`) — one row per
+    // `(project, target)`. What makes Slack and mail one feature is exactly this: a project answers
+    // "where" with as many targets as it likes, which the per-carrier shape could not write.
+    //
+    // It names the project rather than the `project_notify` row, as `project_notify_event` does: all three
+    // hang off the project, so one CASCADE takes all three and no order between them has to be remembered.
+    //
+    // **`target_id` is `RESTRICT`, and that is the point.** Deleting a target a project still uses is
+    // stopped until the op has cleared these rows — and the op is where the count the screen asks for
+    // ("two projects use this") is read, before anything goes.
+    project_notify_target {
+        project_id: fk("project", "CASCADE"),
+        target_id: fk("notify_target", "RESTRICT"),
+    } => "UNIQUE (project_id, target_id)"
+
+    // **An event this project reports** (`AMB-D-885`) — one row per `(project, event)`, naming one of the
+    // thirteen in `crate::plugin_payload::V1_EVENTS` that say what happened. Six of them are what a
+    // project starts with (`AMB-D-714`).
+    //
+    // `store.changed` is the fourteenth and is not admitted: it says only that *something* moved, which is
+    // a signal for a mirror to re-read on and nothing a person can be told. The `CHECK` is a second
+    // spelling of a catalog that lives in `plugin_payload`, kept honest by a test in this module rather
+    // than by everyone remembering — it is here because a column saying which values it admits is what
+    // stops a subscription to a name nothing will ever fire.
+    //
+    // **No rows is an answer, not an unset**: the `project_notify` row's existence is what says the
+    // project has been set up, so a project that ticked every box off reports nothing and stays on.
+    project_notify_event {
+        project_id: fk("project", "CASCADE"),
+        event: enum_col(
+            "task.created",
+            "task.status_changed",
+            "task.done",
+            "task.rejected",
+            "task.assigned",
+            "task.moved",
+            "task.deleted",
+            "decision.accepted",
+            "decision.rejected",
+            "comment.added",
+            "comment.removed",
+            "task.due",
+            "task.due_tomorrow",
+        ),
+    } => "UNIQUE (project_id, event)"
 }
 
 /// Look up a dataset by name. A dataset's key and its table are the same word (`AMB-D-807`), so this
@@ -1313,6 +1413,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS plugin_enable_device ON plugin_enable(plugin) 
 -- does, and for the same reason: its `project_id` is NULL, so the general index says nothing about it.
 CREATE UNIQUE INDEX IF NOT EXISTS secret_address ON secret(project_id, area, COALESCE(owner_id, 0), field_key);
 CREATE UNIQUE INDEX IF NOT EXISTS secret_address_device ON secret(area, COALESCE(owner_id, 0), field_key) WHERE project_id IS NULL;
+-- Which projects a notification target carries (`AMB-D-885`), sought from the target. The table's own
+-- `UNIQUE (project_id, target_id)` already seeks the other way — this project's targets — but leads on
+-- the project, so the count a delete asks for ("two projects use this") would scan every row in the
+-- table. The delete is where that count is read, and it is read before anything goes.
+CREATE INDEX IF NOT EXISTS project_notify_target_by_target ON project_notify_target(target_id);
 -- A plugin's queue, read the only way it is ever read: that plugin's own rows, oldest first. The pair is
 -- the whole query (`plugin` seeks, `id` orders), so the runner reads its head without scanning the rows
 -- queued for every other plugin, and the fan-out's "which plugins have work" seek stays on the index too.
@@ -1531,6 +1636,32 @@ mod tests {
         // The other side of the door: a plain table nobody named is not collected.
         assert_eq!(feed_table("nudge_fired"), None, "a plain table nobody named stays silent");
         assert_eq!(feed_table("change_feed"), None, "and the feed does not feed on itself");
+    }
+
+    /// The events a project may report are the catalog's own, and the column says so in a second
+    /// spelling (`AMB-D-885`). The two are held to each other here rather than by everyone remembering:
+    /// a name added to `plugin_payload` and not to the `CHECK` would be a subscription the store
+    /// refuses, and one dropped from the catalog would be a row nothing can ever fire.
+    ///
+    /// `store.changed` is the fourteenth and is deliberately absent: it says only that *something*
+    /// moved, which is a signal for a mirror to re-read on and nothing a person is told.
+    #[test]
+    fn the_events_a_project_may_report_are_the_catalog_minus_the_ledgers_signal() {
+        let decl = dataset("project_notify_event")
+            .expect("the dataset is declared")
+            .columns
+            .iter()
+            .find(|c| c.name == "event")
+            .expect("the column is declared")
+            .decl;
+        for event in crate::plugin_payload::V1_EVENTS {
+            let named = decl.contains(&format!("'{event}'"));
+            if event == crate::plugin_payload::name::STORE_CHANGED {
+                assert!(!named, "`{event}` is the ledger's signal — no project subscribes to it");
+            } else {
+                assert!(named, "`{event}` is in the catalog but not in the column's CHECK");
+            }
+        }
     }
 
     /// What a store is born from is run in two pieces, and the second is wrapped in a transaction

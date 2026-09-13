@@ -137,17 +137,21 @@ async function open(): Promise<void> {
   await act(async () => { await Promise.resolve(); });
 }
 
-describe("the row is drawn for a provider that can be moved, and for nothing else", () => {
-  it("draws nothing for a pane with a plain prompt in it", async () => {
+describe("the row stands under every pane, and the press in it only where a model can be named", () => {
+  it("draws the row, and no press, for a pane with a plain prompt in it", async () => {
     await draw(null);
-    expect(container.querySelector(".modelrow"), "a shell was offered a model").toBeNull();
+    // The band is there so that what shares it with the press — the box's own open and shut
+    // (`AMB-D-889`) — is in the same place under every pane.
+    expect(container.querySelector(".modelrow"), "a shell had no row under it").toBeTruthy();
+    expect(container.querySelector(".modelrow__now"), "a shell was offered a model").toBeNull();
   });
 
-  it("draws nothing where the host says there is no road", async () => {
+  it("draws the row, and no press, where the host says there is no road", async () => {
     // A command the reader registered: Amenbo cannot name the program inside it (`AMB-D-794`), so
     // there is no slash command it could type.
     await draw("custom:1");
-    expect(container.querySelector(".modelrow"), "a registered command was offered a model").toBeNull();
+    expect(container.querySelector(".modelrow"), "a registered command had no row under it").toBeTruthy();
+    expect(container.querySelector(".modelrow__now"), "a registered command was offered a model").toBeNull();
   });
 
   it("draws the row for a catalogued provider", async () => {

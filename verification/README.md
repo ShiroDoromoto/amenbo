@@ -884,10 +884,12 @@ gone is how many returns it takes to send the line, two while the mark is still 
 it has been settled.
 
 Under the pane stands a box of Amenbo's own, and it has a vocabulary of its own for one reason: what
-is written there is not typed at the terminal. `open-box` is the press that brings it out, and every
-road that touches the box walks it first: a pane comes up with the box folded away and its presses
-going to the program, so there is nothing to click into until a reader asks for it, and the asking
-is what hands the box the keyboard. `write-to-pane` writes a line into it, `still-to-send`
+is written there is not typed at the terminal. `open-box` is that box standing open, and every road
+that touches it walks that first: a pane comes up with the box folded away and its presses going to
+the program, so there is nothing to click into until a reader asks for it. It is the state and not
+the press — the control swaps the two over, so the operator is asked to look first and press only
+where the box is missing, and a step that pressed regardless would fold it away on a pane that came
+up open. The keyboard is in the box either way. `write-to-pane` writes a line into it, `still-to-send`
 reads that line standing there with nothing run — the half that parts the box from the terminal's own
 input line — and `send-written` sends it, `by: key` or `by: button` naming which of the two
 presses, because they are two controls and a road that walked one would leave the other unpressed.

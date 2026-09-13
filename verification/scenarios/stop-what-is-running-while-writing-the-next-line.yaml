@@ -82,6 +82,12 @@ steps_gui:
     domain: terminal
     op: open-start
 
+  # The box, which a pane comes up without: the press this road is about is made in that box while it
+  # is holding a line, and a pane still folded has neither.
+  - type: action
+    domain: terminal
+    op: open-box
+
   # What the pane has not said yet. Without it, the word read after the press would be one that might
   # have been on the screen the whole time for a reason nothing here is about.
   - type: assert

@@ -2160,20 +2160,24 @@ impl Instructor {
                     "At {pane}, with the word standing under its mark, press return twice. The first press accepts the word as it is written and the mark under it goes away; the second gives the line to the program running there. The shell will not know the command, which is what leaves the word on the screen for the step after this one to read."
                 )
             }
-            // The press that brings the box out from under a pane, which every pane comes up without.
-            // It is found by the band it stands on and not by the mark on it: that mark is a keyboard
-            // while the box is folded away, and so is the one the box's own row draws once it is open
-            // — an operator sent looking for a keyboard would have two of them to choose between.
+            // The box standing open under a pane. The operator is asked to look first and press only
+            // where it is missing: the control swaps the two over, so an instruction to press it
+            // whatever is on the screen would fold the box away on a pane that came up open.
             //
-            // What the press leaves behind is said as well, because the steps after it are read
-            // against it: the box is there, and it has the keyboard.
+            // The control is found by the band it stands on and not by the mark on it: that mark is
+            // a keyboard while the box is folded away, and so is the one the box's own row draws
+            // once it is open — an operator sent looking for a keyboard would have two of them to
+            // choose between.
+            //
+            // Where the box ends up is said as well, because the steps after it are read against it:
+            // the box is there, and it has the keyboard.
             (Domain::Terminal, "open-box") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
                     None => "the pane the step before opened".to_string(),
                 };
                 format!(
-                    "Under {pane}, below the terminal, is a thin band of Amenbo's own that stands under every running pane. Press the control at its left-hand end, once — where the band names a model, this is the press to the left of that. Amenbo's box opens between the terminal and the band, and the keyboard goes into the box: what you type now is written there rather than given to the program. Press nothing else."
+                    "Under {pane}, below the terminal, stands a thin band of Amenbo's own — it is under every running pane, and where a model is named it is named on that band. Look between the terminal and that band for Amenbo's own box: a row you could write in, with a mark at its left and a press at its right. Where it is already there, press nothing — this step is done. Where it is not, press the control at the band's left-hand end, once, and the box opens there. Either way the keyboard ends up in the box: what you type now is written there rather than given to the program. Press nothing else."
                 )
             }
             // A line written into the box under the pane and left standing. The box is named by

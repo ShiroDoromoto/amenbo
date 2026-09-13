@@ -86,6 +86,12 @@ steps_gui:
     domain: terminal
     op: open-shell
 
+  # The box itself, which a pane comes up without. It is asked for before the reading below, that
+  # reading being of an empty box rather than of no box at all.
+  - type: action
+    domain: terminal
+    op: open-box
+
   # The box before anything is put in it. Both words the readings below rest on are absent here, so
   # finding them afterwards is the paste and nothing else.
   - type: assert

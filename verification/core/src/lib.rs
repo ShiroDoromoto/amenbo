@@ -2602,24 +2602,32 @@ const REGISTRY: &[OpSpec] = &[
     // is the page's one pane — a road with two says which, the same way it says which one to type
     // into.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "in-the-box", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
-    // The press that brings that box out, which every pane comes up without. A pane is opened by
-    // somebody who is about to work the program in it, so it opens folded and the presses go to the
-    // terminal; a person who means to write asks for the box, and this is that asking.
+    // The box standing open under a pane, which is what every step below needs and no pane owes. A
+    // pane is opened by somebody who is about to work the program in it, so it comes up with the box
+    // folded away and its presses going to the terminal; a person who means to write asks for the
+    // box, and this is that asking.
     //
     // **A road that touches the box walks this first.** There is nothing to click into while a pane
     // is folded, so a line written, pasted or read under one is a line the operator cannot carry out
     // at all — which is why it is an op of its own rather than something the steps below do quietly:
     // a press a road did not ask for is a press nobody can see in the road afterwards.
     //
-    // **The keyboard goes into the box as it opens.** Opening it is asking to write in it
-    // (`app/src/shell/TerminalPane.tsx`), so a road that wants the keyboard at the terminal after
-    // this puts it there itself, by typing at the pane.
+    // **It is the state and not the press.** The control swaps the two over, so a step that pressed
+    // it whatever it found would fold the box away on the day a pane comes up already open — which
+    // is the day the reader's last answer is what a pane opens in. What the operator is asked for is
+    // a box that is there, and pressing nothing is one of the ways to have one.
     //
-    // There is no op for folding it away again: no road walks that press, and one written for it
-    // would be a mapping in every driver with nothing behind it.
+    // **The keyboard is in that box afterwards.** A pane hands it there as the box comes up, whether
+    // the reader asked for it or the pane opened that way (`app/src/shell/TerminalPane.tsx`), so a
+    // road that wants the keyboard at the terminal after this puts it there itself, by typing at the
+    // pane.
+    //
+    // There is no op for folding it away again: no road walks that, and one written for it would be
+    // a mapping in every driver with nothing behind it.
     //
     // `onto` is which pane, named the way `write-to-pane` names one. Left out, it is the pane the
-    // step before opened — which is where a road asks for this, the fold being what a pane opens in.
+    // step before opened — which is where a road asks for this, a fresh pane being where the box is
+    // most often not there.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-box", required: &[], refs: &[], strings: &["onto"], binds: false },
     // A line written into the box standing under the pane, and left there. It is **not** `type-line`
     // with the box named: that one types at the terminal, where every character reaches the program

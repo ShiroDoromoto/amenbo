@@ -788,7 +788,8 @@ fn pointer_present() -> bool {
 }
 
 /// Is the bound folder — the one holding the `.amenbo` this invocation resolved — inside a git checkout?
-/// This is what gates the agent spec's `worktree` cycle: git advice reaches only the people git reaches. It
+/// This is what gates the agent spec's git advice — the `worktree` cycle, and the steps of `commit` that
+/// only git makes possible: what git reaches, that advice reaches, and no further. It
 /// asks about that folder rather than the CWD because the binding is what says where the work lives, and a
 /// caller with no pointer at all has no such folder, so the answer is no.
 fn bound_dir_is_under_git() -> bool {
@@ -1232,6 +1233,12 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             // same runtime seam the fields above use.
             if !bound_dir_is_under_git() {
                 amenbo_core::agent::drop_cycle(&mut spec, amenbo_core::agent::Cyc::Worktree);
+                // The same rule where it runs through a cycle rather than around one. `commit` is
+                // written for whoever is about to send text out of this store, which is everybody,
+                // and two of its steps — anchoring a commit's SHA, wiring git's hook slots — are for
+                // the half that has git. Dropping the cycle whole would take the lint advice with
+                // them, and that advice holds over a file or piped text with no git anywhere near it.
+                amenbo_core::agent::drop_git_only_steps(&mut spec);
             }
             // And where a plugin's author named a step of Amenbo's own cycle, hang the line to type on
             // that step (`AMB-D-571`): the advice and the tool for it are otherwise in one document

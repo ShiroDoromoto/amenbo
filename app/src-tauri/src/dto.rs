@@ -3069,3 +3069,34 @@ pub struct NotifyTargetDto {
     #[ts(type = "number")]
     pub(crate) projects_using: usize,
 }
+
+/// **What one project does with the device's shelf** (`AMB-D-885`): whether it notifies at all, which
+/// targets carry it, what it reports, and where its mail is addressed.
+///
+/// The four are read together because the screen draws them together, and because three of them are sets
+/// rather than columns — which is what lets one project reach a Slack channel and an inbox at once.
+///
+/// **`enabled` is not "is a target selected".** They are deliberately apart: a fortnight away costs one
+/// switch, and the selection is still standing on the way back.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectNotifyDto {
+    /// Does this project notify? Off keeps the targets and the events where they are.
+    pub(crate) enabled: bool,
+    /// Where a mail target's message is addressed — several addresses on one line, separated by commas,
+    /// as the person typed them. Empty falls back to the target's own account.
+    pub(crate) mail_to: String,
+    /// The targets this project's notifications are carried by, as ids into the device's shelf.
+    #[ts(type = "number[]")]
+    pub(crate) target_ids: Vec<i64>,
+    /// Which of the events below this project reports. A subset of `reportable`, and empty is an answer:
+    /// a project that reports nothing stays on and reports nothing.
+    pub(crate) events: Vec<String>,
+    /// **The events a project may report**, in the catalog's own order — core's list rather than the
+    /// screen's, so a name added there reaches the form without the form being told.
+    ///
+    /// `store.changed` is not among them: it says only that *something* moved, which is a signal for a
+    /// mirror to re-read on and nothing a person can be told (`AMB-D-582`).
+    pub(crate) reportable: Vec<String>,
+}

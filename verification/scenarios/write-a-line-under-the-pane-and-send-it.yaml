@@ -24,6 +24,12 @@
 # was written stays in the box, which is the half the road reads after it — a way out that threw the
 # line away is one nobody would take twice.
 #
+# ── Why the box is read before anything is typed ────────────────────────────────────────────────
+# A pane is opened by somebody who is about to write, so the box comes to hand as the pane does: the
+# keyboard is in it before the first press, and there is no click to make first. That is read at the
+# top of the road because it is the one moment it can be read — every step after this one has put
+# the keyboard somewhere itself.
+#
 # ── Why the arrow is walked first ───────────────────────────────────────────────────────────────
 # The box is empty when a pane has just been opened and at no other point on this road, so the press
 # that only an empty box hands on is walked before anything is written. `ctrl-c` after it is the road
@@ -61,15 +67,16 @@
 id: write-a-line-under-the-pane-and-send-it
 title: A line is written in the box under the pane, stands there unsent, and goes when it is sent
 description: >
-  Open a pane on a plain shell. With nothing written in the box beneath it, press the up arrow and
-  watch the shell's own history answer it — the press went past the box. Then write a line in the
-  box: it stands there with nothing run. Send it with return, and it reaches the terminal. Write a
+  Open a pane on a plain shell. The box beneath it has the keyboard already, nobody having clicked
+  anything. With nothing written in it, press the up arrow and watch the shell's own history answer
+  it — the press went past the box. Then write a line in the box: it stands there with nothing run.
+  Send it with return, and it reaches the terminal. Write a
   second and send it with the press beside the box instead. Then write a third, and leave the box by
   the first line's up arrow: the shell walks its history, and the third line is still standing in the
   box. Then open a second pane and press back onto the first, and read which box the keyboard is in.
   What is under test is that the box holds what is written until a person sends it, stays out of the
   way while it is empty, lets a person back to the program without losing what they wrote, and comes
-  to hand in the pane a press moves the work to.
+  to hand both as a pane opens and in the pane a press moves the work to.
 
 given:
   - type: action
@@ -104,6 +111,14 @@ steps_gui:
   - type: action
     domain: terminal
     op: open-shell
+
+  # ── The box a freshly opened pane hands the keyboard to ───────────────────────────────────────
+  # Nothing has been clicked since the pane came up, so what the mark says here is what opening the
+  # pane did. Read before the line below is typed, which is the last moment nothing else has moved
+  # the keyboard.
+  - type: assert
+    domain: terminal
+    op: keys-in-the-box
 
   # ── The empty box, which hands its presses on ─────────────────────────────────────────────────
   # Typed at the terminal itself rather than in the box, and that is the point of it: what the arrow

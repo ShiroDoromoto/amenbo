@@ -405,6 +405,10 @@ describe("where a press goes", () => {
   it("says which of the two the keyboard is answering to, and changes as the keyboard moves", async () => {
     await pane();
     await opened();
+    // A person pressing the terminal, which is how the keyboard is handed to the program in it. A
+    // pane opens with the keyboard in the box (`./TerminalPane`), so it is taken off there first —
+    // what is read below is the mark following it back.
+    await act(async () => { typing()?.focus(); });
 
     expect(mark()?.title).toBe(t("face.composePasses"));
     await write("half a sentence");
@@ -445,6 +449,33 @@ describe("where a press goes", () => {
 
     expect(typing(), "the terminal's own box went missing").not.toBeNull();
     expect(box(), "the two boxes were taken for one").not.toBe(typing());
+  });
+});
+
+describe("a terminal opening in the pane", () => {
+  // What a person does next in a place they just opened is write, and until this they had to click
+  // once to say where. Opening a place also makes it the one being worked in (`../talk/layout`), so
+  // the two agree without the person pressing anything.
+  it("puts the keyboard in the box", async () => {
+    await pane();
+    await opened();
+
+    expect(document.activeElement, "the pane opened with the keyboard nowhere a person could type")
+      .toBe(box());
+  });
+
+  // Several panes come back at once when the window opens. Only one of them is the one being worked
+  // in, and each of the others taking the keyboard would leave it wherever the last one answered.
+  it("leaves the keyboard alone where the pane is not the one being worked in", async () => {
+    await pane(true, false);
+    const elsewhere = document.createElement("textarea");
+    document.body.append(elsewhere);
+    elsewhere.focus();
+
+    await opened();
+
+    expect(document.activeElement, "a pane opening off to the side took the keyboard").toBe(elsewhere);
+    elsewhere.remove();
   });
 });
 

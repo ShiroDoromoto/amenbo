@@ -469,6 +469,25 @@ export function TerminalPane({
     // — a change of either would be a different pane, and the face gives that one a different key.
   }, [running]);
 
+  // The keyboard, at the moment a terminal opens here. What a person does next in a place they just
+  // opened is write, and the box is where they write (`AMB-D-864`) — left to itself the keyboard is
+  // on the page, and the first thing typed goes nowhere.
+  //
+  // **It is answered here rather than in `opened`**, which runs a render too early: the box is drawn
+  // by the render that learns the session, so there is nothing to put the keyboard in until this one.
+  //
+  // **Only the pane being worked in.** Several panes open at once when the window comes back, and
+  // each one taking the keyboard would leave it in whichever answered last. A pane the person opened
+  // themselves is the one being worked in — opening a place moves the frame to it (`../talk/layout`)
+  // — so the pane that should take it is the pane that has it.
+  //
+  // Opening is the whole of it. A pane that becomes the one being worked in later was pressed, and
+  // the press has already said where the keyboard goes (`pressedOn`).
+  useEffect(() => {
+    if (live === null || !focused) return;
+    boxRef.current?.focus();
+  }, [live]);
+
   // A naming reaches every row, not only the one it happened in: the rail renames a pane that is not
   // the one being worked in, and the row above that pane is where the answer shows.
   useEffect(() => {

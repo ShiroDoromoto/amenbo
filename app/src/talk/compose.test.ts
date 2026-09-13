@@ -65,6 +65,7 @@ describe("sending a line a person wrote", () => {
   // `Date.now()` is the time of day rounded to the millisecond (`AMB-T-4731`).
   it("leaves the pane's agent its cushion before the return, and still sends one", async () => {
     hoisted.asked = [];
+    // Read without naming an OS, the way the send under test reads it.
     const cushion = pauseBeforeTheReturn("gemini-cli");
     vi.useFakeTimers();
 
@@ -89,23 +90,57 @@ describe("sending a line a person wrote", () => {
 
 describe("how long a pane's agent is left before the return", () => {
   it("waits for nobody the measurement found reads it straight away", () => {
-    expect(pauseBeforeTheReturn("claude-code")).toBe(0);
-    expect(pauseBeforeTheReturn("codex-cli")).toBe(0);
+    expect(pauseBeforeTheReturn("claude-code", "", [], "macos")).toBe(0);
+    expect(pauseBeforeTheReturn("codex-cli", "", [], "macos")).toBe(0);
   });
 
   it("waits out the cushion of the one provider measured having one", () => {
-    expect(pauseBeforeTheReturn("gemini-cli")).toBe(50);
+    expect(pauseBeforeTheReturn("gemini-cli", "", [], "macos")).toBe(50);
   });
 
   // A pane running no agent, one running something the reader registered themselves, and the
   // catalogued agents nobody measured. Assuming no cushion costs them a message that does not go,
   // and assuming one costs a twentieth of a second (`AMB-D-879`).
   it("waits for a pane it has no measurement for, rather than assuming there is nothing to wait for", () => {
-    expect(pauseBeforeTheReturn(null)).toBe(50);
-    expect(pauseBeforeTheReturn("a-shell-somebody-registered")).toBe(50);
+    expect(pauseBeforeTheReturn(null, "", [], "macos")).toBe(50);
+    expect(pauseBeforeTheReturn("a-shell-somebody-registered", "", [], "macos")).toBe(50);
     for (const id of ["github-copilot", "opencode", "cursor"]) {
-      expect(pauseBeforeTheReturn(id), id).toBe(50);
+      expect(pauseBeforeTheReturn(id, "", [], "macos"), id).toBe(50);
     }
+  });
+
+  // Linux was measured alongside macOS and asks for nothing the provider does not (`AMB-T-4724`).
+  it("leaves a machine that is neither of those the provider's own figure", () => {
+    expect(pauseBeforeTheReturn("codex-cli", "", [], "other")).toBe(0);
+    expect(pauseBeforeTheReturn("gemini-cli", "", [], "other")).toBe(50);
+  });
+});
+
+// Codex CLI takes a return with no gap on macOS and on Linux and needs 80ms on Windows, whatever
+// was pasted — so what is being waited out there is the host handing the paste over, not a cushion
+// in the provider. Every pane on that OS gets the floor (`AMB-T-4724`, `AMB-D-887`).
+describe("the floor Windows puts under every send", () => {
+  it("raises a pane the provider would have had sent with no wait at all", () => {
+    expect(pauseBeforeTheReturn("codex-cli", "", [], "windows")).toBe(150);
+    expect(pauseBeforeTheReturn("claude-code", "", [], "windows")).toBe(150);
+  });
+
+  // Its own 30ms cushion went through 7 times out of 7 at 50ms there and less than that at 45ms and
+  // 40ms — a number with nothing left over, which the floor gives it.
+  it("raises the one provider whose own cushion is measured, rather than leaving it at the edge", () => {
+    expect(pauseBeforeTheReturn("gemini-cli", "", [], "windows")).toBe(150);
+  });
+
+  it("raises a pane running no agent, and one nobody measured", () => {
+    expect(pauseBeforeTheReturn(null, "", [], "windows")).toBe(150);
+    expect(pauseBeforeTheReturn("a-shell-somebody-registered", "", [], "windows")).toBe(150);
+  });
+
+  // The floor is the least of the two and never a sum: a wait already over it comes through as it
+  // stands.
+  it("leaves a wait that is already longer than the floor where it was", () => {
+    const picture = "C:\\work\\pasted-0a0b0c0d.png";
+    expect(pauseBeforeTheReturn("claude-code", `'${picture}' look`, [picture], "windows")).toBe(1300);
   });
 });
 
@@ -116,20 +151,21 @@ describe("how long the agent that reads what a body names is left", () => {
   const PICTURE = "/tmp/amenbo-pasted-7a/pasted-0a0b0c0d.png";
 
   it("waits out the reading where a path Amenbo put in is still standing in the body", () => {
-    expect(pauseBeforeTheReturn("claude-code", `'${PICTURE}' look at this`, [PICTURE])).toBe(1300);
+    expect(pauseBeforeTheReturn("claude-code", `'${PICTURE}' look at this`, [PICTURE], "macos"))
+      .toBe(1300);
   });
 
   // Put in at the caret and then written over, or deleted: there is no file to be read, so there is
   // nothing to wait out.
   it("waits for nothing where the body no longer holds it", () => {
-    expect(pauseBeforeTheReturn("claude-code", "look at this", [PICTURE])).toBe(0);
-    expect(pauseBeforeTheReturn("claude-code", "", [PICTURE])).toBe(0);
+    expect(pauseBeforeTheReturn("claude-code", "look at this", [PICTURE], "macos")).toBe(0);
+    expect(pauseBeforeTheReturn("claude-code", "", [PICTURE], "macos")).toBe(0);
   });
 
   // A path the person typed themselves is not one Amenbo can vouch for, and the body that comes of
   // it is sent the way any other body is (`AMB-D-879`).
   it("waits for nothing where the path in the body is one the person wrote", () => {
-    expect(pauseBeforeTheReturn("claude-code", `look at ${PICTURE}`, [])).toBe(0);
+    expect(pauseBeforeTheReturn("claude-code", `look at ${PICTURE}`, [], "macos")).toBe(0);
   });
 
   // What went into the box is the path quoted, and a name with a `'` in it is not written there
@@ -137,19 +173,21 @@ describe("how long the agent that reads what a body names is left", () => {
   // named, so either is waited out.
   it("waits out the reading whichever spelling of the path is standing", () => {
     const apostrophe = "/work/it's a shot.png";
-    expect(pauseBeforeTheReturn("claude-code", "'/work/it'\\''s a shot.png' look", [apostrophe]))
-      .toBe(1300);
+    expect(pauseBeforeTheReturn(
+      "claude-code", "'/work/it'\\''s a shot.png' look", [apostrophe], "macos",
+    )).toBe(1300);
     // And the same path with the quotes taken off, which the agent reads all the more readily.
-    expect(pauseBeforeTheReturn("claude-code", `look at ${apostrophe}`, [apostrophe])).toBe(1300);
+    expect(pauseBeforeTheReturn("claude-code", `look at ${apostrophe}`, [apostrophe], "macos"))
+      .toBe(1300);
   });
 
   // The second condition is this agent's alone. The others were measured reading a named file
   // without dropping the return, and the cushion one of them has is its own.
   it("leaves every other pane the wait it already had", () => {
     const body = `'${PICTURE}' look at this`;
-    expect(pauseBeforeTheReturn("codex-cli", body, [PICTURE])).toBe(0);
-    expect(pauseBeforeTheReturn("gemini-cli", body, [PICTURE])).toBe(50);
-    expect(pauseBeforeTheReturn(null, body, [PICTURE])).toBe(50);
+    expect(pauseBeforeTheReturn("codex-cli", body, [PICTURE], "macos")).toBe(0);
+    expect(pauseBeforeTheReturn("gemini-cli", body, [PICTURE], "macos")).toBe(50);
+    expect(pauseBeforeTheReturn(null, body, [PICTURE], "macos")).toBe(50);
   });
 });
 

@@ -7,6 +7,10 @@
 # not go, and the person is left looking at their own words in the agent's input box wondering what
 # they pressed wrong.
 #
+# Windows puts a floor under every send on top of that, because a return can outrun a paste the host
+# has not finished handing over. This road is far over that floor, so what it walks is the agent's
+# own number on all three.
+#
 # ── Why this cannot be read anywhere but here ───────────────────────────────────────────────────
 # The wait is a number measured against one version of one product. Nothing in the code knows when
 # that version moves, and no unit test can: what is being waited for happens inside somebody else's

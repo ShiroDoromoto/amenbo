@@ -931,6 +931,21 @@ export async function mountTerminal(
     fontSize: 13,
     cursorBlink: true,
     theme: paneColors(),
+    // **Option is the meta key here, which is not what macOS does with it by default.** Left alone,
+    // this emulator treats Option as the third-level shift the operating system makes it: `Alt+B` is
+    // `∫` and `Alt+F` is `ƒ`, so a person moving a word at a time writes two characters into the
+    // program's own prompt instead. Windows and Linux have no such layer and the same presses arrive
+    // as meta already, so this is the setting that makes one pane behave the same on all three.
+    //
+    // **The three agents a pane is opened with all read it.** `ESC b` and `ESC f` move a word in
+    // every one of them, measured (`AMB-T-4778`), and the same road carries everything else that is
+    // spelled with meta — the word delete, the undo one of them spells `ESC z` — including whatever
+    // a provider adds later, which is what a hand-kept list of keys could not.
+    //
+    // **What it costs is Option as a way of composing characters, inside the pane only.** A reader
+    // who wants `£` from `option+3` still has it in the box under the pane, which is a field of the
+    // page's own and not this emulator's.
+    macOptionIsMeta: true,
     // The second way a ref becomes clickable: our own output wraps one in OSC 8, so the escape says
     // where the text points and no pattern has to find it (`AMB-T-3595`). Non-HTTP addresses have to
     // be let through for `amenbo://` to arrive at all, and an address neither branch below claims is

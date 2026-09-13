@@ -31,10 +31,10 @@ use std::process::Stdio;
 use std::sync::{mpsc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use amenbo_core::agent_models::{self, Ask, Model};
+use amenbo_core::agent_models::{self, Answer, Ask};
 use amenbo_core::harness::Launch;
 
-use crate::dto::AgentModelDto;
+use crate::dto::{AgentModelDto, AgentModelListDto};
 
 /// How long a provider is given to answer before it is taken to have hung.
 ///
@@ -46,7 +46,7 @@ const ASKING: Duration = Duration::from_secs(30);
 
 /// What each provider answered, for the life of the process — see the module docs on why an empty
 /// answer is kept as an answer.
-static ASKED: OnceLock<Mutex<HashMap<String, Vec<Model>>>> = OnceLock::new();
+static ASKED: OnceLock<Mutex<HashMap<String, Answer>>> = OnceLock::new();
 
 /// Which models an agent can be started on — the row a face draws before it opens a pane
 /// (`app/src/shell/EmptySlot.tsx`).
@@ -64,23 +64,31 @@ static ASKED: OnceLock<Mutex<HashMap<String, Vec<Model>>>> = OnceLock::new();
 /// An ask that did not finish is the empty row every other way of failing here is: what the face
 /// does with no models is put up its own box, and that road is open whatever the reason.
 #[tauri::command]
-pub async fn agent_models(agent: String) -> Vec<AgentModelDto> {
+pub async fn agent_models(agent: String) -> AgentModelListDto {
     tauri::async_runtime::spawn_blocking(move || rows(&agent)).await.unwrap_or_default()
 }
 
 /// The row itself, on whichever thread asked for it — [`agent_models()`] without the door.
-fn rows(agent: &str) -> Vec<AgentModelDto> {
+fn rows(agent: &str) -> AgentModelListDto {
     let Some(launch) = amenbo_core::harness::find_launch(agent) else {
-        return Vec::new();
+        return AgentModelListDto::default();
     };
-    models(launch).into_iter().map(|one| AgentModelDto { id: one.id, label: one.label }).collect()
+    let answer = models(launch);
+    AgentModelListDto {
+        models: answer
+            .models
+            .into_iter()
+            .map(|one| AgentModelDto { id: one.id, label: one.label })
+            .collect(),
+        current: answer.current,
+    }
 }
 
-/// The models this provider answered with — kept from the first ask onward.
-fn models(launch: &Launch) -> Vec<Model> {
+/// What this provider answered with — kept from the first ask onward.
+fn models(launch: &Launch) -> Answer {
     let Some(ask) = launch.models.as_ref() else {
         // Nothing to run, so nothing is remembered either: there was never a question to put.
-        return Vec::new();
+        return Answer::default();
     };
     if let Some(kept) = ASKED.get_or_init(Mutex::default).lock().ok().and_then(|asked| asked.get(launch.id).cloned()) {
         return kept;
@@ -172,15 +180,21 @@ mod tests {
     fn the_provider_with_nothing_to_ask_is_answered_without_running_anything() {
         let copilot = amenbo_core::harness::find_launch("github-copilot").expect("catalogued");
         assert!(copilot.models.is_none());
-        assert!(models(copilot).is_empty());
+        assert_eq!(models(copilot), Answer::default());
     }
 
     /// An id that is not a catalogued provider is an empty row rather than a refusal: what the
     /// reader registered is a command line of their own, and Amenbo cannot ask it anything.
+    ///
+    /// **And nothing it is on either.** A face reading a name out of this would be drawing one for a
+    /// command Amenbo never asked anything.
     #[test]
     fn an_id_the_catalog_does_not_list_is_an_empty_row() {
-        assert!(rows("a-row-the-reader-wrote").is_empty());
-        assert!(rows(amenbo_core::wake::SHELL).is_empty());
+        for id in ["a-row-the-reader-wrote", amenbo_core::wake::SHELL] {
+            let row = rows(id);
+            assert!(row.models.is_empty(), "{id}");
+            assert!(row.current.is_none(), "{id}");
+        }
     }
 
     /// A command that is not on this machine answers nothing, and does it without the ask failing —

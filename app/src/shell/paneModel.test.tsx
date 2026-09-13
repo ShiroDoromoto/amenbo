@@ -62,7 +62,9 @@ vi.mock("../core/ipc", () => ({
       };
       return settled;
     }
-    if (cmd === "agent_models") return hoisted.models[(args as { agent: string }).agent] ?? [];
+    if (cmd === "agent_models") {
+      return { models: hoisted.models[(args as { agent: string }).agent] ?? [], current: null };
+    }
     if (cmd === "wake_model") {
       return hoisted.kept[(args as { agent: string }).agent]
         ?? { chosen: null, history: [], flag: "--model" };

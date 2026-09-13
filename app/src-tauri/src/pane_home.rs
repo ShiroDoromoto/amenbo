@@ -89,6 +89,15 @@ struct Kind {
     /// is a file that will not be shared until this list says so, which is the cost `AMB-D-869`
     /// accepted for not reading its internals.
     shared: &'static [&'static str],
+    /// Which of [`Kind::shared`] the provider **makes when somebody logs in**, rather than one the
+    /// reader already has (`AMB-D-880`).
+    ///
+    /// These are linked to whether or not the reader has one yet, which the rest are not: there is
+    /// nothing to read either way, and what the link buys is the login landing in the reader's own
+    /// directory rather than in a home that goes when the pane does. A reader who has never logged
+    /// in would otherwise be asked again by every pane they open, for as long as they use Amenbo
+    /// (`AMB-T-4709`).
+    made: &'static [&'static str],
     /// What each home is told the path of, in the reader's own directory, instead of being given a
     /// link to it — the variable, and the name under [`Kind::theirs`].
     ///
@@ -142,6 +151,11 @@ const KINDS: &[Kind] = &[
         // are gone from the pane; take `cache` and `models_cache.json` out and the home is 29MB
         // instead of 2.3 (`AMB-T-4633`).
         shared: &["auth.json", "config.toml", "skills", "prompts", "cache", "plugins", "models_cache.json"],
+        // The one a login makes. Watched being written in place through a link that had nothing
+        // behind it, leaving the link and the reader's own new file (`AMB-D-880`). The rest of the
+        // row is configuration and cache: a reader who has none of those is not asked for them
+        // again and again.
+        made: &["auth.json"],
         points: &[],
         // Codex replaces `config.toml` — on an `mcp add`, and on a plain `codex exec`, which adds
         // the folder's `trust_level` (`AMB-T-4696`). What is wanted of the file is the reader's
@@ -160,6 +174,10 @@ const KINDS: &[Kind] = &[
         // there the provider writes one into the home it was pointed at, which is this one and not
         // the reader's, so an authentication would be asked for again per pane.
         shared: &["settings.json", "gemini-credentials.json"],
+        // The credentials, and not `settings.json` beside them: that one is the reader's own
+        // configuration rather than something a login writes, and a pane with none of it does not
+        // open at all (`AMB-T-4677`) — which is a thing to say rather than a file to invent.
+        made: &["gemini-credentials.json"],
         // The third thing the pane stops without — it exits on a folder it has not been told to
         // trust, and its TUI asks about the folder every time (`AMB-T-4677`) — and the one the
         // provider replaces rather than writes into, so it is pointed at (`AMB-D-878`).
@@ -295,9 +313,22 @@ fn make(kind: &Kind, home: &Path, theirs: Option<&Path>) -> Option<PathBuf> {
         for name in kind.linked() {
             let from = theirs.join(name);
             // What the reader does not have is not linked to: a link to nothing is a path the
-            // provider would read as a file it cannot open, rather than as a file that is not there.
+            // provider would read as a file it cannot open, rather than as a file that is not
+            // there. The exception is a name a login makes (`Kind::made`, `AMB-D-880`) — that one
+            // is linked to where the file will be, so that the login lands in the reader's own
+            // directory instead of in this home.
             if !from.exists() {
-                continue;
+                if !kind.made.contains(&name) {
+                    continue;
+                }
+                // A reader who has never run this provider has no directory either, and a write
+                // through the link needs one to land in.
+                if let Some(parent) = from.parent() {
+                    if let Err(e) = std::fs::create_dir_all(parent) {
+                        log::warn!("{name} is not shared into {}: {e}", into.display());
+                        continue;
+                    }
+                }
             }
             if let Err(e) = link(&from, &into.join(name)) {
                 log::warn!("{name} is not shared into {}: {e}", into.display());
@@ -356,11 +387,21 @@ fn link(from: &Path, at: &Path) -> std::io::Result<()> {
 /// not, and the two entries a provider replaces rather than edits are `AMB-T-4706`'s and
 /// `AMB-T-4707`'s to take out of this list. It also has to be made on the drive the file is already
 /// on — the reader's home and Amenbo's app-data both sit under `%USERPROFILE%`.
+///
+/// **A hard link needs a file to be a second name for**, which is where the two operating systems
+/// part on [`Kind::made`]: Unix links to where the login will put the file, and here the file is
+/// brought into being first, empty. Empty is not what nothing reads as — `codex login status` says
+/// `EOF while parsing a value` against a nought-byte `auth.json` where it would have said `Not
+/// logged in` — and it is still the shape taken, because the one alternative measured, `{}`, is
+/// answered with `Logged in using ChatGPT` by a reader who is not (`AMB-D-880`).
 #[cfg(windows)]
 fn link(from: &Path, at: &Path) -> std::io::Result<()> {
     if from.is_dir() {
         junction::create(from, at)
     } else {
+        if !from.exists() {
+            std::fs::File::create(from)?;
+        }
         std::fs::hard_link(from, at)
     }
 }
@@ -501,6 +542,78 @@ mod tests {
 
         assert!(home.join(".gemini/settings.json").symlink_metadata().is_err());
         assert!(home.join(".gemini/gemini-credentials.json").symlink_metadata().is_ok());
+    }
+
+    /// The one thing the reader has none of that **is** linked to: the name a login makes.
+    ///
+    /// This is the test the whole of `AMB-T-4709` is: a reader who has never logged in was asked
+    /// again by every pane they opened, because the credentials the first pane wrote went into that
+    /// pane's home and left with it. What is read here is the reach in the direction the login goes
+    /// — something written at the pane's end arriving in the reader's own directory — which is the
+    /// opposite direction to the sharing everywhere else and the only one that matters here.
+    #[test]
+    fn the_name_a_login_makes_is_linked_to_before_there_is_anything_behind_it() {
+        for kind in KINDS {
+            let theirs = theirs(kind);
+            let home = amenbo_scratch::scratch("pane-home-login").join(kind.agent).join("7");
+            for name in kind.made {
+                std::fs::remove_file(theirs.join(name)).unwrap();
+            }
+
+            make(kind, &home, Some(&theirs)).unwrap();
+
+            for name in kind.made {
+                let at = home.join(kind.inside).join(name);
+                assert!(
+                    at.symlink_metadata().is_ok(),
+                    "{}: {name} is not there for a login to write through",
+                    kind.agent
+                );
+                // Nothing to read yet, the same as a reader who has not logged in.
+                assert!(std::fs::read(&at).is_err() || std::fs::read(&at).unwrap().is_empty());
+                // And the login lands in the reader's own directory rather than in the home.
+                std::fs::write(&at, "what the login wrote").unwrap();
+                assert_eq!(
+                    std::fs::read_to_string(theirs.join(name)).unwrap(),
+                    "what the login wrote",
+                    "{}: {name} stayed in the pane's home",
+                    kind.agent
+                );
+            }
+        }
+    }
+
+    /// A reader who has never run the provider has no directory either, and the login has to land
+    /// in one — so it is made rather than the link being given up on.
+    #[test]
+    fn a_reader_who_has_never_run_the_provider_is_given_the_directory_the_login_needs() {
+        let kind = kind(CODEX);
+        let theirs = amenbo_scratch::scratch("pane-theirs-never").join(kind.agent);
+        let _ = std::fs::remove_dir_all(&theirs);
+        let home = amenbo_scratch::scratch("pane-home-never").join("7");
+
+        make(kind, &home, Some(&theirs)).unwrap();
+
+        assert!(theirs.is_dir(), "the reader's own directory was not made");
+        let at = home.join(kind.inside).join("auth.json");
+        std::fs::write(&at, "what the login wrote").unwrap();
+        assert_eq!(std::fs::read_to_string(theirs.join("auth.json")).unwrap(), "what the login wrote");
+    }
+
+    /// Every name a login makes is one this provider shares, and none of them is one carried in as
+    /// a copy: a copy is taken from the reader's file on every open, so a login written into the
+    /// pane's copy would be thrown away by the next one.
+    #[test]
+    fn the_names_a_login_makes_are_shared_names_and_never_copied_ones() {
+        for kind in KINDS {
+            for name in kind.made {
+                assert!(kind.shared.contains(name), "{}: {name}", kind.agent);
+                assert!(!kind.copied.contains(name), "{}: {name}", kind.agent);
+                // Files, not directories: what is made on Windows against a name with nothing
+                // behind it is an empty file, and a junction is the spelling for the other kind.
+                assert!(name.contains('.'), "{}: {name} is not a file", kind.agent);
+            }
+        }
     }
 
     /// The file the provider replaces is not linked into the home at all: the pane is told where the

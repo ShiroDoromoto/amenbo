@@ -150,8 +150,12 @@ fn message(project: &str, lines: &[String]) -> String {
 /// Hand one message to the webhook.
 fn post(webhook: &str, text: &str) -> Result<()> {
     let body = serde_json::json!({ "text": text }).to_string();
+    // A refused post is read rather than raised. Slack answers one with a short reason of its own
+    // (`invalid_payload`, `no_service`), and that reason is the whole of what a person can act on —
+    // left as the client's own error, the answer says a number and nothing about why.
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(POST_TIMEOUT))
+        .http_status_as_error(false)
         .build()
         .into();
     let answered = agent
@@ -251,6 +255,48 @@ mod tests {
         let refused = send("https://example.com/x", "work", &["line".to_string()])
             .expect_err("not a webhook");
         assert!(refused.to_string().contains(FIELD), "{refused}");
+    }
+
+    /// **A refusal is quoted back in the words the far side used.** Slack answers a rejected post with
+    /// a short reason of its own, and that reason is the whole of what a person can act on: a webhook
+    /// deleted from the workspace and one that never existed are both `404`, and only the body tells
+    /// them apart.
+    #[test]
+    fn a_refusal_is_answered_in_the_words_it_came_in() {
+        let refusing = refusing_with("HTTP/1.1 404 Not Found", "no_service");
+        let refused = post(&refusing, "anything").expect_err("the post was refused");
+        let said = refused.to_string();
+        assert!(said.contains("no_service"), "{said}");
+        assert!(said.contains("404"), "{said}");
+    }
+
+    /// What comes back past the cap is left behind: a refusal is a short reason, and anything longer is
+    /// an error page nobody needs in a log line.
+    #[test]
+    fn an_error_page_is_not_carried_into_a_log() {
+        let refusing = refusing_with("HTTP/1.1 500 Internal Server Error", &"x".repeat(4000));
+        let said = post(&refusing, "anything").expect_err("refused").to_string();
+        assert!(said.len() < DIAGNOSTIC_LIMIT + 200, "{} characters came back", said.len());
+    }
+
+    /// One connection, answered with the status and body a test chose. It is here rather than behind
+    /// the static host because what these two are about is the refusal's *body*, and that host answers
+    /// a miss with none.
+    fn refusing_with(status: &str, body: &str) -> String {
+        use std::io::{Read as _, Write as _};
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("a port to answer on");
+        let port = listener.local_addr().expect("the port").port();
+        let answer = format!(
+            "{status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else { return };
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+            let _ = stream.write_all(answer.as_bytes());
+        });
+        format!("http://127.0.0.1:{port}/services/T0/B0/x")
     }
 
     /// A transport failure that names the URL is not written down word for word.

@@ -336,6 +336,15 @@ export const ja: Translation = {
     "notify.delete": "削除",
     "notify.usedBy": "ここから送っているプロジェクト: {n}",
     "notify.deleteLoses": "削除すると接続と設定した値が消え、ここから送っているプロジェクトはすべて通知先を失います。",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "接続を検査",
+    "notify.test": "テスト送信",
+    "notify.checkReached": "サーバーがアカウントを受け付けました。",
+    "notify.checkShape": "URL は Slack の incoming webhook の形をしています。まだ使えるかどうかはテスト送信が答えます。",
+    "notify.testSentSlack": "送りました。チャンネルを見てください。",
+    "notify.testSentMail": "送りました。このアカウントの受信箱を見てください。",
     "notify.deleteConfirm": "『{name}』を削除しますか？ここから送っているプロジェクトはすべて通知先を失います。",
     "settings.data": "データ", "settings.dataPath": "保存先",
     "settings.logs": "ログ",

@@ -331,6 +331,15 @@ export const ko: Translation = {
     "notify.delete": "삭제",
     "notify.usedBy": "여기로 보내는 프로젝트: {n}",
     "notify.deleteLoses": "삭제하면 연결과 저장한 값이 함께 사라지고, 여기로 보내던 프로젝트는 모두 대상을 잃습니다.",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "연결 검사",
+    "notify.test": "테스트 메시지 보내기",
+    "notify.checkReached": "서버가 계정을 받아들였습니다.",
+    "notify.checkShape": "URL이 Slack 수신 웹후크의 형태입니다. 아직 쓸 수 있는지는 테스트 메시지가 답합니다.",
+    "notify.testSentSlack": "보냈습니다. 채널을 확인하세요.",
+    "notify.testSentMail": "보냈습니다. 이 계정의 편지함을 확인하세요.",
     "notify.deleteConfirm": "“{name}”을(를) 삭제할까요? 여기로 보내던 프로젝트는 모두 대상을 잃습니다.",
     "settings.data": "데이터", "settings.dataPath": "위치",
     "settings.logs": "로그",

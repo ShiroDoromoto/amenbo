@@ -358,6 +358,15 @@ const ui = {
   "notify.delete": "Delete",
   "notify.usedBy": "Projects sending through this: {n}",
   "notify.deleteLoses": "Deleting it takes the connection and what it holds, and every project sending through it loses it.",
+  // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+  // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+  // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+  "notify.check": "Check the connection",
+  "notify.test": "Send a test message",
+  "notify.checkReached": "The server accepted the account.",
+  "notify.checkShape": "The URL has the shape of a Slack incoming webhook. Whether it still works is what a test message answers.",
+  "notify.testSentSlack": "It went out — look for it in the channel.",
+  "notify.testSentMail": "It went out — look for it in the mailbox this account reads.",
   "notify.deleteConfirm": "Delete “{name}”? Every project sending through it loses it.",
   "settings.data": "Data", "settings.dataPath": "Location",
   "settings.logs": "Logs",

@@ -334,6 +334,15 @@ export const vi: Translation = {
     "notify.delete": "Xoá",
     "notify.usedBy": "Dự án gửi qua đây: {n}",
     "notify.deleteLoses": "Xoá sẽ mang theo kết nối và những gì nó giữ, và mọi dự án gửi qua đây đều mất nó.",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "Kiểm tra kết nối",
+    "notify.test": "Gửi tin nhắn thử",
+    "notify.checkReached": "Máy chủ đã chấp nhận tài khoản.",
+    "notify.checkShape": "URL có dạng incoming webhook của Slack. Còn dùng được hay không thì tin nhắn thử mới trả lời.",
+    "notify.testSentSlack": "Đã gửi — hãy xem trong kênh.",
+    "notify.testSentMail": "Đã gửi — hãy xem trong hộp thư của tài khoản này.",
     "notify.deleteConfirm": "Xoá “{name}”? Mọi dự án gửi qua đây đều mất nó.",
     "settings.data": "Dữ liệu", "settings.dataPath": "Vị trí",
     "settings.logs": "Nhật ký",

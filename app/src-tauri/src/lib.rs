@@ -552,6 +552,8 @@ pub fn run() {
       commands::notify_target_save,
       commands::notify_target_set_default,
       commands::notify_target_delete,
+      commands::notify_target_check,
+      commands::notify_target_test,
       commands::project_notify,
       commands::project_notify_set_enabled,
       commands::project_notify_set_mail_to,

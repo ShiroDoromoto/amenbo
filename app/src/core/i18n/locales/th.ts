@@ -334,6 +334,15 @@ export const th: Translation = {
     "notify.delete": "ลบ",
     "notify.usedBy": "โปรเจกต์ที่ส่งผ่านทางนี้: {n}",
     "notify.deleteLoses": "การลบจะพาการเชื่อมต่อและสิ่งที่เก็บไว้ไปด้วย และทุกโปรเจกต์ที่ส่งผ่านทางนี้จะเสียปลายทางไป",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "ตรวจสอบการเชื่อมต่อ",
+    "notify.test": "ส่งข้อความทดสอบ",
+    "notify.checkReached": "เซิร์ฟเวอร์รับบัญชีนี้แล้ว",
+    "notify.checkShape": "URL มีรูปแบบของ incoming webhook ของ Slack ส่วนจะยังใช้ได้หรือไม่ ข้อความทดสอบจะตอบ",
+    "notify.testSentSlack": "ส่งแล้ว — ดูในแชนเนล",
+    "notify.testSentMail": "ส่งแล้ว — ดูในกล่องจดหมายของบัญชีนี้",
     "notify.deleteConfirm": "ลบ “{name}” ไหม ทุกโปรเจกต์ที่ส่งผ่านทางนี้จะเสียปลายทางไป",
     "settings.data": "ข้อมูล", "settings.dataPath": "ตำแหน่ง",
     "settings.logs": "บันทึกระบบ",

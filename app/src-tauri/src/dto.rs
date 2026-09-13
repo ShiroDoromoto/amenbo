@@ -3070,6 +3070,21 @@ pub struct NotifyTargetDto {
     pub(crate) projects_using: usize,
 }
 
+/// **What a connection check found** (`AMB-D-885`) — and how much of it was actually asked.
+///
+/// A check either reads the settings or speaks to the server, and which of the two happened decides what
+/// a screen may claim afterwards. A mail target is connected to and authenticated as, so "it works" is
+/// honest; a Slack webhook has no door but posting, so all that was read is the URL's shape — and a
+/// webhook revoked yesterday still has it. One `bool` rather than two commands, because the caller does
+/// not choose: the target's kind does.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyCheckedDto {
+    /// Was a server spoken to? False means the settings were read and nothing more.
+    pub(crate) reached: bool,
+}
+
 /// **What one project does with the device's shelf** (`AMB-D-885`): whether it notifies at all, which
 /// targets carry it, what it reports, and where its mail is addressed.
 ///

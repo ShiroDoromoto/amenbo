@@ -338,6 +338,15 @@ export const pl: Translation = {
     "notify.delete": "Usuń",
     "notify.usedBy": "Projekty wysyłające tędy: {n}",
     "notify.deleteLoses": "Usunięcie zabiera połączenie i to, co trzyma, a każdy projekt wysyłający tędy je traci.",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "Sprawdź połączenie",
+    "notify.test": "Wyślij wiadomość testową",
+    "notify.checkReached": "Serwer przyjął konto.",
+    "notify.checkShape": "Adres ma kształt przychodzącego webhooka Slacka. Czy nadal działa, odpowie wiadomość testowa.",
+    "notify.testSentSlack": "Poszła — poszukaj jej na kanale.",
+    "notify.testSentMail": "Poszła — poszukaj jej w skrzynce tego konta.",
     "notify.deleteConfirm": "Usunąć „{name}”? Każdy projekt wysyłający tędy je traci.",
     "settings.data": "Dane", "settings.dataPath": "Położenie",
     "settings.logs": "Dzienniki",

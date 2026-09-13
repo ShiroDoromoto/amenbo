@@ -338,6 +338,15 @@ export const uk: Translation = {
     "notify.delete": "Видалити",
     "notify.usedBy": "Проєктів, що надсилають звідси: {n}",
     "notify.deleteLoses": "Видалення забирає з'єднання і те, що воно тримає, і кожен проєкт, який надсилає звідси, його втрачає.",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "Перевірити з'єднання",
+    "notify.test": "Надіслати тестове повідомлення",
+    "notify.checkReached": "Сервер прийняв обліковий запис.",
+    "notify.checkShape": "Адреса має вигляд вхідного вебхука Slack. Чи він ще працює, покаже тестове повідомлення.",
+    "notify.testSentSlack": "Надіслано — подивіться в каналі.",
+    "notify.testSentMail": "Надіслано — подивіться в скриньці цього облікового запису.",
     "notify.deleteConfirm": "Видалити «{name}»? Кожен проєкт, який надсилає звідси, його втратить.",
     "settings.data": "Дані", "settings.dataPath": "Розташування",
     "settings.logs": "Журнали",

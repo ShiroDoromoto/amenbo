@@ -5542,6 +5542,69 @@ pub fn notify_target_set_default(id: i64) -> Result<NotifyTargetDto, CmdError> {
     })
 }
 
+/// **Whether this target's connection is usable**, without a message being posted to prove it
+/// (`AMB-D-885`).
+///
+/// What "usable" can mean is the kind's to say, and the answer carries which one it was
+/// ([`NotifyCheckedDto`]). A mail relay is connected to, upgraded, and asked to accept the account — the
+/// whole conversation up to the message, which is where nearly every real failure is. A Slack webhook
+/// has no door but posting, so its URL's shape is read and nothing else; saying more would mean putting
+/// a line in the channel every time somebody pressed Check.
+///
+/// It is a read and not a write: nothing in the store moves, and the credential is read here and
+/// nowhere above.
+#[tauri::command]
+pub fn notify_target_check(id: i64) -> Result<NotifyCheckedDto, CmdError> {
+    use amenbo_core::model::NotifyKind;
+    let store = open_store_read()?;
+    match target_kind(&store, id)? {
+        NotifyKind::Slack => {
+            amenbo_core::notify_slack::check(&amenbo_core::notify_slack::webhook_for(&store, id)?)?;
+            Ok(NotifyCheckedDto { reached: false })
+        }
+        NotifyKind::Mail => {
+            amenbo_core::notify_mail::check(&amenbo_core::notify_mail::settings_for(&store, id, None)?)?;
+            Ok(NotifyCheckedDto { reached: true })
+        }
+    }
+}
+
+/// **Send one message through this target**, which is the only thing that answers whether it still
+/// works (`AMB-D-885`).
+///
+/// It is asked of the shelf rather than of a project, so it carries no project's name and no project's
+/// address: a mail target sends to the account it authenticates as, which is the mailbox its owner
+/// reads. The line itself is the reader's own language's ([`amenbo_core::notify_wording::test_line`]) —
+/// it lands in the same channel as every other, so it is worded with them.
+#[tauri::command]
+pub fn notify_target_test(id: i64) -> Result<(), CmdError> {
+    use amenbo_core::model::NotifyKind;
+    let store = open_store_read()?;
+    let language = store.config.language.clone().unwrap_or_else(|| "en".to_string());
+    let said = amenbo_core::notify_wording::test_line(&language);
+    match target_kind(&store, id)? {
+        NotifyKind::Slack => {
+            let webhook = amenbo_core::notify_slack::webhook_for(&store, id)?;
+            amenbo_core::notify_slack::send_test(&webhook, "", &language)?;
+        }
+        NotifyKind::Mail => {
+            let settings = amenbo_core::notify_mail::settings_for(&store, id, None)?;
+            let thread = amenbo_core::notify_mail::Thread::of(&settings, 0, id);
+            amenbo_core::notify_mail::send(&settings, &thread, "", &said, &said)?;
+        }
+    }
+    Ok(())
+}
+
+/// The kind a target is, or the refusal that says there is no such target. Both doors above branch on it
+/// and neither takes it from the caller: a kind passed in is a kind that can disagree with the row.
+fn target_kind(store: &Store, id: i64) -> Result<amenbo_core::model::NotifyKind, CmdError> {
+    Ok(store
+        .notify_target(id)?
+        .ok_or_else(|| amenbo_core::Error::not_found(format!("notification target {id}")))?
+        .kind)
+}
+
 /// Delete a target, and with it every project's selection of it and the credential it held. Answers with
 /// the projects that lost it, in id order — the same count the screen showed in front of the press, read
 /// once more on the way out so what is reported is what actually went.

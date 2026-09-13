@@ -283,6 +283,23 @@ pub struct Launch {
     /// not is a row rather than an exception — Gemini carries nothing that survives its own restart
     /// (`AMB-T-4659`).
     pub resume: Option<Resume>,
+    /// Whether a line coming back into a conversation names the model, or leaves that to the
+    /// provider (`AMB-T-4694`).
+    ///
+    /// **The six part on what resuming does to the model, which is why this is a column and not one
+    /// rule.** Claude Code, OpenCode and Cursor come back on the model the pane was having the
+    /// conversation on, and a name put on that line overrides it — on the first two the override is
+    /// written into the session's own record, so a later line carrying no model comes back on the
+    /// overriding one and not on what the person chose. Copilot is off it for a second reason: a
+    /// model name the account cannot reach is exit 1 with no session opened, and what Amenbo holds
+    /// is one name per provider rather than one per account. Gemini restores nothing and falls to
+    /// its own settings' default, so a silent line comes back on a model the pane never used. Codex
+    /// does the same and says so here against the day its way back returns (`AMB-T-4679`), its
+    /// [`resume`](Launch::resume) being `None` for now.
+    ///
+    /// **It says nothing about a line that starts a session.** Every row names the model there
+    /// (`AMB-D-865`): that model is being chosen, not restored.
+    pub model_on_the_way_back: bool,
     /// Whether this row has been watched starting the provider on a real machine (`AMB-T-3819`).
     ///
     /// Every row is written from the product's own documentation, and that is not the same as having
@@ -564,6 +581,10 @@ pub static LAUNCHES: &[Launch] = &[
             issue: Some(Issue::Flag("--session-id")),
             ask: None,
         }),
+        // Comes back on the model its own record last named, and a name on this line overrides it
+        // and is written into that record — so the override outlives the line that made it, and the
+        // model the person chose is not come back to by leaving it off later (`AMB-T-4694`).
+        model_on_the_way_back: false,
         confirmed: true,
     },
     Launch {
@@ -602,6 +623,10 @@ pub static LAUNCHES: &[Launch] = &[
         // `AMB-T-4679` puts both back, once `AMB-T-4666` says what a home has to be for a
         // conversation to be recorded in it.
         resume: None,
+        // Falls to `config.toml`'s default on the way back and says so itself — "recorded with X but
+        // is resuming with Y". Written down for the day `AMB-T-4679` gives this row a way back;
+        // nothing reads it while `resume` is `None` (`AMB-T-4694`).
+        model_on_the_way_back: true,
         confirmed: true,
     },
     Launch {
@@ -630,6 +655,11 @@ pub static LAUNCHES: &[Launch] = &[
             issue: Some(Issue::Flag("--session-id")),
             ask: None,
         }),
+        // The row that is off for the account rather than for the conversation: a model name this
+        // account cannot reach is exit 1 with no session opened, and what Amenbo holds is one name
+        // per provider. Whether it restores its own could not be measured — the account that was
+        // asked can reach only `auto` (`AMB-T-4694`).
+        model_on_the_way_back: false,
         confirmed: true,
     },
     Launch {
@@ -669,6 +699,10 @@ pub static LAUNCHES: &[Launch] = &[
         // for the same reason: the place decides, and Amenbo already made the place. A home with no
         // conversation in it answers plainly with a new one (`AMB-T-4677`).
         resume: Some(Resume { back: Back::Words(&["--resume", "latest"]), issue: None, ask: None }),
+        // Restores nothing: a line that says no model comes back on this machine's default, which is
+        // not what the pane was running. So this line names one, and `AMB-T-4698` is what makes the
+        // name the pane's own rather than the provider's (`AMB-T-4694`).
+        model_on_the_way_back: true,
         confirmed: true,
     },
     Launch {
@@ -709,6 +743,9 @@ pub static LAUNCHES: &[Launch] = &[
                 reading: crate::agent_sessions::Reading::JsonSessions,
             }),
         }),
+        // Comes back on the model its own database last recorded, and an override on this line is
+        // written into that database — the same shape as Claude Code's (`AMB-T-4694`).
+        model_on_the_way_back: false,
         confirmed: true,
     },
     Launch {
@@ -741,6 +778,9 @@ pub static LAUNCHES: &[Launch] = &[
         // (`AMB-T-4630`). **A handle it cannot find is a new session and no word about it** — the
         // one row that fails silently, and `AMB-D-869` leaves it there rather than covering for it.
         resume: Some(Resume { back: Back::Behind("--resume"), issue: Some(Issue::Back), ask: None }),
+        // Comes back on the session's own model, reading its settings file for a new session and not
+        // for a resumed one. A name on this line overrides it (`AMB-T-4694`).
+        model_on_the_way_back: false,
         // Written from the documentation and never run — the tool is not on the machine the other five
         // were tried on (`AMB-T-3838`).
         confirmed: false,
@@ -805,8 +845,14 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 ///
 /// It goes in front of the prompt, which is where all six were watched taking it (`AMB-T-4576`), and
 /// in front of [`prompt_flag`](Launch::prompt_flag) because that flag takes the argument straight
-/// after it. **It is named on a line that comes back as well**: which model answers is as true of a
-/// conversation carried on as of one started.
+/// after it.
+///
+/// **A line that comes back names it only where the provider would not restore it**
+/// ([`model_on_the_way_back`](Launch::model_on_the_way_back), `AMB-T-4694`). Three of the rows come
+/// back on the model the pane was having the conversation on, and a name put on that line is not
+/// agreement with them — it overrides what the person had chosen in that pane, and on two of the
+/// three it overrides it in the session's own record, where leaving the flag off next run does not
+/// undo it.
 ///
 /// **`handle` is the session this pane is opened on, and `None` is a pane opened on none**
 /// ([`Handle`], `AMB-D-869`). It rides on the same line as the opening prompt rather than in a
@@ -845,7 +891,10 @@ pub fn opening(
     if let Some(Put::Head(words)) = way_back {
         args.extend(words.iter().map(|word| (*word).to_string()));
     }
-    if let Some(model) = model.map(str::trim).filter(|name| !name.is_empty()) {
+    // A conversation carried on keeps the model it was being had on, except on the rows where the
+    // provider would not bring that model back (`AMB-T-4694`).
+    let naming_a_model = model.filter(|_| !carrying_on || launch.model_on_the_way_back);
+    if let Some(model) = naming_a_model.map(str::trim).filter(|name| !name.is_empty()) {
         args.push(launch.model_flag.to_string());
         args.push(model.to_string());
     }
@@ -1494,16 +1543,23 @@ mod tests {
             let back = opening(launch, "amenbo", Some("a-model"), Some(Handle::Back("a-handle")));
             let started = opening(launch, "amenbo", Some("a-model"), Some(Handle::New("a-handle")));
             assert_eq!(started.last().map(String::as_str), Some(said.as_str()), "{}", launch.id);
-            // The model is named either way (`AMB-D-865`) — wherever on the line this row puts it.
-            assert!(back.iter().any(|arg| arg == launch.model_flag), "{}", launch.id);
-            assert!(back.iter().any(|arg| arg == "a-model"), "{}", launch.id);
+            // A line starting a session names the model on every row (`AMB-D-865`); a line coming
+            // back names it only where the provider would not restore it (`AMB-T-4694`).
+            assert!(started.iter().any(|arg| arg == launch.model_flag), "{}", launch.id);
+            assert!(started.iter().any(|arg| arg == "a-model"), "{}", launch.id);
 
             let Some(resume) = launch.resume.as_ref() else {
                 // The one row with no way back resumes nothing on its line, so every line it has is
-                // a session starting — Gemini does not come back at all (`AMB-T-4659`).
+                // a session starting — Codex does not come back at all (`AMB-T-4678`).
                 assert_eq!(back, started, "{}", launch.id);
                 continue;
             };
+            assert_eq!(
+                back.iter().any(|arg| arg == "a-model"),
+                launch.model_on_the_way_back,
+                "{} disagrees with its own column about naming a model on the way back",
+                launch.id
+            );
             assert!(!back.contains(&said), "{} says it again on the way back", launch.id);
             if let Some(flag) = launch.prompt_flag {
                 assert!(
@@ -1512,19 +1568,26 @@ mod tests {
                     launch.id
                 );
             }
+            // What a row that names no model on the way back is left with is the way back itself —
+            // the handle or the words, and nothing else on the line at all.
+            let named: &[String] = if launch.model_on_the_way_back {
+                &[launch.model_flag.to_string(), "a-model".to_string()]
+            } else {
+                &[]
+            };
             match resume.back {
                 Back::Behind(flag) => {
                     // The model is named first, and the handle follows it.
-                    assert_eq!(back[0], launch.model_flag, "{}", launch.id);
-                    assert_eq!(back[2..], [flag.to_string(), "a-handle".to_string()], "{}", launch.id);
+                    let mut want = named.to_vec();
+                    want.extend([flag.to_string(), "a-handle".to_string()]);
+                    assert_eq!(back, want, "{}", launch.id);
                 }
                 // The subcommand comes first and the model follows it: `codex resume --last -m …`,
                 // because what goes in front of a subcommand is not read as one.
                 Back::Words(words) => {
-                    assert_eq!(back[..words.len()], *words, "{}", launch.id);
-                    assert_eq!(back[words.len()], launch.model_flag, "{}", launch.id);
-                    assert_eq!(back[words.len() + 1], "a-model", "{}", launch.id);
-                    assert_eq!(back.len(), words.len() + 2, "{}", launch.id);
+                    let mut want: Vec<String> = words.iter().map(|word| (*word).to_string()).collect();
+                    want.extend_from_slice(named);
+                    assert_eq!(back, want, "{}", launch.id);
                 }
             }
         }
@@ -1579,6 +1642,30 @@ mod tests {
             opening(gemini, "amenbo", None, Some(Handle::Back("/homes/7"))),
             ["--resume", "latest"]
         );
+    }
+
+    /// Claude Code's line, both ways round, spelled out — the row that comes back saying no model.
+    ///
+    /// It is the line itself rather than the column because what the column stands on is not a
+    /// spelling: `--model` on the way back was measured writing the name into the session's own
+    /// record, so a pane the person had moved to haiku came back on whatever Amenbo last put on the
+    /// line, and taking the flag off a later run did not bring it back (`AMB-T-4694`). The pane
+    /// coming back on the right model is a thing nothing on the screen would show going wrong.
+    #[test]
+    fn a_line_coming_back_leaves_the_model_to_the_provider_that_recorded_it() {
+        let claude = find_launch("claude-code").expect("the catalog lists it");
+        let said = crate::agents::pane_instruction("amenbo");
+
+        // A session starting is told the model, because that is where the choice is made.
+        let first = opening(claude, "amenbo", Some("a-model"), None);
+        assert_eq!(first, ["--model", "a-model", said.as_str()]);
+        let new = opening(claude, "amenbo", Some("a-model"), Some(Handle::New("a-handle")));
+        assert_eq!(new, ["--model", "a-model", "--session-id", "a-handle", said.as_str()]);
+
+        // A session carried on is told the handle and nothing else — not the model, and not the
+        // instruction it was said the run before (`AMB-T-4663`).
+        let back = opening(claude, "amenbo", Some("a-model"), Some(Handle::Back("a-handle")));
+        assert_eq!(back, ["--resume", "a-handle"]);
     }
 
     /// A handle is minted for every row Amenbo decides one for, and for no other — and it is a

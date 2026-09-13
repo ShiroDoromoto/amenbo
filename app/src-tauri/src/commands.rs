@@ -5613,6 +5613,107 @@ pub fn notify_target_delete(id: i64) -> Result<Vec<i64>, CmdError> {
     with_store_mut(|store| Ok(store.notify_target_delete(id)?))
 }
 
+// ───────────────────────── one project's notifications ─────────────────────────
+
+/// **What one project does with the device's shelf** (`AMB-D-885`) — the switch, the targets it is carried
+/// by, what it reports, and where its mail is addressed, read in one go because the screen draws them in
+/// one go.
+///
+/// A project that predates the feature has no row yet, and that is answered as the settings a project is
+/// born with rather than as an error: on, carrying nothing, reporting nothing. The row itself is raised by
+/// the first write, so reading this never writes.
+#[tauri::command]
+pub fn project_notify(project_id: i64) -> Result<ProjectNotifyDto, CmdError> {
+    let store = open_store_read()?;
+    let row = store.project_notify(project_id)?;
+    Ok(ProjectNotifyDto {
+        enabled: row.as_ref().map_or(true, |r| r.enabled),
+        mail_to: row.map(|r| r.mail_to).unwrap_or_default(),
+        target_ids: store
+            .project_notify_targets(project_id)?
+            .into_iter()
+            .map(|r| r.target_id)
+            .collect(),
+        events: store
+            .project_notify_events(project_id)?
+            .into_iter()
+            .map(|r| r.event)
+            .collect(),
+        reportable: reportable_events(),
+    })
+}
+
+/// The events a project may report, in the catalog's own order. Read off core's list and filtered by
+/// core's own test, so the screen never carries a second copy of the catalog to drift from it.
+fn reportable_events() -> Vec<String> {
+    amenbo_core::plugin_payload::V1_EVENTS
+        .iter()
+        .filter(|e| amenbo_core::ops::notify::is_reportable(e))
+        .map(|e| e.to_string())
+        .collect()
+}
+
+/// Turn one project's notifications on or off. Off keeps the targets and the events where they are — the
+/// two are apart so that a fortnight away costs one switch rather than a screen rebuilt on the way back.
+#[tauri::command]
+pub fn project_notify_set_enabled(project_id: i64, enabled: bool) -> Result<(), CmdError> {
+    with_store_mut(|store| {
+        store.project_notify_set_enabled(project_id, enabled)?;
+        Ok(())
+    })
+}
+
+/// Write where this project's mail is addressed — several addresses on one line, separated by commas, as
+/// the person typed them. Empty falls back to the mail target's own account.
+///
+/// It is the project's and not the target's because it answers *who is told* while the target answers what
+/// carries it, so it is not one setting kept in two tiers (`AMB-D-434`).
+#[tauri::command]
+pub fn project_notify_set_mail_to(project_id: i64, mail_to: String) -> Result<(), CmdError> {
+    with_store_mut(|store| {
+        store.project_notify_set_mail_to(project_id, &mail_to)?;
+        Ok(())
+    })
+}
+
+/// Carry this project's notifications through one more target, or stop carrying them through it. The
+/// target itself is untouched either way — it stays on the shelf for the other projects that chose it.
+///
+/// One door rather than two, because the screen has one control: a chip is put on or taken off, and which
+/// of the two happened is the state the press came from.
+#[tauri::command]
+pub fn project_notify_select_target(
+    project_id: i64,
+    target_id: i64,
+    selected: bool,
+) -> Result<(), CmdError> {
+    with_store_mut(|store| {
+        if selected {
+            store.project_notify_select_target(project_id, target_id)?;
+        } else {
+            store.project_notify_deselect_target(project_id, target_id)?;
+        }
+        Ok(())
+    })
+}
+
+/// Tick or untick one of the thirteen events this project reports. A name core does not carry — including
+/// `store.changed`, which says only that something moved — is refused there rather than stored.
+///
+/// **Unticking them all is an answer**, and it is kept: the row is what says the project has been set up,
+/// so a project reporting nothing stays on and reports nothing.
+#[tauri::command]
+pub fn project_notify_set_event(
+    project_id: i64,
+    event: String,
+    on: bool,
+) -> Result<(), CmdError> {
+    with_store_mut(|store| {
+        store.project_notify_set_event(project_id, &event, on)?;
+        Ok(())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -10,6 +10,7 @@ import { ErrorNote } from "../components/ErrorNote";
 import { DoneNote } from "../components/DoneNote";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { openExternalUrl } from "../core/mutations";
+import { Kind, kindLabel } from "../components/NotifyKind";
 
 // Settings > Notification targets: **the device's shelf** (`AMB-D-885`).
 //
@@ -18,31 +19,12 @@ import { openExternalUrl } from "../core/mutations";
 // notifications go takes one screen. What a project does with the shelf (on or off, which targets, which
 // events) is the project's settings, not this.
 //
-// **The kind is drawn twice, as a colour and as a word.** A tile alone stops being readable once there are
-// four kinds, and a word alone cannot be skimmed down a column — so the left edge carries both, and adding
-// a kind costs one ground colour and one glyph.
+// **The kind is drawn twice, as a colour and as a word** (`components/NotifyKind`), which is what the left
+// edge of every row carries.
 //
 // **A credential is never drawn.** A row says whether it holds one, never what it is, so the box for it is
 // masked and starts empty on a target that has one: leaving it that way keeps what is saved
 // (`core/notifyTargets`).
-
-/** The glyph on a kind's tile. The colour beside it is `--k-<kind>`, in `tokens.css`. */
-const KIND_GLYPH: Record<NotifyKind, string> = { slack: "#", mail: "✉" };
-
-/** What a kind is called on screen. */
-function kindLabel(kind: NotifyKind): string {
-  return t(`notify.kind.${kind}`);
-}
-
-/** The tile and the word, which is how a kind is told apart anywhere on this screen. */
-function Kind({ kind }: { kind: NotifyKind }) {
-  return (
-    <span className={`kind k-${kind}`}>
-      <span className="kind__tile" aria-hidden="true">{KIND_GLYPH[kind]}</span>
-      <span className="kind__name">{kindLabel(kind)}</span>
-    </span>
-  );
-}
 
 /** The line under a target's name: what it connects to, in the part that is not a credential. */
 function connectionSummary(target: NotifyTarget): string {

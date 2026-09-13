@@ -826,6 +826,23 @@ button.feed__target:hover { color: var(--c-accent); }
 .k-slack .kind__tile { background: var(--k-slack); }
 .k-mail .kind__tile { background: var(--k-mail); }
 
+/* A target a project has chosen, as a chip. It wears the kind's ground as a dot rather than the tile and
+   word the shelf uses: a chip is read one at a time and carries the target's own name, so what is left for
+   the kind to say is which of them this is. */
+.chip--dest { background: var(--c-surface); border-color: var(--c-edge); color: var(--c-text); padding-left: var(--s-1); }
+.dot {
+  width: 14px; height: 14px; border-radius: 3px; flex: none;
+  display: inline-grid; place-items: center;
+  color: #fff; font-size: 9px; font-weight: var(--fw-bold); line-height: 1;
+}
+.k-slack.dot { background: var(--k-slack); }
+.k-mail.dot { background: var(--k-mail); }
+
+/* The events a project reports: as many columns as the width allows, because thirteen of them down one
+   column is a list nobody reads to the end. */
+.events { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--s-1) var(--s-3); }
+.events label { display: inline-flex; gap: var(--s-2); align-items: baseline; font-size: var(--fs-md); }
+
 /* Profile avatar preview: a 48px circular base (registered image or identicon). */
 .avatar-preview {
   display: inline-flex; width: 48px; height: 48px; flex: none;

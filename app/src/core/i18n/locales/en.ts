@@ -77,6 +77,36 @@ const ui = {
   "projset.confirmDelete": "Delete project “{name}”? All of its tasks are deleted too.",
   "projset.folders": "Linked folders",
   "projset.foldersHint": "An AI launched in these folders can operate this project.",
+  // Project settings > Notifications — what this project does with the device's shelf (`AMB-D-885`).
+  // Nothing here names a connection: those are the device's, and its own settings word them.
+  "projset.notify": "Notifications",
+  "notify.projectSwitch": "Notifications for this project",
+  "notify.on": "On",
+  "notify.off": "Off",
+  "notify.switchNote": "Off keeps the targets and the ticks below where they are.",
+  "notify.targets": "Sent through",
+  "notify.addTarget": "Add a target",
+  "notify.dropTarget": "Stop sending through this one",
+  "notify.targetsNote": "Chosen from what stands in Settings › Notification targets.",
+  "notify.noneOnDevice": "This machine has no notification targets yet. One made here lands on the device's shelf, where every project picks from it.",
+  "notify.events": "What it reports",
+  "notify.eventsNote": "Only what was written to this project is reported. The last two are not writes — a day arrived, and you are told once that day.",
+  "notify.mailTo": "Mail is addressed to",
+  "notify.mailToPlaceholder": "Blank sends to the account the connection signs in as",
+  "notify.mailToNote": "Shown while a mail target is among those above. Separate several with commas.",
+  "notify.event.task.created": "A task was created",
+  "notify.event.task.status_changed": "A task’s status changed",
+  "notify.event.task.done": "A task was completed",
+  "notify.event.task.rejected": "A task was decided against",
+  "notify.event.task.assigned": "A task was assigned",
+  "notify.event.task.moved": "A task moved to another project",
+  "notify.event.task.deleted": "A task was deleted",
+  "notify.event.decision.accepted": "A decision was accepted",
+  "notify.event.decision.rejected": "A decision was rejected",
+  "notify.event.comment.added": "A comment was added",
+  "notify.event.comment.removed": "A comment was taken back",
+  "notify.event.task.due": "A task’s day has come (or gone)",
+  "notify.event.task.due_tomorrow": "A task’s day is tomorrow",
   "projset.plugins": "Plugins",
   "projset.pluginsHint": "A plugin turned on here fires for this project. It is the same switch the plugin screen draws.",
   "projset.pluginsNone": "None is on or filled in here", "projset.pluginsAdd": "Add a plugin…",
@@ -337,7 +367,7 @@ const ui = {
   "notify.checkShape": "The URL has the shape of a Slack incoming webhook. Whether it still works is what a test message answers.",
   "notify.testSentSlack": "It went out — look for it in the channel.",
   "notify.testSentMail": "It went out — look for it in the mailbox this account reads.",
-  "notify.deleteConfirm": "Delete \u201c{name}\u201d? Every project sending through it loses it.",
+  "notify.deleteConfirm": "Delete “{name}”? Every project sending through it loses it.",
   "settings.data": "Data", "settings.dataPath": "Location",
   "settings.logs": "Logs",
   "settings.logsOpen": "Open the logs folder",
@@ -1056,6 +1086,29 @@ const ui = {
   "notify.say.taskDueTomorrow": "{what} is due tomorrow",
   "notify.say.unknown": "{who} acted on {what} ({event})",
   "notify.say.test": "Test message from Amenbo — this project reports here.",
+  // The subject's own vocabulary: what happened, in the fewest words that still say it. It is shorter
+  // than the sentences above on purpose — a line says who did what to which record, and a subject says
+  // only what happened, the record's ref following it.
+  // `count` is what a message carrying a burst says instead, and `countOne` is what that says at one.
+  // Every language writes both: where a numeral changes nothing — which is most of them outside Europe
+  // — the two are the same words, and saying so here is what keeps a correction to one from leaving the
+  // other behind.
+  "notify.say.subject.taskCreated": "Task created",
+  "notify.say.subject.statusChanged": "Task moved to {state}",
+  "notify.say.subject.statusChangedBare": "Task status changed",
+  "notify.say.subject.taskDone": "Task finished",
+  "notify.say.subject.taskRejected": "Task decided against",
+  "notify.say.subject.taskAssigned": "Task reassigned",
+  "notify.say.subject.taskMoved": "Task moved",
+  "notify.say.subject.taskDeleted": "Task deleted",
+  "notify.say.subject.decisionAccepted": "Decision accepted",
+  "notify.say.subject.decisionRejected": "Decision rejected",
+  "notify.say.subject.commentAdded": "Comment added",
+  "notify.say.subject.commentRemoved": "Comment removed",
+  "notify.say.subject.taskDue": "Task due",
+  "notify.say.subject.taskDueTomorrow": "Task due tomorrow",
+  "notify.say.subject.count": "{n} updates",
+  "notify.say.subject.countOne": "{n} update",
 };
 
 // code → template (`{name}` interpolated from the error's fields). Only the codes whose full

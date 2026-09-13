@@ -2453,6 +2453,50 @@ const REGISTRY: &[OpSpec] = &[
     // the step before this one made it — but a road that comes *back* to a pane it left does, because
     // by then every box on the page has a terminal in it and "the pane" names three of them.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
+    // A word written into that same line **through the machine's own input method**, and left with
+    // the conversion still open: the characters stand under the mark an emulator draws an unsettled
+    // word with, and nothing has accepted them yet.
+    //
+    // It is not `type-line` in another language. There every key reaches the program as it is
+    // pressed; here none of them do. An input method holds what has been typed and hands it over only
+    // once it is settled, so between the first key and the last there is a word that is on the screen
+    // and in no other place — and everything that can go wrong with a conversion goes wrong inside
+    // that gap. A pane only ever typed at in Latin letters never stands in it.
+    //
+    // `text` is what stands under the mark: the reading as it was typed, and not the word a person
+    // would have picked from it. That is what a build hands the program when a conversion is cut
+    // short, so it is also what the road reads back once the line has been sent.
+    //
+    // Nothing is sent. The word is left standing for `send-a-word` below, which is where a road says
+    // what became of it.
+    //
+    // `shows` is which pane, named the way `type-line` names one. Left out, it is the page's one pane.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "write-a-word", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
+    // The press that gives that word to the program: return, made at the terminal's own line with the
+    // word still standing on it.
+    //
+    // **`away` is what this op exists for.** It says the keyboard is taken out of the window and
+    // brought straight back before the press, with the conversion still open — somebody answering a
+    // message, or reaching for the window behind this one, in the middle of a word. The emulator
+    // empties the field it keeps that word in the moment the keyboard leaves it, and the characters
+    // have nowhere else to be (`app/src/talk/terminal.ts`), so a build that lets them go leaves a
+    // person looking at a word that is no longer anywhere: the mark is still drawn under it, the
+    // field beneath it is empty, and the press that would have accepted it arrives as a bare return
+    // and sends the line without it. Alt-tabbing mid-word was enough to do it.
+    //
+    // **The leaving and the press are one step because a step between them would say nothing.** Every
+    // step is handed over and then photographed, and a word that was thrown away is drawn exactly
+    // like a word that was settled — same characters, same mark. Only the press after them tells the
+    // two apart, which is why it stands in the same step as the leaving rather than in one of its
+    // own.
+    //
+    // **How many returns it takes is half the reading.** A word still under the mark takes two: one
+    // to accept it, one to send the line. After `away` it takes one, because a build that settled the
+    // word told the emulator the conversion was over as well — and one left holding a conversion
+    // answers the next return as part of it rather than as a send.
+    //
+    // `onto` is which pane, named the way `write-a-word` names one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "send-a-word", required: &[], refs: &[], strings: &["onto"], binds: false },
     // A file dragged in from outside and let go over a pane. It is the file face's `drop-in` aimed at
     // the other half of the screen, and it answers a different question: there the reader chose a
     // folder for it to land in, and here nothing lands anywhere — the file stays where it is and the

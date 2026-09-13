@@ -34,7 +34,7 @@
 # what a capture says is the producer's to write, and a rule about how we write
 # has no claim on it.
 #
-# Three things are left out, each for a reason that cannot rot into a list:
+# Four things are left out, each for a reason that cannot rot into a list:
 #   - esorp.yaml, the declaration itself. Its rules have to spell the words they
 #     forbid, so it fails every one it defines — no-history's pattern alone trips
 #     no-history, english-only and internal-ref. check-doc-refs.sh carves itself
@@ -46,6 +46,13 @@
 #     a copy is worth is that a producer made it. Editing one to pass a guard
 #     over our own prose leaves a document nobody ever sent, which is the single
 #     thing a fixture must not be.
+#   - verification/scenarios, where the words are the road's own data. What a
+#     road types into a pane is the reader's words and not the interface's, and a
+#     road that walks an input method can only be written in a language that
+#     needs one — so Japanese in a value there is the feature, exactly as it is
+#     in source. Only the values go: esorp.yaml's `hash` family reads the `#`
+#     comments of a .yaml on the comment face, which is the half of these files a
+#     rule about how we write has a claim on.
 #
 # The whole tree is judged, not the changed part: these files are clean, so a
 # violation anywhere is the commit's to answer for. The comment guard reads its
@@ -79,7 +86,7 @@ fi
 if [ ${#FILES[@]} -eq 0 ]; then
   while IFS= read -r -d '' f; do
     case "$f" in
-      esorp.yaml|*-lock.json|*.lock|devtool/fixtures/*) continue ;;
+      esorp.yaml|*-lock.json|*.lock|devtool/fixtures/*|verification/scenarios/*) continue ;;
     esac
     FILES+=("$f")
   done < <(git ls-files -z '*.md' '*.toml' '*.yml' '*.yaml' '*.json' '*.mod')

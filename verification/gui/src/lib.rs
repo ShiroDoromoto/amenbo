@@ -2125,6 +2125,41 @@ impl Instructor {
                     req(with, "text")?
                 )
             }
+            // A word typed through the machine's input method and left unsettled. The operator is
+            // told twice not to accept it, because accepting it is the one thing that would walk past
+            // what the steps after this one are for: a word on the screen and in no field.
+            (Domain::Terminal, "write-a-word") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                format!(
+                    "Click into {pane}, onto the terminal's own input line rather than the box under it. Switch this machine's keyboard to an input method that converts — the Japanese one on this Mac — and write \"{}\" with it, as the reading: those characters stand on the input line with a mark drawn under them. Stop there. Do not press space to pick a word out of it, and do not press return.",
+                    req(with, "text")?
+                )
+            }
+            // The press that sends it. The two forms differ by one press and that difference is the
+            // reading: a word still under its mark needs a return to accept it before the return that
+            // sends, and a word the keyboard was taken away from has already been settled — so the
+            // second form asks for one press and says what a second one would mean.
+            //
+            // **The leaving is in this line rather than in one of its own.** A shot taken between the
+            // two would be of the same screen either way, the mark being drawn over characters that
+            // are kept and over characters that are gone alike.
+            (Domain::Terminal, "send-a-word") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane that has a terminal running in it".to_string(),
+                };
+                if flagged(with, "away") {
+                    return Ok(format!(
+                        "At {pane}, with the word still standing under its mark, take the keyboard out of Amenbo and bring it straight back: hold command and press tab to another application on this Mac, then command-tab back. Press nothing else on the way and click nothing on the way back. Then press return once, and only once. The word was settled as the keyboard left — the mark under it is gone — so that one press sends the line to the program running there. A press that is swallowed instead, or a line that goes without the word in it, is what the step after this one reads."
+                    ));
+                }
+                format!(
+                    "At {pane}, with the word standing under its mark, press return twice. The first press accepts the word as it is written and the mark under it goes away; the second gives the line to the program running there. The shell will not know the command, which is what leaves the word on the screen for the step after this one to read."
+                )
+            }
             // A line written into the box under the pane and left standing. The box is named by
             // where it is rather than by the words in it: it is empty at the moment the operator
             // looks for it, so the only thing that finds it is the row it stands on.
@@ -6374,6 +6409,46 @@ steps_gui:
             ins.expectation(&steps[1]),
             Some(Expectation { text: "/work/notes.md".to_string(), present: true })
         );
+    }
+
+    /// **A word an input method is still writing is on the screen and in no field, so the line has to
+    /// say where to stop.** The operator is told not to settle it, because settling it here walks
+    /// past the one moment the road exists for — and the press that sends it is one press rather than
+    /// two once the keyboard has been away, a build that settled the word having closed the
+    /// conversion with it.
+    #[test]
+    fn a_word_left_under_its_mark_is_sent_with_one_press_once_the_keyboard_has_been_away() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: terminal
+    op: write-a-word
+    with: { text: しなりおのことば }
+  - type: action
+    domain: terminal
+    op: send-a-word
+  - type: action
+    domain: terminal
+    op: send-a-word
+    with: { away: true }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+
+        assert!(lines[0].contains("input method"), "got: {}", lines[0]);
+        assert!(lines[0].contains("しなりおのことば"), "got: {}", lines[0]);
+        assert!(lines[0].contains("do not press return"), "the word is left standing: {}", lines[0]);
+
+        assert!(lines[1].contains("press return twice"), "got: {}", lines[1]);
+        assert!(!lines[1].contains("command and press tab"), "nothing takes the keyboard away here: {}", lines[1]);
+
+        // The two are not one line with a word changed: what parts them is how many presses the
+        // operator is asked for, which is the whole of what the second half reads.
+        assert!(lines[2].contains("command and press tab"), "got: {}", lines[2]);
+        assert!(lines[2].contains("once, and only once"), "got: {}", lines[2]);
     }
 
     /// **A hand full and a hand with one thing in it are two gestures, and the line has to say which.**

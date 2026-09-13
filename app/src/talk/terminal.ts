@@ -889,6 +889,59 @@ export function focusTerminal(host: HTMLElement | null): void {
 }
 
 /**
+ * Settle a conversion the keyboard left in the middle, so the characters it had are not thrown away.
+ *
+ * **A terminal's box is emptied the moment the keyboard leaves it, and a conversion in it goes with
+ * the characters.** The emulator clears that box on `blur` — it is a hidden field a screen reader is
+ * meant to read the last line out of, not a place anything is kept — and an input method halfway
+ * through a word has nowhere else to put what it has written. So a window that lost the keyboard
+ * mid-word and got it back leaves a person looking at characters that are no longer anywhere: the
+ * mark the emulator draws them with is still on the screen, the field under it is empty, and the key
+ * that would accept them arrives as a bare Enter and sends the line without them (measured on Windows
+ * 11 with the Microsoft IME, where alt-tabbing mid-word is enough to do it).
+ *
+ * **What is done instead is what every other program does with an interrupted word: it is settled.**
+ * The characters written so far go to the program as typed, and the conversion is closed in the
+ * emulator too, so the mark under them goes away and the next Enter is an Enter. They are the
+ * unconverted characters rather than the word the person was about to pick, and that is the point —
+ * they are on the line, in sight, and can be erased. Losing them without a trace cannot be undone.
+ *
+ * **Read before the emulator answers, which is what the capture phase buys.** `blur` is heard on the
+ * document on its way down, and the emulator hears it on the field itself on the way back, so the
+ * characters are still there to be read when this runs. The `compositionend` written here is what
+ * tells the emulator to let go — it has no other way of being told, and left holding a conversion it
+ * answers the next press as part of one.
+ */
+export function settlesWhatTheKeyboardLeft(
+  area: HTMLTextAreaElement,
+  settle: (text: string) => void,
+  root: Document = document,
+): () => void {
+  // Where the conversion began in the field, so what it wrote can be told from whatever stood there
+  // before it. Null is no conversion open, which is every moment but the ones this exists for.
+  let from: number | null = null;
+  const whenever = (kind: string, run: () => void) => {
+    const mine = (e: Event) => { if (e.target === area) run(); };
+    root.addEventListener(kind, mine, true);
+    return () => root.removeEventListener(kind, mine, true);
+  };
+  const stops = [
+    whenever("compositionstart", () => { from = area.value.length; }),
+    whenever("compositionend", () => { from = null; }),
+    whenever("blur", () => {
+      if (from === null) return;
+      const written = area.value.slice(from);
+      from = null;
+      if (written !== "") settle(written);
+      // Said before the field is emptied, and answered by the emulator on the spot: it reads the
+      // field one turn later, by which time there is nothing in it, so nothing is sent twice.
+      area.dispatchEvent(new CompositionEvent("compositionend", { data: written }));
+    }),
+  ];
+  return () => { for (const stop of stops) stop(); };
+}
+
+/**
  * End the program in a terminal.
  *
  * **It is the only way out.** Taking a pane away never ends one — that is a pane moving, and the
@@ -1097,6 +1150,11 @@ export async function mountTerminal(
   const send = (data: string) => {
     void invoke("pty_write", { session, data }).catch(() => {});
   };
+  // The one thing the emulator does not do for itself: hold on to a word an input method was still
+  // writing when the keyboard left the pane ({@link settlesWhatTheKeyboardLeft}). The field is the
+  // emulator's own, found the way `focusTerminal` finds it.
+  const area = host.querySelector<HTMLTextAreaElement>("textarea");
+  const stopLeaving = area === null ? () => {} : settlesWhatTheKeyboardLeft(area, send);
   const stream = term.onData((data) => {
     send(data);
     if (!sendsTheSentence(owed, data)) return;
@@ -1223,6 +1281,7 @@ export async function mountTerminal(
     host.removeEventListener("copy", onCopy, true);
     links.dispose();
     stream.dispose();
+    stopLeaving();
     stopPaste();
     stopImagePress();
     void unlistenOutput();

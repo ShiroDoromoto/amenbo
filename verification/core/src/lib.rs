@@ -2411,6 +2411,10 @@ const REGISTRY: &[OpSpec] = &[
     // command settles it in one line, and `waiting` where it opens a picker instead and the choosing
     // is the person's — which is a thing to say and never a model to claim has moved.
     //
+    // `none` is a pane there is no name to put up for, and a pane started on no model is one only
+    // where its provider has never said which model it is on either: where it has, that name is
+    // what the row draws (`stands-for`).
+    //
     // **Nothing here is read off the pane's screen**, and that is the reading this defends: three of
     // the six say in words that the model changed and three change a value on a status line and say
     // nothing, so a build that read either would be parsing a provider's screen — the one thing a
@@ -2976,6 +2980,22 @@ const REGISTRY: &[OpSpec] = &[
     // alone would keep that promise falsely — the row would say one thing and the pane would open on
     // another, and nothing on the screen would look wrong.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "starts-on", required: &["model"], refs: &[], strings: &["model"], binds: false },
+    // The first thing on the model row, which is the agent starting on whatever its own settings
+    // already say — and what that comes to, where the agent said so.
+    //
+    // **It is a different fact from every other reading of this row.** `starts-on` reads the line a
+    // press would run, and the whole of what the first choice does there is put nothing on it; a
+    // reader looking at that line learns what will *not* be sent and nothing about what the agent
+    // will do with it. The name here is the agent's own answer to a question it was already asked
+    // — it arrives with the list of candidates and costs no second ask — so `model` is that name,
+    // and `none` is the four providers that name no default at all, which say what they said
+    // before.
+    //
+    // A road walks both, and it has to: the reading is one word drawn beside another, so a build
+    // that named a model it was never told of and a build that named the wrong one are the same
+    // fault from either end, and a road with only the naming half would pass on a build that put a
+    // name on every provider on the row.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "stands-for", required: &["model"], refs: &[], strings: &["model"], binds: false },
     // A registered command as the frame draws it: the `name` on the row, and the `line` written out
     // beside it.
     //

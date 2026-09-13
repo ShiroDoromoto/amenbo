@@ -1,0 +1,164 @@
+# The first thing on the model row is the agent starting on whatever its own settings already say,
+# and two of the six providers will say which model that comes to.
+#
+# Amenbo holds no table of model names, and it holds no table of defaults either: the name is the
+# agent's own answer, out of the list it gave when it was asked what it can be started on. So it is
+# free — there is no second question to put and nothing to start — and it is there for two of the
+# six and for nobody else.
+#
+# ── What this road defends ───────────────────────────────────────────────────────────────────────
+# That the reader learns what the first choice comes to without pressing it. "Its own default" says
+# what will not go on the line and nothing about what the agent will do with a line that names no
+# model, so a reader who wanted to know had to open the pane and look. A build that stopped naming
+# it would still open panes correctly, the row would still be drawn, and nothing on the screen would
+# look wrong — which is why it is read here and not left to somebody noticing.
+#
+# And that the pane opened on that choice says the same name. The name is drawn in two places — on
+# the frame before the press, and on the row under the pane for the rest of the session — and the
+# second is the one a reader is at afterwards. Nothing about a model goes on that pane's line, so its
+# row has only the provider's own answer to name it by, and a build that drew the frame's half alone
+# would leave every pane started this way saying nothing about what it is running.
+#
+# And that a name is drawn only where a provider gave one. Four of the six say nothing about which
+# model they are on, and a build answering for them would put a name on the row that no provider
+# ever said — read from the outside, that is the same screen as the build that names one correctly.
+# So both halves are walked, and the one that reads a provider naming none is the half that catches
+# it.
+#
+# ── Why the machine is stood up first ────────────────────────────────────────────────────────────
+# Because the name belongs to the tool and to the account a run happens to be signed in to. The
+# premise puts programs in front of the `PATH` that answer their own provider's question in their
+# own shape, and tells the two that have room for it to say they are on the second of the names they
+# answered with — so the row is the same row everywhere this runs. The other four have nowhere in
+# their answer to put it and say nothing, which is not a gap in the premise but the second reading.
+#
+# The whole catalog is stood up rather than the two: the providers are named on this road, and a
+# name is only on the row where that agent was found.
+#
+# The world is empty apart from the place to work: a pane has to open somewhere, and one folder is
+# what that takes.
+id: read-what-an-agents-own-default-comes-to
+title: The first thing on the model row names the model it comes to, where the provider said which
+description: >
+  Stand a machine up with the whole catalog of agents on it, each answering with three models and
+  the two that can say so saying they are on the second of them. Open the terminal face and choose
+  Cursor: the model row comes up, and the first thing on it — the agent on its own settings — names
+  that second model beside the words, while the line under the row still names no model at all. Press
+  open, and the row under the pane that came up names the same model. Take that pane away, choose
+  Gemini CLI, whose answer carries the same fact in a shape of its own, and read the first choice
+  naming it there too. Then choose Claude Code, which says nothing about which model it is on, and
+  read the same first choice naming no model.
+
+given:
+  # The folder is named on the project rather than bound beside it, for the reason every terminal road
+  # names one: a pane has to open somewhere, and two folders is a question this road is not asking.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lantern
+      dir: lampstore
+    as: lantern
+
+  # The whole catalog, because this road names three of them and each has to be on the row. Three
+  # models each — short enough that the row draws the whole answer — and the second of those three is
+  # the one the two that can say so say they are on.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 6
+      models: 3
+      on: 2
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and the
+  # pane this road opens has to open in the folder this road named.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lantern
+
+  # ── A provider that says which model it is on ─────────────────────────────────────────────────
+  # Named rather than counted along, which the premise earns: this road is about which providers
+  # answer, so which one is chosen is the whole of what each reading is worth.
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Cursor
+
+  - type: assert
+    domain: terminal
+    op: stands-for
+    with:
+      model: scenario-model-02
+
+  # And the line is untouched by it. The name is what the agent would do left alone, so a build that
+  # drew it and then put it on the line would be starting the pane on a choice nobody made.
+  - type: assert
+    domain: terminal
+    op: starts-on
+    with:
+      model: none
+
+  # ── And the pane opened on it says the same name ──────────────────────────────────────────────
+  # The other place the name is drawn, and the one a reader is at for the rest of the session. A pane
+  # started on no model of its own carries nothing about a model on its line, so the row under it has
+  # only the provider's own answer to name — and a build that drew the name on the frame and left the
+  # pane's row saying nothing would keep half of this promise, with nothing on the screen looking
+  # wrong.
+  - type: action
+    domain: terminal
+    op: open-start
+
+  - type: assert
+    domain: terminal
+    op: answers-on
+    with:
+      model: scenario-model-02
+
+  # The pane goes, so the frame the next agent is chosen on is a frame and not a pane.
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with:
+      shows: standing in for cursor-agent
+
+  # ── And another, whose answer carries it in a shape of its own ────────────────────────────────
+  # The second of the two, because what the build reads is one shape per provider: a name Cursor
+  # writes into the label of a row and one Gemini CLI writes beside the list are the same fact read
+  # two ways, and a build that had learnt only the first would draw a row here saying nothing.
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Gemini CLI
+
+  - type: assert
+    domain: terminal
+    op: stands-for
+    with:
+      model: scenario-model-02
+
+  # ── And a provider that says nothing about it ─────────────────────────────────────────────────
+  # The half that catches a build answering for a provider that never said: four of the six name no
+  # default, and on this machine they answered a list of models without naming one of them.
+  - type: action
+    domain: terminal
+    op: pick-start
+    with:
+      agent: Claude Code
+
+  - type: assert
+    domain: terminal
+    op: stands-for
+    with:
+      model: none

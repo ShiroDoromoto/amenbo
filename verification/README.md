@@ -1003,10 +1003,14 @@ and about the account it was signed in to that day — and `name: none` presses 
 which is the agent's own settings and is a choice rather than the absence of one. `starts-on` reads
 what the whole thing is for: the line the frame writes out under the row, which is what the press
 would run. It is read from the end, the word it begins with being the agent's own program name; what
-follows is a flag and the name, or on `model: none` nothing at all. `open-start` is the press itself,
-and it is the one way of opening a pane that chooses nothing on the way: `open-shell` and
-`open-registered` carry their own answer, and what this one opens on is whatever the two rows were
-set to.
+follows is a flag and the name, or on `model: none` nothing at all. `stands-for` reads the row's
+first choice rather than the line — what the agent's own default *comes to*, which is a name two of
+the six give and four do not, and `model: none` is one of the four. It is a reading of its own
+because the line says nothing about it: what that choice puts there is nothing, so a reader looking
+at the line learns what will not be sent and nothing about what the agent will do with it.
+`open-start` is the press itself, and it is the one way of opening a pane that chooses nothing on the
+way: `open-shell` and `open-registered` carry their own answer, and what this one opens on is
+whatever the two rows were set to.
 
 **The row has three shapes, and which one is drawn is decided by how long the agent's answer was** —
 so a road says which it is walking, in `pick-model`'s `how`. `write` is a box to type a name in, which
@@ -1026,6 +1030,13 @@ promise falsely. It then takes the pane away and reads the row on the frame draw
 is where a kept choice is told from a button that stayed pressed.
 `narrow-a-long-row-of-models-to-the-one-you-want` asks for twenty and reaches one the row was not
 drawing, which is the whole of what the box above it is for.
+`read-what-an-agents-own-default-comes-to` asks for `terminal can-start`'s `on` as well — the
+position of the model the stand-ins say they are standing on — and reads the row's first choice on
+three providers: the two whose own answer has room to say which model that is, and one of the four
+whose has none. Both halves are walked because a build answering for a provider that never said
+draws the same screen as one naming it correctly, read from the outside. It also opens a pane on that
+first choice and reads the name again on the row under it (`answers-on`), which is the other place
+the same fact is drawn and the one a reader is at for the rest of the session.
 
 **A pane already running is the other half of the same question, and it has nothing in common with
 the half above.** A model chosen before a pane opens goes on the launch line; an hour into a session
@@ -1039,12 +1050,14 @@ hand and a fourth keeps it in a database, so a control that moved somebody's def
 would be Amenbo writing a provider's settings through the back door. `switch-model` presses one, and
 its `how` is `pick-model`'s three shapes for the same reason: the candidates are drawn from the same
 answer. `answers-on` reads the row under a running pane — the model that pane is on. A name is what it says
-where Amenbo knows one: the name that went on the pane's launch line, or the one it sent on a line
-this provider settles the model with. `waiting` is where the press opened the provider's own picker
-instead and the choosing is the person's; `none` is a pane there is no name for at all, which is one
-started on no model. **Nothing on any of these reads the pane's screen**: three of the
-six say in words that the model changed and three change a value on a status line and say nothing, so
-a build reading either would be parsing a provider's own screen.
+where Amenbo knows one: the name that went on the pane's launch line, the one it sent on a line this
+provider settles the model with, or — for a pane started on no model of its own — the default that
+provider named when it answered its list. `waiting` is where the press opened the provider's own
+picker instead and the choosing is the person's; `none` is a pane there is no name to put up for,
+which is one started on no model whose provider has not said which one it is on either. **Nothing on
+any of these reads the pane's screen**: three of the six say in words that the model changed and
+three change a value on a status line and say nothing, so a build reading either would be parsing a
+provider's own screen.
 
 `move-a-running-pane-to-another-model` walks the provider that takes the name on its line, and reads
 the line back **off the program** — `terminal can-start`'s `then: reads` is what leaves one running to
@@ -1481,6 +1494,12 @@ names are the harness's own and numbered two digits wide, so a road narrowing th
 one of them. The shapes are written down here rather than asked for, which is the same bargain the
 catalog of commands is written under: what drift costs is an agent that reads as having no models, and
 the step that meant to press one is what says so.
+
+**`on` is which of those models the stand-ins say they are standing on**, written as a position in
+the row rather than as a name. Only two of the six providers have anywhere in their own answer to put
+it — one writes it into the label of a row, the other beside the list — so the same premise stands up
+both readings a road about a provider's own default needs: those two naming one, and the other four
+naming none. Left off, nobody says, which is the machine every road before it stood up.
 
 **And a stand-in prints what it was started with**, one argument to a line under a mark of the
 harness's own. That is how a road reads a model choice back off the program rather than off the line

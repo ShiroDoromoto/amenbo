@@ -178,20 +178,10 @@ steps_gui:
     with:
       shows: SCENARIO the same terminal
 
-  # And the box asked for again, in this window. What crosses between the two is the arrangement they
-  # share, and the fold is not written into it — the pane is drawn afresh here, so it is drawn the way
-  # a pane comes up. The sentence is the half that does cross, which is what the reading below is
-  # about: asking for the box is how it is put back in front of the reader, and not how it survived.
-  - type: action
-    domain: terminal
-    op: open-box
-    window: "Amenbo — "
-    with:
-      onto: SCENARIO the same terminal
-
-  # The sentence crossed with it. This is the move it is easiest to lose on: the pane is drawn by a
-  # different window from here, and what it draws it learns from the arrangement the two of them
-  # share — so a draft left out of that arrangement is one the reader loses at the press.
+  # The sentence crossed with it, and the box it is standing in crossed too — nothing is pressed here
+  # to open one. This is the move it is easiest to lose on: the pane is drawn by a different window
+  # from here, and what it draws it learns from the arrangement the two of them share, so anything
+  # left out of that arrangement is lost at the press. Both of these are in it.
   - type: assert
     domain: terminal
     op: still-to-send
@@ -213,18 +203,9 @@ steps_gui:
     with:
       shows: SCENARIO the same terminal
 
-  # And the box asked for a third time, for the reason it was asked for in the other window: the pane
-  # is drawn afresh by whichever window is holding it. It comes after the reading above, which is the
-  # one that says the second window has gone — a step naming no window is what says so, and this one
-  # names none either.
-  - type: action
-    domain: terminal
-    op: open-box
-    with:
-      onto: SCENARIO the same terminal
-
   # And it came back the other way too, which is the half a build that only wrote the arrangement out
-  # would fail: the window folding away is the one holding the sentence.
+  # would fail: the window folding away is the one holding the sentence. The box is open here without
+  # a press for the reason it was open over there.
   - type: assert
     domain: terminal
     op: still-to-send

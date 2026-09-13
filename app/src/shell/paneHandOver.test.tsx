@@ -120,6 +120,9 @@ async function pane(autoStart = true): Promise<void> {
       onName: () => {},
       written: "",
       onWrite: () => {},
+      // Nothing here reads the box, so it is left folded — the state a pane comes up in.
+      composeOpen: false,
+      onFold: () => {},
       onFocus: (id: string) => { hoisted.focused.push(id); },
       }));
   });

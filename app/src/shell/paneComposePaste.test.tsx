@@ -10,6 +10,7 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneEvents } from "../talk/terminal";
+import { composeStartsOpen } from "../core/composeStartsOpen";
 import { TerminalPane } from "./TerminalPane";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -97,6 +98,9 @@ afterEach(() => {
 /** The window the pane is drawn in, which is what holds the line being written (`../talk/layout`). */
 function Window() {
   const [written, setWritten] = useState("");
+  // Whether the box is open is the window's as well (`AMB-D-890`), seeded from this machine's habit
+  // the way the face seeds a pane it is opening.
+  const [composeOpen, setComposeOpen] = useState(() => composeStartsOpen());
   hoisted.held = written;
   return createElement(TerminalPane, {
     frame: "1",
@@ -106,6 +110,8 @@ function Window() {
     autoStart: true,
     focused: true,
     written,
+    composeOpen,
+    onFold: (_frame: string, open: boolean) => setComposeOpen(open),
     onWrite: (_frame: string, text: string, put: readonly string[] = []) => {
       hoisted.put = put;
       setWritten(text);

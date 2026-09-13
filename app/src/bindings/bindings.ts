@@ -2663,7 +2663,17 @@ written?: string,
  * A place with no way back — a plain shell, a line the reader registered (`AMB-D-794`) — comes
  * back false and is drawn as the place it is, with the way in on it.
  */
-resumes?: boolean, };
+resumes?: boolean, 
+/**
+ * Whether the box under this pane is open (`AMB-D-890`). Absent in an arrangement written before
+ * it was carried, which the window answers for.
+ *
+ * **It rides the arrangement for the reason the draft does** — that is how the two windows hand
+ * the face over — **and it goes on to the store as well**, which the draft does not: a
+ * half-written sentence is the moment's, and which panes a reader writes in outlives the run
+ * (`amenbo_core::frames::SavedPane::compose_open`).
+ */
+composeOpen?: boolean, };
 
 /**
  * The talk window's arrangement, as the window drawing the face has it (`crate::frames`).

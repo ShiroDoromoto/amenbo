@@ -7,7 +7,9 @@
 // **What it answers is only where the next pane starts.** A pane already on the screen is left
 // where its reader put it: the box takes room from the terminal above it, and a pane that folded
 // itself because somebody pressed a different pane's control would wake the program inside to
-// repaint at a moment nobody asked it to (`AMB-D-864`).
+// repaint at a moment nobody asked it to (`AMB-D-864`). Where a pane already made stands is the
+// arrangement's (`../talk/layout`, `AMB-D-890`) — this answers the moment one is being opened, and
+// the one row the store came back without.
 //
 // Stored as the *open* switch rather than the shut one, so a machine with no localStorage — and a
 // reader who has never pressed the control — both land on folded, which is what `AMB-D-889` settled

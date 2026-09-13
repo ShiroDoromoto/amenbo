@@ -20,7 +20,7 @@ import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import { pushNotice } from "../core/notice";
-import { composeStartsOpen, setComposeStartsOpen } from "../core/composeStartsOpen";
+import { setComposeStartsOpen } from "../core/composeStartsOpen";
 import { Menu, MenuItem } from "../components/Menu";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
@@ -80,8 +80,8 @@ async function handOver(session: string, paths: string[]) {
  */
 export function TerminalPane({
   frame, project, names, start, autoStart, focused, landed = false, offered = false, written,
-  inserted = [],
-  onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite,
+  inserted = [], composeOpen,
+  onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
@@ -145,6 +145,17 @@ export function TerminalPane({
   /** The paths Amenbo put into this box, still standing in what is written (`../talk/layout`). They
    *  are what the send waits the pane's agent out for (`../talk/terminal`, `AMB-D-879`). */
   inserted?: readonly string[];
+  /**
+   * Whether the box under this pane is open (`AMB-D-890`).
+   *
+   * **Held by the window for the reason the draft is** (`../talk/layout`): a pane is taken down
+   * whenever it stops being on the screen, and a reader who opened the box did not ask for it to
+   * shut at any of those moments. It outlives the run as well, which the draft does not.
+   */
+  composeOpen: boolean;
+  /** The press on this pane's band, said as the box opens or folds away. What the *next* pane will
+   *  start as is a separate answer and is written down here (`../core/composeStartsOpen`). */
+  onFold: (frame: string, open: boolean) => void;
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
@@ -192,11 +203,12 @@ export function TerminalPane({
   // the characters to reach the program to be completed at all, which a box in front of them would
   // stop.
   //
-  // **Where it starts is what this machine last chose** (`../core/composeStartsOpen`), read once as
-  // the pane comes up and never again. A reader who works in the box was otherwise pressing the same
-  // control on every pane they opened. Reading it again would make a press in one pane move the
-  // others, and each of those would wake the program inside it to repaint (`AMB-D-864`).
-  const [folded, setFolded] = useState(() => !composeStartsOpen());
+  // **Where it starts is what this machine last chose, and where it is now is the window's**
+  // (`../core/composeStartsOpen`, `../talk/layout`). The habit answers a pane being made and nothing
+  // after it: read again later, a press in one pane would fold another, and each fold wakes the
+  // program inside to repaint (`AMB-D-864`). What this pane is now outlives the drawing, so the box
+  // is still open in the window a terminal is split out into and in the next run (`AMB-D-890`).
+  const folded = !composeOpen;
   // The box itself, which is measured rather than told how tall to be: how many lines a sentence
   // takes is the browser's answer, not one this can work out from the characters.
   const boxRef = useRef<HTMLTextAreaElement>(null);
@@ -866,7 +878,7 @@ export function TerminalPane({
               title={t(folded ? "face.composeOpen" : "face.composeFold")}
               aria-label={t(folded ? "face.composeOpen" : "face.composeFold")}
               onClick={() => {
-                setFolded(!folded);
+                onFold(frame, folded);
                 setComposeStartsOpen(folded);
               }}
             >

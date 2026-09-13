@@ -86,6 +86,9 @@ async function pane(names: Map<string, string> = new Map()): Promise<void> {
       },
       written: "",
       onWrite: () => {},
+      // Nothing here reads the box, so it is left folded — the state a pane comes up in.
+      composeOpen: false,
+      onFold: () => {},
       onFocus: () => {},
       }));
   });
@@ -136,6 +139,9 @@ describe("naming a pane", () => {
         onOpened: () => {}, onSaid: () => {}, onPath: () => {}, onClosed: () => {},
         onDrop: () => {}, onName: () => {}, onFocus: () => {},
         written: "", onWrite: () => {},
+        // Nothing here reads the box, so it is left folded — the state a pane comes up in.
+        composeOpen: false,
+        onFold: () => {},
       }));
     });
 

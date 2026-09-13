@@ -294,8 +294,7 @@ pub struct Launch {
     /// model name the account cannot reach is exit 1 with no session opened, and what Amenbo holds
     /// is one name per provider rather than one per account. Gemini restores nothing and falls to
     /// its own settings' default, so a silent line comes back on a model the pane never used. Codex
-    /// does the same and says so here against the day its way back returns (`AMB-T-4679`), its
-    /// [`resume`](Launch::resume) being `None` for now.
+    /// does the same, and says so in the pane itself — "recorded with X but is resuming with Y".
     ///
     /// **It says nothing about a line that starts a session.** Every row names the model there
     /// (`AMB-D-865`): that model is being chosen, not restored.
@@ -424,17 +423,18 @@ pub struct Rename {
 /// How a pane comes back into the session it was running — the resume catalog's column
 /// (`AMB-D-869`).
 ///
-/// **Five of the six have a way back, and no two of them spell it alike** (`AMB-T-4630`). What
-/// parts them is not the spelling but who decides which session: three take a handle Amenbo hands
-/// them as the session starts, one of those three takes an unknown one and creates it, one names
-/// its own and has to be asked afterwards, and one is told nothing at all and comes back to
-/// whatever the home it was pointed at last held. So the column carries the halves separately —
+/// **All six have a way back, and no two of them spell it alike** (`AMB-T-4630`). What parts them
+/// is not the spelling but who decides which session: three take a handle Amenbo hands them as the
+/// session starts, one of those three takes an unknown one and creates it, one names its own and
+/// has to be asked afterwards, and two are told nothing at all and come back to whatever the home
+/// they were pointed at last held. So the column carries the halves separately —
 /// [`back`](Resume::back) is the way in, [`issue`](Resume::issue) is who decides.
 ///
-/// **`None` here is a row that cannot come back.** Codex is the one on it, and not for want of a
-/// spelling: what it comes back into is not recorded where Amenbo points it (`AMB-T-4666`), so
-/// asking would open a new conversation without saying so (`AMB-T-4678`, put back by
-/// `AMB-T-4679`).
+/// **`None` here is a row that cannot come back, and no row is on it.** Codex stood there while
+/// what it came back into was not known to be recorded where Amenbo points it, and came off again
+/// once that was measured (`AMB-T-4666`, `AMB-T-4678`, `AMB-T-4679`). The shape is kept because a
+/// provider can lose its way back the same way, and what stands here is what a reader is told
+/// before they close the window (`AMB-T-4676`).
 pub struct Resume {
     /// How the line is put back into the session it was running ([`Back`]).
     pub back: Back,
@@ -461,7 +461,7 @@ pub enum Back {
     /// either. Gemini's `--resume latest` means "the newest session recorded in the home this pane
     /// was started in", so what picks the session is the environment and not the line
     /// (`app/src-tauri/src/pane_home.rs`, `AMB-D-875`). Codex's `resume --last` means the same
-    /// thing and is down for now (`AMB-T-4678`, put back by `AMB-T-4679`).
+    /// thing (`AMB-D-869`, `AMB-T-4665`).
     Words(&'static [&'static str]),
 }
 
@@ -520,9 +520,8 @@ pub enum Handle<'a> {
 /// A handle for a session about to start on `launch`, where Amenbo is the one that decides it.
 ///
 /// `None` for the three rows it is not Amenbo's to decide: OpenCode names its own and is asked
-/// afterwards ([`Resume::ask`]), Gemini is told nothing on its line and comes back by the home it
-/// runs in ([`Back::Words`], `AMB-D-875`), and Codex has no way back to be handed one for
-/// ([`Launch::resume`], `AMB-T-4678`).
+/// afterwards ([`Resume::ask`]), and Codex and Gemini are told nothing on their lines and come back
+/// by the home they run in ([`Back::Words`], `AMB-D-869`, `AMB-D-875`).
 ///
 /// **A version 4 UUID, because that is the shape the providers were watched taking** — Claude Code
 /// refuses `--session-id` anything else, and the other two were only ever handed one
@@ -610,22 +609,22 @@ pub static LAUNCHES: &[Launch] = &[
         // The one row the rename is half-seen on: the thread takes the name, the terminal title
         // stays on the folder it was started in (`AMB-T-4652`).
         rename: Some(Rename { command: "/rename", limit: None, titles: false }),
-        // **Taken down, not absent** (`AMB-T-4678`). The row this came back on was
-        // `Back::Words(&["resume", "--last"])`, against a home of its own for each pane
-        // (`AMB-T-4640`, `AMB-T-4665`). Then a TUI session was watched leaving nothing behind in
-        // such a home: `resume --last` finds no session, says no word about it and opens a fresh
-        // conversation (`AMB-T-4666`). Of the three things a pane can do, that is the worst — it
-        // comes back, it says it cannot, or it silently starts over as though the talk were lost.
-        // So the row says it cannot, which is `None`, and the home is not made either
-        // (`app/src-tauri/src/pty.rs`): keeping the home without the way back would pay
-        // `AMB-D-869`'s price — writes reaching the reader's own `~/.codex` — for nothing.
+        // The one row that comes back by a subcommand. Which session it is stays the home the
+        // pane was started in — a variable and a directory to keep (`AMB-T-4640`,
+        // `app/src-tauri/src/pane_home.rs`) — so the line has only to say "the last one", and there
+        // is no handle on it to be wrong (`AMB-T-4665`). Nothing is issued and nothing is asked for
+        // the same reason: the place decides, and Amenbo already made the place.
         //
-        // `AMB-T-4679` puts both back, once `AMB-T-4666` says what a home has to be for a
-        // conversation to be recorded in it.
-        resume: None,
+        // **Taken down once and put back** (`AMB-T-4678`, `AMB-T-4679`). What took it down was a
+        // TUI session watched leaving nothing behind in a home of this shape, which would have left
+        // `resume --last` opening a fresh conversation without a word about it — the worst of the
+        // three things a pane can do (`AMB-T-4666`). Measured again with the home as this build
+        // makes it, the session is recorded and `resume --last` comes back into it; what the first
+        // measurement had was a home with no `config.toml` in it, where the TUI takes no typed line
+        // at all, so there was never a conversation to record.
+        resume: Some(Resume { back: Back::Words(&["resume", "--last"]), issue: None, ask: None }),
         // Falls to `config.toml`'s default on the way back and says so itself — "recorded with X but
-        // is resuming with Y". Written down for the day `AMB-T-4679` gives this row a way back;
-        // nothing reads it while `resume` is `None` (`AMB-T-4694`).
+        // is resuming with Y" (`AMB-T-4694`).
         model_on_the_way_back: true,
         confirmed: true,
     },
@@ -1469,16 +1468,17 @@ mod tests {
                 assert!(flag.starts_with('-'), "{}: {flag} is not a flag", launch.id);
             }
         }
-        // The row that comes back by a place: Gemini is handed nothing, because a handle on its
-        // line kills the start it makes of itself (`AMB-T-4659`) and a list that names sessions by
-        // index cannot tell two panes on one folder apart (`AMB-D-875`).
-        let gemini = find_launch("gemini-cli").unwrap().resume.as_ref().expect("gemini comes back");
-        assert_eq!(gemini.back, Back::Words(&["--resume", "latest"]));
-        assert!(gemini.comes_back_by_a_place() && !gemini.carries_a_handle());
-        // And the one row with no way back at all, which is not for want of a spelling: what Codex
-        // comes back into is not recorded where Amenbo points it, so asking would open a new
-        // conversation and say nothing about it (`AMB-T-4666`, `AMB-T-4678`).
-        assert!(find_launch("codex-cli").unwrap().resume.is_none());
+        // The two rows that come back by a place, and the words each of them says. Neither is
+        // handed anything: a handle on Gemini's line kills the start it makes of itself
+        // (`AMB-T-4659`), and Codex's line has nowhere to put one — the home decides which session
+        // it is (`AMB-D-869`, `AMB-D-875`).
+        let by_a_place: [(&str, &'static [&'static str]); 2] =
+            [("gemini-cli", &["--resume", "latest"]), ("codex-cli", &["resume", "--last"])];
+        for (id, words) in by_a_place {
+            let resume = find_launch(id).unwrap().resume.as_ref().expect("comes back");
+            assert_eq!(resume.back, Back::Words(words), "{id}");
+            assert!(resume.comes_back_by_a_place() && !resume.carries_a_handle(), "{id}");
+        }
     }
 
     /// A handle rides on the same line the pane is opened with, in front of whatever follows it,
@@ -1550,8 +1550,9 @@ mod tests {
             assert!(started.iter().any(|arg| arg == "a-model"), "{}", launch.id);
 
             let Some(resume) = launch.resume.as_ref() else {
-                // The one row with no way back resumes nothing on its line, so every line it has is
-                // a session starting — Codex does not come back at all (`AMB-T-4678`).
+                // A row with no way back resumes nothing on its line, so every line it has is a
+                // session starting. None of the six is on that branch now (`AMB-T-4679`); it stands
+                // for the row that loses its way back, the way Codex did (`AMB-T-4678`).
                 assert_eq!(back, started, "{}", launch.id);
                 continue;
             };
@@ -1594,29 +1595,30 @@ mod tests {
         }
     }
 
-    /// Codex's line, spelled out, while its way back is down (`AMB-T-4678`).
+    /// Codex's line, both ways round, spelled out.
     ///
     /// The generic tests read the column and would pass on a row that said the wrong words. This one
-    /// is the line itself, because it is what a person's conversation hangs on. **Every line is a
-    /// session starting, and every one of them is told where it is working** — including a pane
-    /// handed a way back left over from before the row was taken down. That is the whole point of
-    /// taking it down: a pane that cannot come back is a pane that says so by starting plainly,
-    /// rather than one that goes silent in a conversation nobody is in (`AMB-T-4666`).
+    /// is the line itself, because it is what a person's conversation hangs on: a pane opening for
+    /// the first time is a session starting and is told where it is working, and a pane coming back
+    /// asks for the last session in the home it was pointed at and says nothing else at all
+    /// (`AMB-T-4665`, `AMB-T-4679`).
     #[test]
-    fn a_codex_pane_starts_plainly_whatever_it_is_handed() {
+    fn a_codex_pane_starts_plainly_and_comes_back_by_asking_for_the_last_session() {
         let codex = find_launch("codex-cli").expect("the catalog lists it");
         let said = crate::agents::pane_instruction("amenbo");
 
         let first = opening(codex, "amenbo", Some("a-model"), None);
         assert_eq!(first, ["-m", "a-model", said.as_str()]);
 
-        // A home written down by a run from before `AMB-T-4678`: nothing of it reaches the line, and
-        // the pane is still told where it is working.
+        // The home is what the handle is, and none of it reaches the line.
         let back = opening(codex, "amenbo", Some("a-model"), Some(Handle::Back("/homes/7")));
-        assert_eq!(back, ["-m", "a-model", said.as_str()]);
+        assert_eq!(back, ["resume", "--last", "-m", "a-model"]);
 
-        // And with no model chosen, the line is the instruction and nothing else.
-        assert_eq!(opening(codex, "amenbo", None, Some(Handle::Back("/homes/7"))), [said.as_str()]);
+        // And with no model chosen, the line is the subcommand and nothing else.
+        assert_eq!(
+            opening(codex, "amenbo", None, Some(Handle::Back("/homes/7"))),
+            ["resume", "--last"]
+        );
     }
 
     /// Gemini's line, both ways round, spelled out.

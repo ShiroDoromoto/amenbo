@@ -21,17 +21,21 @@
 # the plain sentence — said as an absence, because a build that named a provider there would be
 # frightening somebody off a quit that costs them nothing.
 #
-# ── Why the last leg opens on a named provider ───────────────────────────────────────────────────
-# The named half is the promise's other side, and it can only be walked on a pane whose provider has
-# no way back. Which providers those are is the catalog's answer and changes; what does not change is
-# that the machine this road stands up holds the catalog's own commands in its own order, so the leg
-# names one of them and the sentence is read for that name. The pane has to be **running** besides —
-# the question is only raised over something still going — which is why the stand-ins on this road
-# stay open rather than printing and ending.
+# ── Why the last leg opens on a provider and reads no name ──────────────────────────────────────
+# **Every row in the catalog has a way back now** (`crates/amenbo-core/src/harness.rs`, `LAUNCHES`,
+# the `resume` field): Codex was the last one without, and it came back once a pane's own home was
+# measured recording what was said in it. So the named half of the promise has no provider left to be
+# walked on here, and what this leg reads instead is the fact that replaced it — a pane on a
+# catalogued provider is a pane that comes back, and the question says nobody's name over it. The
+# legs above read the same silence over a plain shell; this one reads it over a provider, which is
+# the reading that goes red if a row loses its way back without the sentence being taught to say so.
 #
-# The provider written below is the one the catalog has no way back for today. The day it gains one
-# this leg goes red, and that is the road asking to be pointed at whichever provider is still without
-# — not a fault in the build (`crates/amenbo-core/src/harness.rs`, `LAUNCHES`, the `resume` field).
+# The pane has to be **running** besides — the question is only raised over something still going —
+# which is why the stand-ins on this road stay open rather than printing and ending.
+#
+# The named half is still the product's, and the road to walk it is a pane whose way in was taken
+# back rather than a provider that never had one (`crate::frames::TalkFace::gave_up`). That is a road
+# of its own and is written down as one.
 #
 # ── Why both doors are walked ────────────────────────────────────────────────────────────────────
 # There are two ways out and they arrive by different roads. The menu's item is one this app wrote,
@@ -58,8 +62,8 @@ description: >
   app is still running and the task is still held. Ask again and go — the app ends and the reservation
   is still standing when it comes back. Then do the same through the other door, the close on the last
   window, and that reservation stands too. Then quit with no pane open at all, and nothing is asked.
-  Finally open a pane on a provider that will not be in its conversation again, and read the question
-  naming it.
+  Finally open a pane on a catalogued provider, and read the question singling nobody out — that pane
+  comes back into its conversation, so there is no name for it to say.
 
 given:
   - type: action
@@ -340,10 +344,10 @@ steps_gui:
       how: menu
       asks: false
 
-  # ── And the half the plain sentence cannot say ──────────────────────────────────────────────────
-  # A pane on a provider with no way back, running. The machine this road stood up holds the
-  # catalog's own commands in the catalog's own order, so the name below is on the row whatever the
-  # operator has installed of their own.
+  # ── And the same silence over a provider rather than a shell ───────────────────────────────────
+  # A pane on a catalogued provider, running. The machine this road stood up holds the catalog's own
+  # commands in the catalog's own order, so the name below is on the row whatever the operator has
+  # installed of their own.
   - type: action
     domain: terminal
     op: show-face
@@ -373,14 +377,15 @@ steps_gui:
       how: menu
       asks: true
 
-  # The goal this leg is here for. The sentence promises every pane comes back into its conversation;
-  # this one will not, and the question says whose it is rather than leaving the reader to find out
-  # at the next start.
+  # The goal this leg is here for. The sentence promises every pane comes back into its conversation,
+  # and this one does — so no provider is singled out. A build that named this one would be telling
+  # the reader a conversation is about to be lost that is not.
   - type: assert
     domain: store
     op: quit-names
     with:
       agent: Codex CLI
+      present: false
 
   - type: action
     domain: store

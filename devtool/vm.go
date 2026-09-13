@@ -58,6 +58,25 @@ const (
 	vmGuestHome = "/Users/" + vmUser
 	// vmDisplayPath is where the compiled display tool is put in the guest, on the same terms.
 	vmDisplayPath = vmGuestHome + "/display"
+	// vmInputPath is where the compiled input tool is put while the golden is being prepared. It is
+	// taken away again before the golden is stopped: the golden carries no copy of a tool this tree
+	// changes, which is the same rule the screen tool is sent under.
+	vmInputPath = vmGuestHome + "/input"
+	// vmJapaneseInputMethod is the input method the golden is prepared with. It is spelled here as
+	// well as in vminput.swift because the two are separate programs, and what this one needs it for
+	// is reading a guest's preferences back — which the tool is not in there to do: it is taken out
+	// again as soon as the golden is prepared.
+	vmJapaneseInputMethod = "com.apple.inputmethod.Kotoeri.RomajiTyping"
+	// vmKotoeriDomain is that input method's own preference domain, and vmLiveConversionKey the
+	// switch in it that decides what stands under the mark while a word is being written.
+	//
+	// It is turned OFF in the golden. Left on — which is how a Mac ships — the input method converts
+	// as the keys arrive, so what stands unsettled is a guess it made out of a dictionary and a
+	// history of what has been typed on that machine before. A road that read it back would be
+	// reading the input method's guess rather than the build's behaviour, and it would move under it.
+	// Off, what stands there is the reading as it was typed, which is what a road can name.
+	vmKotoeriDomain     = "com.apple.inputmethod.Kotoeri"
+	vmLiveConversionKey = "JIMPrefLiveConversionKey"
 	// vmDisplaySize is the screen verification runs on, in points, declared here rather than
 	// inherited from whatever the golden happened to carry: a shot is only comparable against
 	// another shot taken on the same screen, and `vm golden --refresh` would otherwise move it.
@@ -74,6 +93,12 @@ const (
 //
 //go:embed vmdisplay.swift
 var vmDisplaySource string
+
+// vmInputSource is the input tool, carried and compiled the same way, and sent only while the golden
+// is being prepared.
+//
+//go:embed vminput.swift
+var vmInputSource string
 
 // vmCmd dispatches the `vm` subcommands: the two that raise the clone and throw it away, the two
 // that reach into it, and the two that report — on the golden, and on the clone.
@@ -155,8 +180,17 @@ func vmCmd(args []string) {
 	case "golden":
 		fs := flag.NewFlagSet("vm golden", flag.ExitOnError)
 		refresh := fs.Bool("refresh", false, "pull the base image and cut the golden from it again")
+		prepare := fs.Bool("prepare", false, "on the running golden: enable the Japanese input method, then stop it")
 		fs.Parse(args[1:])
 		noArgs(fs)
+		if *refresh && *prepare {
+			logf("devtool: vm golden --refresh cuts a golden and --prepare finishes one that is already running; they are two steps, not one")
+			os.Exit(2)
+		}
+		if *prepare {
+			fail(vmGoldenPrepare())
+			break
+		}
 		fail(vmGolden(*refresh))
 	default:
 		logf("devtool: unknown vm subcommand %q", sub)
@@ -295,7 +329,7 @@ func vmEnsureUp() (string, error) {
 		}
 	}
 
-	ip, err := vmWaitReady()
+	ip, err := vmWaitReady(vmCloneName)
 	if err != nil {
 		return "", err
 	}
@@ -329,7 +363,7 @@ func setDisplaySize() error {
 // tool: the golden holds no copy of a tool this tree changes, and a clone cannot answer with a
 // stale one.
 func vmTakeNativeDisplay(ip string) error {
-	bin, cleanup, err := buildDisplayTool()
+	bin, cleanup, err := buildGuestTool("display", vmDisplaySource)
 	if err != nil {
 		return err
 	}
@@ -346,23 +380,24 @@ func vmTakeNativeDisplay(ip string) error {
 	return nil
 }
 
-// buildDisplayTool writes the embedded display tool out and compiles it on the host, answering with
-// the binary and the way to take the temporary directory back.
-func buildDisplayTool() (bin string, cleanup func(), err error) {
-	dir, err := os.MkdirTemp("", "amenbo-display-")
+// buildGuestTool writes one of the embedded guest tools out and compiles it on the host, answering
+// with the binary and the way to take the temporary directory back. Host and guest are the same arch
+// and the same OS generation, which is what lets the guest need no Swift toolchain of its own.
+func buildGuestTool(name, source string) (bin string, cleanup func(), err error) {
+	dir, err := os.MkdirTemp("", "amenbo-"+name+"-")
 	if err != nil {
 		return "", func() {}, err
 	}
 	cleanup = func() { os.RemoveAll(dir) }
-	src := filepath.Join(dir, "display.swift")
-	if err := os.WriteFile(src, []byte(vmDisplaySource), 0o644); err != nil {
+	src := filepath.Join(dir, name+".swift")
+	if err := os.WriteFile(src, []byte(source), 0o644); err != nil {
 		cleanup()
 		return "", func() {}, err
 	}
-	bin = filepath.Join(dir, "display")
+	bin = filepath.Join(dir, name)
 	if _, err := run("", "swiftc", "-O", "-o", bin, src); err != nil {
 		cleanup()
-		return "", func() {}, fmt.Errorf("compiling the display tool: %w", err)
+		return "", func() {}, fmt.Errorf("compiling the %s tool: %w", name, err)
 	}
 	return bin, cleanup, nil
 }
@@ -415,23 +450,27 @@ func tartRun() error {
 	return nil
 }
 
-// vmWaitReady waits for the clone to be reachable and to have a GUI session, and answers with its
+// vmWaitReady waits for the named VM to be reachable and to have a GUI session, and answers with its
 // IP. Three waits rather than one, because each fails differently and a caller told only "not ready"
 // cannot tell a VM that never booted from one whose screen never came up.
 //
+// The name is a parameter because the golden is waited on too, once, while it is being prepared —
+// and a preparation that ran before the guest's screen was up would be writing into a session that
+// does not exist yet.
+//
 // Measured on this arrangement: the address answers at ~7s, ssh at ~10s, the console at ~11s. The
 // budgets below are that with room, not a guess.
-func vmWaitReady() (string, error) {
-	ip, err := run("", "tart", "ip", vmCloneName, "--wait", "90")
+func vmWaitReady(name string) (string, error) {
+	ip, err := run("", "tart", "ip", name, "--wait", "90")
 	if err != nil {
-		return "", fmt.Errorf("no address for %s after 90s: %w — the boot log is %s", vmCloneName, err,
-			filepath.Join(os.TempDir(), "amenbo-vm-"+vmCloneName+".log"))
+		return "", fmt.Errorf("no address for %s after 90s: %w — the boot log is %s", name, err,
+			filepath.Join(os.TempDir(), "amenbo-vm-"+name+".log"))
 	}
 	if err := waitFor(60*time.Second, func() bool {
 		_, err := sshRun(ip, "true")
 		return err == nil
 	}); err != nil {
-		return "", fmt.Errorf("%s answers at %s but ssh does not, after 60s — is %s enrolled in the golden's authorized_keys? (`devtool vm golden` reports)", vmCloneName, ip, vmKeyPath())
+		return "", fmt.Errorf("%s answers at %s but ssh does not, after 60s — is %s enrolled in the golden's authorized_keys? (`devtool vm golden` reports)", name, ip, vmKeyPath())
 	}
 	// The console's owner is what says a GUI session exists. Without it there is no screen to
 	// draw on, and the screen tools fail in the shape that is hardest to read: exit 0, nothing
@@ -440,7 +479,7 @@ func vmWaitReady() (string, error) {
 		who, err := sshRun(ip, "stat -f %Su /dev/console")
 		return err == nil && strings.TrimSpace(who) == vmUser
 	}); err != nil {
-		return "", fmt.Errorf("%s is up at %s but no GUI session came up after 60s (/dev/console is not %s) — a screen tool would exit 0 and deliver nothing", vmCloneName, ip, vmUser)
+		return "", fmt.Errorf("%s is up at %s but no GUI session came up after 60s (/dev/console is not %s) — a screen tool would exit 0 and deliver nothing", name, ip, vmUser)
 	}
 	return ip, nil
 }
@@ -847,7 +886,8 @@ func vmGolden(refresh bool) error {
 		}
 		logf("✓ %s cut from %s", vmGoldenName, vmBase)
 		logf("  golden  : it carries no key yet. Start it (`tart run %s --no-graphics`), then", vmGoldenName)
-		logf("            `ssh-copy-id -i %s.pub %s@$(tart ip %s)` (the image's password), then stop it.", vmKeyPath(), vmUser, vmGoldenName)
+		logf("            `ssh-copy-id -i %s.pub %s@$(tart ip %s)` (the image's password),", vmKeyPath(), vmUser, vmGoldenName)
+		logf("            then `devtool vm golden --prepare`, which finishes it and stops it.")
 		logf("            The golden is never started for verification — only to be prepared.")
 		return nil
 	}
@@ -867,6 +907,91 @@ func vmGolden(refresh bool) error {
 	}
 	if !ok {
 		logf("  `devtool vm golden --refresh` takes the base image and cuts the golden from it")
+	}
+	return nil
+}
+
+// vmGoldenPrepare finishes a golden that a person has started and enrolled a key in: it gives the
+// guest the Japanese input method, and stops the golden again.
+//
+// **It is its own step rather than part of `--refresh`.** A refresh cuts an image that cannot be
+// reached yet — the key is enrolled by hand, with the image's password — so there is no way in at the
+// moment the clone is made. This runs once that way in exists.
+//
+// **It stops the golden itself.** What was written is only in the image clones are cut from once the
+// guest is down, and a golden left running is one that goes on picking up state and stops being a
+// known ground.
+func vmGoldenPrepare() error {
+	if err := requireTart(); err != nil {
+		return err
+	}
+	vms, err := tartVMs()
+	if err != nil {
+		return err
+	}
+	golden, ok := findVM(vms, vmGoldenName)
+	if !ok {
+		return fmt.Errorf("no golden image %q — `devtool vm golden --refresh` cuts one from %s", vmGoldenName, vmBase)
+	}
+	if !golden.Running {
+		return fmt.Errorf("%s is stopped, and what is done here is done inside it — start it (`tart run %s --no-graphics`) and run this again; it stops the golden itself when it is through", vmGoldenName, vmGoldenName)
+	}
+	ip, err := vmWaitReady(vmGoldenName)
+	if err != nil {
+		return err
+	}
+	bin, cleanup, err := buildGuestTool("input", vmInputSource)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	args := append(sshOpts(), bin, vmUser+"@"+ip+":"+vmInputPath)
+	if _, err := run("", "scp", args...); err != nil {
+		return err
+	}
+	mode, err := sshRun(ip, shq(vmInputPath), "japanese")
+	if err != nil {
+		return fmt.Errorf("enabling the Japanese input method in %s: %w", vmGoldenName, err)
+	}
+	logf("  input   : %s enabled", strings.TrimSpace(mode))
+	if _, err := sshRun(ip, "defaults", "write", vmKotoeriDomain, vmLiveConversionKey, "-bool", "false"); err != nil {
+		return fmt.Errorf("turning live conversion off in %s: %w", vmGoldenName, err)
+	}
+	logf("  input   : live conversion off — what stands unsettled is the reading as it was typed")
+	// Out again before the golden goes down, on the rule the screen tool is sent under: the golden
+	// holds no copy of a tool this tree changes, or a clone can answer with a stale one.
+	if _, err := sshRun(ip, "rm", "-f", shq(vmInputPath)); err != nil {
+		return fmt.Errorf("taking the input tool back out of %s: %w", vmGoldenName, err)
+	}
+	logf("  golden  : shutting %s down from inside — a clone is cut from the disk, not from the session", vmGoldenName)
+	if err := vmShutDown(ip, vmGoldenName); err != nil {
+		return err
+	}
+	logf("✓ %s prepared — `devtool vm up` cuts a clone that comes up with it", vmGoldenName)
+	return nil
+}
+
+// vmShutDown asks the guest to shut itself down and waits for tart to report it down.
+//
+// **`tart stop` is not this.** It takes the VM away from the outside, and what the guest had not
+// written yet is gone with it — measured on the first golden prepared this way: the preferences
+// written a second earlier and a file deleted a second before that were both back as they had been
+// in the clone cut afterwards. A golden is an image other images are cut from, so the only stop worth
+// having here is the one the guest itself carries out.
+//
+// The command's own exit says nothing — the connection goes down with the machine — so what is waited
+// on is tart.
+func vmShutDown(ip, name string) error {
+	_, _ = sshRun(ip, "sudo", "shutdown", "-h", "now")
+	if err := waitFor(120*time.Second, func() bool {
+		vms, err := tartVMs()
+		if err != nil {
+			return false
+		}
+		vm, ok := findVM(vms, name)
+		return ok && !vm.Running
+	}); err != nil {
+		return fmt.Errorf("%s is still up 120s after being asked to shut down — anything cut from it now is cut from a half-written image", name)
 	}
 	return nil
 }
@@ -904,9 +1029,30 @@ func vmStatus() error {
 	}
 	logf("  clone   : %s running at %s", vmCloneName, ip)
 	reportDisplay(ip)
+	reportInputSources(ip)
 	reportClaude(ip)
 	reportVersionDrift(ip)
 	return nil
+}
+
+// reportInputSources says whether the guest can be typed at through an input method, and stops
+// nothing either way. A clone cut from a golden prepared before the Japanese one was added is a
+// screen every other road still walks; the one road it cannot carry is the one about a word an input
+// method is still holding, and that road is better told here than found out inside a run.
+//
+// Being unable to ask is not an answer. A guest that will not talk has already failed louder
+// somewhere else.
+func reportInputSources(ip string) {
+	enabled, err := sshRun(ip, "defaults", "read", "com.apple.HIToolbox", "AppleEnabledInputSources")
+	if err != nil {
+		return
+	}
+	if strings.Contains(enabled, vmJapaneseInputMethod) {
+		logf("  input   : the Japanese input method is there")
+		return
+	}
+	logf("  input   : NO Japanese input method — this clone was cut from a golden prepared before it was added,")
+	logf("            so a word written through one cannot be walked in here. `devtool vm golden --prepare` adds it")
 }
 
 // reportClaude says which Claude Code the clone has, because the one road that opens a pane on a

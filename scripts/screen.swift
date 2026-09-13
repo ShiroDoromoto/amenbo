@@ -24,6 +24,10 @@
 //   swift screen.swift drop-file <pid> <x> <y> <path>…   drag those files in from outside the app and
 //                                                let them go at that point (a real dragging session, which `drag` is not)
 //   swift screen.swift type "text"               type into the focused element (Unicode direct, so no IME)
+//   swift screen.swift input-source [<id>]       the input method the keyboard speaks through — said,
+//                                                or changed to the one named (only one this machine has enabled)
+//   swift screen.swift compose <reading>         write that reading through the selected input method and
+//                                                leave it standing under its mark, settled by nothing
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 51=Backspace / 121=Page Down)
 //                                                — held under `--cmd` / `--shift` / `--opt` / `--ctrl` when the press is a
 //                                                  shortcut: ⌘C is `key 8 --cmd`, ⌘V is `key 9 --cmd`
@@ -95,6 +99,7 @@
 
 import AppKit
 import ApplicationServices
+import Carbon
 import CoreGraphics
 import Foundation
 import Vision
@@ -1298,6 +1303,209 @@ func key(_ code: CGKeyCode, flags: CGEventFlags = []) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// the layer between a key and a window
+// ---------------------------------------------------------------------------
+
+/// Which input method the keyboard is speaking through: said with no name, changed with one.
+///
+/// `type` walks around every input method by construction — it hands the window finished characters
+/// — so a screen driven through it alone never stands in the gap most of the world writes in. There
+/// a key reaches an input method rather than the program, and what has been typed is held on the
+/// screen and in no other place until a person settles it.
+///
+/// Only a source this machine has **enabled** can be selected: a disabled one comes back `paramErr`
+/// and changes nothing, silently, which is why a name that is not among the enabled ones is refused
+/// here and they are printed instead. Enabling is the machine's own preparation and not a move on a
+/// screen, so it is not here — in the VM the GUI is verified in, the golden image carries it
+/// (`devtool vm golden --prepare`).
+///
+/// **The app in front is taken away and brought back afterwards.** An app takes the input source that
+/// was selected when it was last activated, and a selection made from outside does not move one that
+/// is already standing there: measured on this tree's own app, where a word written after the switch
+/// went in as the Latin letters its reading is typed with — the switch having been made, and said,
+/// and reached nothing. Safari follows a selection where that one does not, so this is not something a
+/// caller can know from the screen. It is the same bounce a person makes without noticing, reaching
+/// for the input menu and coming back.
+func inputSource(_ wanted: String?) {
+    guard let wanted else {
+        guard let now = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else {
+            fail("this session has no keyboard input source — nothing here is typing anywhere")
+        }
+        print(inputSourceID(now))
+        return
+    }
+    let enabled = enabledInputSources()
+    guard let source = enabled.first(where: { inputSourceID($0) == wanted }) else {
+        fail("no input source \(wanted) is enabled on this machine — these are: \(enabled.map(inputSourceID).joined(separator: ", "))")
+    }
+    let status = TISSelectInputSource(source)
+    if status != noErr { fail("selecting \(wanted) came back \(status)") }
+    carryTheFrontAppOverTheSwitch()
+}
+
+/// Take whatever is in front away and bring it straight back, so that it is activated under the input
+/// source that has just been selected.
+///
+/// The app it is handed to is the Finder, which is running on any Mac with a screen and comes forward
+/// without raising a window of its own. Where the Finder is what was in front, any other app with
+/// windows will do; where there is no second app at all, there is nothing in front worth carrying and
+/// this does nothing.
+func carryTheFrontAppOverTheSwitch() {
+    let workspace = NSWorkspace.shared
+    guard let front = workspace.frontmostApplication else { return }
+    let others = workspace.runningApplications.filter {
+        $0.activationPolicy == .regular && $0.processIdentifier != front.processIdentifier
+    }
+    let finder = others.first { $0.bundleIdentifier == "com.apple.finder" }
+    guard let stand = finder ?? others.first else { return }
+    activate(stand)
+    activate(front)
+}
+
+/// Bring one app forward and wait for it to arrive — the activation lands after the call returns, the
+/// way `front` says of its own.
+func activate(_ app: NSRunningApplication) {
+    if #available(macOS 14.0, *) {
+        app.activate()
+    } else {
+        app.activate(options: [.activateIgnoringOtherApps])
+    }
+    usleep(400_000)
+}
+
+/// The keyboard input sources this machine has enabled — the ones a person could pick from the input
+/// menu, and so the only ones a selection can name.
+func enabledInputSources() -> [TISInputSource] {
+    guard let list = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
+        return []
+    }
+    return list
+}
+
+/// An input source's own identifier, which is how every caller names one.
+func inputSourceID(_ source: TISInputSource) -> String {
+    guard let value = TISGetInputSourceProperty(source, kTISPropertyInputSourceID) else { return "?" }
+    return Unmanaged<CFString>.fromOpaque(value).takeUnretainedValue() as String
+}
+
+/// A reading written through the input method that is selected, and left standing unsettled.
+///
+/// What is handed over is the reading — the kana a person watches appear as they type — and what is
+/// sent to the window is the keys that reading is typed with, one press at a time. The input method
+/// is then the thing that turns them into characters, which is the whole point: a caller that sent
+/// the characters themselves would have walked around the one layer this exists to walk through, and
+/// `type` already does that.
+///
+/// **Nothing is settled.** The word is left where the input method has it — drawn on the screen,
+/// held in no field — and that gap is where everything that can go wrong with a conversion goes
+/// wrong. The return that accepts it is the caller's own press, and how many returns it takes is
+/// what tells a build that kept the word from one that threw it away.
+func compose(_ reading: String) {
+    for ch in keysFor(reading) {
+        guard let code = usKeyCode[ch] else {
+            fail("no key on a U.S. keyboard writes \(ch) — compose presses the keys a reading is typed with")
+        }
+        key(code)
+        // A gap between presses, because an input method reads them in order and builds a word out
+        // of the run: two arriving together are two keys it never saw one of.
+        usleep(20_000)
+    }
+}
+
+/// The keys a reading is typed with, in the order they are pressed.
+///
+/// Two kana are read before one, because a small ゃゅょ belongs to the kana in front of it — `きょ` is
+/// `kyo` and never `ki` followed by something. `っ` is not a key of its own either: it is the next
+/// sound's first consonant written twice, so it is resolved by looking past itself. A kana nothing
+/// here can write is refused rather than dropped, since a word that came out one sound short would
+/// be read back as a build's failure rather than as this one's.
+func keysFor(_ reading: String) -> String {
+    let kana = Array(reading)
+    var keys = ""
+    var i = 0
+    while i < kana.count {
+        if kana[i] == "っ" {
+            let (next, width) = readingAt(kana, i + 1)
+            // A `っ` with no sound after it is a kana in its own right, and so is one in front of a
+            // vowel: neither has a consonant to write twice.
+            guard let next, let consonant = next.first, !"aiueo".contains(consonant) else {
+                keys += "xtu"
+                i += 1
+                continue
+            }
+            keys.append(consonant)
+            keys += next
+            i += 1 + width
+            continue
+        }
+        let (here, width) = readingAt(kana, i)
+        guard let here else {
+            fail("no reading for \"\(kana[i])\" — compose writes the kana a Japanese reading is typed in")
+        }
+        keys += here
+        i += width
+    }
+    return keys
+}
+
+/// The kana standing at that place and how wide it is — two characters where the one after is a small
+/// ゃゅょ, and one otherwise.
+func readingAt(_ kana: [Character], _ i: Int) -> (String?, Int) {
+    guard i < kana.count else { return (nil, 0) }
+    if i + 1 < kana.count, let pair = kanaKeys[String(kana[i ... i + 1])] { return (pair, 2) }
+    if let one = kanaKeys[String(kana[i])] { return (one, 1) }
+    return (nil, 0)
+}
+
+/// Kana to the letters it is typed with. Hiragana only: katakana is written by converting a reading
+/// rather than by typing it, so a road that wanted it would be asking for a conversion and not for a
+/// word left standing.
+let kanaKeys: [String: String] = [
+    "あ": "a", "い": "i", "う": "u", "え": "e", "お": "o",
+    "か": "ka", "き": "ki", "く": "ku", "け": "ke", "こ": "ko",
+    "が": "ga", "ぎ": "gi", "ぐ": "gu", "げ": "ge", "ご": "go",
+    "さ": "sa", "し": "shi", "す": "su", "せ": "se", "そ": "so",
+    "ざ": "za", "じ": "ji", "ず": "zu", "ぜ": "ze", "ぞ": "zo",
+    "た": "ta", "ち": "chi", "つ": "tsu", "て": "te", "と": "to",
+    "だ": "da", "ぢ": "di", "づ": "du", "で": "de", "ど": "do",
+    "な": "na", "に": "ni", "ぬ": "nu", "ね": "ne", "の": "no",
+    "は": "ha", "ひ": "hi", "ふ": "fu", "へ": "he", "ほ": "ho",
+    "ば": "ba", "び": "bi", "ぶ": "bu", "べ": "be", "ぼ": "bo",
+    "ぱ": "pa", "ぴ": "pi", "ぷ": "pu", "ぺ": "pe", "ぽ": "po",
+    "ま": "ma", "み": "mi", "む": "mu", "め": "me", "も": "mo",
+    "や": "ya", "ゆ": "yu", "よ": "yo",
+    "ら": "ra", "り": "ri", "る": "ru", "れ": "re", "ろ": "ro",
+    "わ": "wa", "を": "wo", "ん": "nn", "ゔ": "vu",
+    "ぁ": "xa", "ぃ": "xi", "ぅ": "xu", "ぇ": "xe", "ぉ": "xo",
+    "ゃ": "xya", "ゅ": "xyu", "ょ": "xyo", "ゎ": "xwa", "っ": "xtu",
+    "きゃ": "kya", "きゅ": "kyu", "きょ": "kyo",
+    "ぎゃ": "gya", "ぎゅ": "gyu", "ぎょ": "gyo",
+    "しゃ": "sha", "しゅ": "shu", "しょ": "sho",
+    "じゃ": "ja", "じゅ": "ju", "じょ": "jo",
+    "ちゃ": "cha", "ちゅ": "chu", "ちょ": "cho",
+    "ぢゃ": "dya", "ぢゅ": "dyu", "ぢょ": "dyo",
+    "にゃ": "nya", "にゅ": "nyu", "にょ": "nyo",
+    "ひゃ": "hya", "ひゅ": "hyu", "ひょ": "hyo",
+    "びゃ": "bya", "びゅ": "byu", "びょ": "byo",
+    "ぴゃ": "pya", "ぴゅ": "pyu", "ぴょ": "pyo",
+    "みゃ": "mya", "みゅ": "myu", "みょ": "myo",
+    "りゃ": "rya", "りゅ": "ryu", "りょ": "ryo",
+    "ふぁ": "fa", "ふぃ": "fi", "ふぇ": "fe", "ふぉ": "fo",
+    "うぃ": "wi", "うぇ": "we",
+    "てぃ": "thi", "でぃ": "dhi",
+    "ー": "-", "、": ",", "。": ".",
+]
+
+/// The letter a key writes on a U.S. layout, the other way round — which is the way a caller with a
+/// reading in hand needs it. Only what `kanaKeys` can ask for is here.
+let usKeyCode: [Character: CGKeyCode] = [
+    "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9,
+    "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "o": 31, "u": 32,
+    "i": 34, "p": 35, "l": 37, "j": 38, "k": 40, "n": 45, "m": 46,
+    "-": 27, ",": 43, ".": 47,
+]
+
 /// Pull `--<flag> <value>` out of the line, wherever in it the caller wrote it, and hand back what is
 /// left as the positional arguments each subcommand already reads. Which window, and which kind of
 /// element, are qualifiers on the aim rather than more things to name, so neither is given a place in
@@ -1526,7 +1734,7 @@ let (role, afterRole) = takeOption("--role", afterWindow, needs: "the role find 
 let (at, afterAt) = takeAt(afterRole)
 let (held, args) = takeModifiers(afterAt)
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|menu|click-named|right-click-named|dblclick-named|point-named|click|right-click|dblclick|point|drag|drop-file|type|key|scroll|set-date|trusted> … [--window <title>]")
+    fail("usage: screen <front|shot|read|find|menu|click-named|right-click-named|dblclick-named|point-named|click|right-click|dblclick|point|drag|drop-file|type|key|input-source|compose|scroll|set-date|trusted> … [--window <title>]")
 }
 // Refused rather than ignored: a qualifier the subcommand never reads would narrow nothing and say so
 // nowhere, which is the silent miss every refusal in this file is written against.
@@ -1606,6 +1814,12 @@ case "key":
         fail("usage: screen key <keycode> [--cmd] [--shift] [--opt] [--ctrl]")
     }
     key(CGKeyCode(code), flags: held)
+case "input-source":
+    guard args.count == 2 || args.count == 3 else { fail("usage: screen input-source [<id>]") }
+    inputSource(args.count == 3 ? args[2] : nil)
+case "compose":
+    guard args.count == 3 else { fail("usage: screen compose <reading>") }
+    compose(args[2])
 case "scroll":
     guard args.count == 5, let pid = Int(args[2]), let dx = Double(args[3]), let dy = Double(args[4]) else {
         fail("usage: screen scroll <pid> <dx> <dy> [--at <x> <y>] [--window <title>]")

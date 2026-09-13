@@ -207,12 +207,24 @@ func TestGuestPathsAreOneAgreement(t *testing.T) {
 		{vmVerifyLog, "/Users/admin/verify-gui.log"},
 		{vmVerifyEvidence, "/Users/admin/verify-gui-evidence"},
 		{vmScreenSource, "/Users/admin/screen.swift"},
+		{vmInputPath, "/Users/admin/input"},
 		{vmGuestApp, "/Users/admin/Applications/Amenbo.app"},
 		{vmGuestCLI, "/Users/admin/.local/bin/amenbo"},
 	} {
 		if c.got != c.want {
 			t.Errorf("guest path = %q, want %q", c.got, c.want)
 		}
+	}
+}
+
+// TestTheInputMethodIsSpelledOnceForTwoPrograms holds the one name this file and vminput.swift both
+// carry. The tool enables the method; this side greps a guest's preferences for it to say whether a
+// clone can walk the road a word is written through one on — and the tool is deleted from the guest
+// as soon as the golden is prepared, so there is nothing in there to ask instead. A spelling that
+// drifted would have `vm status` reporting no input method on a guest that has one.
+func TestTheInputMethodIsSpelledOnceForTwoPrograms(t *testing.T) {
+	if !strings.Contains(vmInputSource, `"`+vmJapaneseInputMethod+`"`) {
+		t.Errorf("vminput.swift does not name %q — the tool enables one method and vm status looks for another", vmJapaneseInputMethod)
 	}
 }
 

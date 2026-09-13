@@ -162,7 +162,25 @@ case "$built_machine" in
 esac
 
 echo "→ [container] AppImage self-check (unpack):"
-"$DIST_IMG" --appimage-extract >/dev/null 2>&1 && echo "  AppImage unpacks OK" || echo "  (AppImage extract check skipped)"
+if "$DIST_IMG" --appimage-extract >/dev/null 2>&1; then
+  echo "  AppImage unpacks OK"
+  # What the bundle can be typed into. linuxdeploy-plugin-gtk copies THIS IMAGE's GTK immodules
+  # into the AppDir, re-queries them here, and then points the run at the cache it wrote
+  # (GTK_IM_MODULE_FILE in apprun-hooks) — so an input method module that is not installed in
+  # Dockerfile.linux-gui is in no AppImage we ship, GTK_IM_MODULE=ibus resolves to nothing, and
+  # the app falls back to a context that never composes: Japanese cannot be typed in the terminal
+  # or in the box. Nothing else reads this back, and a build is green either way, so this is the
+  # only thing that would notice the two packages going.
+  im_cache="$(find /build/app/squashfs-root/usr/lib -name immodules.cache -print -quit 2>/dev/null || true)"
+  [ -n "$im_cache" ] || { echo "✗ the bundle carries no GTK immodules.cache — nothing in it can compose" >&2; exit 1; }
+  for im in ibus fcitx5; do
+    grep -q "im-$im\.so" "$im_cache" \
+      || { echo "✗ the bundle's immodules.cache has no im-$im.so row — that input method cannot be typed with (see Dockerfile.linux-gui)" >&2; exit 1; }
+  done
+  echo "  input method modules present: ibus, fcitx5"
+else
+  echo "  (AppImage extract check skipped)"
+fi
 rm -rf /build/app/squashfs-root 2>/dev/null || true
 
 collected=("$DIST_IMG")

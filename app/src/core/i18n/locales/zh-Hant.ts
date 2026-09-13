@@ -586,6 +586,10 @@ export const zhHant: Translation = {
     "face.composeSendKeys": "傳送（{keys}）",
     "face.composeOpen": "開啟輸入框",
     "face.composeFold": "收合輸入框",
+    // The draft page and the notes field a task or a project carries are named with different
+    // words here. One Chinese word names a slip written on, another names a field of remarks,
+    // and neither stretches over both — so these are left apart rather than made to match the
+    // single word ja and en use for the two (`AMB-D-891`).
     "files.side": "便箋與檔案",
     "files.memo": "便箋",
     "files.memoTyping": "輸入中",

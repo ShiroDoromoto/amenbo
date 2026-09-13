@@ -1,0 +1,141 @@
+# Most of the world does not type in the letters a keyboard has on it. A word in Japanese, Chinese or
+# Korean is written through an input method: the reading is typed, the input method holds it, and it
+# reaches the program only once a person settles it. Until then the word is on the screen and in no
+# other place.
+#
+# **No road here had ever stood in that gap.** Every line a road types into a pane is typed in Latin
+# letters, which reach the program as they are pressed — so a pane could lose a word to a conversion
+# and every road would stay green.
+#
+# ── What the road is about ──────────────────────────────────────────────────────────────────────
+# Two things, and the second is the one a person loses work to.
+#
+# **A word written through an input method reaches the program.** That is the ordinary road, and it
+# is walked first because the one under it means nothing without it: a pane that could not take a
+# converted word at all would fail the second half for a reason that had nothing to do with the
+# keyboard going anywhere.
+#
+# **A word the keyboard was taken away from mid-conversion is still there when it comes back.** The
+# emulator empties the field it keeps that word in the moment the keyboard leaves it, and nothing
+# else holds the characters. A build that lets them go leaves a person looking at a word that is no
+# longer anywhere — the mark still drawn under it, the field beneath it empty — and the press that
+# would have accepted it arrives as a bare return and sends the line without it. Alt-tabbing
+# mid-word was enough to do it.
+#
+# ── Why the leaving and the press are one step ──────────────────────────────────────────────────
+# Every step is handed over and then photographed, so seconds pass between one and the next. A shot
+# taken after the keyboard came back and before the press would be the same picture on either build:
+# the mark is drawn over characters that were kept and over characters that are gone alike. Only the
+# press tells them apart, so it stands in the step that takes the keyboard away.
+#
+# ── Why the unsettled word is not read where it stands ──────────────────────────────────────────
+# For the same reason. A reading made while the mark is still under the word is green on a build that
+# is about to throw it away, so a step there would cost a shot and settle nothing. What the word is
+# read for is the line the program echoed, after the send.
+#
+# ── Why the two words are different ─────────────────────────────────────────────────────────────
+# The first is still on the pane when the second is sent, and a reading cannot say which of two
+# identical lines it found. They are far enough apart that the one character a reading is forgiven
+# cannot turn either into the other.
+#
+# ── Why the pane runs a shell ───────────────────────────────────────────────────────────────────
+# What is sent has to be answered the same way every time. A folder with an agent on it opens on the
+# agent, and what an agent does with a line is the agent's own — so the pane is taken down to a plain
+# prompt, the way every road that speaks in one does.
+#
+# ── The screen road alone ───────────────────────────────────────────────────────────────────────
+# An input method is the machine's, between a keyboard and a window. Nothing the binary is handed
+# goes near it.
+id: keep-the-word-the-keyboard-was-taken-away-from
+title: A word an input method was still writing survives the keyboard leaving the pane
+description: >
+  Open a pane on a plain shell and write a word into it through an input method that converts,
+  stopping while the word is still under its mark. Press return to accept it and again to send it:
+  the shell echoes the word, so it reached the program. Then write a second word the same way and,
+  with it still unsettled, leave Amenbo with the keyboard and come straight back — and press return
+  once. That one press sends the line, and the second word is on it. What is under test is that a
+  conversion the keyboard walked out on is settled rather than dropped, and that the emulator is told
+  it is over, so the next return is a return.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Pottery
+    as: pottery
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: pottery
+      project: pottery
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The frame and not the way in beside it: the project was bound where the world was stood up, so
+  # the press opens a pane in that folder and asks nothing.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # ── The ordinary road: a word written through an input method ─────────────────────────────────
+  # Left under its mark, which is where the op stops. Nothing is read here — see the head of this
+  # file.
+  - type: action
+    domain: terminal
+    op: write-a-word
+    with:
+      text: しなりおのさいしょのことば
+
+  # Two presses: one accepts the word as it is written, one sends the line.
+  - type: action
+    domain: terminal
+    op: send-a-word
+
+  # It reached the program. The word is on the pane because the shell was given it, echoed it, and
+  # did not know the command — which is a thing only the program can have put there.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: しなりおのさいしょのことば
+
+  # ── And the road a person loses work on ───────────────────────────────────────────────────────
+  # A second word, written the same way and left under its mark the same way. Different words from
+  # the first, so the reading at the end cannot be the earlier line read twice.
+  - type: action
+    domain: terminal
+    op: write-a-word
+    with:
+      text: しなりおのふたつめのことば
+
+  # The keyboard out of Amenbo and straight back, and then one press. One, because a build that
+  # settled the word told the emulator the conversion was over as well: left holding one, it answers
+  # this return as part of the conversion and the line does not go at all.
+  - type: action
+    domain: terminal
+    op: send-a-word
+    with:
+      away: true
+
+  # And the word went with the line. On a build that dropped it, the same press sends an empty line
+  # and this reading finds nothing — the characters having been thrown away with the field, in front
+  # of a person who could still see them.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: しなりおのふたつめのことば

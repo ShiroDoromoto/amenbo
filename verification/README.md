@@ -871,6 +871,18 @@ part company: what Amenbo's own output says of itself travels beside the charact
 touch it, while reading them back off the screen means joining the rows a line was drawn across
 before anything can be found there at all.
 
+Most of the world does not type in the letters a keyboard has on it, and a word written through an
+input method is held by that input method until a person settles it — on the screen, and in no other
+place. `write-a-word` writes one into the terminal's own line and stops there, the characters still
+under the mark an emulator draws an unsettled word with; `send-a-word` is the return that gives it to
+the program. `away: true` takes the keyboard out of the window and brings it straight back before
+that press, which is the one thing the pair is here for: the emulator empties the field it keeps such
+a word in the moment the keyboard leaves it, so a build that does not settle the word as it goes
+loses it where the person can still see it. The leaving and the press are one step because a shot
+between them is the same picture either way — what parts a word that was kept from a word that is
+gone is how many returns it takes to send the line, two while the mark is still there and one after
+it has been settled.
+
 Under the pane stands a box of Amenbo's own, and it has a vocabulary of its own for one reason: what
 is written there is not typed at the terminal. `write-to-pane` writes a line into it, `still-to-send`
 reads that line standing there with nothing run — the half that parts the box from the terminal's own

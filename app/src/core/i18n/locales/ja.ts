@@ -570,6 +570,7 @@ export const ja: Translation = {
     "face.whichModel": "どのモデルで起動しますか",
     "face.modelsChecking": "起動できるモデルを確認しています…",
     "face.modelDefault": "CLI の既定のまま",
+    "face.modelDefaultNamed": "CLI の既定のまま（{model}）",
     "face.modelFind": "絞り込む",
     "face.modelName": "モデル名",
     "face.modelsMore": "ほかに {n} 件。絞り込むと出ます",

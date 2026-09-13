@@ -584,6 +584,7 @@ export const uk: Translation = {
     "face.whichModel": "З якою моделлю він запускається?",
     "face.modelsChecking": "Запитуємо, з якими моделями його можна запустити…",
     "face.modelDefault": "Його власне типове значення",
+    "face.modelDefaultNamed": "Його власне типове значення ({model})",
     "face.modelFind": "Звузити список",
     "face.modelName": "Назва моделі",
     "face.modelsMore": "Ще {n} — звузьте список, щоб до них дістатися",

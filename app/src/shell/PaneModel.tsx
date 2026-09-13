@@ -33,9 +33,11 @@ import { Icon } from "../components/Icon";
  * same kind of fact and not a reading either: it is the name Amenbo put on this pane's launch line,
  * or the one it last settled here. It is asked of the place rather than of the terminal, so that the
  * row and the launch line of the next run cannot disagree — each pane keeps a model of its own
- * (`AMB-T-4698`), and this is the one place a reader can tell two panes of one provider apart. And it
- * goes the moment a provider's own picker is opened over it: what the pane is on from then on is
- * between the person and the provider.
+ * (`AMB-T-4698`), and this is the one place a reader can tell two panes of one provider apart. A
+ * pane started on no model of its own is named by the provider's own default, where the provider has
+ * said one (`crate::agent_models::agent_default_model`). And every one of them goes the moment a
+ * provider's own picker is opened over it: what the pane is on from then on is between the person
+ * and the provider.
  *
  * **What the press will do is said before it is pressed** — which command goes in, and, for the three
  * that keep the change past this session, which of the reader's own files it lands in. A control that
@@ -74,11 +76,13 @@ export function PaneModel({ frame, session, agent }: {
   // and never a reading of the screen: the providers whose picker opens leave it null, because what
   // was chosen in there is between the person and the provider.
   const [now, setNow] = useState<AgentModelDto | null>(null);
-  // What this pane is on, as the host holds it against the place (`crate::frames::frame_model`) —
-  // what the button says with nothing pressed.
+  // What this pane is on — what the button says with nothing pressed. Its own model where it was
+  // started on one (`crate::frames::frame_model`), and the provider's own default where it was not
+  // (`crate::agent_models::agent_default_model`).
   //
-  // Null is a pane there is no name to put up for: one started on no model, one whose provider's own
-  // picker has since been opened, and a pane running a plain shell.
+  // Null is a pane there is no name to put up for: one whose provider has never said what its own
+  // default is, one whose provider's own picker has since been opened, and a pane running a plain
+  // shell.
   const [on, setOn] = useState<AgentModelDto | null>(null);
   // The provider's own picker is open and the choosing is the person's. It stands until they come
   // back to this row, which is the one moment it is certainly over.
@@ -104,8 +108,14 @@ export function PaneModel({ frame, session, agent }: {
   // What this pane is on, asked as the row comes up — and again for a pane whose provider changed
   // under it, which is a pane that adopted another session.
   //
-  // It is two questions because the host keeps the two halves apart: the place holds the name that
-  // went on the line, and what a reader calls that name is kept beside the choice they made
+  // **A pane started on no model of its own is on the provider's default**, and that name is asked
+  // for separately because it is a different fact: one is what Amenbo put on this pane's line, the
+  // other is what the provider would do left alone. Neither ask starts anything — the second answers
+  // out of what the provider said the last time it was asked for its list, and says nothing where
+  // nobody has asked yet (`AMB-D-865`).
+  //
+  // The pane's own name takes a second question besides: the place holds the name that went on the
+  // line, and what a reader calls that name is kept beside the choice they made
   // (`crate::wake::wake_chose_model`). A name nothing remembers a word for stands as the provider
   // spells it, which is what went on the line.
   useEffect(() => {
@@ -118,7 +128,8 @@ export function PaneModel({ frame, session, agent }: {
       const id = await invoke<string | null>("frame_model", { frame }).catch(() => null);
       if (!alive) return;
       if (id === null) {
-        setOn(null);
+        const its = await invoke<AgentModelDto | null>("agent_default_model", { agent }).catch(() => null);
+        if (alive) setOn(its);
         return;
       }
       const kept = await invoke<AgentModelKeptDto>("wake_model", { agent }).catch(() => null);

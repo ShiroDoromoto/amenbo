@@ -35,6 +35,9 @@ const hoisted = vi.hoisted(() => ({
       (`AMB-D-865`). An agent not named here answers with nothing, the way one with no list door
       does. */
   models: {} as Record<string, { id: string; label: string }[]>,
+  /** Which of them each agent says it is on right now. Four of the six name none, which is what an
+      agent not set here answers with. */
+  onNow: {} as Record<string, string | null>,
   /** What this device already remembers for each agent: the model it comes up on, what was chosen
       for it before, and the flag its command takes a model behind. */
   kept: {} as Record<string, { chosen: { id: string; label: string } | null; history: { id: string; label: string }[]; flag: string | null }>,
@@ -73,7 +76,8 @@ vi.mock("../core/ipc", () => ({
       return cmd === "wake_register" ? "custom:1" : undefined;
     }
     if (cmd === "agent_models") {
-      return { models: hoisted.models[(args as { agent: string }).agent] ?? [], current: null };
+      const asked = (args as { agent: string }).agent;
+      return { models: hoisted.models[asked] ?? [], current: hoisted.onNow[asked] ?? null };
     }
     if (cmd === "wake_model") {
       return hoisted.kept[(args as { agent: string }).agent]
@@ -163,6 +167,7 @@ beforeEach(() => {
   hoisted.reached = true;
   hoisted.chosen = [];
   hoisted.models = {};
+  hoisted.onNow = {};
   hoisted.kept = {};
   started.length = 0;
   container = document.createElement("div");
@@ -617,6 +622,28 @@ describe("which model the agent on the row starts on", () => {
       expect(hoisted.asked).not.toContain("wake_forget_model");
       expect(started).toEqual(["claude-code"]);
     });
+
+  it("names the model the agent's own default stands for, where the agent named it", async () => {
+    hoisted.wake = startable(["claude-code"], "claude-code");
+    hoisted.models["claude-code"] = [{ id: "opus", label: "Opus" }, { id: "sonnet", label: "Sonnet" }];
+    hoisted.onNow["claude-code"] = "sonnet";
+    await draw("/work/here");
+
+    // The first pill still means "nothing goes on the line" — what it gains is what that comes to,
+    // which is otherwise only learnt by opening the pane.
+    expect(offered()).toEqual(["Its own default (Sonnet)", "Opus", "Sonnet"]);
+    expect(runs(), "naming it changes nothing about the press").toBe("claude-code");
+  });
+
+  it("leaves the first pill unnamed where the agent did not say which one it is on", async () => {
+    // Four of the six do not say. The pill says what it always said, which is the honest answer for
+    // an agent that has not named one.
+    hoisted.wake = startable(["claude-code"], "claude-code");
+    hoisted.models["claude-code"] = [{ id: "opus", label: "Opus" }];
+    await draw("/work/here");
+
+    expect(offered()).toEqual(["Its own default", "Opus"]);
+  });
 
   it("is kept against the agent when the pane opens, and the line says so first", async () => {
     hoisted.wake = startable(["claude-code"], "claude-code");

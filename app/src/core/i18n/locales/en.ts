@@ -677,6 +677,7 @@ const ui = {
   "face.whichModel": "What model does it start on?",
   "face.modelsChecking": "Asking which models it can be started on…",
   "face.modelDefault": "Its own default",
+  "face.modelDefaultNamed": "Its own default ({model})",
   "face.modelFind": "Narrow the list",
   "face.modelName": "Model name",
   "face.modelsMore": "{n} more — narrow the list to reach them",

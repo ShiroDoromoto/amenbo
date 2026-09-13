@@ -561,6 +561,7 @@ export const id: Translation = {
     "face.whichModel": "Model apa yang dipakai saat mulai?",
     "face.modelsChecking": "Menanyakan model apa saja yang bisa dipakai untuk memulainya…",
     "face.modelDefault": "Bawaannya sendiri",
+    "face.modelDefaultNamed": "Bawaannya sendiri ({model})",
     "face.modelFind": "Persempit daftar",
     "face.modelName": "Nama model",
     "face.modelsMore": "{n} lagi — persempit daftar untuk mencapainya",

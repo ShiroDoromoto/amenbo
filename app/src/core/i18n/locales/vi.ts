@@ -561,6 +561,7 @@ export const vi: Translation = {
     "face.whichModel": "Nó khởi động với mô hình nào?",
     "face.modelsChecking": "Đang hỏi nó có thể khởi động với những mô hình nào…",
     "face.modelDefault": "Mặc định của chính nó",
+    "face.modelDefaultNamed": "Mặc định của chính nó ({model})",
     "face.modelFind": "Thu hẹp danh sách",
     "face.modelName": "Tên mô hình",
     "face.modelsMore": "Còn {n} nữa — thu hẹp danh sách để tới chúng",

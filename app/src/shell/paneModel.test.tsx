@@ -30,6 +30,8 @@ const hoisted = vi.hoisted(() => ({
   onFrame: [] as { frame: string; model: string }[],
   /** The model the host holds against this pane's place — what it is running on. */
   onPlace: null as string | null,
+  /** What each provider last said its own default is, for the panes started on no model. */
+  itsOwn: {} as Record<string, { id: string; label: string } | null>,
   /** What was written into the terminal, in order: `send` carries the return behind it and `paste`
       does not, which is the difference the two providers with a picker turn on. */
   wrote: [] as { how: "send" | "paste"; text: string; agent?: string | null }[],
@@ -74,6 +76,9 @@ vi.mock("../core/ipc", () => ({
         ?? { chosen: null, history: [], flag: "--model" };
     }
     if (cmd === "frame_model") return hoisted.onPlace;
+    if (cmd === "agent_default_model") {
+      return hoisted.itsOwn[(args as { agent: string }).agent] ?? null;
+    }
     if (cmd === "wake_chose_model") return undefined;
     if (cmd === "frame_on_model") {
       hoisted.onFrame.push(args as { frame: string; model: string });
@@ -93,6 +98,7 @@ beforeEach(() => {
   hoisted.asked = [];
   hoisted.onFrame = [];
   hoisted.onPlace = null;
+  hoisted.itsOwn = {};
   hoisted.wrote = [];
   hoisted.writeFails = false;
   container = document.createElement("div");
@@ -166,6 +172,23 @@ describe("what the button says the pane is on", () => {
     await draw("gemini-cli");
 
     expect(container.querySelector(".modelrow__now")?.textContent).toContain("Gemini 2.5 Pro");
+  });
+
+  it("names the provider's own default where the pane was started on no model", async () => {
+    hoisted.switches["claude-code"] = { command: "/model", carries: "named", keeps: null };
+    hoisted.itsOwn["claude-code"] = { id: "sonnet", label: "Sonnet 5" };
+    await draw("claude-code");
+
+    expect(container.querySelector(".modelrow__now")?.textContent).toContain("Sonnet 5");
+  });
+
+  it("says nothing for a pane on no model whose provider has never named its own", async () => {
+    // Four of the six do not say which one they are on, and a fifth may not have been asked yet.
+    // Neither is a model — it is a name nobody has, and the row says so by not saying one.
+    hoisted.switches["codex-cli"] = { command: "/model", carries: "picker", keeps: null };
+    await draw("codex-cli");
+
+    expect(container.querySelector(".modelrow__now")?.textContent).toContain("Model");
   });
 
   it("stands the name as the provider spells it where nothing remembers a word for it", async () => {
@@ -362,10 +385,10 @@ describe("asking the host", () => {
     // way up would pay for one nobody opened (`crate::agent_models`).
     hoisted.switches["claude-code"] = { command: "/model", carries: "named", keeps: null };
     await draw("claude-code");
-    // Two cheap reads on the way up, and neither opens anything: how this provider is moved, and
-    // what the pane was started on. The reader's word for that name is asked only where there is a
-    // name to have one.
-    expect(hoisted.asked).toEqual(["wake_switch", "frame_model"]);
+    // Three cheap reads on the way up, and none of them opens anything: how this provider is moved,
+    // what the pane was started on, and — this pane having been started on nothing — what the
+    // provider said its own default is the last time anybody asked it for a list.
+    expect(hoisted.asked).toEqual(["wake_switch", "frame_model", "agent_default_model"]);
     expect(hoisted.asked, "the list was asked for before the row was opened").not.toContain("agent_models");
 
     await open();

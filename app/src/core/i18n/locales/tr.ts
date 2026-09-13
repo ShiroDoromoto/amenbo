@@ -558,6 +558,7 @@ export const tr: Translation = {
     "face.whichModel": "Hangi modelle başlıyor?",
     "face.modelsChecking": "Hangi modellerle başlatılabileceği soruluyor…",
     "face.modelDefault": "Kendi varsayılanı",
+    "face.modelDefaultNamed": "Kendi varsayılanı ({model})",
     "face.modelFind": "Listeyi daralt",
     "face.modelName": "Model adı",
     "face.modelsMore": "{n} tane daha — onlara ulaşmak için listeyi daraltın",

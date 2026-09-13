@@ -68,6 +68,38 @@ pub async fn agent_models(agent: String) -> AgentModelListDto {
     tauri::async_runtime::spawn_blocking(move || rows(&agent)).await.unwrap_or_default()
 }
 
+/// The model this provider says it is on, where it has **already** been asked ([`agent_models()`]) —
+/// and nothing where it has not.
+///
+/// **It runs nothing, and that is the whole of why it is a door of its own.** The row under a
+/// running pane names the model that pane is on, and a pane started on no model of its own is on
+/// whatever the provider's own settings have. Asking for the list to learn that name would put a
+/// login shell and a provider starting up behind every pane that comes up — the ones a run resumes
+/// without anybody pressing included (`AMB-D-869`) — and a pane is drawn far more often than a row
+/// of candidates is opened. So a provider nobody has asked yet is answered with nothing, rather than
+/// with a question put on its behalf.
+///
+/// A provider that answered a list without saying which of them it is on is the same nothing: five
+/// of the six do not say, and what is missing there is the name and not the model (`AMB-T-4701`).
+#[tauri::command]
+pub fn agent_default_model(agent: String) -> Option<AgentModelDto> {
+    let launch = amenbo_core::harness::find_launch(&agent)?;
+    let kept = ASKED.get()?.lock().ok()?.get(launch.id).cloned()?;
+    let current = kept.current?;
+    // Named out of the answer it came in, and standing as the provider spells it where the two do not
+    // meet: a name the reader would see written on the row is worth more than the same name in the
+    // provider's own spelling, and the spelling is worth more than saying nothing at all.
+    Some(
+        kept.models
+            .into_iter()
+            .find(|one| one.id == current)
+            .map_or_else(
+                || AgentModelDto { id: current.clone(), label: current.clone() },
+                |one| AgentModelDto { id: one.id, label: one.label },
+            ),
+    )
+}
+
 /// The row itself, on whichever thread asked for it — [`agent_models()`] without the door.
 fn rows(agent: &str) -> AgentModelListDto {
     let Some(launch) = amenbo_core::harness::find_launch(agent) else {

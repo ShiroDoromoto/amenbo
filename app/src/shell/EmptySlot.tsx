@@ -134,6 +134,9 @@ export function EmptySlot({
   // agent's own answer and the memory is kept against the agent, so neither is a fact about this
   // frame (`crate::agent_models` · `crate::config`).
   const [models, setModels] = useState<AgentModelDto[] | null>(null);
+  // Which of them the agent says it is on right now, where it says so at all — the name the first
+  // pill stands for, and `null` on the four providers that do not name one (`AMB-T-4701`).
+  const [its, setIts] = useState<AgentModelDto | null>(null);
   const [kept, setKept] = useState<AgentModelKeptDto | null>(null);
   // Which model the reader picked here. `undefined` is "they have not", which falls back to what was
   // remembered; `null` is the agent's own default, which is a choice and not the absence of one —
@@ -266,11 +269,13 @@ export function EmptySlot({
   useEffect(() => {
     if (asks === null) {
       setModels(null);
+      setIts(null);
       setKept(null);
       return;
     }
     let alive = true;
     setModels(null);
+    setIts(null);
     setKept(null);
     setPicked(undefined);
     setTyped("");
@@ -280,7 +285,18 @@ export function EmptySlot({
     // A read that failed is an empty row, the same as an agent that would not answer: the other road
     // is always open, which is to open the pane and use the provider's own picker (`AMB-D-865`).
     void invoke<AgentModelListDto>("agent_models", { agent: asks })
-      .then((said) => { if (alive) setModels(said.models); })
+      .then((said) => {
+        if (!alive) return;
+        setModels(said.models);
+        // The name the agent's own default stands for, out of the answer it arrived in. A provider
+        // that named one it did not list is taken at its word and drawn as it spelled it.
+        setIts(
+          said.current === null
+            ? null
+            : said.models.find((one) => one.id === said.current)
+              ?? { id: said.current, label: said.current },
+        );
+      })
       .catch(() => { if (alive) setModels([]); });
     return () => { alive = false; };
   }, [asks]);
@@ -382,7 +398,12 @@ export function EmptySlot({
         if (models !== null && models.length === 0) setTyped(one?.id ?? "");
       }}
     >
-      {one === null ? t("face.modelDefault") : one.label}
+      {/* The agent's own default, named where the agent named it. Without the name the pill says
+          only that nothing will be put on the line, which leaves the reader to open the pane to find
+          out what that means. */}
+      {one === null
+        ? its === null ? t("face.modelDefault") : tf("face.modelDefaultNamed", { model: its.label })
+        : one.label}
     </button>
   );
 

@@ -580,6 +580,7 @@ export const ptBR: Translation = {
     "face.whichModel": "Com qual modelo ele inicia?",
     "face.modelsChecking": "Perguntando com quais modelos ele pode iniciar…",
     "face.modelDefault": "O padrão dele mesmo",
+    "face.modelDefaultNamed": "O padrão dele mesmo ({model})",
     "face.modelFind": "Restringir a lista",
     "face.modelName": "Nome do modelo",
     "face.modelsMore": "Mais {n} — restrinja a lista para chegar a eles",

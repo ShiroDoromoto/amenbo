@@ -568,6 +568,7 @@ export const de: Translation = {
     "face.whichModel": "Mit welchem Modell startet es?",
     "face.modelsChecking": "Es wird gefragt, mit welchen Modellen es gestartet werden kann …",
     "face.modelDefault": "Eigene Voreinstellung",
+    "face.modelDefaultNamed": "Eigene Voreinstellung ({model})",
     "face.modelFind": "Liste eingrenzen",
     "face.modelName": "Modellname",
     "face.modelsMore": "{n} weitere – grenze die Liste ein, um sie zu erreichen",

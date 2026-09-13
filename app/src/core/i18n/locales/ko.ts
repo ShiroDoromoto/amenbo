@@ -557,6 +557,7 @@ export const ko: Translation = {
     "face.whichModel": "어떤 모델로 시작하나요?",
     "face.modelsChecking": "어떤 모델로 시작할 수 있는지 묻고 있습니다…",
     "face.modelDefault": "그 도구의 기본값",
+    "face.modelDefaultNamed": "그 도구의 기본값 ({model})",
     "face.modelFind": "목록 좁히기",
     "face.modelName": "모델 이름",
     "face.modelsMore": "{n}개 더 — 목록을 좁히면 나옵니다",

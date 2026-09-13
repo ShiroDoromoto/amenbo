@@ -558,6 +558,7 @@ export const zhHans: Translation = {
     "face.whichModel": "用哪个模型启动？",
     "face.modelsChecking": "正在问它能用哪些模型启动……",
     "face.modelDefault": "它自己的默认设置",
+    "face.modelDefaultNamed": "它自己的默认设置（{model}）",
     "face.modelFind": "缩小列表",
     "face.modelName": "模型名",
     "face.modelsMore": "还有 {n} 个——缩小列表就能看到",

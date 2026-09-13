@@ -561,6 +561,7 @@ export const th: Translation = {
     "face.whichModel": "เริ่มด้วยโมเดลไหน",
     "face.modelsChecking": "กำลังถามว่าเริ่มด้วยโมเดลใดได้บ้าง…",
     "face.modelDefault": "ค่าตั้งต้นของตัวมันเอง",
+    "face.modelDefaultNamed": "ค่าตั้งต้นของตัวมันเอง ({model})",
     "face.modelFind": "จำกัดรายการให้แคบลง",
     "face.modelName": "ชื่อโมเดล",
     "face.modelsMore": "อีก {n} รายการ — จำกัดรายการให้แคบลงเพื่อไปถึง",

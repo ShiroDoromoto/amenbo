@@ -558,6 +558,7 @@ export const hi: Translation = {
     "face.whichModel": "यह किस मॉडल पर शुरू होता है?",
     "face.modelsChecking": "पूछा जा रहा है कि इसे किन मॉडलों पर शुरू किया जा सकता है…",
     "face.modelDefault": "इसका अपना डिफ़ॉल्ट",
+    "face.modelDefaultNamed": "इसका अपना डिफ़ॉल्ट ({model})",
     "face.modelFind": "सूची सीमित करें",
     "face.modelName": "मॉडल का नाम",
     "face.modelsMore": "{n} और — उन तक पहुँचने के लिए सूची सीमित करें",

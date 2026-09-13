@@ -558,6 +558,7 @@ export const nl: Translation = {
     "face.whichModel": "Met welk model start het?",
     "face.modelsChecking": "Er wordt gevraagd met welke modellen het kan starten…",
     "face.modelDefault": "De eigen standaard",
+    "face.modelDefaultNamed": "De eigen standaard ({model})",
     "face.modelFind": "Lijst beperken",
     "face.modelName": "Modelnaam",
     "face.modelsMore": "Nog {n} — beperk de lijst om ze te bereiken",

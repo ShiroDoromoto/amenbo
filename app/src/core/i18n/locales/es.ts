@@ -593,6 +593,7 @@ export const es: Translation = {
     "face.modelSendsPicker": "Escribe solo {command} en el panel. Se abre su propio selector, y la elección es suya.",
     "face.modelSendsFilter": "Escribe {command} en el panel y luego el nombre en su campo de búsqueda. Confirmarlo es cosa suya.",
     "face.modelKeeps": "También cambia su propio valor predeterminado, en {path}.",
+    "face.modelKeepsPane": "Se queda en este panel: su propio valor predeterminado, en {path}, no cambia, y el cambio desaparece la próxima vez que abra este panel.",
     "face.startSave": "Guardar",
     "face.startCancel": "Cancelar",
     "face.startEdit": "Editar",

@@ -71,13 +71,15 @@ steps_gui:
     domain: terminal
     op: open-models
 
-  # Said before the press: the command goes in alone, and the change reaches a file of the reader's.
+  # Said before the press: the command goes in alone, and a file of the reader's is named — with what
+  # the press does to it, which is not the same answer on every machine: this pane holds a copy of
+  # that file where a link would not survive the provider replacing it.
   - type: assert
     domain: terminal
     op: switch-says
     with:
       command: /model
-      keeps: ~/.codex/config.toml
+      keeps: copied ~/.codex/config.toml
 
   - type: action
     domain: terminal

@@ -575,6 +575,7 @@ export const vi: Translation = {
     "face.modelSendsPicker": "Chỉ gõ {command} vào khung. Bộ chọn của nó mở ra, và việc chọn là của bạn.",
     "face.modelSendsFilter": "Gõ {command} vào khung, rồi đặt tên vào ô tìm kiếm của nó. Xác nhận là của bạn.",
     "face.modelKeeps": "Việc này cũng đổi mặc định của chính bạn, ở {path}.",
+    "face.modelKeepsPane": "Chỉ nằm trong khung này: mặc định của chính bạn, ở {path}, không đổi, và thay đổi sẽ mất khi khung này mở lần sau.",
     "face.startSave": "Lưu",
     "face.startCancel": "Hủy",
     "face.startEdit": "Sửa",

@@ -4629,6 +4629,15 @@ impl Instructor {
             (Domain::Terminal, "switch-says") => {
                 let keeps = match arg_str(with, "keeps") {
                     None | Some("none") => "Confirm it says nothing about a file of your own: this provider changes the session in front of you and nothing else, and a sentence naming a file here would be Amenbo promising a change it does not make.".to_string(),
+                    // A name behind `copied` is a file some machines hand the pane a copy of rather
+                    // than the file itself, so which of the two sentences is right is the machine's
+                    // answer and both are read for here. It is the one row it is: the rest reach the
+                    // reader's own file wherever they run, and reading both sentences for those would
+                    // let a build say the change stays in the pane on a machine where it does not.
+                    Some(path) if path.starts_with("copied ") => format!(
+                        "Confirm it also names `{path}` — one of your own files, named before the press and not after it — and says one of two things about it: that your own default moves with the press, or that the change stays in this pane and that file does not move. Which of the two is right is this machine's answer rather than this road's, because a pane handed a copy of that file writes to the copy. A press that said nothing about the file at all would move your default, or fail to, without telling you.",
+                        path = path.trim_start_matches("copied "),
+                    ),
                     Some(path) => format!("Confirm it also says the change reaches `{path}` — one of your own files, named before the press and not after it. This provider keeps the change past this session, so a press that said nothing about it would move your default without telling you."),
                 };
                 format!(

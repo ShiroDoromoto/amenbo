@@ -201,6 +201,21 @@ fn kind_of(agent: Option<&str>) -> Option<&'static Kind> {
         .map(|_| kind)
 }
 
+/// Whether what a pane running `agent` writes to `path` — a place in the reader's own home, spelled
+/// the way the catalog spells one (`amenbo_core::harness::Switch::keeps`) — reaches that file.
+///
+/// **False on the one shape that is a copy**: a name this operating system carries into the pane's
+/// home instead of linking ([`Kind::copied`], `AMB-D-878`). The copy is taken again on every open,
+/// so what the pane wrote to it is gone by the next one and the reader's own file was never in it.
+///
+/// True everywhere else, the two cases alike: a name reached by a link or by a path is the reader's
+/// own file, and a provider given no home at all was never parted from it. It is asked so that the
+/// difference is said before the press rather than found out a pane later (`AMB-D-894`).
+pub fn writes_come_back(agent: &str, path: &str) -> bool {
+    let Some(kind) = kind_of(Some(agent)) else { return true };
+    !kind.copied_here().iter().any(|name| path == format!("~/{}/{name}", kind.theirs))
+}
+
 /// The home the AI in this frame runs in, made and linked the first time it is asked for, with the
 /// variables the pane is started with: the one it is told its home by, and one for each file it is
 /// pointed at where the reader keeps it ([`Kind::points`]). Nothing at all for a pane running
@@ -739,6 +754,26 @@ mod tests {
             assert!(kind.copied_here().is_empty());
             assert!(linked.contains(&"config.toml"), "{linked:?}");
         }
+    }
+
+    /// What a pane writes to the copy stays in the pane, and the row that says so before the press
+    /// is asked here (`AMB-D-894`, `crate::wake::wake_switch`).
+    ///
+    /// **The path is the catalog's own**: the answer is a comparison of two spellings, so a row
+    /// respelled on one side and not the other would go on reading "it comes back" with nothing
+    /// looking amiss.
+    #[test]
+    fn a_write_to_a_copied_file_does_not_come_back_where_it_is_copied() {
+        let keeps = amenbo_core::harness::find_launch(CODEX).unwrap().switch.keeps.unwrap();
+
+        assert_eq!(keeps, "~/.codex/config.toml");
+        assert_eq!(writes_come_back(CODEX, keeps), !cfg!(windows));
+        // Its neighbours in the same directory are reached by a link on every operating system, and
+        // so is everything Gemini's home shares.
+        assert!(writes_come_back(CODEX, "~/.codex/auth.json"));
+        assert!(writes_come_back(GEMINI, "~/.gemini/settings.json"));
+        // And a provider given no home of its own was never parted from the reader's file.
+        assert!(writes_come_back("claude-code", "~/.claude/settings.json"));
     }
 
     /// A copy is taken again on every open, so a pane that was made runs ago is still given what the

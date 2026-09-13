@@ -572,6 +572,7 @@ export const hi: Translation = {
     "face.modelSendsPicker": "पैनल में सिर्फ़ {command} लिखता है। उसका अपना चयनक खुलता है, और चुनना आपका है।",
     "face.modelSendsFilter": "पैनल में {command} लिखता है, फिर नाम उसके खोज-खाने में। पक्का करना आपका है।",
     "face.modelKeeps": "इससे आपका अपना डिफ़ॉल्ट भी बदलता है, {path} में।",
+    "face.modelKeepsPane": "यह इसी पैनल तक रहता है: {path} में आपका अपना डिफ़ॉल्ट नहीं बदलता, और अगली बार यह पैनल खुलने पर यह बदलाव चला जाता है।",
     "face.startSave": "सहेजें",
     "face.startCancel": "रद्द करें",
     "face.startEdit": "बदलें",

@@ -182,15 +182,24 @@ notify-rust = "4"
 # The shell's own file operation, which is how a row is put in the recycle bin with a sink attached
 # to report where it landed — the only door on this OS that says (`crate::trash`). The typed crate
 # rather than `windows-sys` beside it, because a sink is a COM object this side implements and only
-# `#[implement]` writes one; it is the same 0.61.3 tauri already links, so nothing new is compiled.
-# `windows-core` is named outright because that is what `#[implement]` expands to, and `windows` 0.61
-# carries no feature that would re-export it under its own name.
+# `#[implement]` writes one. `windows-core` is named outright because that is what `#[implement]`
+# expands to, and `windows` carries no feature that would re-export it under its own name.
+#
+# The two versions below are one contract, not two dependencies to keep current separately. An
+# interface `windows` hands over implements the `Interface` trait of the `windows-core` that
+# `windows` was built against, while `#[implement]` expands against the `windows-core` named here —
+# so the moment the two requirements stop overlapping, the graph carries two crates called
+# `windows-core`, two traits called `Interface`, and `crate::trash` stops compiling with a mismatch
+# that names the same trait on both sides. Move them in one step, by hand, and only to versions that
+# were released together: `windows-core` 0.100.0 exists with no `windows` past 0.62.2 to pair with
+# it, and taking it alone is what broke the Windows leg on 2026-09-12. .github/dependabot.yml holds
+# `windows-core` to patch bumps so the bot cannot repeat that.
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_System_Com",
   "Win32_UI_Shell",
 ] }
-windows-core = "0.100"
+windows-core = "0.62"
 # Asks whether the drive is remote (a network drive) (`store_watch`), and whether this process holds an
 # administrator's token (`launch`) — elevation is what stops a terminal reaching anything scoop installed.
 # Same version tauri already pulls in.

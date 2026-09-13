@@ -9,8 +9,8 @@
 // Which presses leave the box is decided by what is written in it and by nothing on the screen. An
 // empty box has no history to walk, no word to complete and nothing to escape from; a box holding a
 // half-written sentence has all three, and keeps them — except the ArrowUp on its first line, which
-// is the one road out and takes the keyboard with it, and the two that stop what is running, which
-// leave whatever is written (`AMB-D-876`).
+// is the one road out and takes the keyboard with it from either box (`AMB-T-4788`), and the two that
+// stop what is running, which leave whatever is written (`AMB-D-876`).
 import { describe, expect, it, vi } from "vitest";
 import {
   boxHeight, leavesForTerminal, passedOn, pauseBeforeTheReturn, pressIntoTerminal, sendIntoTerminal,
@@ -293,7 +293,7 @@ describe("the presses that stop what is running", () => {
   });
 });
 
-describe("the way out of a box with something written in it", () => {
+describe("the way out of the box", () => {
   /** Where the caret sits when a person has just written `text` and not moved. */
   const end = (text: string) => text.length;
 
@@ -311,8 +311,10 @@ describe("the way out of a box with something written in it", () => {
     expect(leavesForTerminal(press("ArrowUp"), written, "first line".length)).toBe("\x1b[A");
   });
 
-  it("is not this road while the box is empty, where every press of the four goes on anyway", () => {
-    expect(leavesForTerminal(press("ArrowUp"), "", 0)).toBeNull();
+  // An empty box handed the press on before, and kept the keyboard — so what the program drew could
+  // be walked and never chosen (`AMB-T-4788`).
+  it("is this road while the box is empty too", () => {
+    expect(leavesForTerminal(press("ArrowUp"), "", 0)).toBe("\x1b[A");
   });
 
   it("is the ArrowUp alone — not a press held with something, and not another key", () => {

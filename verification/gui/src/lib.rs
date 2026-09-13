@@ -2235,6 +2235,11 @@ impl Instructor {
             // A press the empty box hands on. The operator is told the box has to be empty, because
             // that is the whole of what decides where the press goes — not what the program is
             // drawing, which nothing here can ask about.
+            //
+            // The up arrow is the one of the five that takes the keyboard with it, so the line says
+            // so: walking a menu the program drew is no use to a person who then cannot choose from
+            // it, and an operator left expecting the box to keep the keyboard would read the next
+            // step against the wrong one.
             (Domain::Terminal, "press-through") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
@@ -2267,13 +2272,22 @@ impl Instructor {
                         "At the box under {pane}, leaving what is written in it exactly where it is — do not empty it and do not add to it — {press}. The press is not the box's, and it is not the box's whether or not anything is written there: it goes to the program running in the terminal above."
                     ));
                 }
+                // What the up arrow leaves behind it. The other four are pressed and the keyboard
+                // stays in the box; this one is the road out, and the step after it is read on a
+                // terminal that now has the typing.
+                let after = match key {
+                    "up" => " The keyboard goes with it, which the other presses do not do: the up arrow is the road out of the box, so what you type after this lands in the terminal and not in the box you pressed it from.",
+                    _ => "",
+                };
                 format!(
-                    "Click into the box under {pane} and make sure nothing at all is written in it — where something is, select it and delete it. Then {press}. The press is not the box's: it goes to the program running in the terminal above, and what answers it is that program."
+                    "Click into the box under {pane} and make sure nothing at all is written in it — where something is, select it and delete it. Then {press}. The press is not the box's: it goes to the program running in the terminal above, and what answers it is that program.{after}"
                 )
             }
-            // The one press a written box hands on. The operator is told twice where the caret has to
-            // be, because that is the whole of what parts this press from the box's own: the same key
-            // one line lower walks up through what is written and never leaves.
+            // The one press that leaves a box with something written in it. The operator is told twice
+            // where the caret has to be, because that is the whole of what parts this press from the
+            // box's own: the same key one line lower walks up through what is written and never
+            // leaves. An empty box takes the same road, and is asked for by `press-through` instead —
+            // there is nothing to put a caret on the first line of.
             (Domain::Terminal, "press-out") => {
                 let pane = match arg_str(with, "onto") {
                     Some(onto) => format!("the pane showing \"{onto}\""),
@@ -9810,7 +9824,8 @@ steps_gui:
     /// return would grow a line in the box and read a pane that had been given nothing. And the presses
     /// that mean "stop" are handed on over a box with something in it, which the other three are not:
     /// asking for one of those is refused rather than turned into an instruction that contradicts the
-    /// rule under test.
+    /// rule under test. The up arrow over an empty box is the road out, so its line says the keyboard
+    /// leaves with the press and the other four say nothing of the kind.
     #[test]
     fn the_send_is_a_held_return_and_the_stop_goes_through_a_written_box() {
         let s = load(
@@ -9833,6 +9848,10 @@ steps_gui:
     domain: terminal
     op: press-through
     with: { key: up, holding: true }
+  - type: action
+    domain: terminal
+    op: press-through
+    with: { key: up }
 "#,
         );
         let steps = s.steps(Driver::Gui);
@@ -9855,6 +9874,11 @@ steps_gui:
         assert!(
             refused.contains("that press is the box's own"),
             "one of the other three over a written box is refused, and says why: {refused}"
+        );
+        let left = Instructor::new().render(&steps[4]).unwrap();
+        assert!(
+            left.contains("The keyboard goes with it") && !emptied.contains("The keyboard goes with it"),
+            "the up arrow is the one of the five that takes the keyboard, and says so: {left}"
         );
     }
 

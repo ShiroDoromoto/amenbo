@@ -4,7 +4,6 @@
 
 mod harness;
 
-use std::process::Command;
 
 use serde_json::Value;
 
@@ -131,7 +130,7 @@ fn a_task_added_in_a_bound_folder_lands_there_without_naming_it() {
 fn execution_guard_requires_pointer_when_unbound() {
     let dir = temp_home();
     std::fs::create_dir_all(&dir).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env_remove("AMENBO_HOME")
         .env("AMENBO_UPDATE_CHECK", "0") // no update check (hermetic)
         .current_dir(&dir)
@@ -154,7 +153,7 @@ fn execution_guard_requires_pointer_when_unbound() {
     // home keeps app-data clean.
     let home = temp_home();
     std::fs::create_dir_all(&home).unwrap();
-    let out2 = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    let out2 = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &home)
         .env("AMENBO_UPDATE_CHECK", "0") // no update check (hermetic)
         .current_dir(&dir)
@@ -179,7 +178,7 @@ fn nested_worktree_is_refused_but_a_subdirectory_and_a_submodule_are_not() {
     cli.run(&["init", "--name", "Alice"]);
 
     let run_args_in = |dir: &std::path::Path, args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(dir)
@@ -750,7 +749,7 @@ fn bind_refuses_nested_subdirectory_without_force() {
     let bind = |cwd: &std::path::Path, extra: &[&str]| {
         let mut args: Vec<&str> = vec!["bind", "--project", &pid];
         args.extend_from_slice(extra);
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .current_dir(cwd)
             .args(with_defaults(&args, "human"))
@@ -915,7 +914,7 @@ fn a_moved_folder_is_re_pointed_by_id_and_the_binding_that_vanished_is_listed_wi
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
     let run_args_in = |dir: &std::path::Path, args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(dir)

@@ -32,7 +32,7 @@ fn a_tick_takes_each_purposes_turn_once_a_day_and_exits_clean() {
     assert_eq!(again["already_done"], serde_json::json!(["due"]), "{again}");
 
     // The same round without a facet on the command line: a scheduler has none to pass.
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &cli.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&cli.home)

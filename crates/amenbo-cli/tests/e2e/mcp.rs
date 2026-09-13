@@ -8,7 +8,7 @@
 mod harness;
 
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, ChildStdin, Stdio};
 
 use serde_json::{json, Value};
 
@@ -25,7 +25,7 @@ impl Server {
     /// Start one for `dirs`, from `cwd` — which the tests deliberately make a folder that decides
     /// nothing, so nothing here can pass by accident.
     fn start(home: &std::path::Path, cwd: &std::path::Path, dirs: &[&std::path::Path]) -> Server {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let mut child = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(cwd)
@@ -90,7 +90,7 @@ fn a_bound_and_an_unbound_folder(cli: &Cli) -> (std::path::PathBuf, std::path::P
     let unbound = amenbo_scratch::scratch("mcp-unbound");
     std::fs::create_dir_all(&bound).unwrap();
     std::fs::create_dir_all(&unbound).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &cli.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&bound)
@@ -207,7 +207,7 @@ fn run_reaches_the_bound_folder_and_the_facet_is_never_the_caller_s() {
 fn bind_is_refused_and_the_folder_still_points_where_it_did() {
     let cli = Cli::new();
     let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
-    let elsewhere = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    let elsewhere = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &cli.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&bound)
@@ -287,7 +287,7 @@ fn a_call_that_cannot_be_shaped_is_a_protocol_fault() {
 fn a_second_bound_folder(cli: &Cli, name: &str, from: &std::path::Path) -> std::path::PathBuf {
     let dir = amenbo_scratch::scratch("mcp-bound-too");
     std::fs::create_dir_all(&dir).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &cli.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(from)
@@ -391,7 +391,7 @@ fn the_listing_says_which_folders_have_no_project_yet() {
 fn a_dir_that_names_no_folder_is_refused_at_the_start_but_only_takes_itself_down() {
     let cli = Cli::new();
     let missing = cli.home.join("never-made");
-    let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &cli.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&cli.home)

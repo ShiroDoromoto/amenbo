@@ -4,7 +4,6 @@
 
 mod harness;
 
-use std::process::Command;
 
 use harness::*;
 
@@ -132,7 +131,7 @@ fn facet_required_stops_every_operation_that_uses_the_facet() {
     // A call that declares no facet at all. Nothing is stripped from the environment: the facet has no
     // entry point there to inherit one from.
     let spawn = |args: &[&str]| -> (String, i32) {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .current_dir(&cli.home)
             .args(args)
@@ -317,7 +316,7 @@ fn a_plugins_window_is_refused_the_whole_device() {
     // A plugin's process: the store and the window in the environment, no facet, and a CWD that is
     // whatever its launcher happened to be in (never the bound folder).
     let plugin = |args: &[&str]| -> (String, String, i32) {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("AMENBO_PLUGIN_REACH", amenbo_core::idref::project(bound.parse().unwrap()))
@@ -379,7 +378,7 @@ fn a_carriers_road_is_open_to_the_window_the_whole_device_is_refused_to() {
     // A plugin's process: the store and the window in the environment, and **no facet** — a read decides
     // nothing by one, and a carrier has none to declare.
     let plugin = |args: &[&str]| -> (String, String, i32) {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("AMENBO_PLUGIN_REACH", amenbo_core::idref::project(bound.parse().unwrap()))

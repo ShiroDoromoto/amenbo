@@ -8,7 +8,6 @@
 
 #![allow(dead_code)]
 
-use std::process::Command;
 
 use serde_json::Value;
 
@@ -112,7 +111,7 @@ impl Cli {
 
     /// Run the binary and return (stdout, exit_code).
     pub(crate) fn run(&self, args: &[&str]) -> (String, i32) {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)
             // No update check: the tests never reach GitHub and never touch the real OS cache (hermetic).
             .env("AMENBO_UPDATE_CHECK", "0")
@@ -131,7 +130,7 @@ impl Cli {
     /// Run `--json` from a different CWD against the same `AMENBO_HOME`. Needed to exercise behaviour
     /// **outside** a bound folder — a folder you never run Amenbo in gets no automatic follow-up.
     pub(crate) fn json_from(&self, cwd: &std::path::Path, args: &[&str]) -> Value {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(cwd)
@@ -154,7 +153,7 @@ impl Cli {
     /// never passes through the shell.
     pub(crate) fn json_stdin(&self, args: &[&str], stdin: &str) -> Value {
         use std::io::Write;
-        let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let mut child = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&self.home)
@@ -175,7 +174,7 @@ impl Cli {
     /// Run the binary and return (stdout, stderr, exit_code) — for a command that succeeds on stdout
     /// while also emitting an advisory on stderr (the two streams inspected together).
     pub(crate) fn run_both(&self, args: &[&str]) -> (String, String, i32) {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&self.home)
@@ -191,7 +190,7 @@ impl Cli {
 
     /// Run the binary and return (stderr, exit_code); used for the error paths.
     pub(crate) fn run_err(&self, args: &[&str]) -> (String, i32) {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)
             // No update check: the tests never reach GitHub and never touch the real OS cache (hermetic).
             .env("AMENBO_UPDATE_CHECK", "0")
@@ -212,7 +211,7 @@ impl Cli {
     /// something that never answers, or the test spends the real index's availability on a question it
     /// already seeded the answer to on disk.
     pub(crate) fn run_env(&self, env: &[(&str, &str)], args: &[&str]) -> (String, i32) {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_amenbo"));
+        let mut command = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"));
         command
             .env("AMENBO_HOME", &self.home)
             .env("AMENBO_UPDATE_CHECK", "0")
@@ -228,7 +227,7 @@ impl Cli {
     /// Run the binary with extra environment on top of the harness's, and return (stderr, exit_code) —
     /// [`Cli::run_env`]'s reading for the paths that refuse.
     pub(crate) fn run_env_err(&self, env: &[(&str, &str)], args: &[&str]) -> (String, i32) {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_amenbo"));
+        let mut command = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"));
         command
             .env("AMENBO_HOME", &self.home)
             .env("AMENBO_UPDATE_CHECK", "0")

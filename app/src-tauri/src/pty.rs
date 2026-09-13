@@ -680,18 +680,30 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
 /// `claude --model opus` an opening instruction would go — before the flags, after them, behind a
 /// flag of its own — so it does not guess: the line is started as it stands and the sentence follows
 /// it into the pane (`AMB-D-793`).
-fn started_as(agent: &str, handle: Option<Handle<'_>>) -> Result<Started, CmdError> {
+fn started_as(
+    agent: &str,
+    pane_model: Option<&str>,
+    handle: Option<Handle<'_>>,
+) -> Result<Started, CmdError> {
     let cmd = amenbo_core::config::Paths::command_name();
     let config = amenbo_core::config::Paths::resolve()
         .map(|paths| amenbo_core::config::Config::load(&paths.config_file))
         .unwrap_or_default();
     if let Some(launch) = amenbo_core::wake::started_as(agent) {
-        return Ok(opening_line(launch, config.model_for(agent), handle));
+        // The pane's own model where it has one, and the agent's where it has not. Which of the two
+        // is right is the caller's question and is answered before this is called (`AMB-T-4698`);
+        // what is here is the fallback, so a pane that has never been put on anything still comes up
+        // on what was last chosen for its provider (`AMB-D-865`).
+        let model = pane_model
+            .map(str::to_owned)
+            .or_else(|| config.model_for(agent).map(|one| one.id.clone()));
+        return Ok(opening_line(launch, model, handle));
     }
     if let Some(own) = config.custom_agent(agent) {
         return Ok(Started {
             line: own.line.clone(),
             hand_over: Some(amenbo_core::agents::pane_instruction(cmd)),
+            model: None,
         });
     }
     Err(CmdError::coded(
@@ -727,32 +739,34 @@ fn started_as(agent: &str, handle: Option<Handle<'_>>) -> Result<Started, CmdErr
 /// the pane opens. What is left of the old shape would be a card asking a person who has just arrived
 /// to decide what to ask for, which is the one thing they do not yet know.
 ///
-/// **The model is whichever one was chosen for this agent, and no model at all where none was**
-/// (`amenbo_core::config::Config::agent_model`). A line naming none starts the provider on however
+/// **The model is the one settled before this is called, and no model at all where there is none**
+/// ([`started_as`]): the pane's own where it is coming back into a conversation, and the agent's
+/// where it is opening a fresh one (`AMB-T-4698`). A line naming none starts the provider on however
 /// its own settings have it, which is what a person who has never been asked expects to happen — so
 /// the flag is absent rather than passed empty (`amenbo_core::harness::opening`).
 ///
-/// **It is read here rather than carried in from the face.** What model an agent comes up on is a
-/// fact about the agent and is kept against it (`AMB-D-865`), so every road that starts one — the
-/// press on the empty frame, the offer a folder with several puts up, the row on a frame whose
-/// program has ended — reaches the same answer without any of them having to hand it along.
+/// **Neither of the two is carried in from the face.** What model an agent comes up on is kept
+/// against the agent (`AMB-D-865`) and what a pane is answering on is kept against the pane
+/// (`crate::frames::TalkFace`), so every road that starts one — the press on the empty frame, the
+/// offer a folder with several puts up, the row on a frame whose program has ended — reaches the
+/// same answer without any of them having to hand it along.
 ///
 /// **A row the reader registered gets none.** Its line is theirs as they wrote it and is never taken
 /// apart (`AMB-D-794`), so there is nowhere in it a model flag could be put that would not be Amenbo
 /// guessing at somebody else's command line.
 fn opening_line(
     launch: &amenbo_core::harness::Launch,
-    model: Option<&amenbo_core::config::AgentModel>,
+    model: Option<String>,
     handle: Option<Handle<'_>>,
 ) -> Started {
     let cmd = amenbo_core::config::Paths::command_name();
-    let named = model.map(|one| one.id.as_str());
     Started {
         line: launch::command_line(
             launch.command,
-            &amenbo_core::harness::opening(launch, cmd, named, handle),
+            &amenbo_core::harness::opening(launch, cmd, model.as_deref(), handle),
         ),
         hand_over: None,
+        model,
     }
 }
 
@@ -768,6 +782,13 @@ struct Started {
     /// The instruction still to be handed over once the pane draws, or `None` where the line already
     /// carries it.
     hand_over: Option<String>,
+    /// The model this pane is being put on, for the row the frame keeps (`AMB-T-4698`).
+    ///
+    /// It is answered here rather than worked out again at the frame because here is where the two
+    /// candidates were weighed. `None` twice over: a line naming no model, and a line the reader
+    /// registered — which is never taken apart, so there is nowhere in it a model could be
+    /// (`AMB-D-794`).
+    model: Option<String>,
 }
 
 /// How long between one look at the pane and the next, while the instruction is being handed over.
@@ -976,11 +997,30 @@ pub fn pty_open(
         .as_deref()
         .map(Handle::Back)
         .or_else(|| issued.as_deref().map(Handle::New));
-    let started = agent.as_deref().map(|id| started_as(id, handle)).transpose()?;
+    // A pane coming back into its conversation goes back on the model it was answering on, so a
+    // choice made in another pane of the same provider does not decide for it; a pane opening a fresh
+    // conversation has nothing of its own to go on and takes the agent's answer instead
+    // (`AMB-T-4698`). Only one row reads a model on the way back at all — the rest bring the
+    // conversation's own with it (`amenbo_core::harness::Launch::model_on_the_way_back`).
+    let was_on = frame
+        .as_deref()
+        .filter(|_| back.is_some())
+        .zip(agent.as_deref())
+        .and_then(|(frame, agent)| face.model_on(frame, agent));
+    let started = agent
+        .as_deref()
+        .map(|id| started_as(id, was_on.as_deref(), handle))
+        .transpose()?;
     // Written down before the program is started, so a quit that comes between the two still leaves
     // the pane a way back — the session is made under this handle whether or not anybody is watching.
     if let (Some(frame), Some(issued)) = (frame.as_deref(), issued.as_deref()) {
         face.resumed_from(frame, issued.to_string());
+    }
+    // And the model that went on the line goes down on the same row, which is what the next run reads
+    // back. A pane opened at a plain prompt, or on a line the reader registered, clears it: what was
+    // written there names a model this place is no longer on.
+    if let Some(frame) = frame.as_deref() {
+        face.opened_on(frame, started.as_ref().and_then(|s| s.model.clone()));
     }
     // The frame to take the way back off again, should the program end in moments. Only where what
     // is written down is a handle the line carries: Gemini's row keeps the place the pane runs in

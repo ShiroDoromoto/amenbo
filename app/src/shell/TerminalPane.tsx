@@ -738,7 +738,7 @@ export function TerminalPane({
 
           **It draws nothing for a pane whose program Amenbo cannot name** — the plain shell, and a
           command the reader registered — so the row is absent rather than dead there. */}
-      {live !== null && <PaneModel session={live} agent={inPane} />}
+      {live !== null && <PaneModel frame={frame} session={live} agent={inPane} />}
     </div>
   );
 }

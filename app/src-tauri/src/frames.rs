@@ -49,6 +49,14 @@ pub struct TalkFace {
     /// now is what came back from the store, which is what keeps a handle from being dropped by the
     /// next write of the arrangement.
     hints: Mutex<BTreeMap<String, String>>,
+    /// The model each pane is answering on, by frame — the spelling the provider takes, for the
+    /// panes Amenbo knows one for (`AMB-T-4698`).
+    ///
+    /// **It is held here for the reason the handles are**: what a pane opened on was settled on this
+    /// side, as the launch line was built, and a value that made the round trip through the window
+    /// would be one a window could write. What is in here now is what came back from the store,
+    /// beside whatever this run has since put on a pane.
+    models: Mutex<BTreeMap<String, String>>,
     /// The arrangement as the window drawing the face last had it, or nothing before either window
     /// has laid one out in this run.
     layout: Mutex<Option<TalkLayoutDto>>,
@@ -78,6 +86,46 @@ impl TalkFace {
             return None;
         }
         self.hints.lock().expect("resume hints lock").get(frame).cloned()
+    }
+
+    /// The model this frame is on, where one was written down **for this provider**.
+    ///
+    /// It is what a pane coming back into its conversation is put on, in place of the model kept
+    /// against the agent (`AMB-T-4698`): the agent's answer is one value for every pane of that
+    /// provider, so a model chosen in one pane would otherwise decide what the others come back on.
+    ///
+    /// **The provider is asked about for the reason it is asked about for a handle**
+    /// ([`comes_back_on`](Self::comes_back_on)): a model name means nothing away from the agent it
+    /// was chosen for, and one of the six answers with a spelling no other would take.
+    pub fn model_on(&self, frame: &str, agent: &str) -> Option<String> {
+        let kept = self.kept.lock().expect("kept layout lock");
+        let pane = kept.as_ref()?.panes.iter().find(|pane| pane.id == frame)?;
+        if pane.agent.as_deref() != Some(agent) {
+            return None;
+        }
+        self.models.lock().expect("pane models lock").get(frame).cloned()
+    }
+
+    /// Write down the model a pane is answering on — the name that went on its launch line as it was
+    /// started (`crate::pty::pty_open`), and the one a press on the row under it settled it at
+    /// ([`frame_on_model`]).
+    ///
+    /// `None` is a pane put back on the provider's own default, which is an answer like any other:
+    /// the row is cleared rather than left naming a model the pane is no longer on.
+    pub fn opened_on(&self, frame: &str, model: Option<String>) {
+        {
+            let mut models = self.models.lock().expect("pane models lock");
+            match model {
+                Some(model) => models.insert(frame.to_string(), model),
+                None => models.remove(frame),
+            };
+        }
+        let Some(layout) = self.layout.lock().expect("talk layout lock").clone() else {
+            return;
+        };
+        if let Err(e) = keep(self, &layout) {
+            log::warn!("could not write down the model frame {frame} is on: {e:?}");
+        }
     }
 
     /// Every handle written down in this run — what a pane reading one back out of a provider's own
@@ -216,6 +264,23 @@ pub fn name_frame(
     now
 }
 
+/// Write down the model a running pane was just moved to, so it comes back on it next run
+/// (`AMB-T-4698`, `app/src/shell/PaneModel.tsx`).
+///
+/// **Only where the press settled it.** Three of the providers open a picker of their own instead of
+/// taking the name on the command's line, and what is chosen in there is between the person and the
+/// provider ([`amenbo_core::harness::switching`]) — a name written down off a press that settled
+/// nothing would be Amenbo's guess at somebody else's screen (`AMB-D-747`). So the row asks for this
+/// on the one road where it knows.
+///
+/// **The model is not checked and the frame is not either.** Which models exist is the provider's
+/// answer and never Amenbo's (`AMB-D-865`), and a frame the arrangement does not hold writes a row
+/// nothing reads — it goes when the arrangement is next kept ([`forget_dropped`]).
+#[tauri::command]
+pub fn frame_on_model(face: tauri::State<'_, TalkFace>, frame: String, model: Option<String>) {
+    face.opened_on(&frame, model);
+}
+
 /// The arrangement of the talk window, as this run has it — and where it has none yet, the splits and
 /// the project this device left behind.
 ///
@@ -294,12 +359,16 @@ fn seed(face: &TalkFace, kept: &SavedLayout) {
     }
     let mut names = face.names.lock().expect("frame names lock");
     let mut hints = face.hints.lock().expect("resume hints lock");
+    let mut models = face.models.lock().expect("pane models lock");
     for pane in &kept.panes {
         if let Some(name) = &pane.name {
             names.name(&pane.id, &name.name, name.by);
         }
         if let Some(resume) = &pane.resume {
             hints.insert(pane.id.clone(), resume.clone());
+        }
+        if let Some(model) = &pane.model {
+            models.insert(pane.id.clone(), model.clone());
         }
     }
     *face.kept.lock().expect("kept layout lock") = Some(kept.clone());
@@ -349,6 +418,7 @@ fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) {
         crate::pane_home::forget(std::path::Path::new(handle));
         false
     });
+    face.models.lock().expect("pane models lock").retain(|frame, _| here.contains(frame.as_str()));
 }
 
 /// The panes as they are written down: what the window sent about each place, and beside it the two
@@ -360,6 +430,7 @@ fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) {
 fn panes_of(face: &TalkFace, layout: &TalkLayoutDto) -> Vec<SavedPane> {
     let names = face.names.lock().expect("frame names lock");
     let hints = face.hints.lock().expect("resume hints lock");
+    let models = face.models.lock().expect("pane models lock");
     layout
         .frames
         .iter()
@@ -371,6 +442,7 @@ fn panes_of(face: &TalkFace, layout: &TalkLayoutDto) -> Vec<SavedPane> {
                 agent: frame.agent.clone(),
                 name: names.all().get(&frame.id).cloned(),
                 resume: hints.get(&frame.id).cloned(),
+                model: models.get(&frame.id).cloned(),
             })
         })
         .collect()
@@ -563,6 +635,7 @@ mod tests {
                 agent: Some("claude-code".to_string()),
                 name: None,
                 resume: Some("0f9c".to_string()),
+                model: Some("opus".to_string()),
             }],
             next_id: 2,
         });
@@ -577,6 +650,58 @@ mod tests {
         face.resumed_from("1", "aa11".to_string());
         assert_eq!(face.comes_back_on("1", "claude-code").as_deref(), Some("aa11"));
         assert_eq!(face.resume_hints(), vec!["aa11".to_string()]);
+    }
+
+    /// The model a pane is on is the pane's, and it is answered for the provider the row names — the
+    /// same question the handle is asked (`AMB-T-4698`). A name means nothing away from the agent it
+    /// was chosen for, and a frame opened on another provider is a frame that was never put on it.
+    #[test]
+    fn the_model_comes_back_only_for_the_provider_the_row_names() {
+        let face = TalkFace::default();
+        seed(&face, &SavedLayout {
+            project: Some(1),
+            splits: std::collections::BTreeMap::new(),
+            panes: vec![SavedPane {
+                id: "1".to_string(),
+                project: 1,
+                folder: Some("/work/repo".to_string()),
+                agent: Some("gemini-cli".to_string()),
+                name: None,
+                resume: Some("/homes/1".to_string()),
+                model: Some("gemini-2.5-pro".to_string()),
+            }],
+            next_id: 2,
+        });
+
+        assert_eq!(face.model_on("1", "gemini-cli").as_deref(), Some("gemini-2.5-pro"));
+        assert_eq!(face.model_on("1", "codex-cli"), None);
+        assert_eq!(face.model_on("2", "gemini-cli"), None);
+
+        // A pane moved to another model answers with that one, and one put back on the provider's own
+        // default answers with none rather than with the name it is no longer on.
+        face.opened_on("1", Some("gemini-2.5-flash".to_string()));
+        assert_eq!(face.model_on("1", "gemini-cli").as_deref(), Some("gemini-2.5-flash"));
+        face.opened_on("1", None);
+        assert_eq!(face.model_on("1", "gemini-cli"), None);
+    }
+
+    /// What each pane is on is written onto its own row, and a place the window no longer sends takes
+    /// its answer with it — the same way its handle goes ([`forget_dropped`]).
+    #[test]
+    fn the_model_goes_down_on_the_row_and_goes_with_the_place() {
+        let face = TalkFace::default();
+        face.opened_on("1", Some("opus".to_string()));
+        face.opened_on("2", Some("gpt-5.5".to_string()));
+
+        let here = layout(vec![frame("1", Some("claude-code"))]);
+        let panes = panes_of(&face, &here);
+        assert_eq!(panes.len(), 1);
+        assert_eq!(panes[0].model.as_deref(), Some("opus"));
+
+        // And the place the window stopped sending takes its answer with it, so nothing puts it back.
+        forget_dropped(&face, &here);
+        assert_eq!(face.models.lock().unwrap().len(), 1, "the place that went took its model");
+        assert!(face.models.lock().unwrap().contains_key("1"));
     }
 
     /// What the store kept comes back into the two maps the window does not hold — with the rank the
@@ -595,6 +720,7 @@ mod tests {
                 agent: Some("claude".to_string()),
                 name: Some(FrameName { name: "the migration".to_string(), by: NamedBy::Person }),
                 resume: Some("0f9c".to_string()),
+                model: None,
             }],
             next_id: 2,
         };

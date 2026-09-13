@@ -38,7 +38,10 @@ import { Icon } from "../components/Icon";
  * registered is a pane whose program Amenbo cannot name (`AMB-D-794`), and the plain shell has no
  * model at all — for both, the host answers with no road and this row is not there.
  */
-export function PaneModel({ session, agent }: {
+export function PaneModel({ frame, session, agent }: {
+  /** The place this row stands in (`../talk/layout`) — what the model it settles is written down
+   *  against, so the pane comes back on it next run (`crate::frames::frame_on_model`). */
+  frame: string;
   /** The terminal this row types into. */
   session: string;
   /** What is running in it, as the session says it was started (`crate::pty`) — null for a plain
@@ -153,6 +156,11 @@ export function PaneModel({ session, agent }: {
         // here is a name they can press next time.
         await invoke<void>("wake_chose_model", { agent, model: model.id, label: model.label })
           .catch(() => {});
+        // And against this place as well, which is what the pane itself comes back on. The two
+        // answers are not the same one: the agent's is what the next pane opened with it starts on,
+        // and this is what *this* pane resumes on, so moving one pane does not move the others
+        // (`crate::frames::TalkFace::model_on`).
+        await invoke<void>("frame_on_model", { frame, model: model.id }).catch(() => {});
       } else {
         setWaiting(true);
       }

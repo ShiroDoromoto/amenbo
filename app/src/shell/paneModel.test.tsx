@@ -26,6 +26,8 @@ const hoisted = vi.hoisted(() => ({
   kept: {} as Record<string, { chosen: { id: string; label: string } | null; history: { id: string; label: string }[]; flag: string | null }>,
   /** Which commands the row put to the host, in the order it asked. */
   asked: [] as string[],
+  /** What the row wrote down against the place, which is what the pane comes back on. */
+  onFrame: [] as { frame: string; model: string }[],
   /** What was written into the terminal, in order: `send` carries the return behind it and `paste`
       does not, which is the difference the two providers with a picker turn on. */
   wrote: [] as { how: "send" | "paste"; text: string }[],
@@ -70,6 +72,10 @@ vi.mock("../core/ipc", () => ({
         ?? { chosen: null, history: [], flag: "--model" };
     }
     if (cmd === "wake_chose_model") return undefined;
+    if (cmd === "frame_on_model") {
+      hoisted.onFrame.push(args as { frame: string; model: string });
+      return undefined;
+    }
     throw new Error(`the row asked the host for ${cmd}`);
   }),
 }));
@@ -82,6 +88,7 @@ beforeEach(() => {
   hoisted.models = {};
   hoisted.kept = {};
   hoisted.asked = [];
+  hoisted.onFrame = [];
   hoisted.wrote = [];
   hoisted.writeFails = false;
   container = document.createElement("div");
@@ -97,7 +104,7 @@ afterEach(() => {
 /** Draw the row for a pane running `agent`. */
 async function draw(agent: string | null): Promise<void> {
   await act(async () => {
-    root.render(createElement(PaneModel, { session: "session-7", agent }));
+    root.render(createElement(PaneModel, { frame: "7", session: "session-7", agent }));
   });
   await act(async () => { await Promise.resolve(); });
 }
@@ -157,6 +164,9 @@ describe("what a press puts in the terminal", () => {
     // frame keeps one.
     expect(container.querySelector(".modelrow__now")?.textContent).toContain("Sonnet 5");
     expect(hoisted.asked).toContain("wake_chose_model");
+    // And against the place as well: the agent's answer is what the next pane opens on, and this is
+    // what this pane comes back on (`AMB-T-4698`).
+    expect(hoisted.onFrame).toEqual([{ frame: "7", model: "sonnet" }]);
     expect(container.querySelector(".modelrow__note"), "a settled line said it was waiting").toBeNull();
   });
 
@@ -187,6 +197,9 @@ describe("what a press puts in the terminal", () => {
     expect(container.querySelector(".modelrow__note")?.textContent).toContain("waiting");
     expect(container.querySelector(".modelrow__now")?.textContent).toContain("Model");
     expect(hoisted.asked, "a picker that opened was recorded as a choice").not.toContain("wake_chose_model");
+    // Nor against the place. What the pane is on after the person has used the provider's own picker
+    // is not something Amenbo saw, and a name written down here would be its guess (`AMB-D-747`).
+    expect(hoisted.onFrame).toEqual([]);
   });
 
   it("pastes the name into the picker's search box and submits nothing behind it", async () => {

@@ -521,6 +521,8 @@ export const ko: Translation = {
     "quit.confirmNotAll": "Amenbo를 종료할까요? 열려 있는 터미널이 모두 끝납니다. 대화는 다음에 켜면 돌아오지만, {names} 페인은 돌아오지 않습니다. 그 안에서 돌던 것도 돌아오지 않습니다.",
 
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
+
+    "face.endedGeminiUnset": "Gemini CLI에 인증 방법이 설정되어 있지 않습니다. 표시된 경로는 이 창만의 것이라 함께 사라지므로, 설정할 파일은 본인의 ~/.gemini/settings.json입니다.",
     "face.projects": "프로젝트",
     "face.railFolders": "폴더",
     "face.tabsCompact": "이름 숨기기",

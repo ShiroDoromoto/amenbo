@@ -543,6 +543,8 @@ export const es: Translation = {
     "quit.confirmNotAll": "¿Salir de Amenbo? Todas las terminales abiertas se cierran. Las conversaciones vuelven en el próximo arranque, salvo en los paneles con {names}. Lo que estaban ejecutando tampoco vuelve.",
 
     "face.ended": "El programa de esta terminal ha terminado.",
+
+    "face.endedGeminiUnset": "Gemini CLI no tiene definido ningún método de autenticación. La ruta que indica pertenece solo a este panel y desaparece con él: la que debe editar es su propio ~/.gemini/settings.json.",
     "face.projects": "Proyectos",
     "face.railFolders": "Carpetas",
     "face.tabsCompact": "Ocultar los nombres",

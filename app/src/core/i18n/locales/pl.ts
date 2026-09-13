@@ -548,6 +548,8 @@ export const pl: Translation = {
     "quit.confirmNotAll": "Zakończyć Amenbo? Wszystkie otwarte terminale zostaną zakończone. Rozmowy wrócą przy następnym uruchomieniu, poza panelami z {names}. To, co w nich działało, też nie wróci.",
 
     "face.ended": "Program w tym terminalu zakończył działanie.",
+
+    "face.endedGeminiUnset": "Dla Gemini CLI nie ustawiono metody uwierzytelniania. Podana ścieżka należy tylko do tego panelu i znika wraz z nim — ustaw ją we własnym pliku ~/.gemini/settings.json.",
     "face.projects": "Projekty",
     "face.railFolders": "Foldery",
     "face.tabsCompact": "Ukryj nazwy",

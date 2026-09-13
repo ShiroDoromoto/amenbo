@@ -189,8 +189,8 @@ export async function mountAgentFrame(
         folder = where ?? folder;
         on.opened(session, where, running);
       },
-      closed: (session) => {
-        on.closed(session);
+      closed: (session, code) => {
+        on.closed(session, code);
         if (mine === showing) frame.append(row(choice));
       },
     };

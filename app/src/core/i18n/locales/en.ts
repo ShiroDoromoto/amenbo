@@ -603,6 +603,7 @@ const ui = {
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.
   "face.ended": "The program in this terminal has exited.",
+  "face.endedGeminiUnset": "Gemini CLI has no authentication method set. The path it names is this pane's own and goes with it — the one to set is your own ~/.gemini/settings.json.",
   "face.projects": "Projects",
   // The rail's two halves: the lists, and the folder tree that moved there off the other side of the
   // panes (`AMB-D-835`). Each word names what its half holds rather than what pressing it does, because

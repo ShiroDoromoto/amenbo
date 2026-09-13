@@ -47,7 +47,7 @@ use tauri::{Emitter, Manager};
 
 use amenbo_core::harness::Handle;
 
-use crate::dto::{PtyChunkDto, PtyReplayDto, PtySessionDto, SessionSaidDto};
+use crate::dto::{PtyChunkDto, PtyClosedDto, PtyReplayDto, PtySessionDto, SessionSaidDto};
 use crate::error::CmdError;
 use crate::launch;
 
@@ -58,9 +58,10 @@ use crate::launch;
 /// terminal while the app is one window, the talk window once it has been split out.
 const OUTPUT_EVENT: &str = "pty://output";
 
-/// The event a terminal's end arrives on, once, when the program in it exits. The payload is the
-/// session's id as a string. Nothing follows it — the session is gone from the registry by the time
-/// it is emitted, so a write or a resize aimed at it is refused rather than silently dropped.
+/// The event a terminal's end arrives on, once, when the program in it exits. The payload is a
+/// [`PtyClosedDto`] — the session's id, and what it exited with. Nothing follows it — the session is
+/// gone from the registry by the time it is emitted, so a write or a resize aimed at it is refused
+/// rather than silently dropped.
 const CLOSED_EVENT: &str = "pty://closed";
 
 /// The variable a session's id is carried in, into the terminal and everything started inside it.
@@ -1118,9 +1119,11 @@ pub fn pty_open(
     std::thread::spawn(move || {
         drain(&app, &id, &pane, reader);
         // Reap the program before the pane is told, so nothing is left behind for the length of a
-        // round trip to the webview. Its exit status says nothing a person needs: what a terminal
-        // ends with is what is on the screen, which the pane already has.
-        let _ = child.wait();
+        // round trip to the webview. What it ended with goes on with the ending: for nearly every
+        // program the screen is the whole of why it stopped, and the one exception is a provider
+        // that stopped over a file Amenbo pointed somewhere else, whose own message then names a
+        // home the reader will never see again (`crate::dto::PtyClosedDto`).
+        let code = child.wait().ok().and_then(|it| i32::try_from(it.exit_code()).ok());
         // Whether the registry still held it says who ended it: `pty_close` takes the entry out
         // before it kills, so an entry still here is a program that ended on its own.
         let itself = app
@@ -1136,7 +1139,8 @@ pub fn pty_open(
         if let Some(frame) = on_the_line.filter(|_| itself && opened.elapsed() < BELIEVED_AFTER) {
             app.state::<crate::frames::TalkFace>().gave_up(&frame);
         }
-        let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, &id);
+        let ending = PtyClosedDto { session: id.clone(), code };
+        let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, ending);
     });
 
     Ok(PtySessionDto {

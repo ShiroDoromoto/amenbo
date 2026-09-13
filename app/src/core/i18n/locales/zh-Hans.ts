@@ -522,6 +522,8 @@ export const zhHans: Translation = {
     "quit.confirmNotAll": "要退出 Amenbo 吗？打开的终端都会结束。下次启动时对话会回来，但跑着 {names} 的窗格不会。正在跑的东西也不会。",
 
     "face.ended": "此终端中的程序已退出。",
+
+    "face.endedGeminiUnset": "Gemini CLI 尚未设置身份验证方式。它给出的路径只属于此窗格，会随之丢弃——要设置的是你自己的 ~/.gemini/settings.json。",
     "face.projects": "项目",
     "face.railFolders": "文件夹",
     "face.tabsCompact": "隐藏名称",

@@ -534,6 +534,8 @@ export const ja: Translation = {
     "quit.confirmNotAll": "Amenbo を終了しますか？開いている端末はすべて終わります。会話は次の起動で戻りますが、{names} のペインは戻りません。走っていたものも戻りません。",
 
     "face.ended": "この端末のプログラムは終了しました。",
+
+    "face.endedGeminiUnset": "Gemini CLI に認証方法が設定されていません。画面のパスはこのペイン専用で一緒に捨てられるので、直すのはご自分の ~/.gemini/settings.json です。",
     "face.projects": "プロジェクト",
     "face.railFolders": "フォルダ",
     "face.tabsCompact": "名前を隠す",

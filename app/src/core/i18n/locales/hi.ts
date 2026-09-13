@@ -522,6 +522,8 @@ export const hi: Translation = {
     "quit.confirmNotAll": "Amenbo छोड़ें? खुले हुए सभी टर्मिनल समाप्त हो जाएँगे। बातचीत अगली बार वापस आ जाएगी, पर {names} वाले पैन वापस नहीं आएँगे। उनमें जो चल रहा था वह भी वापस नहीं आएगा।",
 
     "face.ended": "इस टर्मिनल का प्रोग्राम समाप्त हो गया।",
+
+    "face.endedGeminiUnset": "Gemini CLI के लिए कोई प्रमाणीकरण विधि सेट नहीं है। जो पथ दिखाया गया है वह केवल इसी पैन का है और इसके साथ हट जाता है — सेट करनी है आपकी अपनी ~/.gemini/settings.json में।",
     "face.projects": "परियोजनाएँ",
     "face.railFolders": "फ़ोल्डर",
     "face.tabsCompact": "नाम छिपाएँ",

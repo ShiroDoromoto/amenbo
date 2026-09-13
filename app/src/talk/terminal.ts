@@ -26,7 +26,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type IBufferCell } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import type { PtyChunkDto, PtyReplayDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
+import type { PtyChunkDto, PtyClosedDto, PtyReplayDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
@@ -74,8 +74,12 @@ export type PaneEvents = {
    *  say: a relative one is read against the folder this session is in, and only the window knows
    *  whether that lands inside the folder the file face is rooted at (`AMB-T-3630`). */
   path(target: string): void;
-  /** The program in the terminal has exited. Nothing running is kept. */
-  closed(session: string): void;
+  /** The program in the terminal has exited. Nothing running is kept.
+   *
+   *  `code` is what it exited with, and null where it was ended rather than ended by itself. It is
+   *  carried because a few endings are ones Amenbo had a hand in and the screen cannot say so
+   *  ({@link whyItStopped}). */
+  closed(session: string, code: number | null): void;
   /** This frame has settled where it works, before anything is running there — the person chose a
    *  folder (`./agent`). It is said of the choice and not of the terminal because the two can be a
    *  long way apart, and a page that waited for a started terminal would ask its other slots again. */
@@ -637,6 +641,30 @@ export async function pasteIntoTerminal(session: string, text: string): Promise<
 }
 
 /**
+ * Why the program in a pane stopped, where a word about it is worth more than the screen it left —
+ * an i18n key, and `null` for every ending a reader can read for themselves.
+ *
+ * **Almost nothing belongs here.** What a program leaves on the screen is the whole of why it
+ * stopped, and a pane that added its own account of an ordinary ending would be talking over it.
+ *
+ * **The exception is an ending Amenbo had a hand in.** A pane is given a home of its own so two
+ * panes of one provider do not share a conversation (`crate::pane_home`), and a provider that stops
+ * over a file it was pointed at there names *that* path in its message — a directory thrown away
+ * with the pane. The reader is told, correctly, to go and edit a file nobody will read again. So
+ * what is said here is which of the reader's own files it actually is.
+ *
+ * **Read off the status and never off the screen.** The numbers are the provider's own answer and
+ * are distinct per cause — Gemini CLI 0.59.0 measured exiting 41 with no auth method set, 52 on a
+ * settings file it could not parse and 55 on a folder it has not been told to trust (`AMB-T-4729`) —
+ * so recognising one is not parsing anybody's output. A number that moves in a later version costs
+ * the word and nothing else: the pane still says the program ended, which is what it said before.
+ */
+export function whyItStopped(agent: string | null, code: number | null): string | null {
+  if (agent === "gemini-cli" && code === 41) return "face.endedGeminiUnset";
+  return null;
+}
+
+/**
  * How long a return has to arrive after the paste for the agent in the pane to read it as a return,
  * in milliseconds, by the catalogued id of that agent (`amenbo_core::harness`).
  *
@@ -960,8 +988,8 @@ export async function mountTerminal(
       on.output();
     }
   });
-  const unlistenClosed = await listen<string>(CLOSED_EVENT, ({ payload }) => {
-    if (payload === session) on.closed(payload);
+  const unlistenClosed = await listen<PtyClosedDto>(CLOSED_EVENT, ({ payload }) => {
+    if (payload.session === session) on.closed(payload.session, payload.code ?? null);
   });
   // **All this event does is put the pane in the way of sending it**: from here on the person's next
   // Enter carries the sentence out behind their own line (`sendsTheSentence`). Nothing is drawn for it

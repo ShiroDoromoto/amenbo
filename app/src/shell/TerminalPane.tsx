@@ -12,6 +12,7 @@ import {
   sendIntoTerminal,
   sendsWhatIsWritten,
   stopsTheProgram,
+  whyItStopped,
 } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { Plate as Row } from "../talk/nameplate";
@@ -153,6 +154,9 @@ export function TerminalPane({
   // The fact of the program having exited, which the screen cannot show on its own — what a finished
   // shell leaves behind looks exactly like one waiting to be typed at.
   const [ended, setEnded] = useState(false);
+  // And why, for the few endings Amenbo had a hand in and the screen cannot own up to
+  // (`../talk/terminal`). Null for every other ending, which is nearly all of them.
+  const [stopped, setStopped] = useState<string | null>(null);
   // The session running here, while one is. It is what the way out names, and it is null at exactly
   // the two moments there is nothing to end: before a terminal has opened, and after one has closed.
   const [live, setLive] = useState<string | null>(null);
@@ -161,6 +165,9 @@ export function TerminalPane({
   // the program in a terminal was settled when it started, and the row that moves it to another model
   // is a question about that program (`./PaneModel`).
   const [inPane, setInPane] = useState<string | null>(null);
+  // The same, as the handlers below read it. They are made once, when the terminal is mounted, so the
+  // state above is the value it had then and never what `opened` put there a moment later.
+  const inPaneRef = useRef<string | null>(null);
   // Where the row's menu was opened, while it is open. It is placed at the press rather than under
   // the button for the reason every other menu in the app is (`../components/Menu`).
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
@@ -399,6 +406,7 @@ export function TerminalPane({
         plate.opened(where ?? start.cwd ?? null);
         setLive(session);
         setInPane(running);
+        inPaneRef.current = running;
         // Where the terminal actually runs and what is in it, neither of which is always what this
         // slot was handed: a pane that took one up learns both from the session (`../talk/layout`).
         on.current.onOpened(frame, session, where ?? start.cwd ?? null, running);
@@ -413,11 +421,15 @@ export function TerminalPane({
       // is made (`./FolderChoice`) — so there is no choice for the frame to report.
       chose: () => {},
       said: (statement) => on.current.onSaid(statement),
-      closed: (session) => {
+      closed: (session, code) => {
         plate.closed();
         setEnded(true);
+        // What the program was is taken off the pane a line below, so why it stopped is settled here
+        // while the two are still together.
+        setStopped(whyItStopped(inPaneRef.current, code));
         setLive(null);
         setInPane(null);
+        inPaneRef.current = null;
         on.current.onClosed(session);
       },
       // How many rows the terminal is drawing now, which is the one measurement the box below it
@@ -690,7 +702,12 @@ export function TerminalPane({
         {running
           ? (
             <>
-              {ended && <span className="termface__note">{t("face.ended")}</span>}
+              {ended && (
+                <span className="termface__note">
+                  {t("face.ended")}
+                  {stopped !== null && ` ${t(stopped)}`}
+                </span>
+              )}
               <div className="termface__face" ref={paneRef} />
             </>
           )

@@ -20,6 +20,7 @@ import { confirmDialog, pickFiles, pickFolders } from "../core/dialog";
 import { watchHostDrop } from "../core/hostDrop";
 import { takesPastedFiles, takesPastedImages, writesPastedImage } from "../core/clipFiles";
 import { pushNotice } from "../core/notice";
+import { composeStartsOpen, setComposeStartsOpen } from "../core/composeStartsOpen";
 import { Menu, MenuItem } from "../components/Menu";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
@@ -185,12 +186,17 @@ export function TerminalPane({
   // (`../talk/terminal`), and so does a person clicking the terminal, and the mark follows both
   // rather than go on naming the box.
   const [typing, setTyping] = useState(false);
-  // Whether the box under this pane is folded away (`AMB-D-889`). **Every pane comes up folded**, and
-  // where the reader last left it is not remembered yet (`AMB-T-4791`) — so a pane opened now is a
-  // pane whose presses go to the program, which is what a pane is before anybody asks for anything
-  // else. A person who writes paragraphs opens it, and a slash command typed at a CLI needs the
-  // characters to reach the program to be completed at all, which a box in front of them would stop.
-  const [folded, setFolded] = useState(true);
+  // Whether the box under this pane is folded away (`AMB-D-889`). A pane whose reader has never said
+  // comes up folded — its presses go to the program, which is what a pane is before anybody asks for
+  // anything else: a person who writes paragraphs opens it, and a slash command typed at a CLI needs
+  // the characters to reach the program to be completed at all, which a box in front of them would
+  // stop.
+  //
+  // **Where it starts is what this machine last chose** (`../core/composeStartsOpen`), read once as
+  // the pane comes up and never again. A reader who works in the box was otherwise pressing the same
+  // control on every pane they opened. Reading it again would make a press in one pane move the
+  // others, and each of those would wake the program inside it to repaint (`AMB-D-864`).
+  const [folded, setFolded] = useState(() => !composeStartsOpen());
   // The box itself, which is measured rather than told how tall to be: how many lines a sentence
   // takes is the browser's answer, not one this can work out from the characters.
   const boxRef = useRef<HTMLTextAreaElement>(null);
@@ -848,14 +854,21 @@ export function TerminalPane({
 
                 **It says when it is holding something nobody can see.** A pane folded over a
                 half-written sentence looks exactly like one folded over an empty box, and the
-                sentence is still there and still unsent (`../talk/layout`). */}
+                sentence is still there and still unsent (`../talk/layout`).
+
+                **Each press is also what the next pane will start as** (`../core/composeStartsOpen`),
+                which is why there is no row for this in the settings screen: the switch is here, in
+                front of whoever it is in effect for, and the way back is the same press. */}
             <button
               className={`panerow__fold${written === "" ? "" : " panerow__fold--holding"}`}
               type="button"
               aria-expanded={!folded}
               title={t(folded ? "face.composeOpen" : "face.composeFold")}
               aria-label={t(folded ? "face.composeOpen" : "face.composeFold")}
-              onClick={() => setFolded(!folded)}
+              onClick={() => {
+                setFolded(!folded);
+                setComposeStartsOpen(folded);
+              }}
             >
               <Icon name={folded ? "keyboard" : "pencil"} />
             </button>

@@ -25,6 +25,8 @@ const hoisted = vi.hoisted(() => ({
   asked: [] as Array<{ cmd: string; args: Record<string, unknown> }>,
   /** What the window is holding for this pane, as it last drew. */
   held: "",
+  /** The paths the pane said Amenbo had put into the box, on the last write (`../talk/layout`). */
+  put: [] as readonly string[],
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -101,7 +103,10 @@ function Window() {
     autoStart: true,
     focused: true,
     written,
-    onWrite: (_frame: string, text: string) => setWritten(text),
+    onWrite: (_frame: string, text: string, put: readonly string[] = []) => {
+      hoisted.put = put;
+      setWritten(text);
+    },
     onOpened: () => {},
     onSaid: () => {},
     onPath: () => {},
@@ -197,6 +202,35 @@ describe("pasting a file into the box under a pane", () => {
     await pasteFiles({ words: "書き写した文" });
 
     expect(hoisted.held).toBe("書き写した文");
+  });
+});
+
+describe("what a paste says was put into the box", () => {
+  // The send waits the pane's agent out for a file the body names, and what settles whether it does
+  // is whether Amenbo put the path there (`../talk/layout`, `../talk/terminal`, `AMB-D-879`). So a
+  // paste that puts paths in says which, beside the body it put them into.
+  it("names the paths it put in", async () => {
+    hoisted.paths = ["/work/a shot.png", "/work/notes.md"];
+
+    await pane();
+    await pasteFiles();
+
+    expect(hoisted.put).toEqual(["/work/a shot.png", "/work/notes.md"]);
+  });
+
+  it("names the path a picture was written down at", async () => {
+    await pane();
+    await pasteImage();
+
+    expect(hoisted.put).toEqual(["/tmp/amenbo-pasted-7a/pasted-0a0b0c0d.png"]);
+  });
+
+  // Words are not a path, so there is no file for the agent to stop over and nothing to name.
+  it("names nothing where what went in was the words the paste carried", async () => {
+    await pane();
+    await pasteFiles({ words: "書き写した文" });
+
+    expect(hoisted.put).toEqual([]);
   });
 });
 

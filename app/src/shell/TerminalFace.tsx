@@ -1262,7 +1262,8 @@ export function TerminalFace({
                     onFocus={(id) => setLayout((was) => focusOn(was, id))}
                     onRow={paneRow}
                     written={frame.written}
-                    onWrite={(id, text) => setLayout((was) => writing(was, id, text))}
+                    inserted={frame.inserted}
+                    onWrite={(id, text, put) => setLayout((was) => writing(was, id, text, put))}
                   />
                 ))}
                 {asking !== null && (

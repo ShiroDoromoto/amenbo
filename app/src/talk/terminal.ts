@@ -649,6 +649,10 @@ export async function pasteIntoTerminal(session: string, text: string): Promise<
  * **A wait that is too short costs nothing.** What it leaves is what leaving it out leaves — the
  * text sitting in the provider's own input box, for the person to send. The safety is in sending one
  * return and never a second, not in the number being right (`AMB-D-879`).
+ *
+ * **One row here is not the whole of that agent's answer.** Claude Code takes none of this and a
+ * long one where the body names a file it will stop to read ({@link READS_WHAT_A_BODY_NAMES}), which
+ * is a condition rather than a number and sits below.
  */
 const READ_AS_A_RETURN_AFTER: Record<string, number> = {
   "claude-code": 0,
@@ -668,11 +672,61 @@ const READ_AS_A_RETURN_AFTER: Record<string, number> = {
 const READ_AS_A_RETURN_UNMEASURED_MS = 50;
 
 /**
+ * The agent that stops to read a file the pasted body names, and the wait that outlasts its reading.
+ *
+ * **It reads the file before it reads the return, and the return is gone by the time it looks.**
+ * A body with a path in it put the pane's input box on `Pasting…` and held the screen for about
+ * 1160ms at 20.80MB, with the return dropped: the person watched their message not go and had to
+ * press into the pane and hit Enter themselves (`AMB-T-4714`).
+ *
+ * **The wait is the same whatever the file weighs.** Under 3.13MB the reading was over in 1ms, so
+ * most sends wait longer than they need to; the alternative is Amenbo weighing the file it wrote and
+ * guessing from that, which `AMB-D-879` did not buy. Nothing here is unsafe if the number is wrong —
+ * one return is sent and never a second, and a wait that falls short leaves the body in the pane's
+ * own box for the person to send (`AMB-T-4717`).
+ */
+const READS_WHAT_A_BODY_NAMES = "claude-code";
+const READ_AFTER_A_NAMED_FILE_MS = 1300;
+
+/**
+ * Whether one of the paths Amenbo put into this box is still standing in what is about to be sent.
+ *
+ * **Both spellings of it count.** What went into the box was the path quoted ({@link quotedPath}),
+ * and a name with a `'` in it is not written there character for character — so the quoted form is
+ * asked after as well as the bare one. The other way round matters too: a person who takes the
+ * quotes off leaves a path the agent reads all the more readily (`AMB-T-4719`).
+ *
+ * **A path the person typed themselves is not one of these.** Amenbo has nothing to vouch for there,
+ * and the send is the one it would have been without this (`AMB-D-879`).
+ */
+function stillStanding(text: string, put: readonly string[]): boolean {
+  return put.some((path) => text.includes(path) || text.includes(quotedPath(path)));
+}
+
+/**
  * How long to leave between the paste and the return for the agent running in this pane, `null`
  * being a pane running none.
+ *
+ * `put` is what Amenbo itself put into `text` (`../talk/layout`). The one agent that stops to read a
+ * named file is left the longer wait where one of those is still standing in the body, and the
+ * ordinary one where none is.
+ *
+ * **What is asked is whether Amenbo put the path there, not whether it looks like a picture.** The
+ * agent cuts a pasted body on newlines and on a space before a slash, and tries each piece against
+ * an extension list of its own; a reading of "ends in a picture's extension" misses the path
+ * somebody went on writing after, which is the ordinary shape here because Amenbo puts the path in
+ * at the caret. Copying the cutting would be Amenbo carrying that agent's parser, and the three
+ * agents measured do not agree on it (`AMB-T-4719`, `AMB-D-879`).
  */
-export function pauseBeforeTheReturn(agent: string | null): number {
+export function pauseBeforeTheReturn(
+  agent: string | null,
+  text = "",
+  put: readonly string[] = [],
+): number {
   if (agent === null) return READ_AS_A_RETURN_UNMEASURED_MS;
+  if (agent === READS_WHAT_A_BODY_NAMES && stillStanding(text, put)) {
+    return READ_AFTER_A_NAMED_FILE_MS;
+  }
   return READ_AS_A_RETURN_AFTER[agent] ?? READ_AS_A_RETURN_UNMEASURED_MS;
 }
 
@@ -690,7 +744,8 @@ export function pauseBeforeTheReturn(agent: string | null): number {
  * rather than as that many lines sent one after another.
  *
  * **The return follows the paste after a pause the pane's agent decides**
- * ({@link pauseBeforeTheReturn}, `AMB-D-879`), and it is sent once. Sending it twice, or reading the
+ * ({@link pauseBeforeTheReturn}, `AMB-D-879`) — one it takes `put`, what Amenbo put into the body,
+ * into account for — and it is sent once. Sending it twice, or reading the
  * screen and sending again, were both measured doing worse than not sending it at all
  * (`AMB-T-4717`).
  *
@@ -709,9 +764,10 @@ export async function sendIntoTerminal(
   session: string,
   text: string,
   agent: string | null,
+  put: readonly string[] = [],
 ): Promise<void> {
   await pasteIntoTerminal(session, text);
-  const pause = pauseBeforeTheReturn(agent);
+  const pause = pauseBeforeTheReturn(agent, text, put);
   if (pause > 0) await new Promise((settled) => setTimeout(settled, pause));
   await invoke<void>("pty_write", { session, data: SUBMIT });
   await invoke<void>("pty_brief", { session }).catch(() => {});

@@ -200,7 +200,16 @@ describe("where a pane works", () => {
 
   it("is learned from the session for a pane that took one up rather than starting it", () => {
     const adopted = openedIn({ ...EMPTY_LAYOUT, project: 1, frames: [
-      { id: "1", project: 1, session: null, folder: null, agent: null, resumes: false, written: "" },
+      {
+        id: "1",
+        project: 1,
+        session: null,
+        folder: null,
+        agent: null,
+        resumes: false,
+        written: "",
+        inserted: [],
+      },
     ], nextId: 2 }, "1", "s1", null, "claude");
     // What is running comes off the session as well, and by the same reasoning: a pane that adopted
     // one never asked for it.
@@ -647,6 +656,87 @@ describe("what is written in the box under a pane", () => {
   it("moves nothing the store keeps, so a keystroke is not a write to the disk", () => {
     const { layout } = half();
     const { frames: _typed, ...rest } = laidOut(layout);
+    const { frames: _empty, ...was } = laidOut(writing(layout, layout.frames[0]!.id, ""));
+    expect(rest).toEqual(was);
+  });
+});
+
+describe("what Amenbo put into the box under a pane", () => {
+  const PICTURE = "/tmp/amenbo-pasted-7a/pasted-0a0b0c0d.png";
+
+  /** A pane with a path Amenbo put in the box, and a word the person wrote after it. */
+  function put() {
+    const one = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/repo");
+    const written = `'${PICTURE}' look at this`;
+    return { layout: writing(one.layout, one.frame.id, written, [PICTURE]), frame: one.frame.id };
+  }
+
+  const standing = (layout: Layout, frame: string) =>
+    layout.frames.find((one) => one.id === frame)?.inserted;
+
+  it("is nothing in a place nobody has put anything into", () => {
+    const one = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/repo");
+    expect(one.frame.inserted).toEqual([]);
+  });
+
+  it("is remembered against the pane it was put into", () => {
+    const { layout, frame } = put();
+    expect(standing(layout, frame)).toEqual([PICTURE]);
+  });
+
+  it("stays while the person goes on writing round it", () => {
+    const { layout, frame } = put();
+    const on = writing(layout, frame, `'${PICTURE}' look at this, it is the third one`);
+    expect(standing(on, frame)).toEqual([PICTURE]);
+  });
+
+  // The send empties the box, and what was put into a body is nothing without the body.
+  it("is forgotten when the box is emptied", () => {
+    const { layout, frame } = put();
+    expect(standing(writing(layout, frame, ""), frame)).toEqual([]);
+  });
+
+  // Whether the body still holds one is asked at the send, where the quoting the path went in under
+  // is understood (`./terminal`). This keeps the list that is asked about.
+  it("is kept while the box is not empty, even where the person deleted the path", () => {
+    const { layout, frame } = put();
+    expect(standing(writing(layout, frame, "look at this"), frame)).toEqual([PICTURE]);
+  });
+
+  it("is remembered once, however often the same path is put in", () => {
+    const { layout, frame } = put();
+    const again = writing(layout, frame, `'${PICTURE}' '${PICTURE}'`, [PICTURE]);
+    expect(standing(again, frame)).toEqual([PICTURE]);
+  });
+
+  it("crosses with the draft, to the window the terminal is split out into", () => {
+    const { layout, frame } = put();
+    expect(standing(restored(laidOut(layout), 1), frame)).toEqual([PICTURE]);
+  });
+
+  it("is left out of the arrangement where nothing was put in", () => {
+    const one = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/repo");
+    const typed = writing(one.layout, one.frame.id, "run the tests");
+    expect(laidOut(typed).frames[0]).not.toHaveProperty("inserted");
+    expect(standing(restored(laidOut(typed), 1), one.frame.id)).toEqual([]);
+  });
+
+  // An arrangement written by a build that did not carry the draft, or one whose body was dropped
+  // on the way: a remembered path with nothing standing over it would have the next send wait out
+  // an agent that has no file to read.
+  it("comes back only where the body it was put into came too", () => {
+    const back = restored({
+      count: 1,
+      nextId: 2,
+      project: 1,
+      frames: [{ id: "1", project: 1, inserted: [PICTURE] }],
+    }, 1);
+    expect(back.frames[0]!.inserted).toEqual([]);
+  });
+
+  it("moves nothing the store keeps, so a paste is not a write to the disk", () => {
+    const { layout } = put();
+    const { frames: _put, ...rest } = laidOut(layout);
     const { frames: _empty, ...was } = laidOut(writing(layout, layout.frames[0]!.id, ""));
     expect(rest).toEqual(was);
   });

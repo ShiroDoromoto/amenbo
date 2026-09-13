@@ -244,6 +244,9 @@ func requireTart() error {
 // The clone is cut from the golden on the way if there is none (0.03s, no disk of its own until it
 // is written to), and the wait runs to a GUI session rather than to a ping: `/dev/console` owned by
 // the account is what says a screen exists to draw on, and everything here is for drawing on it.
+//
+// A raise also puts the host's Claude Code in there and signs it in (vmclaude.go). That is done per
+// clone rather than baked into the golden, because what it carries is a credential.
 func vmUp() error {
 	ip, err := vmEnsureUp()
 	if err != nil {
@@ -299,6 +302,7 @@ func vmEnsureUp() (string, error) {
 	if err := vmTakeNativeDisplay(ip); err != nil {
 		return "", err
 	}
+	vmSeedClaudeCode(ip)
 	reportVersionDrift(ip)
 	return ip, nil
 }
@@ -900,8 +904,20 @@ func vmStatus() error {
 	}
 	logf("  clone   : %s running at %s", vmCloneName, ip)
 	reportDisplay(ip)
+	reportClaude(ip)
 	reportVersionDrift(ip)
 	return nil
+}
+
+// reportClaude says which Claude Code the clone has, because the one road that opens a pane on a
+// real agent is green or not on the strength of it — and a clone raised before that was seeded, or
+// raised off a host that had none, carries nothing and says so nowhere else.
+func reportClaude(ip string) {
+	if version := guestClaudeVersion(ip); version != "" {
+		logf("  claude  : %s in there", version)
+		return
+	}
+	logf("  claude  : none in there — `devtool vm up` puts this machine's own in (vmclaude.go)")
 }
 
 // reportVersionDrift says whether host and guest have drifted apart, and never stops anything. What

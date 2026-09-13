@@ -35,6 +35,28 @@ func runThrough(dir string, extraEnv []string, name string, args ...string) (int
 	return 0, nil
 }
 
+// runFed is run with `input` handed to the command on its stdin.
+//
+// It exists for the one thing that must not be spelled as an argument: a credential read out of a
+// keychain and passed as a word would stand in this machine's process list for as long as the
+// command took, and in the far machine's too where the command is an `ssh`.
+func runFed(dir, input, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(input)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = strings.TrimSpace(stdout.String())
+		}
+		return "", fmt.Errorf("%s: %v: %s", name, err, msg)
+	}
+	return strings.TrimSpace(stdout.String()), nil
+}
+
 // run executes a command in dir and returns its trimmed stdout. On failure the
 // error carries the captured stderr so callers can surface the real cause.
 func run(dir, name string, args ...string) (string, error) {

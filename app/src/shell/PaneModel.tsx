@@ -29,6 +29,14 @@ import { Icon } from "../components/Icon";
  * says after a press is what it *did*: the model, where the command settled it, and that the terminal
  * is waiting for a choice where it opened a picker instead.
  *
+ * **Before any press it names what this pane is on** (`crate::frames::frame_model`), which is the
+ * same kind of fact and not a reading either: it is the name Amenbo put on this pane's launch line,
+ * or the one it last settled here. It is asked of the place rather than of the terminal, so that the
+ * row and the launch line of the next run cannot disagree — each pane keeps a model of its own
+ * (`AMB-T-4698`), and this is the one place a reader can tell two panes of one provider apart. And it
+ * goes the moment a provider's own picker is opened over it: what the pane is on from then on is
+ * between the person and the provider.
+ *
  * **What the press will do is said before it is pressed** — which command goes in, and, for the three
  * that keep the change past this session, which of the reader's own files it lands in. A control that
  * quietly moved somebody's default would be Amenbo writing a provider's settings through the back
@@ -66,6 +74,12 @@ export function PaneModel({ frame, session, agent }: {
   // and never a reading of the screen: the providers whose picker opens leave it null, because what
   // was chosen in there is between the person and the provider.
   const [now, setNow] = useState<AgentModelDto | null>(null);
+  // What this pane is on, as the host holds it against the place (`crate::frames::frame_model`) —
+  // what the button says with nothing pressed.
+  //
+  // Null is a pane there is no name to put up for: one started on no model, one whose provider's own
+  // picker has since been opened, and a pane running a plain shell.
+  const [on, setOn] = useState<AgentModelDto | null>(null);
   // The provider's own picker is open and the choosing is the person's. It stands until they come
   // back to this row, which is the one moment it is certainly over.
   const [waiting, setWaiting] = useState(false);
@@ -86,6 +100,35 @@ export function PaneModel({ frame, session, agent }: {
       .catch(() => { if (alive) setHow(null); });
     return () => { alive = false; };
   }, [agent]);
+
+  // What this pane is on, asked as the row comes up — and again for a pane whose provider changed
+  // under it, which is a pane that adopted another session.
+  //
+  // It is two questions because the host keeps the two halves apart: the place holds the name that
+  // went on the line, and what a reader calls that name is kept beside the choice they made
+  // (`crate::wake::wake_chose_model`). A name nothing remembers a word for stands as the provider
+  // spells it, which is what went on the line.
+  useEffect(() => {
+    if (agent === null) {
+      setOn(null);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const id = await invoke<string | null>("frame_model", { frame }).catch(() => null);
+      if (!alive) return;
+      if (id === null) {
+        setOn(null);
+        return;
+      }
+      const kept = await invoke<AgentModelKeptDto>("wake_model", { agent }).catch(() => null);
+      if (!alive) return;
+      const said = [kept?.chosen ?? null, ...(kept?.history ?? [])]
+        .find((one) => one !== null && one.id === id);
+      setOn(said ?? { id, label: id });
+    })();
+    return () => { alive = false; };
+  }, [frame, agent]);
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -162,6 +205,10 @@ export function PaneModel({ frame, session, agent }: {
         // (`crate::frames::TalkFace::model_on`).
         await invoke<void>("frame_on_model", { frame, model: model.id }).catch(() => {});
       } else {
+        // The provider's own picker is open, so whatever this pane was on is no longer something
+        // Amenbo can stand behind. The button goes back to saying nothing rather than going on
+        // naming the model the pane started on (`AMB-D-747`).
+        setOn(null);
         setWaiting(true);
       }
       setOpen(false);
@@ -202,7 +249,7 @@ export function PaneModel({ frame, session, agent }: {
         }}
       >
         <Icon name="robot" label={t("face.modelSwitch")} />
-        {now?.label ?? t("face.modelHere")}
+        {now?.label ?? on?.label ?? t("face.modelHere")}
       </button>
       {/* What the row did, in place of the model it cannot claim. The providers whose picker opens
           leave the choosing to the person, and until they have made it there is nothing here that is

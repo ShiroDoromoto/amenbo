@@ -281,6 +281,24 @@ pub fn frame_on_model(face: tauri::State<'_, TalkFace>, frame: String, model: Op
     face.opened_on(&frame, model);
 }
 
+/// The model the pane in this frame is on — the name that went on its launch line, or the one a press
+/// on the row under it settled it at (`AMB-T-4699`, `app/src/shell/PaneModel.tsx`).
+///
+/// **The same answer the next run is resumed on** ([`TalkFace::model_on`]), which is the point of
+/// asking here rather than of the terminal: a row that named one model while the pane came back on
+/// another would be two answers where a reader is owed one.
+///
+/// It is not asked about a provider, where [`TalkFace::model_on`] is. The map holds what the place is
+/// on **now** — cleared the moment a pane opens on something else ([`TalkFace::opened_on`]) — and the
+/// row that asks is drawn over a running pane, so there is no older row for it to be read off.
+///
+/// `None` three times over, and the row draws the same thing for all of them: a pane started on no
+/// model, a place nothing has been opened in, and a frame nobody has ever written one for.
+#[tauri::command]
+pub fn frame_model(face: tauri::State<'_, TalkFace>, frame: String) -> Option<String> {
+    face.models.lock().expect("pane models lock").get(&frame).cloned()
+}
+
 /// The arrangement of the talk window, as this run has it — and where it has none yet, the splits and
 /// the project this device left behind.
 ///

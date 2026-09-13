@@ -28,6 +28,8 @@ const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
   /** What the row wrote down against the place, which is what the pane comes back on. */
   onFrame: [] as { frame: string; model: string }[],
+  /** The model the host holds against this pane's place — what it is running on. */
+  onPlace: null as string | null,
   /** What was written into the terminal, in order: `send` carries the return behind it and `paste`
       does not, which is the difference the two providers with a picker turn on. */
   wrote: [] as { how: "send" | "paste"; text: string; agent?: string | null }[],
@@ -71,6 +73,7 @@ vi.mock("../core/ipc", () => ({
       return hoisted.kept[(args as { agent: string }).agent]
         ?? { chosen: null, history: [], flag: "--model" };
     }
+    if (cmd === "frame_model") return hoisted.onPlace;
     if (cmd === "wake_chose_model") return undefined;
     if (cmd === "frame_on_model") {
       hoisted.onFrame.push(args as { frame: string; model: string });
@@ -89,6 +92,7 @@ beforeEach(() => {
   hoisted.kept = {};
   hoisted.asked = [];
   hoisted.onFrame = [];
+  hoisted.onPlace = null;
   hoisted.wrote = [];
   hoisted.writeFails = false;
   container = document.createElement("div");
@@ -144,9 +148,46 @@ describe("the row is drawn for a provider that can be moved, and for nothing els
     hoisted.switches["claude-code"] = { command: "/model", carries: "named", keeps: "~/.claude/settings.json" };
     await draw("claude-code");
     expect(container.querySelector(".modelrow")).toBeTruthy();
-    // Nothing is claimed about the model before anything has been pressed: what the pane opened on
-    // is not something this row was told, and reading it off the screen is what the pane exists not
-    // to do (`AMB-D-747`).
+    // A pane started on no model at all: the provider is on whatever its own settings have, which is
+    // not a name anybody here can put up.
+    expect(container.querySelector(".modelrow__now")?.textContent).toContain("Model");
+  });
+});
+
+describe("what the button says the pane is on", () => {
+  it("names the model the pane was started on, in the reader's own word for it", async () => {
+    hoisted.switches["gemini-cli"] = { command: "/model", carries: "picker", keeps: null };
+    hoisted.onPlace = "gemini-2.5-pro";
+    hoisted.kept["gemini-cli"] = {
+      chosen: { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+      history: [],
+      flag: "-m",
+    };
+    await draw("gemini-cli");
+
+    expect(container.querySelector(".modelrow__now")?.textContent).toContain("Gemini 2.5 Pro");
+  });
+
+  it("stands the name as the provider spells it where nothing remembers a word for it", async () => {
+    hoisted.switches["codex-cli"] = { command: "/model", carries: "picker", keeps: null };
+    hoisted.onPlace = "gpt-5.6-luna";
+    await draw("codex-cli");
+
+    expect(container.querySelector(".modelrow__now")?.textContent).toContain("gpt-5.6-luna");
+  });
+
+  it("stops naming a model once the provider's own picker has been opened", async () => {
+    hoisted.switches["gemini-cli"] = { command: "/model", carries: "picker", keeps: null };
+    hoisted.models["gemini-cli"] = [{ id: "gemini-2.5-flash", label: "Flash" }];
+    hoisted.onPlace = "gemini-2.5-pro";
+    await draw("gemini-cli");
+    expect(container.querySelector(".modelrow__now")?.textContent).toContain("gemini-2.5-pro");
+
+    await open();
+    await press("Flash");
+
+    // What the pane is on now was chosen in the provider's picker, which Amenbo did not see. Going on
+    // naming the model it started on would be the row claiming a fact it no longer has (`AMB-D-747`).
     expect(container.querySelector(".modelrow__now")?.textContent).toContain("Model");
   });
 });
@@ -321,7 +362,11 @@ describe("asking the host", () => {
     // way up would pay for one nobody opened (`crate::agent_models`).
     hoisted.switches["claude-code"] = { command: "/model", carries: "named", keeps: null };
     await draw("claude-code");
-    expect(hoisted.asked).toEqual(["wake_switch"]);
+    // Two cheap reads on the way up, and neither opens anything: how this provider is moved, and
+    // what the pane was started on. The reader's word for that name is asked only where there is a
+    // name to have one.
+    expect(hoisted.asked).toEqual(["wake_switch", "frame_model"]);
+    expect(hoisted.asked, "the list was asked for before the row was opened").not.toContain("agent_models");
 
     await open();
     expect(hoisted.asked).toContain("agent_models");

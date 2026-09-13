@@ -4567,7 +4567,7 @@ impl Instructor {
                     pane = named_pane(with),
                 ),
                 model => format!(
-                    "Read the row under {pane} that names its model. Confirm it now says `{model}` — the name that was pressed. This provider's own command settles the model on the line it was given, so the row says which one; it says it because Amenbo sent that line, and never because anything was read off the pane's screen.",
+                    "Read the row under {pane} that names its model. Confirm it says `{model}` — the model this pane is running on. Amenbo says it for one of two reasons and no other: that name went on this pane's launch line, or it went on a line this provider settles the model with. Never because anything was read off the pane's screen.",
                     pane = named_pane(with),
                 ),
             },

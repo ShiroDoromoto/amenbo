@@ -116,6 +116,14 @@ steps_gui:
     with:
       shows: SCENARIO arg scenario-model-02
 
+  # And the pane says so itself, with nothing pressed on it. The row under a running pane names what
+  # that pane is on, which is the one place a reader can look to tell two panes of one provider apart.
+  - type: assert
+    domain: terminal
+    op: answers-on
+    with:
+      model: scenario-model-02
+
   # ── And the choice was kept, not left standing ────────────────────────────────────────────────
   # The pane goes, so the frame that answers next is a frame drawn again.
   - type: action

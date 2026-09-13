@@ -176,6 +176,17 @@ func windowsOnScreen(of app: AXUIElement) -> [AXUIElement] {
 /// The titles come off the window list, which serves them only to a process granted Screen Recording
 /// — the same permission shooting needs, so a run that can take the picture can also say which window
 /// it took.
+///
+/// **An untitled window is dropped wherever a titled one is up**, which is this list's answer to the
+/// same thing the accessibility list answers with a subrole (`windowsOnScreen`). A caller says which
+/// window it means by writing the title down, so a window that has none is one no `--window` could
+/// ever reach: counted, it makes an app that is plainly showing one window ambiguous, and every call
+/// from there on has to name a window while the nameless one goes on being unnameable. The question
+/// the app puts in front of its own quit arrives exactly so — a sheet over the board, owned by the
+/// app, carrying no title — and it is drawn inside the board's own picture, so the shot a caller
+/// wanted is the one it now gets by saying nothing (measured 2026-09-14 in the verification VM: the
+/// quit question as `""` beside `"Amenbo"`, and the same question 33 points shorter passing under the
+/// height floor below and never counted at all).
 func windowOf(pid: Int, named wanted: String?) -> (id: Int, frame: CGRect) {
     guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
         fail("could not read the window list")
@@ -196,7 +207,8 @@ func windowOf(pid: Int, named wanted: String?) -> (id: Int, frame: CGRect) {
         windows.append((id, w[kCGWindowName as String] as? String ?? "",
                         CGRect(x: x, y: y, width: width, height: height)))
     }
-    let found = theWindow(wanted, among: windows, titled: { $0.title }, of: pid)
+    let withTitles = windows.filter { !$0.title.isEmpty }
+    let found = theWindow(wanted, among: withTitles.isEmpty ? windows : withTitles, titled: { $0.title }, of: pid)
     return (found.id, found.frame)
 }
 

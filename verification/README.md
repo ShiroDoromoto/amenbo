@@ -510,8 +510,10 @@ carries the Japanese one because its golden image was prepared with it (`devtool
 source it was last activated under and does not follow one selected from outside — measured on this
 tree's own app, where the switch was made and said and the word still went in as its own romaji.
 **A word left standing draws a window of the app's own**, untitled, for the candidates the input
-method is offering: while one stands, the app has two windows and every line aimed at it has to say
-`--window <title>` rather than name the pid alone.
+method is offering: while one stands, a line that reads or presses by name has two windows in front
+of it and has to say which with `--window <title>` rather than name the pid alone. A shot is
+answered without one — what is counted there is the windows a title could reach, and an untitled
+window standing beside a titled one is not one of them (`scripts/screen.swift`, `windowOf`).
 
 **What the tree holds is not what the window shows.** A webview keeps a row it has scrolled out of
 sight in the tree, named and framed like anything else, and the frame stands past the window's edge.

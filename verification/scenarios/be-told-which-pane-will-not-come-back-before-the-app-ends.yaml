@@ -121,13 +121,9 @@ steps_gui:
     domain: terminal
     op: open-start
 
-  # The window is named because the question is a second one: while it stands the app has two on
-  # screen, and a shot that took whichever was in front would be a picture of a screen nobody stood
-  # at. The question is drawn over the board, so the board is what is shot.
   - type: action
     domain: store
     op: quit
-    window: Amenbo
     with:
       how: menu
       asks: true
@@ -137,7 +133,6 @@ steps_gui:
   - type: assert
     domain: store
     op: quit-names
-    window: Amenbo
     with:
       agent: GitHub Copilot CLI
       present: true
@@ -145,6 +140,5 @@ steps_gui:
   - type: action
     domain: store
     op: answer-quit
-    window: Amenbo
     with:
       answer: leave

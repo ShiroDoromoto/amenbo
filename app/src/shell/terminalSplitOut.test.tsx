@@ -213,6 +213,11 @@ describe("the sentence somebody was part-way through writing", () => {
       { session: "s2", folder: "/work/b" },
     ];
     await mount(true);
+    // Every pane comes up with its box folded away (`AMB-D-889`), so what was written is read by
+    // opening them — which is the whole point of keeping it: it is still there to come back to.
+    for (const press of q(".panerow__fold")) {
+      await act(async () => { (press as HTMLButtonElement).click(); });
+    }
     const boxes = q(".compose__box") as HTMLTextAreaElement[];
     expect(boxes.map((box) => box.value)).toEqual(["run the tests", ""]);
   });

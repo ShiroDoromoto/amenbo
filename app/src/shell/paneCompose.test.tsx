@@ -125,10 +125,23 @@ async function pane(autoStart = true, working = true): Promise<void> {
   });
 }
 
-/** The host opens a terminal in the pane, which is what puts the box up. */
+/** The host opens a terminal in the pane. The box under it starts folded away (`AMB-D-889`). */
 async function opened(): Promise<void> {
   await act(async () => { hoisted.events?.opened("session-7", "/work/here", null); });
   await act(async () => { await Promise.resolve(); });
+}
+
+/** The press on the pane's own band that opens the box, and shuts it again. */
+async function folds(): Promise<void> {
+  await act(async () => { container.querySelector<HTMLButtonElement>(".panerow__fold")?.click(); });
+  await act(async () => { await Promise.resolve(); });
+}
+
+/** A terminal open in the pane with the box open under it, which is what a reader who is writing
+ *  rather than typing at the program has in front of them. */
+async function writing(): Promise<void> {
+  await opened();
+  await folds();
 }
 
 /** The host says the program in the pane has exited. */
@@ -194,6 +207,63 @@ const wrote = () => hoisted.asked.filter((one) => one.cmd === "pty_write").map((
  *  reports no user agent this app places on macOS, which is the same answer Windows and Linux get. */
 const SEND = { ctrlKey: true };
 
+// Which of the two the pane is being worked through is the reader's to say, because the two are
+// opposite and neither can be guessed (`AMB-D-889`): a slash command typed at a CLI is completed as
+// the characters reach the program, and a paragraph with a redo in it needs a box the browser owns.
+// So the box folds, every pane comes up folded, and the press that does it is on the pane's own band.
+describe("the press that folds the box away", () => {
+  /** The press itself, which stands whether or not anything else does. */
+  const fold = () => container.querySelector<HTMLButtonElement>(".panerow__fold");
+
+  it("is on the band under every running pane, and says the box is shut", async () => {
+    await pane();
+    await opened();
+
+    expect(fold(), "a running pane had no way to open a box under it").not.toBeNull();
+    expect(box(), "the pane came up with the box already open").toBeNull();
+    expect(fold()?.getAttribute("aria-expanded")).toBe("false");
+    expect(fold()?.title).toBe(t("face.composeOpen"));
+  });
+
+  it("opens the box, and shuts it again", async () => {
+    await pane();
+    await opened();
+
+    await folds();
+    expect(box(), "the press did not open the box").not.toBeNull();
+    expect(fold()?.getAttribute("aria-expanded")).toBe("true");
+    expect(fold()?.title).toBe(t("face.composeFold"));
+
+    await folds();
+    expect(box(), "the press did not shut the box again").toBeNull();
+  });
+
+  it("keeps what was written through the fold, and says it is holding it", async () => {
+    await pane();
+    await writing();
+    await write("the sentence I was part way through");
+
+    await folds();
+
+    expect(box(), "the box would not fold over a half-written sentence").toBeNull();
+    // The window is still holding it — a pane that dropped it here would lose a paragraph to a press
+    // that said nothing about throwing one away.
+    expect(hoisted.held).toBe("the sentence I was part way through");
+    expect(fold()?.className, "a folded pane said nothing about what it was holding")
+      .toContain("panerow__fold--holding");
+
+    await folds();
+    expect(box()?.value).toBe("the sentence I was part way through");
+  });
+
+  it("says nothing about holding while the box is empty", async () => {
+    await pane();
+    await opened();
+
+    expect(fold()?.className).not.toContain("panerow__fold--holding");
+  });
+});
+
 describe("the box under a pane", () => {
   it("is not there before a terminal is", async () => {
     await pane(false);
@@ -202,23 +272,23 @@ describe("the box under a pane", () => {
 
   it("stands under the terminal for as long as one is running", async () => {
     await pane();
-    await opened();
+    await writing();
 
     expect(box(), "a running pane had nowhere to write a line").not.toBeNull();
-    // The pane's frame is one column: the row, the terminal, the box, and the band under it that
-    // stands beneath every pane (`./PaneModel`, `AMB-D-889`). The box coming after the terminal is
-    // what makes the terminal give room up rather than be covered.
+    // The pane's frame is one column: the row, the terminal, the box, and the pane's own band under
+    // it (`AMB-D-889`). The box coming after the terminal is what makes the terminal give room up
+    // rather than be covered.
     const frame = container.querySelector(".slot__frame")!;
     const bands = [...frame.children].map((one) => one.className);
     expect(bands.findIndex((one) => one.includes("compose")))
       .toBeGreaterThan(bands.findIndex((one) => one.includes("termface__face")));
-    expect(bands.findIndex((one) => one.includes("modelrow")))
+    expect(bands.findIndex((one) => one.includes("panerow")))
       .toBeGreaterThan(bands.findIndex((one) => one.includes("compose")));
   });
 
   it("goes with the terminal, because there is nothing left to write to", async () => {
     await pane();
-    await opened();
+    await writing();
     await closed();
 
     expect(box(), "a line could be written to a program that had exited").toBeNull();
@@ -226,7 +296,7 @@ describe("the box under a pane", () => {
 
   it("is one line high whether or not anything is written in it", async () => {
     await pane();
-    await opened();
+    await writing();
 
     expect(box()?.rows).toBe(1);
     await write("a line long enough to have wrapped");
@@ -237,7 +307,7 @@ describe("the box under a pane", () => {
 describe("sending what was written", () => {
   it("goes out on the send press, as a paste with the return behind it", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("run the tests");
 
     expect(await pressed("Enter", SEND), "the newline was typed into the box as well").toBe(true);
@@ -247,7 +317,7 @@ describe("sending what was written", () => {
 
   it("asks for the sentence the pane may still owe, behind the person's own line", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("run the tests");
     await pressed("Enter", SEND);
     await sent();
@@ -259,7 +329,7 @@ describe("sending what was written", () => {
   // else, and nothing crosses until the send press is made.
   it("is another line on Enter, and on Shift-Enter, and nothing crosses", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("first line");
 
     expect(await pressed("Enter"), "the newline was taken from the box").toBe(false);
@@ -270,7 +340,7 @@ describe("sending what was written", () => {
 
   it("empties the box once the line has gone", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("run the tests");
 
     await pressed("Enter", SEND);
@@ -282,7 +352,7 @@ describe("sending what was written", () => {
 
   it("leaves what was written where it is when the send is refused", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("run the tests");
     hoisted.asked = [];
     // The terminal ended between the writing and the send, which is the whole of what can refuse.
@@ -296,7 +366,7 @@ describe("sending what was written", () => {
 
   it("is what the window hands down, so a pane put up again draws it", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("half a sentence");
 
     expect(hoisted.held, "the pane kept the draft to itself").toBe("half a sentence");
@@ -305,7 +375,7 @@ describe("sending what was written", () => {
 
   it("sends nothing while nothing is written", async () => {
     await pane();
-    await opened();
+    await writing();
 
     await pressed("Enter", SEND);
 
@@ -315,7 +385,7 @@ describe("sending what was written", () => {
 
   it("goes out on the press beside the box too", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("run the tests");
 
     expect(sendBtn()?.disabled).toBe(false);
@@ -330,7 +400,7 @@ describe("sending what was written", () => {
 describe("where a press goes", () => {
   it("hands a press on while nothing is written, and keeps the keyboard", async () => {
     await pane();
-    await opened();
+    await writing();
 
     expect(await pressed("ArrowDown"), "the press stayed in the box").toBe(true);
     expect(wrote()).toEqual(["\x1b[B"]);
@@ -342,7 +412,7 @@ describe("where a press goes", () => {
   // drawing could be walked and never chosen (`AMB-T-4788`).
   it("goes to the terminal on an empty box's ArrowUp, keyboard and press together", async () => {
     await pane();
-    await opened();
+    await writing();
 
     expect(await pressed("ArrowUp"), "the press stayed in the box").toBe(true);
     expect(wrote(), "the way out reached the program as something else").toEqual(["\x1b[A"]);
@@ -352,7 +422,7 @@ describe("where a press goes", () => {
 
   it("keeps them once something is written", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("half a sentence");
 
     expect(await pressed("ArrowDown"), "the box gave up the line it was walking").toBe(false);
@@ -361,7 +431,7 @@ describe("where a press goes", () => {
 
   it("goes to the terminal on the first line's ArrowUp, keyboard and press together", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("half a sentence");
 
     expect(await pressed("ArrowUp"), "the press stayed in the box").toBe(true);
@@ -373,7 +443,7 @@ describe("where a press goes", () => {
 
   it("walks up through what is written until the first line, and leaves from there", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("first line\nsecond line");
 
     expect(await pressed("ArrowUp"), "the second line's ArrowUp was taken from the box").toBe(false);
@@ -386,7 +456,7 @@ describe("where a press goes", () => {
 
   it("hands Ctrl+C on while nothing is written, which is what stops what is running", async () => {
     await pane();
-    await opened();
+    await writing();
 
     await pressed("c", { ctrlKey: true });
 
@@ -397,7 +467,7 @@ describe("where a press goes", () => {
   // reaches for these because something went wrong, and by then the next line is half typed.
   it("hands the stopping keys on from a written box too, and leaves the line where it is", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("half a sentence");
 
     expect(await pressed("Escape"), "the box swallowed the press that stops what is running").toBe(true);
@@ -411,7 +481,7 @@ describe("where a press goes", () => {
   // keyboard, and these two are not it.
   it("leaves the keyboard in the box the stopping keys were pressed in", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("half a sentence");
     box()?.focus();
 
@@ -424,7 +494,7 @@ describe("where a press goes", () => {
 
   it("says which of the two the keyboard is answering to, and changes as the keyboard moves", async () => {
     await pane();
-    await opened();
+    await writing();
     // A person pressing the terminal, which is how the keyboard is handed to the program in it. A
     // pane opens with the keyboard in the box (`./TerminalPane`), so it is taken off there first —
     // what is read below is the mark following it back.
@@ -437,7 +507,7 @@ describe("where a press goes", () => {
 
   it("names the box as soon as the keyboard is in it, nothing written yet", async () => {
     await pane();
-    await opened();
+    await writing();
 
     // A person clicking into the box before they have typed anything. Every character they are about
     // to type is the box's, so the mark that names the terminal would be untrue from here on.
@@ -453,7 +523,7 @@ describe("where a press goes", () => {
 
   it("names the terminal again once the keyboard goes there, line still written", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("half a sentence");
 
     // A person clicking into the terminal, which takes the keyboard and leaves the line alone.
@@ -465,7 +535,7 @@ describe("where a press goes", () => {
 
   it("is not the box the emulator collects typing in", async () => {
     await pane();
-    await opened();
+    await writing();
 
     expect(typing(), "the terminal's own box went missing").not.toBeNull();
     expect(box(), "the two boxes were taken for one").not.toBe(typing());
@@ -473,14 +543,25 @@ describe("where a press goes", () => {
 });
 
 describe("a terminal opening in the pane", () => {
-  // What a person does next in a place they just opened is write, and until this they had to click
+  // What a person does next in a place they just opened is type, and until this they had to click
   // once to say where. Opening a place also makes it the one being worked in (`../talk/layout`), so
-  // the two agree without the person pressing anything.
-  it("puts the keyboard in the box", async () => {
+  // the two agree without the person pressing anything. A pane comes up folded (`AMB-D-889`), so
+  // where the keyboard belongs is the program.
+  it("puts the keyboard on the terminal, which is what a folded pane is", async () => {
     await pane();
     await opened();
 
     expect(document.activeElement, "the pane opened with the keyboard nowhere a person could type")
+      .toBe(typing());
+  });
+
+  // And the other way round once the box is open, which is the reader saying that is where they mean
+  // to write.
+  it("puts the keyboard in the box once the box is opened", async () => {
+    await pane();
+    await writing();
+
+    expect(document.activeElement, "the box was opened and the keyboard stayed on the terminal")
       .toBe(box());
   });
 
@@ -500,9 +581,19 @@ describe("a terminal opening in the pane", () => {
 });
 
 describe("a press that moves the pane being worked in", () => {
-  it("puts the keyboard in the box", async () => {
+  it("puts the keyboard on the terminal while the box is folded", async () => {
     await pane(true, false);
     await opened();
+
+    await pressOn(slot());
+
+    expect(document.activeElement, "the frame moved and the keyboard stayed where it was")
+      .toBe(typing());
+  });
+
+  it("puts the keyboard in the box where the box is open", async () => {
+    await pane(true, false);
+    await writing();
 
     await pressOn(slot());
 
@@ -512,7 +603,7 @@ describe("a press that moves the pane being worked in", () => {
 
   it("leaves the keyboard alone inside the pane already being worked in", async () => {
     await pane();
-    await opened();
+    await writing();
     // A person pressing the terminal, which is how the keyboard is handed to the program in it.
     await act(async () => { typing()?.focus(); });
 
@@ -548,7 +639,7 @@ describe("a press the input method is still using", () => {
 
   it("takes the conversion back rather than stopping the program", async () => {
     await pane();
-    await opened();
+    await writing();
     hoisted.asked = [];
 
     const caught = await composing("Escape");
@@ -560,7 +651,7 @@ describe("a press the input method is still using", () => {
   // The other half of the same exception, and the one that is held rather than spelled.
   it("does not stop the program on a Ctrl+C either", async () => {
     await pane();
-    await opened();
+    await writing();
     hoisted.asked = [];
 
     await composing("c", { ctrlKey: true });
@@ -573,7 +664,7 @@ describe("a press the input method is still using", () => {
   // there is nothing to hold the press back but this.
   it("walks the candidates rather than leaving for the terminal", async () => {
     await pane();
-    await opened();
+    await writing();
     hoisted.asked = [];
 
     await composing("ArrowUp");
@@ -585,7 +676,7 @@ describe("a press the input method is still using", () => {
   // leave the box whatever is written in it (`AMB-D-876`).
   it("still stops the program once the editor has let go", async () => {
     await pane();
-    await opened();
+    await writing();
     await write("書きかけ");
     hoisted.asked = [];
 

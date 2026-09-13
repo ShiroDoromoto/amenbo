@@ -718,6 +718,12 @@ const ui = {
   "face.composeSendKeys": "Send ({keys})",
   "face.composePasses": "Keys go to the terminal",
   "face.composeKeeps": "Writing here",
+  // The press on the pane's own band that opens and shuts that box (`AMB-D-889`). Two keys rather
+  // than one: the mark on it says which of the two states the box is in, and the words say what the
+  // press would do — a reader who stops on a folded pane is asking how to get the box back, not
+  // being told again that it is folded.
+  "face.composeOpen": "Open the box to write in",
+  "face.composeFold": "Fold the box away",
   // The file face beside the terminal's pane: the project's folder, folded, with what git says
   // about each row drawn as a colour rather than as words (`AMB-D-785`). What a file turns out not
   // to be is said in its own words — a binary is not a failure, it is simply not something a panel

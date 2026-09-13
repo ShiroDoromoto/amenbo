@@ -615,6 +615,8 @@ export const ru: Translation = {
     "face.composeSendKeys": "Отправить ({keys})",
     "face.composePasses": "Клавиши идут в терминал",
     "face.composeKeeps": "Пишете здесь",
+    "face.composeOpen": "Открыть поле для ввода",
+    "face.composeFold": "Свернуть поле ввода",
     "files.side": "Страница и файлы",
     "files.memo": "Страница",
     "files.memoTyping": "Набор",

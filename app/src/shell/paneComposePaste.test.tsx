@@ -117,10 +117,13 @@ function Window() {
   });
 }
 
-/** A pane with a terminal running in it, which is what puts the box up. */
+/** A pane with a terminal running in it and the box open under it. A pane comes up with the box
+ *  folded away (`AMB-D-889`), so opening it is part of standing one up to paste into. */
 async function pane(): Promise<void> {
   await act(async () => { root.render(createElement(Window)); });
   await act(async () => { hoisted.events?.opened("session-7", "/work/here", null); });
+  await act(async () => { await Promise.resolve(); });
+  await act(async () => { container.querySelector<HTMLButtonElement>(".panerow__fold")?.click(); });
   await act(async () => { await Promise.resolve(); });
 }
 

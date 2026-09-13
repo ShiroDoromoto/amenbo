@@ -894,13 +894,15 @@ mod tests {
     }
 
     /// A pane is given a home while the catalog says it comes back by the place it runs in, and not
-    /// otherwise. Codex is the row that is not, for now (`AMB-T-4678`): keeping its home while it
-    /// cannot come back would pay `AMB-D-869`'s price — writes reaching the reader's own directory —
-    /// for a way back the pane no longer has.
+    /// otherwise. Both rows are on it (`AMB-T-4679`); what the asking is for is the day one of them
+    /// comes down again, the way Codex did (`AMB-T-4678`) — keeping a home for a pane that cannot
+    /// come back would pay `AMB-D-869`'s price, writes reaching the reader's own directory, for
+    /// nothing.
     #[test]
     fn a_home_is_made_for_the_rows_that_come_back_by_one() {
-        assert!(kind_of(Some(GEMINI)).is_some());
-        assert!(kind_of(Some(CODEX)).is_none(), "a home for a row whose way back is down");
+        for agent in [GEMINI, CODEX] {
+            assert!(kind_of(Some(agent)).is_some(), "{agent}");
+        }
     }
 
     /// Only a provider that comes back by a place gets one. The others are resumed by a session id

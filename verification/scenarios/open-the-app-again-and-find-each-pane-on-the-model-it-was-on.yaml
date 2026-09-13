@@ -14,12 +14,15 @@
 # agent's answer is the second name, and the first pane is the one with something of its own to say.
 #
 # ── Why the provider is this one ─────────────────────────────────────────────────────────────────
-# Because it is the only one whose line carries a model on the way back. Five of the six bring the
-# conversation's own model with it and are handed none, which is a road of its own and not this one —
-# and one this harness has no reading for yet, there being no way here to say a name is absent from a
-# pane. This one restores nothing, so a line that said no model would put the pane on the machine's
-# default: a working screen, drawn without complaint, and not the conversation the reader left.
-# Naming it here is what parts the two.
+# Because its line carries a model on the way back. Four of the six bring the conversation's own
+# model with them and are handed none, which is a road of its own and not this one — and one this
+# harness has no reading for yet, there being no way here to say a name is absent from a pane. This
+# one restores nothing, so a line that said no model would put the pane on the machine's default: a
+# working screen, drawn without complaint, and not the conversation the reader left. Naming it here
+# is what parts the two.
+#
+# Codex is the other row that carries one. One road is walked rather than both: what is being read is
+# the pane's own name reaching a resumed line, and that is one fact however many rows spell it.
 #
 # ── Why the reading is the program's own words ───────────────────────────────────────────────────
 # What a pane was started with is not on the screen anywhere else: the launch line is gone by the
@@ -82,7 +85,7 @@ steps_gui:
 
   # ── The first pane, on the first of the two models ───────────────────────────────────────────
   # Named rather than taken by position, because this road is about one provider and not about
-  # wherever it sits on the row: it is the one whose launch line carries a model on the way back.
+  # wherever it sits on the row: its launch line carries a model on the way back.
   - type: action
     domain: terminal
     op: pick-start

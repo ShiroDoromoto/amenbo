@@ -40,8 +40,8 @@ pub struct TalkFace {
     /// What this run calls its frames — read back out of the store's panes as the first window of a
     /// run comes up ([`talk_layout`]).
     names: Mutex<FrameNames>,
-    /// The handle each pane's provider is resumed from, by frame — a session id for most of them, and
-    /// the path of a home of its own for `codex` (`AMB-D-869`).
+    /// The handle each pane's provider is resumed from, by frame — a session id for four of them,
+    /// and the path of a home of its own for `codex` and `gemini` (`AMB-D-869`, `AMB-D-875`).
     ///
     /// **It is held beside the arrangement rather than in it** for the reason the names are: it is
     /// the host that issues one, as it starts the session (`AMB-T-4639`, `AMB-T-4640`), and a value
@@ -615,7 +615,8 @@ mod tests {
         *face.layout.lock().unwrap() = Some(layout(vec![
             // Comes back: the row has a way back and the place still holds one.
             frame("1", Some("claude-code")),
-            // No way back at all — the catalog row carries none (`AMB-T-4659`).
+            // Nothing holds a way into this place: its row has one, and no home has been written
+            // down against this frame.
             frame("2", Some("gemini-cli")),
             // The way into this place was taken back: what was started in it never came up.
             frame("3", Some("claude-code")),

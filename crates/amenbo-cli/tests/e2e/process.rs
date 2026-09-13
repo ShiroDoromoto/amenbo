@@ -35,12 +35,12 @@ fn errors_and_exit_codes() {
 #[test]
 fn a_closed_pipe_ends_the_run_without_a_panic() {
     use std::os::unix::process::ExitStatusExt;
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
 
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    let mut child = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &cli.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&cli.home)

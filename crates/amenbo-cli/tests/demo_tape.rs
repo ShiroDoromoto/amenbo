@@ -17,7 +17,6 @@
 //! breath as the `vhs` run is what keeps the two the same age.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// The repository root — this crate sits two levels under it.
 fn repo_root() -> PathBuf {
@@ -122,7 +121,7 @@ fn transcript(commands: &[String]) -> String {
     let mut out = String::new();
     for line in commands {
         let args = argv(line);
-        let done = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let done = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .args(&args[1..])
             .current_dir(&cwd)
             .env("AMENBO_HOME", &home)

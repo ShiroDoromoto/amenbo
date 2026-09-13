@@ -4,7 +4,6 @@
 
 mod harness;
 
-use std::process::Command;
 
 use serde_json::Value;
 
@@ -245,7 +244,7 @@ fn concurrent_writers_all_land_without_a_file_lock() {
         let home = cli.home.clone();
         let pid = pid.clone();
         handles.push(std::thread::spawn(move || {
-            let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
                 .env("AMENBO_HOME", &home)
                 .env("AMENBO_UPDATE_CHECK", "0") // no update check (hermetic)
                 // A non-interactive write declares a facet.
@@ -276,7 +275,7 @@ fn r6_clone_to_new_machine_rebinds_hardware() {
     // The runs below pin the CWD to home, so home_a must exist before the first one.
     std::fs::create_dir_all(&home_a).unwrap();
     let run = |home: &std::path::Path, hw: &str, args: &[&str]| -> (Value, String) {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", home)
             .env("AMENBO_HW_ID", hw)
             .env("AMENBO_UPDATE_CHECK", "0") // no update check (hermetic)
@@ -395,7 +394,7 @@ fn version_and_update_answer_without_a_pointer() {
     let dir = temp_home();
     std::fs::create_dir_all(&dir).unwrap();
     let run = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env_remove("AMENBO_HOME")
             .env("AMENBO_UPDATE_CHECK", "0") // no upstream lookup (hermetic)
             .env("AMENBO_UPDATE_JSON_URL", "http://127.0.0.1:1/latest.json") // a shipped build's road, without the endpoint
@@ -439,7 +438,7 @@ fn update_apply_declines_gracefully_without_manifest() {
     let dir = temp_home();
     std::fs::create_dir_all(&dir).unwrap();
     let run = |args: &[&str], check_off: bool| {
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_amenbo"));
+        let mut cmd = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"));
         cmd.env_remove("AMENBO_HOME")
             // A test binary is unstamped, which is its own refusal; the override puts it on the road a
             // shipped build takes, so what is exercised here is the unreachable manifest and nothing else.
@@ -475,7 +474,7 @@ fn an_unstamped_build_declines_to_check_for_updates() {
     let dir = temp_home();
     std::fs::create_dir_all(&dir).unwrap();
     let run = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env_remove("AMENBO_HOME")
             // Nothing is set here on purpose: no kill switch, no override.
             .env_remove("AMENBO_UPDATE_CHECK")
@@ -520,7 +519,7 @@ fn update_rollback_declines_gracefully_without_a_retained_binary() {
     let dir = temp_home();
     std::fs::create_dir_all(&dir).unwrap();
     let run = |args: &[&str]| {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env_remove("AMENBO_HOME")
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&dir)

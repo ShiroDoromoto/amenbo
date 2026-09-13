@@ -4,7 +4,6 @@
 
 mod harness;
 
-use std::process::Command;
 
 use serde_json::Value;
 
@@ -28,7 +27,7 @@ fn a_plugin_reads_back_with_no_facet_and_still_declares_one_to_write() {
     // A plugin's process: the store and the window named in the environment, and no facet anywhere — the
     // CWD is not the bound folder either, since a plugin's is whatever its launcher happened to be in.
     let plugin = |args: &[&str]| -> (String, String, i32) {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("AMENBO_PLUGIN_REACH", amenbo_core::idref::project(pid.parse().unwrap()))
@@ -79,7 +78,7 @@ fn a_facet_written_after_plugin_run_is_named_where_the_call_failed() {
 
     // Nothing is added to these calls: what a person typed is the whole input.
     let spawn = |args: &[&str]| -> (String, i32) {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&cli.home)
@@ -141,7 +140,7 @@ fn a_help_flag_reaches_the_plugin_and_only_the_nameless_form_is_amenbos() {
 
         // Naming no plugin: Amenbo's own help, and no facet declared anywhere — a help request never
         // needed one.
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&cli.home)
@@ -158,7 +157,7 @@ fn a_help_flag_reaches_the_plugin_and_only_the_nameless_form_is_amenbos() {
 
     // A hyphen where the name goes is otherwise a flag written one word too late, and is told so rather
     // than sent to the catalog as a plugin nobody could have installed.
-    let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &cli.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&cli.home)
@@ -533,7 +532,7 @@ fn a_tmpdir_that_is_gone_is_not_handed_on_to_a_plugin_and_a_live_one_is() {
     cli.json(&["plugin", "enable", "tmp", "--json"]);
 
     let ran = |tmpdir: &std::path::Path| -> String {
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("TMPDIR", tmpdir)

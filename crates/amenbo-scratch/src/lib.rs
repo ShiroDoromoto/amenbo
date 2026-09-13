@@ -1,10 +1,13 @@
-//! The throwaway directory a test works in.
+//! The throwaway directory a test works in, and the throwaway environment it runs the binary in.
 //!
-//! Every crate's tests reach the same three rules through this one function: one parent, a name whose
-//! uniqueness does not rest on the pid, and a sweep on the way *in*. It is a dev-dependency everywhere and
-//! is never linked into a shipped binary.
+//! Every crate's tests reach the same three rules through [`scratch`]: one parent, a name whose
+//! uniqueness does not rest on the pid, and a sweep on the way *in*. [`command`] is the same idea one
+//! step out — what a test runs is started from a set of variables the test decided rather than from
+//! whatever the shell it was typed in happened to hold. It is a dev-dependency everywhere and is never
+//! linked into a shipped binary.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Once;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -35,6 +38,31 @@ pub fn scratch(tag: &str) -> PathBuf {
     let dir = root().join(format!("{tag}-{:x}-{nanos:x}-{n:x}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("create the scratch directory");
     dir
+}
+
+/// The binary at `exe`, with **nothing the parent had under `AMENBO_`**.
+///
+/// A command takes its parent's environment, and a test run from inside a pane of Amenbo's own
+/// terminal has that pane's session and drop box in it. They reach the binary under test, which then
+/// believes it is inside the window and answers as one: it leaves its statements in the drop box of a
+/// pane somebody is working in, which renames that pane after a word a test made up and tells the
+/// window an agent has been briefed when none has. The test reading the refusal goes red at the same
+/// time, and only there — CI runs outside a pane, so the whole of it lands on one person's machine.
+///
+/// They are dropped **by prefix and not by name**, so a variable added later is dropped by the same
+/// line rather than by whoever next runs the tests from a pane. What a test wants put back — the
+/// throwaway store, the update check held off — it sets itself, on top of this.
+///
+/// `exe` is the caller's own `env!("CARGO_BIN_EXE_…")`: which binary is under test is that crate's to
+/// say, and this crate has no dependency on any of them.
+pub fn command(exe: &str) -> Command {
+    let mut command = Command::new(exe);
+    for (key, _) in std::env::vars() {
+        if key.starts_with("AMENBO_") {
+            command.env_remove(&key);
+        }
+    }
+    command
 }
 
 /// Sweep on the way in, not on the way out, and once per process.

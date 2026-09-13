@@ -23,7 +23,7 @@ fn unopened_home() -> std::path::PathBuf {
 
 fn lint(cwd: &std::path::Path, home: &std::path::Path, args: &[&str], stdin: Option<&str>) -> (String, String, i32) {
     use std::io::Write;
-    let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    let mut child = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", home)
         // `lint` touches no facet, so it must run with none declared — and none is declared here.
         .env("AMENBO_UPDATE_CHECK", "0")
@@ -486,7 +486,7 @@ fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
 
     let spawns = |args: &[&str]| -> usize {
         let _ = std::fs::remove_file(&log);
-        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        let out = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("PATH", &shim_dir)
@@ -501,7 +501,7 @@ fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
     assert_eq!(spawns(&["task", "list", "--json"]), 1, "an ordinary command probes the hooks once");
     assert_eq!(spawns(&["hooks", "status", "--json"]), 1, "and the hooks' own faces do not probe twice");
 
-    Command::new(env!("CARGO_BIN_EXE_amenbo"))
+    amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &cli.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&cli.home)
@@ -562,7 +562,10 @@ fn the_installed_hook_lives_its_whole_life_under_real_git() {
     let commit = |file: &str, content: &str, message: &str, path: &str| -> std::process::Output {
         std::fs::write(repo.join(file), content).unwrap();
         git(&repo, &["add", "-A"]);
-        Command::new("git")
+        // git, and through it the hook, and through that the Amenbo on the crafted `PATH`: the last of
+        // the three is what this drives, so it starts from a decided environment like every other run
+        // here (`amenbo_scratch::command`).
+        amenbo_scratch::command("git")
             .current_dir(&repo)
             .env("PATH", path)
             .env("AMENBO_UPDATE_CHECK", "0")
@@ -623,7 +626,7 @@ fn the_hook_coexists_with_a_foreign_hook_and_leaves_it_on_uninstall() {
     let commit = |file: &str, message: &str| -> std::process::Output {
         std::fs::write(repo.join(file), format!("{file}\n")).unwrap();
         git(&repo, &["add", "-A"]);
-        Command::new("git")
+        amenbo_scratch::command("git")
             .current_dir(&repo)
             .env("PATH", &with_amenbo)
             .env("AMENBO_UPDATE_CHECK", "0")

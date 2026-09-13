@@ -38,7 +38,7 @@ impl Ask {
     }
 
     fn command(&self, args: &[&str]) -> Command {
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_amenbo"));
+        let mut cmd = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"));
         cmd.env("AMENBO_HOME", &self.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("NO_COLOR", "1")

@@ -484,3 +484,62 @@ describe("a press that moves the pane being worked in", () => {
     elsewhere.remove();
   });
 });
+
+// Writing Japanese, Chinese or Korean puts an editor between the keyboard and the box. Its keys walk a
+// list of candidates, accept one, or take the conversion back — and every one of them arrives as a
+// `keydown` spelled like the key it was made with. A box that read those as the keys they look like
+// would hand them to the program: an `Escape` meant to drop a half-made word would stop the agent,
+// which is the press a person reaches for when nothing is wrong (`AMB-T-4782`).
+describe("a press the input method is still using", () => {
+  /** Press a key mid-conversion, which is what the page says with `isComposing`. */
+  const composing = (key: string, held: KeyboardEventInit = {}) =>
+    pressed(key, { ...held, isComposing: true });
+
+  it("takes the conversion back rather than stopping the program", async () => {
+    await pane();
+    await opened();
+    hoisted.asked = [];
+
+    const caught = await composing("Escape");
+
+    expect(caught, "the box answered for a press the editor was in the middle of").toBe(false);
+    expect(wrote(), "the agent was stopped by somebody dropping a half-made word").toEqual([]);
+  });
+
+  // The other half of the same exception, and the one that is held rather than spelled.
+  it("does not stop the program on a Ctrl+C either", async () => {
+    await pane();
+    await opened();
+    hoisted.asked = [];
+
+    await composing("c", { ctrlKey: true });
+
+    expect(wrote()).toEqual([]);
+  });
+
+  // The candidate list is walked with the arrows, and an empty box hands every ordinary press to the
+  // program — so the first character of a conversion is the worst case: nothing is written yet, and
+  // there is nothing to hold the press back but this.
+  it("walks the candidates rather than leaving for the terminal", async () => {
+    await pane();
+    await opened();
+    hoisted.asked = [];
+
+    await composing("ArrowUp");
+
+    expect(wrote()).toEqual([]);
+  });
+
+  // And the exception is still an exception: once the editor has let go, the two stopping presses
+  // leave the box whatever is written in it (`AMB-D-876`).
+  it("still stops the program once the editor has let go", async () => {
+    await pane();
+    await opened();
+    await write("書きかけ");
+    hoisted.asked = [];
+
+    await pressed("Escape");
+
+    expect(wrote()).toEqual(["\x1b"]);
+  });
+});

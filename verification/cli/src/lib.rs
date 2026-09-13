@@ -598,6 +598,9 @@ impl<'a> Driver<'a> {
             // The file face is a screen too. Reading a file at a shell is `cat`, which is not Amenbo
             // doing anything, so there is nothing here to walk and no gap in the road.
             Domain::Files => Err(unmapped(domain, op)),
+            // Both halves of a notification's setup — the device's shelf and the project's selection
+            // — walked at the terminal. Nothing here posts (`domain::notify`).
+            Domain::Notify => self.notify_action(op, with, bind),
         }
     }
 
@@ -626,6 +629,7 @@ impl<'a> Driver<'a> {
             // The screen's alone, the same way its actions are.
             Domain::Terminal => Err(unmapped(domain, op)),
             Domain::Files => Err(unmapped(domain, op)),
+            Domain::Notify => self.notify_assert(op, with),
         }
     }
 

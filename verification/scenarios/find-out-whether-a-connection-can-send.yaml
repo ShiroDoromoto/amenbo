@@ -1,0 +1,125 @@
+# Finding out on the spot whether a connection works, instead of finding out when the first real
+# notification does not arrive.
+#
+# A connection typed into a form is a guess until something is asked of it, and the first thing that
+# would otherwise say so is the first message nobody receives — by which time nobody is looking at
+# the form. So the press is on the form, and this road is that it answers, and that it answers
+# differently about a connection that is wrong.
+#
+# Two kinds and two honest answers. A mail relay is connected to and the account offered to it, so a
+# check can say the settings are usable; a webhook has no door but posting, so all that is read is
+# the shape of its URL — a webhook revoked yesterday still has the shape. The road walks the negative
+# for both, because a build whose check always said yes would pass every positive step here.
+#
+# Nothing is sent. The press that sends is the operator's own, against a channel they own — there is
+# no relay a gate may post through, and one it could would make the gate depend on a third party
+# answering today.
+id: find-out-whether-a-connection-can-send
+title: A connection can be tried where it was typed, and says what is wrong rather than that it is fine
+description: >
+  Raise two targets — one webhook that is not one, one mail relay with nothing filled in — ask each
+  whether it is usable and be told no; then correct the webhook and be told the shape is right. What
+  is under test is that the check is a reading and not a formality: a build answering yes on an empty
+  form would leave a reader sure of a connection that has never worked.
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+
+steps_cli:
+  # A webhook that is not one. It is the ordinary mistake — the workspace's home page, a bot token's
+  # URL, half of one — and it is refused on the shape alone, with nothing leaving the machine.
+  - type: action
+    domain: notify
+    op: raise
+    with:
+      kind: slack
+      name: SCENARIO SEED — a webhook that is not one
+    as: wrong_webhook
+
+  - type: action
+    domain: notify
+    op: connect
+    with:
+      target: wrong_webhook
+      secret: https://example.com/not-a-webhook
+
+  - type: assert
+    domain: notify
+    op: usable
+    with:
+      target: wrong_webhook
+      yes: false
+
+  # A mail target nobody has filled in. What it is missing is not one field but three, and the check
+  # names them together rather than one per press.
+  - type: action
+    domain: notify
+    op: raise
+    with:
+      kind: mail
+      name: SCENARIO SEED — a relay with nothing filled in
+    as: empty_relay
+
+  - type: assert
+    domain: notify
+    op: usable
+    with:
+      target: empty_relay
+      yes: false
+
+  # The correction, and the answer changing with it. This is the step that says the check reads the
+  # settings rather than remembering its first verdict.
+  - type: action
+    domain: notify
+    op: connect
+    with:
+      target: wrong_webhook
+      secret: https://hooks.slack.com/services/T00SCENARIO/B00SCENARIO/notarealwebhookvalue
+
+  - type: assert
+    domain: notify
+    op: usable
+    with:
+      target: wrong_webhook
+      yes: true
+
+steps_gui:
+  - type: action
+    domain: notify
+    op: raise
+    with:
+      kind: slack
+      name: SCENARIO SEED — a webhook that is not one
+    as: wrong_webhook
+
+  - type: action
+    domain: notify
+    op: connect
+    with:
+      target: wrong_webhook
+      secret: https://example.com/not-a-webhook
+
+  - type: assert
+    domain: notify
+    op: usable
+    with:
+      target: wrong_webhook
+      yes: false
+
+  - type: action
+    domain: notify
+    op: connect
+    with:
+      target: wrong_webhook
+      secret: https://hooks.slack.com/services/T00SCENARIO/B00SCENARIO/notarealwebhookvalue
+
+  - type: assert
+    domain: notify
+    op: usable
+    with:
+      target: wrong_webhook
+      yes: true

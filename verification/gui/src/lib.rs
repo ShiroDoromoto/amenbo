@@ -1907,6 +1907,50 @@ impl Instructor {
             // All three are walked, where the login nudge takes only the refusal: a yes there
             // registers this machine's login with no way back on the road, while a yes here is
             // taken back by moving the settings row to off before the run ends.
+            // ---- notifications: the device's shelf, and what a project sends through it ----
+            // The shelf is in Amenbo's own settings and the selection in the project's, which is the
+            // decision this road exists to walk: a reader who could not find the second half would
+            // have a connection written and nothing sending through it.
+            (Domain::Notify, "raise") => format!(
+                "In Amenbo's own settings, under the notification targets, add a target of the kind `{}` and name it `{}`.",
+                req(with, "kind")?,
+                req(with, "name")?
+            ),
+            // The credential is typed into a box that is masked and cannot be read back, so the step
+            // says to type it rather than to check it afterwards — what a later step reads is that one
+            // is held, never which.
+            (Domain::Notify, "connect") => {
+                let mut said = vec!["Open that notification target's own form and fill its connection in".to_string()];
+                for (key, what) in [
+                    ("smtp_host", "the server"),
+                    ("smtp_user", "the account"),
+                    ("mail_from", "the address to send from"),
+                    ("secret", "the credential (the masked box)"),
+                ] {
+                    if let Some(value) = with.get(key).and_then(|v| v.as_str()) {
+                        said.push(format!("{what} as `{value}`"));
+                    }
+                }
+                format!("{}. Then save.", said.join(", "))
+            }
+            (Domain::Notify, "mark-default") => "On that notification target's form, press the button that makes it the default — where a newly created project starts out pointing.".to_string(),
+            (Domain::Notify, "remove") => "On that notification target's form, press the button that removes it, and confirm. The line in front of the press says how many projects lose it.".to_string(),
+            (Domain::Notify, "report") => match req_bool(with, "on")? {
+                true => "In this project's settings, switch its notifications on.".to_string(),
+                false => "In this project's settings, switch its notifications off — leaving the targets and the events it had chosen exactly where they are.".to_string(),
+            },
+            (Domain::Notify, "carry") => match req_bool(with, "on")? {
+                true => "In this project's settings, select that notification target, so this project sends through it.".to_string(),
+                false => "In this project's settings, unselect that notification target. It stays on the device's shelf.".to_string(),
+            },
+            (Domain::Notify, "address") => format!(
+                "In this project's settings, address its mail to `{}`.",
+                req(with, "to")?
+            ),
+            (Domain::Notify, "choose") => match req_bool(with, "on")? {
+                true => format!("In this project's settings, tick `{}` among the events it reports.", req(with, "event")?),
+                false => format!("In this project's settings, untick `{}` among the events it reports.", req(with, "event")?),
+            },
             (Domain::Tick, "banner-answer") => match req(with, "answer")? {
                 "start" => "In the band offering to watch due dates, press the button that starts the hourly check — the one that answers yes and registers the timer."
                     .to_string(),
@@ -4242,6 +4286,34 @@ impl Instructor {
             // The tick's band, standing or gone. Nothing is pressed here and nothing is opened —
             // the band comes up on its own while its three conditions hold, so the line is the
             // screen as the app left it, and the absent half is read after one of them has gone.
+            // What the shelf says about one target. The credential is never drawn, so what is read is
+            // the line that says whether one is held — which is what decides whether it can send.
+            (Domain::Notify, "shelved") => match req_bool(with, "credential")? {
+                true => "In Amenbo's own settings, confirm that notification target is on the shelf and its line says a credential is saved.".to_string(),
+                false => "In Amenbo's own settings, confirm that notification target is on the shelf and its line says no credential is saved yet.".to_string(),
+            },
+            // What this project does with the shelf, read on the project's own settings — the second
+            // half of the split, and the one a reader goes to when asking where notifications go.
+            (Domain::Notify, "reports") => {
+                let mut said = vec![format!(
+                    "In this project's settings, confirm its notifications are switched {}",
+                    if req_bool(with, "on")? { "on" } else { "off" }
+                )];
+                if with.contains_key("target") {
+                    said.push("the target above is among the ones selected".to_string());
+                }
+                if let Some(event) = with.get("event").and_then(|v| v.as_str()) {
+                    said.push(format!("`{event}` is ticked among the events it reports"));
+                }
+                format!("{}.", said.join(", and that "))
+            }
+            // The press that asks without sending. What it may claim differs by kind, and the
+            // sentence it answers with is the one to read — a webhook's says the shape was read and
+            // that a test message is what answers the rest.
+            (Domain::Notify, "usable") => match req_bool(with, "yes")? {
+                true => "On that notification target's form, press the button that checks the connection, and confirm the line it answers with says the settings are usable.".to_string(),
+                false => "On that notification target's form, press the button that checks the connection, and confirm the line it answers with names what is wrong rather than saying it is usable.".to_string(),
+            },
             (Domain::Tick, "banner") => match present(with) {
                 true => "Confirm the band offering to watch due dates is standing across the app — it came up by itself, and it carries three buttons: one that starts the checking, one that declines it, one that puts it off."
                     .to_string(),
@@ -5155,6 +5227,15 @@ fn present(with: &Args) -> bool {
     with.get("present").and_then(|v| v.as_bool()).unwrap_or(true)
 }
 
+/// A yes-or-no the step is required to carry. The loader has already seen it — every key here is one
+/// an `OpSpec` asked for — so what is left is reading it, and a value of another shape is a road that
+/// would otherwise be walked as its opposite.
+fn req_bool(with: &Args, key: &str) -> Result<bool, String> {
+    with.get(key)
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| format!("`{key}` has to be true or false"))
+}
+
 /// How long a pane set printing goes on putting something out.
 ///
 /// It answers to both ends of the one road it is on. Long enough that the lamp is still lit after a
@@ -6041,6 +6122,7 @@ pub fn domain_str(d: Domain) -> &'static str {
         Domain::Tick => "tick",
         Domain::Terminal => "terminal",
         Domain::Files => "files",
+        Domain::Notify => "notify",
     }
 }
 

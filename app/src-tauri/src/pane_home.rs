@@ -221,15 +221,22 @@ pub fn for_pane(frame: &str, agent: Option<&str>) -> Option<(Vec<(&'static str, 
     }
     let home = homes_root(kind)?.join(frame);
     let theirs = amenbo_core::env::home_dir().map(|dir| dir.join(kind.theirs));
-    // A home that is already there is the one that comes back, links and all; only the first ask
-    // makes one. The variables are read off the row either way — they are what the pane is started
-    // with, not something the making leaves behind.
-    let home = if home.is_dir() { home } else { make(kind, &home, theirs.as_deref())? };
-    // The copies are carried in here rather than in `make`, so that the open which found the home
-    // already there brings them too: what they are for is the reader's file as it is now, and a
-    // copy taken on the open that made the home would be as old as the pane.
+    // A home that is already there is the one that comes back; only the first ask makes one. The
+    // variables are read off the row either way — they are what the pane is started with, not
+    // something the making leaves behind.
+    let home = if home.is_dir() { home } else { make(kind, &home)? };
+    // The sharing is done on every open rather than on the open that made the home, because a name
+    // that was linked can stop being one while the pane runs: Gemini's own keychain unlinks the
+    // credentials file as it logs out, which takes this pane's link and leaves the reader's file
+    // where it was (`AMB-T-4710`). Left to the making, that pane would go on running with a home
+    // that shares nothing and no sign of it, until somebody closed the pane and opened another.
+    //
+    // The copies are here for a neighbouring reason: what they are for is the reader's file as it is
+    // now, and a copy taken on the open that made the home would be as old as the pane.
     if let Some(theirs) = theirs.as_deref() {
-        copy_in(kind.copied_here(), &home.join(kind.inside), theirs);
+        let into = home.join(kind.inside);
+        share(kind, &into, theirs);
+        copy_in(kind.copied_here(), &into, theirs);
     }
     Some((vars(kind, home.clone(), theirs.as_deref()), home))
 }
@@ -294,8 +301,33 @@ fn homes_root(kind: &Kind) -> Option<PathBuf> {
     Some(amenbo_core::config::Paths::resolve().ok()?.base_dir.join(kind.homes))
 }
 
-/// Make one home and link the reader's own halves into it, answering with it — and with nothing where
-/// the directory itself could not be made.
+/// Make one home, answering with it — and with nothing where the directory itself could not be made.
+///
+/// What goes **into** it is [`share`]'s and [`copy_in`]'s, and both are asked on every open rather
+/// than only on this one: a home outlives the run that made it, and what it holds does not.
+fn make(kind: &Kind, home: &Path) -> Option<PathBuf> {
+    let into = home.join(kind.inside);
+    if let Err(e) = std::fs::create_dir_all(&into) {
+        log::warn!("no {} home at {}: {e}", kind.agent, into.display());
+        return None;
+    }
+    Some(home.to_path_buf())
+}
+
+/// Link the reader's own halves into a pane's home — every name that is not already reached from
+/// there.
+///
+/// **It is asked on every open and not only on the one that made the home** (`AMB-T-4710`). A name
+/// linked into a home can stop being one while the pane runs, and the provider is the one that takes
+/// it: Gemini's own keychain unlinks the credentials file when the last of them is deleted, which is
+/// what a logout does. What goes is this pane's link; the reader's file stays where it is. Left
+/// until the next home was made, that pane would keep running against a home that shares nothing,
+/// taking none of the reader's later changes and saying nothing about it.
+///
+/// **A name already reached from the home is left exactly as it is.** What is asked of it is
+/// [`std::fs::symlink_metadata`] and not whether it can be opened: a link to a name a login has yet
+/// to make ([`Kind::made`]) answers nothing on the far side and is still the link that login will go
+/// through, and relinking it every open would be work for nothing at best.
 ///
 /// **A link that fails is a warning and not a refusal.** What it costs is one of the things in
 /// [`Kind::shared`]: a pane that logs in again, or comes up without the reader's skills. That is
@@ -303,39 +335,35 @@ fn homes_root(kind: &Kind) -> Option<PathBuf> {
 /// the same on both rows**: Codex opens without its links and Gemini does not open at all, stopping
 /// on the first two of its. Which is why [`link`] is spelled the way it is on Windows, where until
 /// `AMB-D-878` this was the ordinary outcome rather than the odd one.
-fn make(kind: &Kind, home: &Path, theirs: Option<&Path>) -> Option<PathBuf> {
-    let into = home.join(kind.inside);
-    if let Err(e) = std::fs::create_dir_all(&into) {
-        log::warn!("no {} home at {}: {e}", kind.agent, into.display());
-        return None;
-    }
-    if let Some(theirs) = theirs {
-        for name in kind.linked() {
-            let from = theirs.join(name);
-            // What the reader does not have is not linked to: a link to nothing is a path the
-            // provider would read as a file it cannot open, rather than as a file that is not
-            // there. The exception is a name a login makes (`Kind::made`, `AMB-D-880`) — that one
-            // is linked to where the file will be, so that the login lands in the reader's own
-            // directory instead of in this home.
-            if !from.exists() {
-                if !kind.made.contains(&name) {
+fn share(kind: &Kind, into: &Path, theirs: &Path) {
+    for name in kind.linked() {
+        let at = into.join(name);
+        if at.symlink_metadata().is_ok() {
+            continue;
+        }
+        let from = theirs.join(name);
+        // What the reader does not have is not linked to: a link to nothing is a path the
+        // provider would read as a file it cannot open, rather than as a file that is not
+        // there. The exception is a name a login makes (`Kind::made`, `AMB-D-880`) — that one
+        // is linked to where the file will be, so that the login lands in the reader's own
+        // directory instead of in this home.
+        if !from.exists() {
+            if !kind.made.contains(&name) {
+                continue;
+            }
+            // A reader who has never run this provider has no directory either, and a write
+            // through the link needs one to land in.
+            if let Some(parent) = from.parent() {
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    log::warn!("{name} is not shared into {}: {e}", into.display());
                     continue;
                 }
-                // A reader who has never run this provider has no directory either, and a write
-                // through the link needs one to land in.
-                if let Some(parent) = from.parent() {
-                    if let Err(e) = std::fs::create_dir_all(parent) {
-                        log::warn!("{name} is not shared into {}: {e}", into.display());
-                        continue;
-                    }
-                }
-            }
-            if let Err(e) = link(&from, &into.join(name)) {
-                log::warn!("{name} is not shared into {}: {e}", into.display());
             }
         }
+        if let Err(e) = link(&from, &at) {
+            log::warn!("{name} is not shared into {}: {e}", into.display());
+        }
     }
-    Some(home.to_path_buf())
 }
 
 /// Carry the reader's own copy of each of these into a pane's home, replacing what an earlier open
@@ -437,6 +465,19 @@ mod tests {
     const GEMINI: &str = "gemini-cli";
     const CODEX: &str = "codex-cli";
 
+    /// What one open does to a home: make it where it is not there, and share the reader's own into
+    /// it — [`for_pane`]'s pair, without the parts of it that read the device.
+    ///
+    /// The tests call this rather than [`make`] because the two are what an open is, and because the
+    /// half that is asked **every** time is the half half of them are about (`AMB-T-4710`).
+    fn opened(kind: &Kind, home: &Path, theirs: Option<&Path>) -> Option<PathBuf> {
+        let home = if home.is_dir() { home.to_path_buf() } else { make(kind, home)? };
+        if let Some(theirs) = theirs {
+            share(kind, &home.join(kind.inside), theirs);
+        }
+        Some(home)
+    }
+
     /// The row for a provider, whether or not it is one being given homes today — the table itself,
     /// which the tests below make homes against directly.
     fn kind(agent: &str) -> &'static Kind {
@@ -502,7 +543,7 @@ mod tests {
             let theirs = theirs(kind);
             let home = amenbo_scratch::scratch("pane-home").join(kind.agent).join("7");
 
-            assert_eq!(make(kind, &home, Some(&theirs)).as_deref(), Some(home.as_path()));
+            assert_eq!(opened(kind, &home, Some(&theirs)).as_deref(), Some(home.as_path()));
             for name in kind.linked() {
                 let at = home.join(kind.inside).join(name);
                 // Reading through it reaches the reader's own — the entry itself where it is a
@@ -523,7 +564,7 @@ mod tests {
         let theirs = theirs(kind);
         let home = amenbo_scratch::scratch("pane-home-gemini").join("7");
 
-        make(kind, &home, Some(&theirs)).unwrap();
+        opened(kind, &home, Some(&theirs)).unwrap();
 
         shares(&home.join(".gemini/settings.json"), &theirs.join("settings.json"));
         assert!(home.join("settings.json").symlink_metadata().is_err(), "shared at the home itself");
@@ -538,7 +579,7 @@ mod tests {
         std::fs::remove_file(theirs.join("settings.json")).unwrap();
         let home = amenbo_scratch::scratch("pane-home-missing").join("7");
 
-        make(kind, &home, Some(&theirs)).unwrap();
+        opened(kind, &home, Some(&theirs)).unwrap();
 
         assert!(home.join(".gemini/settings.json").symlink_metadata().is_err());
         assert!(home.join(".gemini/gemini-credentials.json").symlink_metadata().is_ok());
@@ -560,7 +601,7 @@ mod tests {
                 std::fs::remove_file(theirs.join(name)).unwrap();
             }
 
-            make(kind, &home, Some(&theirs)).unwrap();
+            opened(kind, &home, Some(&theirs)).unwrap();
 
             for name in kind.made {
                 let at = home.join(kind.inside).join(name);
@@ -583,6 +624,38 @@ mod tests {
         }
     }
 
+    /// A link the provider took away is put back on the next open, and one that is still standing is
+    /// left exactly as it was.
+    ///
+    /// **The taking away is the provider's own doing and not a mishap** (`AMB-T-4710`): Gemini's
+    /// keychain unlinks the credentials file as the last of them is deleted, which is what a logout
+    /// does. What goes is this pane's name for the reader's file; the reader's file stays. Shared
+    /// only on the open that made the home, that pane would go on running against a home that
+    /// reaches nothing — taking none of the reader's later changes, and saying nothing about it
+    /// until somebody thought to close the pane.
+    #[test]
+    fn a_link_the_provider_took_away_comes_back_on_the_next_open() {
+        let kind = kind(GEMINI);
+        let theirs = theirs(kind);
+        let home = amenbo_scratch::scratch("pane-home-logged-out").join("7");
+        opened(kind, &home, Some(&theirs)).unwrap();
+        let into = home.join(kind.inside);
+        let settings = into.join("settings.json");
+        let credentials = into.join("gemini-credentials.json");
+
+        // The logout: the provider takes its own name for the file away, and nothing else moves.
+        std::fs::remove_file(&credentials).unwrap();
+        assert!(credentials.symlink_metadata().is_err());
+
+        opened(kind, &home, Some(&theirs)).unwrap();
+
+        assert!(credentials.symlink_metadata().is_ok(), "the pane came back sharing nothing");
+        // Reached rather than merely there: what would be useless is a name standing over a copy.
+        shares(&credentials, &theirs.join("gemini-credentials.json"));
+        // And the one that was never taken away still reaches the reader's own.
+        shares(&settings, &theirs.join("settings.json"));
+    }
+
     /// A reader who has never run the provider has no directory either, and the login has to land
     /// in one — so it is made rather than the link being given up on.
     #[test]
@@ -592,7 +665,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&theirs);
         let home = amenbo_scratch::scratch("pane-home-never").join("7");
 
-        make(kind, &home, Some(&theirs)).unwrap();
+        opened(kind, &home, Some(&theirs)).unwrap();
 
         assert!(theirs.is_dir(), "the reader's own directory was not made");
         let at = home.join(kind.inside).join("auth.json");
@@ -624,7 +697,7 @@ mod tests {
         let theirs = theirs(kind);
         let home = amenbo_scratch::scratch("pane-home-pointed").join("7");
 
-        make(kind, &home, Some(&theirs)).unwrap();
+        opened(kind, &home, Some(&theirs)).unwrap();
 
         assert!(home.join(".gemini/trustedFolders.json").symlink_metadata().is_err());
         assert_eq!(
@@ -739,11 +812,11 @@ mod tests {
         let kind = kind(GEMINI);
         let theirs = theirs(kind);
         let home = amenbo_scratch::scratch("pane-home-again").join("7");
-        make(kind, &home, Some(&theirs)).unwrap();
+        opened(kind, &home, Some(&theirs)).unwrap();
         let talk = home.join(".gemini/chat.jsonl");
         std::fs::write(&talk, "a conversation").unwrap();
 
-        make(kind, &home, Some(&theirs)).unwrap();
+        opened(kind, &home, Some(&theirs)).unwrap();
 
         assert_eq!(std::fs::read_to_string(&talk).unwrap(), "a conversation");
         shares(&home.join(".gemini/settings.json"), &theirs.join("settings.json"));
@@ -761,7 +834,7 @@ mod tests {
             let theirs = theirs(kind);
             let root = amenbo_scratch::scratch("pane-homes-gone").join(kind.agent);
             let home = root.join("7");
-            make(kind, &home, Some(&theirs)).unwrap();
+            opened(kind, &home, Some(&theirs)).unwrap();
 
             forget_in(&root, &home);
 
@@ -797,7 +870,7 @@ mod tests {
         let kind = kind(GEMINI);
         let root = amenbo_scratch::scratch("pane-homes-swept");
         for frame in ["1", "2", "3"] {
-            make(kind, &root.join(frame), None).unwrap();
+            opened(kind, &root.join(frame), None).unwrap();
         }
 
         sweep_in(&root, &BTreeSet::from(["1".to_string(), "3".to_string()]));
@@ -812,7 +885,7 @@ mod tests {
     #[test]
     fn the_sweep_of_an_empty_arrangement_clears_the_root() {
         let root = amenbo_scratch::scratch("pane-homes-empty");
-        make(kind(GEMINI), &root.join("1"), None).unwrap();
+        opened(kind(GEMINI), &root.join("1"), None).unwrap();
 
         sweep_in(&root, &BTreeSet::new());
 

@@ -57,9 +57,10 @@
 id: send-a-message-with-a-picture-in-it
 title: A message with a picture in it goes when it is sent, rather than sitting in the agent's input box
 description: >
-  Open a pane on the first agent this machine has. Write a line in the box Amenbo draws under it,
-  paste a large picture in beside it, and send the two together. The message goes: Amenbo's box is
-  empty, the agent's own input line is empty of it, and the pane above holds what was sent.
+  Open a pane on the first agent this machine has, and open the box Amenbo folds away under it.
+  Write a line in that box, paste a large picture in beside it, and send the two together. The
+  message goes: Amenbo's box is empty, the agent's own input line is empty of it, and the pane above
+  holds what was sent.
 
 given:
   - type: action
@@ -104,6 +105,13 @@ steps_gui:
   - type: action
     domain: terminal
     op: open-start
+
+  # The box, which a pane comes up without: a pane is opened by somebody about to work the program in
+  # it, so the presses go there until the reader asks for somewhere else to put them. Everything
+  # below this line is written in that box, and a folded pane has nothing to write in.
+  - type: action
+    domain: terminal
+    op: open-box
 
   # ── The message, written and not yet sent ─────────────────────────────────────────────────────
   # The words the three readings below rest on. They are written first so the paste goes in beside

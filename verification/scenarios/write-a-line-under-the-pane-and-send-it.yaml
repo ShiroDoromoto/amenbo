@@ -26,11 +26,13 @@
 # the half the road reads after it — a way out that threw the line away is one nobody would take
 # twice.
 #
-# ── Why the box is read before anything is typed ────────────────────────────────────────────────
-# A pane is opened by somebody who is about to write, so the box comes to hand as the pane does: the
-# keyboard is in it before the first press, and there is no click to make first. That is read at the
-# top of the road because it is the one moment it can be read — every step after this one has put
-# the keyboard somewhere itself.
+# ── Why the box is opened first, and read as it opens ───────────────────────────────────────────
+# A pane comes up with the box folded away, and the presses in it go to the program: that is what a
+# pane is before anybody asks for anything else, and a slash command typed at a CLI needs the
+# characters to reach it to be completed at all. So a person who means to write asks for the box —
+# and the press that asks is the press that hands it the keyboard, opening it being the same act as
+# saying you mean to write in it. That is read at the top of the road because it is the one moment
+# it can be read: every step after this one has put the keyboard somewhere itself.
 #
 # ── Why the arrow is walked first ───────────────────────────────────────────────────────────────
 # The box is empty when a pane has just been opened and at no other point on this road, so the press
@@ -71,11 +73,11 @@
 id: write-a-line-under-the-pane-and-send-it
 title: A line is written in the box under the pane, stands there unsent, and goes when it is sent
 description: >
-  Open a pane on a plain shell. The box beneath it has the keyboard already, nobody having clicked
-  anything. With nothing written in it, press the up arrow and watch the shell's own history answer
-  it — the press went past the box. Then write a line in the box: it stands there with nothing run.
-  Send it with return, and it reaches the terminal. Write a
-  second and send it with the press beside the box instead. Then write a third, and leave the box by
+  Open a pane on a plain shell and open the box beneath it, which a pane comes up without. The box
+  has the keyboard as it opens, nobody having clicked into it. With nothing written in it, press the
+  up arrow and watch the shell's own history answer it — the press went past the box. Then write a
+  line in the box: it stands there with nothing run. Send it with return, and it reaches the
+  terminal. Write a second and send it with the press beside the box instead. Then write a third, and leave the box by
   the first line's up arrow: the shell walks its history, and the third line is still standing in the
   box. Then open a second pane and press back onto the first, and read which box the keyboard is in.
   What is under test is that the box holds what is written until a person sends it, stays out of the
@@ -116,10 +118,15 @@ steps_gui:
     domain: terminal
     op: open-shell
 
-  # ── The box a freshly opened pane hands the keyboard to ───────────────────────────────────────
-  # Nothing has been clicked since the pane came up, so what the mark says here is what opening the
-  # pane did. Read before the line below is typed, which is the last moment nothing else has moved
-  # the keyboard.
+  # ── The box, asked for, and the keyboard that comes with it ───────────────────────────────────
+  # The pane came up folded, so the box is asked for before anything can be written in it. Every
+  # step below this one is about that box.
+  - type: action
+    domain: terminal
+    op: open-box
+
+  # Nothing has been clicked since, so what the mark says here is what opening the box did. Read
+  # before the line below is typed, which is the last moment nothing else has moved the keyboard.
   - type: assert
     domain: terminal
     op: keys-in-the-box
@@ -279,6 +286,14 @@ steps_gui:
   - type: action
     domain: terminal
     op: open-shell
+
+  # This pane's box too, and before a word is typed at it: the readings at the end of the road are of
+  # two marks, and a pane still folded draws neither of them. Opening it puts the keyboard in it,
+  # which the line below then takes away again — that order is the point, because what those readings
+  # rest on is a box that is there and does not have the keyboard.
+  - type: action
+    domain: terminal
+    op: open-box
 
   # Typed at the terminal so this pane has words of its own to be named by. Both panes work in the
   # one folder, and there is nothing else here to tell them apart by.

@@ -2160,6 +2160,22 @@ impl Instructor {
                     "At {pane}, with the word standing under its mark, press return twice. The first press accepts the word as it is written and the mark under it goes away; the second gives the line to the program running there. The shell will not know the command, which is what leaves the word on the screen for the step after this one to read."
                 )
             }
+            // The press that brings the box out from under a pane, which every pane comes up without.
+            // It is found by the band it stands on and not by the mark on it: that mark is a keyboard
+            // while the box is folded away, and so is the one the box's own row draws once it is open
+            // — an operator sent looking for a keyboard would have two of them to choose between.
+            //
+            // What the press leaves behind is said as well, because the steps after it are read
+            // against it: the box is there, and it has the keyboard.
+            (Domain::Terminal, "open-box") => {
+                let pane = match arg_str(with, "onto") {
+                    Some(onto) => format!("the pane showing \"{onto}\""),
+                    None => "the pane the step before opened".to_string(),
+                };
+                format!(
+                    "Under {pane}, below the terminal, is a thin band of Amenbo's own that stands under every running pane. Press the control at its left-hand end, once — where the band names a model, this is the press to the left of that. Amenbo's box opens between the terminal and the band, and the keyboard goes into the box: what you type now is written there rather than given to the program. Press nothing else."
+                )
+            }
             // A line written into the box under the pane and left standing. The box is named by
             // where it is rather than by the words in it: it is empty at the moment the operator
             // looks for it, so the only thing that finds it is the row it stands on.
@@ -4393,10 +4409,10 @@ impl Instructor {
                 };
                 match present(with) {
                     true => format!(
-                        "Under {pane}, look at the mark at the left-hand end of the box below the terminal: confirm it is the one drawn for a box that keeps what is typed — the writing mark, not the keyboard one the other box carries. That mark is the box saying it has the keyboard, so a person typing now would be writing there."
+                        "Under {pane}, look at the mark at the left-hand end of the box below the terminal — the one on the box's own row, and not the press on the band under it, which draws the same two pictures: confirm it is the one drawn for a box that keeps what is typed — the writing mark, not the keyboard one the other box carries. That mark is the box saying it has the keyboard, so a person typing now would be writing there."
                     ),
                     false => format!(
-                        "Under {pane}, look at the mark at the left-hand end of the box below the terminal: confirm it is the one drawn for a box that hands presses on — the keyboard mark. The keyboard is somewhere else, so what is typed now does not go into that box."
+                        "Under {pane}, look at the mark at the left-hand end of the box below the terminal — the one on the box's own row, and not the press on the band under it, which draws the same two pictures: confirm it is the one drawn for a box that hands presses on — the keyboard mark. The keyboard is somewhere else, so what is typed now does not go into that box."
                     ),
                 }
             }

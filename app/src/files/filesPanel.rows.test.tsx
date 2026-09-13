@@ -650,6 +650,36 @@ describe("the file face", () => {
     expect(box.scrollTop).toBe((99 - 20) * 22 + 22 - 10 * 22);
   });
 
+  /** Put the list where a reader standing `scrolled` rows down the tree sees it, and let the
+   *  window catch up — which is what a browser does on its own on every turn of the wheel. */
+  async function wheelTo(box: HTMLElement, scrolled: number) {
+    const list = container.querySelector<HTMLElement>('[role="tree"]')!;
+    list.getBoundingClientRect = () => ({ top: -scrolled * 22 }) as DOMRect;
+    await act(async () => {
+      box.dispatchEvent(new Event("scroll"));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  /** The wheel is the reader's once they are standing on the row. Reaching for the row again on
+   *  every window would pull the box back to it, and the panel would go nowhere upward
+   *  (`AMB-T-4806`). */
+  it("leaves the wheel to the reader once it has stood on the row", async () => {
+    const box = await tall(20);
+    await press(rows()[0]!, "End");
+    // The box moved by 70 rows, so the reader now stands 90 rows down and the last row is drawn:
+    // this is the turn the focus lands in.
+    await wheelTo(box, 20 + ((99 - 20) * 22 + 22 - 10 * 22) / 22);
+    expect(rows().some((one) => labelOf(one) === "f099.md")).toBe(true);
+    const stood = box.scrollTop;
+
+    // And now the reader turns the wheel upward, far enough that the row they stood on is left out
+    // of the document again.
+    await wheelTo(box, 40);
+    expect(rows().some((one) => labelOf(one) === "f099.md")).toBe(false);
+    expect(box.scrollTop).toBe(stood);
+  });
+
   it("says how deep a row is, how many it stands among, and which one it is", async () => {
     await stood();
     await press(rows()[0]!, "ArrowRight");

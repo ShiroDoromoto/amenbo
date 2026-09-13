@@ -1206,12 +1206,20 @@ function Tree({
    * is anything to stand on: the box is moved here, the drawing that follows puts the row in, and
    * this runs again with it in hand. `focus` is what scrolls it the rest of the way where it is
    * only half on the screen, which is the browser's own answer and the one Tab gives too.
+   *
+   * **Put down once the reader is standing on the row**, which is what leaves the wheel to them
+   * (`AMB-T-4806`). The window is read off the box on every scroll, so `from` and `to` change under
+   * every turn of the wheel and this runs again with them. An answer still in hand at that point is
+   * reached for a second time, and reaching for a row the reader has just turned away from is the
+   * box being pulled back to it: the panel goes nowhere upward while it still moves down, because
+   * only the row leaving by the foot of the box is one that has to be scrolled to. A press puts a
+   * fresh answer down, so the same row named twice still carries.
    */
   useEffect(() => {
     if (named === null) return;
     const ul = tree.current;
     const row = ul?.querySelector<HTMLElement>(`[data-key="${CSS.escape(named.key)}"]`) ?? null;
-    if (row !== null) { row.focus(); return; }
+    if (row !== null) { row.focus(); setNamed(null); return; }
     const box = scroller.current;
     const at = lines.findIndex((line) => line.kind === "row" && line.key === named.key);
     if (ul === null || box === null || at < 0) return;

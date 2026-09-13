@@ -300,12 +300,13 @@ export function TerminalPane({
    *
    * **Everything else is the box's only while something is written in it.** An empty box has no
    * history to walk and no word to complete, so the presses that mean those things go to the program
-   * instead and the person keeps them without leaving the box.
+   * instead, and the keyboard stays in the box for the next character.
    *
-   * **The one way out of a written box is the ArrowUp on its first line.** It moves the keyboard to
-   * the terminal and goes there itself, so a menu the program is drawing is walked by the one press
-   * rather than by a press to leave and a press to move. What is written stays where it is, and the
-   * mark beside the box goes on saying the way back.
+   * **The one way out is the ArrowUp on the first line, empty box or written one** (`AMB-T-4788`).
+   * It moves the keyboard to the terminal and goes there itself, so a menu the program is drawing is
+   * walked by the one press rather than by a press to leave and a press to move — and what is walked
+   * can then be chosen, which an empty box's handed-on ArrowUp left no way to do. What is written
+   * stays where it is, and the mark beside the box goes on saying the way back.
    */
   const pressed = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (isEnterSubmit(e)) {

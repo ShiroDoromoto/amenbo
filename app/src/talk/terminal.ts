@@ -295,9 +295,10 @@ export type Press = {
  *
  * **It is asked of a box with nothing in it** (`AMB-D-864`). What decides where a press goes is what
  * the person has written, not what is on the screen: a box holding a half-written sentence keeps its
- * own arrows, and an empty one has nothing to keep them for. Two roads out of a written box ask this
- * for the bytes rather than deciding them again — {@link leavesForTerminal}'s one press, and the two
- * that stop what is running ({@link stopsTheProgram}, `AMB-D-876`).
+ * own arrows, and an empty one has nothing to keep them for. Two roads out of the box ask this for
+ * the bytes rather than deciding them again — {@link leavesForTerminal}'s one press, which is the
+ * road out of an empty box as well, and the two that stop what is running ({@link stopsTheProgram},
+ * `AMB-D-876`).
  *
  * `Ctrl+C` is here and `Ctrl` with anything else is not. It is the one press that means "stop what is
  * running", which is the reason a person looks away from what they were writing; the rest of the
@@ -352,8 +353,8 @@ export function stopsTheProgram(e: Press): string | null {
 }
 
 /**
- * What the terminal is given for the press that leaves a box with something written in it, or nothing
- * where this press is not that one (`AMB-D-864`).
+ * What the terminal is given for the press that leaves the box, or nothing where this press is not
+ * that one (`AMB-D-864`).
  *
  * **It is the way back to a program that is asking something.** While a line is half written the
  * arrows are the box's, so a menu the program is drawing cannot be walked — and there is no way to
@@ -364,11 +365,14 @@ export function stopsTheProgram(e: Press): string | null {
  * `caret` is where the caret sits in `written` — the first line is the text in front of it holding no
  * newline. Below the first line the press is the box's, and walks up through what is written.
  *
- * **An empty box is not this road**, and answers `null` here: everything of an empty box's goes to
- * the program already ({@link passedOn}), and this one press is the exception a written box makes.
+ * **An empty box is this road too** (`AMB-T-4788`). Its `ArrowUp` already reached the program, by the
+ * presses an empty box hands on ({@link passedOn}), but the keyboard stayed behind — so the menu the
+ * program was drawing could be walked and never chosen. Walking and leaving are the one press
+ * whatever is written. What `AMB-D-864` kept in an empty box were the characters of a first word, and
+ * `ArrowUp` is not one of them.
  */
 export function leavesForTerminal(e: Press, written: string, caret: number): string | null {
-  if (written === "" || e.key !== "ArrowUp") return null;
+  if (e.key !== "ArrowUp") return null;
   if (written.slice(0, caret).includes("\n")) return null;
   return passedOn(e);
 }

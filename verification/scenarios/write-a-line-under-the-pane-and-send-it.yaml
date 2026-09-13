@@ -18,11 +18,13 @@
 # the program is drawing — that second question cannot be asked of a terminal at all, which is the
 # whole reason the rule is the one it is.
 #
-# **And a written box keeps one press as the way back.** The rule above leaves a person with a
-# half-written line unable to answer a program that has put a menu up, so the up arrow on the first
-# line is left as the road out: it moves the keyboard to the terminal and goes there itself. What
-# was written stays in the box, which is the half the road reads after it — a way out that threw the
-# line away is one nobody would take twice.
+# **And the up arrow is the way back, out of either box.** The rule above leaves a person unable to
+# answer a program that has put a menu up, so the up arrow — on the first line where something is
+# written — is left as the road out: it moves the keyboard to the terminal and goes there itself.
+# Walking and choosing are the one press, and a build that handed the arrow on while keeping the
+# keyboard would let a menu be walked and never chosen. What was written stays in the box, which is
+# the half the road reads after it — a way out that threw the line away is one nobody would take
+# twice.
 #
 # ── Why the box is read before anything is typed ────────────────────────────────────────────────
 # A pane is opened by somebody who is about to write, so the box comes to hand as the pane does: the
@@ -32,10 +34,12 @@
 #
 # ── Why the arrow is walked first ───────────────────────────────────────────────────────────────
 # The box is empty when a pane has just been opened and at no other point on this road, so the press
-# that only an empty box hands on is walked before anything is written. `ctrl-c` after it is the road
-# tidying up as much as anything: the recalled line is standing at the prompt, and it is the fifth
-# press the box hands on, so abandoning it walks one more of them and leaves a clean prompt for the
-# half that follows.
+# that only an empty box hands on is walked before anything is written. It is read twice over: the
+# shell walked its history, and the mark says the keyboard left with the press. `ctrl-c` after it is
+# the road tidying up as much as anything: the recalled line is standing at the prompt, and it is the
+# fifth press the box hands on, so abandoning it walks one more of them and leaves a clean prompt for
+# the half that follows — and that press puts the keyboard back in the box, because it is asked for
+# over a box the operator clicks into first.
 #
 # ── Why the stop is walked over a written box, and what it does not prove ───────────────────────
 # Escape and ctrl-c are the exception to the rule above: they go to the program whatever is written,
@@ -142,6 +146,15 @@ steps_gui:
     op: in-the-box
     with:
       shows: SCENARIO the seedling trays were counted on the first cold morning
+
+  # And the keyboard went with the press. That is the half a walked line cannot say on its own: a
+  # build that handed the arrow on and kept the keyboard leaves the person walking a menu they have
+  # no way to choose from, because the return that would choose is the box's.
+  - type: assert
+    domain: terminal
+    op: keys-in-the-box
+    with:
+      present: false
 
   # Abandoned rather than run, which walks the fifth press the box hands on and leaves the prompt
   # clean for what follows.

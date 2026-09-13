@@ -9,7 +9,8 @@
 // And that **what a press means is decided by what is written, not by what is on the screen**. An
 // empty box hands the arrows, the tab and Escape to the program; a box with something in it keeps
 // them, but for one — the ArrowUp on its first line, which is the way back to a program that is
-// asking something. There is no way to ask a terminal whether it is showing a menu, so nothing here
+// asking something, and which takes the keyboard there from an empty box just the same
+// (`AMB-T-4788`). There is no way to ask a terminal whether it is showing a menu, so nothing here
 // tries.
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -322,12 +323,26 @@ describe("sending what was written", () => {
 });
 
 describe("where a press goes", () => {
-  it("hands the arrows on while nothing is written", async () => {
+  it("hands a press on while nothing is written, and keeps the keyboard", async () => {
+    await pane();
+    await opened();
+
+    expect(await pressed("ArrowDown"), "the press stayed in the box").toBe(true);
+    expect(wrote()).toEqual(["\x1b[B"]);
+    expect(document.activeElement, "a press that only walks a list took the keyboard with it")
+      .toBe(box());
+  });
+
+  // Before this the press went on its own and the keyboard stayed behind, so a menu the program was
+  // drawing could be walked and never chosen (`AMB-T-4788`).
+  it("goes to the terminal on an empty box's ArrowUp, keyboard and press together", async () => {
     await pane();
     await opened();
 
     expect(await pressed("ArrowUp"), "the press stayed in the box").toBe(true);
-    expect(wrote()).toEqual(["\x1b[A"]);
+    expect(wrote(), "the way out reached the program as something else").toEqual(["\x1b[A"]);
+    expect(document.activeElement, "the keyboard stayed in the box the press left").toBe(typing());
+    expect(mark()?.title, "the mark went on naming a box the keyboard had left").toBe(t("face.composePasses"));
   });
 
   it("keeps them once something is written", async () => {

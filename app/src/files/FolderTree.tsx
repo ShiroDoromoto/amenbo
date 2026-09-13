@@ -1144,8 +1144,14 @@ function Tree({
       // is a first row of nought once it is floored.
       const above = box.getBoundingClientRect().top - ul.getBoundingClientRect().top;
       const first = Math.floor(above / ROW);
-      const from = Math.max(0, first - SPARE);
-      const to = Math.min(lines.length, first + Math.ceil(tall / ROW) + SPARE);
+      // Held inside the lines at both ends. `above` is read off the box the whole panel scrolls
+      // in, so a tree bound beside others is carried clean past it: once the section has gone by
+      // the box's top, `first` runs on past the last line and the height left behind for the rows
+      // above (`from * ROW`) grows taller than the tree itself. Everything below is pushed down by
+      // as much as the reader scrolled, so the panel stops moving and the rows judder in 22px
+      // steps (`AMB-T-4726`). The far end is held the same way, for a section still below the box.
+      const from = Math.min(lines.length, Math.max(0, first - SPARE));
+      const to = Math.max(0, Math.min(lines.length, first + Math.ceil(tall / ROW) + SPARE));
       setWin((was) => (was !== null && was.from === from && was.to === to ? was : { from, to }));
     };
     look();

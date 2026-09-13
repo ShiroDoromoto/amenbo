@@ -2602,6 +2602,25 @@ const REGISTRY: &[OpSpec] = &[
     // is the page's one pane — a road with two says which, the same way it says which one to type
     // into.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "in-the-box", required: &["shows"], refs: &[], strings: &["on", "shows"], binds: false },
+    // The press that brings that box out, which every pane comes up without. A pane is opened by
+    // somebody who is about to work the program in it, so it opens folded and the presses go to the
+    // terminal; a person who means to write asks for the box, and this is that asking.
+    //
+    // **A road that touches the box walks this first.** There is nothing to click into while a pane
+    // is folded, so a line written, pasted or read under one is a line the operator cannot carry out
+    // at all — which is why it is an op of its own rather than something the steps below do quietly:
+    // a press a road did not ask for is a press nobody can see in the road afterwards.
+    //
+    // **The keyboard goes into the box as it opens.** Opening it is asking to write in it
+    // (`app/src/shell/TerminalPane.tsx`), so a road that wants the keyboard at the terminal after
+    // this puts it there itself, by typing at the pane.
+    //
+    // There is no op for folding it away again: no road walks that press, and one written for it
+    // would be a mapping in every driver with nothing behind it.
+    //
+    // `onto` is which pane, named the way `write-to-pane` names one. Left out, it is the pane the
+    // step before opened — which is where a road asks for this, the fold being what a pane opens in.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-box", required: &[], refs: &[], strings: &["onto"], binds: false },
     // A line written into the box standing under the pane, and left there. It is **not** `type-line`
     // with the box named: that one types at the terminal, where every character reaches the program
     // as it is pressed, and this is Amenbo's own box drawn under it — what is written there belongs
@@ -2636,6 +2655,9 @@ const REGISTRY: &[OpSpec] = &[
     // **It is read rather than typed at.** A character sent to find out where the keyboard is would
     // be a character added to whatever is standing in the box, and this road reads that line
     // afterwards. The mark says the same thing and costs nothing.
+    //
+    // **It is the mark on the box's own row.** The press that opens and folds the box draws the same
+    // two pictures on the band under it (`open-box`), so the reading says which row it is made on.
     //
     // `on` is which pane's box, named the way `still-to-send`'s is; `present: false` is the other
     // half — a box the keyboard has left, which draws the other mark.

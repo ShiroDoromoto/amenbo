@@ -843,6 +843,33 @@ export const ja: Translation = {
     "detail.premiseChangedHint": "予約後に動いた前提（後から付いた／確定が外れた・着手可否が下がった）",
     "detail.premiseAdded": "予約後に付いた前提",
     "detail.premiseReopened": "予約後に確定が外れた前提（未採択化／置き換え。リンクは前からある）",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who} が {what} を作成しました",
+    "notify.say.statusChanged": "{who} が {what} を{state}にしました",
+    "notify.say.statusChangedBare": "{who} が {what} のステータスを変更しました",
+    "notify.say.taskDone": "{who} が {what} を完了しました",
+    "notify.say.taskRejected": "{who} が {what} を見送りました",
+    "notify.say.taskAssigned": "{who} が {what} を {state} に割り当てました",
+    "notify.say.taskAssignedBare": "{who} が {what} を割り当てました",
+    "notify.say.taskMoved": "{who} が {what} を {state} へ移動しました",
+    "notify.say.taskMovedBare": "{who} が {what} を別のプロジェクトへ移動しました",
+    "notify.say.taskDeleted": "{who} が {what} を削除しました",
+    "notify.say.decisionAccepted": "{who} が {what} を採択しました",
+    "notify.say.decisionRejected": "{who} が {what} を却下しました",
+    "notify.say.commentAdded": "{who} が {what} にコメントしました",
+    "notify.say.commentAddedBare": "{who} が {what} を追加しました",
+    "notify.say.commentRemoved": "{who} が {what} のコメントを取り消しました",
+    "notify.say.commentRemovedBare": "{who} が {what} を取り消しました",
+    "notify.say.taskDue": "{what} は期日が来ています",
+    "notify.say.taskDueTomorrow": "{what} は明日が期日です",
+    "notify.say.unknown": "{who} が {what} を操作しました（{event}）",
+    "notify.say.test": "Amenbo からのテスト送信です。このプロジェクトの通知はここに届きます。",
   },
 
   err: {

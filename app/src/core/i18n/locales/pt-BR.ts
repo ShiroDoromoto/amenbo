@@ -850,6 +850,33 @@ export const ptBR: Translation = {
     "detail.premiseChangedHint": "Premissas que se mexeram depois que você reservou — acrescentadas, ou que não estão mais resolvidas (a prontidão foi retirada)",
     "detail.premiseAdded": "Acrescentada depois que você reservou",
     "detail.premiseReopened": "Deixou de estar resolvida depois que você reservou — reaberta ou substituída (o vínculo é mais antigo)",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who} criou {what}",
+    "notify.say.statusChanged": "{who} mudou {what} para {state}",
+    "notify.say.statusChangedBare": "{who} mudou o status de {what}",
+    "notify.say.taskDone": "{who} concluiu {what}",
+    "notify.say.taskRejected": "{who} decidiu não fazer {what}",
+    "notify.say.taskAssigned": "{who} atribuiu {what} a {state}",
+    "notify.say.taskAssignedBare": "{who} definiu o responsável de {what}",
+    "notify.say.taskMoved": "{who} moveu {what} para {state}",
+    "notify.say.taskMovedBare": "{who} moveu {what} para outro projeto",
+    "notify.say.taskDeleted": "{who} excluiu {what}",
+    "notify.say.decisionAccepted": "{who} aceitou {what}",
+    "notify.say.decisionRejected": "{who} recusou {what}",
+    "notify.say.commentAdded": "{who} comentou em {what}",
+    "notify.say.commentAddedBare": "{who} adicionou {what}",
+    "notify.say.commentRemoved": "{who} retirou um comentário de {what}",
+    "notify.say.commentRemovedBare": "{who} retirou {what}",
+    "notify.say.taskDue": "O prazo de {what} chegou",
+    "notify.say.taskDueTomorrow": "O prazo de {what} é amanhã",
+    "notify.say.unknown": "{who} fez algo em {what} ({event})",
+    "notify.say.test": "Mensagem de teste do Amenbo — este projeto reporta aqui.",
   },
 
   err: {

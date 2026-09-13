@@ -823,6 +823,33 @@ export const vi: Translation = {
     "detail.premiseChangedHint": "Những tiền đề đã dịch chuyển sau khi bạn nhận việc — mới được ghim vào, hoặc không còn ngã ngũ (tính sẵn sàng bị rút)",
     "detail.premiseAdded": "Được ghim vào sau khi bạn nhận việc",
     "detail.premiseReopened": "Hết ngã ngũ sau khi bạn nhận việc — được mở lại hoặc bị thay thế (mối nối cũ hơn)",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who} đã tạo {what}",
+    "notify.say.statusChanged": "{who} đã chuyển {what} sang {state}",
+    "notify.say.statusChangedBare": "{who} đã đổi trạng thái của {what}",
+    "notify.say.taskDone": "{who} đã hoàn thành {what}",
+    "notify.say.taskRejected": "{who} đã quyết định không làm {what}",
+    "notify.say.taskAssigned": "{who} đã giao {what} cho {state}",
+    "notify.say.taskAssignedBare": "{who} đã giao {what}",
+    "notify.say.taskMoved": "{who} đã chuyển {what} sang dự án {state}",
+    "notify.say.taskMovedBare": "{who} đã chuyển {what} sang dự án khác",
+    "notify.say.taskDeleted": "{who} đã xoá {what}",
+    "notify.say.decisionAccepted": "{who} đã chấp nhận {what}",
+    "notify.say.decisionRejected": "{who} đã bác {what}",
+    "notify.say.commentAdded": "{who} đã bình luận về {what}",
+    "notify.say.commentAddedBare": "{who} đã thêm {what}",
+    "notify.say.commentRemoved": "{who} đã rút lại bình luận về {what}",
+    "notify.say.commentRemovedBare": "{who} đã rút lại {what}",
+    "notify.say.taskDue": "{what} đã đến hạn",
+    "notify.say.taskDueTomorrow": "{what} đến hạn vào ngày mai",
+    "notify.say.unknown": "{who} đã tác động đến {what} ({event})",
+    "notify.say.test": "Tin nhắn thử từ Amenbo — dự án này sẽ báo về đây.",
   },
 
   err: {

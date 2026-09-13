@@ -819,6 +819,33 @@ export const ko: Translation = {
     "detail.premiseChangedHint": "예약한 뒤에 움직인 전제 — 새로 붙었거나, 더는 정해진 상태가 아닌 것(준비 상태가 거둬들여짐)",
     "detail.premiseAdded": "예약한 뒤에 붙음",
     "detail.premiseReopened": "예약한 뒤에 정해진 상태에서 벗어남 — 논의로 돌아갔거나 대체됨(연결이 더 오래됨)",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who}이(가) {what}을(를) 만들었습니다",
+    "notify.say.statusChanged": "{who}이(가) {what}을(를) {state}(으)로 바꿨습니다",
+    "notify.say.statusChangedBare": "{who}이(가) {what}의 상태를 바꿨습니다",
+    "notify.say.taskDone": "{who}이(가) {what}을(를) 완료했습니다",
+    "notify.say.taskRejected": "{who}이(가) {what}을(를) 하지 않기로 했습니다",
+    "notify.say.taskAssigned": "{who}이(가) {what}을(를) {state}에게 맡겼습니다",
+    "notify.say.taskAssignedBare": "{who}이(가) {what}의 담당을 정했습니다",
+    "notify.say.taskMoved": "{who}이(가) {what}을(를) {state}(으)로 옮겼습니다",
+    "notify.say.taskMovedBare": "{who}이(가) {what}을(를) 다른 프로젝트로 옮겼습니다",
+    "notify.say.taskDeleted": "{who}이(가) {what}을(를) 삭제했습니다",
+    "notify.say.decisionAccepted": "{who}이(가) {what}을(를) 채택했습니다",
+    "notify.say.decisionRejected": "{who}이(가) {what}을(를) 기각했습니다",
+    "notify.say.commentAdded": "{who}이(가) {what}에 댓글을 남겼습니다",
+    "notify.say.commentAddedBare": "{who}이(가) {what}을(를) 남겼습니다",
+    "notify.say.commentRemoved": "{who}이(가) {what}의 댓글을 거뒀습니다",
+    "notify.say.commentRemovedBare": "{who}이(가) {what}을(를) 거뒀습니다",
+    "notify.say.taskDue": "{what}의 기한이 되었습니다",
+    "notify.say.taskDueTomorrow": "{what}의 기한이 내일입니다",
+    "notify.say.unknown": "{who}이(가) {what}에 무언가 했습니다 ({event})",
+    "notify.say.test": "Amenbo에서 보낸 테스트 메시지입니다. 이 프로젝트는 여기로 보고합니다.",
   },
 
   err: {

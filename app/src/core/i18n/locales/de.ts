@@ -834,6 +834,33 @@ export const de: Translation = {
     "detail.premiseChangedHint": "Prämissen, die sich nach deiner Reservierung bewegt haben — hinzugekommen oder nicht mehr entschieden (die Gültigkeit wurde zurückgezogen)",
     "detail.premiseAdded": "Nach deiner Reservierung hinzugekommen",
     "detail.premiseReopened": "Nach deiner Reservierung nicht mehr entschieden — wieder geöffnet oder ersetzt (die Verknüpfung ist älter)",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who} hat {what} erstellt",
+    "notify.say.statusChanged": "{who} hat {what} auf {state} gesetzt",
+    "notify.say.statusChangedBare": "{who} hat den Status von {what} geändert",
+    "notify.say.taskDone": "{who} hat {what} erledigt",
+    "notify.say.taskRejected": "{who} hat entschieden, {what} nicht zu machen",
+    "notify.say.taskAssigned": "{who} hat {what} an {state} übergeben",
+    "notify.say.taskAssignedBare": "{who} hat {what} zugewiesen",
+    "notify.say.taskMoved": "{who} hat {what} nach {state} verschoben",
+    "notify.say.taskMovedBare": "{who} hat {what} in ein anderes Projekt verschoben",
+    "notify.say.taskDeleted": "{who} hat {what} gelöscht",
+    "notify.say.decisionAccepted": "{who} hat {what} angenommen",
+    "notify.say.decisionRejected": "{who} hat {what} abgelehnt",
+    "notify.say.commentAdded": "{who} hat {what} kommentiert",
+    "notify.say.commentAddedBare": "{who} hat {what} hinzugefügt",
+    "notify.say.commentRemoved": "{who} hat einen Kommentar zu {what} zurückgenommen",
+    "notify.say.commentRemovedBare": "{who} hat {what} zurückgenommen",
+    "notify.say.taskDue": "{what} ist fällig",
+    "notify.say.taskDueTomorrow": "{what} ist morgen fällig",
+    "notify.say.unknown": "{who} hat etwas an {what} gemacht ({event})",
+    "notify.say.test": "Testnachricht von Amenbo — dieses Projekt meldet hierher.",
   },
 
   err: {

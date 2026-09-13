@@ -821,6 +821,33 @@ export const nl: Translation = {
     "detail.premiseChangedHint": "Gronden die bewogen nadat je dit reserveerde — er vastgeprikt, of niet langer beslecht (de gereedheid is ingetrokken)",
     "detail.premiseAdded": "Vastgeprikt nadat je dit reserveerde",
     "detail.premiseReopened": "Niet langer beslecht nadat je dit reserveerde — heropend of vervangen (de koppeling is ouder)",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who} heeft {what} aangemaakt",
+    "notify.say.statusChanged": "{who} heeft {what} op {state} gezet",
+    "notify.say.statusChangedBare": "{who} heeft de status van {what} gewijzigd",
+    "notify.say.taskDone": "{who} heeft {what} afgerond",
+    "notify.say.taskRejected": "{who} heeft besloten {what} niet te doen",
+    "notify.say.taskAssigned": "{who} heeft {what} aan {state} toegewezen",
+    "notify.say.taskAssignedBare": "{who} heeft {what} toegewezen",
+    "notify.say.taskMoved": "{who} heeft {what} naar {state} verplaatst",
+    "notify.say.taskMovedBare": "{who} heeft {what} naar een ander project verplaatst",
+    "notify.say.taskDeleted": "{who} heeft {what} verwijderd",
+    "notify.say.decisionAccepted": "{who} heeft {what} aangenomen",
+    "notify.say.decisionRejected": "{who} heeft {what} afgewezen",
+    "notify.say.commentAdded": "{who} heeft op {what} gereageerd",
+    "notify.say.commentAddedBare": "{who} heeft {what} toegevoegd",
+    "notify.say.commentRemoved": "{who} heeft een reactie op {what} ingetrokken",
+    "notify.say.commentRemovedBare": "{who} heeft {what} ingetrokken",
+    "notify.say.taskDue": "De deadline van {what} is bereikt",
+    "notify.say.taskDueTomorrow": "De deadline van {what} is morgen",
+    "notify.say.unknown": "{who} heeft iets met {what} gedaan ({event})",
+    "notify.say.test": "Testbericht van Amenbo — dit project meldt hier.",
   },
 
   err: {

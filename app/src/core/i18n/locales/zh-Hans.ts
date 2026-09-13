@@ -824,6 +824,33 @@ export const zhHans: Translation = {
     "detail.premiseChangedHint": "你预约之后发生变动的前提——新挂上的，或者不再是定论的（就绪状态被撤回）",
     "detail.premiseAdded": "在你预约之后才挂上",
     "detail.premiseReopened": "在你预约之后不再是定论——被退回讨论或被取代（关联更早）",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who} 创建了 {what}",
+    "notify.say.statusChanged": "{who} 把 {what} 改为{state}",
+    "notify.say.statusChangedBare": "{who} 修改了 {what} 的状态",
+    "notify.say.taskDone": "{who} 完成了 {what}",
+    "notify.say.taskRejected": "{who} 决定不做 {what}",
+    "notify.say.taskAssigned": "{who} 把 {what} 分配给了 {state}",
+    "notify.say.taskAssignedBare": "{who} 分配了 {what}",
+    "notify.say.taskMoved": "{who} 把 {what} 移动到了 {state}",
+    "notify.say.taskMovedBare": "{who} 把 {what} 移动到了另一个项目",
+    "notify.say.taskDeleted": "{who} 删除了 {what}",
+    "notify.say.decisionAccepted": "{who} 采纳了 {what}",
+    "notify.say.decisionRejected": "{who} 否决了 {what}",
+    "notify.say.commentAdded": "{who} 评论了 {what}",
+    "notify.say.commentAddedBare": "{who} 添加了 {what}",
+    "notify.say.commentRemoved": "{who} 撤回了对 {what} 的评论",
+    "notify.say.commentRemovedBare": "{who} 撤回了 {what}",
+    "notify.say.taskDue": "{what} 已到期",
+    "notify.say.taskDueTomorrow": "{what} 明天到期",
+    "notify.say.unknown": "{who} 对 {what} 做了操作（{event}）",
+    "notify.say.test": "来自 Amenbo 的测试消息——这个项目会报告到这里。",
   },
 
   err: {

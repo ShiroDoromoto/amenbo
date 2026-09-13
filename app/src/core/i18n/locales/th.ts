@@ -823,6 +823,33 @@ export const th: Translation = {
     "detail.premiseChangedHint": "ข้อตั้งที่ขยับหลังจากคุณจองงานนี้ — เพิ่งถูกตรึงเข้ามา หรือไม่ยุติอีกต่อไป (ความพร้อมถูกถอน)",
     "detail.premiseAdded": "ถูกตรึงเข้ามาหลังจากคุณจองงานนี้",
     "detail.premiseReopened": "เลิกยุติหลังจากคุณจองงานนี้ — ถูกเปิดใหม่หรือถูกแทนที่ (การเชื่อมเก่ากว่า)",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who} สร้าง {what}",
+    "notify.say.statusChanged": "{who} เปลี่ยน {what} เป็น {state}",
+    "notify.say.statusChangedBare": "{who} เปลี่ยนสถานะของ {what}",
+    "notify.say.taskDone": "{who} ทำ {what} เสร็จแล้ว",
+    "notify.say.taskRejected": "{who} ตัดสินใจไม่ทำ {what}",
+    "notify.say.taskAssigned": "{who} มอบหมาย {what} ให้ {state}",
+    "notify.say.taskAssignedBare": "{who} มอบหมาย {what}",
+    "notify.say.taskMoved": "{who} ย้าย {what} ไปที่ {state}",
+    "notify.say.taskMovedBare": "{who} ย้าย {what} ไปโปรเจกต์อื่น",
+    "notify.say.taskDeleted": "{who} ลบ {what}",
+    "notify.say.decisionAccepted": "{who} รับ {what} แล้ว",
+    "notify.say.decisionRejected": "{who} ตีตก {what}",
+    "notify.say.commentAdded": "{who} แสดงความเห็นใน {what}",
+    "notify.say.commentAddedBare": "{who} เพิ่ม {what}",
+    "notify.say.commentRemoved": "{who} ถอนความเห็นใน {what}",
+    "notify.say.commentRemovedBare": "{who} ถอน {what}",
+    "notify.say.taskDue": "{what} ถึงกำหนดแล้ว",
+    "notify.say.taskDueTomorrow": "{what} ถึงกำหนดพรุ่งนี้",
+    "notify.say.unknown": "{who} ทำบางอย่างกับ {what} ({event})",
+    "notify.say.test": "ข้อความทดสอบจาก Amenbo — โปรเจกต์นี้จะรายงานมาที่นี่",
   },
 
   err: {

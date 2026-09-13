@@ -821,6 +821,33 @@ export const tr: Translation = {
     "detail.premiseChangedHint": "Bunu üstlendikten sonra oynayan dayanaklar — yeni iliştirilmiş ya da artık karara bağlı olmayan (hazırlığı geri çekilmiş)",
     "detail.premiseAdded": "Bunu üstlendikten sonra iliştirildi",
     "detail.premiseReopened": "Bunu üstlendikten sonra karara bağlı olmaktan çıktı — yeniden açıldı ya da yerine geçildi (bağ daha eski)",
+    // What a notification says one event was, said the same way to every carrier a project reports
+    // through. Four slots and never more: who drove the write, which record it was, the second thing the
+    // event names (a status, an assignee, a project), and the event's own name where there are no words
+    // for it. Anything the reader typed — a title, a slug, a ref — travels through untouched.
+    //
+    // Two forms where an event names a second thing and may arrive without it: the plain key says it,
+    // and the `Bare` one is what is said when it did not arrive.
+    "notify.say.taskCreated": "{who}, {what} kaydını oluşturdu",
+    "notify.say.statusChanged": "{who}, {what} kaydını {state} durumuna geçirdi",
+    "notify.say.statusChangedBare": "{who}, {what} kaydının durumunu değiştirdi",
+    "notify.say.taskDone": "{who}, {what} kaydını bitirdi",
+    "notify.say.taskRejected": "{who}, {what} kaydını yapmamaya karar verdi",
+    "notify.say.taskAssigned": "{who}, {what} kaydını {state} kullanıcısına verdi",
+    "notify.say.taskAssignedBare": "{who}, {what} kaydının sorumlusunu belirledi",
+    "notify.say.taskMoved": "{who}, {what} kaydını {state} projesine taşıdı",
+    "notify.say.taskMovedBare": "{who}, {what} kaydını başka bir projeye taşıdı",
+    "notify.say.taskDeleted": "{who}, {what} kaydını sildi",
+    "notify.say.decisionAccepted": "{who}, {what} kararını kabul etti",
+    "notify.say.decisionRejected": "{who}, {what} kararını reddetti",
+    "notify.say.commentAdded": "{who}, {what} kaydına yorum yaptı",
+    "notify.say.commentAddedBare": "{who}, {what} ekledi",
+    "notify.say.commentRemoved": "{who}, {what} kaydındaki yorumu geri aldı",
+    "notify.say.commentRemovedBare": "{who}, {what} geri aldı",
+    "notify.say.taskDue": "{what} kaydının teslim tarihi geldi",
+    "notify.say.taskDueTomorrow": "{what} kaydının teslim tarihi yarın",
+    "notify.say.unknown": "{who}, {what} üzerinde bir işlem yaptı ({event})",
+    "notify.say.test": "Amenbo'dan test mesajı — bu proje buraya bildiriyor.",
   },
 
   err: {

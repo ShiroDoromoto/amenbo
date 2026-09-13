@@ -281,7 +281,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm install-gui-dev-vm-locked dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate test-spawn-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate token-contrast-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm install-gui-dev-vm-locked dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate test-spawn-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate token-contrast-gate brand notify-wording notify-wording-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -746,6 +746,7 @@ gate-cheap:
 	$(MAKE) --no-print-directory ci-aggregate-gate
 	$(MAKE) --no-print-directory workflow-run-gate
 	$(MAKE) --no-print-directory token-contrast-gate
+	$(MAKE) --no-print-directory notify-wording-gate
 
 ## The workspace stage: CI's `lint` job (clippy, the doctests, the doc link check) and its `rust`
 ## job (the tests) in one pass, because a local sweep has no runners to spread them over.
@@ -1163,6 +1164,21 @@ brand:
 ## what changes. See scripts/gen-lang-config.mjs.
 lang-config:
 	node scripts/gen-lang-config.mjs
+
+## Re-bake the notification wording out of the GUI's dictionaries: what a line says about each of the
+## thirteen events, in all nineteen languages, as a Rust table core can read. Unlike the two above it
+## the source is in this tree, so it can go stale on an ordinary edit — `notify-wording-gate` is what
+## notices. See scripts/gen-notify-wording.mjs.
+notify-wording:
+	node scripts/gen-notify-wording.mjs
+
+## Guard that table against the dictionaries it comes from: run the generator and read the working
+## tree, the same shape check-bindings-fresh.sh uses. A sentence corrected in a locale file and not
+## regenerated here is green everywhere — the GUI shows the new words and every notification goes on
+## saying the old ones.
+## Declared once and shared: `make test` and CI's tree-guards both run this file.
+notify-wording-gate:
+	@guards/check-notify-wording-fresh.sh
 
 ## Local-only targets (each person's dev-environment tools) go in .local/local.mk, which is not
 ## tracked. If present it is included, if absent nothing happens. So it does not steal the default

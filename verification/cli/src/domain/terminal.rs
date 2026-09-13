@@ -35,6 +35,12 @@
 //! label`, Gemini CLI's an ACP session answer, and GitHub Copilot's is nothing at all, which is that
 //! provider having no door to ask at.
 //!
+//! **Two of them can also say which model they are on**, and `on` is which — the position of one of
+//! the names they answer with. Only Cursor and Gemini CLI have anywhere in their answer to put it
+//! (`amenbo_core::agent_models::Answer::current`), so the same premise stands up both readings a
+//! road about a provider's own default needs: the two naming one, and the four naming none. Left
+//! off, nobody says, which is the machine every road before this one stood up.
+//!
 //! **A road may also ask them to stay and read.** Left alone a stand-in prints and ends, which is the
 //! pane every road before this one read: the output stands on the screen and nothing is running. A
 //! pane whose model is *moved* has to still be running — there is no control on a frame whose program
@@ -126,7 +132,11 @@ fn model_names(count: i64) -> Vec<String> {
 ///
 /// **OpenCode's names carry a qualifier** — its spelling is `provider/model` and the whole of it is
 /// what its flag takes — so a road that picked that one names it with the qualifier on.
-fn list_door(command: &str, models: &[String]) -> Option<(String, String)> {
+///
+/// `on` is the model the provider says it is standing on, and it reaches the answer only where that
+/// provider's own shape has room for it: Cursor writes it into the label of the row, Gemini CLI
+/// beside the list, and the other four have nowhere to put it and say nothing.
+fn list_door(command: &str, models: &[String], on: Option<&str>) -> Option<(String, String)> {
     if models.is_empty() {
         return None;
     }
@@ -169,23 +179,25 @@ fn list_door(command: &str, models: &[String]) -> Option<(String, String)> {
         // An ACP session's answer, on one line. It is printed without waiting to be spoken to: the
         // caller writes its hello and its request and then reads until it recognises an answer, so an
         // answer already there is one it recognises on the first line it reads.
-        "gemini" => Some((
-            "--acp".to_string(),
+        "gemini" => Some(("--acp".to_string(), {
+            let mut said = serde_json::Map::new();
+            said.insert(
+                "availableModels".to_string(),
+                models.iter().map(|one| serde_json::json!({ "modelId": one, "name": one })).collect(),
+            );
+            // Where this provider says which one it is on, it says it beside the list rather than
+            // inside a row — and where it does not say, the key is not there at all, which is the
+            // shape a provider nobody has told gives.
+            if let Some(one) = on {
+                said.insert("currentModelId".to_string(), serde_json::json!(one));
+            }
             serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 2,
-                "result": {
-                    "sessionId": "scenario-session",
-                    "models": {
-                        "availableModels": models
-                            .iter()
-                            .map(|one| serde_json::json!({ "modelId": one, "name": one }))
-                            .collect::<Vec<_>>(),
-                    },
-                },
+                "result": { "sessionId": "scenario-session", "models": said },
             })
-            .to_string(),
-        )),
+            .to_string()
+        })),
         // One qualified name per line and nothing else on it.
         "opencode" => Some((
             "models".to_string(),
@@ -199,7 +211,16 @@ fn list_door(command: &str, models: &[String]) -> Option<(String, String)> {
             "--list-models".to_string(),
             format!(
                 "Available models:\n{rows}\nTip: name one when you start - or leave it and pick in the tool.\n",
-                rows = models.iter().map(|one| format!("{one} - {one}\n")).collect::<String>(),
+                rows = models
+                    .iter()
+                    .map(|one| match on == Some(one.as_str()) {
+                        // Where this provider says which one it is on, it says it in the label of the
+                        // row itself — read off the label and taken as state rather than as name
+                        // (`amenbo_core::agent_models`).
+                        true => format!("{one} - {one} (current, default)\n"),
+                        false => format!("{one} - {one}\n"),
+                    })
+                    .collect::<String>(),
             ),
         )),
         // GitHub Copilot, which has nowhere to be asked.
@@ -213,9 +234,9 @@ fn list_door(command: &str, models: &[String]) -> Option<(String, String)> {
 /// The order is the order it prints in, and the list door is first because it ends there: a run that
 /// answered the ask has been asked a question, not started as a pane, and saying it is a stand-in
 /// afterwards would put a line of English in the middle of a JSON document.
-fn program(command: &str, models: &[String], reads: bool) -> String {
+fn program(command: &str, models: &[String], on: Option<&str>, reads: bool) -> String {
     let mut body = "#!/bin/sh\n".to_string();
-    if let Some((asked, answer)) = list_door(command, models) {
+    if let Some((asked, answer)) = list_door(command, models, on) {
         // The answer is written between the marks with its own last newline taken off: the heredoc
         // gives every line one, and an answer that kept its would print a blank line no provider does.
         body.push_str(&format!(
@@ -247,7 +268,7 @@ fn program(command: &str, models: &[String], reads: bool) -> String {
 /// The first of the catalog rather than a road's pick: which agents are on the row is nothing this
 /// premise is about — what it is about is how many — and a road naming one would be a road about a
 /// tool.
-fn stand_up(tools: &Path, count: i64, models: i64, reads: bool) -> Result<String, String> {
+fn stand_up(tools: &Path, count: i64, models: i64, on: i64, reads: bool) -> Result<String, String> {
     if count < 2 {
         return Err(format!(
             "`can-start` takes a count of 2 or more, not {count} — it puts programs in front of the \
@@ -270,15 +291,27 @@ fn stand_up(tools: &Path, count: i64, models: i64, reads: bool) -> Result<String
              draws, and a row longer than this is one whose names would stop being one word each"
         ));
     }
+    if !(0..=models).contains(&on) {
+        return Err(format!(
+            "`can-start` was asked to have the stand-ins say they are on model {on} of the {models} \
+             they answer with — the position is one of those, and 0 (the default) is nobody saying \
+             which they are on"
+        ));
+    }
     let named = &COMMANDS[..want];
     let names = model_names(models);
+    let standing = usize::try_from(on).ok().filter(|at| *at > 0).and_then(|at| names.get(at - 1));
     for command in named {
-        write_program(&tools.join(command), &program(command, &names, reads))?;
+        write_program(&tools.join(command), &program(command, &names, standing.map(String::as_str), reads))?;
     }
     Ok(format!(
         "this machine can start {want} of the agents Amenbo knows ({}), each answering with {models} \
-         models it can be started on{}",
+         models it can be started on{}{}",
         named.join(", "),
+        match standing {
+            Some(one) => format!(" and the two that can say so saying they are on {one}"),
+            None => String::new(),
+        },
         match reads {
             true => " and staying open to read what is typed at it",
             false => "",
@@ -326,6 +359,13 @@ impl Driver<'_> {
                     None => 0,
                     Some(_) => req_i64(with, "models")?,
                 };
+                // Which of those names the stand-ins say they are on, by its position in the row.
+                // Only two of the six have anywhere in their answer to say it, so this is also how a
+                // road reads the other four saying nothing — one premise, both readings.
+                let on = match with.get("on") {
+                    None => 0,
+                    Some(_) => req_i64(with, "on")?,
+                };
                 // What a stand-in does once it has printed. `ends` is what every road before this one
                 // stood up — the output on the screen and nothing running — and `reads` is the pane a
                 // road moves to another model, which needs a program still there to move.
@@ -344,6 +384,7 @@ impl Driver<'_> {
                     &self.session.tools,
                     req_i64(with, "count")?,
                     models,
+                    on,
                     reads,
                 )?))
             }
@@ -389,7 +430,7 @@ mod tests {
     #[test]
     fn the_asked_for_agents_are_standing_and_runnable() {
         let session = crate::scratch::session("can-start-test", false).expect("a throwaway session");
-        let said = stand_up(&session.tools, 2, 0, false).expect("two is a machine it can stand up");
+        let said = stand_up(&session.tools, 2, 0, 0, false).expect("two is a machine it can stand up");
 
         for command in &COMMANDS[..2] {
             let at = session.tools.join(command);
@@ -407,7 +448,7 @@ mod tests {
     fn a_count_below_two_is_refused_because_nothing_here_can_take_an_install_away() {
         let session = crate::scratch::session("can-start-floor-test", false).expect("a session");
         for count in [-1, 0, 1] {
-            let err = stand_up(&session.tools, count, 0, false).expect_err("a floor, never a ceiling");
+            let err = stand_up(&session.tools, count, 0, 0, false).expect_err("a floor, never a ceiling");
             assert!(err.contains("2 or more"), "{err}");
         }
     }
@@ -417,7 +458,7 @@ mod tests {
     fn more_agents_than_there_are_is_refused() {
         let session = crate::scratch::session("can-start-over-test", false).expect("a session");
         let asked = COMMANDS.len() as i64 + 1;
-        let err = stand_up(&session.tools, asked, 0, false).expect_err("there are only so many");
+        let err = stand_up(&session.tools, asked, 0, 0, false).expect_err("there are only so many");
         assert!(err.contains(&COMMANDS.len().to_string()), "{err}");
     }
 
@@ -425,7 +466,7 @@ mod tests {
     #[test]
     fn more_models_than_the_names_can_carry_is_refused() {
         let session = crate::scratch::session("can-start-models-over-test", false).expect("a session");
-        let err = stand_up(&session.tools, 2, MOST_MODELS + 1, false).expect_err("two digits is the width");
+        let err = stand_up(&session.tools, 2, MOST_MODELS + 1, 0, false).expect_err("two digits is the width");
         assert!(err.contains(&MOST_MODELS.to_string()), "{err}");
     }
 
@@ -434,7 +475,7 @@ mod tests {
     #[test]
     fn an_agent_asked_for_no_models_answers_its_list_door_with_nothing_of_the_kind() {
         let session = crate::scratch::session("can-start-no-models-test", false).expect("a session");
-        stand_up(&session.tools, 2, 0, false).expect("a machine with two agents on it");
+        stand_up(&session.tools, 2, 0, 0, false).expect("a machine with two agents on it");
 
         let said = ran(&session.tools.join("claude"), &["--help"]);
         assert!(said.contains("standing in for claude"), "{said}");
@@ -447,7 +488,7 @@ mod tests {
     #[test]
     fn each_agent_answers_its_own_list_door_in_its_own_shape() {
         let session = crate::scratch::session("can-start-models-test", false).expect("a session");
-        stand_up(&session.tools, COMMANDS.len() as i64, 2, false).expect("the whole catalog");
+        stand_up(&session.tools, COMMANDS.len() as i64, 2, 0, false).expect("the whole catalog");
         let first = format!("{MODEL}01");
         let second = format!("{MODEL}02");
 
@@ -495,7 +536,7 @@ mod tests {
     #[test]
     fn a_stand_in_asked_to_stay_prints_back_every_line_it_is_given_whole() {
         let session = crate::scratch::session("can-start-reads-test", false).expect("a session");
-        stand_up(&session.tools, 2, 3, true).expect("a machine whose stand-ins stay and read");
+        stand_up(&session.tools, 2, 3, 0, true).expect("a machine whose stand-ins stay and read");
 
         let name = format!("{MODEL}02");
         let typed = format!("\u{1b}[200~/model {name}\u{1b}[201~\n\u{1b}[200~/model\u{1b}[201~\n");
@@ -522,7 +563,7 @@ mod tests {
         use std::io::{BufRead as _, BufReader, Read as _, Write as _};
 
         let session = crate::scratch::session("can-start-stopped-test", false).expect("a session");
-        stand_up(&session.tools, 2, 0, true).expect("a machine whose stand-ins stay and read");
+        stand_up(&session.tools, 2, 0, 0, true).expect("a machine whose stand-ins stay and read");
 
         let mut child = std::process::Command::new(session.tools.join("claude"))
             .stdin(std::process::Stdio::piped())
@@ -557,9 +598,60 @@ mod tests {
     #[test]
     fn a_stand_in_left_alone_ends_rather_than_waiting_to_be_typed_at() {
         let session = crate::scratch::session("can-start-ends-test", false).expect("a session");
-        stand_up(&session.tools, 2, 0, false).expect("a machine with two agents on it");
+        stand_up(&session.tools, 2, 0, 0, false).expect("a machine with two agents on it");
         let printed = said_to(&session.tools.join("claude"), "a line nobody reads\n");
         assert!(!printed.contains(SAID), "{printed}");
+    }
+
+    /// Which model a stand-in says it is on, where its own provider's answer has room to say it —
+    /// and nothing for the four whose answer has none, which is the same premise read from the other
+    /// side.
+    #[test]
+    fn the_two_that_can_say_which_model_they_are_on_say_it_and_the_rest_do_not() {
+        let session = crate::scratch::session("can-start-on-test", false).expect("a session");
+        stand_up(&session.tools, COMMANDS.len() as i64, 3, 2, false).expect("the whole catalog");
+        let second = format!("{MODEL}02");
+
+        // Cursor says it in the label of the row itself, beside the name.
+        let rows = ran(&session.tools.join("cursor-agent"), &["--list-models"]);
+        assert!(rows.contains(&format!("{second} - {second} (current, default)")), "{rows}");
+        assert_eq!(rows.matches("(current, default)").count(), 1, "one row and no other: {rows}");
+
+        // Gemini CLI says it beside the list rather than inside a row.
+        let answer = ran(&session.tools.join("gemini"), &["--acp"]);
+        let read: serde_json::Value = serde_json::from_str(answer.trim()).expect("one line of JSON");
+        assert_eq!(read["result"]["models"]["currentModelId"], serde_json::json!(second));
+
+        // And the shapes with nowhere to say it say nothing. Read as the build reads them — the
+        // state Cursor writes into a label, and the key Gemini CLI writes beside a list — because
+        // the word itself turns up in prose neither of them is: this provider's own help text calls
+        // the session it is started for the current one.
+        let help = ran(&session.tools.join("claude"), &["--help"]);
+        assert!(!help.contains("(current, default)"), "{help}");
+        let catalog = ran(&session.tools.join("codex"), &["debug", "models"]);
+        assert!(!catalog.contains("currentModelId"), "{catalog}");
+    }
+
+    /// Nobody saying which is the default, and it is what every road before this one stood up: the
+    /// key is not in the answer at all rather than in it holding nothing.
+    #[test]
+    fn a_machine_nobody_was_told_about_says_which_model_nowhere() {
+        let session = crate::scratch::session("can-start-not-on-test", false).expect("a session");
+        stand_up(&session.tools, COMMANDS.len() as i64, 3, 0, false).expect("the whole catalog");
+
+        let rows = ran(&session.tools.join("cursor-agent"), &["--list-models"]);
+        assert!(!rows.contains("(current, default)"), "{rows}");
+        let answer = ran(&session.tools.join("gemini"), &["--acp"]);
+        assert!(!answer.contains("currentModelId"), "{answer}");
+    }
+
+    /// A position outside the row is a road naming a model nobody answered with, and it is refused
+    /// where it is written rather than read back as a name that never appears.
+    #[test]
+    fn being_on_a_model_that_is_not_in_the_row_is_refused() {
+        let session = crate::scratch::session("can-start-on-over-test", false).expect("a session");
+        let err = stand_up(&session.tools, 2, 3, 4, false).expect_err("three is the whole row");
+        assert!(err.contains("model 4 of the 3"), "{err}");
     }
 
     /// Started rather than asked, a stand-in prints what it was started with — one argument to a
@@ -567,7 +659,7 @@ mod tests {
     #[test]
     fn a_stand_in_prints_what_it_was_started_with_one_argument_to_a_line() {
         let session = crate::scratch::session("can-start-args-test", false).expect("a session");
-        stand_up(&session.tools, 2, 3, false).expect("a machine with a row of models on it");
+        stand_up(&session.tools, 2, 3, 0, false).expect("a machine with a row of models on it");
 
         let name = format!("{MODEL}02");
         let printed = ran(&session.tools.join("claude"), &["--model", &name, "an opening sentence"]);

@@ -4532,6 +4532,17 @@ impl Instructor {
                     "On the empty frame, look at the line the frame writes out under the model row — what it says the press would run. Confirm it ends with the model you named: a flag, spelled the way that agent spells it (`--model` on some of them, `-m` on others), and `{model}` after it, the same characters the row was answered with and nothing added or tidied. What the line begins with is the agent's own program name and is nothing to this reading."
                 ),
             },
+            // The first thing on the model row, and what the agent's own default comes to. It is read
+            // on the row itself rather than off the line under it: what that choice puts on the line
+            // is nothing, which is `starts-on`'s reading, and this is the other half — what the
+            // agent will do with a line that names no model.
+            (Domain::Terminal, "stands-for") => match req(with, "model")? {
+                "none" => "On the empty frame, look at the model row under the agent you chose, at the first thing on it — the one that says the agent starts on whatever its own settings already say. Confirm it names no model: it says that and nothing more. This provider has never said which model it is on, and a name here would be Amenbo answering for it."
+                    .to_string(),
+                model => format!(
+                    "On the empty frame, look at the model row under the agent you chose, at the first thing on it — the one that says the agent starts on whatever its own settings already say. Confirm it also names `{model}`, which is the model that comes to. The name is the agent's own answer and arrived with the row of candidates, so it is drawn there with nothing pressed and nothing else opened."
+                ),
+            },
             // What the row under a **running** pane says a press would do, read before it is pressed.
             // The first half is the provider's own command and the second is what the press costs the
             // reader outside this session — which is the half a build could stop saying while still
@@ -4556,7 +4567,7 @@ impl Instructor {
                 // there — it is a pane running a provider Amenbo can name — and what it says is that
                 // there is a model to choose.
                 "none" => format!(
-                    "Read the row under {pane} that names its model. Confirm it names no model at all: what it says is that there is one to choose, and nothing more. A name here is a build holding a choice nobody made in this pane.",
+                    "Read the row under {pane} that names its model. Confirm it names no model at all: what it says is that there is one to choose, and nothing more. Nothing was put on this pane's launch line and this provider has never said which model it is on, so a name here is a build holding a choice nobody made.",
                     pane = named_pane(with),
                 ),
                 // The provider's own picker is standing open in the pane and the choosing has not
@@ -4567,7 +4578,7 @@ impl Instructor {
                     pane = named_pane(with),
                 ),
                 model => format!(
-                    "Read the row under {pane} that names its model. Confirm it says `{model}` — the model this pane is running on. Amenbo says it for one of two reasons and no other: that name went on this pane's launch line, or it went on a line this provider settles the model with. Never because anything was read off the pane's screen.",
+                    "Read the row under {pane} that names its model. Confirm it says `{model}` — the model this pane is running on. Amenbo says it for one of three reasons and no other: that name went on this pane's launch line, it went on a line this provider settles the model with, or the pane was started on no model of its own and this is the default the provider itself named. Never because anything was read off the pane's screen.",
                     pane = named_pane(with),
                 ),
             },

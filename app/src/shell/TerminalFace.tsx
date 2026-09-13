@@ -186,8 +186,9 @@ export function TerminalFace({
   onOpenLedger?: () => void;
   /**
    * A folder the ledger asked this face to work in, whose project it is, and a count of the asking —
-   * the same shape the file face's `show` takes, and for the same reason: pressing the button twice
-   * is a reader saying it again, not a state that has not moved.
+   * the count being what makes pressing the button twice two asks rather than a state that has not
+   * moved. The ask is the ledger's to hold, so this face cannot put it down once it has answered;
+   * the path pressed in a pane is this face's own ask, and that one is put down (`show`).
    *
    * **The project is named, never absent.** A pane belongs to a project and cannot be moved to
    * another one afterwards, so an ask that did not say which project it is about is one this face
@@ -207,9 +208,11 @@ export function TerminalFace({
   // pane put up first and replaced afterwards would start a terminal in a frame the answer was about
   // to take away. Outside Tauri there is no host to read one from, so there is nothing to wait for.
   const [settled, setSettled] = useState(!inTauri());
-  // The file a path clicked in a pane asked for, and a count that makes asking twice two answers:
-  // the same file clicked again is a reader saying "open it" again, not a state that has not moved.
-  const [show, setShow] = useState<{ target: string; cwd: string | null; nth: number } | null>(null);
+  // The file a path clicked in a pane asked for, with the folder that pane is in. It is put down as
+  // soon as it has been answered, which is what makes one press one opening: the same file clicked
+  // again is a fresh ask, and an ask that stayed standing would be answered a second time whenever
+  // the folders it is read against changed (`AMB-T-4812`).
+  const [show, setShow] = useState<{ target: string; cwd: string | null } | null>(null);
   const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
   // The columns beside the panes: whether each was asked for, and how wide the person has made it.
   // Both are kept between runs, the wish for the device and the width for the project it was dragged
@@ -475,7 +478,7 @@ export function TerminalFace({
   const pathClicked = useCallback((frame: string, target: string) => {
     setLayout((was) => {
       const cwd = was.frames.find((one) => one.id === frame)?.folder ?? null;
-      setShow((asked) => ({ target, cwd, nth: (asked?.nth ?? 0) + 1 }));
+      setShow({ target, cwd });
       return was;
     });
   }, []);
@@ -996,15 +999,17 @@ export function TerminalFace({
   // **The rail is left where it was.** The file is drawn on the other side of the panes, so a reader
   // following a path out of a pane is shown it without the lists going out from under them
   // (`AMB-D-835`).
-  const roots = boundPaths.join("\0");
   useEffect(() => {
     if (show === null) return;
+    // Put down here, before the folders are even read: the ask is about the press a reader has just
+    // made, not about one the folders under it might make land later. Left standing, leaving a
+    // project and coming back to it would open the file a second time — bringing a closed file back
+    // and taking the reading column off the notes (`AMB-T-4812`).
+    setShow(null);
     const found = fileUnderAny(boundPaths, show.cwd, show.target);
     if (!found) return;
     openFile(found);
-    // `nth` is what makes the same file asked for twice two answers, and the folders are joined
-    // because the array itself is rebuilt on every render.
-  }, [show?.nth, roots]);
+  }, [show]);
 
   const rail = (
     <FolderRail

@@ -99,6 +99,15 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 # near-miss there does not fail, it quietly reports a project as not set up. Writing goes through the
 # same crate so the two directions are one grammar rather than two. Pure Rust, no build script.
 toml = "1"
+# The SMTP conversation a mail notification goes out on (`notify_smtp`). Rust's standard
+# library has no counterpart to the `net/smtp` the Go plugin this was ported from leaned on, so the
+# conversation is written here and only the encryption under it is borrowed. All three of these are
+# already in the tree — `ureq` reaches HTTPS through the same rustls and the same `ring` — so what is
+# added is a name in this file rather than a crate in the lock. `webpki-roots` is named beside it
+# because a submission server's certificate is checked against the same roots the updater already
+# trusts; the server's name comes through rustls's own re-export, so the types crate is not named here.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+webpki-roots = "1"
 # `canonicalize`, in the spelling the reader has (`binding::canonical_dir`). On Windows the std call
 # answers in the verbatim `\\?\C:\…` form, which is Win32's internal one and appears nowhere a person
 # looks; this drops the prefix again, and knows the cases where dropping it would change which file the

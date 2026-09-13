@@ -104,6 +104,7 @@ dependencies = [
  "objc2-service-management",
  "pulldown-cmark",
  "rusqlite",
+ "rustls",
  "self-replace",
  "serde",
  "serde_json",
@@ -114,6 +115,7 @@ dependencies = [
  "tracing",
  "unicode-normalization",
  "ureq",
+ "webpki-roots",
  "windows-sys 0.61.2",
  "zip 8.6.0",
 ]

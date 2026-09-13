@@ -496,14 +496,16 @@ input[type="color"] {
      line beside it. */
   display: flex; align-items: flex-end; gap: var(--s-2);
   padding: var(--s-1) var(--s-2);
-  /* **No edge of its own while nothing is written.** What tells this box from the terminal above it
-     is the frame's ground it stands on (`.slot__frame`), and a dashed rule there was the second of
-     three teal-ish lines running across a focused pane. The room is kept rather than the colour, so
-     that writing the first character moves nothing: the edge comes up teal the moment something is
-     written, alongside the press at the end of the row. */
+  /* **No edge of its own, written in or not.** What tells this box from the terminal above it is
+     the frame's ground it stands on (`.slot__frame`). An edge that came up teal once something was
+     written sat a few pixels inside the teal frame of the focused pane (`.slot--focused
+     .slot__frame`), so the same colour answered two questions at once — which pane is being worked
+     in, and whether this box holds something unsent. The second of those is already said twice: the
+     press at the end of the row leaves its grey for teal (`.compose__send:disabled`), and so does the
+     one that folds the box away (`.panerow__fold--holding`). The room is kept rather than the colour,
+     so that the box is measured the same whether or not anything is written. */
   border: 1px solid transparent; border-radius: var(--r-md);
 }
-.compose--writing { border-color: var(--c-accent); }
 /* One line high until something is written, and never taller than what is written needs. The height
    is set from here in pixels (`../shell/TerminalPane`), which is why nothing sets it below: it is
    measured against what the box holds and against the rows the terminal is keeping, and a rule here

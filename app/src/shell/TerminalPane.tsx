@@ -262,7 +262,7 @@ export function TerminalPane({
   const send = async () => {
     if (live === null || written === "") return;
     try {
-      await sendIntoTerminal(live, written);
+      await sendIntoTerminal(live, written, inPane);
     } catch (e: unknown) {
       // The terminal having ended between the writing and the send is the whole of what this can be.
       // What was written stays in the box: it did not go, and a box emptied on a refusal would have

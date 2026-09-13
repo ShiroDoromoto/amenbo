@@ -637,6 +637,46 @@ export async function pasteIntoTerminal(session: string, text: string): Promise<
 }
 
 /**
+ * How long a return has to arrive after the paste for the agent in the pane to read it as a return,
+ * in milliseconds, by the catalogued id of that agent (`amenbo_core::harness`).
+ *
+ * **It is a cushion inside the provider and not a speed.** Gemini CLI rewrites a return that reaches
+ * it within 30ms of a paste into a Shift-Enter, so a line sent with no gap lands as another newline
+ * in its input box: the person watches a multi-line message not go, and has to press into the pane
+ * and hit Enter themselves (`AMB-T-4704`). Nothing in that product turns the cushion off — it is a
+ * constant, read from no setting, no environment variable and no flag (`AMB-T-4718`).
+ *
+ * **A wait that is too short costs nothing.** What it leaves is what leaving it out leaves — the
+ * text sitting in the provider's own input box, for the person to send. The safety is in sending one
+ * return and never a second, not in the number being right (`AMB-D-879`).
+ */
+const READ_AS_A_RETURN_AFTER: Record<string, number> = {
+  "claude-code": 0,
+  "codex-cli": 0,
+  "gemini-cli": 50,
+};
+
+/**
+ * The wait for a pane whose agent this has no measurement for — one running no agent at all, one
+ * running something somebody registered themselves (`AMB-D-794`), and the three catalogued agents
+ * the measurement did not cover.
+ *
+ * It is the cushion of the one provider that was found to have one, because the alternative is
+ * assuming the rest have none: assuming a cushion costs a twentieth of a second on a press somebody
+ * made, and assuming none costs them a message that does not go (`AMB-D-879`).
+ */
+const READ_AS_A_RETURN_UNMEASURED_MS = 50;
+
+/**
+ * How long to leave between the paste and the return for the agent running in this pane, `null`
+ * being a pane running none.
+ */
+export function pauseBeforeTheReturn(agent: string | null): number {
+  if (agent === null) return READ_AS_A_RETURN_UNMEASURED_MS;
+  return READ_AS_A_RETURN_AFTER[agent] ?? READ_AS_A_RETURN_UNMEASURED_MS;
+}
+
+/**
  * Send `text` to whatever is running in a terminal, as the line a person wrote and pressed send on.
  *
  * **It is the paste plus the return, and the difference from {@link pasteIntoTerminal} is who
@@ -649,13 +689,30 @@ export async function pasteIntoTerminal(session: string, text: string): Promise<
  * has newlines in it, and an agent that reads a bracketed paste takes those as part of one message
  * rather than as that many lines sent one after another.
  *
+ * **The return follows the paste after a pause the pane's agent decides**
+ * ({@link pauseBeforeTheReturn}, `AMB-D-879`), and it is sent once. Sending it twice, or reading the
+ * screen and sending again, were both measured doing worse than not sending it at all
+ * (`AMB-T-4717`).
+ *
+ * **The wait is here rather than in the host because the person's line has to survive it.** A
+ * terminal that ends during the pause refuses the return, this rejects, and the caller keeps what
+ * was written in the box for them to send again (`../shell/TerminalPane`). A host that answered
+ * before waiting would have nobody left to refuse to: the box would be emptied on a send that never
+ * happened, and the line would be gone.
+ *
  * **The opening sentence rides out behind it**, the same way it rides out behind a line typed in the
  * pane itself (`AMB-D-805`). Whether anything is owed is the host's to answer and it answers once
  * (`crate::pty::pty_brief`), so this asks on every send rather than keeping a copy of the answer: a
  * send is a person pressing something, not a keystroke, and one round trip per send costs nothing.
  */
-export async function sendIntoTerminal(session: string, text: string): Promise<void> {
+export async function sendIntoTerminal(
+  session: string,
+  text: string,
+  agent: string | null,
+): Promise<void> {
   await pasteIntoTerminal(session, text);
+  const pause = pauseBeforeTheReturn(agent);
+  if (pause > 0) await new Promise((settled) => setTimeout(settled, pause));
   await invoke<void>("pty_write", { session, data: SUBMIT });
   await invoke<void>("pty_brief", { session }).catch(() => {});
 }

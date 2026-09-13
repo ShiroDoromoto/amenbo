@@ -142,7 +142,7 @@ export function PaneModel({ session, agent }: {
     try {
       const going = await invoke<AgentSwitchDto | null>("wake_switch", { agent, model: model.id });
       if (going === null) return;
-      await sendIntoTerminal(session, going.line);
+      await sendIntoTerminal(session, going.line, agent);
       if (going.then !== null) await pasteIntoTerminal(session, going.then);
       if (going.settles) {
         setNow(model);

@@ -28,7 +28,7 @@ const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
   /** What was written into the terminal, in order: `send` carries the return behind it and `paste`
       does not, which is the difference the two providers with a picker turn on. */
-  wrote: [] as { how: "send" | "paste"; text: string }[],
+  wrote: [] as { how: "send" | "paste"; text: string; agent?: string | null }[],
   /** Set to refuse the write, the way a terminal that ended between the press and the write does. */
   writeFails: false,
 }));
@@ -37,9 +37,9 @@ const hoisted = vi.hoisted(() => ({
 // a line that settles the model goes as a person's own line, and a name for a picker's search box is
 // pasted with nothing submitted behind it (`AMB-D-793`).
 vi.mock("../talk/terminal", () => ({
-  sendIntoTerminal: async (_session: string, text: string) => {
+  sendIntoTerminal: async (_session: string, text: string, agent: string | null) => {
     if (hoisted.writeFails) throw new Error("that terminal is no longer open");
-    hoisted.wrote.push({ how: "send", text });
+    hoisted.wrote.push({ how: "send", text, agent });
   },
   pasteIntoTerminal: async (_session: string, text: string) => {
     hoisted.wrote.push({ how: "paste", text });
@@ -152,7 +152,9 @@ describe("what a press puts in the terminal", () => {
     await open();
     await press("Sonnet 5");
 
-    expect(hoisted.wrote).toEqual([{ how: "send", text: "/model sonnet" }]);
+    // The agent goes with the line: how long the provider is left before the return is decided by
+    // which provider is in the pane (`../talk/terminal`, `AMB-D-879`).
+    expect(hoisted.wrote).toEqual([{ how: "send", text: "/model sonnet", agent: "claude-code" }]);
     // The line settled it, so the row says which model — and keeps it, the way a press on an empty
     // frame keeps one.
     expect(container.querySelector(".modelrow__now")?.textContent).toContain("Sonnet 5");
@@ -169,7 +171,7 @@ describe("what a press puts in the terminal", () => {
     await open();
     await press("gpt-5.6-luna");
 
-    expect(hoisted.wrote).toEqual([{ how: "send", text: "/model" }]);
+    expect(hoisted.wrote).toEqual([{ how: "send", text: "/model", agent: "codex-cli" }]);
     for (const one of hoisted.wrote) {
       expect(one.text, "the name reached a line the provider reads as a prompt").not.toContain("gpt-5.6-luna");
     }
@@ -201,7 +203,7 @@ describe("what a press puts in the terminal", () => {
     await press("MiMo");
 
     expect(hoisted.wrote).toEqual([
-      { how: "send", text: "/models" },
+      { how: "send", text: "/models", agent: "opencode" },
       { how: "paste", text: "opencode/mimo" },
     ]);
   });
@@ -254,7 +256,7 @@ describe("what the reader is told before they press", () => {
 
     expect(container.querySelector(".slot__field input"), "there was nowhere to type a name").toBeTruthy();
     await press("auto");
-    expect(hoisted.wrote).toEqual([{ how: "send", text: "/model auto" }]);
+    expect(hoisted.wrote).toEqual([{ how: "send", text: "/model auto", agent: "github-copilot" }]);
   });
 
   it("puts a box over a list too long to be a row", async () => {

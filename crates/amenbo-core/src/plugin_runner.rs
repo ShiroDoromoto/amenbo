@@ -264,7 +264,7 @@ impl RunnerLauncher for HereRunner<'_> {
 /// nothing else, holds no store and no lock, and if the parent exits first (the short-lived face's ordinary
 /// case) it goes with it and the runner is reparented, still running. What it is emphatically not is a wait
 /// the *drive* makes — that is the whole of what `AMB-T-2175` removes.
-fn reap(mut child: std::process::Child) {
+pub(crate) fn reap(mut child: std::process::Child) {
     std::thread::spawn(move || {
         let _ = child.wait();
     });

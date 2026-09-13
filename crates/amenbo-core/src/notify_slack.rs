@@ -292,8 +292,27 @@ mod tests {
         );
         std::thread::spawn(move || {
             let Ok((mut stream, _)) = listener.accept() else { return };
+            // **The whole request is read before anything is answered.** A server that replies and closes
+            // while the client is still writing the body hands it a broken pipe instead of a status, which
+            // is a passing test on an idle machine and a failing one on a loaded one.
+            let mut heard = Vec::new();
             let mut buf = [0u8; 4096];
-            let _ = stream.read(&mut buf);
+            loop {
+                let Ok(read) = stream.read(&mut buf) else { return };
+                if read == 0 {
+                    break;
+                }
+                heard.extend_from_slice(&buf[..read]);
+                let text = String::from_utf8_lossy(&heard).to_string();
+                let Some(head) = text.find("\r\n\r\n") else { continue };
+                let wants = text
+                    .lines()
+                    .find_map(|line| line.to_ascii_lowercase().strip_prefix("content-length:").map(|n| n.trim().parse::<usize>().unwrap_or(0)))
+                    .unwrap_or(0);
+                if heard.len() >= head + 4 + wants {
+                    break;
+                }
+            }
             let _ = stream.write_all(answer.as_bytes());
         });
         format!("http://127.0.0.1:{port}/services/T0/B0/x")

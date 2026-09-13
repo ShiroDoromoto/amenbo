@@ -13,5 +13,11 @@ fn main() {
   if app_lib::run_plugin_runner() {
     return;
   }
+
+  // The same, for a notification sender (`AMB-D-885`): post what it was handed and exit, without ever
+  // reaching the window.
+  if app_lib::run_notify_sender() {
+    return;
+  }
   app_lib::run();
 }

@@ -13,6 +13,11 @@ use crate::output::{CliError, Flags};
 /// entry point, named where it is dispatched.
 const RUNNER_ARGV: &[&str] = &["plugin-runner"];
 
+/// The same, for a **notification sender** (`AMB-D-885`): the hidden `notify-sender` command, which core
+/// follows with the store to post through. Named here beside the runner's for the same reason — the face
+/// owns the spelling of its own entry points, and this is where both are dispatched.
+const NOTIFY_ARGV: &[&str] = &["notify-sender"];
+
 /// Run a mutating command group, then drive the plugin observation dispatcher once at the short-lived
 /// CLI's write seam (`AMB-T-2033`). After the command committed, drain the outbox from the persisted
 /// cursor onto the subscribed plugins' queues, persist where it advanced, and launch a runner process for
@@ -32,7 +37,7 @@ pub(crate) fn with_dispatch(
 ) -> Result<i32, CliError> {
     let code = op(store)?;
     dispatch(store, |store, subs| {
-        store.drive_plugins_persisted(Face::Cli, subs, RUNNER_ARGV).map(Some)
+        store.drive_plugins_persisted(Face::Cli, subs, RUNNER_ARGV, NOTIFY_ARGV).map(Some)
     });
     Ok(code)
 }
@@ -45,7 +50,7 @@ pub(crate) fn with_dispatch(
 /// It costs a command with nothing pending two reads and no write lock — the guard is core's
 /// ([`Store::resume_plugin_delivery`]), so both faces make the same judgement.
 pub(crate) fn resume_dispatch(store: &Store) {
-    dispatch(store, |store, subs| store.resume_plugin_delivery(Face::Cli, subs, RUNNER_ARGV));
+    dispatch(store, |store, subs| store.resume_plugin_delivery(Face::Cli, subs, RUNNER_ARGV, NOTIFY_ARGV));
 }
 
 /// The half both dispatch mounts share: resolve who is installed, hand the resolver to `drive`, and relay

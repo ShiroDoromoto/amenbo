@@ -80,6 +80,11 @@ pub enum Outcome {
     /// was never delivered to anybody (`Delivered::gapped`, `AMB-D-352`). What was lost cannot be named —
     /// the events are gone — so the line records that it happened and when, and no more.
     Gap,
+    /// **Not a run either.** A notification the far side would not take (`AMB-D-885`, `AMB-D-352`) — a
+    /// relay that refused the account, a webhook that answered 404. It is dropped rather than retried, so
+    /// this line is the only trace there is that somebody was not told, which is what makes it belong in
+    /// the same file a gap does: a sender is a detached process with nowhere else to write.
+    Refused,
 }
 
 impl Outcome {
@@ -91,6 +96,7 @@ impl Outcome {
             Outcome::TimedOut => "timed_out",
             Outcome::NotLaunched => "not_launched",
             Outcome::Gap => "gap",
+            Outcome::Refused => "refused",
         }
     }
 
@@ -102,6 +108,7 @@ impl Outcome {
             "timed_out" => Some(Outcome::TimedOut),
             "not_launched" => Some(Outcome::NotLaunched),
             "gap" => Some(Outcome::Gap),
+            "refused" => Some(Outcome::Refused),
             _ => None,
         }
     }
@@ -230,6 +237,22 @@ pub fn record_gap(path: &Path) {
             code: None,
             elapsed: Duration::ZERO,
             stderr: String::new(),
+        },
+    );
+}
+
+/// Record a notification the far side would not take (`AMB-D-885`). It names no plugin — there is none —
+/// and the reason is the whole content, because a dropped message leaves nothing else to look at.
+pub fn record_refused(path: &Path, why: &str) {
+    record(
+        path,
+        &Run {
+            plugin: String::new(),
+            event: "",
+            outcome: Outcome::Refused,
+            code: None,
+            elapsed: Duration::ZERO,
+            stderr: why.to_string(),
         },
     );
 }

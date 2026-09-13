@@ -249,18 +249,21 @@ impl Store {
         face: crate::plugin_drive::Face,
         subs: &dyn crate::plugin_dispatch::Subscribers,
         runner_argv: &[&str],
+        notify_argv: &[&str],
     ) -> Result<crate::plugin_dispatch::Delivered> {
         // A runner opens the store at this base directory for itself: it is a process of its own, and this
         // `Store` is the caller's, closed when the command that opened it returns (`AMB-D-399`).
         let launcher =
             crate::plugin_runner::SelfRunner::new(runner_argv, self.paths.base_dir.clone());
-        crate::plugin_drive::drive_persisted(
+        let delivered = crate::plugin_drive::drive_persisted(
             &self.engine,
             face,
             subs,
             Some(&launcher),
             Some(&self.paths.plugin_log_file()),
-        )
+        )?;
+        self.hand_notifications_over(&delivered.seen, notify_argv);
+        Ok(delivered)
     }
 
     /// Drive the dispatcher **only if a previous run left delivery unfinished** — the startup kick both
@@ -275,16 +278,21 @@ impl Store {
         face: crate::plugin_drive::Face,
         subs: &dyn crate::plugin_dispatch::Subscribers,
         runner_argv: &[&str],
+        notify_argv: &[&str],
     ) -> Result<Option<crate::plugin_dispatch::Delivered>> {
         let launcher =
             crate::plugin_runner::SelfRunner::new(runner_argv, self.paths.base_dir.clone());
-        crate::plugin_drive::resume_persisted(
+        let delivered = crate::plugin_drive::resume_persisted(
             &self.engine,
             face,
             subs,
             Some(&launcher),
             Some(&self.paths.plugin_log_file()),
-        )
+        )?;
+        if let Some(delivered) = &delivered {
+            self.hand_notifications_over(&delivered.seen, notify_argv);
+        }
+        Ok(delivered)
     }
 
     /// Drive delivery and work every queue **to its end, in this process** — the flush a caller asks for on
@@ -300,12 +308,75 @@ impl Store {
         face: crate::plugin_drive::Face,
         subs: &dyn crate::plugin_dispatch::Subscribers,
     ) -> Result<crate::plugin_drive::Flushed> {
-        crate::plugin_drive::flush_persisted(
+        let flushed = crate::plugin_drive::flush_persisted(
             &self.engine,
             face,
             subs,
             Some(&self.paths.plugin_log_file()),
-        )
+        )?;
+        // The flush is the one mount that does the work rather than starting it, so the notifications go
+        // out here too — a caller asking for a flush is asking for it to have happened, and a process
+        // started behind its back would leave it saying so before it had.
+        self.post_notifications(&flushed.delivered.seen);
+        Ok(flushed)
+    }
+
+    /// Word what a drive walked and hand it to a sender **process** — the ride-along mounts' half
+    /// (`AMB-D-885`, `AMB-D-352`).
+    ///
+    /// Nothing here fails the drive. A notification is worth telling and is not worth a write refusing over,
+    /// so a store that will not answer and a process that will not start are both a line in the log and no
+    /// more — which is the same terms an observation hook is on.
+    fn hand_notifications_over(&self, seen: &[crate::notify_dispatch::Happened], notify_argv: &[&str]) {
+        if seen.is_empty() || notify_argv.is_empty() {
+            return;
+        }
+        let messages = match crate::notify_dispatch::messages(self, seen) {
+            Ok(messages) if messages.is_empty() => return,
+            Ok(messages) => messages,
+            Err(e) => {
+                tracing::warn!(error = %e, "notifications are not sent: the settings would not be read");
+                return;
+            }
+        };
+        let dispatcher = crate::notify_dispatch::SelfDispatcher::new(
+            notify_argv,
+            self.paths.base_dir.clone(),
+        );
+        use crate::notify_dispatch::Dispatcher as _;
+        if let Err(e) = dispatcher.hand_over(&messages) {
+            tracing::warn!(error = %e, "notifications are dropped: no sender started");
+        }
+    }
+
+    /// The same, posted **here** rather than handed to a process — the flush's half, and the sender
+    /// process's own door ([`crate::notify_dispatch::deliver`]).
+    ///
+    /// What refused is recorded and dropped (`AMB-D-352`). Answering with it would put a caller in the
+    /// position of retrying, which is exactly what a notification is not worth.
+    pub fn post_notifications(&self, seen: &[crate::notify_dispatch::Happened]) {
+        if seen.is_empty() {
+            return;
+        }
+        match crate::notify_dispatch::messages(self, seen) {
+            Ok(messages) => self.send_notifications(&messages),
+            Err(e) => {
+                tracing::warn!(error = %e, "notifications are not sent: the settings would not be read");
+            }
+        }
+    }
+
+    /// Post messages already worded — what the sender process was started to do.
+    ///
+    /// **What refused goes into the execution log** (`AMB-D-361`). A sender is a detached process with no
+    /// stdio and nobody waiting on it, so a line there is the only trace a person chasing "why did nothing
+    /// arrive" can find.
+    pub fn send_notifications(&self, messages: &[crate::notify_dispatch::Message]) {
+        let log = self.paths.plugin_log_file();
+        for (target, why) in crate::notify_dispatch::deliver(self, messages) {
+            crate::plugin_log::record_refused(&log, &format!("notification target {target}: {why}"));
+            tracing::warn!(target, why, "a notification was refused and is dropped");
+        }
     }
 
     /// Stop delivering to a plugin: throw away what is waiting for it and end the runner working it, on one

@@ -29,10 +29,10 @@
 # ── Why the box is opened first, and read as it opens ───────────────────────────────────────────
 # A pane comes up with the box folded away, and the presses in it go to the program: that is what a
 # pane is before anybody asks for anything else, and a slash command typed at a CLI needs the
-# characters to reach it to be completed at all. So a person who means to write asks for the box —
-# and the press that asks is the press that hands it the keyboard, opening it being the same act as
-# saying you mean to write in it. That is read at the top of the road because it is the one moment
-# it can be read: every step after this one has put the keyboard somewhere itself.
+# characters to reach it to be completed at all. So a person who means to write asks for the box, and
+# the box comes to hand with the keyboard already in it — a pane hands it there as the box comes up,
+# there being no click to make after. That is read at the top of the road because it is the one
+# moment it can be read: every step after this one has put the keyboard somewhere itself.
 #
 # ── Why the arrow is walked first ───────────────────────────────────────────────────────────────
 # The box is empty when a pane has just been opened and at no other point on this road, so the press
@@ -119,8 +119,8 @@ steps_gui:
     op: open-shell
 
   # ── The box, asked for, and the keyboard that comes with it ───────────────────────────────────
-  # The pane came up folded, so the box is asked for before anything can be written in it. Every
-  # step below this one is about that box.
+  # Asked for before anything can be written in it: a pane that came up folded has nothing to write
+  # in. Every step below this one is about that box.
   - type: action
     domain: terminal
     op: open-box
@@ -288,9 +288,9 @@ steps_gui:
     op: open-shell
 
   # This pane's box too, and before a word is typed at it: the readings at the end of the road are of
-  # two marks, and a pane still folded draws neither of them. Opening it puts the keyboard in it,
-  # which the line below then takes away again — that order is the point, because what those readings
-  # rest on is a box that is there and does not have the keyboard.
+  # two marks, and a pane still folded draws neither of them. The box comes to hand with the keyboard
+  # in it, which the line below then takes away again — that order is the point, because what those
+  # readings rest on is a box that is there and does not have the keyboard.
   - type: action
     domain: terminal
     op: open-box

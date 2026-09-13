@@ -89,6 +89,12 @@ steps_gui:
     domain: terminal
     op: open-shell
 
+  # The box, which a pane comes up without: what the copy below is read back in is Amenbo's own box,
+  # and there is nothing to paste into while the pane is folded.
+  - type: action
+    domain: terminal
+    op: open-box
+
   - type: action
     domain: terminal
     op: run

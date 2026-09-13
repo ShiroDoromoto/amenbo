@@ -108,7 +108,7 @@ steps_gui:
 
   # The box, which a pane comes up without: a pane is opened by somebody about to work the program in
   # it, so the presses go there until the reader asks for somewhere else to put them. Everything
-  # below this line is written in that box, and a folded pane has nothing to write in.
+  # below this line is written in that box, and a pane that came up folded has nothing to write in.
   - type: action
     domain: terminal
     op: open-box

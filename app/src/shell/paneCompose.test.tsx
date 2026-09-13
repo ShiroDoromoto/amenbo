@@ -15,6 +15,7 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PaneEvents } from "../talk/terminal";
+import { pauseBeforeTheReturn } from "../talk/terminal";
 import { t } from "../core/i18n";
 import { TerminalPane } from "./TerminalPane";
 
@@ -177,6 +178,14 @@ async function pressed(key: string, held: KeyboardEventInit = {}): Promise<boole
   return event.defaultPrevented;
 }
 
+/** Wait out the pause a send leaves between the paste and the return (`../talk/terminal`). The pane
+ *  these tests open runs no agent, so what it waits is the wait for a provider nobody measured
+ *  (`AMB-D-879`). */
+async function sent(): Promise<void> {
+  const pause = pauseBeforeTheReturn(null);
+  await act(async () => { await new Promise((over) => setTimeout(over, pause + 5)); });
+}
+
 /** What was written to the terminal, in the order it went. */
 const wrote = () => hoisted.asked.filter((one) => one.cmd === "pty_write").map((one) => one.args.data);
 
@@ -226,6 +235,7 @@ describe("sending what was written", () => {
     await write("run the tests");
 
     expect(await pressed("Enter", SEND), "the newline was typed into the box as well").toBe(true);
+    await sent();
     expect(wrote()).toEqual(["\x1b[200~run the tests\x1b[201~", "\r"]);
   });
 
@@ -234,6 +244,7 @@ describe("sending what was written", () => {
     await opened();
     await write("run the tests");
     await pressed("Enter", SEND);
+    await sent();
 
     expect(hoisted.asked.map((one) => one.cmd)).toEqual(["pty_write", "pty_write", "pty_brief"]);
   });
@@ -257,6 +268,7 @@ describe("sending what was written", () => {
     await write("run the tests");
 
     await pressed("Enter", SEND);
+    await sent();
 
     expect(box()?.value, "the next sentence would have been the tail of this one").toBe("");
     expect(hoisted.held, "the window went on holding a line that had been sent").toBe("");
@@ -303,6 +315,7 @@ describe("sending what was written", () => {
     expect(sendBtn()?.disabled).toBe(false);
     await act(async () => { sendBtn()?.click(); });
     await act(async () => { await Promise.resolve(); });
+    await sent();
 
     expect(wrote()).toEqual(["\x1b[200~run the tests\x1b[201~", "\r"]);
   });

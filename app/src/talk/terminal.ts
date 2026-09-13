@@ -678,6 +678,10 @@ export function whyItStopped(agent: string | null, code: number | null): string 
  * text sitting in the provider's own input box, for the person to send. The safety is in sending one
  * return and never a second, not in the number being right (`AMB-D-879`).
  *
+ * **These are the numbers the provider itself asks for, and Windows asks for more on top of them**
+ * ({@link READ_AS_A_RETURN_ON_WINDOWS_AFTER_MS}). A row of `0` here means the provider has no
+ * cushion — not that the return is read wherever it lands.
+ *
  * **One row here is not the whole of that agent's answer.** Claude Code takes none of this and a
  * long one where the body names a file it will stop to read ({@link READS_WHAT_A_BODY_NAMES}), which
  * is a condition rather than a number and sits below.
@@ -698,6 +702,26 @@ const READ_AS_A_RETURN_AFTER: Record<string, number> = {
  * made, and assuming none costs them a message that does not go (`AMB-D-879`).
  */
 const READ_AS_A_RETURN_UNMEASURED_MS = 50;
+
+/**
+ * The least Windows leaves between the paste and the return, whatever the pane is running.
+ *
+ * **It is the host's and not any provider's.** Codex CLI takes a return with no gap at all on macOS
+ * and on Linux — body, small picture and a 20.80MB one alike — and on Windows the same send needs
+ * 80ms: measured at 70ms the return was gone 6 times out of 6, and at 80ms it landed 6 out of 6,
+ * with 19 bytes and 20.80MB falling on the same figure. A cushion inside a provider would move with
+ * the size of what was pasted; this does not, because what is happening is the return overtaking a
+ * paste ConPTY has not finished handing over (`AMB-T-4724`, `AMB-D-887`).
+ *
+ * **It covers a second, smaller thing on the same OS.** Gemini CLI's own 30ms cushion sits close
+ * enough to the edge there that the 50ms above went through 7 times out of 7 while 45ms went through
+ * 2 out of 3 and 40ms 3 out of 5 — a number with nothing left over. The floor leaves it 150ms.
+ *
+ * **150ms is about twice the 80ms measured**, because the machine it was measured on is one machine
+ * and a slower one asks for more. What it costs is the one send that went through with no wait on
+ * Windows — Claude Code with no path standing in the body — now waiting 0.15s (`AMB-D-887`).
+ */
+const READ_AS_A_RETURN_ON_WINDOWS_AFTER_MS = 150;
 
 /**
  * The agent that stops to read a file the pasted body names, and the wait that outlasts its reading.
@@ -745,17 +769,33 @@ function stillStanding(text: string, put: readonly string[]): boolean {
  * somebody went on writing after, which is the ordinary shape here because Amenbo puts the path in
  * at the caret. Copying the cutting would be Amenbo carrying that agent's parser, and the three
  * agents measured do not agree on it (`AMB-T-4719`, `AMB-D-879`).
+ *
+ * **On Windows nothing goes out under the floor** ({@link READ_AS_A_RETURN_ON_WINDOWS_AFTER_MS}).
+ * The provider's own figure still decides where it is larger — the reading of a named file is far
+ * over it and comes through untouched — so the floor is the least of the two, never a sum
+ * (`AMB-D-887`).
  */
 export function pauseBeforeTheReturn(
   agent: string | null,
   text = "",
   put: readonly string[] = [],
+  os: HostOs = hostOs(),
 ): number {
+  return atLeastWhatTheHostAsks(theProvidersOwnPause(agent, text, put), os);
+}
+
+/** The pause the provider in the pane asks for, before the host has had its say. */
+function theProvidersOwnPause(agent: string | null, text: string, put: readonly string[]): number {
   if (agent === null) return READ_AS_A_RETURN_UNMEASURED_MS;
   if (agent === READS_WHAT_A_BODY_NAMES && stillStanding(text, put)) {
     return READ_AFTER_A_NAMED_FILE_MS;
   }
   return READ_AS_A_RETURN_AFTER[agent] ?? READ_AS_A_RETURN_UNMEASURED_MS;
+}
+
+/** The same pause, raised to the floor the host puts under every send there (`AMB-D-887`). */
+function atLeastWhatTheHostAsks(pause: number, os: HostOs): number {
+  return os === "windows" ? Math.max(pause, READ_AS_A_RETURN_ON_WINDOWS_AFTER_MS) : pause;
 }
 
 /**

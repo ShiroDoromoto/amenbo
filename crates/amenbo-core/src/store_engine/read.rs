@@ -5550,11 +5550,13 @@ pub fn task_commits(conn: &Connection, task_id: i64) -> Result<Vec<crate::model:
     Ok(rows)
 }
 
-/// The layer half of a plugin row's address, as a predicate (`AMB-D-601`): a project's id seeks that
-/// project's row, and `None` seeks the **device** row, whose key is NULL.
+/// A nullable key as a predicate: an id seeks the row naming it, and `None` seeks the rows that name
+/// nobody. It answers the layer half of a plugin row's address (`AMB-D-601`) — a project's id, or the
+/// **device** row, whose key is NULL — and the owner half of a [`secret_row_id`]'s, where NULL says the
+/// area itself holds the secret rather than any row inside it.
 ///
-/// A branch rather than a bound parameter, because `project_id = NULL` is never true in SQL — a lookup that
-/// bound the absent id would quietly answer "no such row" for every device row there is.
+/// A branch rather than a bound parameter, because `key = NULL` is never true in SQL — a lookup that
+/// bound the absent id would quietly answer "no such row" for every row there is without one.
 fn at_layer<N: Nullability>(key: Col<Int, N>, project_id: Option<i64>) -> Pred {
     match project_id {
         Some(id) => Pred::eq(key, id),
@@ -5654,6 +5656,66 @@ pub fn plugin_secret_value(
 ) -> Result<Option<String>> {
     match plugin_secret_row_id(conn, project_id, plugin, field_key)? {
         Some(id) => Ok(plugin_secret_row_by_id(conn, id)?.map(|r| r.value)),
+        None => Ok(None),
+    }
+}
+
+/// The live `secret` row id for `(project_id, area, owner_id, field_key)`, or `None` — what makes a
+/// secret write an upsert (find-then-update) and a clear a lookup, exactly as the plugin tables' twins
+/// are. Two of the four are nullable and both go through [`at_layer`]: `project_id` is the layer, and
+/// `owner_id` is the row inside the area, absent where the area itself holds the secret. The
+/// `secret_address` UNIQUE index guarantees at most one project row, `secret_address_device` at most one
+/// device row.
+pub fn secret_row_id(
+    conn: &Connection,
+    project_id: Option<i64>,
+    area: crate::model::SecretArea,
+    owner_id: Option<i64>,
+    field_key: &str,
+) -> Result<Option<i64>> {
+    const C: col::secret::Cols = col::secret::ALL;
+    first_id(
+        conn,
+        C.id,
+        &at_layer(C.project_id, project_id)
+            .and(Pred::eq(C.area, area.as_str()))
+            .and(at_layer(C.owner_id, owner_id))
+            .and(Pred::eq(C.field_key, field_key)),
+    )
+}
+
+/// Every live `secret` row one owner holds, **across every layer** — what a delete sweeps when the row a
+/// secret hangs off goes, and what clears an area that holds its own (`owner_id` `None`). Keyed on the
+/// owner alone, it takes the device row with the project ones, which is what leaves nothing behind.
+pub fn secret_row_ids(
+    conn: &Connection,
+    area: crate::model::SecretArea,
+    owner_id: Option<i64>,
+) -> Result<Vec<i64>> {
+    const C: col::secret::Cols = col::secret::ALL;
+    select_ids(
+        conn,
+        C.id,
+        Some(&Pred::eq(C.area, area.as_str()).and(at_layer(C.owner_id, owner_id))),
+    )
+}
+
+/// The `secret` row with this id.
+pub fn secret_row_by_id(conn: &Connection, id: i64) -> Result<Option<crate::model::Secret>> {
+    super::hydrate::row_by_id(conn, "secret", id, super::hydrate::secret_row)
+}
+
+/// One secret field's value at this layer, or `None` when it is unset (`AMB-D-884`). The only caller that
+/// wants the plaintext is the feature connecting with it; a face asks whether it is set and stops there.
+pub fn secret_value(
+    conn: &Connection,
+    project_id: Option<i64>,
+    area: crate::model::SecretArea,
+    owner_id: Option<i64>,
+    field_key: &str,
+) -> Result<Option<String>> {
+    match secret_row_id(conn, project_id, area, owner_id, field_key)? {
+        Some(id) => Ok(secret_row_by_id(conn, id)?.map(|r| r.value)),
         None => Ok(None),
     }
 }

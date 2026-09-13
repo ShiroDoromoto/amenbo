@@ -575,6 +575,43 @@ pub const STEPS: &[Step] = &[
              ALTER TABLE project ADD COLUMN icon_source TEXT;",
         ),
     },
+    Step {
+        to: 37,
+        name: "add secret, where Amenbo's own features keep a credential",
+        // `AMB-D-884`: mail, Slack and the Viewer become the body's own features, and the table their
+        // secrets lived in (`plugin_secret`) goes with the mechanism that held them. `config.json` says of
+        // itself that it holds no secrets, so this is the body's first place for one.
+        //
+        // **The version is what this step is for**, as v31's is. A whole table is not a column: genesis is
+        // `CREATE TABLE IF NOT EXISTS` over the registry and runs at every open, so an existing store grows
+        // this table on its next one, with nothing to backfill — no build before this one wrote a row that
+        // belongs here, and the migration off the plugins is a program of its own rather than a step in
+        // this chain. What a store cannot do for itself is say which shape it is now in, and the frozen
+        // shapes are dated by this chain (`super::schema_frozen`), so moving the genesis DDL is what
+        // appends a step here.
+        //
+        // The DDL is repeated in frozen text rather than referenced, as every step's is: the registry may
+        // rename a column tomorrow, and what this step added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS secret (\
+                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, \
+                 project_id BIGINT REFERENCES project(id) \
+                     ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED, \
+                 area TEXT NOT NULL DEFAULT '' CHECK(area IN ('', 'notify', 'viewer')), \
+                 owner_id BIGINT, \
+                 field_key TEXT NOT NULL DEFAULT '', \
+                 value TEXT NOT NULL DEFAULT '', \
+                 created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+                 updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')\
+             );\
+             CREATE UNIQUE INDEX IF NOT EXISTS secret_address \
+                 ON secret(project_id, area, COALESCE(owner_id, 0), field_key);\
+             CREATE UNIQUE INDEX IF NOT EXISTS secret_address_device \
+                 ON secret(area, COALESCE(owner_id, 0), field_key) WHERE project_id IS NULL;",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to

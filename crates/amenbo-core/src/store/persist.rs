@@ -677,6 +677,40 @@ impl Store {
         })
     }
 
+    /// Set (`Some`) or clear (`None`) one of Amenbo's own secrets at one layer (one operation = one
+    /// transaction) — a notification target's connection, the Viewer's keys (`AMB-D-884`). Returns whether
+    /// anything changed. Reach is guarded the same way a plugin layer's write is
+    /// ([`Self::plugin_layer_target`]): a project's row is that project's content, and the device row is no
+    /// project's.
+    pub fn set_secret(
+        &mut self,
+        project_id: Option<i64>,
+        area: crate::model::SecretArea,
+        owner_id: Option<i64>,
+        field_key: &str,
+        value: Option<&str>,
+    ) -> Result<bool> {
+        self.write_one(&Self::plugin_layer_target(project_id), |tx| {
+            crate::ops::secret::set(tx, project_id, area, owner_id, field_key, value)
+        })
+    }
+
+    /// Erase every layer's secrets for one owner (one operation = one transaction) — what the delete of a
+    /// notification target runs before taking the target's row, and what an unpairing of the Viewer runs
+    /// over the keys the feature itself holds (`owner_id` `None`). Returns how many rows went.
+    ///
+    /// **Deliberately unguarded by project reach**, as [`Self::forget_plugin_secrets`] is: what it deletes
+    /// is one owner's residue, not any project's content, and a sweep that stopped at the bound project
+    /// would leave a credential behind in every other. The blast radius is fixed by the area and the owner
+    /// — no caller can aim this at a project's tasks, decisions or comments.
+    pub fn forget_secrets(
+        &mut self,
+        area: crate::model::SecretArea,
+        owner_id: Option<i64>,
+    ) -> Result<usize> {
+        self.write_one(&[], |tx| crate::ops::secret::forget_owner(tx, area, owner_id))
+    }
+
     /// What a write at one plugin layer is guarded against (`AMB-D-601`). A project's row is that project's
     /// content, so it is `WriteTarget::Project` and an AI outside its binding is refused. The device row is
     /// no project's, so there is no project to hold it to — the containment left is that the row's whole

@@ -723,11 +723,11 @@ const ui = {
   // about each row drawn as a colour rather than as words (`AMB-D-785`). What a file turns out not
   // to be is said in its own words — a binary is not a failure, it is simply not something a panel
   // can show.
-  "files.side": "Page and files",
-  "files.memo": "The page",
+  "files.side": "Notes and files",
+  "files.memo": "Notes",
   "files.memoTyping": "Typing",
   "files.memoKept": "Kept",
-  "files.tree": "The folder",
+  "files.tree": "Folder tree",
   "files.capped": "This folder is too big to look through all of.",
   "files.unwatched": "This machine has run out of watches.",
   "files.unwatchedHow": "The supply is per user and shared with the editor you have open. Raising fs.inotify.max_user_watches gives it more room.",
@@ -857,8 +857,8 @@ const ui = {
   // "no" that ends it.
   "agentHookWiring.title": "Have your AI read Amenbo at the start of every session",
   "agentHookWiring.what": "{tool}: give the text below to your AI to edit {file}, and your AI reads how to work with Amenbo at the start of every session and records the work as tasks.",
-  "agentHookWiring.folders.one": "The folder still waiting (paste the text once):",
-  "agentHookWiring.folders.other": "The folders still waiting (paste the text once in each):",
+  "agentHookWiring.folders.one": "Folder not set up yet (paste the text once):",
+  "agentHookWiring.folders.other": "Folders not set up yet (paste the text once in each):",
   "agentHookWiring.pick": "Which tool do you use here?",
   "agentHookWiring.copy": "Copy the text",
   "agentHookWiring.copied": "Copied",
@@ -950,7 +950,7 @@ const ui = {
   "onboard.s1title": "Link a folder to the project",
   "onboard.s1a": "Places ", "onboard.s1b": " (the local binding) and ", "onboard.s1c": " in that folder. An AI started there can operate the project.",
   "onboard.s2title": "Ask your AI",
-  "onboard.s2body": "The done step of creating — and a board with nothing on it yet — starts a terminal in that folder for you. Where you would rather use your own, the same request is a press away, ready to paste.",
+  "onboard.s2body": "The last screen of creating a project, and a board with nothing on it yet, each offer to start a terminal in that folder. If you would rather use your own terminal, the same request text is one press away, ready to paste.",
   "onboard.s3title": "Then just drop tasks",
   "onboard.s3body": "Assign a task to the AI and it starts and proceeds autonomously. Everything shows up in the activity feed.",
   // list empty states

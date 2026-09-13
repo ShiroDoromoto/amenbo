@@ -893,6 +893,11 @@ up open. The keyboard is in the box either way. `write-to-pane` writes a line in
 reads that line standing there with nothing run — the half that parts the box from the terminal's own
 input line — and `send-written` sends it, `by: key` or `by: button` naming which of the two
 presses, because they are two controls and a road that walked one would leave the other unpressed.
+**What parts those two readings is the sentence an operator is given and never the reading**, the box
+and the terminal being on one screen and one shot — so `present: false` on either of them has to name
+words that are nowhere on that window at all. Words a working build merely puts *somewhere else* —
+the line that was sent, standing above as what the program was given — are words the reading finds,
+and a road asking for their absence is a road that cannot go green however right the screen is.
 The key is return held with this machine's own modifier rather than return alone, which the box
 writes a new line with.
 `press-through` is the other half of the box's rule: a press made in it **while nothing is written**

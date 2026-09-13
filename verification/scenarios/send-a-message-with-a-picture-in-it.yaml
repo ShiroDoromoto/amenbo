@@ -24,6 +24,11 @@
 # order off whatever the operator really has, and the first of them is the one this road is about.
 # It costs the operator's own account one turn, which is what it costs to know.
 #
+# **That is a claim on the machine this is walked on, and the only one this road makes.** A machine
+# with no agent installed draws a row with the plain shell alone on it, and the press below opens on
+# that — a pane with no one in it to answer. Such a run is this road saying the machine it was given
+# is not one it can be walked on, which is a different thing from the build being wrong.
+#
 # ── Why the picture is asked for by size ────────────────────────────────────────────────────────
 # Under about four megabytes the agent takes the picture in fast enough that a return sent with no
 # wait at all still lands, so a road walked with a small one goes green on a build that waits for
@@ -31,24 +36,26 @@
 # run rather than kept on the fixtures shelf: a file that large tracked in this repository would be
 # carried by everyone who ever clones it, for this road alone.
 #
-# ── Why three readings and not one ──────────────────────────────────────────────────────────────
-# "It went" and "it did not go" look nearly alike, and one reading tells them apart in the wrong
-# direction. The words are on the screen either way — sent, they stand above as the turn that was
-# taken; unsent, they stand below in the agent's own input box. So what is read is where they are:
+# ── Why the reading is the answer that comes back ───────────────────────────────────────────────
+# "It went" and "it did not go" put the same words on the same window. Sent, they stand above as the
+# turn that was taken; unsent, they stand below in the agent's own input box. What a shot is read by
+# is which words are on it and never which part of it they are on, so *where* the words are is not a
+# reading this harness has: a step saying they are not in the input line names words a working build
+# leaves standing a little higher up the same window, and a step saying the pane holds them is met by
+# the very failure this road exists for.
 #
-#   - Amenbo's box is empty, which says Amenbo believes it sent them;
-#   - the agent's own input line does not hold them, which is the reading the whole road turns on —
-#     this is exactly what is there when the return arrived too early;
-#   - the pane holds them, which says they arrived somewhere rather than being lost on the way.
-#
-# The middle one alone would pass on a build that never sent anything at all, and the last one alone
-# passes on the failure this road exists for. Together there is nowhere left to be wrong.
+# So what is read is the one thing only a message that arrived can put there: the agent's own answer.
+# The message asks for a word back, and asks for it in halves — `RAIN` and `FELL` are written apart
+# and asked for run together, so the letters the reading looks for are nowhere in the message itself,
+# on the pane or in the box. `RAINFELL` on the pane is the agent having been given the line and
+# having replied to it. A return that arrived while the picture was still being read leaves the
+# message standing in the input box, nothing sent, and nothing to answer with.
 #
 # ── Why the words are the road's own and not the path ───────────────────────────────────────────
 # What the paste puts in the box is a path in this run's throwaway directory, which is different
-# every run and which no reading can name. The sentence written beside it is the road's, so it is the
-# sentence the three readings look for — and it is carried in the same message as the picture, which
-# is what makes the message one the wait applies to.
+# every run and which no reading can name. The sentence written beside it is the road's, so it is
+# the sentence read in the box before the press — and it is carried in the same message as the
+# picture, which is what makes the message one the wait applies to.
 #
 # ── The screen road alone ───────────────────────────────────────────────────────────────────────
 # There is no second road. The box under a pane is drawn in the webview, the clipboard is not
@@ -58,9 +65,9 @@ id: send-a-message-with-a-picture-in-it
 title: A message with a picture in it goes when it is sent, rather than sitting in the agent's input box
 description: >
   Open a pane on the first agent this machine has, and open the box Amenbo folds away under it.
-  Write a line in that box, paste a large picture in beside it, and send the two together. The
-  message goes: Amenbo's box is empty, the agent's own input line is empty of it, and the pane above
-  holds what was sent.
+  Write a line in that box asking for one word back, paste a large picture in beside it, and send
+  the two together. The message goes: the agent answers with the word, which is the one thing on
+  that screen a message left sitting in the input box could not have put there.
 
 given:
   - type: action
@@ -114,13 +121,15 @@ steps_gui:
     op: open-box
 
   # ── The message, written and not yet sent ─────────────────────────────────────────────────────
-  # The words the three readings below rest on. They are written first so the paste goes in beside
-  # them, which is the shape a person's message really has: a sentence, and a picture with it.
+  # The words the readings below rest on. They are written first so the paste goes in beside them,
+  # which is the shape a person's message really has: a sentence, and a picture with it. What the
+  # sentence asks for is the road's whole reading — one word, spelled in two halves so that no part
+  # of the message is the word that comes back.
   - type: action
     domain: terminal
     op: write-to-pane
     with:
-      text: SCENARIO the orchard rows after the rain
+      text: "SCENARIO the orchard rows after the rain. Answer with one word and nothing else: RAIN and FELL run together in capitals, with nothing between them."
 
   - type: action
     domain: repo
@@ -132,9 +141,9 @@ steps_gui:
     domain: terminal
     op: paste-image-into-box
 
-  # Both halves are standing in Amenbo's box, unsent. Read before the press, because everything
-  # after it is about where these words went — and a press that had nothing to send would leave all
-  # three readings below saying the right thing for the wrong reason.
+  # Both halves are standing in Amenbo's box, unsent. Read before the press, because everything after
+  # it is about a message that went — and a press that had nothing to send would leave the reading
+  # below saying nothing at all.
   - type: assert
     domain: terminal
     op: still-to-send
@@ -154,31 +163,13 @@ steps_gui:
     with:
       by: key
 
-  # Amenbo's own box let go of it, which is Amenbo saying it sent the message. On its own this says
-  # nothing about whether the agent took it — the box is emptied on the near side of the wait.
-  - type: assert
-    domain: terminal
-    op: still-to-send
-    with:
-      shows: SCENARIO the orchard rows after the rain
-      present: false
-
-  # **The reading the road is for.** The agent's own input line — the row a person types at inside
-  # the pane — is empty of the message. This is exactly where the words sit when the return arrived
-  # while the agent was still reading the picture: the message did not go, and nothing else on the
-  # screen looks wrong.
-  - type: assert
-    domain: terminal
-    op: in-the-box
-    with:
-      shows: SCENARIO the orchard rows after the rain
-      present: false
-
-  # And they arrived rather than being lost between the two. The agent puts what it was given above
-  # its input line as the turn that was taken, which is the one place the words can be and the
-  # message have gone.
+  # **The reading the road is for.** The word is on the pane, which means the agent was given the
+  # line and answered it. Nothing else on this screen can have put those letters there: the message
+  # spells the two halves apart, so a build whose return arrived while the picture was still being
+  # read leaves its words standing in the input box with no answer under them, and this comes back
+  # red on a screen where nothing else looks wrong.
   - type: assert
     domain: terminal
     op: pane
     with:
-      shows: SCENARIO the orchard rows after the rain
+      shows: RAINFELL

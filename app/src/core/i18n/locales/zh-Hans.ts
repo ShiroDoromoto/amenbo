@@ -304,6 +304,15 @@ export const zhHans: Translation = {
     "notify.delete": "删除",
     "notify.usedBy": "从这里发送的项目：{n}",
     "notify.deleteLoses": "删除会把连接和它保存的内容一起带走，从这里发送的项目都会失去它。",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "检查连接",
+    "notify.test": "发送测试消息",
+    "notify.checkReached": "服务器接受了该账号。",
+    "notify.checkShape": "这个网址具备 Slack incoming webhook 的形状。是否仍然可用，由测试消息来回答。",
+    "notify.testSentSlack": "已发出——去频道里看看。",
+    "notify.testSentMail": "已发出——去这个账号的收件箱里看看。",
     "notify.deleteConfirm": "删除“{name}”？从这里发送的项目都会失去它。",
     "settings.data": "数据", "settings.dataPath": "位置",
     "settings.logs": "日志",

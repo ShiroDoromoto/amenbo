@@ -310,6 +310,15 @@ export const ru: Translation = {
     "notify.delete": "Удалить",
     "notify.usedBy": "Проектов, отправляющих отсюда: {n}",
     "notify.deleteLoses": "При удалении уходят и подключение, и то, что оно хранит, и каждый проект, отправляющий отсюда, его теряет.",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "Проверить подключение",
+    "notify.test": "Отправить тестовое сообщение",
+    "notify.checkReached": "Сервер принял учётную запись.",
+    "notify.checkShape": "Адрес имеет вид входящего вебхука Slack. Работает ли он ещё, покажет тестовое сообщение.",
+    "notify.testSentSlack": "Отправлено — посмотрите в канале.",
+    "notify.testSentMail": "Отправлено — посмотрите в ящике этой учётной записи.",
     "notify.deleteConfirm": "Удалить «{name}»? Каждый проект, отправляющий отсюда, его потеряет.",
     "settings.data": "Данные", "settings.dataPath": "Расположение",
     "settings.logs": "Журналы",

@@ -304,6 +304,15 @@ export const zhHant: Translation = {
     "notify.delete": "刪除",
     "notify.usedBy": "從這裡寄送的專案：{n}",
     "notify.deleteLoses": "刪除會把連線和它保存的內容一起帶走，從這裡寄送的專案都會失去它。",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "檢查連線",
+    "notify.test": "發送測試訊息",
+    "notify.checkReached": "伺服器接受了這個帳號。",
+    "notify.checkShape": "這個網址具備 Slack incoming webhook 的形狀。是否仍然可用，由測試訊息來回答。",
+    "notify.testSentSlack": "已送出——到頻道裡看看。",
+    "notify.testSentMail": "已送出——到這個帳號的收件匣裡看看。",
     "notify.deleteConfirm": "刪除「{name}」？從這裡寄送的專案都會失去它。",
     "settings.data": "資料", "settings.dataPath": "位置",
     "settings.logs": "記錄檔",

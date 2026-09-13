@@ -1190,6 +1190,21 @@ report: MigrationDoneDto | null,
 error: { code: string; message_en: string; fields: Record<string, unknown> | null } | null, };
 
 /**
+ * **What a connection check found** (`AMB-D-885`) — and how much of it was actually asked.
+ *
+ * A check either reads the settings or speaks to the server, and which of the two happened decides what
+ * a screen may claim afterwards. A mail target is connected to and authenticated as, so "it works" is
+ * honest; a Slack webhook has no door but posting, so all that was read is the URL's shape — and a
+ * webhook revoked yesterday still has it. One `bool` rather than two commands, because the caller does
+ * not choose: the target's kind does.
+ */
+export type NotifyCheckedDto = { 
+/**
+ * Was a server spoken to? False means the settings were read and nothing more.
+ */
+reached: boolean, };
+
+/**
  * **One connection this device can send a notification through, under a name** (`AMB-D-885`) — a row on
  * the shelf, and what the form that opens over it starts filled in with.
  *

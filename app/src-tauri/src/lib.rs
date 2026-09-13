@@ -552,6 +552,8 @@ pub fn run() {
       commands::notify_target_save,
       commands::notify_target_set_default,
       commands::notify_target_delete,
+      commands::notify_target_check,
+      commands::notify_target_test,
       wake::wake_probe,
       wake::wake_remember,
       wake::wake_chose,

@@ -12,7 +12,7 @@
 import { invoke } from "./ipc";
 import { inTauri } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
-import type { NotifyTargetDto } from "../bindings/bindings";
+import type { NotifyCheckedDto, NotifyTargetDto } from "../bindings/bindings";
 
 /** One connection this device can send through, under a name (generated DTO). */
 export type NotifyTarget = NotifyTargetDto;
@@ -100,4 +100,30 @@ export async function deleteNotifyTarget(id: number): Promise<number[]> {
   const lost = await invoke<number[]>("notify_target_delete", { id });
   reload();
   return lost;
+}
+
+/** What a connection check found, and how much of it was actually asked (generated DTO). */
+export type NotifyChecked = NotifyCheckedDto;
+
+/**
+ * Ask whether this target's connection is usable, without posting to prove it.
+ *
+ * How much that means is the kind's, and the answer says which: a mail relay is connected to and the
+ * account offered to it, a Slack webhook has only its URL read. Neither writes anything, so nothing is
+ * refetched afterwards.
+ */
+export async function checkNotifyTarget(id: number): Promise<NotifyChecked | null> {
+  if (!inTauri()) return null;
+  return invoke<NotifyChecked>("notify_target_check", { id });
+}
+
+/**
+ * Send one message through this target — the only thing that answers whether it still works.
+ *
+ * It is asked of the shelf and not of a project, so it carries no project's name: a mail target sends to
+ * the account it authenticates as, which is the mailbox its owner reads.
+ */
+export async function testNotifyTarget(id: number): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<null>("notify_target_test", { id });
 }

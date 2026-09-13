@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { errText, t, tf } from "../core/i18n";
 import {
-  addNotifyTarget, deleteNotifyTarget, saveNotifyTarget, setDefaultNotifyTarget, useNotifyTargets,
+  addNotifyTarget, checkNotifyTarget, deleteNotifyTarget, saveNotifyTarget, setDefaultNotifyTarget,
+  testNotifyTarget, useNotifyTargets,
   NOTIFY_KINDS, type NotifyKind, type NotifyTarget, type NotifyTargetEdit,
 } from "../core/notifyTargets";
 import { confirmDialog } from "../core/dialog";
@@ -127,12 +128,16 @@ function TargetForm({ target, kind, onDone }: {
   const [mailFrom, setMailFrom] = useState(target?.mailFrom ?? "");
   const [secret, setSecret] = useState("");
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
+  // What the last press answered, in one line. It is one piece of state and not three, because the
+  // three presses answer the same question — did that work — and two answers standing at once is a
+  // screen saying the connection was accepted next to a saying it was refused.
+  const [said, setSaid] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function run(what: () => Promise<void>) {
     setBusy(true);
     setError(null);
+    setSaid(null);
     try {
       await what();
     } catch (err) {
@@ -159,8 +164,31 @@ function TargetForm({ target, kind, onDone }: {
       if (id === undefined) return;
       await saveNotifyTarget(id, edit);
       setSecret("");
-      setSaved(true);
+      setSaid(t("notify.saved"));
       if (target === undefined) onDone();
+    });
+  }
+
+  /**
+   * Ask whether the connection is usable. What that could mean differs by kind, and the answer says
+   * which it was — a mail relay was spoken to and the account offered to it, a Slack webhook had only
+   * its URL read, and a screen that claimed the second was the first would be telling somebody a
+   * revoked webhook still works.
+   */
+  async function check() {
+    if (!target) return;
+    await run(async () => {
+      const found = await checkNotifyTarget(target.id);
+      setSaid(t(found?.reached === true ? "notify.checkReached" : "notify.checkShape"));
+    });
+  }
+
+  /** Post one message, which is the only thing that answers whether the connection still works. */
+  async function sendTest() {
+    if (!target) return;
+    await run(async () => {
+      await testNotifyTarget(target.id);
+      setSaid(t(at === "slack" ? "notify.testSentSlack" : "notify.testSentMail"));
     });
   }
 
@@ -245,6 +273,17 @@ function TargetForm({ target, kind, onDone }: {
               {t("notify.save")}
             </button>
             <button className="btn" disabled={busy} onClick={onDone}>{t("notify.cancel")}</button>
+            {/* Both want a row to read the connection off, so neither is drawn before the first save. */}
+            {target && (
+              <button className="btn" disabled={busy} onClick={() => void check()}>
+                {t("notify.check")}
+              </button>
+            )}
+            {target && (
+              <button className="btn" disabled={busy} onClick={() => void sendTest()}>
+                {t("notify.test")}
+              </button>
+            )}
             {target && !target.isDefault && (
               <button className="btn" disabled={busy} onClick={() => void run(() => setDefaultNotifyTarget(target.id))}>
                 {t("notify.makeDefault")}
@@ -255,7 +294,7 @@ function TargetForm({ target, kind, onDone }: {
                 {t("notify.delete")}
               </button>
             )}
-            {saved && <DoneNote>{t("notify.saved")}</DoneNote>}
+            {said !== null && <DoneNote>{said}</DoneNote>}
           </span>
           {target && (
             <>

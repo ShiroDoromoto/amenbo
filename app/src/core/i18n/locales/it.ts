@@ -309,6 +309,15 @@ export const it: Translation = {
     "notify.delete": "Elimina",
     "notify.usedBy": "Progetti che inviano da qui: {n}",
     "notify.deleteLoses": "Eliminandola se ne vanno la connessione e ciò che tiene, e ogni progetto che invia da qui la perde.",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "Verifica la connessione",
+    "notify.test": "Invia un messaggio di prova",
+    "notify.checkReached": "Il server ha accettato l'account.",
+    "notify.checkShape": "L'URL ha la forma di un incoming webhook di Slack. Se funzioni ancora lo dice un messaggio di prova.",
+    "notify.testSentSlack": "È partito: cercalo nel canale.",
+    "notify.testSentMail": "È partito: cercalo nella casella di questo account.",
     "notify.deleteConfirm": "Eliminare «{name}»? Ogni progetto che invia da qui la perde.",
     "settings.data": "Dati", "settings.dataPath": "Posizione",
     "settings.logs": "Registri",

@@ -303,6 +303,15 @@ export const tr: Translation = {
     "notify.delete": "Sil",
     "notify.usedBy": "Buradan gönderen projeler: {n}",
     "notify.deleteLoses": "Silmek bağlantıyı ve tuttuğu şeyi de götürür; buradan gönderen her proje onu kaybeder.",
+    // The two presses that ask whether a connection works, and what each can honestly claim afterwards.
+    // A mail relay is spoken to and the account offered to it; a Slack webhook has no door but posting, so
+    // only the shape of its URL is read — and a webhook revoked yesterday still has it.
+    "notify.check": "Bağlantıyı sına",
+    "notify.test": "Sınama iletisi gönder",
+    "notify.checkReached": "Sunucu hesabı kabul etti.",
+    "notify.checkShape": "Adres bir Slack incoming webhook biçiminde. Hâlâ çalışıp çalışmadığını bir sınama iletisi söyler.",
+    "notify.testSentSlack": "Gitti — kanala bakın.",
+    "notify.testSentMail": "Gitti — bu hesabın posta kutusuna bakın.",
     "notify.deleteConfirm": "“{name}” silinsin mi? Buradan gönderen her proje onu kaybeder.",
     "settings.data": "Veri", "settings.dataPath": "Konum",
     "settings.logs": "Günlükler",

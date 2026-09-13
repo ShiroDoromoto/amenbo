@@ -29,6 +29,13 @@ const hoisted = vi.hoisted(() => ({
   /** What the confirmation was asked, and how it was answered. */
   asked: [] as string[],
   confirm: true,
+  /** Every target a check was asked of, and what the check came back saying. */
+  checked: [] as number[],
+  reached: false,
+  /** Every target a test message was sent through. */
+  tested: [] as number[],
+  /** What the next press is answered with, where a test wants a refusal. */
+  refuse: null as string | null,
 }));
 
 vi.mock("../core/notifyTargets", async (importOriginal) => {
@@ -57,6 +64,16 @@ vi.mock("../core/notifyTargets", async (importOriginal) => {
     deleteNotifyTarget: (id: number) => {
       hoisted.deleted.push(id);
       return Promise.resolve([]);
+    },
+    checkNotifyTarget: (id: number) => {
+      hoisted.checked.push(id);
+      if (hoisted.refuse !== null) return Promise.reject(new Error(hoisted.refuse));
+      return Promise.resolve({ reached: hoisted.reached });
+    },
+    testNotifyTarget: (id: number) => {
+      hoisted.tested.push(id);
+      if (hoisted.refuse !== null) return Promise.reject(new Error(hoisted.refuse));
+      return Promise.resolve();
     },
   };
 });
@@ -111,6 +128,10 @@ beforeEach(() => {
   hoisted.nextId = 7;
   hoisted.asked = [];
   hoisted.confirm = true;
+  hoisted.checked = [];
+  hoisted.reached = false;
+  hoisted.tested = [];
+  hoisted.refuse = null;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -255,6 +276,72 @@ describe("deleting a target", () => {
     await act(async () => { button(t("notify.delete"))!.click(); });
 
     expect(hoisted.deleted).toEqual([1]);
+  });
+});
+
+describe("asking whether the connection works", () => {
+  /** The one line the last press left, whichever way it went. */
+  const answer = () => container.querySelector(".donetext, .errortext")?.textContent ?? "";
+
+  it("claims only what was asked: a relay was spoken to, a webhook's URL was read", async () => {
+    hoisted.targets = [target({ id: 1, name: "dev team" })];
+    render();
+    edit();
+
+    // A Slack webhook has no door but posting, so the check reads the shape and says so.
+    await act(async () => { button(t("notify.check"))!.click(); });
+    expect(hoisted.checked).toEqual([1]);
+    expect(answer()).toBe(t("notify.checkShape"));
+
+    // A mail relay is connected to and the account offered to it, so it may claim more.
+    hoisted.reached = true;
+    await act(async () => { button(t("notify.check"))!.click(); });
+    expect(answer()).toBe(t("notify.checkReached"));
+  });
+
+  it("sends the test through the row it was opened on, and says where to look", async () => {
+    hoisted.targets = [
+      target({ id: 1, name: "dev team" }),
+      target({ id: 2, name: "my mail", kind: "mail", smtpHost: "smtp.example.com" }),
+    ];
+    render();
+
+    edit(0);
+    await act(async () => { button(t("notify.test"))!.click(); });
+    expect(hoisted.tested).toEqual([1]);
+    expect(answer()).toBe(t("notify.testSentSlack"));
+
+    // Where to look is not the same place, so the two kinds do not share a sentence.
+    await act(async () => { button(t("notify.cancel"))!.click(); });
+    edit(1);
+    await act(async () => { button(t("notify.test"))!.click(); });
+    expect(hoisted.tested).toEqual([1, 2]);
+    expect(answer()).toBe(t("notify.testSentMail"));
+  });
+
+  it("says what was refused, and leaves nothing standing beside it", async () => {
+    hoisted.targets = [target({ id: 1, name: "dev team" })];
+    hoisted.refuse = "the webhook refused the message: 404 no_service";
+    render();
+    edit();
+
+    await act(async () => { button(t("notify.test"))!.click(); });
+
+    expect(answer()).toContain("no_service");
+    // The refusal is the whole answer: a "sent" line standing beside it would be the screen saying
+    // both at once.
+    expect(container.querySelector(".donetext")).toBe(null);
+  });
+
+  // Both read the connection off a row, and a form that has not been saved yet has none.
+  it("offers neither press before the row exists", () => {
+    render();
+    act(() => {
+      select(container.querySelector<HTMLSelectElement>("select")!, "slack");
+    });
+
+    expect(button(t("notify.check"))).toBe(undefined);
+    expect(button(t("notify.test"))).toBe(undefined);
   });
 });
 

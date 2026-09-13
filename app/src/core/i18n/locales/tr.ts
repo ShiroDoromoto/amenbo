@@ -522,6 +522,8 @@ export const tr: Translation = {
     "quit.confirmNotAll": "Amenbo'dan çıkılsın mı? Açık olan tüm terminaller sonlandırılır. Konuşmalar bir dahaki açılışta geri gelir, {names} çalıştıran bölmeler hariç. İçlerinde çalışanlar da geri gelmez.",
 
     "face.ended": "Bu terminaldeki program sona erdi.",
+
+    "face.endedGeminiUnset": "Gemini CLI için bir kimlik doğrulama yöntemi ayarlanmamış. Belirtilen yol yalnızca bu bölmeye aittir ve onunla birlikte silinir — ayarlamanız gereken kendi ~/.gemini/settings.json dosyanızdır.",
     "face.projects": "Projeler",
     "face.railFolders": "Klasörler",
     "face.tabsCompact": "Adları gizle",

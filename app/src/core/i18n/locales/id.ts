@@ -525,6 +525,8 @@ export const id: Translation = {
     "quit.confirmNotAll": "Keluar dari Amenbo? Semua terminal yang terbuka berakhir. Percakapannya kembali saat dijalankan lagi, kecuali di panel yang menjalankan {names}. Yang sedang berjalan di dalamnya juga tidak kembali.",
 
     "face.ended": "Program di terminal ini telah berhenti.",
+
+    "face.endedGeminiUnset": "Gemini CLI belum memiliki metode autentikasi. Jalur yang disebutkan hanya milik panel ini dan ikut terhapus — yang perlu diatur adalah ~/.gemini/settings.json milik Anda sendiri.",
     "face.projects": "Proyek",
     "face.railFolders": "Folder",
     "face.tabsCompact": "Sembunyikan nama",

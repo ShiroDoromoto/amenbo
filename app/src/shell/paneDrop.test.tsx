@@ -149,7 +149,7 @@ describe("removing a pane", () => {
     await act(async () => {
       hoisted.events?.opened("session-7", "/work/here", null);
     });
-    await act(async () => { hoisted.events?.closed("session-7"); });
+    await act(async () => { hoisted.events?.closed("session-7", 0); });
     await press();
 
     expect(hoisted.ended, "a session the host has forgotten was named anyway").toEqual([]);

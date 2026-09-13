@@ -132,7 +132,7 @@ async function opened(): Promise<void> {
 
 /** The host says the program in the pane has exited. */
 async function closed(): Promise<void> {
-  await act(async () => { hoisted.events?.closed("session-7"); });
+  await act(async () => { hoisted.events?.closed("session-7", 0); });
   await act(async () => { await Promise.resolve(); });
 }
 

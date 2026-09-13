@@ -90,7 +90,7 @@ vi.mock("./terminal", () => ({
       const took = start.adopt !== false ? hoisted.running[0] : undefined;
       const session = took?.session ?? "session-1";
       on.opened(session, took?.folder ?? start.cwd ?? null, took?.agent ?? start.agent ?? null);
-      hoisted.end = () => on.closed(session);
+      hoisted.end = () => on.closed(session, 0);
       host.textContent = "(a terminal)";
       return () => {};
     },

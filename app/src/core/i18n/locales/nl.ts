@@ -522,6 +522,8 @@ export const nl: Translation = {
     "quit.confirmNotAll": "Amenbo stoppen? Alle geopende terminals worden beëindigd. De gesprekken komen bij de volgende start terug, behalve in de deelvensters met {names}. Wat erin liep, komt ook niet terug.",
 
     "face.ended": "Het programma in deze terminal is gestopt.",
+
+    "face.endedGeminiUnset": "Voor Gemini CLI is geen authenticatiemethode ingesteld. Het genoemde pad hoort alleen bij dit deelvenster en verdwijnt ermee — in te stellen in uw eigen ~/.gemini/settings.json.",
     "face.projects": "Projecten",
     "face.railFolders": "Mappen",
     "face.tabsCompact": "Namen verbergen",

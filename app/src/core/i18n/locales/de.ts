@@ -532,6 +532,8 @@ export const de: Translation = {
     "quit.confirmNotAll": "Amenbo beenden? Alle offenen Terminals werden beendet. Die Gespräche kommen beim nächsten Start zurück, außer in den Bereichen mit {names}. Was in ihnen lief, kommt ebenfalls nicht zurück.",
 
     "face.ended": "Das Programm in diesem Terminal wurde beendet.",
+
+    "face.endedGeminiUnset": "Für Gemini CLI ist keine Authentifizierungsmethode festgelegt. Der genannte Pfad gehört nur zu diesem Bereich und verschwindet mit ihm — festzulegen ist sie in Ihrer eigenen ~/.gemini/settings.json.",
     "face.projects": "Projekte",
     "face.railFolders": "Ordner",
     "face.tabsCompact": "Namen ausblenden",

@@ -2438,6 +2438,31 @@ pub struct PtyChunkDto {
     pub(crate) base64: String,
 }
 
+/// A terminal's end, on its way to the pane that was drawing it (the payload of the `pty://closed`
+/// event).
+///
+/// **`code` is here because some endings are Amenbo's fault and the screen cannot say which.** What
+/// a program leaves on the screen is usually the whole of why it stopped, and a pane says no more
+/// than that it ended. The exception is a provider that stopped over a file Amenbo redirected: it
+/// names the per-pane home it was pointed at, which is thrown away with the pane, so a reader who
+/// follows that message edits a file nobody will read again. A provider's own exit status tells the two
+/// apart without anything reading its screen — the numbers are distinct per cause and measured, and
+/// which of them is worth a word is the pane's (`app/src/talk/terminal.ts`).
+///
+/// It is `None` where the program was ended rather than ending — a signal, or Amenbo taking the
+/// pane away — and where the status could not be collected at all.
+// Clone for the same reason `PtyChunkDto` is: `emit_to` takes its payload by value.
+#[derive(Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PtyClosedDto {
+    /// The session whose terminal ended.
+    pub(crate) session: String,
+    /// What it exited with, where it exited on its own.
+    #[ts(optional)]
+    pub(crate) code: Option<i32>,
+}
+
 
 /// One name inside a folder, as the file face draws a row of its tree (`crate::folder`).
 ///

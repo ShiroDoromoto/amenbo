@@ -543,6 +543,8 @@ export const fr: Translation = {
     "quit.confirmNotAll": "Quitter Amenbo ? Tous les terminaux ouverts se terminent. Les conversations reviennent au prochain démarrage, sauf dans les volets qui font tourner {names}. Ce qu'elles exécutaient ne revient pas non plus.",
 
     "face.ended": "Le programme de ce terminal s'est arrêté.",
+
+    "face.endedGeminiUnset": "Aucune méthode d'authentification n'est définie pour Gemini CLI. Le chemin indiqué appartient à ce volet et disparaît avec lui — celui à modifier est votre propre ~/.gemini/settings.json.",
     "face.projects": "Projets",
     "face.railFolders": "Dossiers",
     "face.tabsCompact": "Masquer les noms",

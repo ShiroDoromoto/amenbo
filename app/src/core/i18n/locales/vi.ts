@@ -525,6 +525,8 @@ export const vi: Translation = {
     "quit.confirmNotAll": "Thoát Amenbo? Mọi terminal đang mở sẽ kết thúc. Các cuộc trò chuyện sẽ trở lại ở lần chạy sau, trừ các khung đang chạy {names}. Những gì đang chạy trong đó cũng không trở lại.",
 
     "face.ended": "Chương trình trong terminal này đã kết thúc.",
+
+    "face.endedGeminiUnset": "Gemini CLI chưa được đặt phương thức xác thực. Đường dẫn được nêu chỉ thuộc về khung này và sẽ mất theo nó — tệp cần đặt là ~/.gemini/settings.json của riêng bạn.",
     "face.projects": "Dự án",
     "face.railFolders": "Thư mục",
     "face.tabsCompact": "Ẩn tên",

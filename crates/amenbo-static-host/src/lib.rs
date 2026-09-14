@@ -48,17 +48,27 @@ const REQUEST_LIMIT: usize = 8192;
 pub struct Reply {
     pub status: u16,
     pub body: String,
+    /// Headers written above the body, beside the ones every answer carries. They are here for the
+    /// caller whose behaviour turns on one — a refusal naming the moment to come back at, a door saying
+    /// which credential it wanted — since a body alone cannot say those things.
+    pub headers: Vec<(String, String)>,
 }
 
 impl Reply {
     /// `200` with this body — what a path serves unless it was given a status.
     pub fn ok(body: impl Into<String>) -> Reply {
-        Reply { status: 200, body: body.into() }
+        Reply { status: 200, body: body.into(), headers: Vec::new() }
     }
 
     /// This status with this body.
     pub fn status(status: u16, body: impl Into<String>) -> Reply {
-        Reply { status, body: body.into() }
+        Reply { status, body: body.into(), headers: Vec::new() }
+    }
+
+    /// The same answer with one more header on it.
+    pub fn and_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Reply {
+        self.headers.push((name.into(), value.into()));
+        self
     }
 }
 
@@ -179,8 +189,13 @@ fn answer(stream: TcpStream, routes: &Routes, kept: &Mutex<Vec<Heard>>) {
         });
     kept.lock().expect("what was heard").push(request);
     let reply = reply.unwrap_or_else(|| Reply::status(404, ""));
+    let named = reply
+        .headers
+        .iter()
+        .map(|(name, value)| format!("{name}: {value}\r\n"))
+        .collect::<String>();
     let response = format!(
-        "HTTP/1.1 {} {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        "HTTP/1.1 {} {}\r\nContent-Length: {}\r\n{named}Connection: close\r\n\r\n{}",
         reply.status,
         reason(reply.status),
         reply.body.len(),

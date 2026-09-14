@@ -28,6 +28,7 @@ mod migrate;
 pub mod pace;
 pub mod refusal;
 pub mod sealing;
+pub mod send;
 
 use cloudflare::Sky;
 

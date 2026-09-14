@@ -125,6 +125,11 @@ pub fn resume() {
     if let Err(e) = store.resume_plugin_delivery(Face::Gui, &subscribers, RUNNER_ARGV, SENDER_ARGV) {
         log::warn!("could not resume the plugin observation hooks: {e}");
     }
+    // The Viewer's half of the same kick (`AMB-D-884`). A carrier that died between reading the backlog
+    // out and placing it leaves a queue, and only a write sets one off — so a session spent reading, which
+    // is the ordinary way this app is used, would never reach those rows. What it asks before starting
+    // anything is core's, and on a device with an empty queue it is one count.
+    store.carry_what_was_left_behind(CARRIER_ARGV);
 }
 
 #[cfg(test)]

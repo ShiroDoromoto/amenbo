@@ -339,32 +339,6 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
     let version = store.device_sync_version()?;
     let mut left = store.viewer_carried()?;
 
-    // Where the Worker's ordering stands, as far as this device knows it. **Zero is not an answer** —
-    // the carrier's own `seq` writes "not known" that way — so it is held apart from the number here, and
-    // a check is made only where there is something to check against.
-    let mut ordering = (left.seq != 0).then_some(left.seq);
-
-    // **What this remembers is what it sent, not what the Worker holds**, and the two part company
-    // whenever the key changes under it. Asking costs one call and is asked only where the answer can
-    // still be acted on — a carrier that does not know where that Worker's ordering stands is one whose
-    // queue is about to be placed from the beginning anyway.
-    if ordering.is_none() {
-        match server.standing() {
-            Ok(standing) => {
-                ordering = Some(standing.seq);
-                left = what_the_server_says(store, &server, left, standing)?;
-            }
-            // A Worker that will not say where it stands is not a turn to abandon: the placing says the
-            // same thing, in words, and what is queued is safe until it lands.
-            Err(rebuffed) => {
-                tracing::info!(
-                    "the Viewer's server did not say where it stands — {}",
-                    rebuffed.in_words(now)
-                );
-            }
-        }
-    }
-
     // The number to carry is read off what was remembered rather than off what the copying is about to
     // write down: copying a stretch out moves the version field, and the number turns on where the Worker
     // was left standing before any of that.
@@ -376,41 +350,11 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
     store.set_viewer_carried(&left)?;
     copied?;
 
-    let placed = drain(store, &server, &mut left, sending, ordering, now);
+    let placed = drain(store, &server, &mut left, sending, now);
     store.set_viewer_carried(&left)?;
     let placed = placed?;
 
     Ok(Sent { placed, waiting: store.viewer_waiting()? })
-}
-
-/// What the Worker standing there means for what this device remembers.
-///
-/// **A key that is not this device's is the one answer worth acting on.** The records up there were sealed
-/// with something no phone holding this key can open, and the only repair this side has is to write every
-/// row the backlog still holds again under the key it has now — which is what forgetting makes the next
-/// copying do. What is left over, being rows the backlog no longer holds, is nobody's to open and is the
-/// repair road's business, not this one's.
-///
-/// Otherwise the ordering is taken as the point the check starts from, so the first request of a turn is
-/// checked against what the Worker actually stands at rather than trusted.
-fn what_the_server_says(
-    store: &Store,
-    server: &Server,
-    left: Carried,
-    standing: Standing,
-) -> Result<Carried> {
-    let ours = server.seal.fingerprint();
-    match standing.key_fingerprint.as_deref() {
-        Some(theirs) if !theirs.is_empty() && !theirs.eq_ignore_ascii_case(ours) => {
-            tracing::info!(
-                "the Viewer's server holds records sealed with another key — placing the whole backlog \
-                 again under this device's"
-            );
-            store.forget_viewer_carried()?;
-            Ok(Carried { seq: standing.seq, ..Carried::default() })
-        }
-        _ => Ok(Carried { seq: standing.seq, ..left }),
-    }
 }
 
 /// The version one turn travels under: the backlog's own, except where that is already the number the
@@ -655,17 +599,11 @@ fn record_key(dataset: &str, id: i64) -> String {
 /// **The version is settled by the last request alone.** The Worker writes it down with the part that says
 /// it is the last of its turn, so a queue emptied to the end is the only thing that leaves the Worker
 /// standing at the number this turn carried — and only then is that number remembered.
-///
-/// `ordering` is where the Worker stood before any of this, when that is known at all. A Worker that wrote
-/// what it was handed stands exactly the record count further on, so an answer that did not move that far
-/// is a request that was taken in and dropped — and saying "sent" of one of those is the quiet way a
-/// backlog loses a record for good.
 fn drain(
     store: &Store,
     server: &Server,
     left: &mut Carried,
     sending: i64,
-    mut ordering: Option<i64>,
     now: DateTime<Utc>,
 ) -> Result<usize> {
     let waiting = store.viewer_waiting()?;
@@ -736,19 +674,18 @@ fn drain(
         // Which Worker took it, remembered because a screen has no other way to ask: it reads nothing over
         // the network, and this is a write that already happened.
         left.build = the_build_that_answered(answered.build);
-        if let Some(stood) = ordering {
-            let expected = stood + records.len() as i64;
-            if answered.seq != expected {
-                return Err(Error::invalid(format!(
-                    "the Viewer's server took part {at} of {parts} and did not write it: {} records \
-                     should have carried the ordering to {expected}, and it answered {} — what it did \
-                     not write is still queued",
-                    records.len(),
-                    answered.seq,
-                )));
-            }
+        // **Zero is "not known"**, which is what a carrier that has never been told stands at, so the
+        // check begins with the answer to the first write rather than against a number nothing gave.
+        let expected = left.seq + records.len() as i64;
+        if left.seq != 0 && answered.seq != expected {
+            return Err(Error::invalid(format!(
+                "the Viewer's server took part {at} of {parts} and did not write it: {} records should \
+                 have carried the ordering to {expected}, and it answered {} — what it did not write is \
+                 still queued",
+                records.len(),
+                answered.seq,
+            )));
         }
-        ordering = Some(answered.seq);
         left.seq = answered.seq;
         store.drop_viewer_front(records.len() as i64)?;
         landed += records.len();
@@ -863,19 +800,6 @@ mod tests {
     /// What this device's key is called, which is what a turn writes on every part.
     fn our_fingerprint() -> String {
         super::super::sealing::Sealer::new(&the_key()).unwrap().fingerprint().to_string()
-    }
-
-    /// A Worker standing at `seq`, holding records sealed with `fingerprint`.
-    fn meta(seq: i64, fingerprint: Option<&str>) -> Reply {
-        Reply::ok(
-            serde_json::json!({
-                "spec_v": SPEC_V,
-                "version": 0,
-                "seq": seq,
-                "key_fingerprint": fingerprint,
-            })
-            .to_string(),
-        )
     }
 
     /// A Worker taking a write and answering where its ordering now stands.
@@ -1017,9 +941,6 @@ mod tests {
         seed(&mut store);
         let host = StaticHost::serve(Vec::<(String, String)>::new());
         set_up(&mut store, &host);
-        // **A Worker that will not say where it stands is not a turn to abandon.** Nothing answers
-        // `/meta` here, and the backlog still goes — what is checked from the second request on is what
-        // the first one answered.
         host.set_reply("/records", took(4, 4));
 
         let sent = carry(&store).unwrap();
@@ -1059,7 +980,7 @@ mod tests {
 
         let server = Server::of_device(&store).unwrap().unwrap();
         let mut left = Carried::default();
-        let placed = drain(&store, &server, &mut left, 9, Some(0), Utc::now()).unwrap();
+        let placed = drain(&store, &server, &mut left, 9, Utc::now()).unwrap();
 
         assert_eq!(placed, RECORDS_PER_WRITE + 1);
         let sent = placements(&host);
@@ -1084,17 +1005,42 @@ mod tests {
         let mut store = store_at("seq");
         let host = StaticHost::serve(Vec::<(String, String)>::new());
         set_up(&mut store, &host);
-        // Two records were handed over and the ordering moved by one.
-        host.set_reply("/records", took(1, 1));
+        // Two records were handed over, and the ordering moved by one.
+        host.set_reply("/records", took(11, 1));
         store.enqueue_viewer(&[waiting("task/1"), waiting("task/2")]).unwrap();
 
         let server = Server::of_device(&store).unwrap().unwrap();
-        let mut left = Carried::default();
-        let refused = drain(&store, &server, &mut left, 3, Some(0), Utc::now()).unwrap_err();
+        // A carrier that has been told where this Worker stands. Zero is "not known", and a turn with
+        // nothing to check against trusts the first answer and checks from the next.
+        let mut left = Carried { seq: 10, ..Carried::default() };
+        let refused = drain(&store, &server, &mut left, 3, Utc::now()).unwrap_err();
 
         assert!(refused.to_string().contains("did not write it"), "{refused}");
         assert_eq!(store.viewer_waiting().unwrap(), 2, "nothing is dropped from a turn that failed");
         assert_ne!(left.placed, 3, "a turn that did not empty settles no version");
+    }
+
+    /// **A carrier that has not been told where the Worker stands trusts the first answer**, and checks
+    /// from the next — which is what makes the turn after a first run checkable without a call that asks.
+    #[test]
+    fn a_carrier_that_knows_nothing_checks_from_the_second_request_on() {
+        let mut store = store_at("seq-unknown");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        // A Worker standing somewhere this device was never told about takes the first part, and the
+        // second answer is the one that has to add up.
+        host.set_replies("/records", [took(900, 500), took(900, 0)]);
+        let queued: Vec<Waiting> =
+            (1..=RECORDS_PER_WRITE + 1).map(|n| waiting(&format!("task/{n}"))).collect();
+        store.enqueue_viewer(&queued).unwrap();
+
+        let server = Server::of_device(&store).unwrap().unwrap();
+        let mut left = Carried::default();
+        let refused = drain(&store, &server, &mut left, 3, Utc::now()).unwrap_err();
+
+        assert!(refused.to_string().contains("part 2 of 2"), "{refused}");
+        assert_eq!(left.seq, 900, "the first answer is taken as where it stands");
+        assert_eq!(store.viewer_waiting().unwrap(), 1, "and what it did not write is still queued");
     }
 
     /// A refusal that names a moment to come back at is honoured, and written down: the process ends with
@@ -1115,7 +1061,7 @@ mod tests {
         let server = Server::of_device(&store).unwrap().unwrap();
         let now = Utc::now();
         let mut left = Carried::default();
-        assert!(drain(&store, &server, &mut left, 3, Some(0), now).is_err());
+        assert!(drain(&store, &server, &mut left, 3, now).is_err());
         assert_eq!(
             quiet(&left, now).map(|wait| wait.as_secs()),
             Some(89),
@@ -1124,7 +1070,7 @@ mod tests {
 
         // The next turn does nothing at all — no request goes out, and the record is still queued.
         let sent_before = placements(&host).len();
-        assert_eq!(drain(&store, &server, &mut left, 3, Some(0), now).unwrap(), 0);
+        assert_eq!(drain(&store, &server, &mut left, 3, now).unwrap(), 0);
         assert_eq!(placements(&host).len(), sent_before);
         assert_eq!(store.viewer_waiting().unwrap(), 1);
     }
@@ -1141,45 +1087,9 @@ mod tests {
         let server = Server::of_device(&store).unwrap().unwrap();
         let now = Utc::now();
         let mut left = spend(&Carried::default(), ROWS_WE_MAY_SPEND_A_DAY, now);
-        assert_eq!(drain(&store, &server, &mut left, 3, Some(0), now).unwrap(), 0);
+        assert_eq!(drain(&store, &server, &mut left, 3, now).unwrap(), 0);
         assert!(placements(&host).is_empty());
         assert_eq!(store.viewer_waiting().unwrap(), 1);
-    }
-
-    /// **A Worker holding records sealed with another key is placed over from the beginning.** No phone
-    /// holding this device's key can open what is up there, and the only repair this side has is to write
-    /// every row the backlog still holds again under the key it has now.
-    #[test]
-    fn records_sealed_with_another_key_are_placed_again() {
-        let mut store = store_at("another-key");
-        seed(&mut store);
-        let host = StaticHost::serve(Vec::<(String, String)>::new());
-        set_up(&mut store, &host);
-        host.set_reply("/meta", meta(12, Some(&"a".repeat(64))));
-        host.set_reply("/records", took(12, 0));
-
-        // A carrier that had read the feed out and knows nothing of the Worker's ordering, with a record
-        // of its own already queued.
-        store.enqueue_viewer(&[waiting("task/999")]).unwrap();
-        store
-            .set_viewer_carried(&Carried { cursor: 5, version: 5, ..Carried::default() })
-            .unwrap();
-
-        // The answer moves the ordering by however many the whole backlog turned out to be.
-        let placed = placements(&host);
-        assert!(placed.is_empty());
-        let err = carry(&store).unwrap_err();
-        assert!(err.to_string().contains("did not write it"), "{err}");
-
-        let sent = placements(&host);
-        assert_eq!(sent.len(), 1, "the whole backlog goes in one turn");
-        let keys: Vec<&str> =
-            sent[0]["records"].as_array().unwrap().iter().map(|r| r["k"].as_str().unwrap()).collect();
-        assert!(
-            !keys.contains(&"task/999"),
-            "forgetting takes the queue with the numbers — {keys:?}"
-        );
-        assert!(keys.iter().any(|k| k.starts_with("project/")), "the backlog itself is placed — {keys:?}");
     }
 
     /// **The ordinary turn copies only what moved.** The first one takes the whole backlog; the next one

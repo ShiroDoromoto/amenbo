@@ -19,5 +19,11 @@ fn main() {
   if app_lib::run_notify_sender() {
     return;
   }
+
+  // The same, for a Viewer carrier (`AMB-D-884`): take one turn of the send and exit, without ever
+  // reaching the window.
+  if app_lib::run_viewer_carrier() {
+    return;
+  }
   app_lib::run();
 }

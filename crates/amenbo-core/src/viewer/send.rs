@@ -134,6 +134,12 @@ pub struct Sent {
     pub placed: usize,
     /// How many are still waiting behind them.
     pub waiting: i64,
+    /// Whether another run already held the turn, so this one did nothing.
+    ///
+    /// **It is not a failure — it is the hold working** ([`super::lock`]). A write sets a carrier off and
+    /// writes come in bursts, so this is the ordinary answer for every run of a burst after the first: the
+    /// stretch it would have carried is being carried by the run beside it.
+    pub elsewhere: bool,
 }
 
 /// A call that did not give back what was asked for.
@@ -332,6 +338,13 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
         return Ok(Sent::default());
     };
 
+    // **The turn is taken before the first question, not before the first record.** What must not overlap
+    // is the whole of it — the reading, the placing, and the writing down of where it got to — so the hold
+    // is taken above all three and let go when the turn is over (see `super::lock`).
+    let Some(turn) = super::lock::take_the_turn(&store.paths)? else {
+        return Ok(Sent { placed: 0, waiting: store.viewer_waiting()?, elsewhere: true });
+    };
+
     // The version is read before the picture is taken, never after: a write landing in between makes a
     // remembered version one turn stale, which costs a turn that finds nothing. Remembering a version
     // newer than the picture would instead skip whatever landed in that gap, and the phone would never
@@ -354,7 +367,9 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
     store.set_viewer_carried(&left)?;
     let placed = placed?;
 
-    Ok(Sent { placed, waiting: store.viewer_waiting()? })
+    let sent = Sent { placed, waiting: store.viewer_waiting()?, elsewhere: false };
+    drop(turn);
+    Ok(sent)
 }
 
 /// The version one turn travels under: the backlog's own, except where that is already the number the
@@ -742,6 +757,86 @@ fn the_build_that_answered(named: i64) -> i64 {
     }
 }
 
+/// How a face sets a carrier off — a **process**, and one it never waits for.
+///
+/// **The network is never on the write's path.** Placing a burst against a server somewhere else takes as
+/// long as that server takes, and whoever was typing is owed none of it. So this seam answers one question
+/// and returns — *carry what has moved, and do not make me wait* — exactly as a notification sender is
+/// handed its messages ([`crate::notify_dispatch::Dispatcher`]).
+///
+/// **Nothing is handed over with it.** What a carrier is to carry is in the store, so there is no batch to
+/// pass and nothing to go stale between the handing and the reading.
+///
+/// An `Err` means no carrier started. It costs the turn and no records: what has moved is still ahead of
+/// the cursor, and the next write sets another one off.
+pub trait Carrier {
+    fn set_off(&self) -> std::io::Result<()>;
+}
+
+/// The carrier a real face hands a write seam: **this same executable, re-run** as a carrier.
+///
+/// Every face ships as a single binary — the CLI is one, and so is the app — so a carrier needs no second
+/// one; what differs between faces is only how each names its own entry point, which is what `argv`
+/// carries. The store's base directory follows it, because a carrier must carry the store its parent wrote
+/// to and not whichever one its own working directory would resolve to.
+pub struct SelfCarrier {
+    argv: Vec<String>,
+    base_dir: std::path::PathBuf,
+}
+
+impl SelfCarrier {
+    pub fn new(argv: &[&str], base_dir: std::path::PathBuf) -> Self {
+        Self { argv: argv.iter().map(|a| (*a).to_string()).collect(), base_dir }
+    }
+}
+
+impl Carrier for SelfCarrier {
+    fn set_off(&self) -> std::io::Result<()> {
+        use std::process::Stdio;
+        let child = std::process::Command::new(std::env::current_exe()?)
+            .args(&self.argv)
+            .arg(&self.base_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        crate::plugin_runner::reap(child);
+        Ok(())
+    }
+}
+
+/// **The carrier process's whole life** — open the store it was handed, take one turn, exit.
+///
+/// The store is named rather than resolved, for the reason a notification sender's is
+/// ([`crate::notify_dispatch::send_process`]): it must carry the store its parent wrote to.
+///
+/// Nothing here is reported to a caller — there is none. A store that will not open, a server that refuses,
+/// a turn another run is already taking: each is a line in the log and a queue that keeps.
+pub fn carry_process(base_dir: std::path::PathBuf) {
+    let store = match Store::open_at(crate::config::Paths::at(base_dir)) {
+        Ok(store) => store,
+        Err(err) => {
+            tracing::warn!(error = %err, "a Viewer carrier could not open the store; nothing is carried");
+            return;
+        }
+    };
+    match carry(&store) {
+        // The ordinary answer for every run of a burst after the first, and nothing to say about it: the
+        // stretch this one would have carried is being carried beside it.
+        Ok(sent) if sent.elsewhere => {}
+        Ok(sent) => {
+            tracing::info!(
+                placed = sent.placed,
+                waiting = sent.waiting,
+                "a Viewer carrier took its turn"
+            );
+        }
+        Err(err) => {
+            tracing::warn!(error = %err, "a Viewer carrier could not place what has moved");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -930,6 +1025,32 @@ mod tests {
     fn a_device_with_no_server_places_nothing() {
         let store = store_at("no-server");
         assert_eq!(carry(&store).unwrap(), Sent::default());
+    }
+
+    /// **A turn somebody else is taking is not this run's to take.** Two turns at once put an older
+    /// picture of a record on top of a newer one, so a run that cannot take the hold does nothing at all —
+    /// and says so, rather than answering "nothing to send" and leaving the queue looking dealt with.
+    #[test]
+    fn a_turn_another_run_is_taking_is_left_alone() {
+        let mut store = store_at("turn-taken");
+        seed(&mut store);
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        store.enqueue_viewer(&[waiting("task/1")]).unwrap();
+
+        let held = super::super::lock::take_the_turn(&store.paths).unwrap().expect("nobody holds it");
+        let sent = carry(&store).unwrap();
+
+        assert_eq!(sent, Sent { placed: 0, waiting: 1, elsewhere: true });
+        assert!(placements(&host).is_empty(), "nothing is placed under somebody else's turn");
+        assert_eq!(store.viewer_waiting().unwrap(), 1, "and the queue is where it was");
+
+        // The moment that run lets go, the turn is this one's.
+        drop(held);
+        host.set_reply("/records", took(1, 1));
+        let sent = carry(&store).unwrap();
+        assert!(!sent.elsewhere);
+        assert!(sent.placed > 0, "{sent:?}");
     }
 
     /// **A first run places the whole backlog**, and every part of it carries the contract, the version and

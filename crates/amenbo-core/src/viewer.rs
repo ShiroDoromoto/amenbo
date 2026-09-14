@@ -25,6 +25,7 @@ use crate::store::Store;
 pub mod carried;
 mod cloudflare;
 pub mod code;
+pub mod lock;
 mod migrate;
 pub mod pace;
 pub mod pairing;

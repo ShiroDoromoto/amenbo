@@ -449,6 +449,9 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // whose window comes from the gate it fired through rather than from a facet (`AMB-D-406`).
         | Command::PluginRunner { .. }
         | Command::NotifySender { .. }
+        // A carrier is handed the store to carry and takes the turn its launcher's write earned; it
+        // creates nothing and assigns nothing, so there is no facet for it to declare (`AMB-D-884`).
+        | Command::ViewerCarrier { .. }
         // `validate` reads a manifest file the author names and touches no store at all — unlike the rest
         // of the group, which moves this machine's plugin state and the plugin's own per-project rows.
         | Command::Plugin { sub: PluginCmd::Validate { .. } }
@@ -495,6 +498,7 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // nothing, so there is no author for it to stamp (`AMB-T-2175`).
         | Command::PluginRunner { .. }
         | Command::NotifySender { .. }
+        | Command::ViewerCarrier { .. }
         // The MCP server writes nothing itself; what its tool calls run is a child that stamps its own.
         | Command::Mcp { .. }
         // `validate` reads a manifest file the author names and touches no store at all; the rest of the
@@ -683,6 +687,7 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         | Some(Command::AgentHook { .. })
         | Some(Command::PluginRunner { .. })
         | Some(Command::NotifySender { .. })
+        | Some(Command::ViewerCarrier { .. })
         | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
         // The MCP server is launched by a host, from whatever directory that host happened to be in, and
         // it opens no store there. The folder that decides anything is `--dir`, and the child that runs in
@@ -774,6 +779,7 @@ fn pointer_store_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBu
             | Some(Command::AgentHook { .. })
             | Some(Command::PluginRunner { .. })
             | Some(Command::NotifySender { .. })
+            | Some(Command::ViewerCarrier { .. })
             | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
             | Some(Command::Mcp { .. })
             | Some(Command::Tick { sub: TickCmd::Run })
@@ -892,6 +898,12 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // worth of messages through the store it was handed (`AMB-D-885`).
         Some(Command::NotifySender { store }) => {
             amenbo_core::notify_dispatch::send_process(store.into());
+            return Ok(0);
+        }
+        // A Viewer carrier, on the same footing: Amenbo launched this process to take one turn of the send
+        // over the store it was handed (`AMB-D-884`).
+        Some(Command::ViewerCarrier { store }) => {
+            amenbo_core::viewer::send::carry_process(store.into());
             return Ok(0);
         }
         // `plugin validate` reads a manifest file the author points at — no store, no binding, no facet, on
@@ -1330,7 +1342,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::GithookPreCommit | Command::GithookCommitMsg { .. } => {
             unreachable!("handled before open")
         }
-        Command::PluginRunner { .. } | Command::NotifySender { .. } => {
+        Command::PluginRunner { .. }
+        | Command::NotifySender { .. }
+        | Command::ViewerCarrier { .. } => {
             unreachable!("handled before open")
         }
         Command::Plugin { sub } => return plugin_cmd(&mut store, flags, sub),

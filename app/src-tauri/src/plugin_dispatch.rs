@@ -58,6 +58,17 @@ pub const SENDER_ARGV: &[&str] = &[SENDER_FLAG];
 /// The one argument core appends after [`SENDER_ARGV`] — the store's base directory.
 pub const SENDER_ARGS: usize = 1;
 
+/// The same door, for a **Viewer carrier** (`AMB-D-884`): this executable, re-run to take one turn of the
+/// send and exit. An app started this way puts up no window either, and the only caller is Amenbo itself.
+pub const CARRIER_FLAG: &str = "--viewer-carrier";
+
+/// The argv prefix core re-runs this executable through to carry. Core follows it with [`CARRIER_ARGS`] of
+/// its own — the store's base directory, and nothing else: what a carrier carries is in that store.
+pub const CARRIER_ARGV: &[&str] = &[CARRIER_FLAG];
+
+/// The one argument core appends after [`CARRIER_ARGV`] — the store's base directory.
+pub const CARRIER_ARGS: usize = 1;
+
 /// Drive the dispatcher once over everything committed since the store's cursor, and store where it
 /// advanced to. Call it after a mutating command committed, on that command's still-open store.
 pub fn drive(store: &Store) {
@@ -72,6 +83,10 @@ pub fn drive(store: &Store) {
             return;
         }
     };
+    // The Viewer is set off beside the dispatcher and not through it: what a carrier carries is the
+    // backlog, so which record moved decides nothing here — a write happened, and the phone is now behind
+    // (`AMB-D-884`). It is a process, so this waits for none of it.
+    store.set_the_viewer_off(CARRIER_ARGV);
     let subscribers = EnabledSubscribers::new(&installed, store);
     // The returned `Delivered` is dropped here: the runners it names are processes of their own, and this
     // face never had a `reply:true` subscriber to surface (`AMB-D-383`). The cursor it advanced to is

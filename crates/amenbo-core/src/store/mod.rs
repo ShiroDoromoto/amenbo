@@ -360,6 +360,14 @@ impl Store {
     /// send. A run that finds the turn already taken stops on its own ([`crate::viewer::lock`]), which is
     /// what keeps a burst of writes from becoming a burst of turns.
     ///
+    /// **It asks nothing about pacing, and it must not.** A turn is a copy-out and then a send, in that
+    /// order, and only the second of the two is what a wait or a spent budget is about
+    /// ([`crate::viewer::pace`]): what has moved is read out of the change feed whatever the network is
+    /// doing. Stopping this on a quiet window would leave the copying undone for as long as the window
+    /// lasted — and the feed keeps [`crate::store_engine::CHANGE_FEED_RETAIN`] rows, so a cursor left
+    /// behind it is answered with a gap and paid for by copying the whole store out again. So the pause
+    /// belongs where the sending is and stays there.
+    ///
     /// Nothing here fails the write: it has already committed, and a carrier that did not start costs the
     /// turn and no records — what has moved is still ahead of the cursor for the next one.
     pub fn set_the_viewer_off(&self, carrier_argv: &[&str]) {
@@ -401,6 +409,12 @@ impl Store {
     /// They are read in the order they are cheap in. The count comes first and alone: the queue is empty
     /// on every device nobody has set the Viewer up on, so a command there stops at one count and reads
     /// nothing else.
+    ///
+    /// **Standing down on a wait is safe here and would not be on the write's path**, which is the whole
+    /// reason the two paths differ. What a carrier does first is copy the feed out, and that has to keep
+    /// up with the feed whether the sending can go or not; but the feed only moves when somebody writes,
+    /// and every write sets a carrier off unguarded ([`Store::set_the_viewer_off`]). So a startup that
+    /// stands down stands down on a backlog nothing is adding to.
     pub fn carry_what_was_left_behind(&self, carrier_argv: &[&str]) {
         if carrier_argv.is_empty() {
             return;

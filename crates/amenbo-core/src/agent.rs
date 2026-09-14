@@ -9,7 +9,7 @@
 
 use crate::config::Paths;
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The shape of what this build hands out. Bumped at `2` when `agentCycle` stopped being a list of
@@ -218,8 +218,8 @@ fn retarget_line(node: &mut Value, cli: &str) {
 
 /// Rewrites each standalone occurrence of the authored command word that `accept` takes, given the
 /// text that follows it. Not merely a leading one: a line can wrap the command
-/// (`eval "$(amenbo plugin run …)"`), and one that names it in the middle is as unrunnable on the dev
-/// channel as one that opens with it.
+/// (`eval "$(amenbo worktree start …)"`), and one that names it in the middle is as unrunnable on the
+/// dev channel as one that opens with it.
 fn rewrite(text: &str, cli: &str, accept: impl Fn(&str) -> bool) -> String {
     let authored = Paths::PRODUCTION_APP_NAME;
     let mut out = String::with_capacity(text.len());
@@ -487,7 +487,7 @@ const AGENT_CYCLE: &[Step] = &[
 /// longer said twice.
 fn agent_cycle() -> Value {
     json!({
-        "description": "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, enter at the step whose `trigger` describes where you are and run from there in order; a step with no trigger is simply the next one. A step's `cycles` are the cold-path cycles that branch off it — take one only when its own trigger fires, then come back. A step may also carry `tools`: lines to type that an installed plugin declared for it — its own, and described under `plugins`.",
+        "description": "The AI's recommended execution backbone (pass --actor ai on every command) — a proven default for proceeding autonomously while avoiding parallel collisions, not a mandate. When you follow it, enter at the step whose `trigger` describes where you are and run from there in order; a step with no trigger is simply the next one. A step's `cycles` are the cold-path cycles that branch off it — take one only when its own trigger fires, then come back.",
         "steps": AGENT_CYCLE.iter().map(|s| s.to_value(None)).collect::<Vec<Value>>(),
     })
 }
@@ -826,7 +826,7 @@ const CYCLES: &[Cycle] = &[
                 trigger: None,
                 commands: &[],
                 cycles: &[],
-                prose: "If cutting one hands a line back to you, that line is to run, not to read: what a called command face writes on stdout is its return value, relayed verbatim, so the way in arrives as text — wrap it (`eval \"$(…)\"`, or `iex (…)` in PowerShell). Read it and stop, and you are still standing in the project folder with a worktree nobody entered.",
+                prose: "What `worktree start` writes on stdout is one `cd` line, and that line is to run rather than to read — wrap it (`eval \"$(…)\"`, or `iex (…)` in PowerShell). Read it and stop, and you are still standing in the project folder with a worktree nobody entered. Everything written for you to read is on stderr beside it, and `--json` answers with the path and the branch instead.",
             },
             Step {
                 id: "operate-in-the-project-folder",
@@ -939,35 +939,14 @@ fn drop_branch(steps: &mut Value, cycle: Cyc) {
 /// [`cycles`] files it under.
 const BACKBONE: &str = "agentCycle";
 
-/// **Hangs each call line on the step that named it** (`AMB-D-571`): `tools` keyed by `<run>.<step>`,
-/// against a step of `agentCycle` or of a cycle, wherever the id lands.
-///
-/// The join is one-directional and that is the point. A plugin's manifest names a step
-/// (the naming is the caller's to read); nothing here names a plugin, so
-/// Amenbo's source stays free of any plugin's name (`AMB-D-346`) and this spec keeps saying the same
-/// true thing with none installed. What lands is the line to type and nothing around it — the words
-/// about it are on the `plugins` shelf, where a reader can tell whose they are (`AMB-D-437`).
-///
-/// **A ref that names nothing here is dropped, not reported.** The steps travel with Amenbo and a
-/// manifest stays where it was installed, so a ref can outlive the step it named; the runtime also
-/// drops whole cycles that do not apply (the `worktree` cycle off a git checkout), which would make an
-/// accurate ref look like a broken one. Either way the reader loses a line they had no use for.
-///
-/// Runtime, so it runs on the built spec rather than inside it: what is installed and switched on is
-/// the store's answer, and [`build`] stays a static builder.
-pub fn attach_tools(spec: &mut Value, tools: &BTreeMap<String, Vec<String>>) {
-    for (step_ref, lines) in tools {
-        let Some((run, id)) = step_ref.split_once('.') else { continue };
-        let Some(step) = find_step(spec, run, id) else { continue };
-        let Some(map) = step.as_object_mut() else { continue };
-        // Call lines, and never prose: `tools` is a shelf a sentence has no way onto.
-        map.insert("tools".to_string(), json!(lines));
-    }
-}
 
 /// The emitted step `id` names within `run` — the backbone's steps under [`BACKBONE`], a cycle's under
 /// its own key, both buckets of it, since which bucket an item sits in is the cycle's business and not
 /// the namer's. `None` where the run, the step, or the whole cycle is not in this document.
+///
+/// Test-only: the shelf a plugin hung its call lines on went with the mechanism, and what reaches for a
+/// step by id now is the tests that hold the drop the runtime makes.
+#[cfg(test)]
 fn find_step<'a>(spec: &'a mut Value, run: &str, id: &str) -> Option<&'a mut Value> {
     let buckets: Vec<&mut Value> = if run == BACKBONE {
         vec![spec.get_mut(BACKBONE)?.get_mut("steps")?]
@@ -1097,10 +1076,6 @@ fn capabilities() -> Value {
             &["export"],
         ),
         cap(
-            "Hand a carrier plugin what it takes this store's data outward with — the version of what it may see, one whole snapshot of it, what has changed since a cursor, and those records read back by id (a carrier's road, not a way to read the work)",
-            &["sync version", "sync snapshot", "sync changes", "sync records"],
-        ),
-        cap(
             "Check data integrity",
             &["doctor", "validate"],
         ),
@@ -1143,42 +1118,6 @@ fn capabilities() -> Value {
         cap(
             "Physically erase content from the store — a comment on a task or a decision in full, or one accepted decision's body (human-gated maintenance)",
             &["hard-erase comment", "hard-erase decision-comment", "hard-erase decision"],
-        ),
-        cap(
-            "Validate a plugin manifest against the catalog rules before submitting it (an author's self-check)",
-            &["plugin validate"],
-        ),
-        cap(
-            "Put a plugin from the catalog on this machine, see what is installed and what the catalog has moved past, bring one onto the published build or roll that back, open or close each one's gate (install ≠ enable, one project at a time), and remove one with everything it left behind",
-            &[
-                "plugin list",
-                "plugin install",
-                "plugin update",
-                "plugin rollback",
-                "plugin enable",
-                "plugin disable",
-                "plugin uninstall",
-            ],
-        ),
-        cap(
-            "Call an enabled plugin's command face and use what it returns (its stdout is the return value)",
-            &["plugin run"],
-        ),
-        cap(
-            "Read the plugin execution log — the last runs of each plugin, how each one ended, and what it wrote to stderr",
-            &["plugin log"],
-        ),
-        cap(
-            "Deliver what is waiting on the plugins' queues now, and see what each one got through",
-            &["plugin flush"],
-        ),
-        cap(
-            "Fill in and read back an installed plugin's settings (the keys its author declared)",
-            &["plugin config set", "plugin config get"],
-        ),
-        cap(
-            "Register third-party catalogs to browse alongside the official one, pinning the key each one signs with, and list what is registered",
-            &["plugin catalog list", "plugin catalog add", "plugin catalog remove"],
         ),
     ];
     Value::Array(caps)
@@ -1326,7 +1265,7 @@ fn all_commands() -> Value {
                       { "name": "--limit <n>", "help": "max hits (default 20). total_matched says what the ceiling left behind" },
                       { "name": "--offset <n>", "help": "number of hits to skip in sort order (paging)" },
                       { "name": "--json", "help": "machine-readable output — { query, count, total_matched, hits[face,kind,ref,title,comment,at,snippet,matches,standing] }. matches[start,end] are where the words landed in snippet, in its own characters; standing is the record's own state (status, and a task's priority and labels)" }],
-            "examples": ["amenbo search plugin distribution --json", "amenbo search AMB-T-<n> --json", "amenbo search rollout --kind decision --json", "amenbo search rollout --kind decision --face comment --json", "amenbo search plugin --kind task --filter \"status:todo\" --limit 5 --json", "amenbo search rollout --kind decision --filter \"status:accepted\" --json"] }),
+            "examples": ["amenbo search notification target --json", "amenbo search AMB-T-<n> --json", "amenbo search rollout --kind decision --json", "amenbo search rollout --kind decision --face comment --json", "amenbo search notification --kind task --filter \"status:todo\" --limit 5 --json", "amenbo search rollout --kind decision --filter \"status:accepted\" --json"] }),
         cmd("activity", "Shows activity (system events plus comments) as one timeline. History reads newest-first; passing a cursor to --since reads the increment oldest-first (an agent's poll-for-what-changed). Humans and the AI read the same stream. Every response carries an opaque cursor; --for me narrows it to what a facet should act on.",
             json!([{ "name": "--task <id>", "help": "this task only" },
                    { "name": "--project <id>", "help": "only tasks belonging to this project" },
@@ -1544,7 +1483,7 @@ fn all_commands() -> Value {
             json!(["amenbo task add --title \"Create wireframes\" --due tomorrow --priority high",
                    "amenbo task add --title \"Triage logs\" --to Alice --ai",
                    "amenbo task add --title \"Ship the installer\" --dim \"Category=release\"",
-                   "amenbo task add --title \"Fix the sender\" --at amenbo-plugin-mail"])),
+                   "amenbo task add --title \"Fix the sender\" --at amenbo-site"])),
         json!({ "name": "task finish-creating", "summary": "Ends the second stage of a creation: the task stops being held back and becomes work anyone can take. Nobody is being asked to approve it — the one who created it is the one who says the writing is finished — so run it as the last step of filing, once the edges and classification the task needs are on it. This is where a required classification is read: an axis its project marked required (dimension update --required) and the task carries no value on refuses the finish with invalid_task_required_dimension, naming the axes to fill in — put a value on each with dimension set. One way only: a task filed by mistake ends with task reject (decided against) or task delete. Idempotent — finishing a creation that is already finished reports a no-op.",
             "args": [{ "name": "id", "required": true, "help": "task ID" }],
             "flags": [], "examples": ["amenbo task finish-creating AMB-T-<n>"] }),
@@ -1573,7 +1512,7 @@ fn all_commands() -> Value {
                       { "name": "--clear-priority", "help": "clear the priority" },
                       { "name": "--clear-at", "help": "clear the folder it is worked in" }],
             "examples": ["amenbo task update AMB-T-<n> --due +2d --priority medium",
-                         "amenbo task update AMB-T-<n> --at amenbo-plugin-mail"] }),
+                         "amenbo task update AMB-T-<n> --at amenbo-site"] }),
         json!({ "name": "task done", "summary": "Marks a task done.",
             "args": [{ "name": "id", "required": true, "help": "task ID" }],
             "flags": [], "examples": ["amenbo task done AMB-T-<n>"] }),
@@ -1781,29 +1720,11 @@ fn all_commands() -> Value {
                    { "name": "--yes", "help": "skip confirmation" }]),
             json!(["amenbo attach rm 01ATT… --yes"])),
 
-        cmd("export", "Exports all data — everything on this device, as JSON, and nothing narrower: export exists for moving to another tool, which an excerpt or a human-readable table does not serve. The core of data sovereignty, and one way: Amenbo writes your data out for whatever you move to next, and reads nothing back in — the way back is `restore` from a `backup` archive. `--out <dir>` writes an **export directory**: `export.json` plus `attachments/`, holding every attachment's actual file under the task or decision it hangs on (each row names its `export_path`). With no `--out` the same JSON streams to stdout — a stream has nowhere to put the files, so that shape carries records only. A plugin's secrets are the one thing left behind (`AMB-D-434`): this file goes out to another tool and stays in its hands, and a credential in the clear is not something to hand over on the way past — they ride `backup` instead.",
+        cmd("export", "Exports all data — everything on this device, as JSON, and nothing narrower: export exists for moving to another tool, which an excerpt or a human-readable table does not serve. The core of data sovereignty, and one way: Amenbo writes your data out for whatever you move to next, and reads nothing back in — the way back is `restore` from a `backup` archive. `--out <dir>` writes an **export directory**: `export.json` plus `attachments/`, holding every attachment's actual file under the task or decision it hangs on (each row names its `export_path`). With no `--out` the same JSON streams to stdout — a stream has nowhere to put the files, so that shape carries records only. The secrets are the one thing left behind (`AMB-D-434`): this file goes out to another tool and stays in its hands, and a credential in the clear is not something to hand over on the way past — they ride `backup` instead.",
             json!([{ "name": "--out <path>", "help": "the export directory to create (must not exist yet). Default: stream to stdout" }]),
             json!(["amenbo export --out ./amenbo-export",
                    "amenbo export > ./amenbo-export.json"])),
-        cmd("sync version", "Answers what version this window is at — one number, and the question a carrier plugin asks often. It moves whenever something inside the window is written and stays put when nothing is, so a carrier that remembers the last number it sent knows in one cheap call whether there is anything to send; no snapshot is built to answer it. Compare it for inequality, not for order: a `restore` winds the store back and the version comes back with it, so lower still means changed. A window nothing has written since this build began stamping answers 0. Through a project plugin's window it is that one project's version, so churn in another project sends nobody re-reading; for a human, or a plugin that reaches the device, it is the whole device's. This is a carrier's question and not a way to watch for work — for that, read `activity --since`.",
-            json!([{ "name": "--json", "help": "machine-readable output" }]),
-            json!(["amenbo sync version", "amenbo sync version --json"])),
-        cmd("sync snapshot", "Takes one whole picture of what this window may see and writes it to stdout as JSON — the payload a carrier plugin sends outward. Every table is read from **one instant**, so nothing in it refers to something that is not in it, and a join row travels only when both of its ends are inside the window; a plugin's secrets stay home (`AMB-D-434`). Records only: an attachment's row travels and names the bytes it stands for, but the bytes stay on this device. The shape is the export's — `{\"amenbo_sync\": …, \"tables\": {…}}` — so whatever reads one reads the other, and the road is one-way: nothing reads a snapshot back in. The header also names **where in the ledger the picture stands** (`cursor`), read from that same instant, so a carrier reads the changes on from there instead of having to guess where the whole ended. **Not a way to read the work.** The whole window lands on stdout at once, so this is for sending, not for looking — `task list` and `task show` are what read.",
-            json!([{ "name": "--json", "help": "the snapshot is JSON either way; this silences the note on stderr" }]),
-            json!(["amenbo sync snapshot > ./window.json"])),
-        cmd("sync changes", "Reads what has changed in this window since a cursor — the unread, oldest first, and the cursor to come back with. This is the road a carrier walks when it already holds a copy: instead of re-sending the window, it re-reads only the records that moved. What comes back is which record moved and how (`insert` / `update` / `delete`), never what it now holds — the ledger carries no values (`AMB-D-367`), so read a changed record back by name and drop a deleted one. A plugin's secrets are not named here either: the tables that stay home on the snapshot are left out of the page as well (`AMB-D-434`), so a secret being written moves the cursor and says nothing. `delete` is what makes the road work at all: there is nothing left to read back, and noticing by re-reading everything you hold would mean asking after the whole window on every pass. Start from the `cursor` a `sync snapshot` names in its header; every answer names the next one. A page is bounded and says `more` when it cut one short — come straight back with the cursor it handed you. When the cursor has fallen out of the ledger's window the answer is a gap (`sync_gap`, non-zero exit) rather than an empty page that would read as \"nothing changed\": take a fresh `sync snapshot` and read on from the cursor it names (`AMB-D-583`).",
-            json!([
-                { "name": "--since <cursor>", "help": "read on from this cursor — everything after it, exclusive (required)" },
-                { "name": "--json", "help": "machine-readable output" },
-            ]),
-            json!(["amenbo sync changes --since 0 --json", "amenbo sync changes --since 4821 --json"])),
-        cmd("sync records", "Reads the records `sync changes` named back — the rows themselves, by id, in the shape a `sync snapshot` carries them. This is where the ledger leads: it says which record moved and never what it now holds, so without this the only way to see a changed task is to take the whole window again, which is the ledger's whole point undone. `--dataset` is the name the changes gave (`task`, `task_dependency`, …) and `--ids` are that answer's `record_id`s. What comes back is `{\"amenbo_sync\": …, \"tables\": {\"<table>\": [rows]}}` — the snapshot's document with one table in it, so whatever reads a snapshot reads this. The rows are the raw stored ones, not the assembled cards `task show` builds, and the window is the same one the snapshot closes to: an id it does not reach simply is not there. Nor is an id that has been deleted — the `delete` in the changes already said which is which, so a gap in the answer is never a surprise. One read answers at most a page of changes' worth of ids (500); past that it is refused rather than cut short, so ask in pages.",
-            json!([
-                { "name": "--dataset <name>", "help": "which records — the dataset name `sync changes` gave (required)" },
-                { "name": "--ids <ids>", "help": "the record ids to read back, comma-separated (required)" },
-            ]),
-            json!(["amenbo sync records --dataset task --ids 12,15,31", "amenbo sync records --dataset task_dependency --ids 4"])),
-        json!({ "name": "backup", "summary": "Backs up everything on this device — one database, holding every project — into one verified `.amenbo-backup` archive at the given path (VACUUM INTO: checkpointed, transactionally consistent, no torn DB+WAL; bounded-verified; the manifest records its migration generation). The attachment bytes (blobs) are bundled too, so a restore elsewhere brings the files back and not just the rows referencing them. The device's own secrets (at-rest key / identity) are not part of the engine, so none are included; a plugin's secrets are store rows, so those do ride along and come back working (`AMB-D-434`). The destination must not already exist (managed generation rotation is retired).",
+        json!({ "name": "backup", "summary": "Backs up everything on this device — one database, holding every project — into one verified `.amenbo-backup` archive at the given path (VACUUM INTO: checkpointed, transactionally consistent, no torn DB+WAL; bounded-verified; the manifest records its migration generation). The attachment bytes (blobs) are bundled too, so a restore elsewhere brings the files back and not just the rows referencing them. The device's own secrets (at-rest key / identity) are not part of the engine, so none are included; the secrets a feature holds are store rows, so those do ride along and come back working (`AMB-D-434`). The destination must not already exist (managed generation rotation is retired).",
             "args": [{ "name": "path", "required": false, "help": "destination .amenbo-backup archive that must not already exist" }],
             "flags": [{ "name": "--json", "help": "machine-readable output" }],
             "examples": ["amenbo backup ./everything.amenbo-backup"] }),
@@ -1823,67 +1744,6 @@ fn all_commands() -> Value {
             "args": [{ "name": "id", "required": true, "help": "decision reference (AMB-D-n)" }],
             "flags": [{ "name": "--body <text>", "help": "replacement body (Markdown); omit to use --body-file or stdin" }, { "name": "--body-file <path>", "help": "read the replacement body from this file instead of --body/stdin" }, { "name": "--yes/-y", "help": "skip confirmation" }, { "name": "--json", "help": "machine-readable output" }],
             "examples": ["amenbo hard-erase decision AMB-D-<n> --body-file ./redacted.md --yes"] }),
-        json!({ "name": "plugin validate", "summary": "Validates a plugin manifest file against the catalog rules — a well-formed id, repo, non-empty OS set and config schema, plus a distributable in one of the two forms an entry may take (one https url and checksum for every OS it lists, or one per OS, whose platforms must be exactly the ones declared) — reporting every problem it finds so an author can self-check before opening a catalog PR. It reads the same rules Amenbo enforces at the install/intake door, so the two never disagree. The path may be .yaml (the form authored in the catalog repo) or .json (the aggregated catalog.json form); the format is taken from the extension, defaulting to YAML. A manifest that does not even parse is reported too — a missing required field is the shape half of the fail-closed door. It opens no store and needs no binding, so it runs anywhere (a plugin checkout, CI). On --json a passing manifest also carries what Amenbo read, as the two documents the catalog serves: the 'entry' everyone fetches to draw the list, and the 'detail' fetched only for the plugin being opened or installed, which is where the signature and checksums live. A consumer such as the catalog aggregator therefore publishes what Amenbo hands it, keeping neither its own list of which fields to copy — a list that silently drops a field Amenbo later adds — nor its own idea of which half each field belongs in. The entry carries added_at and detail_sum as empty slots for the catalog to fill, neither being knowable from a manifest. A manifest that does not pass carries neither document. The translations an author wrote beside the manifest are read with it: every sibling <name>.<lang>.<ext> is an overlay of it, refused unless the language is one Amenbo is read in, everything it names exists in the base, and its text stays within the caps its base fields obey. They come back split the same way, each half following its base fields — 'entry_i18n' is the list half, one document per language for the catalog to publish as catalog.<lang>.json, and the detail half rides inside 'detail' with every language at once. The exit code is the verdict: 0 valid, 1 invalid (or the file could not be read).",
-            "args": [{ "name": "path", "required": true, "help": "path to the manifest file (.yaml or .json)" }],
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin validate plugins/worktree.yaml", "amenbo plugin validate ./manifest.json --json"] }),
-        json!({ "name": "plugin list", "summary": "Lists the plugins installed on this machine — name, description and the official badge — beside whose gate is open. The two facts sit together because installing a plugin never runs it: an installed plugin that fires nothing is the ordinary state, not a fault. Each plugin has exactly one switch, and which layer it sits at is its author's declaration: a plugin declaring the project layer has one switch per project, so every row names the projects holding it open rather than answering yes or no from wherever the terminal happens to stand — a plugin still firing somewhere else cannot be hidden by where you ran this, and an empty list is itself an answer, off everywhere. One declaring the machine layer has a single gate for the device instead, and its row says so rather than naming projects it does not answer for (--json carries enabled_projects, each with its id, ref and name, beside the declared scope and whether the device gate is open). Under an AI's reach the row names its own project alone, the way every listing is narrowed, and the wording says as much instead of claiming 'everywhere' over projects it was not shown. An open gate is not the same as a plugin that fires, so each row carries whether this Amenbo can speak to it at all: a plugin whose declared payload contract or minimum Amenbo version this build does not meet is skipped at dispatch, and since Amenbo updates underneath an install, one enabled while it was compatible can stop firing with nobody having touched it — the listing names the mismatch rather than leaving it to the log (--json carries compatible and the reason). Whether a newer build is out is a third fact each row can carry: when the last-fetched catalog holds a different build of an install it is marked 'update available', read from the catalog cached beside the installs so the listing stays offline — refreshing the catalog and putting the build in place are the explicit plugin update --check / plugin update (--json carries update_available). Reads only the app-data plugins/ directory — the installs and the catalog cached beside them — and the store's gate rows — no network, no catalog fetch — so it answers the same offline. A directory it cannot read as an install is skipped rather than allowed to hide the rest. --json adds each plugin's subscribed events and the path of the executable Amenbo would run.",
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin list", "amenbo plugin list --json"] }),
-        json!({ "name": "plugin log", "summary": "Reads the plugin execution log: the last runs of each plugin, newest first, narrowed to one when you name it. A hook is fire-and-forget — nobody waits on it, and nothing fails when it fails — so this is the only place that answers 'my plugin did nothing, why'. One line per run: when it ran, which plugin, on which event, how it ended (ok / failed / timed_out / not_launched), its exit code and how long it took. A run that did not end cleanly is followed by what the plugin wrote to stderr, which is where its author put the diagnosis; --json carries that text for every run, clean ones included. A gap line is not a run at all — it marks events that reached nobody because retention trimmed them away before the dispatcher read them, and it names no plugin because what was lost was never resolved to one. A name with nothing on file reports an empty log rather than an error. Under the cursor it shows one `waiting` line per plugin that still owes something: how many events are on its queue, since when, and whether a runner is on it. That is the half the runs cannot show, because a plugin that never ran wrote no line — a queue piling up with nobody running it is a plugin that stopped, one piling up with a live runner is a plugin taking its time, and the two want opposite responses. Nothing is printed when nothing is waiting. Reads one machine-local file and a few store rows, and no network — nothing here leaves this device (the log itself is outside every backup and export). It is bounded by construction — the last runs of each installed plugin, each with a capped slice of stderr — so there is no window to ask for and no deeper history to page: a longer one is a logging plugin's business, not Amenbo's. No secret can appear in it, structurally: the log is never handed a plugin's environment, so there is no field one could ride in.",
-            "args": [{ "name": "name", "required": false, "help": "narrow to one plugin's runs; omit for every plugin's, newest first" }],
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin log", "amenbo plugin log slack --json"] }),
-        json!({ "name": "plugin flush", "summary": "Delivers what is waiting on the plugins' queues now, in this process, and reports what each one got through. Delivery otherwise rides along with whatever you were doing — a write fans its events out onto the queues and starts a runner per queue, and no command is ever made to wait for a plugin — so a runner killed mid-queue leaves its rows standing until the next write, which may be days away. This is the door for pushing them through on purpose. Because the queues are worked here rather than by a process nobody watches, it returns only once they are empty, and can say per plugin how many events came off its queue and how many are still on it. A queue a live runner already holds is left to that runner and named as such: one queue is worked by one runner, which is what its lease is for. Nothing waiting is not an error — it says so and exits 0. How each delivery *ended* is not here: a failed one is dropped rather than retried, and `plugin log` is where every run's outcome and the plugin's own diagnosis are written. This says what moved; the log says how it went.",
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin flush", "amenbo plugin flush --json"] }),
-        json!({ "name": "plugin install", "summary": "Installs a plugin from the catalogs: resolves the name across the official catalog and every catalog you registered (each fetched fresh when the network answers, its cached copy when it does not; the official one wins a name clash), downloads the asset its manifest points at, verifies it fail-closed, and lays it down under the app-data plugins/ directory. Verification is the whole point of the door: the asset's minisign signature against the key the catalog that served it answers for — Amenbo's own for the official index, the key pinned when that catalog was registered — then the manifest's checksum over the exact bytes served (integrity). Unsigned, signed by any other key, or a digest that does not match, and nothing is written; a registered catalog that publishes no key has no key to check against, so nothing installs from it at all. Installing never enables: the plugin lands inert and `plugin enable` is the separate, explicit act, which is also where compatibility with this build is judged. A name already installed is refused rather than overwritten, and so is a broken install in the way (uninstall it first) — a home left by an install that did not finish is not one, so a retry goes straight through. An OS the manifest does not list is refused too — a platform the entry never claimed has no build behind it — and the asset fetched is the one published for the OS running the install, since an entry may carry a separate distributable per platform. The asset may be a gzip'd tar holding an entry named after the plugin, or the executable itself; a zip is refused by name. The only command in this group that touches the network.",
-            "args": [{ "name": "name", "required": true, "help": "the plugin's name, as the catalog lists it" }],
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin install worktree", "amenbo plugin install worktree --json"] }),
-        json!({ "name": "plugin update", "summary": "Brings an installed plugin onto the build the catalog publishes — or, with --check, only reports which installs it has moved past. Detection is the catalog Amenbo already fetches whole laid beside the manifest that sits next to each installed binary — no central server, no per-plugin request. A manifest carries no version number, so what is compared is detail_sum: one digest per catalog entry, over the whole document an install acts on — the assets, the config schema, the compatibility floor, and what the plugin says for itself at the AI's entry point. That is why an update which changes no binary is still an update: comparing executables would hide every one of them. The asset checksums are still checked where they mean something, at the install door — the bytes that arrive must be the bytes the entry published. It therefore reports different, not newer: a catalog that rolls an entry back offers that older build, because the catalog is the authority on what is published. A plugin the catalog does not list is passed over rather than reported (installed by hand, or delisted). The three jobs are kept distinct so a safe report and a replacing apply are never a typo apart: --check reports and applies nothing, a name applies one, --all applies every one; a bare `plugin update` with none of them is refused rather than guessed at. Nothing is ever applied on Amenbo's own account — naming a plugin, or --all, is the whole consent. Applying re-walks the install door over the new asset (the catalog signature, then this OS's checksum), retains the build it replaced as a .bak pair so `plugin rollback` has somewhere to go, and keeps the plugin's gate and every setting the new build still declares — an update is not a re-install, and wiping a plugin's settings wholesale is uninstall's job. What it does take is a value stored under a key the new build has stopped declaring: nothing would read it again, and a rollback does not bring it back. Any step that refuses (a build this Amenbo cannot speak to, an asset that will not verify) leaves the working plugin exactly as it was; with --all one plugin's failure is reported and the rest are still applied. --check is cheap on purpose: with nothing installed no catalog is read at all, and otherwise a cached catalog younger than an hour answers with no request — which is what lets a check ride along with something you were doing anyway. It says which of the two it did, so a cached answer is never read as a current one, and --fresh fetches the index first when that distance matters. Applying always asks for the current index, since replacing a binary on an hour-old answer is not the same bargain.",
-            "args": [{ "name": "name", "required": false, "help": "the installed plugin to update; omit it with --all or --check" }],
-            "flags": [{ "name": "--check", "help": "report what has an update without applying anything" }, { "name": "--all", "help": "apply every update the catalog holds, one plugin at a time" }, { "name": "--fresh", "help": "with --check: fetch the catalog now instead of letting a cache under an hour old answer" }, { "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin update --check", "amenbo plugin update worktree", "amenbo plugin update --all"] }),
-        json!({ "name": "plugin rollback", "summary": "Undoes the last `plugin update` for one plugin, restoring the build it retained. An update kept the previous executable and its manifest as a .bak pair beside the new ones; this puts both back — the pair, never one without the other, so the installed manifest never disagrees with the bytes beside it. Offline and instant: nothing is fetched and nothing is re-verified, because the retained build already passed the door on its way in and a rollback is a deliberate return to it (the same shape self-update's `update --rollback` takes). It leaves the gate, the settings and the secrets alone — a value the update purged for want of a declaration included, which stays gone: what is retained is one generation of the build and its manifest. Goes back one build, and only one: the retained copy is consumed, so a second rollback has nothing to restore and says so. Refused, changing nothing, when the plugin is not installed or was never updated (there is no retained build to return to).",
-            "args": [{ "name": "name", "required": true, "help": "the installed plugin to roll back" }],
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin rollback worktree"] }),
-        json!({ "name": "plugin enable", "summary": "Enables an installed plugin: opens the one gate it fires through, which is the gate of the project you are in — so it needs a bound folder, and turning it on elsewhere is a separate act. That is why there is no --scope: a plugin has one switch, and a user is never shown two. Installing puts a plugin on disk and nothing more; this is the step that lets it run, and doing it is itself the permission to run somebody else's code, so nothing is asked beside it and nothing is kept beside the row — which is what lets a backup carry the answer with it. Fail-closed on the settings the plugin's author marked required — while one is empty the enable is refused and the empty fields are named; fill them with `plugin config set` and enable again. Amenbo checks only that a value is present in that project; whether the value is *meaningful* is the plugin author's to judge at run time. Fail-closed on compatibility too: a plugin whose manifest reads a different event-payload contract than this Amenbo speaks, or needs an Amenbo newer than the one running, is refused with both versions named — update Amenbo (or the plugin) rather than run one against a payload it cannot read.",
-            "args": [{ "name": "name", "required": true, "help": "the installed plugin's name" }],
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin enable worktree", "amenbo plugin enable slack"] }),
-        json!({ "name": "plugin disable", "summary": "Closes a plugin's gate — the same single switch `enable` opens, in the project you are in, so there is no --scope here either. It stops firing while staying installed, so enabling it again later costs nothing. Deliberately does not require the plugin to still read as installed: this is how a plugin is stopped, and a half-broken install is exactly when stopping it matters most — nothing here is read off the manifest, so a file that will not parse cannot leave a gate open. Disabling one that is already off changes nothing and says so.",
-            "args": [{ "name": "name", "required": true, "help": "the plugin's name" }],
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin disable worktree", "amenbo plugin disable slack"] }),
-        json!({ "name": "plugin uninstall", "summary": "Removes a plugin and everything it left behind: the binary and its directory, its settings in every project on this device, and its secrets. Disabling stops a plugin while keeping all of that — this is the other end, and the difference is the point: a re-install of the same name starts clean, inheriting no setting. It works from the name alone and never asks whether the plugin still reads as installed, so it is also how a half-broken install is cleaned up; a name that holds nothing is reported as such, not an error. The steps run worst-residue-first — the gates, then the secrets, then the settings, then the binary — so an interrupted removal leaves an inert directory and never a plugin that still fires. Confirms unless --yes.",
-            "args": [{ "name": "name", "required": true, "help": "the plugin's name" }],
-            "flags": [{ "name": "--yes/-y", "help": "skip confirmation" }, { "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin uninstall worktree --yes"] }),
-        json!({ "name": "plugin run", "summary": "Calls an installed, enabled plugin's command face and hands you what it returned. A plugin has two faces: the observation hook fires by itself on an event and nobody waits for it, while this one you call on purpose and get an answer. The answer is the plugin's stdout, relayed to this command's stdout verbatim and with nothing of Amenbo's mixed in — which is what lets a plugin return something a shell consumes directly, as in eval \"$(amenbo plugin run worktree start 123)\" — or iex (amenbo plugin run worktree start 123) in PowerShell, since the line a plugin returns is written to go through either shell. Its stderr is the human-facing diagnostic and is relayed to stderr, before the value, whether the call succeeded or not. Everything after the plugin's name is the plugin's own: Amenbo passes the words through untouched and never parses them, dashes included, because what they mean is the plugin's business — so Amenbo's own flags have to come before the plugin's name (amenbo plugin run --json worktree ...), not after it. A plugin that exits non-zero is a failed call — its return value is discarded rather than handed on, and this exits 1 with the plugin's own exit code named in the message, not impersonated. Refused, with the reason, when the plugin is not installed, is installed but not enabled (installing never runs anything), or is not compatible with this build.",
-            "args": [{ "name": "name", "required": true, "help": "the installed plugin's name" }, { "name": "args...", "required": false, "help": "arguments handed to the plugin verbatim, dashes included" }],
-            "flags": [{ "name": "--json", "help": "machine-readable output (the return value rides inside the document)" }],
-            "examples": ["amenbo plugin run worktree start 123", "eval \"$(amenbo plugin run worktree start 123)\"", "iex (amenbo plugin run worktree start 123)", "amenbo plugin run --json worktree finish 123"] }),
-        json!({ "name": "plugin config set", "summary": "Stores one of an installed plugin's settings. The key must be one the plugin's manifest declares — that declaration is also what says whether the value is a secret, and Amenbo never judges that for itself: a secret goes to a store table of its own, which an export must leave (injected later as an environment variable, never echoed anywhere), everything else to the ordinary one. Either way the value is this project's and there is no tier under it; which project is never named here, it is the folder's binding (a human may move that with the global --project). Passing `-` as the value reads it from stdin, which is how a token stays off argv and out of shell history; the trailing newline a pipe adds is dropped, and nothing else. An empty value clears the setting rather than storing a blank, so this is also the unset door. The value is never echoed back. Filling the fields the author marked required is what lets `plugin enable` through. A setting whose author declared candidates takes those candidates, comma-separated, and refuses anything else with the list named; `none` answers with none of them, which is an answer of its own and not the same as leaving the setting empty — an empty value is still nobody having answered, and that is what a `default` in the manifest stands in for.",
-            "args": [{ "name": "name", "required": true, "help": "the installed plugin's name" }, { "name": "key", "required": true, "help": "the setting's key, as the manifest declares it" }, { "name": "value", "required": true, "help": "the value; `-` reads it from stdin, an empty string clears it" }],
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin config set slack events task.done,task.rejected", "amenbo plugin config set slack events none", "printf %s \"$TOKEN\" | amenbo plugin config set slack webhook_url -", "amenbo plugin config set slack events \"\""] }),
-        json!({ "name": "plugin config get", "summary": "Reads one of an installed plugin's settings back as this project holds it, exactly as stored. A secret's value never comes out this door, --json included: it reports only whether one is set, because a get that prints a token puts it in the terminal, the scrollback and the shell's history. Injection reads secrets whole, into the plugin's environment and nowhere else. A key the manifest does not declare is refused with the keys it does declare, so a typo answers with the vocabulary rather than a silent 'not set'. Where the author declared candidates it prints them too, ticking what is in force, and the line names which of the three states the setting is in: a value someone chose, none of them, or nobody answered — where what the run receives is the author's `default`. It is also where what the author wrote about the setting is read from a terminal: the paragraph explaining the field, and a note on a field whose value the plugin writes back itself rather than the user typing it — a field still writable here, since `plugin config set` is the road that value arrives by. A paragraph the manifest rules no longer admit is withheld whole rather than trimmed, naming `plugin validate` as where to see why. --json carries that as state, with the field's type, its candidates and its default beside the value, and its readonly flag and the author's paragraph beside those.",
-            "args": [{ "name": "name", "required": true, "help": "the installed plugin's name" }, { "name": "key", "required": true, "help": "the setting's key, as the manifest declares it" }],
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin config get slack events", "amenbo plugin config get slack events --json"] }),
-        json!({ "name": "plugin catalog list", "summary": "Lists the catalogs that make up the browsing view: the official catalog first, then each registered third-party catalog in the order it was added, with its display name, the fingerprint of the key its plugins are trusted on, how many plugins it currently offers, and whether it could be reached (from the network, or its cache). The unit is the catalog, not the plugin — what grows is the number of indexes, never per-plugin requests. Reads caches the incidental way: a catalog fresh on disk answers with no request, so listing many sources is not many fetches, and one dead URL is marked unreachable rather than costing the view. A catalog with no fingerprint published none, which is the line worth noticing: it can be browsed and nothing on it can be installed. --json carries plugins_total (after cross-catalog de-duplication, official winning a name clash) and per-source url/name/fingerprint/official/reachable/offered.",
-            "args": [], "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin catalog list", "amenbo plugin catalog list --json"] }),
-        json!({ "name": "plugin catalog add", "summary": "Registers a third-party catalog by the URL of its catalog.json, to browse alongside the official one (the 'free' tier), and pins the signing key it publishes at catalog-key.pub beside it. That key is what plugins from this catalog are trusted on, so registering one is a trust decision, not a bookmark: the fingerprint is shown and confirmed before anything is pinned (--yes confirms non-interactively, which a --json run must pass). A catalog that publishes no key registers without a question — it can be browsed, and nothing on it can be installed. A catalog that now publishes a different key is refused rather than re-pinned: unregister it and register it again, which puts the new fingerprint in front of whoever decides. --name gives it a display name (default: the host of its URL). Idempotent: registering the same URL twice is a no-op. Refuses a non-http(s) URL, and the official catalog's own URL (it is always included and is not a third-party source). The catalog is fetched once here so the first browse is warm, and how many plugins it offers is reported; an unreachable URL still registers and is retried on the next browse.",
-            "args": [{ "name": "url", "required": true, "help": "the URL of the third-party catalog's catalog.json" }],
-            "flags": [{ "name": "--name <name>", "help": "what to call this catalog on screen (default: the host of its URL)" }, { "name": "--yes/-y", "help": "confirm pinning the key non-interactively" }, { "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin catalog add https://example.com/plugins/catalog.json", "amenbo plugin catalog add https://example.com/plugins/catalog.json --name 'the works catalog' --yes"] }),
-        json!({ "name": "plugin catalog remove", "summary": "Unregisters a third-party catalog by its URL and drops its cached copy. Idempotent: removing a URL that is not registered is a no-op. The official catalog cannot be removed — it is not a registered source.",
-            "args": [{ "name": "url", "required": true, "help": "the URL that was registered with `plugin catalog add`" }],
-            "flags": [{ "name": "--json", "help": "machine-readable output" }],
-            "examples": ["amenbo plugin catalog remove https://example.com/plugins/catalog.json"] }),
     ])
 }
 
@@ -2469,71 +2329,9 @@ mod tests {
         assert!(named > 10, "the scan found almost no commands in the prose ({named}) — it stopped reading the spans");
     }
 
-    /// One plugin's line, hung on a step by the id its author named.
-    fn hung(step_ref: &str) -> BTreeMap<String, Vec<String>> {
-        BTreeMap::from([(
-            step_ref.to_string(),
-            vec!["amenbo plugin run worktree start <task-id>".to_string()],
-        )])
-    }
 
-    /// The step named gets the line, wherever it was written — a step of the backbone, a cycle's
-    /// ordered item, or a cycle's self-gated one (`AMB-D-571`). Nothing else on the step moves, and no
-    /// other step is touched.
-    #[test]
-    fn a_line_lands_on_the_step_that_named_it() {
-        for (step_ref, at) in [
-            ("agentCycle.reserve", "/agentCycle/steps"),
-            ("worktree.cut-per-task", "/cycles/worktree/backbone"),
-            ("commit.install-the-hooks", "/cycles/commit/optional"),
-        ] {
-            let (_, id) = step_ref.split_once('.').unwrap();
-            let mut spec = build();
-            attach_tools(&mut spec, &hung(step_ref));
 
-            let mut pointer = spec.pointer(at).and_then(Value::as_array).unwrap().iter();
-            let step = pointer.find(|s| s["id"] == id).unwrap_or_else(|| panic!("{step_ref} is gone"));
-            assert_eq!(step["tools"], json!(["amenbo plugin run worktree start <task-id>"]));
-            assert!(step["step"].as_str().is_some_and(|s| !s.is_empty()), "the step's own prose stands");
-            assert!(
-                pointer.all(|other| other.get("tools").is_none()),
-                "a line landed on a step nobody named"
-            );
-        }
-    }
 
-    /// A ref naming nothing in this document is dropped where it falls, and never invents what it
-    /// names. The steps travel with Amenbo while a manifest stays where it was installed, so an
-    /// unknown ref is the ordinary end of a step renamed or a cycle the runtime left out — not an
-    /// error to raise at a reader who cannot act on it.
-    #[test]
-    fn a_ref_naming_nothing_here_is_dropped() {
-        let before = build();
-        for step_ref in [
-            "worktree.retired-long-ago",
-            "noSuchCycle.cut-per-task",
-            "agentCycle.no-such-step",
-            "cycles.worktree",
-            "worktree",
-            "",
-        ] {
-            let mut spec = build();
-            attach_tools(&mut spec, &hung(step_ref));
-            assert_eq!(spec, before, "{step_ref:?} changed the document");
-        }
-    }
-
-    /// A cycle the runtime dropped takes its steps' refs with it: what is not in the document cannot
-    /// be hung on, so the advice and the tool for it disappear together rather than one without the
-    /// other.
-    #[test]
-    fn a_dropped_cycle_leaves_nothing_to_hang_on() {
-        let mut spec = build();
-        spec["cycles"].as_object_mut().unwrap().remove("worktree");
-        let without = spec.clone();
-        attach_tools(&mut spec, &hung("worktree.cut-per-task"));
-        assert_eq!(spec, without);
-    }
 
     /// A cycle the runtime drops takes every branch to it with it. Left behind, a step would go on
     /// telling the reader to take a cycle that is not in the document they were handed — which reads
@@ -2739,8 +2537,10 @@ mod tests {
         let update = dev["commands"].as_array().unwrap().iter().find(|c| c["name"] == "update").unwrap();
         assert!(update["summary"].as_str().unwrap().contains("Updates Amenbo."), "the product's name was rewritten inside prose");
         assert!(update["summary"].as_str().unwrap().contains("Amenbo never updates in the background"), "the product's name was rewritten inside prose");
-        let prose = dev.to_string();
-        assert!(prose.contains("minimum Amenbo version"), "the product's name lost its capital before a noun that doubles as a command word");
+        // A noun that doubles as a command word is the third arm of that rule, and no line of the spec
+        // is written in that shape any more — the one that was went with the plugin group. It is held
+        // where the rule itself is (`retargeting_help_prose_moves_commands_and_flags_only`), which is
+        // the honest place for it: over text rather than over whichever sentence happens to carry it.
     }
 
     /// The prose rule read at the door the CLI's `--help` comes through: text authored elsewhere, one
@@ -2756,7 +2556,7 @@ mod tests {
         // A global flag may sit ahead of the subcommand, putting a dash where the command word goes.
         assert_eq!(dev("`amenbo --project <name> decision add …`"), "`amenbo-dev --project <name> decision add …`");
         // Wrapped rather than leading, and still a line to type.
-        assert_eq!(dev(r#"`eval "$(amenbo plugin run worktree start 123)"`"#), r#"`eval "$(amenbo-dev plugin run worktree start 123)"`"#);
+        assert_eq!(dev(r#"`eval "$(amenbo worktree start 123)"`"#), r#"`eval "$(amenbo-dev worktree start 123)"`"#);
         // The product, not a command: nothing follows that says otherwise. Authored lowercase on
         // purpose — spec prose now spells the product `Amenbo`, but this door takes text authored
         // elsewhere, where a lowercase product mention can still arrive.

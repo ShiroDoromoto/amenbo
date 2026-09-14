@@ -22,6 +22,7 @@ use crate::error::{Error, Result};
 use crate::model::SecretArea;
 use crate::store::Store;
 
+pub mod carried;
 mod cloudflare;
 mod migrate;
 pub mod sealing;
@@ -194,6 +195,19 @@ fn setup_reaching(
     store.set_secret(None, SecretArea::Viewer, None, WORKER_URL, Some(&endpoint))?;
 
     await_the_worker(&endpoint)?;
+
+    // A server that has just been stood up is one nothing has been sent to, whatever this device
+    // remembers sending to the last one. Forgetting here is what makes the next turn place the whole
+    // backlog rather than the next edit alone — and it is the only place it can be settled, since the
+    // write token is refused at the server's reading door.
+    //
+    // **Forgetting is the whole of what this does to the store's own rows**, and nothing else is written
+    // from here. A key drawn just now opens nothing already up there; the forgotten carrier sends the
+    // whole backlog next, key by key, so every row the backlog still holds is written again under the new
+    // key. What is left over is the rows the backlog no longer holds, which open for nobody — and a phone
+    // reads that as its key not fitting, which is answered by the PC writing.
+    store.forget_viewer_carried()?;
+
     tracing::info!(url = %endpoint, ?keys, "the Viewer's server is up");
 
     Ok(Stood { url: endpoint, account: where_, database, keys })
@@ -618,6 +632,35 @@ mod tests {
         for (name, _) in &migrate::MIGRATIONS[4..] {
             assert!(run.contains(name), "{name} had not been applied and did not go over: {run}");
         }
+    }
+
+    /// Standing a server up forgets what the carrier was holding, so the next turn places the whole
+    /// backlog. A memory that says "level" behind a server that has taken nothing would hand it the next
+    /// edit and nothing else — and nothing can ask the server which it is, the write token being refused
+    /// at its reading door.
+    #[test]
+    fn standing_a_server_up_forgets_what_was_sent_to_the_last_one() {
+        let host = cloudflare_standing_in();
+        let mut store = store_at("forgets-the-carrier");
+        store
+            .set_viewer_carried(&crate::viewer::carried::Carried {
+                version: 12_345,
+                cursor: 980,
+                ..Default::default()
+            })
+            .unwrap();
+        store
+            .enqueue_viewer(&[crate::viewer::carried::Waiting {
+                record_key: "task/1".into(),
+                op: crate::viewer::carried::Op::Placed,
+                body: Some("{}".into()),
+            }])
+            .unwrap();
+
+        setup_reaching(&mut store, "a-pasted-token", None, &reaching(&host)).expect("setup");
+
+        assert_eq!(store.viewer_carried().unwrap(), crate::viewer::carried::Carried::default());
+        assert_eq!(store.viewer_waiting().unwrap(), 0, "what was read out under the old cursor goes too");
     }
 
     /// The token is used and not written down. What is left in the store can create nothing in that

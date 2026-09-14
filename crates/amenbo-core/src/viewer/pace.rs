@@ -102,6 +102,11 @@ pub fn quiet(left: &Carried, now: DateTime<Utc>) -> Option<Duration> {
 /// it, and a live carrier meeting that probe would stand down on a turn nobody was going to take. So a
 /// start made while somebody else is carrying costs one process that finds the turn taken and stops —
 /// which is what every write in a burst already costs, by the same design ([`super::lock`]).
+///
+/// **And this is a startup's question alone.** A write must set a carrier off whatever the answer here
+/// would be: a turn copies the feed out before it sends any of it, and the copying has to keep up with
+/// the feed whether the sending can go or not — which is what the head of this file says, and what
+/// [`crate::Store::set_the_viewer_off`] is written not to ask about.
 pub fn stuck(waiting: i64, carrying: bool, left: &Carried, now: DateTime<Utc>) -> bool {
     waiting > 0 && carrying && quiet(left, now).is_none() && !out_of_budget(left, now)
 }

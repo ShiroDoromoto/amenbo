@@ -157,7 +157,7 @@ impl Rebuffed {
     }
 
     /// This, as the sentence whoever has to fix it reads.
-    fn in_words(self, now: DateTime<Utc>) -> Error {
+    pub(super) fn in_words(self, now: DateTime<Utc>) -> Error {
         match self {
             Rebuffed::Refused(refused) => Error::invalid(refused.in_words(now)),
             Rebuffed::Unreadable(error) => error,
@@ -175,6 +175,11 @@ pub struct Server {
 }
 
 impl Server {
+    /// Where it answers — what a request is addressed to.
+    pub(super) fn at(&self) -> &str {
+        &self.url
+    }
+
     /// The server this device was set up against, or `None` where setup has not run.
     ///
     /// **Half a route is not a route.** A URL with no token is turned away at the door on every send, and
@@ -231,10 +236,15 @@ impl Server {
 
     /// Send one request to the Worker and hand back the body of a good answer.
     ///
+    /// **Every door the Worker has is read the same way**, which is why this is the neighbours' as well
+    /// as the sending's ([`super::pairing`]): a refusal has one shape whether what was asked for was a
+    /// placement or a read code, and two readings of it would be two answers to "why is my phone not
+    /// updating?".
+    ///
     /// **No sentence this produces carries the token or anything the body held.** What travels is the
     /// door's name, what it answered, and the Worker's own words — which are written for whoever has to
     /// fix it.
-    fn ask(
+    pub(super) fn ask(
         &self,
         method: &str,
         path: &str,

@@ -120,6 +120,15 @@ webpki-roots = "1"
 # path names (a UNC route, a name Win32 reserves, a path past its length). Here rather than under
 # `cfg(windows)` because the call sites are platform-neutral — elsewhere it forwards to std unchanged.
 dunce = "1"
+# The code a phone's camera reads when it is paired (`src/viewer/code.rs`). Pairing is the one step of
+# setting a phone up that happens off the network: the encryption key goes from this screen to that
+# camera, and routing it through the Worker instead would hand the server the key to everything it is
+# storing. So a code has to be drawn here, and a QR code is not a format a near-enough implementation
+# can be written for — the error correction, the masking and the version fit are the standard.
+# Default features off drops the `image` and `svg` renderers, which brings the crate in with no
+# dependencies of its own: what is taken is the matrix, and the drawing is ours, a terminal being the
+# one screen the CLI has.
+qrcode = { version = "0.14", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 # Two questions the OS is asked directly. Which machine this is, whatever the running binary was built

@@ -30,6 +30,12 @@ tracing.workspace = true
 getrandom = "0.4"
 base64 = "0.23"
 fs2 = "0.4"
+# The cipher the Viewer seals what it carries with: XChaCha20-Poly1305, 256-bit key. Pure Rust
+# (RustCrypto), so cross-OS builds need no system crypto library — the same reason rusqlite vendors its
+# own and ureq takes rustls. XChaCha20 rather than AES-GCM for the nonce: one record is one seal, so
+# the count climbs without bound, and a 192-bit nonce drawn at random is one no counter has to be kept
+# against. Encrypt-only here; what opens a record is the phone (src/viewer/sealing.rs).
+chacha20poly1305 = "0.11"
 # Content-addressed blob store: BLAKE3 is the attachment content-address — a fast, tree-hashing
 # digest. The bytes never enter the truth source; the hash is the fingerprint of the content that
 # drives dedup and tamper detection.

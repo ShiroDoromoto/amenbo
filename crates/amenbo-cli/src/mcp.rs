@@ -166,7 +166,10 @@ pub(crate) fn mcp_cmd(dirs: &[String]) -> Result<i32, CliError> {
         });
     }
     for missing in gone {
-        eprintln!("amenbo mcp: --dir '{missing}' is not a folder on this machine, so it is not served.");
+        eprintln!(
+            "{} mcp: --dir '{missing}' is not a folder on this machine, so it is not served.",
+            Paths::command_name()
+        );
     }
     Ok(serve(&folders))
 }
@@ -183,7 +186,7 @@ pub fn serve(dirs: &[PathBuf]) -> i32 {
         let line = match line {
             Ok(line) => line,
             Err(e) => {
-                eprintln!("amenbo mcp: cannot read the request stream: {e}");
+                eprintln!("{} mcp: cannot read the request stream: {e}", Paths::command_name());
                 return 1;
             }
         };

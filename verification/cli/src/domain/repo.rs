@@ -7,7 +7,7 @@ use std::process::Command;
 
 use amenbo_scenario::{Args, Domain};
 
-use crate::{req_bool, req_i64, req_str, unmapped, Driver, Outcome};
+use crate::{opt_bool, req_bool, req_i64, req_str, unmapped, Driver, Outcome};
 
 impl Driver<'_> {
     pub(crate) fn repo_action(&mut self, op: &str, with: &Args) -> Result<Outcome, String> {
@@ -128,18 +128,15 @@ impl Driver<'_> {
             // then does to a repository that is really there.
             //
             // It leaves a `main` with one commit on it, rather than the branchless state a bare
-            // `init` leaves behind: a repository with no commit has no branch either, and the
-            // official `worktree` plugin needs one to cut a task's checkout from.
+            // `init` leaves behind: a repository with no commit has no branch either, and
+            // `worktree start` needs one to cut a task's checkout from.
             //
             // Which folder becomes one is `write-file`'s rule, said by `dir:` and never by a path:
             // the run's own folder, or one a `folder` step bound. A road reading what git says about
             // a bound folder needs the second — the colours are drawn on the face of the folder the
             // project is bound to, and a repository anywhere else leaves every row of it bare.
             "git-init" => {
-                let at = match with.get("dir") {
-                    Some(_) => self.folder(with)?,
-                    None => self.session.cwd.clone(),
-                };
+                let at = self.repo_dir(with)?;
                 let git = |args: &[&str]| -> Result<(), String> {
                     let out = Command::new("git")
                         .args(args)
@@ -176,10 +173,7 @@ impl Driver<'_> {
             // place to keep the same list. An empty commit is refused by git and left to fail — a
             // road committing nothing has a premise that did not do what it said.
             "git-commit" => {
-                let at = match with.get("dir") {
-                    Some(_) => self.folder(with)?,
-                    None => self.session.cwd.clone(),
-                };
+                let at = self.repo_dir(with)?;
                 let git = |args: &[&str]| -> Result<(), String> {
                     let out = Command::new("git")
                         .args(args)
@@ -282,6 +276,63 @@ impl Driver<'_> {
                 std::fs::write(&full, document.to_string())
                     .map_err(|e| format!("could not write {place}: {e}"))?;
                 Ok(Outcome::action(format!("set {app} up to reach {} over MCP", folder.display())))
+            }
+            // A checkout of the task's own, cut and folded. What a person working a
+            // task types, in the order they type it — and the refusals in between, which is where
+            // most of the value is: a second `start` is what keeps two sessions off one checkout,
+            // and a fold that refuses is what keeps work nobody recorded from going with it.
+            //
+            // The return value goes where a later step can read it. `start`'s whole answer is one
+            // `cd` line on stdout, which is not a state anything can be asked about afterwards.
+            "worktree-start" => {
+                let at = self.repo_dir(with)?;
+                let id = self.resolve(with)?;
+                let id = id.to_string();
+                let mut args = vec!["worktree", "start", &id];
+                // A road asking how this refuses reads the machine face; one asking what it hands
+                // back reads the line a shell takes. The two are the same command and cannot be the
+                // same call: a refusal names its code in an `error` object on stderr, which is only
+                // written under `--json`, and `--json` is also what replaces the `cd` line with a
+                // document. Which question the step is asking is the step's own `refused:`.
+                if self.refusing() {
+                    args.push("--json");
+                }
+                let out = self.run_stdout_in(&at, &args)?;
+                self.last_worktree = Some(String::from_utf8_lossy(&out).into_owned());
+                Ok(Outcome::action(format!("cut task {id} a checkout of its own in {}", at.display())))
+            }
+            // The other end of it. `force` is the only way to discard work on purpose, so a road that
+            // wants the guard to give way has to say so — the same word the person types.
+            "worktree-finish" => {
+                let at = self.repo_dir(with)?;
+                let id = self.resolve(with)?;
+                let id = id.to_string();
+                let mut args = vec!["worktree", "finish", &id];
+                if opt_bool(with, "force").unwrap_or(false) {
+                    args.push("--force");
+                }
+                // `worktree-start`'s reason, and the fold has no return value to lose by it.
+                if self.refusing() {
+                    args.push("--json");
+                }
+                self.run_stdout_in(&at, &args)?;
+                Ok(Outcome::action(format!("folded task {id}'s checkout away")))
+            }
+            // Work nobody has recorded, left in a task's checkout — the one state no other op here can
+            // reach. A checkout stands beside the run's folder rather than inside it, and every path a
+            // road may write is closed to what lies outside; without this the fold's own guard is a
+            // guard no road walks.
+            "worktree-write-file" => {
+                let at = self.repo_dir(with)?;
+                let id = self.resolve(with)?;
+                let path = self.inside(req_str(with, "path")?)?;
+                let full = worktree_of(&at, id)?.join(path);
+                if let Some(dir) = full.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                }
+                std::fs::write(&full, req_str(with, "content")?)
+                    .map_err(|e| format!("could not write {}: {e}", full.display()))?;
+                Ok(Outcome::action(format!("left work nobody recorded in task {id}'s checkout")))
             }
             verb @ ("hooks-install" | "hooks-uninstall") => {
                 let sub = verb.trim_start_matches("hooks-");
@@ -482,6 +533,55 @@ impl Driver<'_> {
                     ),
                 ))
             }
+            // Whether a task's checkout is standing. Both halves are read, because half of either is
+            // not a state a fold may leave behind: a directory whose branch is gone turns the next
+            // `start` away with the wrong reason, and a branch whose directory is gone leaves work
+            // that nothing points at.
+            "worktree" => {
+                let at = self.repo_dir(with)?;
+                let id = self.resolve(with)?;
+                let want = req_bool(with, "present")?;
+                let checkout = worktree_of(&at, id)?;
+                let standing = checkout.is_dir();
+                let branch = format!("task/{id}");
+                let held = Command::new("git")
+                    .args(["show-ref", "--verify", "--quiet", &format!("refs/heads/{branch}")])
+                    .current_dir(&at)
+                    .status()
+                    .map_err(|e| format!("could not run git: {e}"))?
+                    .success();
+                let pass = standing == want && held == want;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "task {id}: the checkout is {}, branch `{branch}` is {} (expected both {}, {})",
+                        if standing { "there" } else { "gone" },
+                        if held { "there" } else { "gone" },
+                        if want { "there" } else { "gone" },
+                        if pass { "as expected" } else { "MISMATCH" },
+                    ),
+                ))
+            }
+            // The way in `worktree start` handed back: one `cd` line and nothing else. It is the whole
+            // of that command's return value — a caller is meant to run it rather than read it — so
+            // what is judged is the exact text, not that a path appears somewhere in it.
+            "worktree-way-in" => {
+                let at = self.repo_dir(with)?;
+                let id = self.resolve(with)?;
+                let said = self
+                    .last_worktree
+                    .as_deref()
+                    .ok_or("no `worktree start` has run on this road for this to read")?;
+                let want = format!("cd '{}'\n", worktree_of(&at, id)?.display());
+                let pass = said == want;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "`worktree start` wrote {said:?} (expected {want:?}, {})",
+                        if pass { "as expected" } else { "MISMATCH" },
+                    ),
+                ))
+            }
             _ => Err(unmapped(Domain::Repo, op)),
         }
     }
@@ -603,9 +703,69 @@ fn adler32(bytes: &[u8]) -> u32 {
     (b << 16) | a
 }
 
+
+/// Where a step's repository is: the folder its `dir:` names, or the run's own. `git-init`'s rule,
+/// spelled once because every op in this domain follows it.
+impl Driver<'_> {
+    fn repo_dir(&self, with: &Args) -> Result<std::path::PathBuf, String> {
+        match with.get("dir") {
+            Some(_) => self.folder(with),
+            None => Ok(self.session.cwd.clone()),
+        }
+    }
+}
+
+/// Where a task's checkout stands, by the layout Amenbo fixes and nobody is asked about:
+/// `<the repository's parent>/<its name>-worktrees/<id>`.
+///
+/// The repository is resolved first. Amenbo derives the placement from what git answers, which is
+/// the resolved path — and a run whose throwaway folder is reached through a symlink (`/tmp` on a
+/// Mac) would otherwise be comparing two spellings of one directory.
+fn worktree_of(root: &Path, id: i64) -> Result<std::path::PathBuf, String> {
+    let root = std::fs::canonicalize(root)
+        .map_err(|e| format!("could not resolve {}: {e}", root.display()))?;
+    let name = root
+        .file_name()
+        .ok_or_else(|| format!("{} has no name to cut a sibling beside", root.display()))?
+        .to_string_lossy()
+        .into_owned();
+    let parent = root
+        .parent()
+        .ok_or_else(|| format!("{} has no parent to cut a sibling in", root.display()))?;
+    Ok(parent.join(format!("{name}-worktrees")).join(id.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The layout a task's checkout is placed by — beside the repository, never inside it, which is
+    /// the shape Amenbo refuses to be run in. The name is the repository's own, so a road that cuts
+    /// in a bound folder and one that cuts in the run's own folder each look beside the right thing.
+    #[test]
+    fn a_checkout_is_looked_for_beside_the_repository_it_was_cut_from() {
+        let session = crate::scratch::session("repo-worktree-of", false).unwrap();
+        let base = session.cwd.clone();
+        let repo = base.join("orchard");
+        std::fs::create_dir_all(&repo).unwrap();
+
+        let at = worktree_of(&repo, 4739).unwrap();
+        // The base is resolved, because git answers with the resolved path and a Mac reaches the
+        // throwaway folder through a symlink.
+        let resolved = std::fs::canonicalize(&base).unwrap();
+        assert_eq!(at, resolved.join("orchard-worktrees").join("4739"));
+        assert!(!at.starts_with(&repo), "it is never looked for inside the repository");
+    }
+
+    /// A folder that is not there cannot be measured from, and the reason says which one — a road
+    /// naming a `dir:` nothing stood up would otherwise fail with a path nobody recognises.
+    #[test]
+    fn a_repository_that_is_not_there_is_named_in_the_refusal() {
+        let session = crate::scratch::session("repo-worktree-of-missing", false).unwrap();
+        let missing = session.cwd.join("nowhere");
+        let said = worktree_of(&missing, 1).unwrap_err();
+        assert!(said.contains("nowhere"), "the refusal names the folder: {said}");
+    }
 
     /// Walk a PNG chunk by chunk, answering with each one's name — and failing on the first whose
     /// check does not match what is in it.

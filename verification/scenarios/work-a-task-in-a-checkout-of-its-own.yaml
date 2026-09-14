@@ -1,0 +1,51 @@
+# Two sessions working two tasks share one working tree unless somebody cuts a second one, and the
+# reservation does not stop that: what it guards is the task's status, not the files. So Amenbo cuts
+# the checkout itself — one command in, one command out, and no plugin to install first.
+#
+# This is a road the shipped build is the only honest place to walk. Everything it proves happens on
+# a real repository: a directory has to appear beside it, a branch has to exist in it, and the fold
+# has to refuse while there is still work in there that nobody recorded. The run makes its own
+# throwaway repository — nothing here touches a repository anyone is working in.
+#
+# The `cd` line is read as the whole return value rather than as text containing a path. A caller is
+# meant to run that line, not read it, so a build that started printing anything beside it would be
+# handing back something no shell can take.
+id: work-a-task-in-a-checkout-of-its-own
+title: A task gets a checkout of its own, and it is not folded away while there is anything left to lose
+description: >
+  Cut a task its own worktree and read what comes back: the one `cd` line that is the way in, and the
+  checkout and branch standing beside the repository. Ask for a second one and be turned away —
+  that refusal is the whole of what keeps two sessions off one checkout, so a build that stopped
+  raising it would let them collide silently. Then leave work in there that nobody recorded and try
+  to fold it: refused, with nothing torn down. `--force` is the one way to discard it on purpose, and
+  after that the fold has nothing left to take.
+given:
+  - type: action
+    domain: repo
+    op: git-init
+steps_cli:
+  # The task the checkout is cut for. Reserving it is a separate act — cutting one touches no record.
+  - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — worked in a checkout of its own }, as: seed }
+
+  # Cut it, and read the way in. The assert follows the call because a return value is not a state.
+  - { type: action, domain: repo, op: worktree-start, with: { target: seed } }
+  - { type: assert, domain: repo, op: worktree-way-in, with: { target: seed } }
+  - { type: assert, domain: repo, op: worktree, with: { target: seed, present: true } }
+
+  # A checkout already standing is not the caller's to enter, and asking again says so rather than
+  # handing over a second way into the same files.
+  - { type: action, domain: repo, op: worktree-start, with: { target: seed }, refused: worktree_exists }
+  - { type: assert, domain: repo, op: worktree, with: { target: seed, present: true } }
+
+  # Work nobody recorded, and a fold that will not take it away. Both halves have to hold: the
+  # refusal, and the checkout still being there afterwards.
+  - { type: action, domain: repo, op: worktree-write-file, with: { target: seed, path: half-done.txt, content: what the session was in the middle of } }
+  - { type: action, domain: repo, op: worktree-finish, with: { target: seed }, refused: worktree_dirty }
+  - { type: assert, domain: repo, op: worktree, with: { target: seed, present: true } }
+
+  # Discarding it is a thing a person says outright, and then the checkout and its branch both go.
+  - { type: action, domain: repo, op: worktree-finish, with: { target: seed, force: true } }
+  - { type: assert, domain: repo, op: worktree, with: { target: seed, present: false } }
+
+  # And the fold has nothing left to take, which it says rather than succeeding over nothing.
+  - { type: action, domain: repo, op: worktree-finish, with: { target: seed }, refused: worktree_missing }

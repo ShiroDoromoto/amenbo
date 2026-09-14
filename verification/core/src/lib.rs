@@ -926,6 +926,20 @@ const REGISTRY: &[OpSpec] = &[
     // — and the tree's rollup, which is about a folder git did **not** name, is never walked.
     // `dir` follows `git-init`'s rule and for its reason.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-commit", required: &[], refs: &[], strings: &["dir"], binds: false },
+    // A checkout of the task's own, cut and folded. The road walks the two commands a
+    // person working a task actually types, and the refusals that stand between them — which is why
+    // `start` is here rather than only the state it leaves: what a second one meets is the whole of
+    // what keeps two sessions off one checkout.
+    //
+    // The task is named by the binding an earlier step made rather than by a number, as everywhere
+    // else; where the repository is follows `git-init`'s rule, said by `dir:` and never by a path.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "worktree-start", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "worktree-finish", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
+    // Work nobody has recorded, left in a task's checkout. It exists for one state no other op can
+    // reach: the checkout lies outside the run's own folder, so no path a road may write reaches into
+    // it — and without it the guard that refuses to fold uncommitted work away is a guard no road
+    // walks.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "worktree-write-file", required: &["target", "path", "content"], refs: &["target"], strings: &["path", "content", "dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], strings: &[], binds: false },
     // The paste that starts this folder's AI on Amenbo at every session, put where the build says it
@@ -1509,6 +1523,13 @@ const REGISTRY: &[OpSpec] = &[
     // The repository-side gates: what the lint found in a file, and what is in a hook slot.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "lint", required: &["path", "hits"], refs: &[], strings: &["path"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "hooks", required: &["hook", "state"], refs: &[], strings: &["hook", "state"], binds: false },
+    // Whether a task's checkout is standing — the directory and the branch together, because half of
+    // either is not a state a fold may leave behind.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "worktree", required: &["target", "present"], refs: &["target"], strings: &["dir"], binds: false },
+    // The way in that `worktree start` hands back: one `cd` line on stdout and nothing else, which is
+    // the whole of its return value. It reads what the call wrote rather than the disk, so it has to
+    // follow that call — the constraint every assert over a return value here carries.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "worktree-way-in", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
     // What `agent --json` recommends here, read by whether a named cycle — or a named step inside one
     // — is in what the reader was handed. `present: false` is the reading with the weight in it.
     //
@@ -4428,6 +4449,7 @@ impl Scenario {
             for key in [
                 "present",
                 "ok",
+                "force",
                 "running",
                 "required",
                 "away",

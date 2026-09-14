@@ -812,6 +812,15 @@ folder a project is **bound** to, and a repository anywhere else leaves every ro
 reaches: until something is committed git names the whole folder and never the paths inside it, so a
 folder git is quiet about while a file in it is new — which is what a folded row on the tree answers
 for — does not exist on the near side of a commit.
+`worktree-start` and `worktree-finish` are the two commands a person working a task types, and the
+road that walks them is the only place a checkout is really cut: the directory has to appear beside
+the repository, the branch has to exist in it, and the fold has to refuse while there is work in
+there nobody recorded. `worktree-write-file` is what leaves that work — a checkout stands *beside*
+the run's folder rather than inside it, so no path a road may write reaches into one, and without it
+the fold's own guard is a guard no road walks. The assert `worktree` reads the directory and the
+branch together (half of either is not a state a fold may leave behind), and `worktree-way-in` reads
+the one `cd` line `start` handed back, which is that command's whole return value and has to be read
+in the step after the call.
 A picture is drawn rather than shelved because the roads that need one turn on its **size** — the
 provider reads that and decides whether to take the picture in — and the smallest that walks is over
 four megabytes, which is six times the largest file this repository tracks. So it is noise, written

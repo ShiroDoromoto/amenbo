@@ -529,6 +529,89 @@ pub enum Command {
         #[command(subcommand)]
         sub: Option<NotifyCmd>,
     },
+
+    /// Amenbo Viewer: the server this store is read from on a phone, and which phone may read it
+    /// (`AMB-D-884`).
+    ///
+    /// **The server is the reader's own.** `setup` stands a Worker and a database up in their Cloudflare
+    /// account, and nothing of theirs is hosted anywhere else. What is put there is sealed with a key this
+    /// device holds, so the account it runs in cannot read it either.
+    ///
+    /// **There is one read code, not one per phone.** Pairing a second phone is the same press as the
+    /// first, and `revoke` takes every phone off at once — there is nothing to name and so nothing to
+    /// single out.
+    Viewer {
+        #[command(subcommand)]
+        sub: ViewerCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ViewerCmd {
+    /// Stand the server up in a Cloudflare account, and leave behind what a send needs.
+    ///
+    /// **The API token is asked for here and written down nowhere.** It is taken on stdin rather than as an
+    /// argument — a token on the command line is visible in the process list and lands in shell history —
+    /// and what is left in the store afterwards is the address, the write token and the encryption key,
+    /// none of which can create anything in that account.
+    ///
+    /// Pressing it again on a device already set up keeps the keys it finds: a new key would open nothing
+    /// already up there.
+    Setup {
+        /// which account to build in, where the token reaches more than one
+        #[arg(long)]
+        account: Option<String>,
+    },
+
+    /// Draw a new read code, for the phone's camera.
+    ///
+    /// **It carries the encryption key**, which is what makes the screen and the camera the one path with
+    /// no network on it. Where it is drawn is somewhere that key has been, and a terminal's scrollback is
+    /// one of those.
+    ///
+    /// It replaces whatever code the server was holding, so the phone that had the one before stops
+    /// reading.
+    Qr {
+        /// draw it even where stdout is not a terminal
+        #[arg(long)]
+        terminal: bool,
+    },
+
+    /// Where the Viewer app is got, as a code each phone's camera can read — and as the addresses in
+    /// words, for whoever cannot point a camera at one.
+    App {
+        /// draw the codes even where stdout is not a terminal
+        #[arg(long)]
+        terminal: bool,
+    },
+
+    /// Ask the server whether a phone may read, and since when.
+    ///
+    /// **It asks the server rather than answering from here.** A list on this side could only say what
+    /// this machine believes it issued, and a server stood up anew underneath it makes every row of that
+    /// list name a phone that reads nothing.
+    Phones,
+
+    /// Take the read code away, so whatever was holding it stops reading.
+    ///
+    /// **This takes every phone off at once** — there is one code, so there is nothing to single out.
+    /// Pairing again is one `qr`.
+    Revoke,
+
+    /// Carry what has moved to the server: copy the backlog's changes into the queue, then empty as much
+    /// of that queue as the server will take.
+    Send,
+
+    /// Compare the server with this machine, and place the difference.
+    ///
+    /// **It is two presses.** Comparing is cheap and placing is not — a backlog that has drifted whole is
+    /// tens of thousands of writes — so this counts and says the number, and the next run inside ten
+    /// minutes places it. `--send` is that second press for whoever typed the first.
+    Repair {
+        /// place the difference rather than only counting it
+        #[arg(long)]
+        send: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

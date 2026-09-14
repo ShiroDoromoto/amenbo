@@ -506,6 +506,10 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // The hourly tick's answer: a config key and a registration in the OS, with no author to stamp
         // and no activity behind it.
         | Command::Tick { .. }
+        // The Viewer's own: the device's secrets, and the carrier's memory of where it left off. Nothing
+        // here is a project's row, nothing records an act, and there is no author for one to be stamped
+        // onto — the carrier's road out (`Sync` above) for the same reason.
+        | Command::Viewer { .. }
         // The AI-harness consent, like the lint's: a per-project row that records an answer, with no
         // author to stamp and no activity behind it.
         | Command::AgentHook { .. }
@@ -1338,6 +1342,10 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 cmd::notify::notify(store, flags, sub)
             })
         }
+        // The Viewer: the server this store is read from on a phone, and which phone may read it
+        // (`AMB-D-884`). Every one of these is the device's — one account, one key, one read code — so
+        // none of them asks which project it is about.
+        Command::Viewer { sub } => return cmd::viewer::viewer(&mut store, flags, sub),
         Command::Config { sub } => return config(&mut store, flags, sub),
         Command::Status { scope } => {
             let result = store.status(&scope).map_err(CliError::from)?;

@@ -210,7 +210,7 @@ fn kind_of(agent: Option<&str>) -> Option<&'static Kind> {
 ///
 /// True everywhere else, the two cases alike: a name reached by a link or by a path is the reader's
 /// own file, and a provider given no home at all was never parted from it. It is asked so that the
-/// difference is said before the press rather than found out a pane later (`AMB-D-894`).
+/// difference is said before the press rather than found out a pane later.
 pub fn writes_come_back(agent: &str, path: &str) -> bool {
     let Some(kind) = kind_of(Some(agent)) else { return true };
     !kind.copied_here().iter().any(|name| path == format!("~/{}/{name}", kind.theirs))
@@ -757,7 +757,7 @@ mod tests {
     }
 
     /// What a pane writes to the copy stays in the pane, and the row that says so before the press
-    /// is asked here (`AMB-D-894`, `crate::wake::wake_switch`).
+    /// is asked here (`crate::wake::wake_switch`).
     ///
     /// **The path is the catalog's own**: the answer is a comparison of two spellings, so a row
     /// respelled on one side and not the other would go on reading "it comes back" with nothing

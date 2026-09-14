@@ -21,6 +21,7 @@ import { facetColor, FacetAvatar, identiconSeed } from "../components/atoms";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { asksBeforeTrash, setAsksBeforeTrash } from "../files/askBeforeTrash";
 import { NotifyTargetsSetting } from "./NotifyTargetsSetting";
+import { ViewerSetting } from "./ViewerSetting";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { Icon } from "../components/Icon";
 
@@ -62,6 +63,15 @@ export function SettingsScreen() {
       <Category title={t("settings.notifyTargets")}>
         <span className="settings__fine">{t("settings.notifyTargetsNote")}</span>
         <NotifyTargetsSetting />
+      </Category>
+
+      {/* The phone that reads this store, and the server it reads from (`AMB-D-884`). It is the device's
+          and not a project's — one Cloudflare account, one key, one read code — so there is no
+          per-project choice to make and none is offered. What the plugin's form carried as seven
+          numbered items was a procedure rather than settings; here the order is the layout. */}
+      <Category title={t("settings.viewer")}>
+        <span className="settings__fine">{t("settings.viewerNote")}</span>
+        <ViewerSetting />
       </Category>
 
       {/* The file panel's own question. It is here rather than beside the panel because the only other

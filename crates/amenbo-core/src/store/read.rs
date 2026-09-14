@@ -306,8 +306,22 @@ impl Store {
     ///
     /// See [`crate::store_engine::write::WriteTx::touches_project`] for where the number is stamped.
     pub fn sync_version(&self) -> Result<i64> {
+        self.version_of(self.reach.project())
+    }
+
+    /// **The whole device's version, whatever this open reaches** — the Viewer's own road
+    /// (`AMB-D-884`). The Viewer is one device's carrier and not one project's: it is set up on the
+    /// device, it carries every project on it, and a phone reading it sees the same thing whichever
+    /// folder the send happened to be started from. A narrowed open must therefore not narrow what it
+    /// carries, which is why this asks for `None` rather than reading the reach.
+    pub(crate) fn device_sync_version(&self) -> Result<i64> {
+        self.version_of(None)
+    }
+
+    /// The version of one window, or of the device when there is no window.
+    fn version_of(&self, window: Option<i64>) -> Result<i64> {
         let conn = self.engine.conn();
-        match self.reach.project() {
+        match window {
             Some(project_id) => crate::store_engine::read::project_version(conn, project_id),
             None => crate::store_engine::read::change_feed_head(conn),
         }
@@ -350,9 +364,20 @@ impl Store {
     /// happened. The way back is the full snapshot (`AMB-D-583`), which names the position it was taken
     /// at, so there is no cursor to hand out here.
     pub fn sync_changes(&self, after: i64, limit: i64) -> Result<SyncChanges> {
+        self.changes_in(self.reach.project(), after, limit)
+    }
+
+    /// **The whole device's changes, whatever this open reaches** — the sibling of
+    /// [`Store::device_sync_version`], and there for the same reason (`AMB-D-884`).
+    pub(crate) fn device_sync_changes(&self, after: i64, limit: i64) -> Result<SyncChanges> {
+        self.changes_in(None, after, limit)
+    }
+
+    /// The changes in one window, or in the device when there is no window.
+    fn changes_in(&self, window: Option<i64>, after: i64, limit: i64) -> Result<SyncChanges> {
         use crate::store_engine::read::FeedSlice;
         let conn = self.engine.conn();
-        let slice = crate::store_engine::read::changes_since(conn, after, limit, self.reach.project())
+        let slice = crate::store_engine::read::changes_since(conn, after, limit, window)
             .map_err(crate::error::engine_on(conn))?;
         Ok(match slice {
             FeedSlice::Changes { rows, more } => {

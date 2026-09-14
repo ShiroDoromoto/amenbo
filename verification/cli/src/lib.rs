@@ -198,6 +198,10 @@ pub(crate) struct Driver<'a> {
     /// folder is the one thing a later step cannot ask the session for — asking places it, and a path
     /// placed again is a path that leads somewhere, which is the very state the road took away.
     moved: HashMap<String, std::path::PathBuf>,
+    /// What the last `worktree start` wrote to stdout — the one `cd` line that is its whole return
+    /// value. Kept for the reason [`Driver::last_run`] is: a return value is not a state, so the only
+    /// place a later step can read it is here, and the assert that reads it has to follow its call.
+    last_worktree: Option<String>,
     /// What the last `plugin flush` reported. Kept for the same reason as the line above: what a
     /// flush got through, and which queues it stepped around, is said once as it returns and is
     /// nowhere to be read afterwards — the store shows the state, not who declined to touch it.
@@ -275,6 +279,7 @@ impl<'a> Driver<'a> {
             last_unbind: None,
             last_rebind: None,
             moved: HashMap::new(),
+            last_worktree: None,
             last_flush: None,
             artifacts: HashMap::new(),
             numbers: HashMap::new(),
@@ -460,7 +465,13 @@ impl<'a> Driver<'a> {
     /// the step's business, and treating a document as text here would put an encoding between a
     /// carrier's file and the file this run judges.
     fn run_stdout(&self, args: &[&str]) -> Result<Vec<u8>, String> {
-        let out = self.invoke(args)?;
+        self.run_stdout_in(&self.session.cwd, args)
+    }
+
+    /// The same, from a chosen folder — for a command whose answer is about the repository it is
+    /// typed in rather than about the store.
+    fn run_stdout_in(&self, cwd: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
+        let out = self.invoke_in(cwd, args)?;
         if let Some(code) = self.refused_code(&out) {
             return Err(format!("{REFUSED}{code}"));
         }
@@ -491,6 +502,13 @@ impl<'a> Driver<'a> {
             return Err(format!("`path: {path}` must stay inside the folder it is written into"));
         }
         Ok(p)
+    }
+
+    /// Is the step now running one that declared `refused:`? The commands whose ordinary face is not
+    /// `--json` ask this: a refusal names its code in an `error` object, and only the machine face
+    /// writes one.
+    pub(crate) fn refusing(&self) -> bool {
+        self.refusal.is_some()
     }
 
     /// The code a refusal came back with, but only while a step is expecting one. Amenbo prints the

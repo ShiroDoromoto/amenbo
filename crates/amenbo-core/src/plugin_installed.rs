@@ -33,7 +33,7 @@
 //! not, so a build carrying a newer rule meets documents admitted under older ones, and the file is a
 //! plain one beside the binary that the checksum never covered. So this layer still checks only what it
 //! can — that the files exist, parse, and agree on the name — and the rules are re-asked where what they
-//! guard is actually used (`AMB-D-573`, [`crate::plugin_agent`] for the guide an entry point relays).
+//! guard is actually used (`AMB-D-573`).
 //!
 //! **One broken install never hides the rest.** [`installed`] warns and skips a directory it cannot read,
 //! the same best-effort posture the dispatch resolver takes with a plugin whose config will not resolve

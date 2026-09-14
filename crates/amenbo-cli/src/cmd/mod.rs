@@ -17,7 +17,6 @@ pub(crate) mod lint;
 pub(crate) mod notify;
 pub(crate) mod outbox;
 pub(crate) mod place;
-pub(crate) mod plugin;
 pub(crate) mod premise;
 pub(crate) mod project;
 pub(crate) mod setup;

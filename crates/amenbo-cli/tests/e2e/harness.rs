@@ -335,6 +335,31 @@ pub(crate) fn install_subscribing_plugin(cli: &Cli, name: &str, events: &[&str])
     std::fs::write(&manifest_file, serde_json::to_vec(&manifest).unwrap()).unwrap();
 }
 
+/// Open this plugin's gate for the project the run's folder is bound to, by writing the row `enable`
+/// wrote (`plugin_trust::effective_enabled_in` reads that row and nothing else).
+///
+/// **The row rather than a command**, because there is no longer a command: the `plugin` group has gone
+/// from the CLI with the mechanism's retreat, and the tests that remain are about the *tick* — a
+/// subscriber is what they need, not a way for a person to make one. The gate lives until the mechanism
+/// does, and these tests go with it.
+#[cfg(unix)]
+pub(crate) fn open_the_gate(cli: &Cli, name: &str) {
+    use amenbo_core::store_engine::StoreEngine;
+
+    // The id is a number the store issued and the name is this test's own word, so the two go into the
+    // statement as they are — the crate that would bind them is not a dependency of this face.
+    let project: i64 = cli.bound_project().parse().expect("a project id is a number");
+    let engine = StoreEngine::open(&cli.home.join("store.sqlite")).unwrap();
+    engine
+        .conn()
+        .execute_batch(&format!(
+            "INSERT OR IGNORE INTO plugin_enable (project_id, plugin, created_at, updated_at) VALUES \
+             ({project}, '{name}', strftime('%Y-%m-%dT%H:%M:%SZ','now'), \
+             strftime('%Y-%m-%dT%H:%M:%SZ','now'));"
+        ))
+        .expect("the gate row goes in");
+}
+
 /// The JSON a **runner process** wrote at `path`, waited for (`AMB-T-2175`).
 ///
 /// A runner is launched by the command that queued the event and outlives it, so what the plugin writes

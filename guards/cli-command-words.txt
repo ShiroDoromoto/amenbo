@@ -35,7 +35,6 @@ export
 backup
 restore
 hard-erase
-plugin
 notify
 viewer
 mcp

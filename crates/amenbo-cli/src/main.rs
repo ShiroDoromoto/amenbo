@@ -35,15 +35,14 @@ use cmd::attach::attach;
 use cmd::binding::{bind_cmd, init_cmd, sync_guide, unbind_cmd, whoami};
 use cmd::comment::comment;
 use cmd::config::config;
-use cmd::data::{export, migrate_at_startup, run_backup, run_restore, sync_cmd};
+use cmd::data::{export, migrate_at_startup, run_backup, run_restore};
 use cmd::decision::decision;
 use cmd::dimension::dimension;
 use cmd::hard_erase::hard_erase;
 use cmd::labels::project_label;
 use cmd::lint::lint_cmd;
 use cmd::outbox::{resume_dispatch, resume_the_viewer, with_dispatch};
-use cmd::place::{binding_project, bound_project, location_header, named_project_flag};
-use cmd::plugin::{PluginsAtEntry, plugin_cmd, plugin_validate_cmd, plugins_for_agent};
+use cmd::place::{binding_project, location_header, named_project_flag};
 use cmd::project::project;
 use cmd::setup::{
     agent_hook_answer_cmd, agent_hook_setup, agent_hook_snippet_cmd, hooks_cmd, lint_hook_setup, tick_cmd,
@@ -55,7 +54,7 @@ use cmd::tick::tick_run_cmd;
 use cmd::update::{self_rollback_cmd, self_update_cmd, unstamped_line, update_cmd, version_unbound};
 use mcp::mcp_cmd;
 use output::{
-    count_header, highlight, human, print_json, render_error, CliError, CliErrorCode, Flags,
+    count_header, highlight, human, print_json, render_error, CliError, Flags,
 };
 
 /// The effective project id picked by an explicit override (`--project`). It is a process-wide setting
@@ -101,37 +100,13 @@ fn restore_sigpipe() {
 fn restore_sigpipe() {}
 
 fn real_main() -> i32 {
-    // What was handed to a plugin is taken out of the command line before the parser sees it — the words
-    // after a plugin's name are not Amenbo's to read (see `plugin_words`).
-    let argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
-    let handed = plugin_words(&argv);
-    let amenbos = match &handed {
-        Some((at, _)) => &argv[..=*at],
-        None => &argv[..],
-    };
-    let mut parsed = match retargeted_cli()
-        .try_get_matches_from(amenbos)
+    let parsed = match retargeted_cli()
+        .try_get_matches_from(std::env::args_os())
         .and_then(|m| Cli::from_arg_matches(&m))
     {
         Ok(c) => c,
         Err(e) => return handle_parse_error(e),
     };
-    if let (Some((_, words)), Some(Command::Plugin { sub: PluginCmd::Run { args, .. } })) =
-        (handed, &mut parsed.command)
-    {
-        *args = words;
-    }
-    // `plugin run` keeps no help flag of its own, so a `--help` sitting where the plugin's name goes
-    // is the one nobody else will answer. It is answered here, ahead of the facet and the pointer,
-    // because that is where a help request has always been answered — before the store is opened.
-    if asks_for_own_help(&parsed.command) {
-        return print_plugin_run_help();
-    }
-    if let Some(err) = flag_in_the_name_position(&parsed.command) {
-        // No Flags yet, so render the error with a minimal set.
-        let probe = Flags { json: parsed.json, yes: false, quiet: false, no_color: false, actor: None };
-        return render_error(&probe, &err);
-    }
     // facet (actor kind): `--actor` and nothing else (`AMB-D-408`). An operation that uses the facet —
     // stamping who acted, or drawing how far an AI reaches — must declare one, and gets `facet_required`
     // when it does not. An operation that uses none passes without one and never touches a facet again.
@@ -148,7 +123,7 @@ fn real_main() -> i32 {
         Err(err) => {
             // No Flags yet, so render the error with a minimal set.
             let probe = Flags { json: parsed.json, yes: false, quiet: false, no_color: false, actor: None };
-            return render_error(&probe, &misplaced_flags_hint(&parsed.command, err));
+            return render_error(&probe, &err);
         }
     };
     let flags = Flags {
@@ -190,80 +165,16 @@ fn decide_facet(flag: Option<&str>, require: bool) -> Result<Option<ActorKind>, 
     }
 }
 
-/// Amenbo's own flags, as they are spelled on a command line. After `plugin run <name>` these are not
-/// Amenbo's any more — every word there is the plugin's (`AMB-D-346`) — which is what the hint below
-/// exists to say out loud.
-const OWN_FLAGS: &[&str] = &["--actor", "--json", "--quiet", "--yes", "--no-color"];
 
 /// The flag that takes a value; the rest stand alone. It is also the only one whose misplacement
 /// **explains** a failure, which is why it is what the hint triggers on.
 const FACET_FLAG: &str = "--actor";
 
-/// Say where a flag went, when that is the answer to the failure a person is looking at.
-///
-/// Everywhere else in Amenbo `--json` goes on the end, so that is the habit people bring to `plugin
-/// run` — where the end belongs to the plugin. The `--actor` they typed is then sitting in the
-/// plugin's argv, Amenbo never saw a facet, and what comes back is "facet is unspecified", which
-/// says nothing about the words they actually wrote. This adds the missing half to the hint: the flag
-/// went to the plugin, and here is the same command with Amenbo's flags where Amenbo can see them.
-///
-/// It fires on that pairing alone. A plugin is entitled to a `--json` of its own, so a flag Amenbo
-/// happens to share a spelling with is not a mistake — only a facet that was typed and never arrived
-/// is, and that is the one this can be sure about.
-fn misplaced_flags_hint(cmd: &Option<Command>, err: CliError) -> CliError {
-    if err.code != CliErrorCode::FacetRequired.as_str() {
-        return err;
-    }
-    let Some(Command::Plugin { sub: PluginCmd::Run { name, args } }) = cmd else { return err };
-    let (own, plugins) = split_own_flags(args);
-    if !own.iter().any(|f| f.starts_with(FACET_FLAG)) {
-        return err;
-    }
-    // Every one of Amenbo's flags found is hoisted, not just the facet: leaving a `--json` behind
-    // would hand back a corrected line that still does not answer in JSON.
-    let corrected = [
-        vec![Paths::command_name().to_string()],
-        own.clone(),
-        vec!["plugin".to_string(), "run".to_string(), name.clone()],
-        plugins,
-    ]
-    .concat()
-    .join(" ");
-    CliError {
-        hint: Some(format!(
-            "`{}` went to the plugin, not to Amenbo — after `plugin run {name}` every word is the plugin's. Put Amenbo's flags before it:\n  {corrected}",
-            own.join(" ")
-        )),
-        ..err
-    }
-}
 
-/// Split what was handed to the plugin into Amenbo's own flags (with the value `--actor` carries) and
-/// everything else, each in the order it was written. `--actor=ai` counts as one word, and a bare
-/// `--actor` at the very end counts as itself — a person who wrote either meant Amenbo to read it.
-fn split_own_flags(args: &[String]) -> (Vec<String>, Vec<String>) {
-    let (mut own, mut rest) = (Vec::new(), Vec::new());
-    let mut it = args.iter().peekable();
-    while let Some(arg) = it.next() {
-        let head = arg.split_once('=').map_or(arg.as_str(), |(k, _)| k);
-        if !OWN_FLAGS.contains(&head) {
-            rest.push(arg.clone());
-            continue;
-        }
-        own.push(arg.clone());
-        // `--actor ai` is two words unless it was written as one; the value follows it.
-        if head == FACET_FLAG && !arg.contains('=') {
-            if let Some(value) = it.next_if(|v| !v.starts_with('-')) {
-                own.push(value.clone());
-            }
-        }
-    }
-    (own, rest)
-}
 
-/// Amenbo's own flags as they may stand **ahead of a plugin's name**, and whether each takes the word
-/// after it. This is the whole set a reader is allowed to write there (`amenbo plugin run --json worktree
-/// …`), so it is also the set [`plugin_words`] steps over on its way to the name.
+/// Amenbo's own flags as they may stand **ahead of the command**, and whether each takes the word after
+/// it. It is what a reader of a line has to step over to reach the word that names the command, which is
+/// the question the MCP face asks of the words a caller sent ([`crate::mcp`]).
 const FLAGS_BEFORE_THE_NAME: &[(&str, bool)] = &[
     ("--json", false),
     ("--quiet", false),
@@ -287,123 +198,11 @@ fn flag_before_the_name(word: &str) -> Option<bool> {
         .map(|(_, takes_value)| *takes_value && !joined)
 }
 
-/// Where the plugin's name stands in this command line, and the words handed to the plugin after it —
-/// `None` when this invocation is not a `plugin run` with anything trailing the name.
-///
-/// **After the name every word is the plugin's** (`AMB-D-346`), and that line cannot be held by the
-/// parser alone: Amenbo's flags are global, so the parser answers for one wherever it appears — including
-/// the first word after the name, which the plugin never then sees. A plugin author who puts `--json` or
-/// `--yes` on their own face would find Amenbo quietly eating it. So the split is made here, over the raw
-/// command line, and the parser is handed only the words up to and including the name.
-///
-/// The name is the first word after `run` that is not one of Amenbo's own (`amenbo plugin run --json
-/// worktree …` is the documented place for those). Whatever lands there is the name position, a flag
-/// included — that is where `plugin run --help` goes, and where a flag written one word too late is
-/// reported from.
-///
-/// A word that is not valid UTF-8 anywhere in the line gives `None`: the parser owns that error, and it
-/// says it better than a splitter could.
-fn plugin_words(argv: &[std::ffi::OsString]) -> Option<(usize, Vec<String>)> {
-    let at = name_position(argv)?;
-    let handed = argv.get(at + 1..).filter(|words| !words.is_empty())?;
-    let words: Vec<String> =
-        handed.iter().map(|w| w.to_str().map(str::to_string)).collect::<Option<_>>()?;
-    Some((at, words))
-}
 
-/// Walk the command line to the word standing where a plugin's name goes. Only the path `plugin run`
-/// leads there, so anything else — another subcommand, a stray word, a flag Amenbo does not answer for
-/// before the path is complete — ends the walk with `None` and leaves the line to the parser.
-fn name_position(argv: &[std::ffi::OsString]) -> Option<usize> {
-    let mut i = 1;
-    for step in ["plugin", "run"] {
-        loop {
-            let word = argv.get(i)?.to_str()?;
-            match flag_before_the_name(word) {
-                Some(takes_value) => i += if takes_value { 2 } else { 1 },
-                None if word == step => {
-                    i += 1;
-                    break;
-                }
-                // Any other word means this line goes somewhere else entirely.
-                None => return None,
-            }
-        }
-    }
-    // Amenbo's own flags reach one word further than the path does: written here they are still ahead of
-    // the name, and still Amenbo's.
-    while let Some(takes_value) = flag_before_the_name(argv.get(i)?.to_str()?) {
-        i += if takes_value { 2 } else { 1 };
-    }
-    // Whatever stands here is the name — a flag Amenbo does not answer for included, since past `run`
-    // there is nobody else left to read it.
-    argv.get(i)?.to_str()?;
-    Some(i)
-}
 
-/// How a person asks for help, in both spellings.
-const HELP_FLAGS: &[&str] = &["--help", "-h"];
 
-/// Is this a `plugin run` with a help flag standing where the plugin's name goes?
-///
-/// After the name every word is the plugin's (`AMB-D-346`), `--help` included — which is exactly the
-/// one a plugin's author puts its usage behind, so Amenbo answering it would hide the very text the
-/// person asked for. `plugin run` therefore carries no help flag of its own and the word travels
-/// through untouched. What is left is the form that names no plugin at all: there, the request is
-/// Amenbo's to answer, and the name is the position the flag lands in.
-///
-/// A plugin cannot be called `--help`: a catalog name is `[a-z0-9-]`, so nothing legitimate is shadowed.
-fn asks_for_own_help(cmd: &Option<Command>) -> bool {
-    matches!(
-        cmd,
-        Some(Command::Plugin { sub: PluginCmd::Run { name, .. } }) if HELP_FLAGS.contains(&name.as_str())
-    )
-}
 
-/// A word starting with a hyphen where the plugin's name goes, and it is not a help flag.
-///
-/// The position takes hyphens at all so that `--help` has somewhere to land; nothing else written there
-/// can be a plugin (`[a-z0-9-]`, never leading), so it is a flag of Amenbo's put one word too late —
-/// they all go ahead of the name. Saying that is the answer; hunting the catalog for a plugin nobody
-/// could have installed is not.
-fn flag_in_the_name_position(cmd: &Option<Command>) -> Option<CliError> {
-    let Some(Command::Plugin { sub: PluginCmd::Run { name, args } }) = cmd else { return None };
-    if !name.starts_with('-') {
-        return None;
-    }
-    let corrected = [
-        vec![Paths::command_name().to_string(), name.clone()],
-        vec!["plugin".to_string(), "run".to_string()],
-        args.clone(),
-    ]
-    .concat()
-    .join(" ");
-    Some(CliError {
-        code: "invalid_value",
-        message: format!("'{name}' is a flag, not a plugin's name"),
-        hint: Some(format!(
-            "Amenbo's flags go before the plugin's name — after it every word is the plugin's:\n  {corrected}"
-        )),
-        exit: 2,
-    })
-}
 
-/// Print `plugin run`'s own help, the way clap would have.
-///
-/// It is rendered off the same retargeted tree the parse ran against, so a dev build's help names the
-/// command that build installs, exactly as every other help does. The tree is built first, which is what
-/// gives a subcommand the full path to itself — without it the usage line opens at `run`, naming no
-/// command anyone can type.
-fn print_plugin_run_help() -> i32 {
-    let mut cli = retargeted_cli();
-    cli.build();
-    let run = cli
-        .find_subcommand_mut("plugin")
-        .and_then(|plugin| plugin.find_subcommand_mut("run"))
-        .expect("`plugin run` is in the command tree this arm was reached through");
-    print!("{}", run.render_long_help());
-    0
-}
 
 /// Does this command **use** the facet (human/ai)? There are two consumers, and either one counts
 /// (`AMB-D-408`):
@@ -452,9 +251,6 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // A carrier is handed the store to carry and takes the turn its launcher's write earned; it
         // creates nothing and assigns nothing, so there is no facet for it to declare (`AMB-D-884`).
         | Command::ViewerCarrier { .. }
-        // `validate` reads a manifest file the author names and touches no store at all — unlike the rest
-        // of the group, which moves this machine's plugin state and the plugin's own per-project rows.
-        | Command::Plugin { sub: PluginCmd::Validate { .. } }
         // The surface layer speaks to the pane on screen and writes to no store (`AMB-D-749`), so there
         // is no author to stamp and no reach to draw — which is why it takes no `--actor` at all.
         | Command::Talk { .. } => false,
@@ -488,9 +284,6 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         | Command::Restore { .. } // replaces the truth source from a snapshot; maintenance op, records no facet or activity
         | Command::HardErase { .. } // physically erases append-only content; maintenance op, records no facet or activity
         | Command::Export { .. }
-        // The carrier's road out: both faces read (a version, a snapshot) and neither records an act —
-        // which is what lets a plugin call them with no facet at all (`facet_required`).
-        | Command::Sync { .. }
         | Command::Lint { .. } // reads the text it is handed; no store, so nothing to stamp a facet onto
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
@@ -501,18 +294,15 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         | Command::ViewerCarrier { .. }
         // The MCP server writes nothing itself; what its tool calls run is a child that stamps its own.
         | Command::Mcp { .. }
-        // `validate` reads a manifest file the author names and touches no store at all; the rest of the
-        // group moves this machine's plugin state and the plugin's own per-project rows (settings, the
-        // enable gate). Those are local settings like `config`: they carry no author and leave no activity
-        // to stamp a facet onto.
-        | Command::Plugin { .. }
+        // The lint hook's answer: a per-project row that records it, with no author to stamp and no
+        // activity behind it.
         | Command::Hooks { .. }
         // The hourly tick's answer: a config key and a registration in the OS, with no author to stamp
         // and no activity behind it.
         | Command::Tick { .. }
         // The Viewer's own: the device's secrets, and the carrier's memory of where it left off. Nothing
         // here is a project's row, nothing records an act, and there is no author for one to be stamped
-        // onto — the carrier's road out (`Sync` above) for the same reason.
+        // onto.
         | Command::Viewer { .. }
         // A worktree is a checkout on disk. It reads the task to see whether this is the repository that
         // task is worked in (`AMB-D-649`) — a read, which is why the facet is still declared — and writes
@@ -692,7 +482,6 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         | Some(Command::PluginRunner { .. })
         | Some(Command::NotifySender { .. })
         | Some(Command::ViewerCarrier { .. })
-        | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
         // The MCP server is launched by a host, from whatever directory that host happened to be in, and
         // it opens no store there. The folder that decides anything is `--dir`, and the child that runs in
         // it meets this guard itself — one answer, given where it is owed.
@@ -784,7 +573,6 @@ fn pointer_store_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBu
             | Some(Command::PluginRunner { .. })
             | Some(Command::NotifySender { .. })
             | Some(Command::ViewerCarrier { .. })
-            | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
             | Some(Command::Mcp { .. })
             | Some(Command::Tick { sub: TickCmd::Run })
             | Some(Command::Talk { .. })
@@ -944,10 +732,6 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             amenbo_core::viewer::send::carry_process(store.into());
             return Ok(0);
         }
-        // `plugin validate` reads a manifest file the author points at — no store, no binding, no facet, on
-        // the same store-free footing as `lint`. It sits ahead of the exec guard so an author can run it in
-        // any directory (their plugin's, a CI checkout), not only a bound one.
-        Some(Command::Plugin { sub: PluginCmd::Validate { path } }) => return plugin_validate_cmd(flags, path.clone()),
         // `agent-hook snippet` reads the catalog and this build's own name, and that is all it needs
         // (`AMB-D-440`): store-free like `lint`, so the answer is the same in a bound folder, a fresh
         // clone, and a checkout nobody has bound at all — which is where somebody wiring their tool for
@@ -1070,7 +854,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     if plugin_window.is_none()
         && !matches!(
             cli.command,
-            Some(Command::Plugin { sub: PluginCmd::Flush }) | Some(Command::Tick { sub: TickCmd::Run })
+            Some(Command::Tick { sub: TickCmd::Run })
         )
     {
         resume_dispatch(&store);
@@ -1276,11 +1060,6 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             // The default is the entry point: how to work, in full; commands, as an index. `--full` piles on
             // every command's spec.
             let mut spec = if full { agent::build() } else { agent::build_index() };
-            // Asked once, and the whole of what plugins put in this document: the shelf they are named
-            // on, and the lines their authors hung on Amenbo's own steps. Asking twice would walk the
-            // disk twice and let the two halves disagree.
-            let PluginsAtEntry { list, tools, empty_because } =
-                plugins_for_agent(&store, bound_project(&store));
             if let serde_json::Value::Object(map) = &mut spec {
                 // Fill in the static spec's `updateAvailable` (false by default) with what the upstream
                 // actually says, so an AI can learn that an update is out.
@@ -1292,22 +1071,6 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     "store_status".to_string(),
                     serde_json::to_value(&vs).unwrap_or(serde_json::Value::Null),
                 );
-                // What the user installed and switched on here (`AMB-D-437`) — in the author's own words
-                // when Amenbo is that author, and as the callable line alone when it is not
-                // (`AMB-D-575`/`AMB-D-576`). A key of its own, never folded into `cycles`: those are
-                // Amenbo's own working practice and Amenbo answers for every line of them, while these
-                // are a third party's — kept on a separate shelf so a reader can always tell whose words
-                // they are reading. Runtime like the fields above, and for the same reason: what is
-                // installed and open is the store's answer, not the static spec's.
-                map.insert("plugins".to_string(), list);
-                // Only when there is nothing to name: a reader with a list in hand has no use for a
-                // sentence about lists that are empty, and the key's presence is itself the answer.
-                if let Some(why) = empty_because {
-                    map.insert(
-                        "pluginsEmptyBecause".to_string(),
-                        serde_json::Value::String(why.to_string()),
-                    );
-                }
             }
             // Where git is not in play, drop the `worktree` cycle outright rather than letting it arrive
             // with a "if you use git" caveat: a caveat still spends the reader's context, and what the
@@ -1325,11 +1088,6 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 // them, and that advice holds over a file or piped text with no git anywhere near it.
                 amenbo_core::agent::drop_git_only_steps(&mut spec);
             }
-            // And where a plugin's author named a step of Amenbo's own cycle, hang the line to type on
-            // that step (`AMB-D-571`): the advice and the tool for it are otherwise in one document
-            // with no way to reach each other, which leaves an AI told to cut a worktree with no hand.
-            // After the cycle drop above, so a step this run does not carry gets nothing hung on it.
-            amenbo_core::agent::attach_tools(&mut spec, &tools);
             print_json(&spec);
         }
         Command::Version => {
@@ -1406,7 +1164,6 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         | Command::ViewerCarrier { .. } => {
             unreachable!("handled before open")
         }
-        Command::Plugin { sub } => return plugin_cmd(&mut store, flags, sub),
         // Notifications: the device's shelf and what this project reports through it (`AMB-D-885`). The
         // writes ride the dispatch seam like every other, so a target raised here is on the shelf before
         // the next write goes looking for it.
@@ -1620,7 +1377,6 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::Decision { sub } => return with_dispatch(&mut store, |s| decision(s, flags, sub)),
         Command::Attach { sub } => return attach(&mut store, flags, sub),
         Command::Export { out } => return export(&store, flags, out),
-        Command::Sync { sub } => return sync_cmd(&store, flags, sub),
         Command::Backup { path } => return run_backup(&store, flags, path),
         Command::HardErase { sub } => return hard_erase(&mut store, flags, sub),
         Command::Restore { .. } => {
@@ -1835,99 +1591,8 @@ mod tests {
         assert_eq!(decide_facet(Some("robot"), false).err().map(|e| e.code), Some("invalid_value"));
     }
 
-    /// Amenbo's flags are told from the plugin's by their spelling, in the order they were written, and
-    /// `--actor` keeps the value that follows it — the corrected line has to be one a person can paste,
-    /// which means it carries the value too.
-    #[test]
-    fn amenbo_flags_are_picked_out_of_what_was_handed_to_the_plugin() {
-        let split = |args: &[&str]| {
-            let owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
-            let (own, rest) = split_own_flags(&owned);
-            (own.join(" "), rest.join(" "))
-        };
-        assert_eq!(split(&["start", "1", "--actor", "ai"]), ("--actor ai".into(), "start 1".into()));
-        assert_eq!(split(&["start", "--actor=ai"]), ("--actor=ai".into(), "start".into()));
-        assert_eq!(
-            split(&["start", "--json", "--actor", "ai", "--yes"]),
-            ("--json --actor ai --yes".into(), "start".into())
-        );
-        // A flag Amenbo does not answer for is the plugin's, whatever it looks like.
-        assert_eq!(split(&["start", "--branch", "main"]), (String::new(), "start --branch main".into()));
-        // A bare `--actor` at the end takes no value with it, and the next flag is not eaten as one.
-        assert_eq!(split(&["--actor", "--json"]), ("--actor --json".into(), String::new()));
-    }
 
-    /// The boundary the parser cannot hold: from the plugin's name onward every word is the plugin's,
-    /// Amenbo's own spellings included, while the same flags written ahead of the name stay Amenbo's.
-    /// A line that goes anywhere else is left alone for the parser to read as it always has.
-    #[test]
-    fn the_words_after_a_plugins_name_are_taken_off_the_command_line() {
-        let split = |line: &str| {
-            let argv: Vec<std::ffi::OsString> =
-                line.split_whitespace().map(std::ffi::OsString::from).collect();
-            plugin_words(&argv).map(|(at, words)| (argv[at].to_str().unwrap().to_string(), words.join(" ")))
-        };
-        let handed = |line: &str| split(line).map(|(_, words)| words);
 
-        // The word right after the name — the one position the parser answered for itself.
-        assert_eq!(split("amenbo plugin run worktree --actor ai"), Some(("worktree".into(), "--actor ai".into())));
-        assert_eq!(handed("amenbo plugin run worktree --json"), Some("--json".into()));
-        assert_eq!(handed("amenbo plugin run worktree -y start"), Some("-y start".into()));
-        // Ahead of the name they are Amenbo's, and the name is still found past them.
-        assert_eq!(split("amenbo plugin run --json worktree start"), Some(("worktree".into(), "start".into())));
-        assert_eq!(split("amenbo --actor ai plugin run worktree start"), Some(("worktree".into(), "start".into())));
-        assert_eq!(split("amenbo plugin run --actor=ai worktree start"), Some(("worktree".into(), "start".into())));
-        // Nothing trailing the name: there is nothing to take off, so the line is left whole.
-        assert_eq!(handed("amenbo plugin run worktree"), None);
-        assert_eq!(handed("amenbo plugin run"), None);
-        // The name position holds whatever was written there, a flag included — that is where Amenbo's
-        // own help lands, and where a misplaced flag is reported from.
-        assert_eq!(handed("amenbo plugin run --help"), None);
-        assert_eq!(split("amenbo plugin run --jsn usage"), Some(("--jsn".into(), "usage".into())));
-        // Another command entirely, and a word standing where the path should be.
-        assert_eq!(handed("amenbo plugin log usage"), None);
-        assert_eq!(handed("amenbo task list --json"), None);
-        assert_eq!(handed("amenbo --help plugin run worktree start"), None);
-    }
-
-    /// The hint fires on one pairing: a facet that was typed, went to the plugin, and so never arrived.
-    /// A plugin is entitled to a `--json` of its own, so a shared spelling alone is not a mistake — and
-    /// no other failure is explained by where the flag was written.
-    #[test]
-    fn the_misplaced_flag_hint_fires_only_where_it_is_the_explanation() {
-        let run = |args: &[&str]| {
-            Some(Command::Plugin {
-                sub: PluginCmd::Run {
-                    name: "worktree".to_string(),
-                    args: args.iter().map(|s| s.to_string()).collect(),
-                },
-            })
-        };
-        let hint = |cmd: &Option<Command>, err: CliError| {
-            misplaced_flags_hint(cmd, err).hint.unwrap_or_default()
-        };
-
-        // The facet went to the plugin: the hint says so, and hands back the line to paste.
-        let told = hint(&run(&["start", "1", "--actor", "ai"]), CliError::facet_required());
-        assert!(told.contains("went to the plugin"), "{told}");
-        assert!(told.contains("plugin run worktree start 1"), "the corrected line is complete: {told}");
-        assert!(told.contains("--actor ai plugin run"), "the flag is hoisted in front: {told}");
-
-        // No facet among them: the failure is that none was declared, not where one was written.
-        let plain = hint(&run(&["start", "--json"]), CliError::facet_required());
-        assert!(!plain.contains("went to the plugin"), "{plain}");
-
-        // Another command's facet_required is not about a plugin's argv at all.
-        let elsewhere = hint(&Some(Command::Version), CliError::facet_required());
-        assert!(!elsewhere.contains("went to the plugin"), "{elsewhere}");
-
-        // And another failure of the same command is left as it was — this explains one thing.
-        let other = misplaced_flags_hint(
-            &run(&["start", "--actor", "ai"]),
-            CliError { code: "not_found", message: "x".into(), hint: None, exit: 1 },
-        );
-        assert!(other.hint.is_none(), "only the failure it explains is touched");
-    }
 
     /// The facet is used by the writes that stamp it **and** by the reads that draw an AI's reach from it;
     /// false is the narrow set that touches neither. This line is what `--actor` is demanded by, so a read
@@ -1944,7 +1609,6 @@ mod tests {
         assert!(!uses_facet(&Some(Command::AgentHook {
             sub: AgentHookCmd::Snippet { tool: "claude-code".to_string(), copy: false }
         })));
-        assert!(!uses_facet(&Some(Command::Plugin { sub: PluginCmd::Validate { path: "p.yaml".to_string() } })));
         // Reads that surface store content draw the reach, so they use the facet too.
         assert!(uses_facet(&None)); // discover: this project's work
         assert!(uses_facet(&Some(Command::Status { scope: "today".to_string() })));
@@ -1957,9 +1621,6 @@ mod tests {
         assert!(uses_facet(&Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string() } })));
         assert!(uses_facet(&Some(Command::Comment { sub: CommentCmd::Add { task: "x".to_string(), text: "t".to_string() } })));
         assert!(uses_facet(&Some(Command::Doctor { fix: true })));
-        // The rest of the plugin group moves per-project rows, so only `validate` is outside.
-        assert!(uses_facet(&Some(Command::Plugin { sub: PluginCmd::List })));
-        assert!(uses_facet(&Some(Command::Plugin { sub: PluginCmd::Enable { name: "p".to_string() } })));
     }
 
     /// `stamps_facet` is the write half alone: it must not claim a read, because on the plugin face this is
@@ -1973,7 +1634,6 @@ mod tests {
         assert!(!stamps_facet(&Some(Command::Status { scope: "today".to_string() })));
         assert!(!stamps_facet(&Some(Command::Doctor { fix: false })));
         // Changing something while naming no author: this machine's settings and its plugin state.
-        assert!(!stamps_facet(&Some(Command::Plugin { sub: PluginCmd::Enable { name: "p".to_string() } })));
         // Writes name an author.
         assert!(stamps_facet(&Some(Command::Comment { sub: CommentCmd::Add { task: "x".to_string(), text: "t".to_string() } })));
         assert!(stamps_facet(&Some(Command::Task { sub: TaskCmd::Status { id: "x".to_string(), status: "in_progress".to_string() } })));
@@ -2005,7 +1665,6 @@ mod tests {
             Some(Command::Agent { command: None, full: false }),
             Some(Command::Update { print: false, apply: false, rollback: false }),
             Some(Command::Bind { project: None, dir: None, force: false, rebind: None }),
-            Some(Command::Plugin { sub: PluginCmd::List }),
             Some(Command::Doctor { fix: false }),
             Some(Command::Doctor { fix: true }),
             Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string() } }),

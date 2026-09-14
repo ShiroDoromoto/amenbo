@@ -104,16 +104,6 @@ path = "tests/e2e/process.rs"
 required-features = ["e2e"]
 
 [[test]]
-name = "cli_e2e_plugin"
-path = "tests/e2e/plugin.rs"
-required-features = ["e2e"]
-
-[[test]]
-name = "cli_e2e_plugin_run"
-path = "tests/e2e/plugin_run.rs"
-required-features = ["e2e"]
-
-[[test]]
 name = "cli_e2e_mcp"
 path = "tests/e2e/mcp.rs"
 required-features = ["e2e"]

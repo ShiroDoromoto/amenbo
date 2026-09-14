@@ -471,77 +471,40 @@ fn argv_for(name: &str, args: &Value) -> Result<Shaped, (i64, String)> {
 /// writes recorded as the person's and its reach widened past the bound project, so the value is never
 /// the caller's to choose. And `bind` / `init` are refused outright.
 ///
-/// Where the caller's words stop being Amenbo's is [`read_line`]'s answer: after `plugin run <name>`
-/// every word is the plugin's (`AMB-D-346`), and a `--actor` standing there is a word on the plugin's
-/// own face, not a facet for Amenbo. Taking it away would quietly break a call Amenbo never read.
+/// Which command the line names is [`read_subcommand`]'s answer, read the way the parser will read it:
+/// over Amenbo's own flags, to the first word that is not one.
 fn shape(words: &[String]) -> Shaped {
-    let line = read_line(words);
-    if let Some(refused) = line.subcommand.as_deref().filter(|s| REFUSED.contains(s)) {
+    if let Some(refused) = read_subcommand(words).as_deref().filter(|s| REFUSED.contains(s)) {
         return Shaped::Refused(format!(
             "`{refused}` is not served over MCP: it writes the pointer that says which project a folder is, and the folders this server works in are the person's to choose. Ask the person to run `{} {refused} …` in the folder itself, or to add the folder to a project in Amenbo's own window.",
             Paths::command_name()
         ));
     }
     let mut argv = vec![FACET_FLAG.to_string(), OUR_FACET.to_string()];
-    argv.extend(without_the_callers_facet(words, line.plugin_tail));
+    argv.extend(without_the_callers_facet(words));
     Shaped::Run(argv)
 }
 
-/// How the caller's line reads to the parser: the subcommand it names, and where its words stop being
-/// Amenbo's own.
-struct Line {
-    /// The first word that is not one of Amenbo's flags — `None` for a line that is all flags, which is
-    /// Amenbo with no command (today's work).
-    subcommand: Option<String>,
-    /// Everything from here on belongs to a plugin; `words.len()` when nothing does.
-    plugin_tail: usize,
-}
-
-/// Walk the caller's words the way the parser will: over Amenbo's own flags, to the subcommand, and — on
-/// the one path that leads there — past `plugin run` to the plugin's name.
-fn read_line(words: &[String]) -> Line {
+/// The command the caller's line names, read the way the parser will: over Amenbo's own flags, to the
+/// first word that is not one. `None` is a line that is all flags, which is Amenbo with no command
+/// (today's work).
+fn read_subcommand(words: &[String]) -> Option<String> {
     let mut i = 0;
-    let mut subcommand = None;
-    let mut path = ["plugin", "run"].iter();
-    let mut step = path.next();
     while let Some(word) = words.get(i) {
         if let Some(takes_value) = flag_before_the_name(word) {
             i += if takes_value { 2 } else { 1 };
             continue;
         }
-        if subcommand.is_none() {
-            subcommand = Some(word.clone());
-        }
-        match step {
-            Some(expected) if word == *expected => {
-                i += 1;
-                step = path.next();
-            }
-            // Any other word means this line goes somewhere else entirely, and all of it is Amenbo's.
-            _ => break,
-        }
-        if step.is_none() {
-            // `plugin run` is complete. Amenbo's own flags may still stand ahead of the name, and the
-            // name itself is Amenbo's to read; everything after it is the plugin's.
-            while let Some(takes_value) = words.get(i).and_then(|w| flag_before_the_name(w)) {
-                i += if takes_value { 2 } else { 1 };
-            }
-            return Line { subcommand, plugin_tail: words.len().min(i + 1) };
-        }
+        return Some(word.clone());
     }
-    Line { subcommand, plugin_tail: words.len() }
+    None
 }
 
 /// The caller's words with every facet of theirs taken out of Amenbo's own half of the line.
-fn without_the_callers_facet(words: &[String], plugin_tail: usize) -> Vec<String> {
+fn without_the_callers_facet(words: &[String]) -> Vec<String> {
     let mut kept = Vec::with_capacity(words.len());
     let mut i = 0;
     while let Some(word) = words.get(i) {
-        if i >= plugin_tail {
-            kept.push(word.clone());
-            i += 1;
-            continue;
-        }
         let head = word.split_once('=').map_or(word.as_str(), |(k, _)| k);
         if head != FACET_FLAG {
             kept.push(word.clone());
@@ -805,23 +768,18 @@ mod tests {
         assert_eq!(ran(&["--actor", "--json", "status"]), vec!["--actor", "ai", "--json", "status"]);
     }
 
-    /// After `plugin run <name>` every word is the plugin's (`AMB-D-346`) — including one spelled like
-    /// Amenbo's facet, which Amenbo never reads there.
+    /// Every `--actor` on the line is the caller's and every one of them goes: the value is never theirs
+    /// to choose, and there is no longer any part of a line that belongs to somebody else.
     #[test]
-    fn a_word_of_the_plugin_s_own_is_left_alone() {
+    fn every_facet_the_caller_wrote_is_taken_out() {
         assert_eq!(
-            ran(&["plugin", "run", "worktree", "start", "3127", "--actor", "human"]),
-            vec!["--actor", "ai", "plugin", "run", "worktree", "start", "3127", "--actor", "human"],
+            ran(&["task", "show", "3127", "--actor", "human"]),
+            vec!["--actor", "ai", "task", "show", "3127"],
         );
-        // Amenbo's own flags may stand ahead of the name, and one there is still Amenbo's.
+        // Ahead of the command as readily as after it.
         assert_eq!(
-            ran(&["plugin", "run", "--json", "worktree", "--actor", "human"]),
-            vec!["--actor", "ai", "plugin", "run", "--json", "worktree", "--actor", "human"],
-        );
-        // The path has to be complete: `plugin list` hands nothing to anybody.
-        assert_eq!(
-            ran(&["plugin", "list", "--actor", "human"]),
-            vec!["--actor", "ai", "plugin", "list"],
+            ran(&["--actor", "human", "--json", "task", "list"]),
+            vec!["--actor", "ai", "--json", "task", "list"],
         );
     }
 

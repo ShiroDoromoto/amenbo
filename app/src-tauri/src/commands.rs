@@ -3914,6 +3914,51 @@ pub fn tick_banner_later() -> Result<(), CmdError> {
     Ok(())
 }
 
+/// What this window still owes the reader about the plugins becoming part of Amenbo, or `None` when
+/// there is nothing to say (`AMB-D-884` / [`amenbo_core::handover`]).
+///
+/// Read **once, at app startup**, beside the tick's question and for the same reason: the migration that
+/// took the plugins in has already run by the time anything mounts, so the answer cannot change under the
+/// window. A machine with no store yet says nothing — the account is written by a migration, and a store
+/// that was never carried has had none.
+///
+/// **A record naming no plugin says nothing either.** The migration writes its account whenever anything
+/// came across, and a device that held a connection without having the plugin's body on disk leaves the
+/// list empty; a band opening "the plugins are part of Amenbo now" over a device that had none names
+/// something the reader never installed. The command line takes the same turning
+/// (`announce_the_handover`).
+///
+/// Core's `handover` is what this reads. It is not [`crate::handover`], which is the agent's opening
+/// instruction and has nothing to do with plugins.
+#[tauri::command]
+pub fn handover_notice() -> Result<Option<crate::dto::HandoverDto>, CmdError> {
+    let paths = amenbo_core::config::Paths::resolve()?;
+    if amenbo_core::env::home().is_none() && !paths.store_file.exists() {
+        return Ok(None);
+    }
+    let held = open_store_read()?.handover_waiting(amenbo_core::handover::surface::GUI)?;
+    Ok(held.filter(|h| !h.plugins.is_empty()).map(|h| crate::dto::HandoverDto {
+        plugins: h.plugins,
+        targets: h.targets,
+        projects: h.projects,
+        viewer: h.viewer,
+    }))
+}
+
+/// Write down that this window has said it — what putting the band away records, and the whole of what it
+/// records (`AMB-D-884`).
+///
+/// **The command line's turn is untouched.** The account holds one mark per surface, so a reader who
+/// upgraded from a terminal and never saw the sentence there is still told here, and the reverse.
+///
+/// Marked on the dismiss rather than on the mount, the way the command line marks it after the sentence
+/// has actually been written: a band nobody has read yet is a turn nobody has taken.
+#[tauri::command]
+pub fn handover_told() -> Result<(), CmdError> {
+    open_store()?.handover_told(amenbo_core::handover::surface::GUI)?;
+    Ok(())
+}
+
 /// What is written on this project's draft page ([`amenbo_core::memo`]).
 ///
 /// It is the one place in Amenbo that is not a record: where a long request is put together before
@@ -5828,6 +5873,14 @@ pub(crate) mod tests {
         std::fs::write(dir.join(program), b"x").unwrap();
     }
 
+    /// Write the account a handover migration would have left, straight onto the store's `store_meta` —
+    /// the migration itself runs on a store carried from an older version, which no test here stands up.
+    fn seed_handover(raw: &str) {
+        let paths = amenbo_core::config::Paths::resolve().unwrap();
+        let engine = amenbo_core::store_engine::StoreEngine::open(&paths.store_file).unwrap();
+        engine.set_meta("plugins_carried_in", Some(raw)).unwrap();
+    }
+
     /// The same plant for a plugin whose author declared no settings at all.
     fn plant_plugin(home: &std::path::Path, name: &str) {
         plant_plugin_with(home, name, serde_json::json!([]));
@@ -5854,6 +5907,53 @@ pub(crate) mod tests {
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         manifest["settings"] = serde_json::json!({ "check": "config check" });
         std::fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    }
+
+    /// The window owes the sentence on its own, and putting the band away is what takes its turn — the
+    /// command line's is untouched, so a reader who upgraded from a terminal is still told here.
+    #[test]
+    fn the_window_owes_the_handover_until_the_band_is_put_away() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-handover");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        seed_handover(
+            r#"{"plugins":["slack","worktree"],"targets":2,"projects":3,"viewer":true,"told":[]}"#,
+        );
+
+        let owed = handover_notice().unwrap().expect("the window has not said it yet");
+        assert_eq!(owed.plugins, vec!["slack".to_string(), "worktree".to_string()]);
+        assert_eq!(owed.targets, 2);
+        assert_eq!(owed.projects, 3);
+        assert!(owed.viewer);
+
+        handover_told().unwrap();
+        assert!(handover_notice().unwrap().is_none(), "said once is said");
+        // The account stays, and the command line's turn with it.
+        let store = Store::open().unwrap();
+        assert!(
+            store.handover_waiting(amenbo_core::handover::surface::CLI).unwrap().is_some(),
+            "the terminal has still not said it",
+        );
+    }
+
+    /// An account naming no plugin is not a band: it would open with "the plugins are part of Amenbo
+    /// now" over a device that never installed one.
+    #[test]
+    fn an_account_that_names_no_plugin_puts_no_band_up() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-handover-empty");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        seed_handover(r#"{"plugins":[],"targets":1,"projects":1,"viewer":false,"told":[]}"#);
+        assert!(handover_notice().unwrap().is_none());
+    }
+
+    /// A device no migration ever ran on has nothing to say, and asking costs it no store.
+    #[test]
+    fn a_device_that_was_never_carried_says_nothing() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-handover-none");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        assert!(handover_notice().unwrap().is_none());
     }
 
     /// The GUI's creation screen asks for a name and nothing else, so the view a new project opens on

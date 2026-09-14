@@ -16,6 +16,7 @@ import { UpdateBanner, UpdateCheckFeedback } from "../components/UpdateBanner";
 import { HealthBanner } from "../components/HealthBanner";
 import { ManagedBlockBanner } from "../components/ManagedBlockBanner";
 import { OrphanBindingBanner } from "../components/OrphanBindingBanner";
+import { HandoverBanner } from "../components/HandoverBanner";
 import { HookSetupBanner } from "../components/HookSetupBanner";
 import { TickBanner } from "../components/TickBanner";
 import { ListScreen } from "../screens/ListScreen";
@@ -567,6 +568,10 @@ export function AppShell() {
         <HealthBanner />
         <ManagedBlockBanner />
         <OrphanBindingBanner />
+        {/* Ahead of the hooks warning: this one explains something that has already happened to the
+            app the reader just opened, and reading it first is what makes the missing Plugins screen
+            make sense. */}
+        <HandoverBanner />
         <HookSetupBanner asked={hooksAsked} />
         <TickBanner />
         {/* The open that is still out. It is a band rather than something on the terminal segment

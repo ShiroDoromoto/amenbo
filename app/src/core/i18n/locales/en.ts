@@ -997,6 +997,14 @@ const ui = {
   "hookSetup.unwired": "{slots}: no hook there. `{cmd}` installs it.",
   "hookRestored.title": "Amenbo restored its lint block",
   "hookRestored.slots": "{slots}: the block had been changed or removed — restored it to the current version.",
+  // Where the plugins went, said once (`AMB-D-884`). The band names what was installed on this device
+  // and what came across with it; the Viewer's line is there because its next send places the whole
+  // backlog again, which is a wait worth warning about rather than a setting that moved.
+  "handover.title": "The plugins are part of Amenbo now",
+  "handover.plugins": "{plugins} — there is nothing left to install and nothing left to enable.",
+  "handover.notify": "Your mail and Slack settings came with them: {targets} connection(s) on this device, and {projects} project(s) reporting through them.",
+  "handover.viewer": "The Viewer is this device's own setting now, with the keys your phone was paired on. Its next send places the whole backlog again, so that one takes longer than usual.",
+  "handover.worktree": "Cutting a task its own worktree is Amenbo's own command now.",
   // The standing row on a project's own screen — the whole of what the GUI says about the session-start
   // hook. It speaks for one project and names that project's folders, and the last of its buttons is the
   // "no" that ends it.

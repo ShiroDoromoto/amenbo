@@ -1172,6 +1172,30 @@ pub struct HookNoticeDto {
     pub(crate) restored: Vec<String>,
 }
 
+/// What the plugins became, for the band that says so once (`AMB-D-884` / [`amenbo_core::handover`]).
+///
+/// It carries the counts and the names, never the sentence — the wording is the screen's, in the
+/// reader's own language, the way [`HookNoticeDto`] hands over its slots rather than its warning.
+///
+/// The Viewer's line is its own field rather than a name in [`HandoverDto::plugins`], because what is
+/// said about it is not "it moved": a device that was carrying starts its next send by placing the whole
+/// backlog again, and that is a fact about what happens next rather than about where a setting went.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct HandoverDto {
+    /// Which of the four were installed on this device, in the order the migration takes them.
+    pub(crate) plugins: Vec<String>,
+    /// How many connections landed on this device's notification shelf.
+    #[ts(type = "number")]
+    pub(crate) targets: usize,
+    /// How many projects came away with notification settings of their own.
+    #[ts(type = "number")]
+    pub(crate) projects: usize,
+    /// Whether anything of the Viewer was taken in — its keys, or the switch.
+    pub(crate) viewer: bool,
+}
+
 /// One AI harness a folder could start its session on `amenbo agent` with, and the text that would do it
 /// ([`amenbo_core::harness`]).
 ///

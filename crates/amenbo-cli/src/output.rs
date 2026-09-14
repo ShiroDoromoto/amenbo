@@ -75,6 +75,35 @@ pub enum CliErrorCode {
     /// speaks about does not exist (`AMB-D-749`). It is a code of its own, and non-zero, because the
     /// alternative — a quiet success — would leave the caller believing it had spoken.
     TalkOutsideSurface,
+
+    // The refusals `worktree start` / `worktree finish` meet (`AMB-D-881`). One code per refusal, because
+    // what a caller does next differs in every one of them: take a different task, commit first, merge
+    // first, type it in the other repository. They are the CLI's rather than the core's for the reason
+    // `nested_worktree` is — each is about the checkout on disk, not about anything the store holds.
+    /// A worktree is already standing for this task. Whose it is cannot be read from disk.
+    WorktreeExists,
+    /// `task/<id>` is already a branch, with no worktree checked out on it.
+    WorktreeBranchExists,
+    /// The task names a folder that lies in another repository, and a cut here would be a checkout of the
+    /// wrong project (`AMB-D-649`).
+    WorktreeElsewhere,
+    /// The fold was asked for where there is no worktree to fold.
+    WorktreeMissing,
+    /// The checkout carries changes nobody has committed.
+    WorktreeDirty,
+    /// The branch carries changes the base does not have.
+    WorktreeUnmerged,
+    /// The folder this was typed in lies in no git repository.
+    WorktreeNotARepository,
+    /// This machine has no git that can be run without asking the person to install something.
+    WorktreeNoGit,
+    /// The worktree's path carries a single quote, which no one line can hand to both a POSIX shell and
+    /// PowerShell.
+    WorktreeUnquotablePath,
+    /// git ran and refused, carrying its own reason.
+    WorktreeGit,
+    /// The filesystem refused — making the sibling directory, or sweeping the checkout away.
+    WorktreeIo,
 }
 
 impl CliErrorCode {
@@ -96,6 +125,17 @@ impl CliErrorCode {
             CliErrorCode::SyncGap => "sync_gap",
             CliErrorCode::SyncError => "sync_error",
             CliErrorCode::TalkOutsideSurface => "talk_outside_surface",
+            CliErrorCode::WorktreeExists => "worktree_exists",
+            CliErrorCode::WorktreeBranchExists => "worktree_branch_exists",
+            CliErrorCode::WorktreeElsewhere => "worktree_elsewhere",
+            CliErrorCode::WorktreeMissing => "worktree_missing",
+            CliErrorCode::WorktreeDirty => "worktree_dirty",
+            CliErrorCode::WorktreeUnmerged => "worktree_unmerged",
+            CliErrorCode::WorktreeNotARepository => "worktree_not_a_repository",
+            CliErrorCode::WorktreeNoGit => "worktree_no_git",
+            CliErrorCode::WorktreeUnquotablePath => "worktree_unquotable_path",
+            CliErrorCode::WorktreeGit => "worktree_git",
+            CliErrorCode::WorktreeIo => "worktree_io",
         }
     }
 
@@ -118,6 +158,17 @@ impl CliErrorCode {
         CliErrorCode::SyncGap,
         CliErrorCode::SyncError,
         CliErrorCode::TalkOutsideSurface,
+        CliErrorCode::WorktreeExists,
+        CliErrorCode::WorktreeBranchExists,
+        CliErrorCode::WorktreeElsewhere,
+        CliErrorCode::WorktreeMissing,
+        CliErrorCode::WorktreeDirty,
+        CliErrorCode::WorktreeUnmerged,
+        CliErrorCode::WorktreeNotARepository,
+        CliErrorCode::WorktreeNoGit,
+        CliErrorCode::WorktreeUnquotablePath,
+        CliErrorCode::WorktreeGit,
+        CliErrorCode::WorktreeIo,
     ];
 }
 
@@ -812,6 +863,17 @@ mod tests {
             "sync_gap",
             "sync_error",
             "talk_outside_surface",
+            "worktree_exists",
+            "worktree_branch_exists",
+            "worktree_elsewhere",
+            "worktree_missing",
+            "worktree_dirty",
+            "worktree_unmerged",
+            "worktree_not_a_repository",
+            "worktree_no_git",
+            "worktree_unquotable_path",
+            "worktree_git",
+            "worktree_io",
         ]);
         let actual = set(CliErrorCode::ALL.iter().map(|c| c.as_str()));
         assert_eq!(actual, expected, "the full set of CLI error codes does not match the contract");

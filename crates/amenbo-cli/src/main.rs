@@ -514,6 +514,10 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // here is a project's row, nothing records an act, and there is no author for one to be stamped
         // onto — the carrier's road out (`Sync` above) for the same reason.
         | Command::Viewer { .. }
+        // A worktree is a checkout on disk. It reads the task to see whether this is the repository that
+        // task is worked in (`AMB-D-649`) — a read, which is why the facet is still declared — and writes
+        // nothing to the store, so there is no act for an author to be stamped onto.
+        | Command::Worktree { .. }
         // The AI-harness consent, like the lint's: a per-project row that records an answer, with no
         // author to stamp and no activity behind it.
         | Command::AgentHook { .. }
@@ -1372,6 +1376,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // (`AMB-D-884`). Every one of these is the device's — one account, one key, one read code — so
         // none of them asks which project it is about.
         Command::Viewer { sub } => return cmd::viewer::viewer(&mut store, flags, sub),
+        // A task's own checkout, cut and folded (`AMB-D-881`). Only git moves; the store is read to see
+        // whether this is the repository the task is worked in.
+        Command::Worktree { sub } => return cmd::worktree::worktree(&store, flags, sub),
         Command::Config { sub } => return config(&mut store, flags, sub),
         Command::Status { scope } => {
             let result = store.status(&scope).map_err(CliError::from)?;

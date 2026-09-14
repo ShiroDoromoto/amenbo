@@ -102,6 +102,7 @@ pub mod view;
 pub mod viewer;
 pub mod wake;
 pub mod worktree;
+pub mod worktree_cut;
 
 pub use error::{Error, ErrorCode, Fields, Msg, Result};
 pub use store::Store;

@@ -99,6 +99,7 @@ pub mod tmpdir;
 pub mod update_check;
 pub mod validate;
 pub mod view;
+pub mod viewer;
 pub mod wake;
 pub mod worktree;
 

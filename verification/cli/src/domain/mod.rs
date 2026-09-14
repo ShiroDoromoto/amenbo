@@ -21,3 +21,4 @@ pub(crate) mod store;
 pub(crate) mod task;
 pub(crate) mod terminal;
 pub(crate) mod tick;
+pub(crate) mod viewer;

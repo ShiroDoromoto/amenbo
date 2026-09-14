@@ -1,0 +1,33 @@
+# The key that opens this store's records on a phone, and the one path it is allowed to travel.
+#
+# Everything the Viewer puts on that server is sealed with one key, and that key is on this PC and on
+# whatever phone has been shown it. The showing is a code held up to a camera — which is a path with
+# no copy left behind anywhere, unlike every other way of moving a secret between two machines.
+#
+# **So the other paths are closed rather than discouraged.** A read code written into a pipe is a key
+# in somebody's shell history and in whatever read the pipe; a read code in a `--json` answer is a key
+# in a log. Both are refused, and both are refused **before a code is issued**: issuing replaces
+# whatever code the server was holding, so a run that ended with nothing on a screen would have
+# stopped the phone that was reading and bought nothing for it.
+#
+# The screen's half of the same rule is an absence. The three fields setup leaves behind — where the
+# server answers, the token that opens its writing door, the key itself — were read-only rows on the
+# form this replaced. There is nothing for a reader to check about them and nothing they can do with
+# them, so the section draws none of them.
+id: keep-the-viewers-key-off-everything-but-a-screen
+title: The Viewer's key travels to a camera and to nothing else
+description: >
+  Ask for a read code where no camera can see it — into JSON, and into a pipe — and be turned away
+  both times; then read the Viewer's settings and find no address, no token and no key drawn
+  anywhere. What is under test is the one property the whole design rests on: a build that answered
+  either of those would have put the key where it can be copied, and nothing afterwards would say so.
+
+steps_cli:
+  - type: assert
+    domain: viewer
+    op: key-stays-on-screen
+
+steps_gui:
+  - type: assert
+    domain: viewer
+    op: key-stays-on-screen

@@ -122,6 +122,30 @@ updates:
     # majors fall outside every group => one PR each, except the react group,
     # which has no update-types filter and so carries its majors together.
 
+  # The Viewer Worker's npm project. It has a lockfile of its own, and the entry above reads
+  # /app and sees none of it — same reason the Tauri host crate needs its own cargo entry.
+  # What it pins reaches users: wrangler is what bundles the script core embeds and deploys
+  # into someone's own Cloudflare account, so a bump here moves the baked copy under
+  # crates/amenbo-core/src/viewer/ and the PR carries that copy with it.
+  - package-ecosystem: npm
+    directory: "/worker"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - npm
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      worker-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    # majors fall outside the group => one PR each.
+
   # GitHub Actions used by the workflows.
   - package-ecosystem: github-actions
     directory: "/"

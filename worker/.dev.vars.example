@@ -1,0 +1,7 @@
+# Copy to .dev.vars for `wrangler dev`. .dev.vars is gitignored — the real token never lands here.
+#
+# On the deployed Worker this is a Secret instead:
+#
+#   wrangler secret put WRITE_TOKEN
+#
+WRITE_TOKEN=a-long-random-token-for-local-development-only

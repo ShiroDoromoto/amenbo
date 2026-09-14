@@ -25,6 +25,21 @@
 /.wharfy/
 /dist/
 
+# The Viewer Worker (worker/): npm's install, the bundle esbuild writes on the way to the copy core
+# embeds, wrangler's local state, and the Env types wrangler generates from wrangler.jsonc — over ten
+# thousand lines, and derivable from the config beside them.
+# What core embeds is the other way round and is tracked on purpose (crates/amenbo-core/src/viewer/):
+# the user's PC has no Node on it, so the built script travels inside the binary.
+/worker/node_modules/
+/worker/dist/
+/worker/.wrangler/
+/worker/worker-configuration.d.ts
+# The local Worker's secrets, which `npm run dev` reads in place of the Secret a deployed one carries.
+# .dev.vars.example is the shape, and it is tracked.
+/worker/.dev.vars
+/worker/.dev.vars.*
+!/worker/.dev.vars.example
+
 # amenbo: the dir→project pointer (`.amenbo`). Its `project_id` is the primary key that project holds
 # in this machine's own store, so on a clone it names a different project or none at all — which is
 # why it is not committed. The store itself and the secrets are not here; they live in app-data.

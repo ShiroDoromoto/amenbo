@@ -1,0 +1,19 @@
+-- Where the placement now standing in the records began, so a phone can tell whether what it
+-- holds is a prefix of it.
+--
+-- A reset empties the records and places the whole backlog again, carrying on from the number the
+-- order had reached. A phone that was away rejoins by asking for everything after its cursor and
+-- is handed that whole placement, which looks like an ordinary catch-up and is not one: a record
+-- deleted while it was away is in neither half. It is not in the placement, being no longer alive,
+-- and the row that said it went was emptied along with the rest. Nothing the phone will ever
+-- receive mentions it, so it keeps a task the backlog does not have, with nothing to notice by.
+--
+-- What separates the two cases is one number. Everything the phone holds arrived at or below its
+-- cursor; the placement occupies the numbers above this one. So a cursor that has not passed this
+-- point holds nothing from the current placement, and every row it does hold has been made again
+-- under a different number — which is the whole of what "throw it away and read again" needs to
+-- know.
+--
+-- It is on the store row rather than derived from the records because the rows that would say it
+-- are exactly the ones a reset destroys.
+ALTER TABLE store ADD COLUMN placed_from INTEGER NOT NULL DEFAULT 0;

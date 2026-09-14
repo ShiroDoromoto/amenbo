@@ -2980,6 +2980,161 @@ updateAvailable: boolean,
 newerVersion: string | null, };
 
 /**
+ * Where the phone's half of this is got — one row per kind of phone, in the order they are drawn.
+ *
+ * **`phone` is a brand and is never translated**: it is the word a reader matches against the thing in
+ * their hand.
+ */
+export type ViewerAppDto = { phone: string, link: string, };
+
+/**
+ * **A freshly drawn read code, for the screen to put in front of a camera** (`AMB-D-884`).
+ *
+ * `carried` is the whole of what the phone reads, and **it carries the encryption key** — which is why
+ * this is the one shape on this wire that holds one. It goes to the webview because that is what draws
+ * the code; it belongs on a screen and nowhere a pipe or a log can take it.
+ *
+ * Issuing replaces whatever code the server was holding, so whatever phone held the one before has
+ * stopped reading.
+ */
+export type ViewerCodeDto = { carried: string, 
+/**
+ * When the server wrote the code down, in its own words (RFC 3339).
+ */
+issuedAt: string, };
+
+/**
+ * What the two ends differ by: the records this machine holds that the server is not holding, and the
+ * keys the server is holding that this machine no longer has.
+ */
+export type ViewerDriftDto = { toPlace: number, toDrop: number, };
+
+/**
+ * **Whether a phone may read, as the server answers it** (`AMB-D-884`).
+ *
+ * There is one read code and the server never learns which phone offered it, so this says whether any
+ * phone may read — never how many do, and never which.
+ */
+export type ViewerPairingDto = { 
+/**
+ * Is the server holding a read code?
+ */
+paired: boolean, 
+/**
+ * When that code was issued, in the server's own words (RFC 3339). Absent when none is held.
+ */
+issuedAt?: string, };
+
+/**
+ * **What one press of "put right what has drifted" did** (`AMB-T-4763`).
+ *
+ * `outcome` is the whole branch, and the two fields below it are filled in as it names them:
+ *
+ * | `outcome` | `drift` | `sent` | what happened |
+ * |---|---|---|---|
+ * | `not_set_up` | — | — | no server on this device. Not a failure — nothing to drift from |
+ * | `level` | — | — | the server holds what this machine holds |
+ * | `counted` | yes | — | the difference was counted and written down. **The next press places it** |
+ * | `placed` | yes | yes | the difference went on the queue, and as much of it as the server would take has gone |
+ * | `sending_elsewhere` | — | — | another run is carrying, so nothing was compared |
+ */
+export type ViewerRepairedDto = { outcome: "not_set_up" | "level" | "counted" | "placed" | "sending_elsewhere", drift?: ViewerDriftDto, sent?: ViewerSentDto, };
+
+/**
+ * **What one turn of carrying did** (`AMB-D-884`).
+ */
+export type ViewerSentDto = { 
+/**
+ * How many records reached the server.
+ */
+placed: number, 
+/**
+ * How many are still waiting behind them.
+ */
+waiting: number, 
+/**
+ * Why the turn did nothing, where it did nothing on purpose. **Neither reason is a failure** and the
+ * queue is where it was under both: another run holds the turn, or this device is not carrying.
+ * Absent is a turn that ran — which may still have placed nothing, there having been nothing to place.
+ */
+heldBack?: "another_turn" | "switched_off", };
+
+/**
+ * **What a screen can say about the Viewer without asking the network** (`AMB-D-884`).
+ *
+ * Everything here is read out of this device's own store, so it is what the settings screen draws on
+ * first paint. Whether a phone may read is not here — only the server can answer that, and asking it
+ * takes a round trip ([`ViewerPairingDto`]).
+ *
+ * **None of the three secrets setup left behind is here**, and none of them is anywhere else on this
+ * wire either: the address, the write token and the encryption key stay in the table no road out of the
+ * store walks. `setUp` is the whole of what a screen needs from them.
+ */
+export type ViewerStateDto = { 
+/**
+ * Has a server been stood up on this device? Half a route is not a route — the address, the token
+ * and the key are read together, and absence of any of them is absence of the server.
+ */
+setUp: boolean, 
+/**
+ * Does this device carry to the Viewer at all? A device that has never touched the switch answers
+ * yes: standing a server up is the act of asking for this.
+ */
+carrying: boolean, 
+/**
+ * How many records have been read out and have not landed yet.
+ */
+waiting: number, 
+/**
+ * When this device last placed anything. **An empty queue cannot answer this**: it is both "the
+ * phone is up to date" and "nothing has gone out since Tuesday". Absent where nothing ever landed.
+ */
+lastPlacedAt?: string, 
+/**
+ * Which build of the Worker the server last answered a write as being. **Zero is "nothing has been
+ * written yet"**, not "an old Worker" — the number travels on the answer to a write and nowhere
+ * else, so a device that has never sent has never been told one.
+ */
+serverBuild: number, 
+/**
+ * The build this Amenbo carries. Pressing setup is what moves the one above onto it, and pressing it
+ * is the reader's to do — so the two are handed over side by side rather than compared here.
+ */
+workerBuild: number, 
+/**
+ * Cloudflare's token screen, with the permissions setup needs already ticked. It is the same link on
+ * every device and needs no server, so it is here for the screen that has none yet.
+ */
+tokenLink: string, };
+
+/**
+ * **What one run of setup stood up** (`AMB-D-884`).
+ *
+ * The account and the database are named because they are what the reader now owns in their own
+ * Cloudflare account. The address is here for the same reason the CLI prints it — it is where their own
+ * Worker answers, and it is not a secret — while the token and the key it was built with are not.
+ */
+export type ViewerStoodDto = { 
+/**
+ * Where the Worker answers.
+ */
+url: string, 
+/**
+ * The account it was built in.
+ */
+account: string, 
+/**
+ * The database it reads and writes.
+ */
+database: string, 
+/**
+ * **Whether the keys already here were kept, or drawn afresh.** A key drawn now opens nothing already
+ * on the server, so every phone has to be paired again — which is the sentence a screen owes the
+ * reader after this press.
+ */
+keys: "kept" | "generated", };
+
+/**
  * One agent a folder's pane could be opened with, and what the folder and this machine say about
  * it (`crate::wake`).
  */

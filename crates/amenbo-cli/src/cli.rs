@@ -353,6 +353,23 @@ pub enum Command {
         stdin: bool,
     },
 
+    /// A worktree of this task's own — cut when the work starts, folded when its commits have landed
+    /// (`AMB-D-881`).
+    ///
+    /// **Where it goes is not a question anyone is asked**: `<the repository's parent>/<its
+    /// name>-worktrees/<id>`, on `task/<id>`. Beside the project rather than inside it, because a
+    /// checkout cut within inherits the project's `.amenbo` and would drive the real backlog from a
+    /// throwaway folder — which is what Amenbo refuses to run in (`nested_worktree`).
+    ///
+    /// Run it in the repository the task is worked in. What is cut is derived from the folder the
+    /// command was typed in, never from the task, so a `start` typed in the wrong repository would
+    /// otherwise hand back a checkout of a different project — and `start` refuses when the task names
+    /// a folder that lies in another repository (`AMB-D-649`).
+    Worktree {
+        #[command(subcommand)]
+        sub: WorktreeCmd,
+    },
+
     /// The **surface layer**: what you say about the session you are running in, inside the talk window's
     /// terminal (`AMB-D-749`). It moves the pane on the person's screen and writes to no store — nothing
     /// said here outlives the window, and every verb of it **fails outside one**, loudly, rather than
@@ -556,6 +573,47 @@ pub enum Command {
     Viewer {
         #[command(subcommand)]
         sub: ViewerCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum WorktreeCmd {
+    /// Cut this task a worktree, and hand back the way into it.
+    ///
+    /// **The return value on stdout is one `cd` line**, so the caller enters the checkout with
+    /// `eval "$(amenbo worktree start <id>)"` — `iex (amenbo worktree start <id>)` in PowerShell, the
+    /// same line either way. Everything a person reads goes to stderr beside it, and `--json` answers
+    /// with the path and the branch instead. This is the one command whose stdout is a value to run
+    /// rather than an account of what happened, and it is written that way so no second step is needed
+    /// to get where the work is (`AMB-D-881`).
+    ///
+    /// The backlog is not touched: reserving the task is its own act, and this one is only git.
+    Start {
+        /// the task
+        id: String,
+        /// the branch to cut from (default: the branch the repository is standing on)
+        #[arg(long, value_name = "BRANCH")]
+        base: Option<String>,
+    },
+
+    /// Take the worktree and its branch away again, once its commits have landed.
+    ///
+    /// It refuses while there is anything left to lose — work nobody committed, or a branch carrying
+    /// changes the base does not have. Whether the changes landed is measured by the patch each commit
+    /// carries rather than by lineage, so a squash or a rebase merge reads as merged (`AMB-D-699`).
+    /// `--force` overrides both, which is the only way to discard work on purpose.
+    ///
+    /// The task itself is untouched: close it with `task done`, or hand it back with `task status
+    /// <id> todo`.
+    Finish {
+        /// the task
+        id: String,
+        /// the branch the worktree is measured against (default: the branch the repository is standing on)
+        #[arg(long, value_name = "BRANCH")]
+        base: Option<String>,
+        /// tear it down regardless — discarding uncommitted work and unmerged commits
+        #[arg(long)]
+        force: bool,
     },
 }
 

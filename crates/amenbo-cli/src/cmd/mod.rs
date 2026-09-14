@@ -27,3 +27,4 @@ pub(crate) mod task;
 pub(crate) mod tick;
 pub(crate) mod update;
 pub(crate) mod viewer;
+pub(crate) mod worktree;

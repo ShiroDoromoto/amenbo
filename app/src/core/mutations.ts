@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { guessLang, t, tf, type CmdError, type CmdErrorPart, type ViewKind } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DimensionDecisionValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DimensionDecisionValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HandoverDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 import { todayStr } from "./calendar";
 
@@ -761,6 +761,28 @@ export async function answerTick(yes: boolean): Promise<void> {
 export async function deferTickBanner(): Promise<void> {
   if (!inTauri()) return;
   await invoke("tick_banner_later");
+}
+
+/**
+ * What this window still owes the reader about the plugins becoming part of Amenbo, or `null` when there
+ * is nothing to say (`AMB-D-884`).
+ *
+ * Read **once, at app startup**, for the reason {@link fetchTickBanner} is: the migration that took the
+ * plugins in ran before anything mounted, so the answer cannot move while the app is open. Outside Tauri
+ * there is no store and no migration, so there is nothing owed.
+ */
+export async function fetchHandoverNotice(): Promise<HandoverDto | null> {
+  if (!inTauri()) return null;
+  return await invoke<HandoverDto | null>("handover_notice");
+}
+
+/**
+ * Take this window's turn: record that it has said where the plugins went. The command line's turn is
+ * separate and untouched, so a reader who upgraded from a terminal is still told there.
+ */
+export async function markHandoverTold(): Promise<void> {
+  if (!inTauri()) return;
+  await invoke("handover_told");
 }
 
 /**

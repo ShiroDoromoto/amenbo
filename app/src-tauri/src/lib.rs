@@ -570,6 +570,8 @@ pub fn run() {
       commands::hook_offer,
       commands::hook_notices,
       commands::hook_answer,
+      commands::handover_notice,
+      commands::handover_told,
       commands::tick_banner,
       commands::tick_answer,
       commands::tick_banner_later,

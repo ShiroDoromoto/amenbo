@@ -321,7 +321,7 @@ describe("what the reader is told before they press", () => {
     // Windows hands a Codex pane a copy of `config.toml` rather than the file itself (`AMB-D-878`),
     // so the press moves nobody's default and what it wrote is gone by the next open. The file is
     // still named: saying nothing would read as the provider changing only this session, which is a
-    // different thing and not what happens here (`AMB-D-894`).
+    // different thing and not what happens here.
     hoisted.switches["codex-cli"] = {
       command: "/model",
       carries: "picker",

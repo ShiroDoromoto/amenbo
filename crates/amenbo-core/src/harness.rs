@@ -330,10 +330,10 @@ pub struct Switch {
     /// the back door, which `AMB-D-440` refuses at the front.
     ///
     /// **It is the provider's fact and not the pane's.** A pane handed a copy of this file rather
-    /// than the file writes to the copy, and nothing comes back — but that is Amenbo's own doing and
-    /// differs by operating system and by whether the pane was given a home at all, so it is
-    /// answered where it is done (`app/src-tauri/src/pane_home.rs`, `AMB-D-894`) rather than by a
-    /// second value here.
+    /// than the file writes to the copy, and nothing comes back — but that is Amenbo's own doing, and
+    /// it differs by operating system and by whether the pane was given a home at all. So it is
+    /// answered where it is done (`app/src-tauri/src/pane_home.rs`) rather than by a second value
+    /// here: this column would then be carrying two facts, the provider's and Amenbo's, in one.
     pub keeps: Option<&'static str>,
 }
 

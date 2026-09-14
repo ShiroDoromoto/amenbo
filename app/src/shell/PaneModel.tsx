@@ -42,7 +42,7 @@ import { Icon } from "../components/Icon";
  * **What the press will do is said before it is pressed** — which command goes in, and, for the three
  * that keep the change past this session, which of the reader's own files it lands in and whether it
  * lands there at all: a pane handed a copy of that file writes to the copy, and what it wrote goes
- * when the pane is next opened (`AMB-D-878`, `AMB-D-894`). A control that quietly moved somebody's
+ * when the pane is next opened (`AMB-D-878`). A control that quietly moved somebody's
  * default would be Amenbo writing a provider's settings through the back door, and `AMB-D-440`
  * refuses that at the front; one that said it had moved a default it never reached would be the same
  * sentence wrong the other way.
@@ -340,8 +340,7 @@ export function PaneModel({ frame, session, agent }: {
           <p className="slot__runs">{sends}</p>
           {/* And where this machine keeps it afterwards, for the providers that keep it anywhere. It
               is the reader's own file, so it is named rather than described — and named either way,
-              because the pane that cannot reach it is the pane the reader most needs it named in
-              (`AMB-D-894`). */}
+              because the pane that cannot reach it is the pane the reader most needs it named in. */}
           {how.keeps !== null && (
             <p className="slot__note">
               {how.comesBack

@@ -2236,8 +2236,8 @@ pub struct AgentSwitchDto {
     /// `null` where the provider changes only the session in front of them.
     pub(crate) keeps: Option<String>,
     /// Whether a write to [`Self::keeps`] made in this kind of pane reaches that file, or stops at
-    /// the copy the pane was handed and goes when the pane is next opened (`AMB-D-894`,
-    /// `crate::pane_home::writes_come_back`).
+    /// the copy the pane was handed and goes when the pane is next opened
+    /// (`crate::pane_home::writes_come_back`).
     ///
     /// It is a second sentence rather than a `keeps` of `null`: silence reads as "the provider
     /// changes only this session", and the provider does write a file — what it cannot reach is the

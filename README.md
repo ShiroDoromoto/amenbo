@@ -147,7 +147,13 @@ data, and neither happens unless you go looking: nothing is fetched for a plugin
 see in the list. That same cached catalog is also what says an installed plugin has a
 newer build: noticing rides the one fetch — inside its freshness window nothing is asked
 at all, and there is no timer — and taking the update is always something you set off
-yourself (`amenbo plugin update <name>`, or the button on the banner).
+yourself, from the button on the banner.
+
+**The Viewer** is the one road your records themselves travel, and it goes nowhere of
+Amenbo's: `viewer setup` stands a server up in **your own** Cloudflare account, and what is
+put there is sealed with a key this device holds — so the account it runs in cannot read it
+either. Nothing is carried until you have stood that server up, and the switch that stops it
+is in this device's own settings.
 
 </details>
 
@@ -162,7 +168,7 @@ yourself (`amenbo plugin update <name>`, or the button on the banner).
 </div>
 
 <details>
-<summary>The full command tour — projects, tasks, dimensions, decisions, attachments, backup/restore, plugins, hooks</summary>
+<summary>The full command tour — projects, tasks, dimensions, decisions, attachments, backup/restore, worktrees, notifications, the Viewer, hooks</summary>
 
 The CLI surface is self-documenting: `amenbo <cmd> --help` and `amenbo agent --json`
 are the authoritative spec (there is no separate command reference to drift out of date).
@@ -254,7 +260,7 @@ amenbo task list --filter "time_axis:v2 done:false" --json
 # is an axis both sides carry, so it rides its own flag instead — narrowing to one keeps
 # the decisions in the answer. Which record the words are on (--kind) and which face of it
 # they are on (--face) are two axes judged apart, so naming both asks for their product.
-amenbo search plugin distribution --json
+amenbo search notification target --json
 amenbo search rollout --kind decision --limit 5 --json
 amenbo search rollout --kind decision --face comment --json   # the remarks on decisions
 amenbo search backup --filter "status:todo" --json
@@ -350,49 +356,31 @@ amenbo export > ./amenbo-export.json        # ...or the same JSON on stdout (rec
 amenbo backup ./everything.amenbo-backup      # archive: the store plus its attachments (disaster recovery)
 amenbo restore ./everything.amenbo-backup --yes # destructively restore this device from the archive
 
-# Plugins: extend Amenbo with an executable somebody else wrote. Installing puts one on
-# disk and nothing more — `enable` is the separate, deliberate act that lets it run, and it
-# opens the gate of the project you are standing in, so a plugin fires where you turned it
-# on and nowhere else. Every install goes through one door: the asset's signature against
-# the key the catalog that served it answers for, then the checksum its manifest published.
-amenbo plugin list                          # what is installed, whose gate is open, what this build can still speak to
-amenbo plugin install worktree              # from the catalogs — the one command in this group that touches the network
-amenbo plugin enable worktree               # let it run, here (refused while a setting its author marked required is empty)
-amenbo plugin disable worktree              # stop it firing, keeping the install and everything it holds
-amenbo plugin update --check                # which installs the catalog has moved past (a cache under an hour old may answer; --fresh asks now)
-amenbo plugin update worktree               # ...and bring one onto the build the catalog publishes (--all for every one)
-amenbo plugin rollback worktree             # undo that update — the build it replaced was retained (offline, and one generation only)
-amenbo plugin uninstall worktree --yes      # remove it and all it left behind: the gates, its secrets, its settings in every project, the binary
+# A checkout of the task's own. Where it goes is not a question anyone is asked:
+# `<the repository's parent>/<its name>-worktrees/<id>`, on branch `task/<id>` — beside the
+# project rather than inside it, since a checkout cut within inherits the project's pointer.
+# What `start` writes on stdout is one `cd` line, so the line is run rather than read.
+eval "$(amenbo worktree start 123)"         # ...or `iex (amenbo worktree start 123)` in PowerShell
+amenbo worktree finish 123                  # take it and its branch away — refused while there is work nobody committed, or commits main does not have
+amenbo worktree finish 123 --force          # ...or discard both on purpose, which is the only way to
 
-# Call an enabled plugin's command face. Everything after the name is the plugin's own —
-# Amenbo hands the words through untouched — and what comes back is that plugin's stdout
-# verbatim, which is what lets one return a line your shell runs directly.
-eval "$(amenbo plugin run worktree start 123)"   # ...or `iex (amenbo plugin run worktree start 123)` in PowerShell
-amenbo plugin log slack                     # the last runs: how each ended, and what it wrote to stderr — the other face fires unwatched, so this is where 'it did nothing' is answered
-amenbo plugin flush                         # deliver what is waiting on the queues now, rather than on whatever you do next
+# Notifications: where this device can send, and what each project reports through it. A
+# connection is written once under a name, and a project selects from that shelf — so a
+# webhook that changes is one edit rather than one per project.
+amenbo notify target add --kind slack team  # raise it on the shelf under a name; the connection itself is written next
+printf %s "$WEBHOOK" | amenbo notify target set 1 --secret -   # `-` reads it from stdin, keeping it off argv and out of shell history
+amenbo notify target list                   # the shelf: every connection, its kind, and which one a new project starts on
+amenbo notify target test 1                 # send one message through it, to see it arrive
+amenbo notify use 1                         # this project reports through that connection (`notify unuse` takes it back off)
+amenbo notify event task.done               # ...and reports this (`--off` stops one); `notify on` / `notify off` is the whole project's switch
+amenbo notify                               # both halves at once: the shelf, and what this project does with it
 
-# Settings: the keys the plugin's author declared, held per project. What the author
-# marked secret goes to a table of its own and never comes back out this door.
-amenbo plugin config set slack events task.done,task.rejected
-printf %s "$TOKEN" | amenbo plugin config set slack webhook_url -   # `-` reads it from stdin, keeping it off argv and out of shell history
-amenbo plugin config get slack events       # the value in force, the candidates the author declared, and what they wrote about the field
-
-# Third-party catalogs, browsed alongside the official one — the usual reason is a closed
-# shelf: plugins handed to people inside your own company. Registering one pins the key it
-# publishes, so it is a trust decision, not a bookmark: the fingerprint is shown and
-# confirmed before anything is written.
-amenbo plugin catalog add https://example.com/plugins/catalog.json --name "the works catalog"
-amenbo plugin catalog list                  # every source, its key's fingerprint, how many plugins it offers, whether it answered
-amenbo plugin catalog remove https://example.com/plugins/catalog.json
-amenbo plugin validate ./manifest.yaml      # an author's self-check, against the rules the install door enforces (see Contributing)
-
-# The road a plugin carries your data outward on — a viewer, an audit trail, a mirror
-# elsewhere. Ask the version, and take a snapshot only when it moved; what comes back is
-# closed to the window the caller reads through, and no plugin secret ever rides along.
-amenbo sync version                         # one number: has anything here changed? (no snapshot is built)
-amenbo sync snapshot > ./window.json        # one whole picture of it, from one instant (records only) — its header names the ledger position it stands at, to read on from
-amenbo sync changes --since 4821 --json     # ...and from there on, only what moved: which records, and the next cursor
-amenbo sync records --dataset task --ids 12,15 # ...and the rows those named, in the snapshot's own shape (an id outside the window, or gone, is simply absent)
+# The Viewer: read this store on a phone. The server stands in your own Cloudflare account,
+# and what is put there is sealed with a key this device holds — so the account it runs in
+# cannot read it either. There is one read code, not one per phone.
+printf %s "$CF_API_TOKEN" | amenbo viewer setup   # stand the server up (the token is taken on stdin and written down nowhere)
+amenbo viewer qr                            # draw the read code for a phone's camera — it carries the key, so the screen is the whole path
+amenbo viewer send                          # carry what has moved; `viewer phones` asks the server who may read, `viewer revoke` takes them all off
 
 # Keep amenbo's refs out of what leaves the store — an id resolves only for
 # someone holding it, so `AMB-` refs are noise in a commit, a diff or a PR body.

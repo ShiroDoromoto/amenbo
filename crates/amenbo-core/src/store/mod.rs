@@ -574,6 +574,17 @@ impl Store {
         crate::viewer::carried::forget(&self.engine)
     }
 
+    /// What this surface still owes the person about the plugins becoming part of Amenbo, or `None`
+    /// when there is nothing to say ([`crate::handover`]).
+    pub fn handover_waiting(&self, surface: &str) -> Result<Option<crate::handover::Handover>> {
+        crate::handover::waiting(&self.engine, surface)
+    }
+
+    /// Write down that this surface has said it. The other surface's turn is still owed.
+    pub fn handover_told(&self, surface: &str) -> Result<()> {
+        crate::handover::mark_told(&self.engine, surface)
+    }
+
     /// Whether this device carries to the Viewer at all ([`crate::viewer::carried::switched_on`]). A
     /// device that has never touched the switch answers yes: standing a server up is the act of asking
     /// for this.

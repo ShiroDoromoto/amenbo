@@ -829,6 +829,40 @@ fn store_reachable() -> bool {
     amenbo_core::env::home().is_some() || pointer_present()
 }
 
+/// Say where the plugins went, once on this surface (`AMB-D-884` / [`amenbo_core::handover`]).
+///
+/// What a person is owed differs by what they had: a device that carried connections is told its
+/// notifications are in Amenbo's own settings now, and one that only ever had `worktree` is told the
+/// command it types instead. Marked told only after it has actually been written, so a run that dies
+/// mid-sentence still owes it.
+///
+/// A store that cannot be written is not a reason to fail a command: the account stays owed and the
+/// person is told again next time, which is the harmless end of being wrong here.
+fn announce_the_handover(store: &Store) {
+    let Ok(Some(said)) = store.handover_waiting(amenbo_core::handover::surface::CLI) else { return };
+    if said.plugins.is_empty() {
+        return;
+    }
+    let cmd = Paths::command_name();
+    eprintln!(
+        "✓ The plugins are part of Amenbo now ({}) — there is nothing to install and nothing to enable.",
+        said.plugins.join(", "),
+    );
+    if said.carried_notifications() {
+        eprintln!(
+            "  Your mail and Slack settings were carried over: {} connection(s) on this device's shelf, {} project(s) reporting through them (`{cmd} notify`).",
+            said.targets, said.projects,
+        );
+    }
+    if said.viewer {
+        eprintln!("  The Viewer is in this device's own settings, with the keys it was paired on (`{cmd} viewer`).");
+    }
+    if said.plugins.iter().any(|p| p == "worktree") {
+        eprintln!("  Cutting a task its own worktree is `{cmd} worktree start <id>`.");
+    }
+    let _ = store.handover_told(amenbo_core::handover::surface::CLI);
+}
+
 /// Nudge a Linux user off an older *system-wide* install. The retired `.deb`/`.rpm` left the GUI and CLI
 /// under `/usr/bin` (root-owned); the per-user build cannot retire those, and by policy it advises
 /// rather than auto-strips them. On stderr (so `--json` stdout stays clean), no-op off Linux or once the
@@ -1088,6 +1122,15 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // A one-time nudge for a Linux user who migrated off the old `.deb`/`.rpm` but still has the retired
     // `/usr/bin` copy. Self-clearing and no-op off Linux, so it sits harmlessly beside the version advisory.
     advise_linux_system_orphan();
+
+    // Where the plugins went (`AMB-D-884`). A person who installed one and finds it gone is owed the
+    // sentence that says it is part of Amenbo now, and the migration that took them in left the account
+    // for both surfaces to read. Said once per surface — the app owes its own — and on stderr beside the
+    // other advisories. A `--json` caller is a machine and is told nothing, so the person's turn is still
+    // theirs when they next type something.
+    if plugin_window.is_none() && !flags.json && !flags.quiet {
+        announce_the_handover(&store);
+    }
 
     // If this invocation is inside a bound folder, whatever that folder still carries on disk — an outdated
     // managed block, a legacy `.amenbo` — is brought up to the current form here: resolving is what repairs

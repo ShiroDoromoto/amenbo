@@ -145,6 +145,18 @@ updates:
           - minor
           - patch
     # majors fall outside the group => one PR each.
+    ignore:
+      # `vitest` and `@cloudflare/vitest-pool-workers` are one contract, and the bot can only see
+      # them as two packages. The pool is what runs these tests inside workerd, and it declares a
+      # peer on the major of vitest it was built against — so a vitest major taken alone leaves a
+      # lockfile `npm ci` refuses to install at all, which is worse than a test that fails. It
+      # happened: vitest 5.0.0 was taken on 2026-09-14 with the newest pool still on `^4.1.0`, and
+      # nothing went red because the Worker had no CI job yet. A minor or patch stays inside the
+      # peer, so those still come through; a major is a migration for a person to do, moving both
+      # lines once the pool supports it.
+      - dependency-name: vitest
+        update-types:
+          - version-update:semver-major
 
   # GitHub Actions used by the workflows.
   - package-ecosystem: github-actions

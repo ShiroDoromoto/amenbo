@@ -122,6 +122,7 @@ jobs:
       rust: ${{ inputs.full && 'true' || steps.filter.outputs.rust }}
       verification: ${{ inputs.full && 'true' || steps.filter.outputs.verification }}
       gui: ${{ inputs.full && 'true' || steps.filter.outputs.gui }}
+      worker: ${{ inputs.full && 'true' || steps.filter.outputs.worker }}
       go: ${{ inputs.full && 'true' || steps.filter.outputs.go }}
       swift: ${{ inputs.full && 'true' || steps.filter.outputs.swift }}
       shell: ${{ inputs.full && 'true' || steps.filter.outputs.shell }}
@@ -687,6 +688,44 @@ jobs:
       - name: Test
         run: npm test
 
+  # The Viewer's Cloudflare Worker — the one face here that Node is needed to judge, and the one
+  # whose output is committed rather than built on the way in. Three things in one job, because they
+  # share an `npm ci` and nothing else in this workflow wants one from `worker/`:
+  # the bake's freshness (the guard re-bakes and reads the working tree), the Worker's own typecheck
+  # and dry-run deploy, and its test suite inside workerd.
+  #
+  # Nothing here deploys anywhere. `deploy --dry-run` builds what a deploy would send and stops, so
+  # it needs no credentials and there are none to give it.
+  worker:
+    name: worker bake + check + test
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.worker == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned Node comes from .nvmrc, the same file the GUI job reads — one version for both npm
+      # projects in this tree.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      # The guard bakes, so the install it needs is the one `make -C worker baked` does for itself.
+      # It runs first: a copy that is behind is the failure that reaches a user's own account, and
+      # the two checks under it would pass against the source either way.
+      - name: The baked copy core embeds is what worker/ writes
+        run: guards/check-worker-baked-fresh.sh
+
+      - name: Typecheck and build the Worker the way a deploy would
+        run: npm run check
+        working-directory: worker
+
+      - name: Test (inside workerd, against the same config a deploy reads)
+        run: npm test
+        working-directory: worker
+
   # devtool is not built or shipped by anything else here — it is the optional helper that gives a
   # task its own dev GUI and measures the agent entry — so no other job compiles it, and
   # nothing but this one would notice it breaking. Publishing it without this job would be
@@ -1198,6 +1237,7 @@ jobs:
       - verification
       - verification-macos
       - gui-web
+      - worker
       - go
       - rot-gates
       - cargo-license

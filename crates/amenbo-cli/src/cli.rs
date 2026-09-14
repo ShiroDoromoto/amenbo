@@ -421,6 +421,19 @@ pub enum Command {
         store: String,
     },
 
+    /// The entry point a **Viewer carrier** is launched through: it takes one turn of the send and exits
+    /// (`AMB-D-884`). Hidden because Amenbo launches it — never a hand.
+    ///
+    /// Nothing arrives with it: what a carrier is to carry is in the store. The store is an argument for
+    /// the reason a notification sender's is — it carries the store the write that launched it wrote to.
+    /// A run that finds another carrier already taking the turn stops at once, which is what keeps a burst
+    /// of writes from becoming a burst of turns.
+    #[command(hide = true)]
+    ViewerCarrier {
+        /// the base directory of the store to carry (app-data, or `AMENBO_HOME`)
+        store: String,
+    },
+
     /// Manage the git hooks that run `amenbo lint`: `pre-commit` for the staged diff, and `commit-msg`
     /// for the message, which is the only place git offers it. Installing writes into your git plumbing,
     /// which Amenbo does not do unasked: it asks once — for the lint as a feature, on this device — and

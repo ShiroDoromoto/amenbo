@@ -349,6 +349,38 @@ impl Store {
         }
     }
 
+    /// Set a Viewer carrier off, for a write that has just committed (`AMB-D-884`).
+    ///
+    /// **The network is never on the write's path**, so this starts a process and returns: what the carrier
+    /// is to carry is in the store, and whoever was typing waits on no server somewhere else
+    /// ([`crate::viewer::send::Carrier`]).
+    ///
+    /// **A device with no Viewer set up starts nothing.** That is nearly every device, and the question is
+    /// one secret read — far less than a process that would open the store only to find there is nowhere to
+    /// send. A run that finds the turn already taken stops on its own ([`crate::viewer::lock`]), which is
+    /// what keeps a burst of writes from becoming a burst of turns.
+    ///
+    /// Nothing here fails the write: it has already committed, and a carrier that did not start costs the
+    /// turn and no records — what has moved is still ahead of the cursor for the next one.
+    pub fn set_the_viewer_off(&self, carrier_argv: &[&str]) {
+        if carrier_argv.is_empty() {
+            return;
+        }
+        match crate::viewer::send::Server::of_device(self) {
+            Ok(None) => return,
+            Ok(Some(_)) => {}
+            Err(e) => {
+                tracing::warn!(error = %e, "the Viewer is not carried: the device's settings would not be read");
+                return;
+            }
+        }
+        let carrier = crate::viewer::send::SelfCarrier::new(carrier_argv, self.paths.base_dir.clone());
+        use crate::viewer::send::Carrier as _;
+        if let Err(e) = carrier.set_off() {
+            tracing::warn!(error = %e, "what has moved is not carried to the Viewer: no carrier started");
+        }
+    }
+
     /// The same, posted **here** rather than handed to a process — the flush's half, and the sender
     /// process's own door ([`crate::notify_dispatch::deliver`]).
     ///

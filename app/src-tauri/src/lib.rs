@@ -220,6 +220,30 @@ pub fn run_notify_sender() -> bool {
     true
 }
 
+/// The store a Viewer carrier was launched over, if this process was one — read off `argv` behind
+/// [`plugin_dispatch::CARRIER_FLAG`], the same exact, positional match the sender's is.
+fn carrier_argv() -> Option<String> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() != 2 + plugin_dispatch::CARRIER_ARGS || args[1] != plugin_dispatch::CARRIER_FLAG {
+        return None;
+    }
+    Some(args[2].clone())
+}
+
+/// Take one turn of the Viewer's send and return, instead of starting the app (`AMB-D-884`). `true` when
+/// that is what happened, which is the caller's signal to start nothing else.
+///
+/// The app carries for the writes it made itself, for the reason it runs its own plugin runners: one binary
+/// per face, and no second one to ship or to keep in step.
+#[must_use = "start the app only when this says the process was not launched as a carrier"]
+pub fn run_viewer_carrier() -> bool {
+    let Some(store) = carrier_argv() else {
+        return false;
+    };
+    amenbo_core::viewer::send::carry_process(store.into());
+    true
+}
+
 /// The `platforms` key this build asks the update manifest for — the machine's, not the build's
 /// (`AMB-D-551`).
 ///

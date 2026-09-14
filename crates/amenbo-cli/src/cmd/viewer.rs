@@ -224,10 +224,16 @@ fn revoke(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 fn send(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     the_server_is_up(store)?;
     let sent = viewer::send::carry(store).map_err(CliError::from)?;
-    let line = format!(
-        "{} record(s) reached the server, and {} wait behind them.",
-        sent.placed, sent.waiting,
-    );
+    // A turn somebody else is taking is not a failure — it is the hold working, and the stretch this run
+    // would have carried is being carried beside it.
+    let line = if sent.elsewhere {
+        format!("Another carrier is taking its turn. {} record(s) are on the queue.", sent.waiting)
+    } else {
+        format!(
+            "{} record(s) reached the server, and {} wait behind them.",
+            sent.placed, sent.waiting,
+        )
+    };
     write_envelope(
         flags,
         "viewer.send",
@@ -246,6 +252,10 @@ fn mend(store: &Store, flags: &Flags, place: bool) -> Result<i32, CliError> {
     let done = viewer::repair::repair(store, place).map_err(CliError::from)?;
     let line = match &done {
         Repaired::NotSetUp => return Err(no_server_yet()),
+        Repaired::SendingElsewhere => {
+            "Another carrier is taking its turn, so nothing was compared. Try again once it is done."
+                .to_string()
+        }
         Repaired::Level => "The server holds what this machine holds.".to_string(),
         Repaired::Counted(drift) => format!(
             "{} record(s) to place and {} to drop. `{} viewer repair --send` carries them, and so does \
@@ -266,7 +276,7 @@ fn mend(store: &Store, flags: &Flags, place: bool) -> Result<i32, CliError> {
         "repair",
         json!(done),
         None,
-        matches!(done, Repaired::Level),
+        matches!(done, Repaired::Level | Repaired::SendingElsewhere),
         line,
     );
     Ok(0)

@@ -18,6 +18,11 @@ const RUNNER_ARGV: &[&str] = &["plugin-runner"];
 /// owns the spelling of its own entry points, and this is where both are dispatched.
 const NOTIFY_ARGV: &[&str] = &["notify-sender"];
 
+/// The same, for a **Viewer carrier** (`AMB-D-884`): the hidden `viewer-carrier` command, which core
+/// follows with the store to carry. The third entry point this face owns the spelling of, named beside the
+/// other two.
+const CARRIER_ARGV: &[&str] = &["viewer-carrier"];
+
 /// Run a mutating command group, then drive the plugin observation dispatcher once at the short-lived
 /// CLI's write seam (`AMB-T-2033`). After the command committed, drain the outbox from the persisted
 /// cursor onto the subscribed plugins' queues, persist where it advanced, and launch a runner process for
@@ -36,6 +41,10 @@ pub(crate) fn with_dispatch(
     op: impl FnOnce(&mut Store) -> Result<i32, CliError>,
 ) -> Result<i32, CliError> {
     let code = op(store)?;
+    // The Viewer is set off beside the dispatcher and not through it: what a carrier carries is the
+    // backlog, so which record moved and who moved it decide nothing here — a write happened, and the
+    // phone is now behind (`AMB-D-884`). It is a process, so this waits for none of it.
+    store.set_the_viewer_off(CARRIER_ARGV);
     dispatch(store, |store, subs| {
         store.drive_plugins_persisted(Face::Cli, subs, RUNNER_ARGV, NOTIFY_ARGV).map(Some)
     });

@@ -66,6 +66,9 @@ pub enum Repaired {
     Counted(Drift),
     /// The difference went on the queue, and as much of it as the server would take has gone.
     Placed { drift: Drift, sent: Sent },
+    /// Another run is carrying, so nothing was compared. Comparing under a turn somebody else is taking
+    /// would work the difference out against a picture that is moving underneath it ([`super::lock`]).
+    SendingElsewhere,
 }
 
 /// What the repair last counted, and when it said so.
@@ -93,7 +96,9 @@ pub fn repair_at(store: &Store, place: bool, now: DateTime<Utc>) -> Result<Repai
 
     let holds = what_it_holds(&server).map_err(|rebuffed| rebuffed.in_words(now))?;
     let placing = place || the_count_still_stands(store, now)?;
-    let drift = compared_with(store, &holds, placing)?;
+    let Some(drift) = compared_with(store, &holds, placing)? else {
+        return Ok(Repaired::SendingElsewhere);
+    };
 
     if drift.is_level() {
         store.forget_viewer_asked()?;
@@ -144,16 +149,21 @@ fn the_count_still_stands(store: &Store, now: DateTime<Utc>) -> Result<bool> {
 ///
 /// **The cursor is not moved.** Nothing was read out of the feed, so nothing has been dealt with: what this
 /// adds is beside the ordinary send's work, never instead of it.
-fn compared_with(store: &Store, holds: &Holding, queue: bool) -> Result<Drift> {
-    // What is queued here is compared against a picture, and a stretch of the feed copied out between the
-    // two would sit behind records answering to an older reading of the same rows — so a delete worked out
-    // here could land on top of a write already queued. The lock that keeps one turn to one process is
-    // `AMB-T-4855`'s, and this is where it is taken once it exists.
+///
+/// `None` where another run is already carrying — see the hold below.
+fn compared_with(store: &Store, holds: &Holding, queue: bool) -> Result<Option<Drift>> {
+    // **The turn is taken before the picture.** What is queued here is compared against a picture, and a
+    // stretch of the feed copied out between the two would sit behind records answering to an older reading
+    // of the same rows — so a delete worked out here could land on top of a write already queued. Under the
+    // hold there is no between (see `super::lock`).
+    let Some(turn) = super::lock::take_the_turn(&store.paths)? else {
+        return Ok(None);
+    };
     let (here, _) = the_whole_picture(store)?;
     let (mut missing, gone) = the_difference(&here, &holds.keys);
     let drift = Drift { to_place: missing.len(), to_drop: gone.len() };
     if !queue || drift.is_level() {
-        return Ok(drift);
+        return Ok(Some(drift));
     }
 
     missing.extend(gone);
@@ -167,7 +177,11 @@ fn compared_with(store: &Store, holds: &Holding, queue: bool) -> Result<Drift> {
     let mut left = store.viewer_carried()?;
     left.seq = holds.seq;
     store.set_viewer_carried(&left)?;
-    Ok(drift)
+
+    // Let go before the carrying: the turn this took is the comparison's, and the carrying takes one of
+    // its own (`carry_at`). A hold kept across both would be this run refusing itself.
+    drop(turn);
+    Ok(Some(drift))
 }
 
 /// The two halves of a drift.
@@ -464,7 +478,7 @@ mod tests {
             placed,
             Repaired::Placed {
                 drift,
-                sent: Sent { placed: mine.len(), waiting: 0 },
+                sent: Sent { placed: mine.len(), waiting: 0, elsewhere: false },
             },
             "the press after the count is the one that spends it",
         );
@@ -601,7 +615,7 @@ mod tests {
         already_carrying(&store, 2);
         let holds = Holding { keys: BTreeMap::new(), seq: 87 };
 
-        let drift = compared_with(&store, &holds, true).unwrap();
+        let drift = compared_with(&store, &holds, true).unwrap().expect("nobody holds the turn");
 
         assert_eq!(drift.to_place, here(&store).len());
         assert_eq!(store.viewer_carried().unwrap().seq, 87);
@@ -667,6 +681,33 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Repaired::NotSetUp).unwrap(),
             serde_json::json!({ "outcome": "not_set_up" }),
+        );
+    }
+
+    /// **A comparison is worked out against a picture**, so a turn somebody else is taking is one this must
+    /// not compare under: a stretch copied out between the picture and the queueing would sit behind
+    /// records answering to an older reading of the same rows.
+    #[test]
+    fn a_comparison_waits_for_nobody_and_compares_under_nobody() {
+        let mut store = store_at("turn-taken");
+        seed(&mut store);
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        already_carrying(&store, 0);
+        host.set_reply("/meta", meta(0));
+        host.set_reply("/records?since=0&keys=1", page(&[], 0, false));
+
+        let held = super::super::lock::take_the_turn(&store.paths).unwrap().expect("nobody holds it");
+        assert_eq!(
+            repair_at(&store, true, at("2026-09-14T10:00:00Z")).unwrap(),
+            Repaired::SendingElsewhere,
+        );
+        assert_eq!(store.viewer_waiting().unwrap(), 0, "and nothing is queued under it");
+
+        drop(held);
+        assert!(
+            matches!(repair_at(&store, false, at("2026-09-14T10:00:00Z")).unwrap(), Repaired::Counted(_)),
+            "the turn let go is the turn this one takes",
         );
     }
 

@@ -29,6 +29,7 @@ mod migrate;
 pub mod pace;
 pub mod pairing;
 pub mod refusal;
+pub mod repair;
 pub mod sealing;
 pub mod send;
 

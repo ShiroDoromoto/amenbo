@@ -1354,6 +1354,28 @@ plain_tables! {
         op: text("CHECK(op IN ('put', 'del'))"),
         body: text_opt,
     }
+
+    /// **What the repair last counted, and when it said so** (`AMB-D-884`, `AMB-D-814`) — one row, this
+    /// device's.
+    ///
+    /// Comparing the server with this machine is cheap and placing the difference is not: a backlog that
+    /// has drifted whole is tens of thousands of writes, which is a large part of a free Cloudflare plan's
+    /// day. So the first press counts and says the number, and the second places it — and this row is what
+    /// stands between them, since the two presses are two runs of a process that remembers nothing.
+    ///
+    /// **It is not the carrier's memory**, and it is kept apart from [`viewer_send`] for that reason: a
+    /// turn reads that row, sends, and writes it back, so a count landing in the middle of one would be
+    /// written over by the turn that never saw it.
+    ///
+    /// `asked_at` is when the number was shown. Past the window a press counts again rather than placing:
+    /// what a person consented to is the number they were shown, and a store that has moved since is one
+    /// they were shown nothing about.
+    viewer_asked {
+        id: integer("PRIMARY KEY CHECK (id = 1)"),
+        asked_at: text,
+        to_place: bigint,
+        to_drop: bigint,
+    }
 }
 
 /// The one line of [`schema_sql`] that is not DDL, named so that [`genesis_sql`] can lift it out.

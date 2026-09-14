@@ -719,6 +719,30 @@ pub const STEPS: &[Step] = &[
              );",
         ),
     },
+    Step {
+        to: 40,
+        name: "add what the Viewer's repair last counted, so the press after it is the one that spends it",
+        // `AMB-D-884` and `AMB-D-814`: comparing the server with this machine is cheap and placing the
+        // difference is not, so the first press counts and the second places. The two presses are two runs
+        // of a process that remembers nothing, and this row is what stands between them.
+        //
+        // It is a table of its own rather than three more columns on `viewer_send`: a turn reads that row,
+        // sends, and writes it back, so a count landing inside one would be written over by the turn that
+        // never saw it.
+        //
+        // **The version is what this step is for**, as v39's is. Genesis is `CREATE TABLE IF NOT EXISTS`
+        // over the registry and runs at every open, so an existing store grows this on its next one. There
+        // is nothing to backfill: a store upgrading into this has been shown no count, which is what an
+        // absent row says.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS viewer_asked (\
+                 id INTEGER PRIMARY KEY CHECK (id = 1) NOT NULL, \
+                 asked_at TEXT NOT NULL, \
+                 to_place BIGINT NOT NULL, \
+                 to_drop BIGINT NOT NULL\
+             );",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to

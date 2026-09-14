@@ -498,6 +498,23 @@ impl Store {
         crate::viewer::carried::drop_front(&self.engine, how_many)
     }
 
+    /// The drift a repair last counted on this device ([`crate::viewer::repair`]), or `None` where none
+    /// has been counted. It is what the press after it consents to.
+    pub fn viewer_asked(&self) -> Result<Option<crate::viewer::repair::Asked>> {
+        crate::viewer::repair::read_asked(&self.engine)
+    }
+
+    /// Write down that a count was shown, so the next press is the one that spends it.
+    pub fn set_viewer_asked(&self, asked: &crate::viewer::repair::Asked) -> Result<()> {
+        crate::viewer::repair::write_asked(&self.engine, asked)
+    }
+
+    /// Take that count away, so a press counts again rather than placing on the strength of a number
+    /// already spent.
+    pub fn forget_viewer_asked(&self) -> Result<()> {
+        crate::viewer::repair::forget_asked(&self.engine)
+    }
+
     /// What is written on this project's draft page ([`crate::memo`]).
     pub fn memo(&self, project_id: i64) -> Result<String> {
         crate::memo::memo(&self.engine, project_id)

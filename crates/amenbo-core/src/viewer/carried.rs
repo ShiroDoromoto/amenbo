@@ -166,11 +166,15 @@ pub fn write(engine: &StoreEngine, left: &Carried) -> Result<()> {
 ///
 /// The queue goes with the numbers. What waits in it was read out under a cursor this forgets, so keeping
 /// it would send the same records twice and place them a second time under the new key besides.
+///
+/// The count a repair last showed goes too. It says how far apart the two ends were, and a server stood
+/// up anew is one nobody has been shown anything about.
 pub fn forget(engine: &StoreEngine) -> Result<()> {
     let tx = engine.transaction()?;
     for sql in [Delete::from(VS.table).sql(), Delete::from(VP.table).sql()] {
         sql.execute(&tx).map_err(StoreEngineError::from)?;
     }
+    super::repair::forget_asked_in(&tx)?;
     tx.commit().map_err(StoreEngineError::from)?;
     Ok(())
 }

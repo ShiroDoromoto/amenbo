@@ -115,9 +115,20 @@ struct Kind {
     /// A symbolic link is resolved afresh every time it is read and comes through that; the hard
     /// link Windows is given is a second name for the file that was there, and is left on it
     /// (`AMB-D-878`). So on Windows these are carried in as copies instead, on every open rather
-    /// than on the open that made the home — and only one direction is kept. What the person chose
-    /// reaches the pane; what the pane settles afterwards does not come back.
+    /// than on the open that made the home.
     copied: &'static [&'static str],
+    /// Which keys of a copied file the pane is meant to settle, and which are therefore written back
+    /// into the reader's own ([`crate::pane_settled`]).
+    ///
+    /// **It is what keeps a copy from being one direction only.** The rest of the copy is the pane's
+    /// and goes with it: a folder's `trust_level` and a server an `mcp add` wrote there were settled
+    /// for the pane rather than for the reader, and carrying the file back whole would carry both —
+    /// which is the cost `AMB-D-878` weighed and the reason it took the copy over a link it would
+    /// have had to rebuild.
+    ///
+    /// Every name in [`Kind::copied`] is answered for here, because a file copied in with nothing
+    /// named is a file whose writes the reader loses without being told.
+    carried_back: &'static [(&'static str, &'static [&'static str])],
 }
 
 impl Kind {
@@ -132,6 +143,16 @@ impl Kind {
     fn copied_here(&self) -> &'static [&'static str] {
         if cfg!(windows) {
             self.copied
+        } else {
+            &[]
+        }
+    }
+
+    /// What this operating system carries back out of those copies. Nothing where nothing was
+    /// copied: a link already reaches the reader's own file and there is no second copy to read.
+    fn carried_back_here(&self) -> &'static [(&'static str, &'static [&'static str])] {
+        if cfg!(windows) {
+            self.carried_back
         } else {
             &[]
         }
@@ -162,6 +183,11 @@ const KINDS: &[Kind] = &[
         // model and servers reaching the pane, and a copy carries that however often it is
         // rewritten (`AMB-D-878`).
         copied: &["config.toml"],
+        // What `/model` settles, and the whole of what it settles: the two were watched changing
+        // together on a press and nothing else in the file moved with them (`AMB-T-4835`). The
+        // second is the picker's own second step, so a model carried back without it would leave the
+        // reader on a pairing they never chose.
+        carried_back: &[("config.toml", &["model", "model_reasoning_effort"])],
     },
     Kind {
         agent: "gemini-cli",
@@ -185,6 +211,8 @@ const KINDS: &[Kind] = &[
         // Gemini's own replaced file is the one above: it is named by a variable rather than
         // carried in, because the provider offers one to name it with.
         copied: &[],
+        // Nothing is copied in, so there is nothing to carry back out.
+        carried_back: &[],
     },
 ];
 
@@ -199,21 +227,6 @@ fn kind_of(agent: Option<&str>) -> Option<&'static Kind> {
         .as_ref()
         .filter(|resume| resume.comes_back_by_a_place())
         .map(|_| kind)
-}
-
-/// Whether what a pane running `agent` writes to `path` — a place in the reader's own home, spelled
-/// the way the catalog spells one (`amenbo_core::harness::Switch::keeps`) — reaches that file.
-///
-/// **False on the one shape that is a copy**: a name this operating system carries into the pane's
-/// home instead of linking ([`Kind::copied`], `AMB-D-878`). The copy is taken again on every open,
-/// so what the pane wrote to it is gone by the next one and the reader's own file was never in it.
-///
-/// True everywhere else, the two cases alike: a name reached by a link or by a path is the reader's
-/// own file, and a provider given no home at all was never parted from it. It is asked so that the
-/// difference is said before the press rather than found out a pane later.
-pub fn writes_come_back(agent: &str, path: &str) -> bool {
-    let Some(kind) = kind_of(Some(agent)) else { return true };
-    !kind.copied_here().iter().any(|name| path == format!("~/{}/{name}", kind.theirs))
 }
 
 /// The home the AI in this frame runs in, made and linked the first time it is asked for, with the
@@ -252,6 +265,9 @@ pub fn for_pane(frame: &str, agent: Option<&str>) -> Option<(Vec<(&'static str, 
         let into = home.join(kind.inside);
         share(kind, &into, theirs);
         copy_in(kind.copied_here(), &into, theirs);
+        // Straight after the copies, because what the watch holds is the values they were taken
+        // with: what the file says other than that afterwards, the pane put there.
+        crate::pane_settled::watch(&home, &into, theirs, kind.carried_back_here());
     }
     Some((vars(kind, home.clone(), theirs.as_deref()), home))
 }
@@ -454,6 +470,8 @@ fn forget_in(root: &Path, handle: &Path) {
     if handle.parent() != Some(root) {
         return;
     }
+    // Before the directory goes, so the watch on it is not left waiting on a home that is not there.
+    crate::pane_settled::forget(handle);
     if let Err(e) = std::fs::remove_dir_all(handle) {
         log::warn!("the pane home at {} stayed: {e}", handle.display());
     }
@@ -756,24 +774,38 @@ mod tests {
         }
     }
 
-    /// What a pane writes to the copy stays in the pane, and the row that says so before the press
-    /// is asked here (`crate::wake::wake_switch`).
+    /// Every file carried in as a copy has its keys carried back out, so a copy is never one
+    /// direction only ([`crate::pane_settled`]).
     ///
-    /// **The path is the catalog's own**: the answer is a comparison of two spellings, so a row
-    /// respelled on one side and not the other would go on reading "it comes back" with nothing
-    /// looking amiss.
+    /// **This is what the face rests on.** The row under a pane says the press moves the reader's
+    /// own default, and it says it on every operating system: a name copied in with nothing carried
+    /// back would make that sentence false on Windows alone, which is the hardest kind of wrong to
+    /// find.
     #[test]
-    fn a_write_to_a_copied_file_does_not_come_back_where_it_is_copied() {
-        let keeps = amenbo_core::harness::find_launch(CODEX).unwrap().switch.keeps.unwrap();
+    fn everything_copied_in_is_carried_back_out() {
+        for kind in KINDS {
+            for name in kind.copied {
+                let carried = kind.carried_back.iter().find(|(file, _)| file == name);
+                let (_, keys) = carried.unwrap_or_else(|| panic!("{}: {name}", kind.agent));
+                assert!(!keys.is_empty(), "{}: {name}", kind.agent);
+            }
+            // And nothing is carried back out of a file that was never copied in: there would be no
+            // second copy to read it from.
+            for (file, _) in kind.carried_back {
+                assert!(kind.copied.contains(file), "{}: {file}", kind.agent);
+            }
+        }
+    }
 
-        assert_eq!(keeps, "~/.codex/config.toml");
-        assert_eq!(writes_come_back(CODEX, keeps), !cfg!(windows));
-        // Its neighbours in the same directory are reached by a link on every operating system, and
-        // so is everything Gemini's home shares.
-        assert!(writes_come_back(CODEX, "~/.codex/auth.json"));
-        assert!(writes_come_back(GEMINI, "~/.gemini/settings.json"));
-        // And a provider given no home of its own was never parted from the reader's file.
-        assert!(writes_come_back("claude-code", "~/.claude/settings.json"));
+    /// The key the catalog names as the one a `/model` press keeps is the file this row copies, so
+    /// the two cannot drift apart: a `keeps` respelled on one side would leave the face naming a
+    /// file the pane no longer carries back.
+    #[test]
+    fn the_file_the_model_press_keeps_is_the_one_the_pane_carries_back() {
+        let keeps = amenbo_core::harness::find_launch(CODEX).unwrap().switch.keeps.unwrap();
+        let kind = kind(CODEX);
+
+        assert_eq!(keeps, format!("~/{}/{}", kind.theirs, kind.carried_back[0].0));
     }
 
     /// A copy is taken again on every open, so a pane that was made runs ago is still given what the

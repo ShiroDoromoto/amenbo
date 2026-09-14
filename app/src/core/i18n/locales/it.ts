@@ -663,7 +663,6 @@ export const it: Translation = {
     "face.modelSendsPicker": "Scrive solo {command} nel riquadro. Si apre il suo selettore, e la scelta è tua.",
     "face.modelSendsFilter": "Scrive {command} nel riquadro, poi il nome nel suo campo di ricerca. Confermare tocca a te.",
     "face.modelKeeps": "Sposta anche la tua impostazione predefinita, in {path}.",
-    "face.modelKeepsPane": "Resta in questo riquadro: la tua impostazione predefinita, in {path}, non cambia, e la modifica sparisce alla prossima apertura di questo riquadro.",
     "face.startSave": "Salva",
     "face.startCancel": "Annulla",
     "face.startEdit": "Modifica",

@@ -769,7 +769,6 @@ const ui = {
   "face.modelSendsPicker": "Puts {command} in the pane on its own. Its own picker opens, and the choosing is yours.",
   "face.modelSendsFilter": "Puts {command} in the pane, then the name in its search box. Confirming it is yours.",
   "face.modelKeeps": "It also moves your own default, in {path}.",
-  "face.modelKeepsPane": "It stays in this pane: your own default, in {path}, does not move, and the change goes when this pane is next opened.",
   "face.startSave": "Save",
   "face.startCancel": "Cancel",
   "face.startEdit": "Edit",

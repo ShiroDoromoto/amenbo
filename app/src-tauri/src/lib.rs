@@ -77,6 +77,9 @@ mod migrate;
 /// A directory of its own for the AI in each pane, so "the last session" in it is that pane's and
 /// no other's (`AMB-D-869`, `AMB-D-875`).
 mod pane_home;
+/// What a pane settles in a file it was handed a copy of, carried back to the reader's own
+/// (`AMB-D-878`).
+mod pane_settled;
 mod perf;
 /// The long-lived mount of the plugin observation dispatcher: the drive the write seam runs after each
 /// mutating command, over the store's own cursor (`AMB-D-380`), and the one this app makes as it comes up

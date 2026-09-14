@@ -668,7 +668,6 @@ export const uk: Translation = {
     "face.modelSendsPicker": "Вписує в панель лише {command}. Відкриється його власний вибір, а вибирати вам.",
     "face.modelSendsFilter": "Вписує {command} у панель, потім назву в його поле пошуку. Підтверджувати вам.",
     "face.modelKeeps": "Це змінює і ваше власне типове значення, у {path}.",
-    "face.modelKeepsPane": "Це лишається в цій панелі: ваше власне типове значення у {path} не змінюється, а зміна зникає під час наступного відкриття панелі.",
     "face.startSave": "Зберегти",
     "face.startCancel": "Скасувати",
     "face.startEdit": "Змінити",

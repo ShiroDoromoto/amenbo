@@ -329,11 +329,10 @@ pub struct Switch {
     /// moved somebody's default without saying so would be Amenbo writing a provider's settings by
     /// the back door, which `AMB-D-440` refuses at the front.
     ///
-    /// **It is the provider's fact and not the pane's.** A pane handed a copy of this file rather
-    /// than the file writes to the copy, and nothing comes back — but that is Amenbo's own doing, and
-    /// it differs by operating system and by whether the pane was given a home at all. So it is
-    /// answered where it is done (`app/src-tauri/src/pane_home.rs`) rather than by a second value
-    /// here: this column would then be carrying two facts, the provider's and Amenbo's, in one.
+    /// **It is one value and holds on every operating system.** A pane given a copy of this file
+    /// rather than the file is a pane whose writes would stop at the copy, and what keeps that from
+    /// making this column false there is the copy being carried back into the reader's own file
+    /// (`app/src-tauri/src/pane_settled.rs`) — not a second value here.
     pub keeps: Option<&'static str>,
 }
 

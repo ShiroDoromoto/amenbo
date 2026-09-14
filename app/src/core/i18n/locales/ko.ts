@@ -641,7 +641,6 @@ export const ko: Translation = {
     "face.modelSendsPicker": "{command} 만 창에 넣습니다. 그쪽 선택 화면이 열리고, 고르는 건 사람입니다.",
     "face.modelSendsFilter": "{command} 를 창에 넣고, 이어서 이름을 검색란에 넣습니다. 확정하는 건 사람입니다.",
     "face.modelKeeps": "이걸로 사용자의 기본값도 바뀝니다({path}).",
-    "face.modelKeepsPane": "이 창 안에서만 유지됩니다. 사용자의 기본값({path})은 바뀌지 않고, 다음에 이 창을 열면 변경은 사라집니다.",
     "face.startSave": "저장",
     "face.startCancel": "취소",
     "face.startEdit": "고치기",

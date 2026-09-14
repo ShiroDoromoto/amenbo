@@ -642,7 +642,6 @@ export const tr: Translation = {
     "face.modelSendsPicker": "Bölmeye yalnızca {command} yazar. Kendi seçicisi açılır, seçmek size kalır.",
     "face.modelSendsFilter": "Bölmeye {command} yazar, ardından adı kendi arama kutusuna koyar. Onaylamak size kalır.",
     "face.modelKeeps": "Bu, {path} içindeki kendi varsayılanınızı da değiştirir.",
-    "face.modelKeepsPane": "Yalnızca bu bölmede kalır: {path} içindeki kendi varsayılanınız değişmez ve bu bölme bir dahaki açıldığında değişiklik kaybolur.",
     "face.startSave": "Kaydet",
     "face.startCancel": "Vazgeç",
     "face.startEdit": "Düzenle",

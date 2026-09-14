@@ -642,7 +642,6 @@ export const zhHans: Translation = {
     "face.modelSendsPicker": "只把 {command} 写进窗格。它自己的选择界面会打开，选哪个由你决定。",
     "face.modelSendsFilter": "先把 {command} 写进窗格，再把名字放进它的搜索框。确认由你来做。",
     "face.modelKeeps": "这也会改掉你自己的默认设置，在 {path}。",
-    "face.modelKeepsPane": "只留在这个窗格里：{path} 里你自己的默认设置不变，下次打开这个窗格时改动就没了。",
     "face.startSave": "保存",
     "face.startCancel": "取消",
     "face.startEdit": "修改",

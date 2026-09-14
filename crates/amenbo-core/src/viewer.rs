@@ -24,6 +24,7 @@ use crate::store::Store;
 
 mod cloudflare;
 mod migrate;
+pub mod sealing;
 
 use cloudflare::Sky;
 

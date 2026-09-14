@@ -684,6 +684,41 @@ pub const STEPS: &[Step] = &[
                  ON project_notify_target(target_id);",
         ),
     },
+    Step {
+        to: 39,
+        name: "add the Viewer's carrier tables — where it was left, and what it has yet to send",
+        // `AMB-D-884`: the carrier that puts the backlog in the reader's own Cloudflare account becomes the
+        // body's own, and what it was left holding came with it. A plugin kept that in a file beside its
+        // binary; there is no such file any more, and no `plugin_config` to put it in either.
+        //
+        // **The version is what this step is for**, as v37's and v38's are. Genesis is
+        // `CREATE TABLE IF NOT EXISTS` over the registry and runs at every open, so an existing store grows
+        // these on its next one. There is nothing to backfill and nothing that could be: a carrier with no
+        // memory places the whole backlog, which is what a first run does — and that is the honest state of
+        // a store upgrading into this, since nothing has ever been sent from it.
+        //
+        // The DDL is repeated in frozen text rather than referenced, as every step's is: the registry may
+        // rename a column tomorrow, and what this step added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS viewer_send (\
+                 id INTEGER PRIMARY KEY CHECK (id = 1) NOT NULL, \
+                 version BIGINT NOT NULL, \
+                 cursor BIGINT NOT NULL, \
+                 placed BIGINT NOT NULL, \
+                 seq BIGINT NOT NULL, \
+                 quiet_until TEXT, \
+                 spent BIGINT NOT NULL, \
+                 spent_on TEXT, \
+                 build BIGINT NOT NULL\
+             );\
+             CREATE TABLE IF NOT EXISTS viewer_pending (\
+                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, \
+                 record_key TEXT NOT NULL, \
+                 op TEXT CHECK(op IN ('put', 'del')) NOT NULL, \
+                 body TEXT\
+             );",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to

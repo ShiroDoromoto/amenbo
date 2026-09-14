@@ -1301,6 +1301,59 @@ plain_tables! {
         nudge_id: text("PRIMARY KEY"),
         at: text,
     }
+
+    /// **Where the Viewer's carrier was left** (`AMB-D-884`, `AMB-D-583`) — one row, this device's.
+    ///
+    /// The carrier reads the backlog out and sends it to a server in the reader's own Cloudflare account,
+    /// and what it was left holding is here rather than in a file beside a binary: the carrier is the
+    /// body's own now, and the body already has somewhere that travels with a backup and stays out of
+    /// every road that leaves.
+    ///
+    /// **It is not a setting.** Settings are what a person fills in; this is bookkeeping nobody types, and
+    /// a screen that showed it would be showing a number they cannot answer and must not edit.
+    ///
+    /// **Losing it is not damage.** A carrier that comes back with no memory places the whole backlog,
+    /// which is exactly what a first run does — one large send and nothing else. What `viewer_pending`
+    /// holds is the exception, and that is why it is a table rather than something worked out again.
+    ///
+    /// The columns are four numbers that mean nothing apart. `cursor` is how far the backlog has been
+    /// **read out**, which is not how far the server has been **told**: holding them together is what
+    /// makes a server that will not take anything drag the reading back with it, and the feed's window
+    /// turns — what is not copied out in time is not copied out at all. `placed` is the number the server
+    /// was last left standing at, `seq` the ordering it answered with, and `version` the backlog version
+    /// last sent.
+    viewer_send {
+        id: integer("PRIMARY KEY CHECK (id = 1)"),
+        version: bigint,
+        cursor: bigint,
+        placed: bigint,
+        seq: bigint,
+        quiet_until: text_opt,
+        spent: bigint,
+        spent_on: text_opt,
+        build: bigint,
+    }
+
+    /// **What has been read out of the backlog for the Viewer and has not landed yet**, oldest first
+    /// (`AMB-D-884`).
+    ///
+    /// It holds the rows themselves rather than the keys to read them back by, so a send needs nothing
+    /// else — no second reading of a backlog that has moved on, and no guessing that a row which cannot be
+    /// read back must have been deleted. What it costs is the room.
+    ///
+    /// **The queue is the mark.** A send takes from the front and drops what landed, so there is no
+    /// separate record of how far it got — one that could disagree with the queue is one that can lose a
+    /// record. `viewer_send.cursor` above it already says the backlog was read that far, which is why
+    /// dropping these rows and keeping that number loses whatever had been copied out and not yet sent.
+    ///
+    /// `body` is the row as it was copied out, in the clear: sealing happens on the way out, so what waits
+    /// here is what the backlog held. A deletion carries none — the key and the word are the whole of it.
+    viewer_pending {
+        id: integer("PRIMARY KEY AUTOINCREMENT"),
+        record_key: text,
+        op: text("CHECK(op IN ('put', 'del'))"),
+        body: text_opt,
+    }
 }
 
 /// The one line of [`schema_sql`] that is not DDL, named so that [`genesis_sql`] can lift it out.

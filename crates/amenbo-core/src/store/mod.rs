@@ -456,6 +456,48 @@ impl Store {
         crate::nudge::mark_put(&self.engine, nudge_id)
     }
 
+    /// Where the Viewer's carrier was left ([`crate::viewer::carried`]) — this device's, one row. A
+    /// store nothing has been sent from answers the default, which is the state a first run is in.
+    pub fn viewer_carried(&self) -> Result<crate::viewer::carried::Carried> {
+        crate::viewer::carried::read(&self.engine)
+    }
+
+    /// Write where the carrier was left. The whole row goes at once: these numbers mean nothing apart.
+    pub fn set_viewer_carried(&self, left: &crate::viewer::carried::Carried) -> Result<()> {
+        crate::viewer::carried::write(&self.engine, left)
+    }
+
+    /// Throw away what the carrier was holding — the numbers and the queue — so the next turn places the
+    /// whole backlog again. What standing a server up runs, that being the only place the two can be
+    /// settled.
+    pub fn forget_viewer_carried(&self) -> Result<()> {
+        crate::viewer::carried::forget(&self.engine)
+    }
+
+    /// How many records have been read out for the Viewer and have not landed yet.
+    pub fn viewer_waiting(&self) -> Result<i64> {
+        crate::viewer::carried::waiting(&self.engine)
+    }
+
+    /// Put records at the back of that queue, in the order they were read out.
+    pub fn enqueue_viewer(&self, records: &[crate::viewer::carried::Waiting]) -> Result<()> {
+        crate::viewer::carried::enqueue(&self.engine, records)
+    }
+
+    /// The first `how_many` records waiting, oldest first — what one turn takes.
+    pub fn viewer_front(
+        &self,
+        how_many: i64,
+    ) -> Result<Vec<crate::viewer::carried::Waiting>> {
+        crate::viewer::carried::front(&self.engine, how_many)
+    }
+
+    /// Drop the first `how_many` — what a turn does with what the server took. The queue is the mark, so
+    /// this is the whole of how far a turn got.
+    pub fn drop_viewer_front(&self, how_many: i64) -> Result<()> {
+        crate::viewer::carried::drop_front(&self.engine, how_many)
+    }
+
     /// What is written on this project's draft page ([`crate::memo`]).
     pub fn memo(&self, project_id: i64) -> Result<String> {
         crate::memo::memo(&self.engine, project_id)

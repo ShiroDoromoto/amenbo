@@ -103,6 +103,9 @@ mod agent_models;
 /// The handle a provider that names its own is resumed from, read back out of its list
 /// (`AMB-D-869`).
 mod agent_sessions;
+/// The doors the Viewer is worked through from the screen — the server in the reader's own Cloudflare
+/// account, the phone that may read it, and the carrying (`AMB-D-884`).
+mod viewer;
 /// OS-specific file watching — the half that wakes `commands::watch_store`. It does not depend on
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
 /// operating systems.
@@ -610,6 +613,15 @@ pub fn run() {
       commands::project_notify_set_mail_to,
       commands::project_notify_select_target,
       commands::project_notify_set_event,
+      viewer::viewer_state,
+      viewer::viewer_app,
+      viewer::viewer_setup,
+      viewer::viewer_set_carrying,
+      viewer::viewer_pairing,
+      viewer::viewer_pair_code,
+      viewer::viewer_cut_off,
+      viewer::viewer_send,
+      viewer::viewer_repair,
       wake::wake_probe,
       wake::wake_remember,
       wake::wake_chose,

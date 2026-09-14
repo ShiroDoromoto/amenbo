@@ -5715,7 +5715,7 @@ pub fn project_notify_set_event(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use amenbo_core::model::View;
     use std::sync::Mutex;
@@ -5796,7 +5796,11 @@ mod tests {
     /// The tests' env guard. It takes ENV_LOCK to serialize, and disables the update check so the
     /// `build_snapshot` path talks to no upstream and touches no real OS cache — hermetic. Every
     /// test that goes through a snapshot goes through this.
-    fn env_guard() -> std::sync::MutexGuard<'static, ()> {
+    ///
+    /// **The lock is one lock for the whole crate.** `AMENBO_HOME` is the process's, so a test in
+    /// another module that swaps it while these are running moves the store out from under them — which
+    /// is why this is reachable from there rather than copied there.
+    pub(crate) fn env_guard() -> std::sync::MutexGuard<'static, ()> {
         let g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::set_var("AMENBO_UPDATE_CHECK", "0");
         g

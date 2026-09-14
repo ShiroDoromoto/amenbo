@@ -591,11 +591,7 @@ func vmVerifyRun(scenario string) error {
 	// window on screen that the next run's shots would have in front of them.
 	_, _ = sshRun(ip, "pkill -f "+vmVerifyBin+" || true; pkill -f "+vmGuestApp+" || true")
 
-	start := fmt.Sprintf(
-		": > %s && rm -rf %s && nohup sh -c 'tail -n 0 -f %s | %s %s --app %s --evidence %s --screen %s --fixtures %s' > %s 2>&1 &",
-		vmVerifySteps, vmVerifyEvidence, vmVerifySteps, vmVerifyBin, guestScenario,
-		vmGuestApp, vmVerifyEvidence, vmScreenSource, vmVerifyFixtures, vmVerifyLog)
-	if _, err := sshRun(ip, start); err != nil {
+	if _, err := sshRun(ip, vmVerifyStartCommand(guestScenario)); err != nil {
 		return fmt.Errorf("starting the run: %w", err)
 	}
 	logf("  verify  : %s walking in %s", filepath.Base(scenario), vmCloneName)
@@ -606,6 +602,36 @@ func vmVerifyRun(scenario string) error {
 		return err
 	}
 	return vmVerifyLogTail(20)
+}
+
+// vmVerifyStartCommand is the one line the guest is sent to put a run on its screen: the keychain
+// opened, then the harness started on the scenario with the app it is to drive.
+//
+// **The unlock has to be in this call and in front of the launch.** The harness starts the app as a
+// child of itself (`verification/gui/src/launch.rs`), so the app inherits the security session this
+// reach over ssh has — and that session's login keychain is locked, whatever a console session on the
+// same account can read. What the app cannot read there is the agent's credential, so a pane on a
+// catalogued provider comes up saying `Not logged in · Please run /login` and every road that asks an
+// agent a question goes red on an install that is signed in (measured 2026-09-14, the v25.0.0
+// pre-distribution run). An unlock in a *separate* reach buys nothing: the session goes with the call.
+//
+// **It does not stop the run.** Almost every road here is walked with stand-ins and wants no
+// credential at all — the model line, the quit gate, a pane's own box — so a guest with no keychain to
+// open, or one whose password has moved, takes none of them down with it. The road that needs the
+// agent fails where it should: on its own asserts, with the pane sitting on a plain prompt. That is
+// the same bargain `vmSeedClaudeCode` strikes on the way in.
+//
+// The password is this image's own, compiled in beside the user it belongs to: a clone is raised from
+// a golden nobody signs into and thrown away after, and every other reach here is already made with
+// it.
+func vmVerifyStartCommand(guestScenario string) string {
+	unlock := fmt.Sprintf("security unlock-keychain -p %q %s >/dev/null 2>&1 || true",
+		vmPassword, claudeGuestKeychain)
+	start := fmt.Sprintf(
+		": > %s && rm -rf %s && nohup sh -c 'tail -n 0 -f %s | %s %s --app %s --evidence %s --screen %s --fixtures %s' > %s 2>&1 &",
+		vmVerifySteps, vmVerifyEvidence, vmVerifySteps, vmVerifyBin, guestScenario,
+		vmGuestApp, vmVerifyEvidence, vmScreenSource, vmVerifyFixtures, vmVerifyLog)
+	return unlock + "; " + start
 }
 
 // vmVerifyStep sends one line and waits for the harness to say something new — which is either the

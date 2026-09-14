@@ -19,10 +19,8 @@
 //! which a process that dies drops on the way out with no code of ours running. Bytes could not say that:
 //! whatever a dead run left behind would go on claiming the turn for ever.
 
-use std::fs::OpenOptions;
+use std::fs::{OpenOptions, TryLockError};
 use std::path::Path;
-
-use fs2::FileExt as _;
 
 use crate::config::Paths;
 use crate::error::{Error, Result};
@@ -44,7 +42,7 @@ impl Drop for TheTurn {
     fn drop(&mut self) {
         // The close would do this on its own. Saying it is for the reader, so both ends of the pair are
         // visible; a hold this cannot drop is one the close drops a line later.
-        let _ = fs2::FileExt::unlock(&self.0);
+        let _ = self.0.unlock();
     }
 }
 
@@ -61,14 +59,18 @@ pub fn at(path: &Path) -> Result<Option<TheTurn>> {
     let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path).map_err(
         |err| Error::invalid(format!("the Viewer's sending lock cannot be opened: {err}")),
     )?;
-    match file.try_lock_exclusive() {
+    match file.try_lock() {
         Ok(()) => Ok(Some(TheTurn(file))),
-        // Every platform answers a hold that is already taken with its own error, and `fs2` hands them
-        // over as they are. It is the answer this asks for rather than a fault, so it is read as one:
-        // what is left over — a directory that went away, a filesystem with no locking at all — is what
-        // comes back as an error.
-        Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-        Err(err) => Err(Error::invalid(format!(
+        // A hold that is already taken is the answer this asks for rather than a fault, so it is read as
+        // one; what is left over — a directory that went away, a filesystem with no locking at all — is
+        // what comes back as an error. `std::fs`'s advisory locking separates the two in
+        // `TryLockError`, as the store's swap lock reads them, so no platform's own number is compared
+        // here. Each platform answers a taken hold with a number of its own — Windows with
+        // `ERROR_LOCK_VIOLATION`, nothing like the `EWOULDBLOCK` a Unix gives — and comparing against one
+        // of those alone left every Windows carrier but the first of a burst erroring where it should
+        // have stopped.
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(err)) => Err(Error::invalid(format!(
             "the Viewer's sending lock cannot be taken: {err}"
         ))),
     }
@@ -101,9 +103,12 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join(FILE_NAME);
 
+        // The length is asked of the directory entry rather than by reading the file: Windows holds the
+        // stretch a lock covers against readers too, so a read taken while the turn is held would fail
+        // there for a reason that has nothing to do with what this is checking.
         let held = at(&path).unwrap().expect("nobody holds it yet");
-        assert_eq!(std::fs::read(&path).unwrap(), Vec::<u8>::new());
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), 0);
         drop(held);
-        assert_eq!(std::fs::read(&path).unwrap(), Vec::<u8>::new());
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), 0);
     }
 }

@@ -128,7 +128,7 @@ pub struct Standing {
 }
 
 /// What one turn did.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Sent {
     /// How many records reached the Worker.
     pub placed: usize,
@@ -157,7 +157,7 @@ impl Rebuffed {
     }
 
     /// This, as the sentence whoever has to fix it reads.
-    fn in_words(self, now: DateTime<Utc>) -> Error {
+    pub(super) fn in_words(self, now: DateTime<Utc>) -> Error {
         match self {
             Rebuffed::Refused(refused) => Error::invalid(refused.in_words(now)),
             Rebuffed::Unreadable(error) => error,
@@ -234,7 +234,7 @@ impl Server {
     /// **No sentence this produces carries the token or anything the body held.** What travels is the
     /// door's name, what it answered, and the Worker's own words — which are written for whoever has to
     /// fix it.
-    fn ask(
+    pub(super) fn ask(
         &self,
         method: &str,
         path: &str,
@@ -479,13 +479,23 @@ fn has_read_nothing_out(left: &Carried) -> bool {
 /// record it does not name is one the store no longer has — but the Worker does, and only a delete already
 /// in the queue will say so. Dropping the queue for the picture would leave those behind for good.
 fn the_whole_backlog(store: &Store, left: &mut Carried, version: i64) -> Result<()> {
-    let mut whole = Vec::new();
-    crate::sync_snapshot::stream_from(&store.paths.store_file, Reach::All, &mut whole)?;
-    let (records, cursor) = carried_out_of(&whole)?;
+    let (records, cursor) = the_whole_picture(store)?;
     store.enqueue_viewer(&records)?;
     left.cursor = cursor;
     left.version = version;
     Ok(())
+}
+
+/// The whole of what this machine holds, as the records that would replace what the Worker has, and the
+/// feed position the picture was taken at.
+///
+/// **Nothing is written down here.** Taking a picture reads nothing out of the feed, so the cursor above it
+/// still names the same stretch — which is what lets the repair road ([`super::repair`]) ask what this
+/// machine holds without the ordinary send losing its place.
+pub(super) fn the_whole_picture(store: &Store) -> Result<(Vec<Waiting>, i64)> {
+    let mut whole = Vec::new();
+    crate::sync_snapshot::stream_from(&store.paths.store_file, Reach::All, &mut whole)?;
+    carried_out_of(&whole)
 }
 
 /// Read a whole snapshot into the records that replace what the Worker holds, and the feed position the

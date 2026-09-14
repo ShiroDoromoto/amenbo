@@ -27,6 +27,7 @@ mod cloudflare;
 mod migrate;
 pub mod pace;
 pub mod refusal;
+pub mod repair;
 pub mod sealing;
 pub mod send;
 

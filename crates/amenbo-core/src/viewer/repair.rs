@@ -478,7 +478,7 @@ mod tests {
             placed,
             Repaired::Placed {
                 drift,
-                sent: Sent { placed: mine.len(), waiting: 0, elsewhere: false },
+                sent: Sent { placed: mine.len(), waiting: 0, held_back: None },
             },
             "the press after the count is the one that spends it",
         );

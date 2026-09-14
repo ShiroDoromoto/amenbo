@@ -1332,6 +1332,7 @@ plain_tables! {
         spent: bigint,
         spent_on: text_opt,
         build: bigint,
+        last_placed_at: text_opt,
     }
 
     /// **What has been read out of the backlog for the Viewer and has not landed yet**, oldest first
@@ -1375,6 +1376,25 @@ plain_tables! {
         asked_at: text,
         to_place: bigint,
         to_drop: bigint,
+    }
+
+    /// **Whether this device carries to the Viewer at all** (`AMB-D-884`) — one row, this device's.
+    ///
+    /// It is the one thing here a person throws rather than something Amenbo works out, which is why it
+    /// is a table of its own and not a column on [`viewer_send`]: standing a server up throws that row
+    /// away, and a switch that came back on because somebody pressed setup is a switch nobody threw.
+    ///
+    /// **An absent row is on.** The switch only decides anything once a server exists, and standing one up
+    /// is the act of asking for this — so a device that has never touched the switch is one that wants
+    /// what it set up. Off means neither the reading nor the placing happens; back on, the feed's window
+    /// has very likely turned, and the whole backlog is placed again, which is what a window that turns
+    /// costs and not a fault.
+    ///
+    /// The row is written whole or not at all, and not at all is the answer above — so `sending` needs no
+    /// default and is never read without one.
+    viewer_switch {
+        id: integer("PRIMARY KEY CHECK (id = 1)"),
+        sending: integer("CHECK(sending IN (0, 1))"),
     }
 }
 

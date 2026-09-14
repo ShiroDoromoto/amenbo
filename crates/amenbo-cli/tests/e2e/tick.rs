@@ -73,7 +73,7 @@ fn a_tick_carries_the_delivery_a_previous_run_left_standing() {
     let program = cli.home.join("plugins").join("logger").join("logger");
     std::fs::write(&program, format!("#!/bin/sh\ncat > '{}'\n", capture.display())).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    cli.json(&["plugin", "enable", "logger", "--json"]);
+    open_the_gate(&cli, "logger");
 
     // Shut the installs away, so the write below fans out to nobody it can resolve and leaves the event
     // where it is. This stands in for the ways a delivery really is left half-done — a runner killed, a
@@ -114,7 +114,7 @@ fn a_day_that_has_come_reaches_a_plugin_through_the_tick() {
     let program = cli.home.join("plugins").join("bell").join("bell");
     std::fs::write(&program, format!("#!/bin/sh\ncat > '{}'\n", capture.display())).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    cli.json(&["plugin", "enable", "bell", "--json"]);
+    open_the_gate(&cli, "bell");
 
     let pid = cli.bound_project();
     let today =
@@ -153,7 +153,7 @@ fn a_tick_leaves_the_queue_a_runner_is_already_on() {
     let program = cli.home.join("plugins").join("slow").join("slow");
     std::fs::write(&program, "#!/bin/sh\nsleep 10\n").unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    cli.json(&["plugin", "enable", "slow", "--json"]);
+    open_the_gate(&cli, "slow");
 
     // The write takes the lease and launches the runner before it returns, so there is a live runner on
     // the queue by the time the tick below is woken.

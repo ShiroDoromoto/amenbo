@@ -377,7 +377,7 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
     }
     check_line(&mut problems, "desc", &m.desc, MAX_DESC_LEN);
     // `desc` is the one line of author prose every plugin puts at the AI's entry point, agent block or no
-    // (`crate::plugin_agent`), so it is held to the same no-citing rule the block's own lines are.
+    // relayed at an entry point, so it is held to the same no-citing rule the block's own lines are.
     check_no_record_ref(&mut problems, "desc", &m.desc);
     if let Some(about) = &m.about {
         check_about(&mut problems, "about", about);
@@ -678,7 +678,7 @@ pub fn validate_list_entry(e: &ListEntry) -> Vec<Problem> {
 }
 
 /// Validate the **agent block alone**, over a manifest already on disk (`AMB-D-573`). Empty ⇒ the block
-/// may be relayed; anything else and [`crate::plugin_agent`] drops the guide rather than trimming it.
+/// may be relayed; anything else and the guide is dropped rather than trimmed.
 ///
 /// Exposed on its own because the door is not the last place these rules have to hold. `validate_manifest`
 /// runs at install, and nothing re-runs it when Amenbo itself is updated — so a rule added today reaches
@@ -1806,7 +1806,7 @@ fn check_agent(problems: &mut Vec<Problem>, m: &Manifest) {
 /// installed plugin naming it would fail a rule its author never broke — and, since a block that fails
 /// is turned away whole (`AMB-D-573`), take the author's sentences down with it. So an unknown ref is
 /// left to resolve to nothing at the entry point, where it costs the reader one absent line
-/// ([`crate::plugin_agent::tools`]).
+/// (the line a face hangs on a step of Amenbo's own cycle).
 fn check_steps(problems: &mut Vec<Problem>, location: &str, steps: &[String]) {
     if steps.len() > MAX_AGENT_COMMAND_STEPS {
         problems.push(Problem::new(

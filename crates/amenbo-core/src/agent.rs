@@ -943,7 +943,7 @@ const BACKBONE: &str = "agentCycle";
 /// against a step of `agentCycle` or of a cycle, wherever the id lands.
 ///
 /// The join is one-directional and that is the point. A plugin's manifest names a step
-/// ([`crate::plugin_agent::tools`] is where the naming is read); nothing here names a plugin, so
+/// (the naming is the caller's to read); nothing here names a plugin, so
 /// Amenbo's source stays free of any plugin's name (`AMB-D-346`) and this spec keeps saying the same
 /// true thing with none installed. What lands is the line to type and nothing around it — the words
 /// about it are on the `plugins` shelf, where a reader can tell whose they are (`AMB-D-437`).

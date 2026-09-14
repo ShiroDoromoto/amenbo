@@ -64,13 +64,6 @@ pub enum CliErrorCode {
     UnbindNoBinding,
     FacetRequired,
     AiGuardrail,
-    /// The ledger can no longer say what changed since the cursor a carrier came back with, so the
-    /// answer is this rather than the empty page that reads as "nothing changed" (`AMB-D-582`). Not a
-    /// fault in the call: the way on is a fresh `sync snapshot` (`AMB-D-583`), which is why it is said
-    /// in a code the caller can branch on.
-    SyncGap,
-    /// A road out of this store could not be walked — the snapshot could not be streamed.
-    SyncError,
     /// A verb of the surface layer was typed outside the talk window's terminal, where the session it
     /// speaks about does not exist (`AMB-D-749`). It is a code of its own, and non-zero, because the
     /// alternative — a quiet success — would leave the caller believing it had spoken.
@@ -122,8 +115,6 @@ impl CliErrorCode {
             CliErrorCode::UnbindNoBinding => "unbind_no_binding",
             CliErrorCode::FacetRequired => "facet_required",
             CliErrorCode::AiGuardrail => "ai_guardrail",
-            CliErrorCode::SyncGap => "sync_gap",
-            CliErrorCode::SyncError => "sync_error",
             CliErrorCode::TalkOutsideSurface => "talk_outside_surface",
             CliErrorCode::WorktreeExists => "worktree_exists",
             CliErrorCode::WorktreeBranchExists => "worktree_branch_exists",
@@ -155,8 +146,6 @@ impl CliErrorCode {
         CliErrorCode::UnbindNoBinding,
         CliErrorCode::FacetRequired,
         CliErrorCode::AiGuardrail,
-        CliErrorCode::SyncGap,
-        CliErrorCode::SyncError,
         CliErrorCode::TalkOutsideSurface,
         CliErrorCode::WorktreeExists,
         CliErrorCode::WorktreeBranchExists,
@@ -860,8 +849,6 @@ mod tests {
             "unbind_no_binding",
             "facet_required",
             "ai_guardrail",
-            "sync_gap",
-            "sync_error",
             "talk_outside_surface",
             "worktree_exists",
             "worktree_branch_exists",

@@ -219,6 +219,42 @@ fn restore_replaces_a_store_this_build_cannot_open() {
     assert_eq!(all["count"], 2, "the archive's store is back and readable");
 }
 
+/// Where the plugins went, said once in this terminal (`AMB-D-884`). The account the handover migration
+/// leaves is read here and said on stderr, beside the other advisories — so `--json` stdout stays a
+/// document — and a second run says nothing, the turn having been taken.
+#[test]
+fn the_terminal_says_once_where_the_plugins_went() {
+    use amenbo_core::store_engine::StoreEngine;
+
+    let cli = Cli::new();
+    cli.json(&["project", "add", "--name", "移行", "--json"]);
+    {
+        let engine = StoreEngine::open(&cli.home.join("store.sqlite")).unwrap();
+        engine
+            .set_meta(
+                "plugins_carried_in",
+                Some(r#"{"plugins":["slack","viewer","worktree"],"targets":2,"projects":3,"viewer":true,"told":[]}"#),
+            )
+            .unwrap();
+    }
+
+    let (_, err, code) = cli.run_both(&["task", "list"]);
+    assert_eq!(code, 0, "{err}");
+    assert!(err.contains("part of Amenbo now"), "the sentence a person is owed: {err}");
+    assert!(err.contains("slack"), "and which plugins it is about: {err}");
+    assert!(err.contains("2 connection(s)"), "what came across with them: {err}");
+    assert!(err.contains("worktree start"), "and the command that replaced worktree: {err}");
+
+    let (_, again, _) = cli.run_both(&["task", "list"]);
+    assert!(!again.contains("part of Amenbo now"), "said once is said: {again}");
+
+    // The account itself stays — the app's window has still not had its turn.
+    let engine = StoreEngine::open(&cli.home.join("store.sqlite")).unwrap();
+    let held = engine.get_meta("plugins_carried_in").unwrap().expect("the row is the account");
+    assert!(held.contains("\"cli\""), "the terminal is marked told, and nobody else is: {held}");
+    assert!(!held.contains("\"gui\""));
+}
+
 /// Whole-device backup needs an explicit destination path (the archive is a self-placed
 /// disaster-recovery file, not a managed rotation). With no path and no `--store`, it fails loudly
 /// (exit 2) rather than guessing a location.

@@ -760,7 +760,412 @@ pub const STEPS: &[Step] = &[
         // itself introduced.
         apply: Apply::Custom(add_the_viewers_switch),
     },
+    Step {
+        to: 42,
+        name: "carry what the four official plugins held into the body, and take them away",
+        apply: Apply::Custom(carry_the_official_plugins_into_the_body),
+    },
 ];
+
+/// The four plugins Amenbo published itself, whose work the body took over (`AMB-D-881`,
+/// `AMB-D-884`). Frozen text, like every step's: whatever this build calls them later, these are the
+/// names the rows on disk were written under.
+const PLUGINS_TAKEN_IN: &[&str] = &["mail", "slack", "viewer", "worktree"];
+
+/// What the mail and slack manifests both declared as the events a project reported when nobody had
+/// ticked anything. A manifest is a file on the plugin's own disk, gone by the time anybody reads this
+/// step again, so the list is written out here — a project whose `events` row is absent chose nothing,
+/// and this is what "nothing" meant.
+const EVENTS_REPORTED_BY_DEFAULT: &[&str] = &[
+    "task.created",
+    "task.status_changed",
+    "task.done",
+    "task.rejected",
+    "task.due",
+    "task.due_tomorrow",
+];
+
+/// The `store_meta` key the handover leaves its account under, for the surfaces to say once
+/// (`crate::handover`).
+const HANDOVER_KEY: &str = "plugins_carried_in";
+
+/// One plugin setting or secret, addressed the way both tables address it.
+type PluginRows = std::collections::BTreeMap<(Option<i64>, String, String), String>;
+
+/// v42: **carry what the four official plugins held into the body, then take them away**
+/// (`AMB-D-884`).
+///
+/// `plugin_uninstall` is deliberately not the road (`AMB-D-357`): it always purges the secrets, and the
+/// Viewer's `encryption_key` going with them would leave every paired phone reading nothing, with no way
+/// back but standing a new server up and photographing a new code on each one. So the taking-in happens
+/// first, by hand, and only what has been taken in is removed.
+///
+/// Where each one lands:
+///
+/// | plugin | carried to |
+/// |---|---|
+/// | slack | a `notify_target` on the device's shelf, its webhook in `secret`; the project's own rows say what it reports (`AMB-D-885`) |
+/// | mail | the same, the relay on the row and the password in `secret`; `to` becomes the project's `mail_to` |
+/// | viewer | the three keys into `secret` under the device's own address (`AMB-D-886`); the switch only where it was off |
+/// | worktree | nothing — it never had a setting (`AMB-D-881`) |
+///
+/// **One target per connection, not one per project.** Three projects pointing at the same webhook were
+/// three copies of it; the shelf holds it once and all three select it, which is the whole of why the
+/// shelf exists. A migrated target is named after its kind and numbered — there is nothing in a webhook
+/// a screen may show, and a name is one edit to change.
+///
+/// **What a project reported replaces what its row says, rather than joining it.** A project created by
+/// a build that already had notifications carries the six events every project starts with, which nobody
+/// chose for it; the plugin's set is the one somebody actually ticked. The targets are added rather than
+/// replaced — a selection is not restored by dropping one.
+///
+/// **The carrier's memory is not carried.** `sync-state.json` goes with the plugin's directory, cursor
+/// and queue together. Keeping the cursor alone would say the ledger had been read past rows that were
+/// copied out and never sent, and those fall out of the ledger's window and are never readable again; a
+/// carrier that starts from nothing places the store whole, which costs one large send and no accuracy.
+///
+/// **Nothing is written to the change feed.** The feed is what an incremental carrier reads, and the
+/// only carrier is the Viewer, whose memory this very step throws away — so the rows land in its next
+/// whole placement rather than as a page it would never come back for.
+///
+/// **The execution log is left where it lies.** `plugin-runs.jsonl` is a bounded, machine-local record
+/// of what ran and why it failed ([`crate::plugin_log`]), and it is the last trace of these four ever
+/// having run here; `AMB-D-387` purges a plugin's lines on `plugin_uninstall`, which this deliberately is
+/// not. The file goes with the mechanism, not with the handover.
+///
+/// **What is deliberately not rolled back.** The rows ride the step's transaction; removing the
+/// plugins' directories cannot. They go last, so an interruption leaves a plugin whose settings are
+/// already in the body — inert, since no build after this one runs it — rather than a setting that
+/// exists nowhere.
+fn carry_the_official_plugins_into_the_body(ctx: &Ctx<'_>) -> Result<()> {
+    let config = read_plugin_rows(ctx.tx, "plugin_config")?;
+    let secret = read_plugin_rows(ctx.tx, "plugin_secret")?;
+    let enabled = read_plugin_enables(ctx.tx)?;
+
+    let viewer = carry_the_viewer(ctx, &config, &secret, &enabled)?;
+    let carried = carry_the_notifiers(ctx, &config, &secret, &enabled)?;
+
+    // The rows first, then the bodies. Both are "what the plugin was", and neither is read by any build
+    // that has run this step.
+    let held: Vec<String> = PLUGINS_TAKEN_IN.iter().map(|p| format!("'{p}'")).collect();
+    let held = held.join(", ");
+    for table in ["plugin_config", "plugin_secret", "plugin_enable", "plugin_queue"] {
+        ctx.tx.execute_batch(&format!("DELETE FROM {table} WHERE plugin IN ({held});"))?;
+    }
+
+    let mut found: Vec<&str> = Vec::new();
+    for plugin in PLUGINS_TAKEN_IN {
+        let dir = ctx.base_dir.join("plugins").join(plugin);
+        let installed = dir.is_dir();
+        if installed {
+            found.push(plugin);
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    if found.is_empty() && carried.targets == 0 && !viewer {
+        return Ok(());
+    }
+    let note = serde_json::json!({
+        "plugins": found,
+        "targets": carried.targets,
+        "projects": carried.projects,
+        "viewer": viewer,
+        "told": Vec::<String>::new(),
+    });
+    ctx.tx.execute(
+        "INSERT INTO store_meta (key, value) VALUES (?1, ?2) \
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![HANDOVER_KEY, note.to_string()],
+    )?;
+    Ok(())
+}
+
+/// Every row of one of the two plugin tables, keyed by the address both of them use.
+fn read_plugin_rows(tx: &Transaction<'_>, table: &str) -> Result<PluginRows> {
+    let sql = format!("SELECT project_id, plugin, field_key, value FROM {table}");
+    let mut stmt = tx.prepare(&sql)?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            (r.get::<_, Option<i64>>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?),
+            r.get::<_, String>(3)?,
+        ))
+    })?;
+    let mut out = PluginRows::new();
+    for row in rows {
+        let (address, value) = row?;
+        out.insert(address, value);
+    }
+    Ok(out)
+}
+
+/// Which `(layer, plugin)` pairs have an enable row — `None` as the layer being the device's
+/// (`AMB-D-601`).
+fn read_plugin_enables(
+    tx: &Transaction<'_>,
+) -> Result<std::collections::BTreeSet<(Option<i64>, String)>> {
+    let mut stmt = tx.prepare("SELECT project_id, plugin FROM plugin_enable")?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, Option<i64>>(0)?, r.get::<_, String>(1)?)))?;
+    rows.collect::<rusqlite::Result<_>>().map_err(Into::into)
+}
+
+/// One plugin's value for a field at a layer, `None` where the row is absent or empty — an empty
+/// required-text column is what a half-written row carries, and it says no more than an absent one.
+fn plugin_value(rows: &PluginRows, project: Option<i64>, plugin: &str, key: &str) -> Option<String> {
+    rows.get(&(project, plugin.to_string(), key.to_string())).filter(|v| !v.is_empty()).cloned()
+}
+
+/// A device-layer value, falling back to whatever a project holds. The Viewer declared itself the
+/// device's (`AMB-D-601`), but builds before that layer existed wrote its settings per project
+/// (`AMB-D-434`) — and a key read from the wrong layer is better than a paired phone that goes dark.
+fn device_or_any(rows: &PluginRows, plugin: &str, key: &str) -> Option<String> {
+    if let Some(value) = plugin_value(rows, None, plugin, key) {
+        return Some(value);
+    }
+    rows.iter()
+        .find(|((_, p, k), v)| p == plugin && k == key && !v.is_empty())
+        .map(|(_, v)| v.clone())
+}
+
+/// The Viewer's three keys into `secret`, and its switch where it was off. Answers whether anything of
+/// the Viewer was there to carry.
+fn carry_the_viewer(
+    ctx: &Ctx<'_>,
+    config: &PluginRows,
+    secret: &PluginRows,
+    enabled: &std::collections::BTreeSet<(Option<i64>, String)>,
+) -> Result<bool> {
+    let mut carried = false;
+    // The address the body keeps them at hangs off no row: one set of keys per device (`AMB-D-886`).
+    for (rows, key) in
+        [(config, "worker_url"), (secret, "auth_token"), (secret, "encryption_key")]
+    {
+        let Some(value) = device_or_any(rows, "viewer", key) else { continue };
+        ctx.tx.execute(
+            "INSERT OR IGNORE INTO secret \
+                 (project_id, area, owner_id, field_key, value, created_at, updated_at) \
+             VALUES (NULL, 'viewer', NULL, ?1, ?2, \
+                 strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+            rusqlite::params![key, value],
+        )?;
+        carried = true;
+    }
+
+    // **An absent switch reads as on**, which is right for a device that never had the plugin: standing
+    // the server up is what turns the Viewer on, and nobody who never stood one up is carrying. The one
+    // device this has to write for is the one that installed the plugin and turned it off — there, an
+    // absent row would silently start carrying again.
+    let installed = ctx.base_dir.join("plugins").join("viewer").is_dir();
+    let switched_on = enabled.iter().any(|(_, plugin)| plugin == "viewer");
+    if installed && !switched_on {
+        ctx.tx.execute_batch("INSERT OR IGNORE INTO viewer_switch (id, sending) VALUES (1, 0);")?;
+        carried = true;
+    }
+    Ok(carried || installed)
+}
+
+/// How much the notifiers' handover came to, for the account the surfaces read.
+struct Carried {
+    targets: usize,
+    projects: usize,
+}
+
+/// Mail and slack into the device's shelf and each project's notification rows (`AMB-D-885`).
+fn carry_the_notifiers(
+    ctx: &Ctx<'_>,
+    config: &PluginRows,
+    secret: &PluginRows,
+    enabled: &std::collections::BTreeSet<(Option<i64>, String)>,
+) -> Result<Carried> {
+    let projects: Vec<i64> = {
+        let mut stmt = ctx.tx.prepare("SELECT id FROM project ORDER BY id")?;
+        let rows = stmt.query_map([], |r| r.get::<_, i64>(0))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+
+    // One row per connection, however many projects pointed at it. The key is the connection itself, so
+    // two projects holding the same webhook meet on the shelf rather than each raising a target.
+    let mut shelf: std::collections::BTreeMap<(String, Vec<String>), i64> =
+        std::collections::BTreeMap::new();
+    let mut named: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    let mut touched = 0usize;
+
+    for project in projects {
+        let at = Some(project);
+        let mut selected: Vec<i64> = Vec::new();
+        let mut events: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut mail_to: Option<String> = None;
+        let mut on = false;
+
+        for plugin in ["slack", "mail"] {
+            let cfg = |key: &str| plugin_value(config, at, plugin, key);
+            let connection: Vec<String> = match plugin {
+                "slack" => match plugin_value(secret, at, plugin, "webhook_url") {
+                    Some(url) => vec![url],
+                    // A slack target *is* its webhook: with none there is no connection to shelve.
+                    None => continue,
+                },
+                _ => {
+                    let relay = [
+                        cfg("smtp_host"),
+                        cfg("smtp_port"),
+                        cfg("smtp_user"),
+                        cfg("from"),
+                        plugin_value(secret, at, plugin, "smtp_password"),
+                    ];
+                    if relay.iter().all(Option::is_none) {
+                        continue;
+                    }
+                    relay.into_iter().map(Option::unwrap_or_default).collect()
+                }
+            };
+            on |= enabled.contains(&(at, plugin.to_string()));
+            events.extend(match cfg("events") {
+                Some(chosen) => chosen.split(',').map(str::trim).map(str::to_string).collect(),
+                None => EVENTS_REPORTED_BY_DEFAULT.iter().map(|e| (*e).to_string()).collect::<Vec<_>>(),
+            });
+            if plugin == "mail" {
+                mail_to = cfg("to");
+            }
+            let kind = if plugin == "slack" { "slack" } else { "mail" };
+            let id = match shelf.get(&(kind.to_string(), connection.clone())) {
+                Some(id) => *id,
+                None => {
+                    let nth = named.entry(kind).and_modify(|n| *n += 1).or_insert(1);
+                    let id = raise_target(ctx, kind, *nth, &connection)?;
+                    shelf.insert((kind.to_string(), connection), id);
+                    id
+                }
+            };
+            selected.push(id);
+        }
+
+        if selected.is_empty() {
+            continue;
+        }
+        touched += 1;
+        settle_project_notify(ctx, project, on, mail_to.as_deref())?;
+        for target in selected {
+            ctx.tx.execute(
+                "INSERT OR IGNORE INTO project_notify_target \
+                     (project_id, target_id, created_at, updated_at) \
+                 VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%SZ','now'), \
+                     strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+                rusqlite::params![project, target],
+            )?;
+        }
+        // Replaced, not joined: see this step's own docs.
+        ctx.tx.execute("DELETE FROM project_notify_event WHERE project_id = ?1", [project])?;
+        for event in &events {
+            // A name this build's column does not admit is dropped rather than refused: the plugin's
+            // catalog and the column's are the same thirteen, and a row that is neither is a value
+            // nothing was ever going to fire for.
+            if !EVENT_NAMES_THE_BODY_REPORTS.contains(&event.as_str()) {
+                continue;
+            }
+            ctx.tx.execute(
+                "INSERT OR IGNORE INTO project_notify_event \
+                     (project_id, event, created_at, updated_at) \
+                 VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%SZ','now'), \
+                     strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+                rusqlite::params![project, event],
+            )?;
+        }
+    }
+
+    Ok(Carried { targets: shelf.len(), projects: touched })
+}
+
+/// The thirteen a project may report, frozen against the column's own `CHECK` — an event the plugin
+/// held that is not one of these is dropped rather than taking the step down.
+const EVENT_NAMES_THE_BODY_REPORTS: &[&str] = &[
+    "task.created",
+    "task.status_changed",
+    "task.done",
+    "task.rejected",
+    "task.assigned",
+    "task.moved",
+    "task.deleted",
+    "decision.accepted",
+    "decision.rejected",
+    "comment.added",
+    "comment.removed",
+    "task.due",
+    "task.due_tomorrow",
+];
+
+/// Put one connection on the device's shelf and hand back its id. `nth` numbers it within its kind, so
+/// a device carrying two Slack channels reads as `Slack` and `Slack 2` rather than as one name twice.
+/// `connection` is the relay's five values for a mail target, and the webhook alone for a slack one.
+fn raise_target(ctx: &Ctx<'_>, kind: &str, nth: usize, connection: &[String]) -> Result<i64> {
+    let name = match (kind, nth) {
+        ("slack", 1) => "Slack".to_string(),
+        ("slack", n) => format!("Slack {n}"),
+        (_, 1) => "Mail".to_string(),
+        (_, n) => format!("Mail {n}"),
+    };
+    // The first one carried is where a project made after this starts out (`AMB-D-885`), and a device
+    // that already marked one keeps its mark: the partial index cannot say "at most one true", so the
+    // mark is only laid where nothing carries it.
+    let marked: bool =
+        ctx.tx.prepare("SELECT 1 FROM notify_target WHERE is_default = 1")?.exists([])?;
+    let empty = String::new();
+    let value = |n: usize| connection.get(n).unwrap_or(&empty).clone();
+    let (host, port, user, from) = match kind {
+        "slack" => (None, None, None, None),
+        _ => (
+            Some(value(0)),
+            value(1).parse::<i64>().ok(),
+            Some(value(2)),
+            Some(value(3)),
+        ),
+    };
+    ctx.tx.execute(
+        "INSERT INTO notify_target \
+             (kind, name, is_default, smtp_host, smtp_port, smtp_user, mail_from, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%SZ','now'), \
+             strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+        rusqlite::params![kind, name, i64::from(!marked), host, port, user, from],
+    )?;
+    let id = ctx.tx.last_insert_rowid();
+    let (field, held) = match kind {
+        "slack" => ("webhook_url", value(0)),
+        _ => ("smtp_password", value(4)),
+    };
+    if !held.is_empty() {
+        ctx.tx.execute(
+            "INSERT OR IGNORE INTO secret \
+                 (project_id, area, owner_id, field_key, value, created_at, updated_at) \
+             VALUES (NULL, 'notify', ?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%SZ','now'), \
+                 strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+            rusqlite::params![id, field, held],
+        )?;
+    }
+    Ok(id)
+}
+
+/// This project's notification row, raised or brought level with what the plugin held. `mail_to` is left
+/// alone where the plugin named nobody — an empty one means "the relay's own account", which is what the
+/// row already says.
+fn settle_project_notify(
+    ctx: &Ctx<'_>,
+    project: i64,
+    enabled: bool,
+    mail_to: Option<&str>,
+) -> Result<()> {
+    ctx.tx.execute(
+        "INSERT INTO project_notify (project_id, enabled, mail_to, created_at, updated_at) \
+         VALUES (?1, ?2, ?3, strftime('%Y-%m-%dT%H:%M:%SZ','now'), \
+             strftime('%Y-%m-%dT%H:%M:%SZ','now')) \
+         ON CONFLICT(project_id) DO UPDATE SET \
+             enabled = excluded.enabled, \
+             mail_to = CASE WHEN excluded.mail_to = '' THEN project_notify.mail_to \
+                            ELSE excluded.mail_to END, \
+             updated_at = excluded.updated_at",
+        rusqlite::params![project, i64::from(enabled), mail_to.unwrap_or_default()],
+    )?;
+    Ok(())
+}
 
 /// v41: the Viewer's switch, and the moment it last placed anything (`AMB-D-884`).
 fn add_the_viewers_switch(ctx: &Ctx<'_>) -> Result<()> {
@@ -2093,12 +2498,15 @@ mod tests {
             engine
                 .conn()
                 .execute_batch(
+                    // A third party's plugin, not one of the four the handover takes in at v42 — the
+                    // subject here is whether the layer opened and the row survived, and a name that a
+                    // later step sweeps would answer a different question.
                     "INSERT INTO project (id, name) VALUES (1, 'p');
-                     INSERT INTO plugin_enable (project_id, plugin) VALUES (1, 'slack');
+                     INSERT INTO plugin_enable (project_id, plugin) VALUES (1, 'notes');
                      INSERT INTO plugin_config (project_id, plugin, field_key, value)
-                       VALUES (1, 'slack', 'channel', '#ops');
+                       VALUES (1, 'notes', 'channel', '#ops');
                      INSERT INTO plugin_secret (project_id, plugin, field_key, value)
-                       VALUES (1, 'slack', 'token', 's3cret');",
+                       VALUES (1, 'notes', 'token', 's3cret');",
                 )
                 .unwrap();
 
@@ -2615,6 +3023,284 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// Lay a plugin's body down where the handover looks for it — the directory is the whole of what
+    /// says a plugin was installed on this device.
+    fn plugin_body(dir: &Path, name: &str) {
+        let home = dir.join("plugins").join(name);
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(home.join("manifest.yaml"), b"name: x\n").unwrap();
+    }
+
+    /// One `secret` row's value, by the address the body keeps it at.
+    fn secret_at(engine: &StoreEngine, area: &str, owner: Option<i64>, field: &str) -> Option<String> {
+        engine
+            .conn()
+            .query_row(
+                "SELECT value FROM secret \
+                 WHERE project_id IS NULL AND area = ?1 AND COALESCE(owner_id, 0) = ?2 AND field_key = ?3",
+                rusqlite::params![area, owner.unwrap_or(0), field],
+                |r| r.get::<_, String>(0),
+            )
+            .ok()
+    }
+
+    /// v42 in full: two projects sending through one Slack channel, a third on its own relay.
+    ///
+    /// The shelf holds one row per connection, not one per project — which is the whole reason it is a
+    /// shelf — and each project selects what it had. What the plugin reported is what the project
+    /// reports afterwards: the six a project starts with are nobody's answer, and the ticked set is.
+    #[test]
+    fn what_the_notifiers_carried_lands_on_the_shelf_and_each_project_selects_its_own() {
+        let dir = scratch("handover-notify");
+        let engine = store_at(&dir, 41);
+        plugin_body(&dir, "slack");
+        plugin_body(&dir, "mail");
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma');
+                 INSERT INTO plugin_enable (project_id, plugin)
+                     VALUES (1, 'slack'), (3, 'mail');
+                 INSERT INTO plugin_secret (project_id, plugin, field_key, value) VALUES
+                     (1, 'slack', 'webhook_url', 'https://hooks.example/one'),
+                     (2, 'slack', 'webhook_url', 'https://hooks.example/one'),
+                     (3, 'mail', 'smtp_password', 'pw');
+                 INSERT INTO plugin_config (project_id, plugin, field_key, value) VALUES
+                     (1, 'slack', 'events', 'task.done,comment.added'),
+                     (3, 'mail', 'smtp_host', 'smtp.example'),
+                     (3, 'mail', 'smtp_port', '587'),
+                     (3, 'mail', 'smtp_user', 'alice@example.com'),
+                     (3, 'mail', 'from', 'alice@example.com'),
+                     (3, 'mail', 'to', 'team@example.com');",
+            )
+            .unwrap();
+
+        let run = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+        assert!(run.applied.iter().any(|s| s.contains("into the body")), "v42 ran: {:?}", run.applied);
+        assert_eq!(engine.format_version().unwrap(), LATEST_VERSION);
+
+        // Two connections, two rows — the webhook the first two projects shared is on the shelf once.
+        let shelf: Vec<(i64, String, String, i64)> = {
+            let mut stmt = engine
+                .conn()
+                .prepare("SELECT id, kind, name, is_default FROM notify_target ORDER BY id")
+                .unwrap();
+            let rows = stmt
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+                .unwrap();
+            rows.filter_map(std::result::Result::ok).collect()
+        };
+        assert_eq!(
+            shelf,
+            vec![
+                (1, "slack".to_string(), "Slack".to_string(), 1),
+                (2, "mail".to_string(), "Mail".to_string(), 0),
+            ],
+            "one row per connection, named by kind, the first one marked",
+        );
+        assert_eq!(
+            secret_at(&engine, "notify", Some(1), "webhook_url").as_deref(),
+            Some("https://hooks.example/one"),
+            "the webhook is in the table no road out walks",
+        );
+        assert_eq!(secret_at(&engine, "notify", Some(2), "smtp_password").as_deref(), Some("pw"));
+
+        let relay: (Option<String>, Option<i64>, Option<String>, Option<String>) = engine
+            .conn()
+            .query_row(
+                "SELECT smtp_host, smtp_port, smtp_user, mail_from FROM notify_target WHERE id = 2",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            relay,
+            (
+                Some("smtp.example".to_string()),
+                Some(587),
+                Some("alice@example.com".to_string()),
+                Some("alice@example.com".to_string()),
+            ),
+        );
+
+        let notify = |project: i64| -> (i64, String) {
+            engine
+                .conn()
+                .query_row(
+                    "SELECT enabled, mail_to FROM project_notify WHERE project_id = ?1",
+                    [project],
+                    |r| Ok((r.get(0).unwrap(), r.get(1).unwrap())),
+                )
+                .unwrap()
+        };
+        assert_eq!(notify(1), (1, String::new()), "the project that had it on has it on");
+        assert_eq!(notify(2), (0, String::new()), "and the one that never turned it on is off");
+        assert_eq!(notify(3), (1, "team@example.com".to_string()), "`to` becomes the project's own");
+
+        let selected = |project: i64| -> Vec<i64> {
+            let mut stmt = engine
+                .conn()
+                .prepare("SELECT target_id FROM project_notify_target WHERE project_id = ?1 ORDER BY target_id")
+                .unwrap();
+            let rows = stmt.query_map([project], |r| r.get::<_, i64>(0)).unwrap();
+            rows.filter_map(std::result::Result::ok).collect()
+        };
+        assert_eq!(selected(1), vec![1]);
+        assert_eq!(selected(2), vec![1], "both projects reach the one shelved webhook");
+        assert_eq!(selected(3), vec![2]);
+
+        let events = |project: i64| -> Vec<String> {
+            let mut stmt = engine
+                .conn()
+                .prepare("SELECT event FROM project_notify_event WHERE project_id = ?1 ORDER BY event")
+                .unwrap();
+            let rows = stmt.query_map([project], |r| r.get::<_, String>(0)).unwrap();
+            rows.filter_map(std::result::Result::ok).collect()
+        };
+        assert_eq!(
+            events(1),
+            vec!["comment.added".to_string(), "task.done".to_string()],
+            "what was ticked is what is reported",
+        );
+        assert_eq!(
+            events(3).len(),
+            6,
+            "a project that ticked nothing reports what the plugin reported for it: {:?}",
+            events(3),
+        );
+
+        // The plugins are gone, bodies and rows together.
+        for plugin in ["slack", "mail"] {
+            assert!(!dir.join("plugins").join(plugin).exists(), "{plugin}'s body is taken away");
+        }
+        let left: i64 = engine
+            .conn()
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM plugin_config) + (SELECT COUNT(*) FROM plugin_secret) \
+                      + (SELECT COUNT(*) FROM plugin_enable)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0, "nothing of the four is left in the tables");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The Viewer's three keys move to the device's own address, and the switch is written **only** where
+    /// the plugin was installed and turned off. An absent switch reads as on, which is right for every
+    /// device that never stood a server up — so writing one there would be inventing an answer.
+    #[test]
+    fn the_viewers_keys_move_and_only_a_switch_that_was_off_is_written() {
+        let dir = scratch("handover-viewer-off");
+        let engine = store_at(&dir, 41);
+        plugin_body(&dir, "viewer");
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO plugin_config (project_id, plugin, field_key, value)
+                     VALUES (NULL, 'viewer', 'worker_url', 'https://amenbo.workers.dev');
+                 INSERT INTO plugin_secret (project_id, plugin, field_key, value) VALUES
+                     (NULL, 'viewer', 'auth_token', 'the-token'),
+                     (NULL, 'viewer', 'encryption_key', 'the-key');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        assert_eq!(
+            secret_at(&engine, "viewer", None, "worker_url").as_deref(),
+            Some("https://amenbo.workers.dev"),
+        );
+        assert_eq!(secret_at(&engine, "viewer", None, "auth_token").as_deref(), Some("the-token"));
+        assert_eq!(
+            secret_at(&engine, "viewer", None, "encryption_key").as_deref(),
+            Some("the-key"),
+            "the key without which every paired phone reads nothing",
+        );
+        let sending: Option<i64> =
+            engine.conn().query_row("SELECT sending FROM viewer_switch", [], |r| r.get(0)).ok();
+        assert_eq!(sending, Some(0), "installed and never enabled: the switch says off");
+        std::fs::remove_dir_all(&dir).ok();
+
+        // The same device with the plugin enabled writes no switch at all.
+        let dir = scratch("handover-viewer-on");
+        let engine = store_at(&dir, 41);
+        plugin_body(&dir, "viewer");
+        engine
+            .conn()
+            .execute_batch("INSERT INTO plugin_enable (project_id, plugin) VALUES (NULL, 'viewer');")
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let rows: i64 =
+            engine.conn().query_row("SELECT COUNT(*) FROM viewer_switch", [], |r| r.get(0)).unwrap();
+        assert_eq!(rows, 0, "an absent switch is the answer for a device that was carrying");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A device that never installed one of the four is carried past this step untouched: no shelf, no
+    /// project rows, and nothing for a surface to announce.
+    #[test]
+    fn a_device_that_never_had_a_plugin_is_left_exactly_as_it_was() {
+        let dir = scratch("handover-none");
+        let engine = store_at(&dir, 41);
+        engine.conn().execute_batch("INSERT INTO project (id, name) VALUES (1, 'alpha');").unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let raised: i64 = engine
+            .conn()
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM notify_target) + (SELECT COUNT(*) FROM project_notify) \
+                      + (SELECT COUNT(*) FROM secret) + (SELECT COUNT(*) FROM viewer_switch)",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(raised, 0);
+        let note: Option<String> = engine
+            .conn()
+            .query_row("SELECT value FROM store_meta WHERE key = 'plugins_carried_in'", [], |r| r.get(0))
+            .ok();
+        assert_eq!(note, None, "nothing was carried, so there is nothing to say");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// What the handover leaves for the surfaces to say once: which plugins were on this device, and how
+    /// much came across. `worktree` is in the list and carries nothing — it never had a setting, and the
+    /// person still wants to be told where it went.
+    #[test]
+    fn the_handover_leaves_an_account_for_the_surfaces_to_read() {
+        let dir = scratch("handover-note");
+        let engine = store_at(&dir, 41);
+        plugin_body(&dir, "worktree");
+        plugin_body(&dir, "slack");
+        engine
+            .conn()
+            .execute_batch(
+                "INSERT INTO project (id, name) VALUES (1, 'alpha');
+                 INSERT INTO plugin_enable (project_id, plugin) VALUES (1, 'slack');
+                 INSERT INTO plugin_secret (project_id, plugin, field_key, value)
+                     VALUES (1, 'slack', 'webhook_url', 'https://hooks.example/one');",
+            )
+            .unwrap();
+
+        run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+        let note: String = engine
+            .conn()
+            .query_row("SELECT value FROM store_meta WHERE key = 'plugins_carried_in'", [], |r| r.get(0))
+            .unwrap();
+        let note: serde_json::Value = serde_json::from_str(&note).unwrap();
+        assert_eq!(note["plugins"], serde_json::json!(["slack", "worktree"]));
+        assert_eq!(note["targets"], 1);
+        assert_eq!(note["projects"], 1);
+        assert_eq!(note["viewer"], false);
+        assert_eq!(note["told"], serde_json::json!([]), "nobody has been told yet");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// v12 in full, on the store shape v11 left behind: queues whose rows carry no project. The column
     /// arrives, the rows waiting on a queue keep every field they had, and their project reads back as
     /// `NULL` — they were fanned out before anyone wrote it down, and a project-scoped subscription fires
@@ -2626,8 +3312,10 @@ mod tests {
         engine
             .conn()
             .execute_batch(
+                // A third party's plugin: v42 sweeps the queue of the four Amenbo published, and this
+                // test is about the column rather than about whose row is on it.
                 "INSERT INTO plugin_queue (id, plugin, face, event, record_id, actor, at, new_state)
-                     VALUES (1, 'slack', 'cli', 'task.deleted', 7, 'ai', '2026-07-26T09:00:00Z', NULL);",
+                     VALUES (1, 'notes', 'cli', 'task.deleted', 7, 'ai', '2026-07-26T09:00:00Z', NULL);",
             )
             .unwrap();
 
@@ -2643,14 +3331,14 @@ mod tests {
             .unwrap();
         assert_eq!(
             row,
-            ("slack".to_string(), "task.deleted".to_string(), None),
+            ("notes".to_string(), "task.deleted".to_string(), None),
             "the row that was already queued keeps its fields and gains an unstamped project",
         );
         engine
             .conn()
             .execute(
                 "INSERT INTO plugin_queue (plugin, face, event, record_id, actor, at, project)
-                     VALUES ('slack', 'cli', 'task.created', 9, 'ai', '2026-07-26T09:00:02Z', 3)",
+                     VALUES ('notes', 'cli', 'task.created', 9, 'ai', '2026-07-26T09:00:02Z', 3)",
                 [],
             )
             .expect("what is fanned out from here on can carry its project");
@@ -2669,18 +3357,20 @@ mod tests {
         engine
             .conn()
             .execute_batch(
+                // A third party's plugin throughout: v42 carries the four Amenbo published into the
+                // body and takes their rows away, and what is under test here is the carrying v15 did.
                 "INSERT INTO project (id, name) VALUES (1, 'alpha'), (2, 'beta');
                  INSERT INTO plugin_config (id, project_id, plugin, field_key, value, created_at, updated_at)
-                     VALUES (1, 2, 'slack', 'events', 'answered-for-itself',
+                     VALUES (1, 2, 'notes', 'events', 'answered-for-itself',
                              '2026-07-26T09:00:00Z', '2026-07-26T09:00:00Z');",
             )
             .unwrap();
         std::fs::write(
             dir.join("config.json"),
-            br#"{"language":"ja","plugin_config":{"slack":{"events":"push"}}}"#,
+            br#"{"language":"ja","plugin_config":{"notes":{"events":"push"}}}"#,
         )
         .unwrap();
-        std::fs::write(dir.join("plugin-secrets.json"), br#"{"slack":{"token":"s3cret"}}"#).unwrap();
+        std::fs::write(dir.join("plugin-secrets.json"), br#"{"notes":{"token":"s3cret"}}"#).unwrap();
 
         let run = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
 
@@ -2692,7 +3382,7 @@ mod tests {
                 .conn()
                 .query_row(
                     &format!(
-                        "SELECT value FROM {table} WHERE project_id = ?1 AND plugin = 'slack' AND field_key = ?2"
+                        "SELECT value FROM {table} WHERE project_id = ?1 AND plugin = 'notes' AND field_key = ?2"
                     ),
                     rusqlite::params![project, key],
                     |r| r.get::<_, String>(0),
@@ -2722,8 +3412,8 @@ mod tests {
     fn a_store_with_no_project_still_loses_the_user_area_homes() {
         let dir = scratch("plugin-settings-no-project");
         let engine = store_at(&dir, 14);
-        std::fs::write(dir.join("config.json"), br#"{"plugin_config":{"slack":{"events":"push"}}}"#).unwrap();
-        std::fs::write(dir.join("plugin-secrets.json"), br#"{"slack":{"token":"s3cret"}}"#).unwrap();
+        std::fs::write(dir.join("config.json"), br#"{"plugin_config":{"notes":{"events":"push"}}}"#).unwrap();
+        std::fs::write(dir.join("plugin-secrets.json"), br#"{"notes":{"token":"s3cret"}}"#).unwrap();
 
         run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
 

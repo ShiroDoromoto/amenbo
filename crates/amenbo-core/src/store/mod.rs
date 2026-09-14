@@ -381,6 +381,60 @@ impl Store {
         }
     }
 
+    /// **Carry a queue nobody is coming back for** (`AMB-D-884`) — the counterpart of
+    /// [`Store::set_the_viewer_off`], for the rows a carrier read out and never placed.
+    ///
+    /// A carrier is a process, and a process can die between the reading and the placing: a machine put to
+    /// sleep, a session killed, a restart. What it leaves behind is a queue, and the only thing that starts
+    /// a carrier is a write — so on a device where nobody writes again, those rows sit there. The phone goes
+    /// on showing what it had, with nothing anywhere to say that it is behind.
+    ///
+    /// **So this is asked at every startup, reads included** — which is the whole point, since the write
+    /// that would otherwise carry them may be days away, and on a face whose life *is* a startup it is the
+    /// only moment there is.
+    ///
+    /// **That is also why it asks more than the write path does.** A carrier set off by a write has a
+    /// reason to run: something moved. This one's only reason is that rows are stuck, so it establishes
+    /// they are stuck rather than merely waiting on purpose before it starts anything — which is
+    /// [`crate::viewer::pace::stuck`]'s to answer, and this reads the three values it is answered from.
+    ///
+    /// They are read in the order they are cheap in. The count comes first and alone: the queue is empty
+    /// on every device nobody has set the Viewer up on, so a command there stops at one count and reads
+    /// nothing else.
+    pub fn carry_what_was_left_behind(&self, carrier_argv: &[&str]) {
+        if carrier_argv.is_empty() {
+            return;
+        }
+        // The count first, and on its own: it is the cheapest question and the commonest no, so a command
+        // on a device that has never touched the Viewer stops here and reads nothing else.
+        let waiting = match self.viewer_waiting() {
+            Ok(0) => return,
+            Ok(waiting) => waiting,
+            Err(e) => {
+                tracing::warn!(error = %e, "what the Viewer left behind is not carried: the queue would not be read");
+                return;
+            }
+        };
+        let carrying = match self.viewer_switched_on() {
+            Ok(carrying) => carrying,
+            Err(e) => {
+                tracing::warn!(error = %e, "what the Viewer left behind is not carried: the switch would not be read");
+                return;
+            }
+        };
+        let left = match self.viewer_carried() {
+            Ok(left) => left,
+            Err(e) => {
+                tracing::warn!(error = %e, "what the Viewer left behind is not carried: the carrier's row would not be read");
+                return;
+            }
+        };
+        if !crate::viewer::pace::stuck(waiting, carrying, &left, chrono::Utc::now()) {
+            return;
+        }
+        self.set_the_viewer_off(carrier_argv);
+    }
+
     /// The same, posted **here** rather than handed to a process — the flush's half, and the sender
     /// process's own door ([`crate::notify_dispatch::deliver`]).
     ///

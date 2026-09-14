@@ -62,6 +62,19 @@ pub(crate) fn resume_dispatch(store: &Store) {
     dispatch(store, |store, subs| store.resume_plugin_delivery(Face::Cli, subs, RUNNER_ARGV, NOTIFY_ARGV));
 }
 
+/// Carry what a carrier read out and never placed (`AMB-D-884`) — the Viewer's half of the same startup.
+///
+/// A carrier dies where any process dies: a machine asleep, a session killed, a restart. What it leaves is
+/// a queue nobody is coming back for, because the only thing that starts a carrier is a write — so on a
+/// device where nobody writes again, the phone goes on showing what it had. This face's whole life is a
+/// startup, so this is where those rows are noticed, on a read as much as on a write.
+///
+/// It costs a command with an empty queue one count and nothing else; what it asks before starting
+/// anything, and why it asks in that order, is core's ([`Store::carry_what_was_left_behind`]).
+pub(crate) fn resume_the_viewer(store: &Store) {
+    store.carry_what_was_left_behind(CARRIER_ARGV);
+}
+
 /// The half both dispatch mounts share: resolve who is installed, hand the resolver to `drive`, and relay
 /// whatever came back. Never fails a command — a mutation behind it is already committed, and a startup
 /// kick has no command's outcome to speak for.

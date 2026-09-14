@@ -82,6 +82,30 @@ pub fn quiet(left: &Carried, now: DateTime<Utc>) -> Option<Duration> {
     (until.0 - now).to_std().ok().filter(|left| !left.is_zero())
 }
 
+/// **Whether a queue left standing is one nobody is coming back for** — the question a startup asks before
+/// it starts a carrier nothing asked for ([`crate::Store::carry_what_was_left_behind`]).
+///
+/// A carrier is a process, and a process can die between reading the backlog out and placing it. What it
+/// leaves is a queue, and the only thing that sets a carrier off is a write — so on a device nobody writes
+/// to again, those rows sit there and the phone goes on showing what it had.
+///
+/// **But a queue standing still is not the same as a queue abandoned**, and the difference is what this
+/// answers. Three of the four states here are the queue waiting on purpose:
+///
+/// - nothing is waiting, which is every device nobody has set the Viewer up on — nothing is ever read out
+///   where there is no server, and nothing where the switch is off;
+/// - the switch is off, and a queue kept across it is a queue meant to sit there until it comes back on;
+/// - the far end asked to be left for a while, or today's allowance is spent. Both lift by themselves, and
+///   a carrier started into either would open the store, read the same mark and exit.
+///
+/// **The turn is deliberately not among them.** Taking the hold to see whether anybody has it *is* taking
+/// it, and a live carrier meeting that probe would stand down on a turn nobody was going to take. So a
+/// start made while somebody else is carrying costs one process that finds the turn taken and stops —
+/// which is what every write in a burst already costs, by the same design ([`super::lock`]).
+pub fn stuck(waiting: i64, carrying: bool, left: &Carried, now: DateTime<Utc>) -> bool {
+    waiting > 0 && carrying && quiet(left, now).is_none() && !out_of_budget(left, now)
+}
+
 /// Write down that the carrier is not to send for a while.
 pub fn be_quiet_for(left: &Carried, wait: Duration, now: DateTime<Utc>) -> Carried {
     if wait.is_zero() {
@@ -190,6 +214,34 @@ mod tests {
 
         let tomorrow = spend(&after, 500, at("2026-09-15T10:00:00Z"));
         assert_eq!((tomorrow.spent, tomorrow.spent_on.as_deref()), (500, Some("2026-09-15")));
+    }
+
+    /// A queue with rows in it, a switch that is on and nothing asking for a wait is a queue whose carrier
+    /// is not coming back — which is the one state a startup starts a new one for.
+    #[test]
+    fn a_queue_left_by_a_carrier_that_died_is_one_to_start_another_for() {
+        let now = at("2026-09-14T10:00:00Z");
+        assert!(stuck(3, true, &Carried::default(), now));
+    }
+
+    /// And the three states that are the queue waiting on purpose. Each is read without starting anything,
+    /// which is the whole reason they are asked: a process started into any of them would open the store,
+    /// read the same mark and exit.
+    #[test]
+    fn a_queue_waiting_on_purpose_is_left_where_it_is() {
+        let now = at("2026-09-14T10:00:00Z");
+
+        assert!(!stuck(0, true, &Carried::default(), now), "nothing is waiting");
+        assert!(!stuck(3, false, &Carried::default(), now), "the switch is off, and the queue keeps");
+
+        let asked_to_wait = be_quiet_for(&Carried::default(), Duration::from_secs(60), now);
+        assert!(!stuck(3, true, &asked_to_wait, now), "the server asked to be left for a while");
+        // And the moment it named having come, the same queue is one to carry.
+        assert!(stuck(3, true, &asked_to_wait, at("2026-09-14T10:02:00Z")));
+
+        let spent_up = spent(ROWS_WE_MAY_SPEND_A_DAY, "2026-09-14");
+        assert!(!stuck(3, true, &spent_up, now), "today's allowance is gone");
+        assert!(stuck(3, true, &spent_up, at("2026-09-15T00:00:01Z")), "and midnight UTC lifts it");
     }
 
     /// The line is under the whole allowance. What is left over is the rest of the person's own account,

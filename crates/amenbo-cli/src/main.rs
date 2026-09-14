@@ -41,7 +41,7 @@ use cmd::dimension::dimension;
 use cmd::hard_erase::hard_erase;
 use cmd::labels::project_label;
 use cmd::lint::lint_cmd;
-use cmd::outbox::{resume_dispatch, with_dispatch};
+use cmd::outbox::{resume_dispatch, resume_the_viewer, with_dispatch};
 use cmd::place::{binding_project, bound_project, location_header, named_project_flag};
 use cmd::plugin::{PluginsAtEntry, plugin_cmd, plugin_validate_cmd, plugins_for_agent};
 use cmd::project::project;
@@ -1036,6 +1036,18 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         )
     {
         resume_dispatch(&store);
+    }
+
+    // The Viewer's half of that same kick (`AMB-D-884`). A carrier that died between reading the backlog
+    // out and placing it leaves a queue, and only a write sets one off — so without this the rows wait for
+    // whenever somebody next writes, which on a device being read from is never.
+    //
+    // **The `viewer` group stands down from it**, the way the flush and the tick stand down above and for
+    // the same reason: those roads are the person attending to this by hand, and a carrier started behind
+    // their back would answer the press they came to make with "somebody else has the turn". A plugin
+    // calling Amenbo back makes no kick either — it is a read from inside a run that was already driven.
+    if plugin_window.is_none() && !matches!(cli.command, Some(Command::Viewer { .. })) {
+        resume_the_viewer(&store);
     }
 
     // Ask the upstream (the published latest.json) for the newest version, once. Infrastructure traffic only:

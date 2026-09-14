@@ -38,3 +38,5 @@ hard-erase
 plugin
 notify
 viewer
+mcp
+agent-hook

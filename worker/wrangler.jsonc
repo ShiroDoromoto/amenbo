@@ -1,0 +1,34 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "amenbo-viewer",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-08-01",
+
+	// The records live in a database, one row each. A key-value store cannot answer either of
+	// the two questions this one is asked — "what has changed since this point in the order"
+	// and "forget this row" — so what a phone reads is a range, and what the PC sends is the
+	// handful of rows that moved rather than everything it holds.
+	//
+	// No `database_id`: this Worker is deployed into the USER's account, not ours, and the
+	// database is created there. Leaving it out is what lets a deploy provision one — and
+	// amenbo, which sets this up over the API, fills the same slot.
+	"d1_databases": [
+		{
+			"binding": "RECORDS",
+			"database_name": "amenbo-viewer",
+			"migrations_dir": "migrations"
+		}
+	],
+
+	// WRITE_TOKEN is what the PC writes with, and it is a Secret rather than a var — the
+	// difference is that it never comes back out of the dashboard or the API once set. The
+	// tokens the phones read with are not here at all: they are rows, one per phone.
+	//
+	//   wrangler secret put WRITE_TOKEN     (paste the token amenbo generated)
+	//
+	// Locally it comes from .dev.vars instead; see .dev.vars.example.
+
+	"observability": {
+		"enabled": true
+	}
+}

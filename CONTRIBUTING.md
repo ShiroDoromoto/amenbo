@@ -48,7 +48,10 @@ rustup show        # rust-toolchain.toml is applied on the next cargo command
 
 `app/package.json` declares `engines.node >= 22.12` (the build deps' floor); the
 pin files select the exact version above that. There is no `package.json` at the
-repository root — the JavaScript side lives entirely under `app/`.
+repository root — the JavaScript side is two npm projects, each with its own
+lockfile: `app/`, the GUI, and `worker/`, the Cloudflare Worker Amenbo Viewer
+reads from (see [worker/README.md](worker/README.md)). The Worker's verbs are
+reachable from the root as `make worker-build` / `worker-test` / `worker-baked`.
 
 Go appears in the tree, but it is not a third toolchain to install: it builds only
 `devtool/`, the optional helper that gives a task its own throwaway dev GUI and

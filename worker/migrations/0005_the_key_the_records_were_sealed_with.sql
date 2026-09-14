@@ -1,0 +1,18 @@
+-- The fingerprint of the key everything now in the records was sealed with, so a phone can find
+-- out that its own key does not fit before it spends a sync finding out row by row.
+--
+-- Two Amenbo stores on one machine reach the same account, because the Worker and the database
+-- are both named `amenbo-viewer`. Standing the second one up draws a new encryption key and
+-- leaves the first one's records where they are — and a phone paired against them is handed rows
+-- nobody can open. "Cannot be opened" reads the same as a record that is genuinely damaged, and
+-- the two call for opposite moves: one is waited out, the other is re-paired.
+--
+-- **It is the hash and never the key.** Anything on the store row is served to whoever holds a
+-- read token, so what is kept here is a SHA-256 as 64 lower-case hex characters and nothing that
+-- opens anything.
+--
+-- **NULL is a real answer, and it means nobody said.** A sender older than this column names no
+-- key, and a store it wrote is one this Worker cannot vouch for either way — so a phone reads
+-- NULL as "there is nothing to compare against" and carries on as it did before this existed,
+-- rather than as a mismatch.
+ALTER TABLE store ADD COLUMN key_fingerprint TEXT;

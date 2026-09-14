@@ -281,7 +281,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm install-gui-dev-vm-locked dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate test-spawn-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate token-contrast-gate brand notify-wording notify-wording-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm install-gui-dev-vm-locked dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate test-spawn-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate token-contrast-gate brand notify-wording notify-wording-gate sweep-stale worker-install worker-build worker-test worker-baked schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -332,6 +332,10 @@ help:
 	@echo "make install-gui-dev-vm AMB-T-ID=<id> - build that instance here and put it in the throwaway macOS VM instead of on this machine (one build per id at a time: a second run of the same id stops instead of waiting; needs devtool + tart; devtool vm rm throws the VM away)"
 	@echo "make gui-dev-linux - build the dev GUI's Linux AppImage in Docker into dist/ (the preview workflow's Linux leg; needs Docker)"
 	@echo "make gui-dev-names - print the names AMB-THEME / AMB-T-ID split a dev build by, as key=value (what the preview workflow reads instead of spelling them again)"
+	@echo "make worker-baked - rebuild the Viewer Worker copy core embeds (crates/amenbo-core/src/viewer/worker.js and the migrations beside it) from worker/src and worker/migrations, and commit what moves (needs Node)"
+	@echo "make worker-build - bake, then typecheck the Worker and build it the way a deploy would (wrangler types -> tsc -> deploy --dry-run; needs Node)"
+	@echo "make worker-test  - bake, then run the Worker's tests inside workerd against the same wrangler.jsonc a deploy reads (needs Node)"
+	@echo "make worker-install - npm ci for worker/ alone (what the three above do for themselves when the lockfile moves)"
 
 ## Pay the freeze debt an appended migration step creates. The chain defines the format version, so a
 ## step bumps it, and the freeze check goes red until that version's shape is written down. The text can
@@ -1179,6 +1183,27 @@ notify-wording:
 ## Declared once and shared: `make test` and CI's tree-guards both run this file.
 notify-wording-gate:
 	@guards/check-notify-wording-fresh.sh
+
+## The Viewer's Cloudflare Worker (worker/, npm): the verbs its own Makefile carries, reachable from
+## the top of the tree so this part is built and tested the same way as every other.
+## `worker-baked` is the one the rest of the tree rests on: it rewrites
+## crates/amenbo-core/src/viewer/worker.js and the migrations beside it, which core embeds at compile
+## time, so an edit under worker/src or worker/migrations that the copy does not follow shows up as a
+## dirty working tree instead of as a user's account quietly getting an older Worker. `worker-build`
+## and `worker-test` bake first for that reason.
+## Node is asked for here and nowhere else in this tree. Nothing deploys: the Worker goes into the
+## user's own Cloudflare account, and amenbo is what puts it there. See worker/README.md.
+worker-install:
+	$(MAKE) -C worker install
+
+worker-build:
+	$(MAKE) -C worker build
+
+worker-test:
+	$(MAKE) -C worker test
+
+worker-baked:
+	$(MAKE) -C worker baked
 
 ## Local-only targets (each person's dev-environment tools) go in .local/local.mk, which is not
 ## tracked. If present it is included, if absent nothing happens. So it does not steal the default

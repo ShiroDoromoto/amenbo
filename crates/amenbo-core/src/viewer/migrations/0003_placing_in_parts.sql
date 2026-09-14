@@ -1,0 +1,16 @@
+-- Whether a replacement is half done, so a phone is not handed half a store.
+--
+-- A write that outgrows one request is sent in parts, and `PUT /reset` empties the records before
+-- it takes the first of them. Between that emptying and the last part landing, what is here is a
+-- fraction of the backlog — indistinguishable, to a phone reading it, from a backlog that really
+-- did shrink to a fraction. It would write that down and call itself level.
+--
+-- So the emptying raises this flag and the last part lowers it, and while it is up the reading
+-- doors say to come back rather than answering. It is on the store row because it is a fact about
+-- the store as a whole, and because a flag counted off the records could not tell a store that is
+-- mid-replacement from one that is genuinely small.
+--
+-- **A placement that adds does not lower it.** An abandoned replacement leaves a partial store
+-- behind, and only another whole placement can put that right — which is what the sender does
+-- when a whole placement of its own did not finish.
+ALTER TABLE store ADD COLUMN replacing INTEGER NOT NULL DEFAULT 0;

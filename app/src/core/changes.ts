@@ -65,12 +65,13 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   plugin_enable: ["plugins"],
   plugin_config: ["plugins"],
   plugin_secret: ["plugins"],
-  // Amenbo's own credentials (`AMB-D-884`). Folded to nothing on purpose, which is not the same as
-  // unlisted: a value here is never drawn, so no query on screen goes stale when one is written, and
-  // falling to gap would buy a full re-read of everything for a change nobody can see. The screens that
-  // will ask whether a field is set — the notification shelf, the Viewer's pane — arrive with the features
-  // themselves, and each names its scope here when it does.
-  secret: [],
+  // Amenbo's own credentials (`AMB-D-884`). The value is never drawn; what is drawn is whether one is
+  // set, and for the Viewer that answer *is* the screen — a device with no server and one with a server
+  // are two different panes, and the three fields setup writes are what tells them apart. So it folds to
+  // the Viewer's scope: the CLI's `viewer setup` is the ordinary way this arrives while the pane is open.
+  // The notification shelf reads a credential the same way and names no scope yet; it is drawn from its
+  // own writes, and a target saved from the CLI is what it does not yet hear.
+  secret: ["viewer"],
   // The notification tables (`AMB-D-885`): the device's shelf of targets, and the three a project's own
   // row is written on. Folded to nothing for `secret`'s reason rather than a different one — nothing on
   // screen draws them yet, so no query goes stale when one moves, and falling to gap would buy a full

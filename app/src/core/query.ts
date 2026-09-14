@@ -118,6 +118,12 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       // The installed rows carry the gate the change feed just moved; the plugins themselves are files on
       // disk, so nothing else on that screen goes stale with them.
       case "plugin-installs": return touchesScope("plugins");
+      // The Viewer's pane. What moves under it from outside this window is `viewer setup` writing the
+      // three fields the state is read from, which folds to this scope. The queue's length and the date
+      // of the last send are **not** on the feed: the queue moves on every write a carrier reads out, so
+      // putting it there would double the feed for a number a person glances at rather than watches.
+      case "viewer-state": return touchesScope("viewer");
+      case "viewer-pairing": return touchesScope("viewer");
       default: return false;
     }
   });

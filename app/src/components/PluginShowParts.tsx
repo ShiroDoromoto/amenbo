@@ -8,9 +8,9 @@
 //
 // Core has already settled what may reach this: the vocabulary, the caps, and the rule that a
 // destination is an official plugin's alone. So this file draws what it is handed and asks nothing.
-import { useMemo, useState } from "react";
-import qrcode from "qrcode-generator";
+import { useState } from "react";
 import type { PluginShowPartDto } from "../bindings/bindings";
+import { QrCode } from "./QrCode";
 import { t } from "../core/i18n";
 import { openExternalUrl } from "../core/mutations";
 
@@ -95,60 +95,9 @@ function ShowCopy({ text }: { text: string }) {
  *
  * This is the part the vocabulary exists for: `viewer` was writing a PNG to a file and asking the
  * operating system to open it, which fails quietly on a machine with nothing registered for the type,
- * and leaves the reader looking at a settings form where nothing happened.
- *
- * Drawn as one SVG path rather than a square per module — the same picture in one node instead of a
- * thousand — and sized in `em` off the box it stands in, so it grows with the form rather than being
- * pinned to a pixel count that is wrong on the next display.
- *
- * A string too long to encode at all (the format tops out well under the four kilobytes a whole answer
- * may weigh) draws nothing rather than throwing the form away: the author's own line is still there to
- * read, and the run log has the rest.
+ * and leaves the reader looking at a settings form where nothing happened. The drawing itself is shared
+ * with the Viewer's own settings (`components/QrCode`).
  */
 function ShowQr({ text }: { text: string }) {
-  const drawn = useMemo(() => qrModules(text), [text]);
-  if (!drawn) return null;
-  const { count, path } = drawn;
-  // One module of quiet zone on each side — less than the spec's four, which is what a camera wants
-  // when the code is printed. On a screen the form's own whitespace is the margin.
-  const span = count + 2;
-  return (
-    <svg
-      className="plugshow__qr"
-      viewBox={`0 0 ${span} ${span}`}
-      role="img"
-      aria-label={t("plugins.show.qr")}
-      shapeRendering="crispEdges"
-    >
-      <rect width={span} height={span} fill="#fff" />
-      <path d={path} fill="#000" transform="translate(1 1)" />
-    </svg>
-  );
-}
-
-/**
- * The dark modules of `text`, as an SVG path, or `null` for a string this format cannot carry.
- *
- * The code is black on white whatever the reader's theme is: a camera reads contrast, and a QR inverted
- * for a dark background is one many scanners will not take.
- */
-function qrModules(text: string): { count: number; path: string } | null {
-  try {
-    // `0` picks the smallest version the string fits in, and `M` is the correction level a code read off
-    // a screen wants — the higher levels buy recovery from damage a screen does not have.
-    const code = qrcode(0, "M");
-    code.addData(text);
-    code.make();
-    const count = code.getModuleCount();
-    let path = "";
-    for (let row = 0; row < count; row++) {
-      for (let col = 0; col < count; col++) {
-        if (code.isDark(row, col)) path += `M${col} ${row}h1v1h-1z`;
-      }
-    }
-    return { count, path };
-  } catch (e) {
-    console.error("[amenbo] a plugin asked for a QR of a string that will not encode:", e);
-    return null;
-  }
+  return <QrCode text={text} label={t("plugins.show.qr")} className="qrcode" />;
 }

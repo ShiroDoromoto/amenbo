@@ -555,7 +555,10 @@ body.is-dragging { user-select: none; }
 .plugshow__copy code { font-size: var(--fs-xs); overflow-wrap: anywhere; }
 /* The code is drawn black on white in both themes: a camera reads contrast, and a QR inverted for a dark
    background is one many scanners will not take. Sized off the form's own type so it grows with it. */
-.plugshow__qr { width: 12rem; max-width: 100%; height: auto; border-radius: var(--r-sm); }
+/* A QR code, wherever one is drawn: a plugin's form, and the Viewer's own settings. The small one is for
+   the store links, which stand side by side beside the pairing code rather than instead of it. */
+.qrcode { width: 12rem; max-width: 100%; height: auto; border-radius: var(--r-sm); }
+.qrcode--sm { width: 7.5rem; }
 
 .plugdet__readme { border-top: 1px solid var(--c-rule); padding-top: var(--s-2); font-size: var(--fs-md); overflow-wrap: anywhere; }
 .plugdet__foot { border-top: 1px solid var(--c-rule); margin-top: var(--s-3); padding-top: var(--s-2); font-size: var(--fs-xs); }

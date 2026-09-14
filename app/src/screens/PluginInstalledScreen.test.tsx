@@ -1130,7 +1130,7 @@ describe("what the author asked to have drawn on the form", () => {
 
     // The QR is drawn here, out of the string, rather than being an image the author handed over — which
     // is the whole reason the vocabulary carries the text and not the picture.
-    const qr = container.querySelector(".plugshow__qr");
+    const qr = container.querySelector(".qrcode");
     expect(qr?.tagName.toLowerCase()).toBe("svg");
     expect(qr?.querySelector("path")?.getAttribute("d")).toBeTruthy();
 
@@ -1176,10 +1176,10 @@ describe("what the author asked to have drawn on the form", () => {
     };
     openForm();
 
-    expect(container.querySelector(".plugshow__qr"), "nothing is drawn before it runs").toBeNull();
+    expect(container.querySelector(".qrcode"), "nothing is drawn before it runs").toBeNull();
     await act(async () => { button("Set up")!.click(); });
     expect(container.textContent).toContain("SCENARIO — the worker is up");
-    expect(container.querySelector(".plugcfg__act .plugshow__qr")).toBeTruthy();
+    expect(container.querySelector(".plugcfg__act .qrcode")).toBeTruthy();
   });
 
   // What a run put on the form is about that run (`AMB-D-727`). A second button's answer standing beside

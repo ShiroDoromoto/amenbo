@@ -66,19 +66,16 @@ description: >
   comes back into its conversation, so there is no name for it to say.
 
 given:
+  # The folder is named here rather than bound in a step of its own: creating a project links one
+  # either way, so a bind beside it leaves the project on two — and two is the question about where a
+  # pane works, which every `open-pane` below says it is not asking.
   - type: action
     domain: project
     op: create
     with:
       name: Foundry
-    as: foundry
-
-  - type: action
-    domain: folder
-    op: bind
-    with:
       dir: forge
-      project: foundry
+    as: foundry
 
   - type: action
     domain: task

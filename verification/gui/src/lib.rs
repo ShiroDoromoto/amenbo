@@ -1951,6 +1951,17 @@ impl Instructor {
                 true => format!("In this project's settings, tick `{}` among the events it reports.", req(with, "event")?),
                 false => format!("In this project's settings, untick `{}` among the events it reports.", req(with, "event")?),
             },
+            // ---- the Viewer ----
+            // The switch, which this face is the only one that has. The terminal's `viewer` group
+            // opens with setup, the pairing and the carrying and has no word for it, so a road that
+            // throws it is a screen road by necessity rather than by choice.
+            (Domain::Viewer, "carry") => match req_bool(with, "on")? {
+                true => "In Amenbo's own settings, under Viewer, set the sync switch to on.".to_string(),
+                false => "In Amenbo's own settings, under Viewer, set the sync switch to off. What is already queued is kept, which the line under it says.".to_string(),
+            },
+            // Opening the form that builds the server. **Nothing past this is walked**: what is
+            // behind it is a Cloudflare account somebody owns, so the road stops at the form.
+            (Domain::Viewer, "stand-up") => "In Amenbo's own settings, under Viewer, press the button that creates the server on Cloudflare.".to_string(),
             (Domain::Tick, "banner-answer") => match req(with, "answer")? {
                 "start" => "In the band offering to watch due dates, press the button that starts the hourly check — the one that answers yes and registers the timer."
                     .to_string(),
@@ -4314,6 +4325,27 @@ impl Instructor {
                 true => "On that notification target's form, press the button that checks the connection, and confirm the line it answers with says the settings are usable.".to_string(),
                 false => "On that notification target's form, press the button that checks the connection, and confirm the line it answers with names what is wrong rather than saying it is usable.".to_string(),
             },
+            // ---- the Viewer ----
+            // Whether a server stands, which every other road here turns on. The screen says it in
+            // the state line rather than by refusing, and what it offers changes with it: the
+            // presses that need a server are not drawn where there is none.
+            (Domain::Viewer, "served") => match req_bool(with, "yes")? {
+                true => "In Amenbo's own settings, under Viewer, confirm the state line says a server stands on this device, and that the presses that need one — showing a pairing code, taking the read code away — are drawn.".to_string(),
+                false => "In Amenbo's own settings, under Viewer, confirm the state line says there is no server on this device yet, and that nothing needing one — showing a pairing code, taking the read code away — is drawn at all.".to_string(),
+            },
+            // Where the phone's half is got, drawn as a code per kind of phone. It needs no server,
+            // so it is here on the device most likely to be asking: the one nobody has set up.
+            (Domain::Viewer, "app-offered") => "In Amenbo's own settings, under Viewer, confirm a code is drawn for each kind of phone the app is got for, each one named by that phone underneath it.".to_string(),
+            // The switch read back off the screen it was thrown on.
+            (Domain::Viewer, "carrying") => match req_bool(with, "on")? {
+                true => "In Amenbo's own settings, under Viewer, confirm the sync switch reads on.".to_string(),
+                false => "In Amenbo's own settings, under Viewer, confirm the sync switch reads off.".to_string(),
+            },
+            // **The key goes to a camera and nowhere else.** On this face that is an absence: the
+            // three fields setup leaves behind were read-only rows on the plugin's form, and the
+            // section that replaced it draws none of them — what stands there instead is a sentence
+            // saying the press writes them and there is nothing to fill in.
+            (Domain::Viewer, "key-stays-on-screen") => "In Amenbo's own settings, under Viewer, confirm nowhere on the section shows the server's address, an API token or an encryption key — and that what stands where they used to is a line saying the press above writes them and there is nothing here to fill in.".to_string(),
             (Domain::Tick, "banner") => match present(with) {
                 true => "Confirm the band offering to watch due dates is standing across the app — it came up by itself, and it carries three buttons: one that starts the checking, one that declines it, one that puts it off."
                     .to_string(),
@@ -6114,6 +6146,7 @@ pub fn domain_str(d: Domain) -> &'static str {
         Domain::Terminal => "terminal",
         Domain::Files => "files",
         Domain::Notify => "notify",
+        Domain::Viewer => "viewer",
     }
 }
 

@@ -101,6 +101,13 @@ run reading green over the very thing it exists to catch. The plugin scenarios t
 the network and an intact catalog — the ones that install one, and the one that reads the browsing
 view back — and they are the only ones that do.
 
+**Two things are on the far side of a line this gate does not cross, and neither is a gap.** Sending
+a notification needs a channel somebody owns and a relay that would take it, and standing the
+Viewer's server up builds in a Cloudflare account somebody owns off an API token for it. A gate that
+reached either would hold a release on whose account it was, on what it cost, and on whether a third
+party answered today. So both domains walk everything up to that line and stop there — the checks
+that read settings without a message leaving, and the roads a device with no Viewer server still has.
+
 The loopback is the other side of that. A third-party catalog is trusted on the signing key it
 publishes beside its `catalog.json`, and a key is *served*, never written down — so a scenario that
 walks the pin (`plugin catalog-stand`) has the run publish a catalog of its own on a port, and names
@@ -746,7 +753,7 @@ the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin` /
-`mcp` / `tick` / `terminal` / `files`) and an
+`mcp` / `tick` / `terminal` / `files` / `notify` / `viewer`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
 refers back to it with `target:` — an op that joins two objects names the second under its own key
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just

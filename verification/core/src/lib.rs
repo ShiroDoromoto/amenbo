@@ -284,6 +284,18 @@ pub enum Domain {
     /// whether a third party answered today. What is walked is everything up to the sending: the
     /// shelf, the selection, and the check that reads the settings without a message leaving.
     Notify,
+    /// The phone that reads this store, and the server it reads from in the reader's own Cloudflare
+    /// account. A domain of its own because none of it is a record: the server is a
+    /// Worker somebody owns, the read code is one code the server holds, and the switch is this
+    /// device's.
+    ///
+    /// **Nothing here stands a server up.** Doing so needs an API token for an account somebody
+    /// owns, and a gate that asked for one would hold a release on whose account it was and what it
+    /// cost. What is walked is everything before that: where the app is got, which answers on a
+    /// device nobody has set anything up on; the refusal that names the one command that makes a
+    /// server; and the key never reaching anywhere but a screen. The same line `Notify` draws in
+    /// front of sending.
+    Viewer,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3778,6 +3790,32 @@ const REGISTRY: &[OpSpec] = &[
     // eye that closes it is the one that was standing at the screen when the item was pressed.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "handed-over", required: &["door"], refs: &[], strings: &["door"], binds: false },
 
+    // ---- the Viewer: the phone that reads this store, and the server it reads from ----
+    // Standing the server up. **A road cannot walk it through**: it builds in a Cloudflare account
+    // somebody owns, and a gate that asked for one would hold a release on whose account it was and
+    // what building in it cost. So what is walked is the refusal — the press made with nothing
+    // pasted in, which is the ordinary way to arrive at this form and get nowhere. The token itself
+    // is never an argument anywhere, this op included: it is read from where the person is.
+    OpSpec { kind: Kind::Action, domain: Domain::Viewer, op: "stand-up", required: &[], refs: &[], strings: &["account"], binds: false },
+    // This device's switch. **The screen's alone**: the terminal has no word for it — `viewer` opens
+    // with setup, the pairing and the carrying, and none of those is the switch — so the CLI driver
+    // meets this as an unmapped op rather than as a road it is short of.
+    OpSpec { kind: Kind::Action, domain: Domain::Viewer, op: "carry", required: &["on"], refs: &[], strings: &[], binds: false },
+    // Asserts. Whether a server stands at all, which is the one fact every other road here turns on.
+    // The terminal answers it by refusing: a device nobody has run setup on is told which command
+    // makes one, and that refusal *is* the answer rather than a failure to report.
+    OpSpec { kind: Kind::Assert, domain: Domain::Viewer, op: "served", required: &["yes"], refs: &[], strings: &[], binds: false },
+    // Where the phone's half is got. It needs no server and no account, so it is the one road here
+    // that answers in full on a device nobody has touched — which is also the device most likely to
+    // be asking.
+    OpSpec { kind: Kind::Assert, domain: Domain::Viewer, op: "app-offered", required: &[], refs: &[], strings: &[], binds: false },
+    // The switch read back. The screen's alone, for the reason `carry` is.
+    OpSpec { kind: Kind::Assert, domain: Domain::Viewer, op: "carrying", required: &["on"], refs: &[], strings: &[], binds: false },
+    // **The key goes to a camera and nowhere else.** What that means differs by face and the road
+    // says the same thing of both: at the terminal a read code is refused into a pipe and refused
+    // into `--json`, before anything is issued; on the screen the three fields setup leaves behind
+    // are drawn nowhere at all.
+    OpSpec { kind: Kind::Assert, domain: Domain::Viewer, op: "key-stays-on-screen", required: &[], refs: &[], strings: &[], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

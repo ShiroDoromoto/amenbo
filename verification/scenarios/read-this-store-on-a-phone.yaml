@@ -1,0 +1,104 @@
+# Getting a phone reading this store, as far as a gate can walk it.
+#
+# What the Viewer asks of a reader is one press and one paste: a Worker and a database go up in their
+# own Cloudflare account, and a code on the screen hands a phone the key. This road walks everything
+# on this side of that account.
+#
+# **The account is where it stops, and deliberately.** Standing the server up builds in an account
+# somebody owns and off an API token for it; a gate that asked for one would hold a release on whose
+# account it was and on what building in it cost. So the far half — a code issued, a phone paired, a
+# drift put right — is walked by hand against an account of one's own, not here. The same line the
+# notification roads draw in front of sending.
+#
+# What is left is not a leftover. It is the device every reader starts on: nothing stood up, nothing
+# paired, and the whole question being what to do first. Three things have to be true there, and none
+# of them needs an account —
+#
+#   - **where the app is got answers anyway.** The two addresses are the same on every device, so a
+#     reader with no server yet can still put the app on the phone.
+#   - **the roads that need a server say which press makes one.** A device nobody has set up is not
+#     failing at anything, so what they answer is an instruction, not an error nobody can act on.
+#   - **the switch works before there is anything to send through it**, and keeps what it is thrown to.
+id: read-this-store-on-a-phone
+title: A device with no Viewer server still says how to get a phone reading, and the switch holds
+description: >
+  On a device nobody has stood a Viewer server up on, be told where the app is got, be turned away
+  from the roads that need a server by being told which press makes one, and throw the sync switch
+  both ways. What is under test is the state every reader starts in: a build that answered these with
+  a blank, or with a refusal naming nothing, would leave a first-time reader with nowhere to go.
+
+steps_cli:
+  # Where the app is got. It asks nothing of the store, so it is the one road here that answers in
+  # full before setup has ever run — which is the device asking.
+  - type: assert
+    domain: viewer
+    op: app-offered
+
+  # And the answer that stands in for everything else until an account exists. It is read as an
+  # answer rather than as a failure: `viewer_not_set_up` names the command that makes a server, which
+  # is the whole of what went wrong.
+  - type: assert
+    domain: viewer
+    op: served
+    with:
+      yes: false
+
+  # The press made with nothing pasted in — the ordinary way to arrive at setup, the form being
+  # opened before the token has been made. The token is never an argument, so a run handed nothing
+  # says so rather than building in an account it was not told the name of.
+  - type: action
+    domain: viewer
+    op: stand-up
+    with:
+      refused: invalid_value
+
+  # Still nothing stood up. The line says the refusal above changed nothing, which is what keeps a
+  # half-built server out of the state a reader is looking at.
+  - type: assert
+    domain: viewer
+    op: served
+    with:
+      yes: false
+
+steps_gui:
+  - type: assert
+    domain: viewer
+    op: served
+    with:
+      yes: false
+
+  - type: assert
+    domain: viewer
+    op: app-offered
+
+  # The switch is this face's alone — the terminal has no word for it — and it decides something
+  # before there is a server: a reader who does not want this device carrying can say so first.
+  - type: action
+    domain: viewer
+    op: carry
+    with:
+      on: false
+
+  - type: assert
+    domain: viewer
+    op: carrying
+    with:
+      on: false
+
+  - type: action
+    domain: viewer
+    op: carry
+    with:
+      on: true
+
+  - type: assert
+    domain: viewer
+    op: carrying
+    with:
+      on: true
+
+  # Where the road stops. The form is opened and read, and nothing is pasted into it: what is behind
+  # it is somebody's Cloudflare account.
+  - type: action
+    domain: viewer
+    op: stand-up

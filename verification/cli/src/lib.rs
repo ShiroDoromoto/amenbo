@@ -601,6 +601,9 @@ impl<'a> Driver<'a> {
             // Both halves of a notification's setup — the device's shelf and the project's selection
             // — walked at the terminal. Nothing here posts (`domain::notify`).
             Domain::Notify => self.notify_action(op, with, bind),
+            // Everything before the account: nothing here stands a server up (`domain::viewer`),
+            // and the switch has no word at this face at all.
+            Domain::Viewer => self.viewer_action(op, with),
         }
     }
 
@@ -630,6 +633,7 @@ impl<'a> Driver<'a> {
             Domain::Terminal => Err(unmapped(domain, op)),
             Domain::Files => Err(unmapped(domain, op)),
             Domain::Notify => self.notify_assert(op, with),
+            Domain::Viewer => self.viewer_assert(op, with),
         }
     }
 

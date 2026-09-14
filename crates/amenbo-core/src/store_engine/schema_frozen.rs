@@ -65,7 +65,8 @@
 //! | v37 | `958e57c1` | |
 //! | v38 | `b92bf2b1` | |
 //! | v39 | `366014aa` | |
-//! | v40 | this commit | held equal to the live registry by the test below |
+//! | v40 | `d98556e9` | |
+//! | v41 | this commit | held equal to the live registry by the test below |
 //!
 //! [`super::migrate::BASELINE_VERSION`] itself is **not** here: this repository's history begins with the
 //! chain already at [`OLDEST_FROZEN_VERSION`], so no build in it ever emitted a v2 store and there is no
@@ -127,6 +128,7 @@ pub fn frozen(version: i64) -> Option<&'static str> {
         38 => include_str!("schema_frozen/v38.sql"),
         39 => include_str!("schema_frozen/v39.sql"),
         40 => include_str!("schema_frozen/v40.sql"),
+        41 => include_str!("schema_frozen/v41.sql"),
         _ => return None,
     })
 }

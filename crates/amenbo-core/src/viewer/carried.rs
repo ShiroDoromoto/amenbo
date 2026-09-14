@@ -24,6 +24,7 @@ use crate::store_engine::{StoreEngine, StoreEngineError};
 
 const VS: col::viewer_send::Cols = col::viewer_send::ALL;
 const VP: col::viewer_pending::Cols = col::viewer_pending::ALL;
+const VW: col::viewer_switch::Cols = col::viewer_switch::ALL;
 
 /// The row this device's memory is, there being one.
 const THE_ROW: i64 = 1;
@@ -64,6 +65,13 @@ pub struct Carried {
     /// The UTC day that count belongs to. A count carrying another day's date is not today's, which is
     /// the whole of the rollover — there is nothing to reset and nothing to run at midnight.
     pub spent_on: Option<String>,
+    /// When this carrier last placed anything — this machine's clock, at the moment a turn came back
+    /// having written something. A turn that placed nothing does not move it.
+    ///
+    /// **It is what a screen says out loud**, and nothing here reads it. A person looking at "the phone is
+    /// up to date" has no way to tell that from "nothing has gone out since Tuesday", and the queue's
+    /// length cannot tell them either: an empty queue is both.
+    pub last_placed_at: Option<String>,
     /// Which build of the Worker the server last answered a write as being.
     ///
     /// **It is remembered because a screen cannot ask.** The number travels on the answer to a write and
@@ -115,6 +123,7 @@ pub fn read(engine: &StoreEngine) -> Result<Carried> {
         (sel.col(VS.version), sel.col(VS.cursor), sel.col(VS.placed), sel.col(VS.seq));
     let (quiet_until, spent, spent_on, build) =
         (sel.col(VS.quiet_until), sel.col(VS.spent), sel.col(VS.spent_on), sel.col(VS.build));
+    let last_placed_at = sel.col(VS.last_placed_at);
     let mut sql = Sql::from(&sel, VS.table);
     sql.push_where(Some(&Pred::eq(VS.id, THE_ROW)));
 
@@ -129,6 +138,7 @@ pub fn read(engine: &StoreEngine) -> Result<Carried> {
                 quiet_until: quiet_until.get(r)?,
                 spent: spent.get(r)?,
                 spent_on: spent_on.get(r)?,
+                last_placed_at: last_placed_at.get(r)?,
                 build: build.get(r)?,
             })
         })
@@ -149,6 +159,7 @@ pub fn write(engine: &StoreEngine, left: &Carried) -> Result<()> {
         .set_opt(VS.quiet_until, left.quiet_until.as_deref())
         .set(VS.spent, left.spent)
         .set_opt(VS.spent_on, left.spent_on.as_deref())
+        .set_opt(VS.last_placed_at, left.last_placed_at.as_deref())
         .set(VS.build, left.build)
         .on_conflict_update(VS.id)
         .sql()
@@ -176,6 +187,42 @@ pub fn forget(engine: &StoreEngine) -> Result<()> {
     }
     super::repair::forget_asked_in(&tx)?;
     tx.commit().map_err(StoreEngineError::from)?;
+    Ok(())
+}
+
+/// Whether this device carries to the Viewer at all.
+///
+/// **An absent row is on.** The switch only decides anything once a server exists, and standing one up is
+/// the act of asking for this — so a device that has never touched it is one that wants what it set up.
+pub fn switched_on(engine: &StoreEngine) -> Result<bool> {
+    let conn = engine.conn();
+    let mut sel = Select::new();
+    let sending = sel.col(VW.sending);
+    let mut sql = Sql::from(&sel, VW.table);
+    sql.push_where(Some(&Pred::eq(VW.id, THE_ROW)));
+
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let found: Option<i64> = stmt
+        .query_row(rusqlite::params_from_iter(sql.params()), |r| sending.get(r))
+        .optional()
+        .map_err(StoreEngineError::from)?;
+    Ok(found.unwrap_or(1) != 0)
+}
+
+/// Throw the switch.
+///
+/// **The queue is left exactly where it is.** Turning the carrying off is not throwing away what has been
+/// read out: back on, what was already copied out is placed, and whatever the feed's window dropped in the
+/// meantime is taken again whole — which is what the copying already does with a gap, and needs nothing
+/// said here.
+pub fn set_switched_on(engine: &StoreEngine, sending: bool) -> Result<()> {
+    Insert::into(VW.table)
+        .set(VW.id, THE_ROW)
+        .set(VW.sending, i64::from(sending))
+        .on_conflict_update(VW.id)
+        .sql()
+        .execute(engine.conn())
+        .map_err(StoreEngineError::from)?;
     Ok(())
 }
 
@@ -313,6 +360,7 @@ mod tests {
             quiet_until: Some("2026-09-14T09:00:00Z".into()),
             spent: 1_200,
             spent_on: Some("2026-09-14".into()),
+            last_placed_at: Some("2026-09-14T09:04:00Z".into()),
             build: 3,
         };
         store.set_viewer_carried(&left).unwrap();

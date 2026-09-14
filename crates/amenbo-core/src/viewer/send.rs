@@ -134,12 +134,24 @@ pub struct Sent {
     pub placed: usize,
     /// How many are still waiting behind them.
     pub waiting: i64,
-    /// Whether another run already held the turn, so this one did nothing.
+    /// Why the turn did nothing, where it did nothing on purpose.
     ///
-    /// **It is not a failure — it is the hold working** ([`super::lock`]). A write sets a carrier off and
-    /// writes come in bursts, so this is the ordinary answer for every run of a burst after the first: the
-    /// stretch it would have carried is being carried by the run beside it.
-    pub elsewhere: bool,
+    /// **Neither reason is a failure**, and the queue is where it was under both. `None` is a turn that
+    /// ran — which may still have placed nothing, there having been nothing to place.
+    pub held_back: Option<HeldBack>,
+}
+
+/// The two reasons a turn does nothing and is right to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HeldBack {
+    /// Another run already held the turn. **It is the hold working** ([`super::lock`]): a write sets a
+    /// carrier off and writes come in bursts, so this is the ordinary answer for every run of a burst
+    /// after the first — the stretch it would have carried is being carried beside it.
+    AnotherTurn,
+    /// This device's switch is off ([`super::carried::switched_on`]). Neither the reading nor the placing
+    /// happens, and what is already queued keeps.
+    SwitchedOff,
 }
 
 /// A call that did not give back what was asked for.
@@ -338,11 +350,17 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
         return Ok(Sent::default());
     };
 
+    // The switch is asked before the hold, because it is the cheaper question and the commoner answer: a
+    // device that is switched off has nothing for a turn to hold.
+    if !store.viewer_switched_on()? {
+        return held_back(store, HeldBack::SwitchedOff);
+    }
+
     // **The turn is taken before the first question, not before the first record.** What must not overlap
     // is the whole of it — the reading, the placing, and the writing down of where it got to — so the hold
     // is taken above all three and let go when the turn is over (see `super::lock`).
     let Some(turn) = super::lock::take_the_turn(&store.paths)? else {
-        return Ok(Sent { placed: 0, waiting: store.viewer_waiting()?, elsewhere: true });
+        return held_back(store, HeldBack::AnotherTurn);
     };
 
     // The version is read before the picture is taken, never after: a write landing in between makes a
@@ -367,9 +385,22 @@ pub fn carry_at(store: &Store, now: DateTime<Utc>) -> Result<Sent> {
     store.set_viewer_carried(&left)?;
     let placed = placed?;
 
-    let sent = Sent { placed, waiting: store.viewer_waiting()?, elsewhere: false };
+    // **The moment is written down only where something landed.** A turn that placed nothing left the
+    // server exactly as it found it, and dating that would be this device telling a screen it had carried
+    // when it had not.
+    if placed > 0 {
+        left.last_placed_at = Some(crate::time::Timestamp(now).to_rfc3339_z());
+        store.set_viewer_carried(&left)?;
+    }
+
+    let sent = Sent { placed, waiting: store.viewer_waiting()?, held_back: None };
     drop(turn);
     Ok(sent)
+}
+
+/// A turn that did nothing on purpose, with the queue reported as it stands.
+fn held_back(store: &Store, why: HeldBack) -> Result<Sent> {
+    Ok(Sent { placed: 0, waiting: store.viewer_waiting()?, held_back: Some(why) })
 }
 
 /// The version one turn travels under: the backlog's own, except where that is already the number the
@@ -821,9 +852,9 @@ pub fn carry_process(base_dir: std::path::PathBuf) {
         }
     };
     match carry(&store) {
-        // The ordinary answer for every run of a burst after the first, and nothing to say about it: the
-        // stretch this one would have carried is being carried beside it.
-        Ok(sent) if sent.elsewhere => {}
+        // A turn that did nothing on purpose has nothing to say: the stretch it would have carried is
+        // being carried beside it, or this device is not carrying at all.
+        Ok(sent) if sent.held_back.is_some() => {}
         Ok(sent) => {
             tracing::info!(
                 placed = sent.placed,
@@ -911,6 +942,11 @@ mod tests {
             .filter(|heard| heard.method == "PUT" && heard.target == "/records")
             .map(|heard| serde_json::from_slice(&heard.body).expect("a placement is JSON"))
             .collect()
+    }
+
+    /// A moment, spelled the way the store spells one.
+    fn at(when: &str) -> DateTime<Utc> {
+        crate::time::Timestamp::parse_rfc3339(when).unwrap().0
     }
 
     /// One record waiting, written the way the copying writes it.
@@ -1027,6 +1063,69 @@ mod tests {
         assert_eq!(carry(&store).unwrap(), Sent::default());
     }
 
+    /// **A device that is switched off carries nothing**, and does not read either: what the switch stops
+    /// is the whole turn. The queue keeps, so throwing it back on places what was already read out.
+    #[test]
+    fn a_device_that_is_switched_off_neither_reads_nor_places() {
+        let mut store = store_at("switched-off");
+        seed(&mut store);
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+        store.enqueue_viewer(&[waiting("task/1")]).unwrap();
+        store.set_viewer_switched_on(false).unwrap();
+
+        let sent = carry(&store).unwrap();
+
+        assert_eq!(sent, Sent { placed: 0, waiting: 1, held_back: Some(HeldBack::SwitchedOff) });
+        assert!(placements(&host).is_empty());
+        assert_eq!(store.viewer_carried().unwrap(), Carried::default(), "and nothing was read out");
+
+        // Back on, what was already read out goes. A window that turned in the meantime is the copying's
+        // own answer — it finds the gap and takes the whole store again.
+        store.set_viewer_switched_on(true).unwrap();
+        host.set_reply("/records", took(1, 1));
+        let sent = carry(&store).unwrap();
+        assert_eq!(sent.held_back, None);
+        assert!(sent.placed > 0, "{sent:?}");
+    }
+
+    /// **A device that has never touched the switch carries.** Standing a server up is the act of asking
+    /// for this, so an absent row is not "off" — it is nobody having said otherwise.
+    #[test]
+    fn a_switch_nobody_has_touched_is_on() {
+        let store = store_at("switch-untouched");
+        assert!(store.viewer_switched_on().unwrap());
+
+        store.set_viewer_switched_on(false).unwrap();
+        assert!(!store.viewer_switched_on().unwrap());
+        store.set_viewer_switched_on(true).unwrap();
+        assert!(store.viewer_switched_on().unwrap());
+    }
+
+    /// **When this device last placed anything is dated only where something landed.** A turn that placed
+    /// nothing left the server as it found it, and dating that would tell a screen it had carried when it
+    /// had not.
+    #[test]
+    fn the_moment_it_last_placed_is_written_only_where_something_landed() {
+        let mut store = store_at("last-placed");
+        let host = StaticHost::serve(Vec::<(String, String)>::new());
+        set_up(&mut store, &host);
+
+        // Nothing queued and nothing in the store to read out: the turn runs and places nothing.
+        let quiet = at("2026-09-14T10:00:00Z");
+        assert_eq!(carry_at(&store, quiet).unwrap().placed, 0);
+        assert_eq!(store.viewer_carried().unwrap().last_placed_at, None);
+
+        seed(&mut store);
+        host.set_reply("/records", took(9, 9));
+        let carried = at("2026-09-14T11:00:00Z");
+        assert!(carry_at(&store, carried).unwrap().placed > 0);
+        assert_eq!(
+            store.viewer_carried().unwrap().last_placed_at.as_deref(),
+            Some("2026-09-14T11:00:00Z"),
+        );
+    }
+
     /// **A turn somebody else is taking is not this run's to take.** Two turns at once put an older
     /// picture of a record on top of a newer one, so a run that cannot take the hold does nothing at all —
     /// and says so, rather than answering "nothing to send" and leaving the queue looking dealt with.
@@ -1041,7 +1140,7 @@ mod tests {
         let held = super::super::lock::take_the_turn(&store.paths).unwrap().expect("nobody holds it");
         let sent = carry(&store).unwrap();
 
-        assert_eq!(sent, Sent { placed: 0, waiting: 1, elsewhere: true });
+        assert_eq!(sent, Sent { placed: 0, waiting: 1, held_back: Some(HeldBack::AnotherTurn) });
         assert!(placements(&host).is_empty(), "nothing is placed under somebody else's turn");
         assert_eq!(store.viewer_waiting().unwrap(), 1, "and the queue is where it was");
 
@@ -1049,7 +1148,7 @@ mod tests {
         drop(held);
         host.set_reply("/records", took(1, 1));
         let sent = carry(&store).unwrap();
-        assert!(!sent.elsewhere);
+        assert_eq!(sent.held_back, None);
         assert!(sent.placed > 0, "{sent:?}");
     }
 

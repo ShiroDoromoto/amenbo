@@ -743,7 +743,42 @@ pub const STEPS: &[Step] = &[
              );",
         ),
     },
+    Step {
+        to: 41,
+        name: "add the Viewer's switch, and when it last placed anything",
+        // `AMB-D-884`: the screen says whether this device is carrying and when it last did, and neither
+        // was anywhere to be read. The switch is a table of its own because standing a server up throws
+        // the carrier's row away — a switch that came back on because somebody pressed setup is a switch
+        // nobody threw.
+        //
+        // **The column is added only where it is missing, and that is not belt and braces.** Genesis is
+        // `CREATE TABLE IF NOT EXISTS` over today's registry and runs before this chain on every open, so
+        // a store from before `viewer_send` existed at all has the table created here complete — column
+        // and all — and a plain `ALTER TABLE … ADD COLUMN` would then fail on a column already there.
+        // Every earlier `ADD COLUMN` step in this chain alters a table that exists in the oldest store
+        // this build opens, so none of them could meet that; this is the first to alter one the chain
+        // itself introduced.
+        apply: Apply::Custom(add_the_viewers_switch),
+    },
 ];
+
+/// v41: the Viewer's switch, and the moment it last placed anything (`AMB-D-884`).
+fn add_the_viewers_switch(ctx: &Ctx<'_>) -> Result<()> {
+    ctx.tx.execute_batch(
+        "CREATE TABLE IF NOT EXISTS viewer_switch (\
+             id INTEGER PRIMARY KEY CHECK (id = 1) NOT NULL, \
+             sending INTEGER CHECK(sending IN (0, 1)) NOT NULL\
+         );",
+    )?;
+    let already: bool = ctx
+        .tx
+        .prepare("SELECT 1 FROM pragma_table_info('viewer_send') WHERE name = 'last_placed_at'")?
+        .exists([])?;
+    if !already {
+        ctx.tx.execute_batch("ALTER TABLE viewer_send ADD COLUMN last_placed_at TEXT;")?;
+    }
+    Ok(())
+}
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to
 /// one project can be handed its own changes — a question the row itself cannot answer once it is gone.

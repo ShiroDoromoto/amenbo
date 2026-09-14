@@ -14,7 +14,7 @@ use std::io::IsTerminal as _;
 use serde_json::json;
 
 use amenbo_core::config::Paths;
-use amenbo_core::viewer::{self, code, pairing, repair::Repaired, send::Server};
+use amenbo_core::viewer::{self, code, pairing, repair::Repaired, send::HeldBack, send::Server};
 use amenbo_core::Store;
 
 use crate::cli::ViewerCmd;
@@ -224,15 +224,20 @@ fn revoke(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 fn send(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     the_server_is_up(store)?;
     let sent = viewer::send::carry(store).map_err(CliError::from)?;
-    // A turn somebody else is taking is not a failure — it is the hold working, and the stretch this run
-    // would have carried is being carried beside it.
-    let line = if sent.elsewhere {
-        format!("Another carrier is taking its turn. {} record(s) are on the queue.", sent.waiting)
-    } else {
-        format!(
+    // Neither reason a turn does nothing is a failure, and the queue is where it was under both — so each
+    // is said in its own words rather than reported as "nothing to send".
+    let line = match sent.held_back {
+        Some(HeldBack::AnotherTurn) => {
+            format!("Another carrier is taking its turn. {} record(s) are on the queue.", sent.waiting)
+        }
+        Some(HeldBack::SwitchedOff) => format!(
+            "This device is not carrying to the Viewer. {} record(s) are on the queue, and they keep.",
+            sent.waiting,
+        ),
+        None => format!(
             "{} record(s) reached the server, and {} wait behind them.",
             sent.placed, sent.waiting,
-        )
+        ),
     };
     write_envelope(
         flags,

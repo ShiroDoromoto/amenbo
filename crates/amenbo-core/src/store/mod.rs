@@ -506,6 +506,18 @@ impl Store {
         crate::viewer::carried::forget(&self.engine)
     }
 
+    /// Whether this device carries to the Viewer at all ([`crate::viewer::carried::switched_on`]). A
+    /// device that has never touched the switch answers yes: standing a server up is the act of asking
+    /// for this.
+    pub fn viewer_switched_on(&self) -> Result<bool> {
+        crate::viewer::carried::switched_on(&self.engine)
+    }
+
+    /// Throw that switch. Off, neither the reading nor the placing happens; the queue keeps either way.
+    pub fn set_viewer_switched_on(&self, sending: bool) -> Result<()> {
+        crate::viewer::carried::set_switched_on(&self.engine, sending)
+    }
+
     /// How many records have been read out for the Viewer and have not landed yet.
     pub fn viewer_waiting(&self) -> Result<i64> {
         crate::viewer::carried::waiting(&self.engine)

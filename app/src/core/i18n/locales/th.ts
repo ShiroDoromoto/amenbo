@@ -645,7 +645,6 @@ export const th: Translation = {
     "face.modelSendsPicker": "ใส่ {command} ลงในบานอย่างเดียว ตัวเลือกของมันจะเปิดขึ้น และการเลือกเป็นของคุณ",
     "face.modelSendsFilter": "ใส่ {command} ลงในบาน แล้วใส่ชื่อในช่องค้นหาของมัน การยืนยันเป็นของคุณ",
     "face.modelKeeps": "ค่าเริ่มต้นของคุณเองก็เปลี่ยนด้วย ที่ {path}",
-    "face.modelKeepsPane": "อยู่แค่ในบานนี้ ค่าเริ่มต้นของคุณเองที่ {path} ไม่เปลี่ยน และการเปลี่ยนแปลงจะหายไปเมื่อเปิดบานนี้ครั้งถัดไป",
     "face.startSave": "บันทึก",
     "face.startCancel": "ยกเลิก",
     "face.startEdit": "แก้ไข",

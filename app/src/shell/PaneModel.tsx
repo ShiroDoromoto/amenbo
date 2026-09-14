@@ -40,12 +40,9 @@ import { Icon } from "../components/Icon";
  * and the provider.
  *
  * **What the press will do is said before it is pressed** — which command goes in, and, for the three
- * that keep the change past this session, which of the reader's own files it lands in and whether it
- * lands there at all: a pane handed a copy of that file writes to the copy, and what it wrote goes
- * when the pane is next opened (`AMB-D-878`). A control that quietly moved somebody's
- * default would be Amenbo writing a provider's settings through the back door, and `AMB-D-440`
- * refuses that at the front; one that said it had moved a default it never reached would be the same
- * sentence wrong the other way.
+ * that keep the change past this session, which of the reader's own files it lands in. A control that
+ * quietly moved somebody's default would be Amenbo writing a provider's settings through the back
+ * door, and `AMB-D-440` refuses that at the front.
  *
  * **It is drawn for a catalogued provider and for nothing else.** A pane running a command the reader
  * registered is a pane whose program Amenbo cannot name (`AMB-D-794`), and the plain shell has no
@@ -339,14 +336,9 @@ export function PaneModel({ frame, session, agent }: {
           {/* What the press puts in the pane, before it is pressed. */}
           <p className="slot__runs">{sends}</p>
           {/* And where this machine keeps it afterwards, for the providers that keep it anywhere. It
-              is the reader's own file, so it is named rather than described — and named either way,
-              because the pane that cannot reach it is the pane the reader most needs it named in. */}
+              is the reader's own file, so it is named rather than described. */}
           {how.keeps !== null && (
-            <p className="slot__note">
-              {how.comesBack
-                ? tf("face.modelKeeps", { path: how.keeps })
-                : tf("face.modelKeepsPane", { path: how.keeps })}
-            </p>
+            <p className="slot__note">{tf("face.modelKeeps", { path: how.keeps })}</p>
           )}
         </div>
       )}

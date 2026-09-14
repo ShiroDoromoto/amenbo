@@ -645,7 +645,6 @@ export const id: Translation = {
     "face.modelSendsPicker": "Menulis {command} saja di panel. Pemilihnya sendiri terbuka, dan memilih adalah urusan Anda.",
     "face.modelSendsFilter": "Menulis {command} di panel, lalu namanya di kotak pencariannya. Mengonfirmasi adalah urusan Anda.",
     "face.modelKeeps": "Ini juga memindahkan setelan bawaan Anda sendiri, di {path}.",
-    "face.modelKeepsPane": "Ini tetap di panel ini: setelan bawaan Anda sendiri, di {path}, tidak berubah, dan perubahannya hilang saat panel ini dibuka lagi.",
     "face.startSave": "Simpan",
     "face.startCancel": "Batal",
     "face.startEdit": "Ubah",

@@ -663,7 +663,6 @@ export const fr: Translation = {
     "face.modelSendsPicker": "Écrit {command} seul dans le volet. Son propre sélecteur s'ouvre, et le choix vous revient.",
     "face.modelSendsFilter": "Écrit {command} dans le volet, puis le nom dans son champ de recherche. La validation vous revient.",
     "face.modelKeeps": "Cela change aussi votre propre valeur par défaut, dans {path}.",
-    "face.modelKeepsPane": "Cela reste dans ce volet : votre propre valeur par défaut, dans {path}, ne change pas, et la modification disparaît à la prochaine ouverture de ce volet.",
     "face.startSave": "Enregistrer",
     "face.startCancel": "Annuler",
     "face.startEdit": "Modifier",

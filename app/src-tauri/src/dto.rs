@@ -2216,10 +2216,10 @@ pub struct AgentModelKeptDto {
 /// What a running pane is asked to change model with, and what a press would actually put into it
 /// (`AMB-D-865`, `crate::wake::wake_switch`).
 ///
-/// **The first four are drawn before the press and the last three are what the press does.** What is
-/// typed, whether the model's name goes on that line, where the machine keeps the change afterwards
-/// and whether that reaches the reader's own file are the whole of what a person needs to judge it —
-/// and two of the six read a named line as a prompt and bill for it (`AMB-T-4581`).
+/// **The first three are drawn before the press and the last three are what the press does.** What is
+/// typed, whether the model's name goes on that line, and where the machine keeps the change
+/// afterwards are the whole of what a person needs to judge it — and two of the six read a named line
+/// as a prompt and bill for it (`AMB-T-4581`).
 ///
 /// **Where the name may go is answered here and nowhere else.** A face that composed the line itself
 /// would be a second answer to the question this catalog exists to hold, and the two would drift on
@@ -2235,15 +2235,6 @@ pub struct AgentSwitchDto {
     /// Where this machine keeps the change past the session — a path in the reader's home — or
     /// `null` where the provider changes only the session in front of them.
     pub(crate) keeps: Option<String>,
-    /// Whether a write to [`Self::keeps`] made in this kind of pane reaches that file, or stops at
-    /// the copy the pane was handed and goes when the pane is next opened
-    /// (`crate::pane_home::writes_come_back`).
-    ///
-    /// It is a second sentence rather than a `keeps` of `null`: silence reads as "the provider
-    /// changes only this session", and the provider does write a file — what it cannot reach is the
-    /// reader's own copy of it, which is Amenbo's doing and so Amenbo's to say (`AMB-D-878`).
-    /// `true` where there is nothing kept at all, which is a row this is not drawn on.
-    pub(crate) comes_back: bool,
     /// What goes into the pane's input box and is submitted, as a person typing it would.
     pub(crate) line: String,
     /// What is pasted after that line has gone, submitting nothing — the picker's own search text —

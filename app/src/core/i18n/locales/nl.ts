@@ -642,7 +642,6 @@ export const nl: Translation = {
     "face.modelSendsPicker": "Zet alleen {command} in het venster. De eigen keuzelijst opent, en het kiezen is aan jou.",
     "face.modelSendsFilter": "Zet {command} in het venster en daarna de naam in het zoekveld. Bevestigen is aan jou.",
     "face.modelKeeps": "Het verplaatst ook je eigen standaard, in {path}.",
-    "face.modelKeepsPane": "Het blijft in dit venster: je eigen standaard, in {path}, verandert niet, en de wijziging is weg zodra dit venster opnieuw opent.",
     "face.startSave": "Opslaan",
     "face.startCancel": "Annuleren",
     "face.startEdit": "Bewerken",

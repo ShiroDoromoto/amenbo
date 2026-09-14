@@ -668,7 +668,6 @@ export const pl: Translation = {
     "face.modelSendsPicker": "Wpisuje w panelu samo {command}. Otwiera się własny wybór, a wybieranie należy do Ciebie.",
     "face.modelSendsFilter": "Wpisuje {command} w panelu, a potem nazwę w jego polu wyszukiwania. Zatwierdzenie należy do Ciebie.",
     "face.modelKeeps": "Zmienia to także Twoje własne ustawienie domyślne, w {path}.",
-    "face.modelKeepsPane": "Zostaje w tym panelu: Twoje własne ustawienie domyślne w {path} się nie zmienia, a zmiana znika przy następnym otwarciu tego panelu.",
     "face.startSave": "Zapisz",
     "face.startCancel": "Anuluj",
     "face.startEdit": "Zmień",

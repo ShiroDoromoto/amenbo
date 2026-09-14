@@ -642,7 +642,6 @@ export const zhHant: Translation = {
     "face.modelSendsPicker": "只把 {command} 寫進窗格。它自己的選擇畫面會開啟，選哪個由你決定。",
     "face.modelSendsFilter": "先把 {command} 寫進窗格，再把名字放進它的搜尋框。確認由你來做。",
     "face.modelKeeps": "這也會改掉你自己的預設設定，在 {path}。",
-    "face.modelKeepsPane": "只留在這個窗格裡：{path} 裡你自己的預設設定不變，下次打開這個窗格時改動就沒了。",
     "face.startSave": "儲存",
     "face.startCancel": "取消",
     "face.startEdit": "修改",

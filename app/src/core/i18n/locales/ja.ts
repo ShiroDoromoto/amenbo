@@ -654,7 +654,6 @@ export const ja: Translation = {
     "face.modelSendsPicker": "{command} だけをペインに入れます。CLI 自身のピッカーが開き、選ぶのは人です。",
     "face.modelSendsFilter": "{command} をペインに入れ、続けて名前を絞り込み欄に入れます。確定するのは人です。",
     "face.modelKeeps": "手元の既定も変わります（{path}）。",
-    "face.modelKeepsPane": "このペインの中だけです。手元の既定（{path}）は変わらず、次にこのペインを開くと消えます。",
     "face.startSave": "保存",
     "face.startCancel": "やめる",
     "face.startEdit": "直す",

@@ -652,7 +652,6 @@ export const de: Translation = {
     "face.modelSendsPicker": "Schreibt nur {command} ins Fenster. Die eigene Auswahl öffnet sich, und die Wahl liegt bei dir.",
     "face.modelSendsFilter": "Schreibt {command} ins Fenster und danach den Namen in dessen Suchfeld. Das Bestätigen liegt bei dir.",
     "face.modelKeeps": "Damit ändert sich auch deine eigene Voreinstellung, in {path}.",
-    "face.modelKeepsPane": "Es bleibt in diesem Fenster: deine eigene Voreinstellung in {path} ändert sich nicht, und die Änderung ist beim nächsten Öffnen dieses Fensters weg.",
     "face.startSave": "Speichern",
     "face.startCancel": "Abbrechen",
     "face.startEdit": "Bearbeiten",

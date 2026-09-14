@@ -27,9 +27,9 @@ serde_json.workspace = true
 serde_norway.workspace = true
 chrono.workspace = true
 clap.workspace = true
-# Hidden password entry for the encrypted recovery kit (`recovery backup`): read the passphrase from
-# the TTY without echoing it. Small, widely-used crate; no-op'd by `--password-stdin` for
-# non-interactive/scripted runs.
+# Hidden entry for the one secret a person pastes: the Cloudflare API token `viewer setup` takes, read
+# from the TTY without echoing it. Small, widely-used crate; a run whose stdin is not a terminal reads
+# the token off the pipe instead and never reaches it.
 rpassword = "7"
 
 # Restores SIGPIPE to its default at startup (`main`), so a reader that walks away ends this process
@@ -121,6 +121,11 @@ required-features = ["e2e"]
 [[test]]
 name = "cli_e2e_tick"
 path = "tests/e2e/tick.rs"
+required-features = ["e2e"]
+
+[[test]]
+name = "cli_e2e_viewer"
+path = "tests/e2e/viewer.rs"
 required-features = ["e2e"]
 
 # The README demo's script, replayed against this build. It forks the binary once per line the film

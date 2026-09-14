@@ -57,6 +57,18 @@ gui:
   - 'crates/amenbo-core/src/error.rs'
   - 'crates/amenbo-core/src/doctor.rs'
   - 'crates/amenbo-core/src/store/tests.rs'
+# The Viewer's Cloudflare Worker: its own npm project, and the only face in this tree that
+# needs Node to be judged. The baked copy core embeds is on this layer as well as on `rust`,
+# because the two ask different questions of it — `rust` compiles what it says, and this asks
+# whether it is still what worker/ writes. The guard is here for the other direction: edited
+# alone, it has to re-open the thing it judges.
+worker:
+  - 'worker/**'
+  - 'crates/amenbo-core/src/viewer/worker.js'
+  - 'crates/amenbo-core/src/viewer/migrations/**'
+  - 'guards/check-worker-baked-fresh.sh'
+  - '.github/workflows/_ci.yml'
+  - '.github/paths-filters.yml'
 # devtool is one self-contained Go module with no dependency on the rest of the tree,
 # so nothing outside it can move its verdict — except the gate itself, which holds the
 # three checks this job runs.

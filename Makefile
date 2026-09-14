@@ -281,7 +281,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm install-gui-dev-vm-locked dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate test-spawn-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate token-contrast-gate brand notify-wording notify-wording-gate sweep-stale worker-install worker-build worker-test worker-baked schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm install-gui-dev-vm-locked dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate test-spawn-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate token-contrast-gate brand notify-wording notify-wording-gate worker-baked-gate gate-worker sweep-stale worker-install worker-build worker-test worker-baked schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -332,6 +332,7 @@ help:
 	@echo "make install-gui-dev-vm AMB-T-ID=<id> - build that instance here and put it in the throwaway macOS VM instead of on this machine (one build per id at a time: a second run of the same id stops instead of waiting; needs devtool + tart; devtool vm rm throws the VM away)"
 	@echo "make gui-dev-linux - build the dev GUI's Linux AppImage in Docker into dist/ (the preview workflow's Linux leg; needs Docker)"
 	@echo "make gui-dev-names - print the names AMB-THEME / AMB-T-ID split a dev build by, as key=value (what the preview workflow reads instead of spelling them again)"
+	@echo "make worker-baked-gate - assert the copy core embeds is still what worker/ bakes (it re-bakes and reads the working tree) = the same guard CI runs (needs Node; skipped without it)"
 	@echo "make worker-baked - rebuild the Viewer Worker copy core embeds (crates/amenbo-core/src/viewer/worker.js and the migrations beside it) from worker/src and worker/migrations, and commit what moves (needs Node)"
 	@echo "make worker-build - bake, then typecheck the Worker and build it the way a deploy would (wrangler types -> tsc -> deploy --dry-run; needs Node)"
 	@echo "make worker-test  - bake, then run the Worker's tests inside workerd against the same wrangler.jsonc a deploy reads (needs Node)"
@@ -678,6 +679,7 @@ GATE_STAGES := gate-cheap \
   $(if $(filter rust gui,$(GATE_FACETS)),gate-tools) \
   $(if $(filter rust,$(GATE_FACETS)),gate-rust gate-app-rust) \
   $(if $(filter gui,$(GATE_FACETS)),gate-gui) \
+  $(if $(filter worker,$(GATE_FACETS)),gate-worker) \
   $(if $(filter verification,$(GATE_FACETS)),gate-verification)
 endif
 endif
@@ -715,6 +717,7 @@ test:
 	$(MAKE) --no-print-directory gate-rust
 	$(MAKE) --no-print-directory gate-app-rust
 	$(MAKE) --no-print-directory gate-gui
+	$(MAKE) --no-print-directory gate-worker
 	$(MAKE) --no-print-directory gate-verification
 	## Sweep last. By the time we get here the build has touched core/cli, the app crate and the GUI, so
 	## the live artifacts' atime is fresh. Sweeping before the build would drop assets not yet read (the
@@ -1183,6 +1186,24 @@ notify-wording:
 ## Declared once and shared: `make test` and CI's tree-guards both run this file.
 notify-wording-gate:
 	@guards/check-notify-wording-fresh.sh
+
+## Guard the copy of the Viewer's Worker that core embeds against the source it is baked from: run the
+## bake and read the working tree, the same shape check-bindings-fresh.sh uses. What watches it
+## otherwise is the Worker's own BUILD number, and that is a number somebody remembers to raise — an
+## edit to worker/src that leaves it alone is green everywhere, and what lands in a user's own account
+## is the Worker from an older commit.
+## Declared once and shared: `make gate-worker` and CI's worker job both run this file.
+worker-baked-gate:
+	@guards/check-worker-baked-fresh.sh
+
+## The Worker stage: the bake's freshness, then the Worker's own typecheck, dry-run deploy and tests —
+## the same three CI's `worker` job runs, and the reason that job exists is that this is the one face
+## in the tree Node is needed to judge. It is a stage of its own rather than part of gate-cheap: those
+## are seconds and this wants an `npm ci` of its own.
+gate-worker:
+	$(MAKE) --no-print-directory worker-baked-gate
+	$(MAKE) --no-print-directory worker-build
+	$(MAKE) --no-print-directory worker-test
 
 ## The Viewer's Cloudflare Worker (worker/, npm): the verbs its own Makefile carries, reachable from
 ## the top of the tree so this part is built and tested the same way as every other.

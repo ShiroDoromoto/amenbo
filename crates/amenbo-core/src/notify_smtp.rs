@@ -1,12 +1,12 @@
 //! **The SMTP conversation** — how one message is handed to the relay a mail target names
-//! (`AMB-D-469`, `AMB-D-895`).
+//! (`AMB-D-469`).
 //!
 //! Every provider speaks SMTP the same way, so the account a person already has is the whole setup and
 //! nobody sits between Amenbo and the mailbox it reports to. What is written here is the conversation
 //! itself — connect, greet, upgrade, authenticate, name the recipients, hand over the body, close —
 //! because the thing the Go plugin this was ported from leaned on (`net/smtp`) has no counterpart in
 //! Rust's standard library, and the one crate that would stand in for it is ten crates in a tree that
-//! already carries the TLS half (`AMB-D-895`).
+//! already carries the TLS half.
 //!
 //! **The message arrives finished.** Headers, body and the line endings between them are
 //! [`crate::notify_mail`]'s; what is added here is the envelope — who it is from, who it is for — and

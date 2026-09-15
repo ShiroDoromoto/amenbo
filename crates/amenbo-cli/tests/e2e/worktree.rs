@@ -89,11 +89,15 @@ fn a_task_in(cli: &Cli, repo: &Path) -> String {
 /// Where a task's worktree is cut, by the layout nobody is asked about: beside the repository, never
 /// inside it.
 fn worktree_of(repo: &Path, tid: &str) -> PathBuf {
-    // git answers with the resolved path, and on macOS the scratch directory is reached through a
-    // symlink (/tmp → /private/tmp) — so the test levels its own spelling rather than the command's.
-    let repo = std::fs::canonicalize(repo).expect("the repository is on disk");
-    let name = repo.file_name().unwrap().to_string_lossy().into_owned();
-    repo.parent().unwrap().join(format!("{name}-worktrees")).join(tid)
+    // Built from the answer the command itself is built from — git's own spelling of the root — rather
+    // than from the filesystem, which spells it a third way on every platform. On macOS the scratch
+    // directory is reached through a symlink (/tmp → /private/tmp) that git resolves and the test would
+    // otherwise carry; on Windows `canonicalize` returns a verbatim path (`\\?\D:\…`) that is not the
+    // spelling the command prints, and not one a shell would take in the `cd` line it prints it in.
+    let git_dir = git_out(repo, &["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    let root = Path::new(&git_dir).parent().expect("the git directory sits inside the repository");
+    let name = root.file_name().unwrap().to_string_lossy().into_owned();
+    root.parent().unwrap().join(format!("{name}-worktrees")).join(tid)
 }
 
 /// The whole round trip: cut, work, merge, fold. `start`'s stdout is the one `cd` line and nothing

@@ -38,7 +38,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-cli"
-version = "26.0.0"
+version = "27.0.0"
 dependencies = [
  "amenbo-core",
  "amenbo-scratch",
@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "amenbo-core"
-version = "26.0.0"
+version = "27.0.0"
 dependencies = [
  "amenbo-scratch",
  "amenbo-static-host",
@@ -97,11 +97,11 @@ dependencies = [
 
 [[package]]
 name = "amenbo-scratch"
-version = "26.0.0"
+version = "27.0.0"
 
 [[package]]
 name = "amenbo-static-host"
-version = "26.0.0"
+version = "27.0.0"
 
 [[package]]
 name = "android_system_properties"

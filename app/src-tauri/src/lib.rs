@@ -314,6 +314,10 @@ pub fn run() {
       // What an earlier run left in the temporary directory when it ended without closing its terminals.
       // Off the launch path: it is a scan of a directory, and nothing here waits on it.
       std::thread::spawn(pty::sweep);
+      // And what the per-pane homes have come to, which is a walk of two directories and a removal
+      // where they are over the budget (`crate::pane_home`, `AMB-D-898`). Off the launch path for
+      // the same reason: it reads the store and then a tree, and nothing here waits on it.
+      std::thread::spawn(pane_home::rotate);
       // And the directory a removed feature left in app-data. Amenbo wrote a row there for every status
       // move made inside a pane, to say which pane was holding which task; nothing writes or reads it
       // any more, so what is left is bytes with nothing in the tree to explain them. Removed once, on

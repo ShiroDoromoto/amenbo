@@ -439,7 +439,13 @@ fn seed(face: &TalkFace, kept: &SavedLayout) {
 /// What was written is remembered only once the store has taken it, so a write that failed is made
 /// again by the next change rather than counted as done.
 fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
-    forget_dropped(face, layout);
+    // A home that has stopped being spoken for is the one thing that can bring the per-pane homes
+    // inside their budget without a byte having changed (`crate::pane_home::rotate`, `AMB-D-898`).
+    // Off this thread because what it does is walk two directories: this is reached on every
+    // keystroke under a pane, and waits for nothing.
+    if forget_dropped(face, layout) {
+        std::thread::spawn(crate::pane_home::rotate);
+    }
     let keeping = SavedLayout {
         project: layout.project,
         splits: splits_of(layout),
@@ -462,18 +468,24 @@ fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
 /// provider's to keep or forget. Where it is a directory Amenbo made, the directory stays and the
 /// watch on it is what goes (`crate::pane_home::forget`, `AMB-D-898`): that directory is the
 /// conversation, and closing a pane is not asking for one to be thrown away.
-fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) {
+///
+/// **It answers whether one of the panes that went had a home of its own**, which is [`keep`]'s cue
+/// to weigh what the homes have come to. Reading the device is left to the caller: this is reached
+/// on every keystroke under a pane, and the tests ask it directly.
+fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) -> bool {
     let here: std::collections::BTreeSet<&str> =
         layout.frames.iter().map(|frame| frame.id.as_str()).collect();
+    let mut a_home_went = false;
     face.hints.lock().expect("resume hints lock").retain(|frame, handle| {
         if here.contains(frame.as_str()) {
             return true;
         }
-        crate::pane_home::forget(std::path::Path::new(handle));
+        a_home_went |= crate::pane_home::forget(std::path::Path::new(handle));
         false
     });
     face.models.lock().expect("pane models lock").retain(|frame, _| here.contains(frame.as_str()));
     face.names.lock().expect("frame names lock").retain(|frame| here.contains(frame));
+    a_home_went
 }
 
 /// The panes as they are written down: what the window sent about each place, and beside it the two

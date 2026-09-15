@@ -1,6 +1,5 @@
-//! `tick run`, the face the scheduler calls: what a wake-up with nothing owed still does, what it picks
-//! up that a previous run left standing, the queue it leaves to the runner already on it, and the device
-//! where there is nothing to wake for at all.
+//! `tick run`, the face the scheduler calls: what a wake-up with nothing owed still does, what it carries
+//! out of the outbox, and the device where there is nothing to wake for at all.
 //!
 //! Driven as a process because that is the whole of what a scheduler starts: it resolves no folder,
 //! declares no facet, and answers with an exit code nothing else reads.
@@ -23,8 +22,7 @@ fn a_tick_takes_each_purposes_turn_once_a_day_and_exits_clean() {
     assert_eq!(out["ok"], true);
     assert_eq!(out["ran"], serde_json::json!(["due"]), "the day's turn was taken: {out}");
     assert_eq!(out["failed"].as_array().unwrap().len(), 0);
-    assert_eq!(out["delivered"], 0, "nothing is due, so nothing was warned about");
-    assert_eq!(out["queues"].as_array().unwrap().len(), 0);
+    assert_eq!(out["carried"], 0, "nothing is due, so there was nothing to carry out");
 
     // The next hour of the same day: the turn is already taken, so nothing runs again.
     let again = cli.json(&["tick", "run", "--json"]);
@@ -57,115 +55,39 @@ fn a_tick_on_a_device_with_no_store_raises_none() {
     assert!(!empty.exists(), "a tick does not bring a store into being");
 }
 
-/// What the tick is woken for on the days it has nothing of its own to say (`AMB-D-706`). A fan-out that
-/// could not resolve anybody leaves its event standing, and — with writes this feature makes a day apart —
-/// the next wake-up is what carries it rather than the next time somebody happens to type something.
-#[cfg(unix)]
-#[test]
-fn a_tick_carries_the_delivery_a_previous_run_left_standing() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let cli = Cli::new();
-    cli.run(&["init", "--name", "tester"]);
-
-    let capture = cli.home.join("fired.json");
-    install_subscribing_plugin(&cli, "logger", &["task.created"]);
-    let program = cli.home.join("plugins").join("logger").join("logger");
-    std::fs::write(&program, format!("#!/bin/sh\ncat > '{}'\n", capture.display())).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    open_the_gate(&cli, "logger");
-
-    // Shut the installs away, so the write below fans out to nobody it can resolve and leaves the event
-    // where it is. This stands in for the ways a delivery really is left half-done — a runner killed, a
-    // machine that went down mid-fan-out — none of which a test can stage.
-    let plugins = cli.home.join("plugins");
-    std::fs::set_permissions(&plugins, std::fs::Permissions::from_mode(0o000)).unwrap();
-    let pid = cli.bound_project();
-    let added = cli.json(&["task", "add", "--title", "取り残された配送", "--project", &pid, "--json"]);
-    cli.json(&["task", "finish-creating", &id_str(&added["task"]["id"]), "--json"]);
-    std::fs::set_permissions(&plugins, std::fs::Permissions::from_mode(0o755)).unwrap();
-
-    let out = cli.json(&["tick", "run", "--json"]);
-    assert_eq!(out["delivered"], 1, "the tick carried what was standing: {out}");
-    assert_eq!(out["queues"].as_array().unwrap().len(), 0, "and left nothing owed: {out}");
-    let payload = wrote_json(&capture, |v| !v["event"].is_null());
-    assert_eq!(payload["event"], "task.created");
-
-    // Woken again with the queues empty: the same clean round as a fresh store's.
-    let again = cli.json(&["tick", "run", "--json"]);
-    assert_eq!(again["delivered"], 0);
-}
-
-/// The whole road, walked once: a day comes, the tick warns about it, and the warning reaches a plugin —
-/// with no app open, no facet on the command line, and nothing resident (`AMB-D-706`).
+/// The whole road, walked once: a day comes, the tick warns about it, and the warning is carried out of
+/// the outbox in the same round — with no app open, no facet on the command line, and nothing resident
+/// (`AMB-D-706`).
 ///
-/// The two steps are named apart on the wire so a subscriber can take one and leave the other, and the
+/// The tick is the one mount that posts in the process it was woken in, rather than handing the messages
+/// to a sender it would not outlive, so what it says it carried is what actually left the outbox.
+///
+/// The two steps are named apart on the wire so a project can report one and leave the other, and the
 /// event carries no actor at all: nobody acted, a day arrived (`AMB-D-708`).
-#[cfg(unix)]
 #[test]
-fn a_day_that_has_come_reaches_a_plugin_through_the_tick() {
-    use std::os::unix::fs::PermissionsExt;
-
+fn a_day_that_has_come_is_carried_out_through_the_tick() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
 
-    let capture = cli.home.join("warned.json");
-    install_subscribing_plugin(&cli, "bell", &["task.due"]);
-    let program = cli.home.join("plugins").join("bell").join("bell");
-    std::fs::write(&program, format!("#!/bin/sh\ncat > '{}'\n", capture.display())).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    open_the_gate(&cli, "bell");
+    // Somewhere for the warning to go. The connection is never written, so the post is refused — which is
+    // the trace that says the message was built, addressed and handed over.
+    cli.json(&["notify", "target", "add", "--kind", "slack", "unreachable", "--json"]);
+    cli.json(&["notify", "on", "--json"]);
+    cli.json(&["notify", "use", "1", "--json"]);
+    cli.json(&["notify", "event", "task.due", "--json"]);
 
     let pid = cli.bound_project();
     let today =
         cli.json(&["task", "add", "--title", "今日が期日", "--project", &pid, "--due", "today", "--json"]);
-    let today_id = id_str(&today["task"]["id"]);
-    cli.finish_creating(&today_id);
-    // Tomorrow's is the other step, which this plugin did not subscribe to: it is warned about, and this
-    // plugin is not the one told.
-    let soon = cli.json(&[
-        "task", "add", "--title", "明日が期日", "--project", &pid, "--due", "tomorrow", "--json",
-    ]);
-    cli.finish_creating(&id_str(&soon["task"]["id"]));
+    cli.finish_creating(&id_str(&today["task"]["id"]));
 
+    // The creations above were carried out by the write seam each command makes, so what this round finds
+    // on the outbox is the day's own warning and nothing else.
     let out = cli.json(&["tick", "run", "--json"]);
     assert_eq!(out["ran"], serde_json::json!(["due"]), "{out}");
-    assert!(out["delivered"].as_i64().unwrap() >= 1, "the warning went out: {out}");
+    assert!(out["carried"].as_i64().unwrap() >= 1, "the warning was carried out: {out}");
 
-    let payload = wrote_json(&capture, |v| v["event"] == "task.due");
-    assert_eq!(payload["event"], "task.due");
-    assert_eq!(id_str(&payload["id"]), today_id, "the payload names the task whose day it is");
-    assert!(payload["actor"].is_null(), "a day arriving is nobody's act: {payload}");
-}
-
-/// One queue is worked by one runner, and the lease is what says so (`AMB-D-399`). The GUI's own drive may
-/// well have a runner on a queue when the hour comes round, and a tick that took the rows out from under it
-/// would deliver them twice — so it names the queue and leaves it alone.
-#[cfg(unix)]
-#[test]
-fn a_tick_leaves_the_queue_a_runner_is_already_on() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let cli = Cli::new();
-    cli.run(&["init", "--name", "tester"]);
-
-    install_subscribing_plugin(&cli, "slow", &["task.created"]);
-    let program = cli.home.join("plugins").join("slow").join("slow");
-    std::fs::write(&program, "#!/bin/sh\nsleep 10\n").unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    open_the_gate(&cli, "slow");
-
-    // The write takes the lease and launches the runner before it returns, so there is a live runner on
-    // the queue by the time the tick below is woken.
-    let pid = cli.bound_project();
-    let added = cli.json(&["task", "add", "--title", "走行役の居るキュー", "--project", &pid, "--json"]);
-    cli.json(&["task", "finish-creating", &id_str(&added["task"]["id"]), "--json"]);
-
-    let out = cli.json(&["tick", "run", "--json"]);
-    assert_eq!(out["delivered"], 0, "nothing was taken from under the runner: {out}");
-    let queues = out["queues"].as_array().unwrap();
-    assert_eq!(queues.len(), 1, "the queue is named rather than passed over in silence: {out}");
-    assert_eq!(queues[0]["plugin"], "slow");
-    assert_eq!(queues[0]["waiting"], 1);
-    assert_eq!(queues[0]["running"], true, "and named as one somebody is on: {out}");
+    // Woken again the same day: the turn is taken and the outbox is empty behind the round above.
+    let again = cli.json(&["tick", "run", "--json"]);
+    assert_eq!(again["carried"], 0, "{again}");
 }

@@ -23,7 +23,7 @@ use rusqlite::types::Value;
 use crate::model::{
     ActorKind, Attachment, Database, Decision, DecisionComment, DecisionDimensionValue,
     DecisionEdge, DecisionTaskLink,
-    Dimension, DimensionValue, NotifyTarget, PluginConfigValue, PluginEnabledProject, PluginSecret,
+    Dimension, DimensionValue, NotifyTarget,
     Project, ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret,
     Task,
     TaskComment, TaskCommit, TaskDependency, TaskDimensionValue,
@@ -193,40 +193,6 @@ pub fn task_commit(c: &TaskCommit) -> Record {
     )
 }
 
-pub fn plugin_config(c: &PluginConfigValue) -> Record {
-    Record::new(
-        "plugin_config",
-        c.id,
-        with_audit(
-            vec![
-                ("project_id", kv_opt(&c.project_id)),
-                ("plugin", tv(&c.plugin)),
-                ("field_key", tv(&c.field_key)),
-                ("value", tv(&c.value)),
-            ],
-            &c.created_at,
-            &c.updated_at,
-        ),
-    )
-}
-
-pub fn plugin_secret(s: &PluginSecret) -> Record {
-    Record::new(
-        "plugin_secret",
-        s.id,
-        with_audit(
-            vec![
-                ("project_id", kv_opt(&s.project_id)),
-                ("plugin", tv(&s.plugin)),
-                ("field_key", tv(&s.field_key)),
-                ("value", tv(&s.value)),
-            ],
-            &s.created_at,
-            &s.updated_at,
-        ),
-    )
-}
-
 pub fn secret(s: &Secret) -> Record {
     Record::new(
         "secret",
@@ -302,21 +268,6 @@ pub fn project_notify_event(e: &ProjectNotifyEvent) -> Record {
             vec![("project_id", kv(e.project_id)), ("event", tv(&e.event))],
             &e.created_at,
             &e.updated_at,
-        ),
-    )
-}
-
-pub fn plugin_enable(g: &PluginEnabledProject) -> Record {
-    Record::new(
-        "plugin_enable",
-        g.id,
-        with_audit(
-            vec![
-                ("project_id", kv_opt(&g.project_id)),
-                ("plugin", tv(&g.plugin)),
-            ],
-            &g.created_at,
-            &g.updated_at,
         ),
     )
 }

@@ -146,12 +146,11 @@ fn amenbos_own_settings_still_go_with_the_project() {
     tx.put_record("project", 1, &[("name", text("going away"))]).unwrap();
     tx.commit().unwrap();
     let tx = e.write().unwrap();
-    tx.put_record("plugin_enable", 1, &[("project_id", text("1")), ("plugin", text("slack"))])
-        .unwrap();
+    tx.put_record("project_notify", 1, &[("project_id", text("1")), ("enabled", text("1"))]).unwrap();
     tx.commit().unwrap();
 
     e.conn().execute("DELETE FROM project WHERE id = 1", []).expect("no concept row holds it back");
     let left: i64 =
-        e.conn().query_row("SELECT count(*) FROM plugin_enable", [], |r| r.get(0)).unwrap();
-    assert_eq!(left, 0, "the gate went with the project it was about");
+        e.conn().query_row("SELECT count(*) FROM project_notify", [], |r| r.get(0)).unwrap();
+    assert_eq!(left, 0, "the setting went with the project it was about");
 }

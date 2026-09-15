@@ -452,9 +452,7 @@ fn check_inner(enabled: bool, force_fresh: bool) -> Option<LatestRelease> {
 }
 
 /// The read, against a named URL, cache file and instant — the seam the tests drive, so nothing in
-/// this module's test run reaches the real manifest, and the TTL can be crossed without waiting a day
-/// (the shape [`crate::plugin_github::facts`] and [`crate::plugin_catalog::load`] take for the same
-/// reason).
+/// this module's test run reaches the real manifest, and the TTL can be crossed without waiting a day.
 ///
 /// When `force_fresh` is set, the early return on a fresh cache entry is skipped and upstream is
 /// always queried — updating the cache on success, and falling back to the stale entry on failure.

@@ -3,8 +3,7 @@
 //! One vocabulary, three sides of it. An ops write point composes an event from what it already holds and
 //! appends it to the [outbox](crate::store_engine::outbox) inside its own transaction; the
 //! [drive](crate::outbox_drive) walks those rows and hands each on to whatever observes a write; a reader
-//! — a [notification](crate::notify_dispatch), a plugin's [payload](crate::plugin_payload) — dispatches on
-//! the name. None of them owns the list, which is why it sits here rather than with any one of them: a name
+//! — a [notification](crate::notify_dispatch), say — dispatches on the name. None of them owns the list, which is why it sits here rather than with any one of them: a name
 //! added on one side and not the others is exactly the drift this placement rules out.
 //!
 //! The names themselves are strings, not an enum. They cross a process boundary as JSON and are stored in
@@ -68,7 +67,7 @@ pub mod name {
     /// classification put on or taken off, an edge drawn, a decision settled, an attachment gone.
     ///
     /// What it carries is what that seam knows and no more. `id` is the project, `version` is the number
-    /// that project is now at ([`crate::plugin_payload::Payload::version`]), and there is **no `actor`**: the feed
+    /// that project is now at (the scalar the row carries), and there is **no `actor`**: the feed
     /// records which rows moved, never who moved them. A subscriber that wants to know *what* changed does not read it
     /// out of this — it re-reads its window, which is what it would do anyway (`AMB-D-582`).
     ///

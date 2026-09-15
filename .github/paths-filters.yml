@@ -110,15 +110,6 @@ cargo_deps:
   - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
   - '.github/workflows/_rot-gates.yml'
-# The key comparison is a function of the file the key is compiled into and the guard
-# that reads it. The far side of the comparison lives in another repository, which no
-# filter here can see — that half is what the weekly leg is for.
-catalog_key:
-  - 'crates/amenbo-core/src/plugin_provenance.rs'
-  - 'guards/check-catalog-key.sh'
-  - '.github/workflows/_ci.yml'
-  - '.github/paths-filters.yml'
-  - '.github/workflows/_rot-gates.yml'
 npm_deps:
   - 'app/package.json'
   - 'app/package-lock.json'

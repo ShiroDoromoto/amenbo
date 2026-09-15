@@ -128,7 +128,6 @@ jobs:
       shell: ${{ inputs.full && 'true' || steps.filter.outputs.shell }}
       cargo_deps: ${{ inputs.full && 'true' || steps.filter.outputs.cargo_deps }}
       npm_deps: ${{ inputs.full && 'true' || steps.filter.outputs.npm_deps }}
-      catalog_key: ${{ inputs.full && 'true' || steps.filter.outputs.catalog_key }}
     steps:
       - uses: actions/checkout@v7
       # Skipped on the nightly leg: there is no diff to read there (the run is a schedule, not a
@@ -754,7 +753,7 @@ jobs:
         run: bash scripts/go-gate.sh
 
   # The gates that can also go red on a tree nobody touched (the linter floats its runner-side
-  # version; the audits float the advisory DB; the catalog key's other copy is another repository's). Their definitions live in _rot-gates.yml so that this
+  # version; the audits float the advisory DB). Their definitions live in _rot-gates.yml so that this
   # workflow and the weekly timer (rot-gates-weekly.yml) run the same thing rather than two copies that
   # drift — see that file for what each one gates and why the build/test jobs are not among them.
   # Here they keep their path filter; the weekly leg runs them unfiltered.
@@ -765,7 +764,6 @@ jobs:
       shell: ${{ needs.changes.outputs.shell == 'true' }}
       cargo_deps: ${{ needs.changes.outputs.cargo_deps == 'true' }}
       npm_deps: ${{ needs.changes.outputs.npm_deps == 'true' }}
-      catalog_key: ${{ needs.changes.outputs.catalog_key == 'true' }}
       # The one gate a change cannot judge: it probes the live release, not the tree.
       provenance: false
 

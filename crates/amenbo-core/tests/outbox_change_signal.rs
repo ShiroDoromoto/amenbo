@@ -7,15 +7,20 @@
 //! on, an edge drawn, an attachment gone — and it carries the version and nothing else.
 //!
 //! These tests drive it through the public `Store` wrappers, the seam CLI and GUI share, and read the
-//! outbox back. The semantic half has its own file (`plugin_outbox_emit.rs`); the two ride the same table
-//! and are deliberately kept apart here, because what each one promises is different.
+//! outbox back. The semantic half has its own file (`outbox_emit.rs`); the two ride the same table and are
+//! deliberately kept apart here, because what each one promises is different.
 
 use amenbo_core::config::Paths;
 use amenbo_core::lifecycle::name;
 use amenbo_core::model::ActorKind;
-use amenbo_core::plugin_payload::Payload;
 use amenbo_core::store_engine::outbox::{events_since, outbox_head, OutboxRow, OutboxSlice};
 use amenbo_core::Store;
+
+/// The version a `store.changed` row carries — the one scalar the ledger seam writes, in the column every
+/// other event puts its new state in (`AMB-D-582`).
+fn version_on(signal: &OutboxRow) -> Option<i64> {
+    signal.new_state.as_deref().and_then(|v| v.parse().ok())
+}
 
 fn temp_store() -> Store {
     let base = amenbo_scratch::scratch("change-signal");
@@ -83,14 +88,12 @@ fn a_write_leaves_one_signal_carrying_the_version() {
     let signal = only_signal(&store, h);
 
     assert_eq!(signal.record_id, project, "the signal is about the project, not the task");
-    assert_eq!(signal.project, Some(project), "and is stamped with it, so the fan-out can route it");
+    assert_eq!(signal.project, Some(project), "and is stamped with it, so a reader can route it");
     assert!(signal.actor.is_empty(), "the ledger names no actor: {signal:?}");
 
-    let rebuilt = Payload::from_outbox_row(&signal).unwrap();
-    assert!(rebuilt.actor.is_none(), "and none is invented on the way to the wire");
     // The version the signal carried is the one the store now answers with, so a reader that acts on the
     // signal and one that polls the version reach the same conclusion.
-    assert_eq!(rebuilt.version, Some(store_version(&store, project)));
+    assert_eq!(version_on(&signal), Some(store_version(&store, project)));
 
     let _ = task;
 }
@@ -115,7 +118,7 @@ fn it_fires_for_the_changes_no_semantic_event_names() {
         store.update_task(task, patch).unwrap();
         let signal = only_signal(&store, h);
         assert_eq!(
-            Payload::from_outbox_row(&signal).unwrap().version,
+            version_on(&signal),
             Some(store_version(&store, project)),
             "the signal carries the version the write moved the project to",
         );

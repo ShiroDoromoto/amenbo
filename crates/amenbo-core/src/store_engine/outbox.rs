@@ -33,8 +33,7 @@
 //! **This table is the record of what happened, and nothing else** (`AMB-D-399`). Its one reader is
 //! [`crate::outbox_drive`], which walks it once for everything that observes a write, hands each row on,
 //! and trims what it read — all on one transaction. What any *one* of those observers still owes is its
-//! own business: a plugin's is its [queue](super::queue)'s, so reclaiming this table is bounded by the walk
-//! alone, never by how fast any reader runs.
+//! own business, so reclaiming this table is bounded by the walk alone, never by how fast any reader runs.
 //!
 //! The table is spelled `plugin_outbox`, from when the only reader was the plugin dispatcher. The name is
 //! stored data, so it stays as written until something else makes a migration worth it.

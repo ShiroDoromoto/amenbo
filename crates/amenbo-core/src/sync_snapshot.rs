@@ -431,20 +431,19 @@ mod tests {
         );
     }
 
-    /// Both secret tables are withheld from the snapshot, and by the export's own list rather than a
-    /// second one beside it (`AMB-D-434`, drawn through by `AMB-D-581`). `secret` is the sharper of the
-    /// two (`AMB-D-884`): the Viewer's `encryption_key` lives there, and the snapshot it would ride is the
-    /// one that key seals — carrying it would hand the server the key to everything it holds.
+    /// The secrets are withheld from the snapshot, and by the export's own list rather than a second one
+    /// beside it (`AMB-D-434`, drawn through by `AMB-D-581`). The Viewer's `encryption_key` is the sharpest
+    /// case (`AMB-D-884`): it lives there, and the snapshot it would ride is the one that key seals —
+    /// carrying it would hand the server the key to everything it holds.
     #[test]
     fn a_snapshot_carries_no_secret() {
-        for name in ["plugin_secret", "secret"] {
-            assert!(export::WITHHELD_ON_THE_WAY_OUT.contains(&name));
-            assert!(!export::datasets_carried_out().iter().any(|d| d.name == name));
-            assert!(
-                DATASETS.iter().any(|d| d.name == name),
-                "the dataset still exists — it is the road out that leaves it, not the schema",
-            );
-        }
+        let name = "secret";
+        assert!(export::WITHHELD_ON_THE_WAY_OUT.contains(&name));
+        assert!(!export::datasets_carried_out().iter().any(|d| d.name == name));
+        assert!(
+            DATASETS.iter().any(|d| d.name == name),
+            "the dataset still exists — it is the road out that leaves it, not the schema",
+        );
     }
 
     fn scratch(tag: &str) -> std::path::PathBuf {
@@ -920,10 +919,6 @@ mod tests {
 
             s.attach_url(AttachmentTarget::Task, task, "https://example.com/seed", None, ActorKind::Ai)
                 .unwrap();
-            // The two rows a plugin leaves in a project: what it was configured with, and whether its
-            // gate is open here. Neither is a secret — those are on no road out at all.
-            s.set_plugin_config_value(Some(project), "carrier", "channel", Some(name)).unwrap();
-            s.set_plugin_enabled_in_project(Some(project), "carrier", true).unwrap();
             (project, comment)
         };
 

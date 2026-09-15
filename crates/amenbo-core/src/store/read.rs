@@ -287,8 +287,8 @@ impl Store {
     /// the reach and stays put when nothing is written; what it never says is *what* changed, because
     /// whoever asks re-sends the whole window either way.
     ///
-    /// Through a closed reach — the AI facet's binding, or the window a plugin fires in — it is that one
-    /// project's version, so churn in another project does not send anyone re-reading. Through `All` it is
+    /// Through a closed reach — the AI facet's binding, or a carrier's window — it is that one project's
+    /// version, so churn in another project does not send anyone re-reading. Through `All` it is
     /// the change feed's head: the whole device is the window, and the feed's own cursor is already the
     /// number that moves with every committed write. Both are ids from the same feed, so a project's
     /// version never runs ahead of the store's; neither is a count, and nothing but their order means
@@ -301,8 +301,8 @@ impl Store {
     /// `restore` replaces the truth source with a snapshot, and the version arrives with it, so a store
     /// wound back reads *lower* than the number a carrier last saw — which is a change, and is meant to
     /// be read as one. And what it covers is the project's own records, reached through what the write
-    /// door declares it touches: store-wide plugin bookkeeping that spans every project at once (a
-    /// plugin's uninstall forgetting its settings) moves no project's version.
+    /// door declares it touches: store-wide bookkeeping that spans every project at once moves no
+    /// project's version.
     ///
     /// See [`crate::store_engine::write::WriteTx::touches_project`] for where the number is stamped.
     pub fn sync_version(&self) -> Result<i64> {
@@ -346,7 +346,7 @@ impl Store {
     ///
     /// **It withholds what no road out carries.** Rows naming a withheld dataset ([`withheld`]) are
     /// dropped from the page, whatever the reach: a window narrows *whose* changes are named, and a
-    /// plugin's secrets — or this machine's own bound folders — are nobody's to be handed. The line is a
+    /// feature's secrets — or this machine's own bound folders — are nobody's to be handed. The line is a
     /// dataset's and not a reach's because it is not about who is asking: the open reach is the device's
     /// whole feed, and withholding by reach would mean the same table travelling or not by who held the
     /// store. What is withheld here is still on the feed, for a reader **on this device** that reads the
@@ -446,38 +446,6 @@ impl Store {
         Ok(crate::store_engine::read::task_commits(self.engine.conn(), task_id)?)
     }
 
-    /// One plugin text field's value at this layer, or `None` when it is unset (`AMB-D-434` / `AMB-D-601`).
-    pub fn plugin_config_value(
-        &self,
-        project_id: Option<i64>,
-        plugin: &str,
-        field_key: &str,
-    ) -> Result<Option<String>> {
-        Ok(crate::store_engine::read::plugin_config_value(
-            self.engine.conn(),
-            project_id,
-            plugin,
-            field_key,
-        )?)
-    }
-
-    /// One plugin secret field's value at this layer, or `None` when it is unset (`AMB-D-434`) — read
-    /// from the table an `export` must leave. The only caller that wants the value itself is the run-time
-    /// injection ([`crate::plugin_inject`]); a face asks whether it is set and stops there.
-    pub fn plugin_secret_value(
-        &self,
-        project_id: Option<i64>,
-        plugin: &str,
-        field_key: &str,
-    ) -> Result<Option<String>> {
-        Ok(crate::store_engine::read::plugin_secret_value(
-            self.engine.conn(),
-            project_id,
-            plugin,
-            field_key,
-        )?)
-    }
-
     /// One of Amenbo's own secret fields at this layer, or `None` when it is unset (`AMB-D-884`) — read
     /// from the table no road out of the store carries. The only caller that wants the plaintext is the
     /// feature connecting with it; a face asks whether it is set and stops there.
@@ -537,63 +505,6 @@ impl Store {
         project_id: i64,
     ) -> Result<Vec<crate::model::ProjectNotifyEvent>> {
         Ok(crate::store_engine::read::project_notify_events(self.engine.conn(), project_id)?)
-    }
-
-    /// Whether this layer holds a plugin's gate open (`AMB-D-434` / `AMB-D-601`) — the row's presence, which
-    /// is the whole answer ([`crate::plugin_trust::effective_enabled_in`] is the boundary's name for it).
-    pub fn plugin_enabled_in_project(&self, project_id: Option<i64>, plugin: &str) -> Result<bool> {
-        Ok(crate::store_engine::read::plugin_enabled_in_project(
-            self.engine.conn(),
-            project_id,
-            plugin,
-        )?)
-    }
-
-    /// Every **layer** holding a plugin's gate open (`AMB-D-434` / `AMB-D-601`), whether or not the caller
-    /// is standing in one of them — the twin of [`Self::plugin_enabled_in_project`] for the judgements that
-    /// are about the plugin rather than about a screen, such as the `required` re-check an update runs
-    /// ([`crate::plugin_config::required_unset_for_update`]).
-    ///
-    /// Layers rather than projects, because a `scope: machine` plugin's one gate is nobody's project and a
-    /// list of project ids would leave it out — silently, and exactly where an update is deciding whether a
-    /// running plugin would be left without a value its author marked `required`.
-    pub fn layers_with_plugin_enabled(&self, plugin: &str) -> Result<Vec<crate::plugin_layer::Layer>> {
-        use crate::plugin_layer::Layer;
-        let conn = self.engine.conn();
-        let mut layers = Vec::new();
-        for id in crate::store_engine::read::plugin_enable_row_ids(conn, plugin)? {
-            if let Some(row) = crate::store_engine::read::plugin_enable_row_by_id(conn, id)? {
-                layers.push(row.project_id.map_or(Layer::Device, Layer::Project));
-            }
-        }
-        Ok(layers)
-    }
-
-    /// Every project holding a value for one plugin — either road, since a setting is a setting whichever
-    /// table the author's `secret` flag sent it to (`AMB-D-356`). Ascending, each project once.
-    ///
-    /// The value-side twin of [`Self::layers_with_plugin_enabled`], and asked for the same reason: a
-    /// project that filled a plugin in and then turned it off still has settings there
-    /// ([`crate::plugin_config::intersections`] draws it a row), and no gate would name it.
-    ///
-    /// Projects only: this answers a face that lists **project** crossings, and the device layer is not one
-    /// of them (`AMB-D-601`). A device row is skipped rather than folded into some project's.
-    pub fn projects_with_plugin_values(&self, plugin: &str) -> Result<Vec<i64>> {
-        let conn = self.engine.conn();
-        let mut projects = Vec::new();
-        for id in crate::store_engine::read::plugin_config_row_ids(conn, plugin)? {
-            if let Some(row) = crate::store_engine::read::plugin_config_row_by_id(conn, id)? {
-                projects.extend(row.project_id);
-            }
-        }
-        for id in crate::store_engine::read::plugin_secret_row_ids(conn, plugin)? {
-            if let Some(row) = crate::store_engine::read::plugin_secret_row_by_id(conn, id)? {
-                projects.extend(row.project_id);
-            }
-        }
-        projects.sort_unstable();
-        projects.dedup();
-        Ok(projects)
     }
 
     /// A single task comment; `None` if there is none (a row exists ⇒ it is live). The id is a comment id, which

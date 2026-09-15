@@ -120,67 +120,14 @@ impl<'a> WriteTx<'a> {
         self.engine.delete_records_for_target(target_type, target_id)
     }
 
-    /// Append one plugin observation event to the outbox **inside this transaction** — the leak-free half
+    /// Append one observation event to the outbox **inside this transaction** — the leak-free half
     /// of `AMB-D-367`. The event lands with the write that caused it or, on an earlier `?`/drop, not at
-    /// all, so a plugin never sees a change that did not commit. Unlike the change feed (drained from
+    /// all, so nobody is told of a change that did not commit. Unlike the change feed (drained from
     /// SQLite's `update_hook` at [`commit`](Self::commit)), the caller *composes* the event: it alone
     /// knows the actor, and — for an `update` — which of the six events the new state names. The store
     /// appends the row it is given and interprets none of its strings. See [`super::outbox`].
     pub fn emit_event(&self, event: &super::outbox::EventRow<'_>) -> Result<()> {
         super::outbox::append(&self.tx, event)
-    }
-
-    /// Place one event on a plugin's queue **inside this transaction** — the fan-out's write
-    /// (`AMB-D-399`). It rides the same transaction that deletes the outbox rows it copied, so an event is
-    /// on every subscriber's queue and off the outbox together, or neither: no copy is made twice, and none
-    /// is reclaimed uncopied. As with [`emit_event`](Self::emit_event) the caller composes the row and the
-    /// store interprets none of its strings. See [`super::queue`].
-    pub fn queue_event(&self, event: &super::queue::QueuedEvent<'_>) -> Result<()> {
-        super::queue::enqueue(&self.tx, event)
-    }
-
-    /// Take one row off a plugin's queue **inside this transaction** — what a runner does as it hands the
-    /// event on (`AMB-D-399`). It rides the same transaction that pushes the runner's lease out, so a runner
-    /// that has lost its lease takes nothing. See [`super::queue`].
-    pub fn dequeue_event(&self, row: i64) -> Result<bool> {
-        super::queue::dequeue(&self.tx, row)
-    }
-
-    /// Throw away what is queued for `plugin` — every row, or only those stamped with `project` — **inside
-    /// this transaction**, and say how many went (`AMB-D-399`). A stopped plugin's queue and the lease of
-    /// whoever is working it go together ([`drop_runner`](Self::drop_runner)), so a stop is one atom: no
-    /// runner is left holding a queue that is no longer there. See [`super::queue`].
-    pub fn drop_queued(&self, plugin: &str, project: Option<i64>) -> Result<usize> {
-        super::queue::drop_queued(&self.tx, plugin, project)
-    }
-
-    /// Take `plugin`'s runner lease away whoever holds it, **inside this transaction** — the stop side of
-    /// [`release_runner`](Self::release_runner), issued when the plugin itself is being stopped
-    /// (`AMB-D-399`). See [`super::runner`].
-    pub fn drop_runner(&self, plugin: &str) -> Result<bool> {
-        super::runner::drop_lease(&self.tx, plugin)
-    }
-
-    /// Take `plugin`'s runner lease for `owner` until `expires_at`, judged against `now` — `true` when it
-    /// was taken, `false` when a live lease is already standing (`AMB-D-399`). Claiming **inside this
-    /// transaction** is what makes "at most one runner per plugin" hold: the read that finds the lease
-    /// absent and the write that takes it are one atom under the write lock, so two drives cannot both find
-    /// it free. See [`super::runner`].
-    pub fn claim_runner(&self, plugin: &str, owner: &str, expires_at: &str, now: &str) -> Result<bool> {
-        super::runner::claim(&self.tx, plugin, owner, expires_at, now)
-    }
-
-    /// Push `owner`'s lease on `plugin` out to `expires_at`; `false` when the lease is no longer its own —
-    /// it was taken over past its horizon. See [`super::runner`].
-    pub fn extend_runner(&self, plugin: &str, owner: &str, expires_at: &str) -> Result<bool> {
-        super::runner::extend(&self.tx, plugin, owner, expires_at)
-    }
-
-    /// Give up `owner`'s lease on `plugin`; `false` when it was already taken over. Issue it **on the
-    /// transaction that read the queue empty** — the pairing is what leaves no gap between "nothing left to
-    /// run" and "nobody is running" (`AMB-D-399`). See [`super::runner`].
-    pub fn release_runner(&self, plugin: &str, owner: &str) -> Result<bool> {
-        super::runner::release(&self.tx, plugin, owner)
     }
 
     /// Commit the batch. Everything written through this guard lands together; on any earlier `?` the
@@ -309,7 +256,7 @@ impl<'a> WriteTx<'a> {
     /// fact — the version this transaction reached — and because being built here is what makes it reach
     /// every write, including the many no semantic name covers. What the seam cannot supply, the signal
     /// therefore does not claim: the stored actor is empty, and the mapping reads it back as none rather
-    /// than as a guess ([`crate::plugin_payload::Payload::store_changed`]).
+    /// than as a guess.
     ///
     /// The version travels in the row's one scalar column (`new_state`) as decimal text. The store keeps
     /// that column without interpreting it, here as everywhere: what a scalar means is the event's, and

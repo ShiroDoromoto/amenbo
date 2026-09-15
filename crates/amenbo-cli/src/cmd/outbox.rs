@@ -1,65 +1,54 @@
-//! Driving the plugin dispatcher around a write. The CLI is a short-lived process, so the
-//! observations a command appends to the outbox are delivered at the write seam it makes here.
+//! Carrying a write out around the command. The CLI is a short-lived process, so the observations a
+//! command appends to the outbox are carried out at the write seam it makes here.
 
 use amenbo_core::outbox_drive::Face;
-use amenbo_core::plugin_installed;
-use amenbo_core::plugin_subscribe::EnabledSubscribers;
 use amenbo_core::{activity_log, Store};
 
 use crate::output::{CliError, Flags};
 
-/// How this face re-runs itself as a plugin runner (`AMB-T-2175`): the hidden `plugin-runner` command, which
-/// core follows with the plugin, the lease's owner and the store to work. The CLI's own spelling of the
-/// entry point, named where it is dispatched.
-const RUNNER_ARGV: &[&str] = &["plugin-runner"];
-
-/// The same, for a **notification sender** (`AMB-D-885`): the hidden `notify-sender` command, which core
-/// follows with the store to post through. Named here beside the runner's for the same reason — the face
-/// owns the spelling of its own entry points, and this is where both are dispatched.
+/// How this face re-runs itself as a **notification sender** (`AMB-D-885`): the hidden `notify-sender`
+/// command, which core follows with the store to post through. The CLI's own spelling of the entry point,
+/// named where it is dispatched.
 const NOTIFY_ARGV: &[&str] = &["notify-sender"];
 
 /// The same, for a **Viewer carrier** (`AMB-D-884`): the hidden `viewer-carrier` command, which core
-/// follows with the store to carry. The third entry point this face owns the spelling of, named beside the
-/// other two.
+/// follows with the store to carry. The second entry point this face owns the spelling of, named beside the
+/// other.
 const CARRIER_ARGV: &[&str] = &["viewer-carrier"];
 
-/// Run a mutating command group, then drive the plugin observation dispatcher once at the short-lived
-/// CLI's write seam (`AMB-T-2033`). After the command committed, drain the outbox from the persisted
-/// cursor onto the subscribed plugins' queues, persist where it advanced, and launch a runner process for
-/// each queue nobody is already working — waiting for none of them, because a runner is not this process's
-/// to cut short (`AMB-D-367` / `AMB-D-399` / `AMB-T-2175`). Only on success: if the command errored its
-/// mutation rolled back, so there is nothing new to dispatch.
+/// Run a mutating command group, then carry the outbox out once at the short-lived CLI's write seam
+/// (`AMB-T-2033`). After the command committed, walk the outbox from the persisted cursor, word what the
+/// projects report out of it, and hand the messages to a sender process — waiting for none of it, because a
+/// sender is not this process's to cut short (`AMB-D-367` / `AMB-D-885`). Only on success: if the command
+/// errored its mutation rolled back, so there is nothing new to carry.
 ///
-/// Who fires is [`EnabledSubscribers`]'s answer, over the plugins installed on this machine
-/// ([`plugin_installed::installed`]) read once per drive: the resolver is a pure function of the state it
-/// is handed, and this mount is what hands it (`AMB-T-2032`). With nothing installed it resolves nobody,
-/// and the cursor still walks and persists, so a plugin installed later starts from what fires *next*, not
-/// the whole backlog. A dispatch failure is a warning, never the command's exit: the mutation is already
-/// committed.
+/// A failure here is a warning, never the command's exit: the mutation is already committed.
 pub(crate) fn with_dispatch(
     store: &mut Store,
     op: impl FnOnce(&mut Store) -> Result<i32, CliError>,
 ) -> Result<i32, CliError> {
     let code = op(store)?;
-    // The Viewer is set off beside the dispatcher and not through it: what a carrier carries is the
-    // backlog, so which record moved and who moved it decide nothing here — a write happened, and the
-    // phone is now behind (`AMB-D-884`). It is a process, so this waits for none of it.
+    // The Viewer is set off beside the drive and not through it: what a carrier carries is the backlog, so
+    // which record moved and who moved it decide nothing here — a write happened, and the phone is now
+    // behind (`AMB-D-884`). It is a process, so this waits for none of it.
     store.set_the_viewer_off(CARRIER_ARGV);
-    dispatch(store, |store, subs| {
-        store.drive_delivery(Face::Cli, subs, RUNNER_ARGV, NOTIFY_ARGV).map(Some)
-    });
+    if let Err(e) = store.drive_delivery(Face::Cli, NOTIFY_ARGV) {
+        eprintln!("warning: could not carry this write out: {e}");
+    }
     Ok(code)
 }
 
-/// Pick up what a previous run left half-delivered, before this command does anything of its own
-/// (`AMB-D-399`). The CLI's whole life *is* a startup, so this is where a fan-out or a runner that was cut
-/// short is noticed — and it is noticed on a read as much as on a write, which is the point: the write that
-/// would otherwise carry those rows out may be days away.
+/// Pick up what a previous run left half carried, before this command does anything of its own
+/// (`AMB-D-399`). The CLI's whole life *is* a startup, so this is where a walk that was cut short is
+/// noticed — and it is noticed on a read as much as on a write, which is the point: the write that would
+/// otherwise carry those rows out may be days away.
 ///
-/// It costs a command with nothing pending two reads and no write lock — the guard is core's
+/// It costs a command with nothing pending one read and no write lock — the guard is core's
 /// ([`Store::resume_delivery`]), so both faces make the same judgement.
 pub(crate) fn resume_dispatch(store: &Store) {
-    dispatch(store, |store, subs| store.resume_delivery(Face::Cli, subs, RUNNER_ARGV, NOTIFY_ARGV));
+    if let Err(e) = store.resume_delivery(Face::Cli, NOTIFY_ARGV) {
+        eprintln!("warning: could not carry out what a previous run left standing: {e}");
+    }
 }
 
 /// Carry what a carrier read out and never placed (`AMB-D-884`) — the Viewer's half of the same startup.
@@ -73,43 +62,6 @@ pub(crate) fn resume_dispatch(store: &Store) {
 /// anything, and why it asks in that order, is core's ([`Store::carry_what_was_left_behind`]).
 pub(crate) fn resume_the_viewer(store: &Store) {
     store.carry_what_was_left_behind(CARRIER_ARGV);
-}
-
-/// The half both dispatch mounts share: resolve who is installed, hand the resolver to `drive`, and relay
-/// whatever came back. Never fails a command — a mutation behind it is already committed, and a startup
-/// kick has no command's outcome to speak for.
-pub(crate) fn dispatch(
-    store: &Store,
-    drive: impl FnOnce(
-        &Store,
-        &dyn amenbo_core::plugin_dispatch::Subscribers,
-    ) -> amenbo_core::Result<Option<amenbo_core::plugin_dispatch::Delivered>>,
-) {
-    // A directory that will not read is not "nothing is installed": drive nothing rather than walk the
-    // cursor past events no subscriber was ever offered. The events stay in the outbox, and the next run
-    // reads the directory again and delivers them.
-    let installed = match plugin_installed::installed(&store.paths) {
-        Ok(installed) => installed,
-        Err(e) => {
-            eprintln!("warning: could not read the installed plugins, so none was dispatched: {e}");
-            return;
-        }
-    };
-    let subscribers = EnabledSubscribers::new(&installed, store);
-    match drive(store, &subscribers) {
-        // A `reply:true` hook (worktree advice, `AMB-D-383`) ran synchronously; relay its stderr to the
-        // caller — the AI reads it off this command's stderr and decides, named by the plugin that gave
-        // it. The queues are a runner's, and this command waits for none of it (`AMB-T-2175`): a runner
-        // is a process, so it is not cut short by this one returning.
-        Ok(Some(delivered)) => {
-            for reply in &delivered.replies {
-                eprintln!("[{}] {}", reply.plugin, reply.stderr.trim_end());
-            }
-        }
-        // Nothing was pending, so nothing was driven.
-        Ok(None) => {}
-        Err(e) => eprintln!("warning: could not dispatch plugin observation hooks: {e}"),
-    }
 }
 
 /// Emit a system event into the ledger, under our own facet. Call it after the mutation wrapper has

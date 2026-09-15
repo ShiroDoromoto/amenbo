@@ -260,8 +260,8 @@ const CANCEL_POLL_ROWS: u64 = 256;
 
 /// Datasets no road out of this store carries, by their stable name (`AMB-D-434`).
 ///
-/// The first two are the credentials in plain text — a plugin's (`plugin_secret`) and Amenbo's own
-/// (`secret`: a notification target's connection, the Viewer's keys, `AMB-D-884`) — and every road out is
+/// The first is the credentials in plain text (`secret`: a notification target's connection, the Viewer's
+/// keys, `AMB-D-884`), and every road out is
 /// one-way: the export lands in another tool's hands and stays there, and the sync snapshot
 /// ([`crate::sync_snapshot`]) lands wherever its carrier puts it. The Viewer's is the sharpest case of
 /// that: the key its snapshot is sealed with would otherwise ride the snapshot to the server it seals it
@@ -293,7 +293,6 @@ const CANCEL_POLL_ROWS: u64 = 256;
 /// file whole ([`crate::archive`]), so it never walks this list.
 pub const WITHHELD_ON_THE_WAY_OUT: &[&str] =
     &[
-        "plugin_secret",
         "secret",
         "notify_target",
         "project_notify_target",

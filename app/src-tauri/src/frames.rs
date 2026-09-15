@@ -424,9 +424,9 @@ fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
 /// A pane that is closed is closed for good: its row goes with it ([`panes_of`] keeps only the places
 /// the window sent), so a handle left behind here would be one nothing could ever hand back. For most
 /// providers letting go is the whole of it — the handle is a session id, and what it names is the
-/// provider's to keep or forget. Where it is a directory Amenbo made, that comes away too rather
-/// than being left to pile up on the machine (`crate::pane_home::forget`) — the pane's own home,
-/// and with it the conversation nothing can reach any more.
+/// provider's to keep or forget. Where it is a directory Amenbo made, the directory stays and the
+/// watch on it is what goes (`crate::pane_home::forget`, `AMB-D-898`): that directory is the
+/// conversation, and closing a pane is not asking for one to be thrown away.
 fn forget_dropped(face: &TalkFace, layout: &TalkLayoutDto) {
     let here: std::collections::BTreeSet<&str> =
         layout.frames.iter().map(|frame| frame.id.as_str()).collect();

@@ -45,11 +45,15 @@
 //! **What is made here outlives the pane it was made for.** A home is where the conversation is:
 //! these two come back by the place they ran in and not by an id, so a home taken away is a
 //! conversation there is no way back into. A pane that closes leaves its home standing, and what is
-//! let go of is the watch on it ([`crate::pane_home::forget`]). **Nothing here bounds the pile yet**:
-//! what is to bound it is the total size the homes come to, and not whether a pane is still open
-//! (`AMB-D-898`).
+//! let go of is the watch on it ([`crate::pane_home::forget`]). What bounds the pile is the total
+//! size the homes come to and not whether a pane is still open: over the budget, the ones least
+//! recently opened are taken away until what is left is inside it ([`crate::pane_home::rotate`],
+//! `AMB-D-898`).
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::SystemTime;
 
 /// One provider's per-pane homes — where they are made, what is shared into them, and the variable
 /// the provider is told about its own by.
@@ -303,7 +307,8 @@ fn vars(kind: &Kind, home: PathBuf, theirs: Option<&Path>) -> Vec<(&'static str,
     vars
 }
 
-/// Let go of what this run holds for one pane's home, once the pane is gone (`crate::frames`).
+/// Let go of what this run holds for one pane's home, once the pane is gone (`crate::frames`), and
+/// answer whether the handle was a home made here.
 ///
 /// **The home itself stays** (`AMB-D-898`). It is where the conversation is, and a pane being closed
 /// is not a reason to take a conversation away; what goes with the pane is the watch that was
@@ -312,8 +317,63 @@ fn vars(kind: &Kind, home: PathBuf, theirs: Option<&Path>) -> Vec<(&'static str,
 /// **It answers only for homes it made.** What is handed in is a pane's resume handle, and the
 /// handles of the other five providers are session ids rather than paths — the watch is kept under
 /// the home it is on, so one of those is let go of without anything being done to it.
-pub fn forget(handle: &Path) {
+///
+/// **The answer is the caller's cue to weigh the pile** ([`rotate`]). A home stops being spoken for
+/// the moment its pane goes, which is the one thing that can bring the roots inside the budget
+/// without a byte having changed.
+pub fn forget(handle: &Path) -> bool {
     crate::pane_settled::forget(handle);
+    made_here(handle)
+}
+
+/// Whether this path is one of the homes made under this build's roots — its parent is one of them.
+///
+/// It is asked as a place and not as a directory that is there: a handle is answered for whether or
+/// not the home it names has since been weighed out.
+fn made_here(handle: &Path) -> bool {
+    KINDS.iter().filter_map(homes_root).any(|root| handle.parent() == Some(root.as_path()))
+}
+
+/// The most the per-pane homes may come to, all told (`AMB-D-898`).
+///
+/// **It is a bound on the disk and not on how many conversations are kept**, because the disk is
+/// what there is to protect. One home was measured at 5–8MB (2.3–4.3MB of it empty, 1–3MB of it what
+/// was said), so this is 130–200 of them; the same 150 homes counted instead would have been
+/// anywhere between 750MB and 1.2GB.
+const BUDGET: u64 = 1024 * 1024 * 1024;
+
+/// Weigh the homes and take the least recently opened away until what is left is inside the budget.
+/// Asked when the run starts and when a pane's home stops being spoken for ([`forget`]).
+///
+/// **A pane the arrangement still has is weighed and never taken.** Its conversation is the one
+/// somebody is in, and a home removed from under a running provider is that pane's way back gone
+/// while its reader watches. So the open panes are what the budget is spent on first, and what is
+/// taken is only ever drawn from the rest.
+///
+/// **Nothing is taken on a store that would not answer.** The rows are the whole of what says which
+/// homes are somebody's; weighing without them would put every open pane's home up for removal.
+///
+/// **The table `AMB-D-897` keeps is not touched.** A task that names a pane whose home has been
+/// weighed out goes on naming it: the row is what says who made the task, and whether the
+/// conversation behind it can still be opened is the directory's answer rather than the row's.
+pub fn rotate() {
+    // One weighing at a time. A pane closing and the run starting can ask at once, and two readings
+    // of the same root would each take the homes the other had already decided to take — the second
+    // one working from a total that was true before the first started.
+    static WEIGHING: Mutex<()> = Mutex::new(());
+    let Ok(_weighing) = WEIGHING.lock() else { return };
+
+    let Ok(store) = crate::commands::open_store_read() else { return };
+    let spoken_for: BTreeSet<String> = match store.saved_layout() {
+        Ok(layout) => layout.map(|kept| kept.panes.iter().map(|pane| pane.id.clone()).collect()),
+        Err(e) => {
+            log::warn!("pane homes are not weighed: {e}");
+            return;
+        }
+    }
+    .unwrap_or_default();
+    let roots: Vec<PathBuf> = KINDS.iter().filter_map(homes_root).collect();
+    rotate_in(&roots, &spoken_for, BUDGET);
 }
 
 /// Where this build's per-pane homes live for one provider, or nothing on a machine whose app-data
@@ -453,6 +513,85 @@ fn link(from: &Path, at: &Path) -> std::io::Result<()> {
         }
         std::fs::hard_link(from, at)
     }
+}
+
+/// [`rotate`] against named roots, a named set of panes and a named budget, so what it weighs and
+/// what it takes can be asked of it.
+///
+/// **What is over the budget is taken from the oldest end until it is not.** The order is the time
+/// each home was last written in, which is when its pane was last open with anything being said in
+/// it — a home nobody has been back to in a month is the one whose conversation is least likely to
+/// be wanted, and it is the reading a directory answers without a row having to be kept anywhere.
+fn rotate_in(roots: &[PathBuf], spoken_for: &BTreeSet<String>, budget: u64) {
+    let mut taking: Vec<(SystemTime, u64, PathBuf)> = Vec::new();
+    let mut total: u64 = 0;
+    for root in roots {
+        let Ok(entries) = std::fs::read_dir(root) else { continue };
+        for entry in entries.filter_map(Result::ok) {
+            // The type readdir already answered, which says nothing of what a link points at: a
+            // home is a directory made here, and a name that is anything else is not weighed.
+            if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+                continue;
+            }
+            let at = entry.path();
+            let (bytes, opened) = weigh(&at);
+            total += bytes;
+            let named = at.file_name().map(|name| name.to_string_lossy().into_owned());
+            // Counted either way, and only ever taken from the rest: what an open pane's home costs
+            // is as real as any other, and it is the budget's to carry rather than to be spared.
+            if named.is_some_and(|frame| spoken_for.contains(&frame)) {
+                continue;
+            }
+            taking.push((opened, bytes, at));
+        }
+    }
+    if total <= budget {
+        return;
+    }
+    taking.sort();
+    for (_, bytes, at) in taking {
+        if total <= budget {
+            return;
+        }
+        if let Err(e) = std::fs::remove_dir_all(&at) {
+            log::warn!("the pane home at {} stayed: {e}", at.display());
+            continue;
+        }
+        total -= bytes;
+    }
+}
+
+/// What one home comes to on the disk, and the last time anything in it was written.
+///
+/// **The reader's own is not walked into and not weighed.** Every shared name is a link, and what a
+/// link costs is the entry rather than what it points at; walking one would weigh the reader's
+/// skills into a pane's home, and would read their file's time as this pane's last word. It is
+/// [`std::fs::symlink_metadata`] throughout, which is also what makes the junctions Windows is given
+/// entries rather than directories (`AMB-D-878`).
+///
+/// **A home nothing was said in answers with the time it was made**, which is the floor the walk
+/// starts from: a pane opened once and left is older than one that was talked to yesterday, and both
+/// have a time.
+fn weigh(home: &Path) -> (u64, SystemTime) {
+    let mut bytes = 0;
+    let mut newest = home.symlink_metadata().and_then(|meta| meta.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
+    let mut walking = vec![home.to_path_buf()];
+    while let Some(dir) = walking.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.filter_map(Result::ok) {
+            let at = entry.path();
+            let Ok(meta) = at.symlink_metadata() else { continue };
+            if let Ok(written) = meta.modified() {
+                newest = newest.max(written);
+            }
+            if meta.is_dir() {
+                walking.push(at);
+            } else {
+                bytes += meta.len();
+            }
+        }
+    }
+    (bytes, newest)
 }
 
 #[cfg(test)]
@@ -879,6 +1018,109 @@ mod tests {
                 kind.agent
             );
         }
+    }
+
+    /// Homes made in this order, each with a hundred bytes said in it — oldest first, so what the
+    /// weighing reads off the directories is the order they were last written in.
+    fn three_homes(root: &Path, kind: &Kind) {
+        for frame in ["oldest", "middle", "newest"] {
+            let home = root.join(frame);
+            opened(kind, &home, None).unwrap();
+            std::fs::write(home.join(kind.inside).join("what-was-said"), [b'x'; 100]).unwrap();
+            // The order is the whole of what this test is about, and two writes inside one tick of
+            // the filesystem's clock would come back in either order.
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    /// Over the budget, homes go from the least recently opened end, and the taking stops the moment
+    /// what is left is inside it — the rest of the conversations stay (`AMB-D-898`).
+    #[test]
+    fn what_is_over_the_budget_goes_from_the_oldest_end() {
+        let kind = kind(GEMINI);
+        let root = amenbo_scratch::scratch("pane-homes-weighed");
+        three_homes(&root, kind);
+
+        // Three hundred bytes of conversation against a budget that holds two of them.
+        rotate_in(std::slice::from_ref(&root), &BTreeSet::new(), 250);
+
+        assert!(!root.join("oldest").exists(), "the least recently opened one went");
+        assert!(root.join("middle").is_dir(), "and the taking stopped there");
+        assert!(root.join("newest").is_dir());
+    }
+
+    /// A home the arrangement still has a pane for is never the one taken, however old it is: its
+    /// conversation is the one somebody is in, and a provider whose home went while it ran is a pane
+    /// that cannot come back while its reader watches.
+    #[test]
+    fn a_pane_that_is_still_open_keeps_its_home() {
+        let kind = kind(GEMINI);
+        let root = amenbo_scratch::scratch("pane-homes-open");
+        three_homes(&root, kind);
+
+        rotate_in(std::slice::from_ref(&root), &BTreeSet::from(["oldest".to_string()]), 250);
+
+        assert!(root.join("oldest").is_dir(), "the open pane's home stayed");
+        assert!(!root.join("middle").exists(), "and what was taken was the oldest of the rest");
+        assert!(root.join("newest").is_dir());
+    }
+
+    /// Inside the budget nothing is taken at all — a weighing is not a reason to lose a conversation.
+    #[test]
+    fn nothing_is_taken_while_the_homes_are_inside_the_budget() {
+        let kind = kind(GEMINI);
+        let root = amenbo_scratch::scratch("pane-homes-inside");
+        three_homes(&root, kind);
+
+        rotate_in(std::slice::from_ref(&root), &BTreeSet::new(), 1_000);
+
+        for frame in ["oldest", "middle", "newest"] {
+            assert!(root.join(frame).is_dir(), "{frame}");
+        }
+    }
+
+    /// What a weighed-out home takes with it is its own entries, never what they are a second name
+    /// for — the reader's own directory is left exactly as it was.
+    ///
+    /// **Both rows, because the shared names that are directories are only on one of them.** On
+    /// Windows those are junctions, and a removal that walked into one would empty the reader's own
+    /// skills and prompts rather than the pane's way to them.
+    #[test]
+    fn what_goes_is_the_home_and_never_the_readers_own() {
+        for kind in KINDS {
+            let theirs = theirs(kind);
+            let root = amenbo_scratch::scratch("pane-homes-taken").join(kind.agent);
+            let home = root.join("7");
+            opened(kind, &home, Some(&theirs)).unwrap();
+
+            // A budget nothing fits inside, so the one home there is, is the one taken.
+            rotate_in(std::slice::from_ref(&root), &BTreeSet::new(), 0);
+
+            assert!(!home.exists(), "{}", kind.agent);
+            for name in kind.shared {
+                let at = theirs.join(name);
+                assert!(at.exists(), "{}: the reader's own {name} is untouched", kind.agent);
+                if at.is_dir() {
+                    assert!(at.join("one").exists(), "{}: and so is what is in it", kind.agent);
+                }
+            }
+        }
+    }
+
+    /// A shared name weighs what the entry weighs and not what it points at. The reader's own
+    /// directory is not a pane's to be charged for — it is one directory reached from every home
+    /// there is, and walking into it would put the same bytes on all of them.
+    #[test]
+    fn the_readers_own_is_not_weighed_into_a_home() {
+        let kind = kind(CODEX);
+        let theirs = theirs(kind);
+        let home = amenbo_scratch::scratch("pane-homes-weight").join("7");
+        opened(kind, &home, Some(&theirs)).unwrap();
+        std::fs::write(theirs.join("skills").join("heavy"), [b'x'; 100_000]).unwrap();
+
+        let (bytes, _) = weigh(&home);
+
+        assert!(bytes < 100_000, "the home weighs {bytes}, which is the reader's own weighed in");
     }
 
     /// A pane is given a home while the catalog says it comes back by the place it runs in, and not

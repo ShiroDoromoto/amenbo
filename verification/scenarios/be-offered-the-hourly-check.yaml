@@ -1,7 +1,7 @@
 # The device's one question, arriving on its own. Until it is answered the due warning is silent, and
 # nothing anywhere says so — so the band puts the question across the whole app, and it earns its place
 # by being held behind three conditions at once: the device unanswered, a dated task still open, and a
-# plugin subscribed to `task.due` enabled somewhere. The world below stands all three up, which is what
+# project reporting `task.due` somewhere it can reach. The world below stands all three up, which is what
 # lets the first shot be of the band standing there with nothing pressed to bring it up.
 #
 # ── What is walked, and where the assert stops ────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ id: be-offered-the-hourly-check
 title: The offer to check due dates arrives on its own, the yes lands where the settings keep it, and the same row takes it back
 description: >
   The goal is one question, put once, and answered where the answer can later be found. A store with a
-  dated task and a plugin that would carry the warning opens the app, and the band offering the hourly
+  dated task and a connection that would carry the warning opens the app, and the band offering the hourly
   check is standing there with nothing pressed to bring it up. Pressing the button that starts the
   checking takes the band away and leaves the answer on the row in Amenbo's own settings — which is
   read for the yes, and then moved back to off, so the run's own consent is not left registered on the
@@ -61,32 +61,44 @@ given:
       target: dated
       due: "+7d"
 
-  # The carrier. `slack` is the official plugin that subscribes to `task.due`, and enabling it in this
-  # run's own project is the whole of what the band asks — which project a warning reaches is the
-  # plugin's business, not the question's. Like every line that installs a plugin, this goes to the
-  # catalog over the network on purpose (see `put-a-plugin-on-the-machine.yaml`).
+  # The carrier. The band's third condition is that some project reports `task.due` somewhere it can
+  # reach, so the world raises a connection on this device's shelf, writes its credential, and has
+  # this run's own project pick it up and tick the event. Nothing is ever sent and nothing reaches the
+  # network: standing a premise up must not knock on anybody's door.
   - type: action
-    domain: plugin
-    op: install
+    domain: notify
+    op: raise
     with:
-      name: slack
-
-  # Since v6 the plugin declares `webhook_url` as a setting it cannot be enabled without, and its
-  # own check reads the value's shape — so the world hands it one shaped like a real hook. Nothing
-  # is ever sent: standing a premise up must not knock on anybody's door.
-  - type: action
-    domain: plugin
-    op: config-set
-    with:
-      name: slack
-      key: webhook_url
-      value: https://hooks.slack.com/services/T0/B0/x
+      kind: slack
+      name: SCENARIO SEED — where the due warning would go
+    as: carrier
 
   - type: action
-    domain: plugin
-    op: enable
+    domain: notify
+    op: connect
     with:
-      name: slack
+      target: carrier
+      secret: https://hooks.slack.com/services/T00SCENARIO/B00SCENARIO/notarealwebhookvalue
+
+  - type: action
+    domain: notify
+    op: report
+    with:
+      on: true
+
+  - type: action
+    domain: notify
+    op: carry
+    with:
+      target: carrier
+      on: true
+
+  - type: action
+    domain: notify
+    op: choose
+    with:
+      event: task.due
+      on: true
 
 steps_gui:
   # The arrival. Three conditions hold, so the band is up — read before anything is pressed, since

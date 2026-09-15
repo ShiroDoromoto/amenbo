@@ -17,15 +17,15 @@ id: not-be-asked-about-the-hourly-check-nothing-would-carry
 title: With nothing enabled that would carry the warning, the offer to check due dates is not put
 description: >
   The goal is silence with a reason. A store holds an open task with a day on it and the device has
-  never been asked about the hourly check — two of the band's three conditions — but no plugin
-  subscribed to the due warning is enabled anywhere, so a yes would start a timer whose news nothing
-  carries. The band stays down. A build that asked anyway would be collecting an answer it cannot act
+  never been asked about the hourly check — two of the band's three conditions — but no project
+  reports the due warning anywhere, so a yes would start a timer whose news nothing carries. The band stays down. A build that asked anyway would be collecting an answer it cannot act
   on, from exactly the reader least equipped to know why.
 
 given:
   # The two conditions that do hold: a dated task still open, on a device nobody has asked. The date is
   # a week out so the shot is not also carrying the due warning's badges, and the unanswered device is
-  # where a fresh store already stands. No plugin is installed — that absence is the world.
+  # where a fresh store already stands. No connection is raised and no project reports — that absence
+  # is the world.
   - type: action
     domain: task
     op: create

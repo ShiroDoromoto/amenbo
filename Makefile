@@ -55,7 +55,7 @@ export AMENBO_LATEST_JSON_URL
 
 # The dev GUI comes in three shapes, and two doors pick which one every dev-GUI target builds and
 # installs. Unset is the shared dev app: one permanent bundle, the place to keep a grown setup
-# (plugins, catalog, projects) that no task may delete. AMB-T-ID=<id> is a throwaway instance one
+# (projects, notification targets, classifications) that no task may delete. AMB-T-ID=<id> is a throwaway instance one
 # task owns — its own bundle identifier, product name and app-data, so two parallel sessions verify
 # their own work instead of installing over each other. The instance lives outside the checkout, so
 # `devtool devgui rm <id>` is what reclaims its bundle and its app-data when the task is finished.
@@ -138,8 +138,8 @@ GUI_DEV_BIN  := amenbo-app-dev-$(GUI_DEV_SUFFIX)
 endif
 
 # What a task's instance opens on. Its app-data is seeded from the shared dev store, so the screen
-# being verified has the grown setup (plugins, catalog, projects) behind it rather than a first-run
-# one. Seeding belongs to the build because this is the one place a task's instance is made at all,
+# being verified has the grown setup (projects, notification targets, classifications) behind it
+# rather than a first-run one. Seeding belongs to the build because this is the one place a task's instance is made at all,
 # and devtool is the one that knows where a store lives. devtool is optional, so its absence says so
 # and builds anyway — an instance that opens empty is a poorer screen, not a broken build.
 ifeq ($(strip $(AMB-T-ID)),)

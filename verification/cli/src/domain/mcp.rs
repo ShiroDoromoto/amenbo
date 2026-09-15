@@ -165,7 +165,7 @@ impl Driver<'_> {
                 )))
             }
             // One tool called, with the words the caller sends under it. The answer is kept for the
-            // assert that follows, the way a plugin's return value is.
+            // assert that follows: a return value is not a state, so there is nowhere else to read it.
             "call" => {
                 let tool = req_str(with, "tool")?.to_string();
                 // Which folder the call is for. Every tool takes it and none of them defaults it, so a

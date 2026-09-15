@@ -46,7 +46,7 @@ function FlatShell({ up }: { up: string[] }) {
   );
 }
 
-const ALL = ["update", "plugins", "health", "hooks"];
+const ALL = ["update", "handover", "health", "hooks"];
 
 let container: HTMLDivElement;
 let root: Root;

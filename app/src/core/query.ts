@@ -115,9 +115,6 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       // A page of hits is drawn from every face at once — a task's words, a decision's, a comment on
       // either, an axis label, an attachment's name — so it goes stale on any of the scopes those sit in.
       case "search": return touchesScope("tasks") || touchesScope("decisions") || touchesScope("attachments");
-      // The installed rows carry the gate the change feed just moved; the plugins themselves are files on
-      // disk, so nothing else on that screen goes stale with them.
-      case "plugin-installs": return touchesScope("plugins");
       // The Viewer's pane. What moves under it from outside this window is `viewer setup` writing the
       // three fields the state is read from, which folds to this scope. The queue's length and the date
       // of the last send are **not** on the feed: the queue moves on every write a carrier reads out, so

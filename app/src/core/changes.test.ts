@@ -48,12 +48,13 @@ describe("foldScopes — folding datasets into invalidation scopes", () => {
     expect([...foldScopes([row("project")]).scopes]).toEqual(["projects"]);
   });
 
-  // A plugin gate flipped from the CLI used to arrive as a dataset with no receiver, so every such write
-  // cost a full re-read of everything on screen. It folds to the one surface that draws it.
-  it("a plugin's gate and its settings fold into the plugin scope", () => {
+  // The plugin tables outlive the screens that drew them (`AMB-D-884`). They stay on the map so a row
+  // that somehow moves is still an answer rather than an unknown dataset, and they name no scope: a
+  // full re-read for a change nothing on screen can show is what folding to gap would cost.
+  it("a plugin's gate and its settings fold to nothing, not to gap", () => {
     const { scopes, unknown } = foldScopes([row("plugin_enable"), row("plugin_config")]);
     expect(unknown).toBe(false);
-    expect([...scopes]).toEqual(["plugins"]);
+    expect([...scopes]).toEqual([]);
   });
 
   // The three tables this device keeps to itself. They are on the feed so a screen here hears them

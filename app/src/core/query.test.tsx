@@ -214,20 +214,6 @@ describe("invalidateScopes — a scope reaches the queries drawn from it", () =>
     return createElement("span", { "data-k": k }, data ?? "…");
   }
 
-  it("refetches the installed plugins for the plugin scope, and for no other", async () => {
-    render(createElement(KeyProbe, { qkey: ["plugin-installs", 1], k: "installs" }));
-    await settle();
-    expect(count("installs")).toBe(1);
-
-    invalidateScopes(new Set(["tasks"]));
-    await settle();
-    expect(count("installs")).toBe(1); // a task write is not a plugin's business
-
-    invalidateScopes(new Set(["plugins"]));
-    await settle();
-    expect(count("installs")).toBe(2); // a gate moved outside this window: re-read the rows that draw it
-  });
-
   // The maps the filter chips judge on, which reach this path and no other when the writing happened
   // outside the window: a `dimension set` typed at the terminal folds to a scope here, where a value
   // chosen on screen comes back through its own ack instead. A key missing from the switch is silent —

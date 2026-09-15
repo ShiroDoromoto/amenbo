@@ -41,14 +41,11 @@
    only one drawing them, and every screen that wanted one after that borrowed the name — which left
    the creation screen's own block unsafe to touch, its rules being half the app's. A screen's block
    holds what only that screen has; this is where what several of them share belongs. */
-/* The quiet line under a control, saying what it will do or what the reader is choosing between. The
-   paragraph a plugin's author wrote under one of their own fields is this line too (`.plugcfg__help`),
-   which only adds the wrapping a body it did not write needs. */
+/* The quiet line under a control, saying what it will do or what the reader is choosing between. */
 .hint { font-size: var(--fs-xs); color: var(--c-text-muted); }
-/* The bold lead-in over a field or a group of them — including the caption over a field a plugin's
-   author declared (`.plugcfg__label`), which only adds the row that holds the chips beside the word.
-   A step over `.hint` is what makes it a lead-in: the two were both drawn at 12px, and a caption the
-   size of the sentence under it leads nothing (`AMB-D-842`). */
+/* The bold lead-in over a field or a group of them. A step over `.hint` is what makes it a lead-in:
+   the two were both drawn at 12px, and a caption the size of the sentence under it leads nothing
+   (`AMB-D-842`). */
 .fieldlabel { font-weight: var(--fw-bold); font-size: var(--fs-md); }
 /* The word in front of a control on a toolbar — a filter's or a sort's, wrapping the control it
    names. It carries the size alone: the row it sits on reads at the page's colour, and the two
@@ -369,9 +366,8 @@ body.is-dragging { user-select: none; }
 
    The box is drawn by the line around it and not by the ground inside it. The grounds are held to
    shallow steps on purpose (`AMB-D-840`) — 1.195:1 between neighbours at the widest — so a chip that
-   relies on its ground says nothing over a row wearing that same ground, which is how the word "on"
-   came to read as plain text on an enabled crossing (`.plugcross--on`, sunken under a sunken chip).
-   No single ground can be picked out of the three either, a chip standing on all of them.
+   relies on its ground says nothing over a row wearing that same ground. No single ground can be
+   picked out of the three either, a chip standing on all of them.
 
    The line is `--c-rule`, the divider, and not the `--c-edge` a control's outline takes: a chip is
    read and never used, so it does not have to be found at 3:1, and the 3:1 outline stays what says a
@@ -383,19 +379,14 @@ body.is-dragging { user-select: none; }
   background: var(--c-sunken); border: 1px solid var(--c-rule);
   color: var(--c-text-muted); white-space: nowrap;
 }
-/* The name of the thing a row is about — a project, a device, a plugin. Written, not boxed, and a
-   step up from the words around it so the row still starts with what it names. */
-.rowname { font-size: var(--fs-md); font-weight: var(--fw-medium); }
 /* The chip for a premise that holds a reserve back (ready===false). It carries the shape alone: which
    step it takes is decided per premise where it is drawn (`atoms.tsx`), an unfinished blocker being a
    stop and a start day still ahead a heed. It stays clear of the human-declared status=blocked and its
    --c-blocked, which is the heed step in the status range — the two must not be confused, and what
    keeps them apart is that a premise nobody can pass is drawn one step above it. */
 .chip--block { white-space: nowrap; cursor: default; }
-.chip--official { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-on-accent); }
-/* A chip that marks one row among its like — the target a new project starts out pointing at. Quieter
-   than `--official`, which fills: this one names a row already in a list the reader is reading, so it
-   is a tint rather than a stamp. */
+/* A chip that marks one row among its like — the target a new project starts out pointing at. A tint
+   rather than a stamp: it names a row already in a list the reader is reading. */
 .chip--accent { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); }
 /* A status said as a filled chip, the fill naming which status it is (`statusColor`, kept beside the
    two places that draw it). White on a colour, so it reads as a stamp on the title rather than as one
@@ -403,14 +394,6 @@ body.is-dragging { user-select: none; }
    plain rather than `--c-on-accent`: that one flips with the theme, and these fills do not — they are
    the same three colours in both, so what reads on them is the same in both. */
 .chip--status { border-radius: 10px; border-color: transparent; color: #fff; white-space: nowrap; }
-/* The index's recommendation, which sits beside the trust badge rather than on its ladder. Outlined
-   in the accent instead of filled with it, so the two read as different kinds of claim at a glance
-   and the solid one stays the rarer, stronger of the pair. */
-.chip--featured { color: var(--c-accent); border-color: var(--c-accent); background: transparent; }
-/* A chip that reports a state the user did not choose and would want to act on — an installed plugin
-   this build cannot speak to, which is handed no event however its switch stands (`AMB-D-359`). The
-   heed step, not the stop one: nothing is broken, it simply does not fire. */
-.chip--heed { color: var(--c-heed); border-color: var(--c-heed); background: transparent; }
 /* The value a card carries on an axis its owner put on the card (`AMB-D-650`). Muted, because it states
    what the task is and not that anything is wrong with it — the chips it shares the card with report
    trouble, and a classification must not be read as one of those. */
@@ -428,140 +411,13 @@ body.is-dragging { user-select: none; }
 }
 .chip__x:hover { color: var(--c-accent); }
 
-/* The plugin market's catalog panel: one row per registered catalog, plus the row that adds one. */
-.catsrc { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) var(--s-4); border-bottom: 1px solid var(--c-rule); background: var(--c-sunken); }
-.catsrc__row { display: flex; align-items: center; gap: var(--s-2); }
-.catsrc__url { font-size: var(--fs-xs); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-.catsrc__name { font-size: var(--fs-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 12em; }
-/* Why adding or dropping a source did not go through, said under the row that asked for it. The heed
-   step: the catalog the user already has is untouched, so nothing is broken — the ask simply did not
-   land. */
-.catsrc__err { font-size: var(--fs-xs); color: var(--c-heed); }
-/* What registering pins, while the user decides (`AMB-D-389`). Set apart from the rows above it,
-   because it is a question and they are a list. */
-.catsrc__consent { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2); border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-surface); }
-/* The fingerprint is what is being trusted, so it is read character by character: monospace, and big
-   enough to compare against what the publisher states. */
-.catsrc__fp strong { font-family: var(--font-mono); font-size: var(--fs-md); letter-spacing: 0.04em; user-select: text; }
-
-/* A market row is the way into the detail, so it says so on hover — the click is what costs a request
-   to GitHub (`AMB-D-347`), and a row that looked inert would hide that. */
-/* The name of an installed plugin, heading the crossings listed under it: a step up from the row's
-   own words, or "mail" and "slack" read as one more line of the list (`AMB-D-842`). */
-.plugname { font-size: var(--fs-body); font-weight: var(--fw-bold); }
-
-.plugcard { cursor: pointer; }
-.plugcard:hover { background: var(--c-hover); }
-
-/* The one plugin a user opened: the catalog's own fields, then what was fetched from GitHub for this
-   entry alone. Taller than the other modals because a README is the bulk of it, and it scrolls
-   inside itself rather than growing the page. */
-.plugdet { width: min(720px, 100%); max-height: 84vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-rule); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-4); }
-.plugdet__head { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2); }
-.plugdet__name { font-size: var(--fs-xl); }
-.plugdet__desc { margin-bottom: var(--s-2); }
-.plugdet__meta { display: flex; gap: var(--s-2); flex-wrap: wrap; font-size: var(--fs-xs); }
-/* What the catalog's detail document says installing would mean (`AMB-D-385`). Set off from the entry's
-   own lines above it by a rule, because it is a different document answering a different question. */
-.plugdet__wants { border-top: 1px solid var(--c-rule); margin-top: var(--s-2); padding-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-1); }
-.plugdet__figures { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin: var(--s-2) 0; font-size: var(--fs-md); }
-.plugdet__note { color: var(--c-heed); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
-/* Install, then enable — the two acts, on one line, wrapping rather than pushing the README down. */
-.plugdet__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-2); }
-/* One plugin's switch, wherever it is drawn — the market's detail and the installed list share the
-   control, so they share its shape. Same row rules as the actions above it. */
-.pluggate { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-2); }
-/* The row reads a step below the page, and the picker on it follows the row rather than the base
-   rule's inherited page font. */
-.pluggate select { font-size: var(--fs-xs); }
-.pluggate .pluggate { margin-bottom: 0; }
-/* One project × plugin crossing (`AMB-D-447`): its line, and the settings it opens underneath. Ruled off
-   from the next crossing, since two rows of chips and buttons otherwise read as one. */
-.plugcross { border-left: 2px solid var(--c-rule); padding: var(--s-1) var(--s-2); margin-bottom: var(--s-2); }
-/* A crossing the plugin fires at: the accent down its left edge and a ground under the whole row, so
-   which projects are on is read by running the eye down the list rather than by finding the word on
-   each line. The word stays where it was — a colour is not a label, and the row still has to say what
-   it is to anyone the colour does not reach. */
-.plugcross--on { border-left-color: var(--c-accent); background: var(--c-sunken); }
-/* Every crossing draws the same four columns — the project, what its settings amount to, the switch,
-   and the way into the form — so the switch stands in one place down the list however long a name
-   runs. The width left over is a column of its own at the end rather than space handed to the states,
-   which would push the controls to the far edge of a wide window and away from the row they act on.
-   Only the crossings: the other rows that share `.pluggate` are one-off lines of controls. */
-.plugcross > .pluggate {
-  display: grid; grid-template-columns: minmax(0, 12rem) minmax(0, 12rem) auto auto 1fr;
-  align-items: center; column-gap: var(--s-2); row-gap: var(--s-1);
-}
-/* What the row says under itself — a refusal, or the events a disable dropped — runs the whole width. */
-.plugcross > .pluggate > .pluggate__note { grid-column: 1 / -1; }
-/* The chips of the states column, held as one cell so an absent chip does not move the columns. */
-.pluggate__states { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
-.pluggate__note { flex-basis: 100%; color: var(--c-heed); font-size: var(--fs-xs); }
-/* The settings a plugin's author declared (`AMB-D-356`), drawn as a form amenbo generates. Set inside a
-   frame of its own: it is a place to type, not another control on the row's line. */
-.plugcfg { flex-basis: 100%; border: 1px solid var(--c-rule); border-radius: var(--r-md); background: var(--c-bg); padding: var(--s-2); margin-bottom: var(--s-2); font-size: var(--fs-md); }
-/* One setting, ruled off from the next: the button that clears a value sits under the box it clears,
-   and without a line under the pair it reads as belonging to the label below it instead. */
-.plugcfg__field {
-  display: flex; flex-direction: column; gap: var(--s-1); align-items: flex-start;
-  border-bottom: 1px solid var(--c-rule); padding-bottom: var(--s-2); margin-bottom: var(--s-2);
-}
-/* The last one has nothing to be told apart from: the operations below carry a rule of their own. */
-.plugcfg__field:last-child, .plugcfg__field:has(+ .plugcfg__acts) { border-bottom: 0; }
-/* A box a value is typed into takes the form width and stops there (`AMB-D-842`) — unless the author's
-   own default or example says the value is a short one, and then it is only as wide as that: a port
-   number in a box the width of a token reads as a box waiting for a token. */
-.plugcfg__field input { width: 100%; max-width: var(--measure-form); }
-.plugcfg__field input.plugcfg__short { width: auto; }
-/* The row a field's caption is: the word, and the chips that qualify it. The type is `.fieldlabel`'s. */
-.plugcfg__label { display: flex; align-items: center; gap: var(--s-2); }
-/* A field whose author declared candidates: one row per candidate, each box only as wide as a box.
-   The rule above stretches every input in the field to the field's width, and a tick box stretched
-   that far is a bar with a tick at one end, so this hands it back the size a tick box has. */
-.plugcfg__choices { display: flex; flex-direction: column; gap: var(--s-1); }
-.plugcfg__choice { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
-.plugcfg__choice input { width: var(--s-4); }
-.plugcfg__note { font-size: var(--fs-xs); }
-/* The author's paragraph under an input (`AMB-D-656`), drawn as the quiet line every screen draws
-   (`.hint`) and adding only what a body somebody else typed needs. Their line breaks are kept — it is a
-   body, and the only shape it has is the one they wrote — and nothing in it is drawn as markup or as a
-   link. */
-.plugcfg__help { max-width: var(--measure-prose); white-space: pre-wrap; overflow-wrap: anywhere; }
-/* A field whose value the plugin writes, standing where its input would (`AMB-D-656`). */
-.plugcfg__fixed { font-size: var(--fs-md); overflow-wrap: anywhere; }
-/* The operations the author declared (`AMB-D-664`), under the fields they act on and ruled off from them:
-   these run somebody else's code, where everything above only writes a value down. */
-.plugcfg__acts { border-top: 1px solid var(--c-rule); margin-top: var(--s-2); padding-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-2); }
-.plugcfg__act { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); }
-/* What one press asks for and nothing keeps — indented under its own button, so the boxes read as part of
-   the press rather than as more settings. */
-.plugcfg__ask { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); width: 100%; padding-left: var(--s-2); }
-/* The pair that closes the ask box. Its own row, because the box stacks its boxes in a column and two
-   buttons one above the other read as two separate steps rather than a choice between them. */
-.plugcfg__askacts { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-1); }
-/* What a plugin's author asked to have drawn (`AMB-D-727`) — from its manifest, between the fields, or
-   from a run that has just answered. A column of its own so a `heading` can break one up, and every string
-   in it is drawn as the plain text it is: no markup, no link, nothing an author's line can turn into. */
-.plugshow { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); width: 100%; margin-bottom: var(--s-2); }
-.plugshow__text { font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
-.plugshow__heading { font-size: var(--fs-md); font-weight: var(--fw-bold); color: var(--c-text-muted); }
-/* The one part that is meant to be noticed — a caution, an expiry — so it takes the same surface the
-   form's own warnings do rather than a colour of the author's choosing. */
-.plugshow__note { font-size: var(--fs-xs); border-left: 2px solid var(--c-accent); padding-left: var(--s-2); overflow-wrap: anywhere; }
-.plugshow__list { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-xs); margin: 0; padding-left: var(--s-3); }
-/* A string nobody should have to retype, with its button on the same line. The string is monospaced —
-   these are addresses and keys, where a run of characters has to be readable one at a time. */
-.plugshow__copy { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.plugshow__copy code { font-size: var(--fs-xs); overflow-wrap: anywhere; }
-/* The code is drawn black on white in both themes: a camera reads contrast, and a QR inverted for a dark
-   background is one many scanners will not take. Sized off the form's own type so it grows with it. */
-/* A QR code, wherever one is drawn: a plugin's form, and the Viewer's own settings. The small one is for
-   the store links, which stand side by side beside the pairing code rather than instead of it. */
+/* A QR code — the Viewer's own settings are where one is drawn. The code is black on white in both
+   themes: a camera reads contrast, and a QR inverted for a dark background is one many scanners will
+   not take. The small one is for the store links, which stand side by side beside the pairing code
+   rather than instead of it. */
 .qrcode { width: 12rem; max-width: 100%; height: auto; border-radius: var(--r-sm); }
 .qrcode--sm { width: 7.5rem; }
 
-.plugdet__readme { border-top: 1px solid var(--c-rule); padding-top: var(--s-2); font-size: var(--fs-md); overflow-wrap: anywhere; }
-.plugdet__foot { border-top: 1px solid var(--c-rule); margin-top: var(--s-3); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from
    --block (why anyone cannot start it) — this is what changed since *you* took it — so it speaks through
    its own bell mark. Like --block it carries the shape alone and takes its step where it is drawn:
@@ -1003,8 +859,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .mcp__pick { display: flex; flex-direction: column; gap: var(--s-1); }
 /* Every project draws the same three columns — the tick, the name, the folder — so the folders begin at
    one place down the list however long a name runs, which is the half a reader is actually comparing.
-   Laid out by each name's own length, as they were, no two paths started in the same place. The name
-   column is the crossings' 12rem (`.plugcross > .pluggate`): the two lists are read the same way. */
+   Laid out by each name's own length, as they were, no two paths started in the same place. */
 .mcp__project {
   display: grid; grid-template-columns: auto minmax(0, 12rem) minmax(0, 1fr);
   align-items: center; column-gap: var(--s-2); font-size: var(--fs-md);
@@ -1092,7 +947,7 @@ button.feed__target:hover { color: var(--c-accent); }
    The card is the part a feature may keep to itself, and those blocks do. `.modal__card` is the
    plain one, for the screens with no chrome of their own: the migration report, the restart gate,
    the dimension manager and the data progress. A screen that brings its own card puts it inside the
-   overlay and leaves `.modal__card` off (PluginDetail does, with `.plugdet`).
+   overlay and leaves `.modal__card` off.
 
    The pair carried the name `.setup__*` until the first-run setup it was written for went away,
    taking the definitions with it and leaving five screens wearing a name for a screen that had gone. */

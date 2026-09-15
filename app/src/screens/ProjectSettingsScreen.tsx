@@ -10,9 +10,7 @@ import {
 } from "../core/mutations";
 import { useAgentHookWiring } from "./AgentHookWiringRow";
 import { McpSetup } from "./McpSetup";
-import { PluginCrossingRow } from "../components/PluginCrossingRow";
 import { ProjectNotifySection } from "./ProjectNotifySection";
-import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
 import { invoke } from "../core/ipc";
 import { revealLabelKey } from "../core/platform";
@@ -247,8 +245,6 @@ export function ProjectSettingsScreen({
         {inTauri() && <FoldersSection projectId={projectId} />}
 
         {inTauri() && <HarnessSection projectId={projectId} onOpenMcp={onOpenMcp} />}
-
-        {inTauri() && <PluginsSection projectId={projectId} />}
 
         {/* What this project does with the device's shelf of notification targets (`AMB-D-885`) — the
             switch, which targets carry it, what it reports. The connections themselves are the device's
@@ -684,107 +680,6 @@ function HarnessRequest({ projectId }: { projectId: number }) {
             {copied ? t("agentHookWiring.copied") : t("agentHookWiring.copy")}
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * This project's plugin crossings (`AMB-D-447`) — the same rows the plugin screen draws, listed from the
- * other end: there, one plugin and the projects it crosses; here, one project and the plugins.
- *
- * The crossing is the unit on both faces, so a row here carries everything about it — the switch for this
- * project, this project's settings, and the mark saying a `required` value is missing — and a person
- * refused an enable fills the value in without leaving the row that refused them. That is what this face
- * lacked: it reported the refusal and offered nowhere to answer it.
- *
- * **What is listed is what there is something to say about**: the plugins on in this project
- * (`AMB-D-412`) and the ones this project filled in without turning on (`AMB-D-434`). Another is
- * **added** from the picker rather than enabled by it, for the reason the plugin face adds a project —
- * the crossing has to exist before what would refuse it can be read or filled in.
- *
- * **A plugin its author declared the machine's is not one of those rows** (`AMB-D-601`). It crosses no
- * project, so a switch drawn here would move a gate this project does not own and read back as untouched
- * — which is what it did before the layer was drawn at all. It is named below the rows instead, with
- * whether it fires, because a device-wide plugin does fire *here* and a project's own settings that never
- * mentioned it would be hiding that; moving it stays on the plugin's own face, where its one row is.
- *
- * What is installed is read once for the whole store — an install already carries the rows it has — so
- * this section is a filter over that, with no reading of its own.
- */
-function PluginsSection({ projectId }: { projectId: number }) {
-  const { installs } = usePluginInstalls();
-  // Plugins opened from the picker, which this project says nothing about yet. Kept until the screen is
-  // left, so turning one off does not make the row someone is working in vanish.
-  const [added, setAdded] = useState<string[]>([]);
-
-  // The device's own, which no project crosses — kept out of the rows and out of the picker, and said
-  // apart below.
-  const deviceWide = installs.filter((i) => i.device != null);
-  const crossable = installs.filter((i) => i.device == null);
-  // In the store's own order, so the same two plugins do not swap places between two visits.
-  const shown = crossable.filter(
-    (i) => added.includes(i.name) || i.projects.some((row) => row.project === projectId),
-  );
-  const rest = crossable.filter((i) => !shown.includes(i));
-
-  return (
-    <div className="settings__section">
-      <div className="settings__h">{t("projset.plugins")}</div>
-      <div className="settings__form">
-        <span className="hint">{t("projset.pluginsHint")}</span>
-
-        {installs.length === 0 && <span className="faint">{t("plugins.emptyInstalled")}</span>}
-        {/* Judged on what this project *could* cross: with only the device's own installed there is no
-            crossing to have made, so saying none were made would be reporting an absence nobody could
-            have filled. */}
-        {crossable.length > 0 && shown.length === 0 && (
-          <span className="faint">{t("projset.pluginsNone")}</span>
-        )}
-
-        {shown.map((i) => (
-          <div key={i.name}>
-            <PluginCrossingRow install={i} layer={projectId} name={i.name} />
-            {/* Said per row, unlike the plugin face where every row is the same plugin: here each row is
-                a different one, and only some of them are builds this Amenbo cannot speak to. */}
-            {!i.compatible && (
-              <div className="pluggate__note">{i.incompatibleReason ?? t("plugins.incompatible")}</div>
-            )}
-          </div>
-        ))}
-
-        {/* The device's own, named rather than switched (`AMB-D-601`). Whether it fires is worth saying
-            here because a device-wide plugin that is on fires in this project too — but the switch is one
-            the whole machine shares, so it stays where its single row is. */}
-        {deviceWide.length > 0 && (
-          <>
-            <span className="hint">{t("projset.pluginsDevice")}</span>
-            {deviceWide.map((i) => (
-              <div className="pluggate" key={i.name}>
-                <span className="rowname">{i.name}</span>
-                {i.device?.enabled && <span className="chip">{t("plugins.enabledChip")}</span>}
-                <span className="meta">
-                  {t("plugins.scope.machine")}
-                </span>
-              </div>
-            ))}
-          </>
-        )}
-
-        {rest.length > 0 && (
-          <div className="buttonrow">
-            <select
-              className="btn"
-              value=""
-              onChange={(e) => setAdded((a) => [...a, e.target.value])}
-            >
-              <option value="">{t("projset.pluginsAdd")}</option>
-              {rest.map((i) => (
-                <option key={i.name} value={i.name}>{i.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
     </div>
   );

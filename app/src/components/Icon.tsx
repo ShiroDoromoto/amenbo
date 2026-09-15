@@ -25,7 +25,6 @@ export type IconSize = "sm" | "md" | "lg";
 export type IconName =
   | "inbox"
   | "activity"
-  | "puzzle"
   | "plug"
   | "search"
   | "link"
@@ -64,7 +63,6 @@ export type IconName =
   | "keyboard"
   | "clipboard"
   | "rocket"
-  | "star"
   | "person"
   | "robot"
   | "dot"
@@ -121,11 +119,8 @@ const ART: Record<IconName, ReactNode> = {
   ),
   // A pulse traced left to right — the activity stream.
   activity: <path d="M2.6 12h3.8l2.6-6.6 3.9 13.2 2.6-6.6h5.9" />,
-  // A puzzle piece — the plugin market. Its knobs are what say "it fits into something".
-  puzzle: (
-    <path d="M4 7.5a1.2 1.2 0 0 1 1.2-1.2h3.4a2.4 2.4 0 1 1 4.8 0h3.4a1.2 1.2 0 0 1 1.2 1.2v3.4a2.4 2.4 0 1 1 0 4.8v3.4a1.2 1.2 0 0 1-1.2 1.2H5.2A1.2 1.2 0 0 1 4 19.1V7.5z" />
-  ),
-  // A plug — the plugins already installed on this machine.
+  // A plug — what a connection is drawn as: an agent wired into a folder, and the band saying the
+  // plugins have been taken into Amenbo.
   plug: (
     <>
       <path d="M8.6 2.8v4.8M15.4 2.8v4.8" />
@@ -363,11 +358,6 @@ const ART: Record<IconName, ReactNode> = {
       <path d="M7.9 12.8 4.6 16v3.4l3.3-2.2M16.1 12.8l3.3 3.2v3.4l-3.3-2.2" />
       <path d="M10.3 18.6 12 21.4l1.7-2.8" />
     </>
-  ),
-  // A star — how many people have starred a plugin's repository on GitHub. It counts something
-  // outside Amenbo, which is why it sits beside the download figure and not among the record marks.
-  star: (
-    <path d="M12 3.2l2.7 5.5 6.1.9-4.4 4.3 1 6-5.4-2.8-5.4 2.8 1-6L3.2 9.6l6.1-.9z" />
   ),
 
   // ----- the two facets, where the settings screen asks what each of them is called -----

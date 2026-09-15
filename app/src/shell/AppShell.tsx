@@ -9,9 +9,6 @@ import { endingConfirm } from "./openPanes";
 import { Sidebar } from "./Sidebar";
 import { BoardScreen } from "../screens/BoardScreen";
 import { ActivityFeed } from "../screens/ActivityFeed";
-import { PluginInstalledScreen } from "../screens/PluginInstalledScreen";
-import { PluginMarketScreen } from "../screens/PluginMarketScreen";
-import { PluginUpdateBanner } from "../components/PluginUpdateBanner";
 import { UpdateBanner, UpdateCheckFeedback } from "../components/UpdateBanner";
 import { HealthBanner } from "../components/HealthBanner";
 import { ManagedBlockBanner } from "../components/ManagedBlockBanner";
@@ -564,12 +561,11 @@ export function AppShell() {
       <div className="shell__banners">
         <UpdateBanner recheck={updateRecheck} />
         <UpdateCheckFeedback state={updateCheck} onDismiss={() => setUpdateCheck(null)} />
-        <PluginUpdateBanner onOpenInstalled={() => navTo({ type: "view", id: "pluginsInstalled" })} />
         <HealthBanner />
         <ManagedBlockBanner />
         <OrphanBindingBanner />
         {/* Ahead of the hooks warning: this one explains something that has already happened to the
-            app the reader just opened, and reading it first is what makes the missing Plugins screen
+            app the reader just opened, and reading it first is what makes the missing plugin screens
             make sense. */}
         <HandoverBanner />
         <HookSetupBanner asked={hooksAsked} />
@@ -667,12 +663,6 @@ export function AppShell() {
           {nav.type === "view" && nav.id === "search" && (
             <SearchScreen onOpenTask={selectTask} onOpenDecision={selectDecision} />
           )}
-          {nav.type === "view" && nav.id === "plugins" && (
-            <PluginMarketScreen
-              onOpenInstalled={() => navTo({ type: "view", id: "pluginsInstalled" })}
-            />
-          )}
-          {nav.type === "view" && nav.id === "pluginsInstalled" && <PluginInstalledScreen />}
           {nav.type === "view" && nav.id === "mcp" && <McpAppsScreen pick={nav.pick ?? null} />}
           {nav.type === "view" && nav.id === "settings" && <SettingsScreen />}
           {nav.type === "view" && nav.id === "onboarding" && <OnboardingScreen onNav={navTo} />}

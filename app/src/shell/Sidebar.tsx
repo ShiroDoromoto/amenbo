@@ -260,30 +260,6 @@ export function Sidebar({
           })()}
         </div>
 
-        {/* Plugins are a section of their own, not an item under "other" (`AMB-D-356`): finding one and
-            managing what is installed are two surfaces, and this is where the second one joins. */}
-        <div className="sidebar__group">
-          {!compact && <div className="sidebar__label">{t("side.plugins")}</div>}
-          {([
-            { id: "plugins", icon: "puzzle", label: t("plugins.market") },
-            { id: "pluginsInstalled", icon: "plug", label: t("plugins.installed") },
-          ] as const).map((item) => {
-            const n: Nav = { type: "view", id: item.id };
-            return (
-              <button
-                key={item.id}
-                className={`navitem ${isActive(n) ? "navitem--active" : ""}`}
-                aria-label={item.label}
-                title={item.label}
-                onClick={() => onNav(n)}
-              >
-                <Icon name={item.icon} />
-                {!compact && <span className="navitem__name">{item.label}</span>}
-              </button>
-            );
-          })}
-        </div>
-
         <div className="sidebar__group">
           {!compact && <div className="sidebar__label">{t("side.other")}</div>}
           {([

@@ -139,16 +139,6 @@ endpoint. The check only reads that manifest; Amenbo never updates
 itself in the background — downloading and applying a new version is always something you
 set off yourself (`amenbo update`, or `amenbo update --apply` for the standalone CLI).
 
-**Looking for a plugin** reads the plugin catalog — one static file, fetched once and
-cached, whatever the catalog's size — and, for a plugin whose detail you open, that one
-repository's stars and downloads from GitHub's public API, plus its README where the
-plugin's author wrote no description of their own. Both carry no task
-data, and neither happens unless you go looking: nothing is fetched for a plugin you only
-see in the list. That same cached catalog is also what says an installed plugin has a
-newer build: noticing rides the one fetch — inside its freshness window nothing is asked
-at all, and there is no timer — and taking the update is always something you set off
-yourself, from the button on the banner.
-
 **The Viewer** is the one road your records themselves travel, and it goes nowhere of
 Amenbo's: `viewer setup` stands a server up in **your own** Cloudflare account, and what is
 put there is sealed with a key this device holds — so the account it runs in cannot read it

@@ -12,18 +12,11 @@ import type {
   AgentHookRequestsDto,
   AgentHookWiringDto,
   BoundFolderDto,
-  PluginFormEntryDto,
-  PluginWantedSettingDto,
 } from "../bindings/bindings";
-import type { PluginInstall } from "../core/pluginInstalls";
 
 const hoisted = vi.hoisted(() => ({
   /** The folders the list reads (what `fetchBoundFolders` answers). */
   folders: [] as BoundFolderDto[],
-  /** What this machine holds, each row naming the projects it fires in. */
-  installs: [] as PluginInstall[],
-  /** The gates that were moved, arguments and all. */
-  gated: [] as { name: string; projectId: number; enabled: boolean }[],
   /** Canned answers for the confirm dialog, consumed from the front; once exhausted, everything is OK. */
   answers: [] as boolean[],
   /** What this project answered about starting its AI on Amenbo — null for never asked. */
@@ -57,21 +50,6 @@ vi.mock("../core/ipc", () => ({
 vi.mock("../core/snapshot", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../core/snapshot")>();
   return { ...orig, inTauri: () => true };
-});
-// The plugin seam, replaced whole: what is installed, and what a moved switch was called with.
-vi.mock("../core/pluginInstalls", async (importOriginal) => {
-  const orig = await importOriginal<typeof import("../core/pluginInstalls")>();
-  return {
-    ...orig,
-    usePluginInstalls: () => ({ installs: hoisted.installs, loading: false, error: undefined }),
-    // What a project *holds* is core's read, and nothing here is about a value already stored — the
-    // crossings under test are the empty ones, so this seam answers with nothing rather than reaching out.
-    usePluginConfig: () => ({ fields: [], loading: false }),
-    setPluginEnabled: (name: string, projectId: number, enabled: boolean) => {
-      hoisted.gated.push({ name, projectId, enabled });
-      return Promise.resolve({ enabled, droppedQueued: 0 });
-    },
-  };
 });
 vi.mock("../core/dialog", () => ({
   confirmDialog: () => Promise.resolve(hoisted.answers.shift() ?? true),
@@ -117,13 +95,6 @@ import { ProjectSettingsScreen } from "./ProjectSettingsScreen";
 import { t, tf } from "../core/i18n";
 import { revealLabelKey } from "../core/platform";
 
-/**
- * A declared form of settings alone (`AMB-D-727`) — every field an entry, in order. The parts a form may
- * also carry are their own tests'; what these are about is the boxes.
- */
-const form = (...fields: PluginWantedSettingDto[]): PluginFormEntryDto[] =>
-  fields.map((field) => ({ kind: "field", field }));
-
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let container: HTMLDivElement;
@@ -155,11 +126,9 @@ const button = (r: HTMLElement, text: string) =>
 
 beforeEach(() => {
   hoisted.folders = [];
-  hoisted.installs = [];
   hoisted.consent = null;
   hoisted.waiting = [];
   hoisted.requests = { tools: [], dirs: [] };
-  hoisted.gated.length = 0;
   hoisted.answers.length = 0;
   hoisted.calls.length = 0;
   hoisted.wake = { candidates: [], offered: [] };
@@ -254,173 +223,6 @@ describe("invariants held by the rows of the linked-folder list", () => {
     await render([folder(), folder({ path: "/w/two", legacy: true })]);
     expect(warnings(row("/w/one"))).toEqual([]);
     expect(warnings(row("/w/two"))).toEqual([`${t("projset.folderLegacyPointer")}`]);
-  });
-});
-
-/**
- * One installed plugin, crossing no project until a test names one: `on` is a project it fires in,
- * `filledIn` one that holds a value without the switch being on (`AMB-D-434`).
- *
- * Naming a `device` row instead is a plugin its author declared the machine's (`AMB-D-601`) — one gate
- * and no crossings — so the declaration follows from the row rather than being written twice.
- */
-function install(
-  { on = [], filledIn = [], ...over }:
-  Partial<PluginInstall> & { name: string; on?: number[]; filledIn?: number[] },
-): PluginInstall {
-  return {
-    compatible: true,
-    projects: [
-      ...on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
-      ...filledIn.map((project) => ({ project, enabled: false, hasValue: true, requiredUnset: false })),
-    ],
-    config: form(),
-    actions: [],
-    scope: over.device ? "machine" : "project",
-    ...over,
-  };
-}
-
-/** The plugins section, found by its heading. */
-function pluginsSection(): HTMLElement {
-  const head = Array.from(container.querySelectorAll(".settings__h")).find(
-    (h) => h.textContent === t("projset.plugins"),
-  );
-  return head!.closest(".settings__section") as HTMLElement;
-}
-const picker = () => pluginsSection().querySelector("select") as HTMLSelectElement;
-const offered = (el: HTMLSelectElement) => Array.from(el.options).map((o) => o.textContent);
-
-/** Pick `value` in the plugins section's picker and let the row it draws settle. */
-async function pick(value: string) {
-  await act(async () => {
-    picker().value = value;
-    picker().dispatchEvent(new Event("change", { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 0));
-  });
-}
-
-/** Press the button in the plugins section whose label is `label`, and let the write settle. */
-async function press(label: string) {
-  const button = Array.from(pluginsSection().querySelectorAll("button")).find(
-    (b) => b.textContent === label,
-  );
-  await act(async () => {
-    button!.click();
-    await new Promise((r) => setTimeout(r, 0));
-  });
-}
-
-// The project's own face of the crossings (`AMB-D-447`): the same rows the plugin screen draws, read
-// from this end — one project, and the plugins it crosses.
-describe("this project's plugin crossings", () => {
-  it("lists the ones it crosses, and offers the rest", async () => {
-    hoisted.installs = [
-      install({ name: "worktree", on: [1, 2] }),
-      install({ name: "notify", on: [2] }),
-    ];
-    await render([]);
-
-    const section = pluginsSection();
-    expect(section.textContent).toContain("worktree");
-    expect(offered(picker())).toEqual([t("projset.pluginsAdd"), "notify"]);
-  });
-
-  // Off is not the same as nothing to say: a value this project holds is a crossing, and hiding it
-  // would leave the one place it can be read from the project's side blank.
-  it("lists a plugin this project filled in without turning on", async () => {
-    hoisted.installs = [install({ name: "notify", filledIn: [1] })];
-    await render([]);
-
-    const section = pluginsSection();
-    expect(section.textContent).toContain("notify");
-    expect(section.textContent).toContain(t("plugins.cfg.filled"));
-    expect(section.querySelector("select")).toBeNull();
-  });
-
-  // A device-wide plugin crosses no project (`AMB-D-601`), so this face names it rather than drawing a
-  // switch that would move a gate the whole machine shares and read back as untouched. That it fires
-  // here is still said: a project's settings that never mentioned it would be hiding it.
-  it("names a device-wide plugin apart from the rows, with no switch of this project's", async () => {
-    hoisted.installs = [
-      install({ name: "carry", device: { enabled: true, hasValue: false, requiredUnset: false } }),
-      install({ name: "notify", on: [1] }),
-    ];
-    await render([]);
-
-    const section = pluginsSection();
-    expect(section.textContent).toContain(t("projset.pluginsDevice"));
-    expect(section.textContent).toContain("carry");
-    expect(section.textContent).toContain(t("plugins.scope.machine"));
-    // One switch on this face, and it is the crossing's. The device's own is on the plugin screen.
-    const switches = Array.from(section.querySelectorAll("button")).filter(
-      (b) => b.textContent === t("plugins.enable") || b.textContent === t("plugins.disable"),
-    );
-    expect(switches).toHaveLength(1);
-    // And nothing offers to add it here: there is no crossing to make.
-    expect(section.querySelector("select")).toBeNull();
-  });
-
-  // With only the device's own installed there is no crossing anyone could have made, so reporting that
-  // none were made would be an absence nobody could have filled.
-  it("does not report an empty crossing list when the only plugin is the device's", async () => {
-    hoisted.installs = [
-      install({ name: "carry", device: { enabled: false, hasValue: false, requiredUnset: false } }),
-    ];
-    await render([]);
-
-    const section = pluginsSection();
-    expect(section.textContent).not.toContain(t("projset.pluginsNone"));
-    expect(section.textContent).toContain(t("projset.pluginsDevice"));
-  });
-
-  it("says so when this project crosses none, without hiding what is installed", async () => {
-    hoisted.installs = [install({ name: "notify", on: [2] })];
-    await render([]);
-    expect(pluginsSection().textContent).toContain(t("projset.pluginsNone"));
-    expect(offered(picker())).toEqual([t("projset.pluginsAdd"), "notify"]);
-  });
-
-  it("points at the market when this machine holds no plugin at all", async () => {
-    await render([]);
-    expect(pluginsSection().textContent).toContain(t("plugins.emptyInstalled"));
-    expect(pluginsSection().querySelector("select")).toBeNull();
-  });
-
-  // Picking draws the crossing; the row's own switch is what runs somebody else's code (`AMB-D-351`).
-  it("draws the crossing for the plugin picked, and enables from that row", async () => {
-    hoisted.installs = [install({ name: "notify" })];
-    await render([]);
-
-    await pick("notify");
-    expect(hoisted.gated).toEqual([]);
-    expect(pluginsSection().textContent).toContain("notify");
-
-    await press(t("plugins.enable"));
-    expect(hoisted.gated).toEqual([{ name: "notify", projectId: 1, enabled: true }]);
-  });
-
-  // The mark is readable before anything is pressed, and the settings that answer it open in the row.
-  it("marks a crossing short of a required value, and opens its settings in the row", async () => {
-    hoisted.installs = [install({
-      name: "notify",
-      config: form({ key: "webhook_url", label: "Webhook", required: true, secret: false, readonly: false, fieldType: "text", options: [], when: [] }),
-    })];
-    await render([]);
-
-    await pick("notify");
-    expect(pluginsSection().textContent).toContain(t("plugins.cfg.requiredEmpty"));
-    expect(hoisted.gated).toEqual([]);
-
-    await press(t("plugins.cfg.open"));
-    expect(pluginsSection().textContent).toContain("Webhook");
-  });
-
-  it("turns one off from the row it is listed on", async () => {
-    hoisted.installs = [install({ name: "worktree", on: [1] })];
-    await render([]);
-    await press(t("plugins.disable"));
-    expect(hoisted.gated).toEqual([{ name: "worktree", projectId: 1, enabled: false }]);
   });
 });
 

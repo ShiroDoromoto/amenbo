@@ -59,12 +59,13 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   decision_task_link: ["tasks", "decisions"], // shows on both (a task's decision badge, a decision's linked tasks)
   attachment: ["attachments"],
   project: ["projects"],
-  // One switch and one value per setting per plugin, all of them per project (`AMB-D-434`/`AMB-D-356`) —
-  // and one surface that draws them, so they fold to the same scope: whichever moved, the installed rows
-  // are what has to be re-read. A gate flipped from the CLI is the ordinary way any of these arrives.
-  plugin_enable: ["plugins"],
-  plugin_config: ["plugins"],
-  plugin_secret: ["plugins"],
+  // The plugin tables (`AMB-D-884`). Nothing reaches them any more — neither face has a plugin command
+  // left — and no screen draws them, so they fold to nothing rather than to gap: a row that somehow
+  // moved would otherwise buy a full re-read for a change nobody can see. The tables themselves go
+  // with the mechanism.
+  plugin_enable: [],
+  plugin_config: [],
+  plugin_secret: [],
   // Amenbo's own credentials (`AMB-D-884`). The value is never drawn; what is drawn is whether one is
   // set, and for the Viewer that answer *is* the screen — a device with no server and one with a server
   // are two different panes, and the three fields setup writes are what tells them apart. So it folds to

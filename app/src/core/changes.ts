@@ -59,13 +59,6 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   decision_task_link: ["tasks", "decisions"], // shows on both (a task's decision badge, a decision's linked tasks)
   attachment: ["attachments"],
   project: ["projects"],
-  // The plugin tables (`AMB-D-884`). Nothing reaches them any more — neither face has a plugin command
-  // left — and no screen draws them, so they fold to nothing rather than to gap: a row that somehow
-  // moved would otherwise buy a full re-read for a change nobody can see. The tables themselves go
-  // with the mechanism.
-  plugin_enable: [],
-  plugin_config: [],
-  plugin_secret: [],
   // Amenbo's own credentials (`AMB-D-884`). The value is never drawn; what is drawn is whether one is
   // set, and for the Viewer that answer *is* the screen — a device with no server and one with a server
   // are two different panes, and the three fields setup writes are what tells them apart. So it folds to
@@ -172,8 +165,8 @@ export async function drainChanges(): Promise<DrainedChanges> {
     if (!res.more) {
       cursor = at;
       // An empty set of scopes is an answer, not a failure: the feed spoke, and it named nothing — a
-      // commit of the store's own bookkeeping, which no dataset covers (the plugin dispatcher draining
-      // its outbox, a `store_meta` scalar). The two writes that reach no row at all — a whole-file swap,
+      // commit of the store's own bookkeeping, which no dataset covers (the drive reclaiming the outbox
+      // it walked, a `store_meta` scalar). The two writes that reach no row at all — a whole-file swap,
       // and `config.json` — are told apart by the caller off the signature's own legs (`AMB-D-856`), so
       // they are no longer guessed at from here.
       return { scopes, gap: false };

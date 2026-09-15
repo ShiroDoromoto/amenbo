@@ -443,44 +443,6 @@ impl Paths {
         Paths::user_base()
     }
 
-    /// The directory name, under the base, holding installed plugins and the registry cache.
-    pub const PLUGINS_DIR_NAME: &'static str = "plugins";
-    /// The name reserved, under [`plugins_dir`](Self::plugins_dir), for the registry cache — it sits
-    /// beside the plugins, so no plugin may claim it (see [`is_reserved_plugin_name`]).
-    pub const REGISTRY_DIR_NAME: &'static str = "registry";
-
-    /// Where installed plugins and the registry cache live: `<base>/plugins/`, machine-global under the
-    /// base (`AMB-D-350`). A plugin's executable is OS/arch-specific and would collide with
-    /// distribution, PII and `.gitignore` if it lived in a project directory, so it never does — and
-    /// never in `.amenbo`, the store-agnostic, sync-safe pointer. Enablement is *not* on disk here: it is
-    /// a store table, one row per project the plugin is on in (`AMB-D-434`).
-    pub fn plugins_dir(&self) -> PathBuf {
-        self.base_dir.join(Self::PLUGINS_DIR_NAME)
-    }
-
-    /// One plugin's home, `<base>/plugins/<name>/`, holding its executable and files — what lives in it
-    /// is [`plugin_installed`](crate::plugin_installed)'s. `name` is the plugin's manifest name;
-    /// [`REGISTRY_DIR_NAME`](Self::REGISTRY_DIR_NAME) is reserved and cannot be one — the manifest
-    /// validator rejects it up front, but do not hand this an unvalidated name.
-    pub fn plugin_dir(&self, name: &str) -> PathBuf {
-        self.plugins_dir().join(name)
-    }
-
-    /// The manifest-registry cache, `<base>/plugins/registry/`: the fetched copy of the plugin catalog.
-    /// There is no central server (local-first); the catalog is a set of git-hosted manifests pulled
-    /// into this directory (`AMB-D-350`).
-    pub fn registry_dir(&self) -> PathBuf {
-        self.plugins_dir().join(Self::REGISTRY_DIR_NAME)
-    }
-
-    /// The **plugin execution log**, `<base>/plugin-runs.jsonl` ([`crate::plugin_log`], `AMB-D-361`): the
-    /// last runs of each installed plugin, with the stderr its author wrote. Machine-local like the
-    /// activity ledger and, like it, outside every backup and export — it is a debugging aid about *this*
-    /// machine's installs, bounded by construction rather than kept as history.
-    pub fn plugin_log_file(&self) -> PathBuf {
-        self.base_dir.join(crate::plugin_log::FILE_NAME)
-    }
-
     /// The **delivery log**, `<base>/delivery.jsonl` ([`crate::delivery_log`], `AMB-D-361`): what could not
     /// be carried out of a write — a notification the far side refused, a span of events retention took
     /// before anybody walked it. Machine-local and outside every backup and export, for the reason the
@@ -488,14 +450,6 @@ impl Paths {
     pub fn delivery_log_file(&self) -> PathBuf {
         self.base_dir.join(crate::delivery_log::FILE_NAME)
     }
-}
-
-/// Whether `name` is reserved by the plugin disk layout and so cannot name a plugin: the registry cache
-/// shares the `plugins/` directory with the installed plugins (`AMB-D-350`), so a plugin called
-/// `registry` would clash with it. The manifest validator calls this so the one truth about the layout's
-/// reserved names lives beside the layout.
-pub fn is_reserved_plugin_name(name: &str) -> bool {
-    name == Paths::REGISTRY_DIR_NAME
 }
 
 /// Logging level for the perf instrumentation. One of three values, persisted as `perf_log` in
@@ -989,10 +943,8 @@ pub fn default_project_name(lang: Option<&str>) -> String {
 /// keyed by one spells it. `en` leads because it is where everything falls back to: an unset setting,
 /// a code from outside this list, and a value nobody translated all end there.
 ///
-/// The list is data rather than a match arm because two roads ask it a question a `match` cannot
-/// answer: which codes exist at all. A plugin's translation overlay is named by its code
-/// (`plugins/<name>.<lang>.yaml`, `AMB-D-621`) and refused when the code is not one of these
-/// ([`crate::plugin_validate::validate_overlays`]), and the GUI carries the same list as `LANGS`
+/// The list is data rather than a match arm because another road asks it a question a `match` cannot
+/// answer: which codes exist at all. The GUI carries the same list as `LANGS`
 /// (`app/src/core/i18n/lang.ts`) — a code Amenbo accepted that the GUI cannot read would be a
 /// translation nobody ever sees.
 ///
@@ -1520,9 +1472,8 @@ mod tests {
         }
     }
 
-    /// The list is what other roads key documents by — a plugin's overlay file, the GUI's dictionaries
-    /// — so a code written twice, or an `en` that stopped leading the fallback, is a fault here rather
-    /// than a puzzle wherever it is read.
+    /// The list is what the GUI's dictionaries are keyed by, so a code written twice, or an `en` that
+    /// stopped leading the fallback, is a fault here rather than a puzzle wherever it is read.
     #[test]
     fn the_supported_languages_are_distinct_and_fall_back_to_english() {
         let mut seen = std::collections::HashSet::new();
@@ -1548,38 +1499,6 @@ mod tests {
         assert_eq!(language_label("de-AT"), "German");
         // An unsupported language is returned as-is.
         assert_eq!(language_label("xx"), "xx");
-    }
-
-    /// The plugin disk layout hangs off the base: bodies and the registry cache under `plugins/`, a
-    /// plugin's home under its name, and nothing in `.amenbo` (`AMB-D-350`).
-    #[test]
-    fn plugin_layout_hangs_off_the_base_never_the_project() {
-        let base = PathBuf::from("/home/base");
-        let paths = Paths::at(base.clone());
-
-        assert_eq!(paths.plugins_dir(), base.join("plugins"));
-        assert_eq!(paths.plugin_dir("worktree"), base.join("plugins").join("worktree"));
-        assert_eq!(paths.registry_dir(), base.join("plugins").join("registry"));
-
-        // Every plugin path is under the base_dir — the app-data area, not a synced project dir.
-        for p in [paths.plugins_dir(), paths.plugin_dir("x"), paths.registry_dir()] {
-            assert!(p.starts_with(&paths.base_dir), "{} sits under the base", p.display());
-        }
-    }
-
-    /// The registry cache shares `plugins/` with the installed plugins, so `registry` is not a name a
-    /// plugin may take — otherwise `plugin_dir("registry")` and `registry_dir` would be the same path.
-    #[test]
-    fn the_registry_name_is_reserved_against_a_plugin_clash() {
-        assert!(is_reserved_plugin_name("registry"));
-        assert!(!is_reserved_plugin_name("worktree"));
-
-        let paths = Paths::at(PathBuf::from("/home/base"));
-        assert_eq!(
-            paths.plugin_dir(Paths::REGISTRY_DIR_NAME),
-            paths.registry_dir(),
-            "the reason registry is reserved: the paths would collide"
-        );
     }
 
     /// `config set attachment.*` overrides a capacity limit (byte count) and rejects non-numeric

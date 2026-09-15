@@ -1,8 +1,8 @@
 //! **A secret one of Amenbo's own features holds**, at one layer (`AMB-D-884`).
 //!
 //! The body had no place for a credential until this. `config.json` says of itself that it holds none,
-//! and the three features that needed one — mail, Slack, the Viewer — were plugins, keeping theirs in
-//! [`crate::ops::plugin_secret`]. That table goes with the mechanism; this one takes over what it was for:
+//! and the three features that needed one — mail, Slack, the Viewer — were plugins then, keeping theirs in
+//! a table of the mechanism's. That table went with it; this one took over what it was for:
 //! the connection a notification target sends through (`AMB-D-885`), and the token and key the Viewer's
 //! server is reached and sealed with (`AMB-D-886`).
 //!

@@ -207,9 +207,9 @@ impl Cli {
 
     /// Run the binary with extra environment on top of the harness's, and return (stdout, exit_code).
     ///
-    /// For the commands that reach outside the machine: the plugin catalog's URL has to be pinned at
-    /// something that never answers, or the test spends the real index's availability on a question it
-    /// already seeded the answer to on disk.
+    /// For the commands that reach outside the machine: an upstream URL has to be pinned at something that
+    /// never answers, or the test spends the real endpoint's availability on a question it already seeded
+    /// the answer to on disk.
     pub(crate) fn run_env(&self, env: &[(&str, &str)], args: &[&str]) -> (String, i32) {
         let mut command = amenbo_scratch::command(env!("CARGO_BIN_EXE_amenbo"));
         command
@@ -283,100 +283,3 @@ pub(crate) fn decision_ref(id: &str) -> String {
     format!("AMB-D-{id}")
 }
 
-/// Plant an installed plugin under the test's app-data: the manifest (the install marker) plus the
-/// executable named after it, which is the whole on-disk shape `plugin_installed::read` looks for.
-pub(crate) fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
-    install_plugin_at(cli, name, config, None);
-}
-
-/// The same install, with the author's layer declared (`AMB-D-601`): `scope` of `Some("machine")` is a
-/// plugin whose gate, settings and secrets are the device's. `None` writes no `scope` key at all — the
-/// undeclared manifest every plugin shipped before this, which must keep meaning `project`.
-pub(crate) fn install_plugin_at(
-    cli: &Cli,
-    name: &str,
-    config: serde_json::Value,
-    scope: Option<&str>,
-) {
-    let dir = cli.home.join("plugins").join(name);
-    std::fs::create_dir_all(&dir).unwrap();
-    let manifest = serde_json::json!({
-        "name": name,
-        "desc": "テスト用",
-        "author": "amenbo",
-        "repo": "ShiroDoromoto/amenbo-plugin-test",
-        "os": ["macos", "linux", "windows"],
-        "category": "workflow",
-        "url": "https://example.com/x.tar.gz",
-        "checksum": "sha256:deadbeef",
-        // What an install records of the detail document it was installed from (`AMB-D-386`) — the
-        // value a later catalog fetch compares against to say the plugin has moved.
-        "detail_sum": format!("sha256:{}", "d".repeat(64)),
-        "config": config,
-    });
-    let mut manifest = manifest;
-    if let Some(scope) = scope {
-        manifest["scope"] = serde_json::json!(scope);
-    }
-    std::fs::write(dir.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
-    std::fs::write(dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX)), b"#!/bin/sh\n").unwrap();
-}
-
-/// Plant an installed plugin that subscribes to `events` — [`install_plugin`] with the manifest field the
-/// dispatch resolver reads. The executable it lays down does nothing; a caller that wants the plugin to
-/// *do* something overwrites it.
-#[cfg(unix)]
-pub(crate) fn install_subscribing_plugin(cli: &Cli, name: &str, events: &[&str]) {
-    install_plugin(cli, name, serde_json::json!([]));
-    let manifest_file = cli.home.join("plugins").join(name).join("manifest.json");
-    let mut manifest: Value =
-        serde_json::from_str(&std::fs::read_to_string(&manifest_file).unwrap()).unwrap();
-    manifest["events"] = serde_json::json!(events);
-    std::fs::write(&manifest_file, serde_json::to_vec(&manifest).unwrap()).unwrap();
-}
-
-/// Open this plugin's gate for the project the run's folder is bound to, by writing the row `enable`
-/// wrote (`plugin_trust::effective_enabled_in` reads that row and nothing else).
-///
-/// **The row rather than a command**, because there is no longer a command: the `plugin` group has gone
-/// from the CLI with the mechanism's retreat, and the tests that remain are about the *tick* — a
-/// subscriber is what they need, not a way for a person to make one. The gate lives until the mechanism
-/// does, and these tests go with it.
-#[cfg(unix)]
-pub(crate) fn open_the_gate(cli: &Cli, name: &str) {
-    use amenbo_core::store_engine::StoreEngine;
-
-    // The id is a number the store issued and the name is this test's own word, so the two go into the
-    // statement as they are — the crate that would bind them is not a dependency of this face.
-    let project: i64 = cli.bound_project().parse().expect("a project id is a number");
-    let engine = StoreEngine::open(&cli.home.join("store.sqlite")).unwrap();
-    engine
-        .conn()
-        .execute_batch(&format!(
-            "INSERT OR IGNORE INTO plugin_enable (project_id, plugin, created_at, updated_at) VALUES \
-             ({project}, '{name}', strftime('%Y-%m-%dT%H:%M:%SZ','now'), \
-             strftime('%Y-%m-%dT%H:%M:%SZ','now'));"
-        ))
-        .expect("the gate row goes in");
-}
-
-/// The JSON a **runner process** wrote at `path`, waited for (`AMB-T-2175`).
-///
-/// A runner is launched by the command that queued the event and outlives it, so what the plugin writes
-/// lands *after* that command has returned — there is nothing for a caller to join any more. `want` picks
-/// the value being waited for, which is what tells a second run from the one already on disk rather than
-/// racing it.
-#[cfg(unix)]
-pub(crate) fn wrote_json(path: &std::path::Path, want: impl Fn(&Value) -> bool) -> Value {
-    for _ in 0..200 {
-        if let Ok(v) = std::fs::read_to_string(path).map_err(|_| ()).and_then(|t| {
-            serde_json::from_str::<Value>(&t).map_err(|_| ())
-        }) {
-            if want(&v) {
-                return v;
-            }
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    panic!("no runner wrote the payload waited for at {} within ten seconds", path.display());
-}

@@ -81,10 +81,10 @@ mod pane_home;
 /// (`AMB-D-878`).
 mod pane_settled;
 mod perf;
-/// The long-lived mount of the plugin observation dispatcher: the drive the write seam runs after each
-/// mutating command, over the store's own cursor (`AMB-D-380`), and the one this app makes as it comes up
-/// for what a previous run left half delivered (`AMB-D-399`).
-mod plugin_dispatch;
+/// The long-lived mount of the outbox drive: the one the write seam runs after each mutating command, over
+/// the store's own cursor (`AMB-D-380`), and the one this app makes as it comes up for what a previous run
+/// left half carried (`AMB-D-399`).
+mod delivery;
 /// The pseudo-terminal a pane of the talk window is filled with: opening one, carrying its bytes
 /// both ways, and telling it how large the pane on screen is (`AMB-D-747`).
 mod pty;
@@ -163,47 +163,20 @@ fn start_store_threads(app: tauri::AppHandle) {
       log::warn!("gc_device_state failed: {e}");
     }
   });
-  // What a previous run left half-delivered (`AMB-D-399`). Started with the other store threads, and after
+  // What a previous run left half carried (`AMB-D-399`). Started with the other store threads, and after
   // a migration for the same reason they are: the store this reads is the migrated one or none at all.
-  std::thread::spawn(plugin_dispatch::resume);
-}
-
-/// The plugin runner this process was launched as, if it was (`AMB-T-2175`): the plugin whose queue to work,
-/// the lease taken on its behalf, and the store to work — read off `argv` in the order core appends them,
-/// behind [`plugin_dispatch::RUNNER_FLAG`].
-///
-/// The match is exact and positional (the flag first, then exactly [`plugin_dispatch::RUNNER_ARGS`]
-/// arguments), so nothing an operating system adds of its own — macOS's `-psn_…` on a launched app, say —
-/// can be mistaken for it.
-fn runner_argv() -> Option<(String, String, String)> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 + plugin_dispatch::RUNNER_ARGS || args[1] != plugin_dispatch::RUNNER_FLAG {
-        return None;
-    }
-    Some((args[2].clone(), args[3].clone(), args[4].clone()))
-}
-
-/// Work one plugin's observation-event queue and return, instead of starting the app — what this executable
-/// does when Amenbo launched it as a runner (`AMB-D-399`, `AMB-T-2175`). `true` when that is what happened,
-/// which is the caller's signal to start nothing else: no window, no watcher, no migration screen.
-///
-/// The app is the runner for the events it queued itself, because a runner is *this same executable, re-run*:
-/// one binary per face, and no second one to ship or to keep in step. Nothing is drawn and nothing is
-/// reported — what each run did lands in the plugin execution log (`AMB-D-361`).
-#[must_use = "start the app only when this says the process was not launched as a runner"]
-pub fn run_plugin_runner() -> bool {
-    let Some((plugin, owner, store)) = runner_argv() else {
-        return false;
-    };
-    amenbo_core::plugin_runner::run_process(store.into(), &plugin, &owner);
-    true
+  std::thread::spawn(delivery::resume);
 }
 
 /// The store a notification sender was launched over, if this process was one — read off `argv` behind
-/// [`plugin_dispatch::SENDER_FLAG`], the same exact, positional match the runner's is.
+/// [`delivery::SENDER_FLAG`].
+///
+/// The match is exact and positional (the flag first, then exactly [`delivery::SENDER_ARGS`] arguments), so
+/// nothing an operating system adds of its own — macOS's `-psn_…` on a launched app, say — can be mistaken
+/// for it.
 fn sender_argv() -> Option<String> {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 + plugin_dispatch::SENDER_ARGS || args[1] != plugin_dispatch::SENDER_FLAG {
+    if args.len() != 2 + delivery::SENDER_ARGS || args[1] != delivery::SENDER_FLAG {
         return None;
     }
     Some(args[2].clone())
@@ -212,8 +185,8 @@ fn sender_argv() -> Option<String> {
 /// Post one drive's worth of notifications and return, instead of starting the app (`AMB-D-885`). `true`
 /// when that is what happened, which is the caller's signal to start nothing else.
 ///
-/// The app sends for the notifications it queued itself, for the reason it runs its own plugin runners: one
-/// binary per face, and no second one to ship or to keep in step.
+/// The app sends for the notifications it queued itself: one binary per face, and no second one to ship or
+/// to keep in step.
 #[must_use = "start the app only when this says the process was not launched as a sender"]
 pub fn run_notify_sender() -> bool {
     let Some(store) = sender_argv() else {
@@ -224,10 +197,10 @@ pub fn run_notify_sender() -> bool {
 }
 
 /// The store a Viewer carrier was launched over, if this process was one — read off `argv` behind
-/// [`plugin_dispatch::CARRIER_FLAG`], the same exact, positional match the sender's is.
+/// [`delivery::CARRIER_FLAG`], the same exact, positional match the sender's is.
 fn carrier_argv() -> Option<String> {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 + plugin_dispatch::CARRIER_ARGS || args[1] != plugin_dispatch::CARRIER_FLAG {
+    if args.len() != 2 + delivery::CARRIER_ARGS || args[1] != delivery::CARRIER_FLAG {
         return None;
     }
     Some(args[2].clone())
@@ -236,8 +209,8 @@ fn carrier_argv() -> Option<String> {
 /// Take one turn of the Viewer's send and return, instead of starting the app (`AMB-D-884`). `true` when
 /// that is what happened, which is the caller's signal to start nothing else.
 ///
-/// The app carries for the writes it made itself, for the reason it runs its own plugin runners: one binary
-/// per face, and no second one to ship or to keep in step.
+/// The app carries for the writes it made itself: one binary per face, and no second one to ship or to keep
+/// in step.
 #[must_use = "start the app only when this says the process was not launched as a carrier"]
 pub fn run_viewer_carrier() -> bool {
     let Some(store) = carrier_argv() else {

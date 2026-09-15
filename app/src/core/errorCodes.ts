@@ -126,81 +126,13 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_migration_no_space",
   "invalid_migration_rolled_back",
   "invalid_migration_rollback_failed",
-  // The plugin screens. Almost everything that goes wrong there comes from a machine the reader does
-  // not control — a catalog document, an asset off the network, a manifest an update replaced — so the
-  // refusals are many, and which one arrived is what says whether to retry, to ask the publisher, or to
-  // uninstall and start again.
-  "not_found_plugin_in_catalog",
-  "not_found_plugin_installed",
-  "not_found_plugin_build_official",
-  "not_found_plugin_build_origin_unknown",
-  "not_found_plugin_build_source_gone",
-  "not_found_plugin_build_source_silent",
-  "not_found_plugin_build_delisted",
-  "conflict_plugin_installed",
-  "conflict_plugin_install_broken",
-  "invalid_catalog_unreadable",
-  "invalid_catalog_version_ahead",
-  "invalid_catalog_detail_swapped",
-  "invalid_catalog_detail_unreadable",
-  "invalid_catalog_detail_names_other",
-  "invalid_catalog_url_scheme",
-  "invalid_catalog_url_official",
-  "invalid_catalog_key_rotated",
-  "invalid_catalog_key_document",
-  "invalid_catalog_key_absent",
-  "invalid_plugin_entry",
-  "invalid_plugin_entry_dropped",
-  "invalid_plugin_entry_duplicate",
-  "invalid_plugin_os_unsupported",
-  "invalid_plugin_asset_absent",
-  "invalid_plugin_asset_empty",
-  "invalid_plugin_asset_zip_off_windows",
-  "invalid_plugin_asset_tar_unreadable",
-  "invalid_plugin_asset_zip_unreadable",
-  "invalid_plugin_asset_without_program",
-  "invalid_plugin_manifest_unwritable",
-  "invalid_plugin_checksum_format",
-  "invalid_plugin_checksum_mismatch",
-  "invalid_plugin_checksum_length",
-  "invalid_plugin_checksum_not_hex",
-  "invalid_plugin_key_malformed",
-  "invalid_plugin_signature_malformed",
-  "invalid_plugin_signature_mismatch",
-  "invalid_plugin_unsigned",
-  "invalid_plugin_manifest_malformed",
-  "invalid_plugin_manifest_names_other",
-  "invalid_plugin_program_absent",
-  "invalid_plugin_update_platform",
-  "invalid_plugin_project_required",
-  "invalid_plugin_settings_required",
-  "invalid_plugin_config_value_too_large",
-  "invalid_plugin_config_value_control_chars",
-  // Why a plugin does not run against this build. They arrive as the refusal's `parts`, because the
-  // same three verdicts read under two different sentences — one for enabling, one for updating —
-  // and writing them as six codes would be six templates saying three things.
-  "invalid_plugin_incompatible",
-  "invalid_plugin_update_incompatible",
-  "plugin_incompatible_payload",
-  "plugin_incompatible_amenbo_old",
-  "plugin_incompatible_floor_unreadable",
 ] as const;
 
-/** Core codes the webview never receives, because the only door they come through is the CLI. Two doors
- * are like that. Putting a plugin back on its earlier build is one (`AMB-D-522`): the screen offers no way
- * to ask for it, so nothing on it can be refused for these reasons. The other is an enable turned away by
- * the plugin's own check (`AMB-D-664`): the switch on screen is handed the verdict and a gate that did not
- * move — the author's sentences *are* the refusal there — so this one travels to the terminal alone. They
- * are listed because the parity test reads every code core declares, not because a reader ever meets one
- * — which is also why they owe no template. A code that reaches a screen belongs in the sentence list
- * instead, with its prose. */
-export const CORE_CLI_ONLY_ERROR_CODES = [
-  "not_found_plugin_rollback_build",
-  "invalid_plugin_rollback_manifest_absent",
-  "invalid_plugin_rollback_manifest_unparsable",
-  "invalid_plugin_check_refused",
-  "invalid_plugin_check_silent",
-] as const;
+/** Core codes the webview never receives, because the only door they come through is the CLI. None is
+ * declared today: every code core raises reaches a screen, so each one owes a template and sits in the
+ * sentence list above. The list stays because the parity test reads every code core declares, and a door
+ * the terminal alone can reach is a shape that comes back. */
+export const CORE_CLI_ONLY_ERROR_CODES = [] as const;
 
 /** Every code core can emit (`amenbo_core::ErrorCode::ALL`), at every grain. */
 export const CORE_ERROR_CODES = [

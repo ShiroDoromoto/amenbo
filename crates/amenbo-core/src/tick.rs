@@ -53,21 +53,18 @@
 //! days rather than in wake-ups (`AMB-D-708`): a machine that was asleep is woken for the hours it missed,
 //! and anything counted per wake-up rings several times over on the day it comes back.
 //!
-//! **The queues are worked on every tick, including the ones with nothing to say** (`AMB-D-706`). A runner
-//! killed mid-queue leaves its rows standing until the next write drives delivery again, and the writes a
-//! daily purpose makes are a day apart — so the tick with nothing to emit is exactly the one that should
-//! carry what a previous run left behind ([`crate::plugin_drive`]). It works them **in this process**: the
-//! tick is a process the scheduler started for this and nothing else, so there is no command being made to
-//! wait, and handing the queues to runners nobody watches would leave it with nothing to report.
+//! **A write is carried out on every tick, including the one with nothing to say** (`AMB-D-706`). A run cut
+//! short leaves the outbox standing until the next write drives it again, and the writes a daily purpose
+//! makes are a day apart — so the tick with nothing to emit is exactly the one that should carry what a
+//! previous run left behind ([`crate::outbox_drive`]). It posts **in this process**: the tick is a process
+//! the scheduler started for this and nothing else, so there is no command being made to wait, and handing
+//! the sending to a process nobody watches would leave it with nothing to report.
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 use crate::outbox_drive::Face;
-use crate::plugin_manifest::Scope;
-use crate::plugin_runner::{Waiting, Worked};
-use crate::plugin_subscribe::{EnabledSubscribers, InstalledPlugin};
 use crate::store::Store;
 use crate::store_engine::StoreEngine;
 use crate::time::date_to_string;
@@ -314,10 +311,10 @@ pub fn settle(consent: Option<TickConsent>) -> Option<Option<TickConsent>> {
 /// | nobody here has answered | an answer given is not a question to put again ([`TickConsent`]) |
 /// | **later** was not pressed today | that button's whole meaning is one day of quiet ([`crate::overview::tick_banner_later`]) |
 /// | an open task carries a due day | the warning only ever speaks about `done:false` work with a day on it |
-/// | a plugin subscribed to `task.due` is enabled somewhere | carrying the warning outward is a plugin's; with none listening, a yes changes nothing |
+/// | some project reports `task.due` somewhere it can reach | with nowhere to carry the warning, a yes changes nothing |
 ///
-/// The last two read the store and the plugins directory, which is why they are last: on the machine that
-/// has already answered — every machine, after the first time — this returns without touching either.
+/// The last two read the store, which is why they are last: on the machine that has already answered —
+/// every machine, after the first time — this returns without touching it.
 ///
 /// It does not ask [`reachable_from_here`]. That one is about the process holding the door, and the
 /// process that puts this question is the app, which on every target is the one that can work it; the CLI
@@ -334,37 +331,10 @@ pub fn banner_shows(store: &Store, today: NaiveDate) -> Result<bool> {
     if !crate::store_engine::read::any_open_task_is_dated(store.engine.conn())? {
         return Ok(false);
     }
-    warning_has_a_carrier(store, &crate::plugin_installed::installed(&store.paths)?)
-}
-
-/// Whether any of `installed` subscribes to `task.due` and has its gate open at the layer its author
-/// declared (`AMB-D-601`) — anywhere on this device, in any project.
-///
-/// Anywhere, because the question behind it is about the timer, which is one per machine: a warning that
-/// reaches one project is a warning the tick is worth having. Which projects it reaches, and which it does
-/// not, is a thing the plugin's own settings say, and not something to weigh here.
-///
-/// A plugin that is enabled but incompatible with this build, or one whose subscription names a face this
-/// device's drives never use, still counts. Both are states the person can be shown and can fix, and
-/// neither is a reason to go quiet about the timer that would carry the warning once they had.
-///
-/// The installed set is passed in rather than found here, the way [`run_over`] takes its table: what is on
-/// disk is [`crate::plugin_installed`]'s answer, and taking it as an argument is what lets this be driven
-/// by a set a test wrote.
-fn warning_has_a_carrier(store: &Store, installed: &[InstalledPlugin]) -> Result<bool> {
-    for plugin in installed {
-        if !plugin.manifest.events.iter().any(|e| e.event == crate::lifecycle::name::TASK_DUE) {
-            continue;
-        }
-        let declared = plugin.manifest.scope;
-        if store.layers_with_plugin_enabled(&plugin.name)?.iter().any(|layer| match declared {
-            Scope::Project => !layer.is_device(),
-            Scope::Machine => layer.is_device(),
-        }) {
-            return Ok(true);
-        }
-    }
-    Ok(false)
+    Ok(crate::store_engine::read::any_project_reports(
+        store.engine.conn(),
+        crate::lifecycle::name::TASK_DUE,
+    )?)
 }
 
 /// One thing Amenbo may have to do when it is woken: the id its day mark is kept under, and the work.
@@ -425,26 +395,17 @@ pub struct Report {
     /// The purposes this device had already carried out on this day, so the tick left them alone.
     pub already_done: Vec<&'static str>,
     /// The purposes that failed, each with what it said. One failure stops that purpose and nothing else:
-    /// the tick goes on to the next, and on to the queues.
+    /// the tick goes on to the next, and on to carrying the outbox out.
     pub failed: Vec<(&'static str, String)>,
-    /// One report per queue this tick worked.
-    pub worked: Vec<Worked>,
-    /// The queues still standing when the tick was done. A queue a live runner already held is here: one
-    /// queue is worked by one runner, and nothing was taken off it here (`AMB-D-399`).
-    pub left: Vec<Waiting>,
-}
-
-impl Report {
-    /// How many events left the queues on this tick.
-    pub fn delivered(&self) -> i64 {
-        self.worked.iter().map(|w| w.delivered).sum()
-    }
+    /// How many events this tick carried out of the outbox — what the purposes above emitted, plus
+    /// whatever a previous run left standing.
+    pub carried: usize,
 }
 
 /// **Woken, judge, drop** — the whole of what the scheduler starts (`AMB-D-706`).
 ///
-/// Every purpose that has not had its turn on `day` takes it, and then the plugin queues are worked to
-/// their end, whether or not any purpose had something to say.
+/// Every purpose that has not had its turn on `day` takes it, and then the outbox is carried out, whether
+/// or not any purpose had something to say.
 pub fn run(store: &Store, day: NaiveDate) -> Result<Report> {
     run_over(store, day, PURPOSES)
 }
@@ -462,18 +423,9 @@ fn run_over(store: &Store, day: NaiveDate, purposes: &[Purpose]) -> Result<Repor
         }
     }
 
-    // Unlike the drive that rides along with a write, an unreadable plugins directory is a failure here:
-    // working the queues is half of what this process was started for, so it cannot quietly do none of it.
-    let installed = crate::plugin_installed::installed(&store.paths)?;
-    let subscribers = EnabledSubscribers::new(&installed, store);
-    let flushed = store.flush_delivery(Face::Cli, &subscribers)?;
-    report.worked = flushed.worked;
-    // What is still standing, minus the queues this tick worked: those are reported by their own counts,
-    // and a queue named twice would read as two backlogs.
-    report.left = crate::plugin_runner::waiting(store.read_model())?
-        .into_iter()
-        .filter(|w| !report.worked.iter().any(|f| f.plugin == w.depth.plugin))
-        .collect();
+    // The flush, not the ride-along drive: this process was started to carry the outbox out and nothing
+    // else, so it posts here rather than handing the messages to a sender it would not outlive.
+    report.carried = store.flush_delivery(Face::Cli)?.seen.len();
     Ok(report)
 }
 
@@ -662,69 +614,14 @@ mod tests {
             .id
     }
 
-    /// One installed plugin, as the resolver reads it — the manifest's `scope` and `events` are the two
-    /// fields the carrier check asks about, and the rest is filler.
-    fn installed(name: &str, scope: Scope, events: &[&str]) -> InstalledPlugin {
-        use crate::plugin_manifest::{EventSubscription, Manifest, Os};
-        InstalledPlugin {
-            name: name.into(),
-            program: std::path::PathBuf::from(format!("/plugins/{name}")),
-            manifest: Manifest {
-                name: name.into(),
-                title: None,
-                desc: String::new(),
-                about: None,
-                author: String::new(),
-                repo: String::new(),
-                os: vec![Os::Linux],
-                category: String::new(),
-                url: String::new(),
-                checksum: String::new(),
-                signature: None,
-                assets: Default::default(),
-                official: false,
-                detail_sum: None,
-                scope,
-                payload_v: crate::plugin_payload::VERSION,
-                min_amenbo: None,
-                config: Vec::new(),
-                events: events.iter().map(|e| EventSubscription::new(*e)).collect(),
-                agent: None,
-                settings: None,
-            },
-            origin: None,
-        }
-    }
-
-    /// Lay a well-formed install down under the store's own base, so [`banner_shows`] finds it the way it
-    /// finds a real one: the home, the executable, and the manifest that marks the install finished.
-    fn lay_down(store: &Store, plugin: &InstalledPlugin) {
-        let home = store.paths.plugin_dir(&plugin.name);
-        std::fs::create_dir_all(&home).unwrap();
-        std::fs::write(
-            home.join(crate::plugin_installed::program_file_name(&plugin.name)),
-            b"#!/bin/sh\n",
-        )
-        .unwrap();
-        std::fs::write(
-            home.join(crate::plugin_installed::MANIFEST_FILE_NAME),
-            serde_json::to_string(&plugin.manifest).unwrap(),
-        )
-        .unwrap();
-    }
-
-    /// Open a plugin's gate at one layer — what an enable does.
-    fn enable_at(store: &mut Store, plugin: &str, layer: crate::plugin_layer::Layer) {
-        crate::plugin_trust::enable(
-            store,
-            plugin,
-            layer,
-            &[],
-            &crate::plugin_when::Stage::default(),
-            |_| true,
-            &crate::plugin_check::Checked::NotDeclared,
-        )
-        .unwrap();
+    /// Set `project` up to report `task.due` somewhere it can reach — a connection on the device's shelf,
+    /// selected by the project, with the event ticked and the project switched on (`AMB-D-885`). All four
+    /// are what [`banner_shows`] asks about, so each one is a switch a test can throw on its own.
+    fn reports_due(store: &mut Store, project: i64) {
+        let target = store.notify_target_add(crate::model::NotifyKind::Slack, "shelf").unwrap();
+        store.project_notify_set_enabled(project, true).unwrap();
+        store.project_notify_select_target(project, target.id).unwrap();
+        store.project_notify_set_event(project, crate::lifecycle::name::TASK_DUE, true).unwrap();
     }
 
     /// The three conditions the decision names, each on its own: with all of them met the banner has a
@@ -735,10 +632,9 @@ mod tests {
         let today = day("2026-08-19");
         let (mut store, project) = store_with_project("tick-banner-conditions");
         let dated = file(&mut store, project, "期日つき", Some(today));
-        lay_down(&store, &installed("carrier", Scope::Project, &["task.due"]));
-        enable_at(&mut store, "carrier", crate::plugin_layer::Layer::Project(project));
+        reports_due(&mut store, project);
 
-        // Unanswered, dated work on the board, and something listening: the whole question is live.
+        // Unanswered, dated work on the board, and somewhere to carry it: the whole question is live.
         assert!(banner_shows(&store, today).unwrap());
 
         // Answered — either way. The question is the device's and it has been put once already.
@@ -761,9 +657,8 @@ mod tests {
         file(&mut store, project, "また期日つき", Some(today));
         assert!(banner_shows(&store, today).unwrap());
 
-        // Nobody listening: carrying the warning outward is a plugin's, so a yes would change nothing.
-        crate::plugin_trust::disable(&mut store, "carrier", crate::plugin_layer::Layer::Project(project))
-            .unwrap();
+        // Nowhere to carry it: the project stops reporting the day, so a yes would change nothing.
+        store.project_notify_set_event(project, crate::lifecycle::name::TASK_DUE, false).unwrap();
         assert!(!banner_shows(&store, today).unwrap());
     }
 
@@ -775,8 +670,7 @@ mod tests {
         let today = day("2026-08-19");
         let (mut store, project) = store_with_project("tick-banner-later");
         file(&mut store, project, "期日つき", Some(today));
-        lay_down(&store, &installed("carrier", Scope::Project, &["task.due"]));
-        enable_at(&mut store, "carrier", crate::plugin_layer::Layer::Project(project));
+        reports_due(&mut store, project);
 
         crate::overview::defer_tick_banner(&store.engine, "2026-08-19").unwrap();
         assert!(!banner_shows(&store, today).unwrap());
@@ -785,45 +679,6 @@ mod tests {
             store.config.tick_consent.is_none(),
             "later answers nothing — the question is still open",
         );
-    }
-
-    /// The gate that counts is the one the plugin's author declared (`AMB-D-601`): a project plugin
-    /// switched on in some project, a machine plugin switched on for the device, and neither reads the
-    /// other's row.
-    #[test]
-    fn a_carrier_is_counted_at_the_layer_its_author_declared() {
-        use crate::plugin_layer::Layer;
-        let (mut store, project) = store_with_project("tick-banner-carrier");
-        let of_the_project = [installed("slack", Scope::Project, &["task.due"])];
-        let of_the_device = [installed("slack", Scope::Machine, &["task.due"])];
-
-        // Installed, subscribed, and switched on nowhere.
-        assert!(!warning_has_a_carrier(&store, &of_the_project).unwrap());
-
-        // The project's own switch answers for a project plugin, and not for a machine one.
-        enable_at(&mut store, "slack", Layer::Project(project));
-        assert!(warning_has_a_carrier(&store, &of_the_project).unwrap());
-        assert!(!warning_has_a_carrier(&store, &of_the_device).unwrap());
-
-        // And the device's switch the other way round.
-        let (mut store, _) = store_with_project("tick-banner-carrier-device");
-        enable_at(&mut store, "slack", Layer::Device);
-        assert!(warning_has_a_carrier(&store, &of_the_device).unwrap());
-        assert!(!warning_has_a_carrier(&store, &of_the_project).unwrap());
-    }
-
-    /// A plugin that is on but does not subscribe to `task.due` carries nothing — being installed and
-    /// enabled is not the same as listening for the warning.
-    #[test]
-    fn a_plugin_that_is_on_but_not_listening_carries_nothing() {
-        let (mut store, project) = store_with_project("tick-banner-not-listening");
-        enable_at(&mut store, "elsewhere", crate::plugin_layer::Layer::Project(project));
-        let elsewhere = [installed("elsewhere", Scope::Project, &["task.done", "comment.added"])];
-        assert!(!warning_has_a_carrier(&store, &elsewhere).unwrap());
-
-        // The day-before warning is its own event, and subscribing to it alone is not subscribing to this.
-        let tomorrow_only = [installed("elsewhere", Scope::Project, &["task.due_tomorrow"])];
-        assert!(!warning_has_a_carrier(&store, &tomorrow_only).unwrap());
     }
 
     /// The rule the hourly wake-up rests on: within one calendar day the work is carried out once, however
@@ -891,10 +746,10 @@ mod tests {
     }
 
     /// The walk: every purpose is asked in turn, one that failed is reported rather than thrown, and the
-    /// tick still reaches the queues afterwards. With nothing installed there is nothing to deliver, which
-    /// is the ordinary shape of a tick and not an error.
+    /// tick still carries the outbox out afterwards. With nothing on it there is nothing to carry, which is
+    /// the ordinary shape of a tick and not an error.
     #[test]
-    fn a_tick_asks_every_purpose_and_reaches_the_queues_whatever_they_answered() {
+    fn a_tick_asks_every_purpose_and_carries_the_outbox_out_whatever_they_answered() {
         let dir = amenbo_scratch::scratch("tick-walk");
         let store = Store::open_at(crate::config::Paths::at(dir)).unwrap();
         let table = [
@@ -909,8 +764,7 @@ mod tests {
         let report = run_over(&store, day("2026-08-18"), &table).unwrap();
         assert_eq!(report.ran, ["carried-out", "after-the-failure"]);
         assert_eq!(report.failed.iter().map(|(id, _)| *id).collect::<Vec<_>>(), ["would-not-run"]);
-        assert_eq!(report.delivered(), 0, "nothing is installed, so nothing is delivered");
-        assert!(report.left.is_empty(), "and nothing is left owed");
+        assert_eq!(report.carried, 0, "no purpose wrote anything, so there is nothing to carry out");
 
         // Woken again the same day: what was carried out is not carried out twice, and what failed is
         // still owed.

@@ -108,17 +108,12 @@ fn real_main() -> i32 {
         Err(e) => return handle_parse_error(e),
     };
     // facet (actor kind): `--actor` and nothing else (`AMB-D-408`). An operation that uses the facet —
-    // stamping who acted, or drawing how far an AI reaches — must declare one, and gets `facet_required`
+    // stamping who acted, or drawing how far an AI reaches — must declare one, and is refused
     // when it does not. An operation that uses none passes without one and never touches a facet again.
     // Nothing is inferred from the context of the call: an environment variable would propagate into
     // every process Amenbo starts, and a human default would let an undeclared AI write as a person and
     // read past its binding.
-    //
-    // On the plugin face one of those two consumers is already served before the command line is read: the
-    // reach came with the launch. So the door asks for a facet only where one is still used — the shape of
-    // that is `facet_required` below.
-    let plugin_face = amenbo_core::plugin_callback::window_declared();
-    let actor = match decide_facet(parsed.actor.as_deref(), facet_required(&parsed.command, plugin_face)) {
+    let actor = match decide_facet(parsed.actor.as_deref(), uses_facet(&parsed.command)) {
         Ok(a) => a,
         Err(err) => {
             // No Flags yet, so render the error with a minimal set.
@@ -214,9 +209,9 @@ fn flag_before_the_name(word: &str) -> Option<bool> {
 ///
 /// False is the narrow set that touches neither: the faces that answer about this build or this machine
 /// (version / update / agent / whoami / config), the ones that place the pointer or read text handed to
-/// them (bind / lint / the git hooks), and the two entry points Amenbo starts itself with a store and a
-/// window already named (plugin-runner, `plugin validate`). Those never reach a facet, so there is
-/// nothing for an undeclared one to go wrong in. Everything else defaults to true (**fail-closed**: a
+/// them (bind / lint / the git hooks), and the entry points Amenbo starts itself with a store already
+/// named (the notification sender, the Viewer carrier). Those never reach a facet, so there is nothing for
+/// an undeclared one to go wrong in. Everything else defaults to true (**fail-closed**: a
 /// variant missed here surfaces `facet_required`, which beats acting on a facet nobody declared).
 fn uses_facet(cmd: &Option<Command>) -> bool {
     // No args = discover, which lists this project's work — store content, so it draws the reach.
@@ -243,10 +238,8 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // executable for every tool call (`AMB-D-665`). The facet is the child's to declare, in the folder
         // the child works — and a host launching a server is in no position to pass one anyway.
         | Command::Mcp { .. }
-        // A runner fires the hooks a facet's own writes already queued: it creates nothing, assigns
-        // nothing, and was handed the store to work (`AMB-T-2175`). So was a plugin calling Amenbo back,
-        // whose window comes from the gate it fired through rather than from a facet (`AMB-D-406`).
-        | Command::PluginRunner { .. }
+        // A sender posts what a facet's own writes already earned: it creates nothing, assigns nothing,
+        // and was handed the store to post through (`AMB-D-885`).
         | Command::NotifySender { .. }
         // A carrier is handed the store to carry and takes the turn its launcher's write earned; it
         // creates nothing and assigns nothing, so there is no facet for it to declare (`AMB-D-884`).
@@ -257,103 +250,6 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // Everything else — every write, and every read that surfaces store content.
         _ => true,
     }
-}
-
-/// Does this command **stamp** the facet — into created_by / assign / activity? The write half of
-/// [`uses_facet`]'s two consumers, asked on its own by [`facet_required`].
-///
-/// False is every read, and with them the faces that change something while naming no author: the machine's
-/// own settings and plugin state (config / bind / hooks / the whole plugin group, whose per-project rows
-/// carry no facet), and the maintenance ops that move the truth source wholesale rather than record an act in
-/// it (backup / restore / hard-erase / export). Everything else defaults to true (**fail-closed**), and a
-/// variant misjudged here still cannot stamp a facet nobody named: [`Flags::facet`] answers `facet_required`
-/// where the value is taken.
-fn stamps_facet(cmd: &Option<Command>) -> bool {
-    let Some(c) = cmd else { return false }; // no args = discover (a read)
-    match c {
-        // Pure reads / discovery / local settings / transport (record no facet).
-        Command::Agent { .. }
-        | Command::Version
-        | Command::Update { .. } // installs a build; nothing of it lands in the store
-        | Command::Whoami
-        | Command::Status { .. }
-        | Command::Activity { .. }
-        | Command::Search { .. }
-        | Command::Validate { .. }
-        | Command::Backup { .. } // reads the truth source into a snapshot file; records no facet or activity
-        | Command::Restore { .. } // replaces the truth source from a snapshot; maintenance op, records no facet or activity
-        | Command::HardErase { .. } // physically erases append-only content; maintenance op, records no facet or activity
-        | Command::Export { .. }
-        | Command::Lint { .. } // reads the text it is handed; no store, so nothing to stamp a facet onto
-        | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
-        | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
-        // A runner fires the hooks a facet's own writes already queued; it creates nothing and assigns
-        // nothing, so there is no author for it to stamp (`AMB-T-2175`).
-        | Command::PluginRunner { .. }
-        | Command::NotifySender { .. }
-        | Command::ViewerCarrier { .. }
-        // The MCP server writes nothing itself; what its tool calls run is a child that stamps its own.
-        | Command::Mcp { .. }
-        // The lint hook's answer: a per-project row that records it, with no author to stamp and no
-        // activity behind it.
-        | Command::Hooks { .. }
-        // The hourly tick's answer: a config key and a registration in the OS, with no author to stamp
-        // and no activity behind it.
-        | Command::Tick { .. }
-        // The Viewer's own: the device's secrets, and the carrier's memory of where it left off. Nothing
-        // here is a project's row, nothing records an act, and there is no author for one to be stamped
-        // onto.
-        | Command::Viewer { .. }
-        // A worktree is a checkout on disk. It reads the task to see whether this is the repository that
-        // task is worked in (`AMB-D-649`) — a read, which is why the facet is still declared — and writes
-        // nothing to the store, so there is no act for an author to be stamped onto.
-        | Command::Worktree { .. }
-        // The AI-harness consent, like the lint's: a per-project row that records an answer, with no
-        // author to stamp and no activity behind it.
-        | Command::AgentHook { .. }
-        | Command::Config { .. } // settings live in the user layer and leave no activity behind
-        // The surface layer: what it writes is a statement to the running window, not a record in the
-        // store, so there is nothing for a facet to be stamped onto.
-        | Command::Talk { .. }
-        | Command::Bind { .. } => false, // only writes the `.amenbo` pointer (no facet recorded)
-        // Sub-command groups that are reads.
-        Command::Doctor { fix } => *fix, // only --fix writes
-        // Anything that is not a read (list/show) counts as a write.
-        Command::Project { sub } => !matches!(sub, ProjectCmd::List { .. } | ProjectCmd::Show { .. }),
-        Command::Dimension { sub } => !matches!(sub, DimensionCmd::List { .. } | DimensionCmd::Show { .. }),
-        Command::Task { sub } => match sub {
-            TaskCmd::List { .. } | TaskCmd::Show { .. } => false,
-            // The commit group nests: `task commit list` is a read, add/rm stamp a facet.
-            TaskCmd::Commit { sub } => !matches!(sub, TaskCommitCmd::List { .. }),
-            _ => true,
-        },
-        Command::Comment { sub } => !matches!(sub, CommentCmd::List { .. }),
-        Command::Decision { sub } => !matches!(
-            sub,
-            DecisionCmd::List { .. } | DecisionCmd::Show { .. } | DecisionCmd::Comment { sub: DecisionCommentCmd::List { .. } }
-        ),
-        // `attach` group: only `rm` writes; ls/show/open/save are reads. (Adds happen under task/decision
-        // attach.)
-        Command::Attach { sub } => matches!(sub, AttachCmd::Rm { .. }),
-        // The rest (Init …) stamp created_by and friends, so default to true (fail-closed).
-        _ => true,
-    }
-}
-
-/// Must this invocation declare a facet at the door? [`uses_facet`] names the facet's two consumers; this
-/// asks which of them is left for the command line to answer.
-///
-/// On the **plugin face** — Amenbo launched this process as a plugin and handed it a window
-/// ([`window_declared`](amenbo_core::plugin_callback::window_declared)) — the reach is that window
-/// (`AMB-D-406`), and `run` opens the store through it whichever facet is named. The reach-drawing consumer
-/// is therefore already served, and a read there uses no facet at all: the read-back an author is shown
-/// (`amenbo task show <id> --json`, no facet) is a call in which nothing is decided by one. A write is
-/// untouched — it still stamps who acted, and the payload the plugin was handed already names that actor.
-///
-/// The two are intersected, so this face never asks for *more* than the ordinary one however a variant falls
-/// in [`stamps_facet`].
-fn facet_required(cmd: &Option<Command>, plugin_face: bool) -> bool {
-    uses_facet(cmd) && (!plugin_face || stamps_facet(cmd))
 }
 
 /// The command tree clap parses with, worded for the CLI **this build installs**
@@ -468,9 +364,10 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
 /// `agent-hook`),
 /// and `unbind` — the way *out*. Refusing that one would strand a pointer an older build wrote, leaving a
 /// text editor as the only way to remove it, and its single store write forgets this folder's registration:
-/// that cleans the binding up rather than driving the backlog with it. So is `plugin-runner`: it is handed
-/// the store to work and inherits only its launcher's directory, so the walk this guard makes would answer
-/// about a folder it never consulted — and refusing it would stall that queue over where a command was typed.
+/// that cleans the binding up rather than driving the backlog with it. So is the notification sender: it is
+/// handed the store to post through and inherits only its launcher's directory, so the walk this guard makes
+/// would answer about a folder it never consulted — and refusing it would drop a message over where a
+/// command was typed.
 fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
     match cmd {
         Some(Command::Version)
@@ -479,14 +376,13 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         | Some(Command::GithookPreCommit)
         | Some(Command::GithookCommitMsg { .. })
         | Some(Command::AgentHook { .. })
-        | Some(Command::PluginRunner { .. })
         | Some(Command::NotifySender { .. })
         | Some(Command::ViewerCarrier { .. })
         // The MCP server is launched by a host, from whatever directory that host happened to be in, and
         // it opens no store there. The folder that decides anything is `--dir`, and the child that runs in
         // it meets this guard itself — one answer, given where it is owed.
         | Some(Command::Mcp { .. })
-        // The scheduler's face, for the reason `plugin-runner` is: the store it works is this device's, and
+        // The scheduler's face, for the reason the sender's is: the store it works is this device's, and
         // the folder its launcher happened to stand in decides nothing about it. Refusing it would stall a
         // delivery over where a scheduler was configured.
         | Some(Command::Tick { sub: TickCmd::Run })
@@ -544,8 +440,8 @@ fn refuse_a_nested_worktree(cmd: &Option<Command>) -> Result<(), CliError> {
 /// `project add --dir` claim the folder for this store, `init` raises a project in it. Refusing those
 /// would leave a text editor as the only way to release a folder — the same reason `unbind` (the other
 /// way out) is outside the nested-worktree guard. So are the faces that decide nothing by this
-/// directory: `version`, `update`, `lint`, the git hooks, `agent-hook`, `plugin validate`,
-/// `plugin-runner`, and `mcp` (whose child meets this guard in the folder its call named).
+/// directory: `version`, `update`, `lint`, the git hooks, `agent-hook`, the notification sender, the Viewer
+/// carrier, and `mcp` (whose child meets this guard in the folder its call named).
 fn refuse_a_pointer_from_another_store(cmd: &Option<Command>) -> Result<(), CliError> {
     match pointer_store_guard_target(cmd).and_then(|dir| amenbo_core::binding::foreign_pointer(&dir)) {
         Some(foreign) => Err(CliError::pointer_other_store(
@@ -570,7 +466,6 @@ fn pointer_store_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBu
             | Some(Command::GithookPreCommit)
             | Some(Command::GithookCommitMsg { .. })
             | Some(Command::AgentHook { .. })
-            | Some(Command::PluginRunner { .. })
             | Some(Command::NotifySender { .. })
             | Some(Command::ViewerCarrier { .. })
             | Some(Command::Mcp { .. })
@@ -667,25 +562,12 @@ fn advise_linux_system_orphan() {
 }
 
 fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
-    // The **plugin face** (`AMB-D-406`): Amenbo launched a plugin, and that plugin is calling Amenbo back to
-    // read what its payload only named. The store to open and the window to read it through were handed over
-    // in the environment, so both are read here, once, ahead of everything that would otherwise consult this
-    // directory — a plugin's is whatever its launcher happened to be in, and nothing here is decided by it.
-    // `None` is every other invocation: nothing launched this as a plugin, and the facet and the binding
-    // decide the reach as they always have.
-    let plugin_window = amenbo_core::plugin_callback::reach_from_env().map_err(CliError::from)?;
     // Whether this checkout is a place to use Amenbo at all is asked before any dispatch: `init` raises a
     // project in the real store and returns below without ever reaching the guards further down, so a
-    // refusal that came later would arrive after the damage it exists to prevent. A plugin is outside it for
-    // the reason `plugin-runner` is (see `nested_guard_target`): the store it works was named to it, so the
-    // upward walk this guard makes would judge a folder that decides nothing here.
-    if plugin_window.is_none() {
-        refuse_a_nested_worktree(&cli.command)?;
-        // And whether the pointer this directory offers is even ours to read (`AMB-D-685`). A plugin is
-        // outside it for the same reason: the store it works was named to it, so the folder its
-        // launcher happened to stand in decides nothing here.
-        refuse_a_pointer_from_another_store(&cli.command)?;
-    }
+    // refusal that came later would arrive after the damage it exists to prevent.
+    refuse_a_nested_worktree(&cli.command)?;
+    // And whether the pointer this directory offers is even ours to read (`AMB-D-685`).
+    refuse_a_pointer_from_another_store(&cli.command)?;
     // Init creates the store itself, so do not open one first.
     match &cli.command {
         Some(Command::Init { name, language, force }) => return init_cmd(flags, name.clone(), language.clone(), *force),
@@ -713,15 +595,10 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // diff (no paths), `commit-msg` lints the message file git hands over.
         Some(Command::GithookPreCommit) => return lint_cmd(flags, Vec::new(), false),
         Some(Command::GithookCommitMsg { path }) => return lint_cmd(flags, vec![path.clone()], false),
-        // A plugin runner: Amenbo launched this process to work one queue (`AMB-T-2175`). It opens the store
-        // it was handed, so it sits ahead of every guard that asks about *this* directory — its own is
-        // whatever its launcher happened to be in, and it was never asked to answer for it.
-        Some(Command::PluginRunner { plugin, owner, store }) => {
-            amenbo_core::plugin_runner::run_process(store.into(), plugin, owner);
-            return Ok(0);
-        }
-        // A notification sender, on the same footing: Amenbo launched this process to post one drive's
-        // worth of messages through the store it was handed (`AMB-D-885`).
+        // A notification sender: Amenbo launched this process to post one drive's worth of messages through
+        // the store it was handed (`AMB-D-885`). It opens the store it was handed, so it sits ahead of every
+        // guard that asks about *this* directory — its own is whatever its launcher happened to be in, and
+        // it was never asked to answer for it.
         Some(Command::NotifySender { store }) => {
             amenbo_core::notify_dispatch::send_process(store.into());
             return Ok(0);
@@ -802,14 +679,6 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // What the restore replaces is guarded where the replacing happens: the swap holds the store's swap lock,
     // and the archive's own gates (layout, generation) still refuse what this build cannot carry.
     if let Some(Command::Restore { path }) = &cli.command {
-        // The one reach check that cannot wait for the store to be opened, because this command replaces
-        // the store rather than reading it. A window was opened to observe one project (`AMB-D-406`), and
-        // what this would do is overwrite every project on the device with the contents of a file — the
-        // furthest thing from observing. `AMB-D-224` allowed it to the AI facet as the recovery an agent
-        // runs on their user's own device; nothing launched a plugin to do that.
-        if let Some(window) = plugin_window {
-            window.refuse_whole_device("restore").map_err(CliError::from)?;
-        }
         return run_restore(flags, path.clone());
     }
     // Migration runs here — before the store is opened, before the command matters. There is no saying
@@ -839,24 +708,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
 
     // The startup kick (`AMB-D-399`), ahead of the command and of the network the update check does: a
     // delivery a previous run left standing is picked up now, whatever this invocation was called to do.
-    // A plugin calling Amenbo back is not a startup — it is a read from inside a run that was already
-    // driven — so it makes none.
     //
-    // Neither does a flush, and for the opposite reason: that command *is* the delivery, and the kick
-    // does the same drive with the other launcher — handing every queue to a runner process before the
-    // command that was asked to work them, and to say what moved, ever reaches one. What it left to
-    // report was then somebody else's work by definition, which is nothing (`AMB-T-2507`). Nothing is
-    // lost by standing down for it: the flush drives both layers, unconditionally, and waits.
-    //
-    // Nor does the tick, which is the flush's reason word for word: working the queues to their end, in this
-    // process, is half of what the scheduler started it for, and a kick that handed every queue to a runner
-    // first would leave it with somebody else's work to report — which is nothing.
-    if plugin_window.is_none()
-        && !matches!(
-            cli.command,
-            Some(Command::Tick { sub: TickCmd::Run })
-        )
-    {
+    // The tick stands down from it: that command *is* the carrying, and it posts in the process it was
+    // woken in rather than handing the messages to a sender it would not outlive. A kick ahead of it would
+    // start that sender first and leave the tick with somebody else's work to report, which is nothing.
+    if !matches!(cli.command, Some(Command::Tick { sub: TickCmd::Run })) {
         resume_dispatch(&store);
     }
 
@@ -866,9 +722,8 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     //
     // **The `viewer` group stands down from it**, the way the flush and the tick stand down above and for
     // the same reason: those roads are the person attending to this by hand, and a carrier started behind
-    // their back would answer the press they came to make with "somebody else has the turn". A plugin
-    // calling Amenbo back makes no kick either — it is a read from inside a run that was already driven.
-    if plugin_window.is_none() && !matches!(cli.command, Some(Command::Viewer { .. })) {
+    // their back would answer the press they came to make with "somebody else has the turn".
+    if !matches!(cli.command, Some(Command::Viewer { .. })) {
         resume_the_viewer(&store);
     }
 
@@ -912,7 +767,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // for both surfaces to read. Said once per surface — the app owes its own — and on stderr beside the
     // other advisories. A `--json` caller is a machine and is told nothing, so the person's turn is still
     // theirs when they next type something.
-    if plugin_window.is_none() && !flags.json && !flags.quiet {
+    if !flags.json && !flags.quiet {
         announce_the_handover(&store);
     }
 
@@ -925,8 +780,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         amenbo_core::binding::resolve_upward(&store, &cwd);
     }
 
-    // Decide this surface's reach once, here — from what Amenbo handed a plugin it launched (`plugin_window`,
-    // above), and otherwise from the facet and the binding. An AI (`--actor ai`) is confined to the project
+    // Decide this surface's reach once, here — from the facet and the binding. An AI (`--actor ai`) is confined to the project
     // the `.amenbo` points at; a human sees the whole device
     // (the overview is the human's place). Reach is drawn from the binding alone — `--project` never widens
     // it: the resolution below is checked against exactly this reach, and naming an outside project is
@@ -936,23 +790,16 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // nothing to bite on, and falling back to All would reduce the binding to decoration. init (which creates
     // the binding) and migrate/unbind (which do not surface store content) are handled before this point and
     // never arrive here; that is the shape of the exceptions.
-    let mut store = match plugin_window {
-        // The plugin face answers first, and for either facet (`AMB-D-406`). A plugin is neither a human nor
-        // an AI — it is a program Amenbo started — so its window is not drawn from a facet's default but from
-        // the gate it fires through: the device for a `machine` plugin, one project for a `project` one. It
-        // cannot come from the binding either, since the folder a plugin runs in has none to read.
-        Some(reach) => store.with_reach(reach),
-        None => match flags.actor {
-            Some(ActorKind::Ai) => {
-                let reach = Reach::for_ai(binding_project(&store)).map_err(CliError::from)?;
-                store.with_reach(reach)
-            }
-            // A human sees the device, which is the store's own reach — nothing to narrow. So is a command
-            // that declared no facet, and that arm is not a human default in disguise: `uses_facet` let
-            // through only the commands that surface no store content (version / agent / whoami / config /
-            // bind …), so the reach they keep is never consulted.
-            Some(ActorKind::Human) | None => store,
-        },
+    let mut store = match flags.actor {
+        Some(ActorKind::Ai) => {
+            let reach = Reach::for_ai(binding_project(&store)).map_err(CliError::from)?;
+            store.with_reach(reach)
+        }
+        // A human sees the device, which is the store's own reach — nothing to narrow. So is a command
+        // that declared no facet, and that arm is not a human default in disguise: `uses_facet` let
+        // through only the commands that surface no store content (version / agent / whoami / config /
+        // bind …), so the reach they keep is never consulted.
+        Some(ActorKind::Human) | None => store,
     };
 
     // Read-only integrity check at startup. Problems are reported as warnings and never repaired
@@ -1159,9 +1006,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::GithookPreCommit | Command::GithookCommitMsg { .. } => {
             unreachable!("handled before open")
         }
-        Command::PluginRunner { .. }
-        | Command::NotifySender { .. }
-        | Command::ViewerCarrier { .. } => {
+        Command::NotifySender { .. } | Command::ViewerCarrier { .. } => {
             unreachable!("handled before open")
         }
         // Notifications: the device's shelf and what this project reports through it (`AMB-D-885`). The
@@ -1455,14 +1300,13 @@ mod tests {
     }
 
     /// The surface layer decides nothing by the folder it was typed in: it reaches the pane that named it
-    /// in the environment, and no store. So it declares no facet, stamps none, and is outside both guards
+    /// in the environment, and no store. So it declares no facet, and is outside both guards
     /// that ask what this directory is — including the nested-worktree one, since a throwaway checkout is
     /// exactly where an agent works and saying what it is doing there is not driving a backlog with it.
     #[test]
     fn the_surface_layer_is_judged_by_the_pane_that_named_it_and_not_by_this_folder() {
         let talk = Some(Command::Talk { sub: None });
         assert!(!uses_facet(&talk), "there is no store content to draw a reach over");
-        assert!(!stamps_facet(&talk), "and no record for an author to be stamped onto");
         assert!(
             nested_guard_target(&talk).is_none(),
             "a worktree is a place to say what is happening in it",
@@ -1621,59 +1465,6 @@ mod tests {
         assert!(uses_facet(&Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string() } })));
         assert!(uses_facet(&Some(Command::Comment { sub: CommentCmd::Add { task: "x".to_string(), text: "t".to_string() } })));
         assert!(uses_facet(&Some(Command::Doctor { fix: true })));
-    }
-
-    /// `stamps_facet` is the write half alone: it must not claim a read, because on the plugin face this is
-    /// the whole of what `--actor` is still demanded by.
-    #[test]
-    fn stamps_facet_is_the_write_half_alone() {
-        assert!(!stamps_facet(&None)); // discover
-        assert!(!stamps_facet(&Some(Command::Task { sub: TaskCmd::Show { id: "x".to_string() } })));
-        assert!(!stamps_facet(&Some(Command::Task { sub: TaskCmd::List { project: None, filter: None, sort: "order".to_string(), limit: None, offset: None } })));
-        assert!(!stamps_facet(&Some(Command::Comment { sub: CommentCmd::List { task: "x".to_string(), limit: None, offset: None } })));
-        assert!(!stamps_facet(&Some(Command::Status { scope: "today".to_string() })));
-        assert!(!stamps_facet(&Some(Command::Doctor { fix: false })));
-        // Changing something while naming no author: this machine's settings and its plugin state.
-        // Writes name an author.
-        assert!(stamps_facet(&Some(Command::Comment { sub: CommentCmd::Add { task: "x".to_string(), text: "t".to_string() } })));
-        assert!(stamps_facet(&Some(Command::Task { sub: TaskCmd::Status { id: "x".to_string(), status: "in_progress".to_string() } })));
-        assert!(stamps_facet(&Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string() } })));
-        assert!(stamps_facet(&Some(Command::Doctor { fix: true })));
-    }
-
-    /// The door's own line (`AMB-T-2460`): a plugin reads back with no facet, because the window it was
-    /// launched with is what draws the reach — while a write from the same plugin still declares who acted.
-    /// Off the plugin face nothing moves, and no command is asked for a facet on the plugin face that the
-    /// ordinary face lets through.
-    #[test]
-    fn the_plugin_face_asks_for_a_facet_only_where_one_is_still_used() {
-        let read = Some(Command::Task { sub: TaskCmd::Show { id: "x".to_string() } });
-        let discover = None;
-        let write = Some(Command::Comment { sub: CommentCmd::Add { task: "x".to_string(), text: "t".to_string() } });
-        // The read-back the author's documentation shows, and the bare discover beside it.
-        assert!(facet_required(&read, false), "off the plugin face a read draws the reach from the facet");
-        assert!(!facet_required(&read, true));
-        assert!(facet_required(&discover, false));
-        assert!(!facet_required(&discover, true));
-        // A write stamps who acted on either face.
-        assert!(facet_required(&write, false));
-        assert!(facet_required(&write, true));
-        // Never stricter than the ordinary face.
-        for cmd in [
-            None,
-            Some(Command::Version),
-            Some(Command::Agent { command: None, full: false }),
-            Some(Command::Update { print: false, apply: false, rollback: false }),
-            Some(Command::Bind { project: None, dir: None, force: false, rebind: None }),
-            Some(Command::Doctor { fix: false }),
-            Some(Command::Doctor { fix: true }),
-            Some(Command::Task { sub: TaskCmd::Done { id: "x".to_string() } }),
-        ] {
-            assert!(
-                !facet_required(&cmd, true) || facet_required(&cmd, false),
-                "the plugin face asks for a facet where the ordinary face does not: {cmd:?}"
-            );
-        }
     }
 
     /// The only faces allowed through without a binding are the ones that never read the store. Loosen this

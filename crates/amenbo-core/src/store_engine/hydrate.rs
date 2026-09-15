@@ -31,8 +31,7 @@ use crate::model::{
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionStatus, DecisionTaskLink,
     Dimension, DimensionAppliesTo, DimensionCardinality,
-    DimensionRole, DimensionValue, NotifyKind, NotifyTarget, PluginConfigValue,
-    PluginEnabledProject, PluginSecret, Priority,
+    DimensionRole, DimensionValue, NotifyKind, NotifyTarget, Priority,
     ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret, SecretArea,
     Project, Subtype, Task, TaskComment, TaskCommit, TaskDependency,
     TaskDimensionValue, TaskStatus, View,
@@ -197,34 +196,6 @@ pub(super) fn task_commit_row(r: &Row) -> rusqlite::Result<TaskCommit> {
     })
 }
 
-pub(super) fn plugin_config_row(r: &Row) -> rusqlite::Result<PluginConfigValue> {
-    const C: col::plugin_config::Cols = col::plugin_config::ALL;
-    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
-    Ok(PluginConfigValue {
-        id: get(r, C.id)?,
-        project_id: get(r, C.project_id)?,
-        plugin: get(r, C.plugin)?,
-        field_key: get(r, C.field_key)?,
-        value: get(r, C.value)?,
-        created_at,
-        updated_at,
-    })
-}
-
-pub(super) fn plugin_secret_row(r: &Row) -> rusqlite::Result<PluginSecret> {
-    const C: col::plugin_secret::Cols = col::plugin_secret::ALL;
-    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
-    Ok(PluginSecret {
-        id: get(r, C.id)?,
-        project_id: get(r, C.project_id)?,
-        plugin: get(r, C.plugin)?,
-        field_key: get(r, C.field_key)?,
-        value: get(r, C.value)?,
-        created_at,
-        updated_at,
-    })
-}
-
 pub(super) fn secret_row(r: &Row) -> rusqlite::Result<Secret> {
     const C: col::secret::Cols = col::secret::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
@@ -292,18 +263,6 @@ pub(super) fn project_notify_event_row(r: &Row) -> rusqlite::Result<ProjectNotif
         id: get(r, C.id)?,
         project_id: get(r, C.project_id)?,
         event: get(r, C.event)?,
-        created_at,
-        updated_at,
-    })
-}
-
-pub(super) fn plugin_enable_row(r: &Row) -> rusqlite::Result<PluginEnabledProject> {
-    const C: col::plugin_enable::Cols = col::plugin_enable::ALL;
-    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
-    Ok(PluginEnabledProject {
-        id: get(r, C.id)?,
-        project_id: get(r, C.project_id)?,
-        plugin: get(r, C.plugin)?,
         created_at,
         updated_at,
     })

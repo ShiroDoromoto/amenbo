@@ -287,9 +287,10 @@ pub enum Command {
     /// that. Export is **one-way**: the way back into Amenbo is a `backup` archive and `restore`,
     /// not this output.
     ///
-    /// One thing stays behind: a plugin's **secrets** (`AMB-D-434`). This file goes out to another tool
-    /// and stays in its hands, and a credential in the clear is not something to hand over on the way
-    /// past — they ride `backup`, which leads back to your own store, instead.
+    /// One thing stays behind: your **secrets** (`AMB-D-884`) — a notification connection, the Viewer's
+    /// keys. This file goes out to another tool and stays in its hands, and a credential in the clear is
+    /// not something to hand over on the way past — they ride `backup`, which leads back to your own store,
+    /// instead.
     Export {
         /// The **export directory** to create — `export.json` plus `attachments/` with every
         /// attachment's bytes. Must not exist yet. With no `--out` the dump streams to stdout (records
@@ -300,9 +301,9 @@ pub enum Command {
     /// Back up this device — its store and its attachment bytes — into a single
     /// verified `.amenbo-backup` archive at `path`. The store is snapshotted with `VACUUM INTO`
     /// (checkpointed, no torn DB+WAL) and bounded-verified; a `manifest.json` records its migration
-    /// generation. The device's own secrets (at-rest key / identity) are never included; a plugin's
-    /// secrets are store rows, so those ride along and come back working (`AMB-D-434`). The destination
-    /// must not already exist.
+    /// generation. The device's own secrets (at-rest key / identity) are never included; your notification
+    /// and Viewer secrets are store rows, so those ride along and come back working (`AMB-D-884`). The
+    /// destination must not already exist.
     Backup {
         /// Destination `.amenbo-backup` archive; must not already exist.
         path: Option<String>,
@@ -396,31 +397,13 @@ pub enum Command {
         path: String,
     },
 
-    /// The entry point a **plugin runner** is launched through: it works one plugin's queue of observation
-    /// events to its end, in a process of its own, and exits (`AMB-D-399`, `AMB-T-2175`). Hidden because
-    /// Amenbo launches it — never a hand. It is not a daemon: it is started only when there is a queue and a
-    /// free lease, and there is nothing to stop, since it ends when its queue is empty.
-    ///
-    /// It takes the store as an argument rather than resolving one: a runner must work the store the drive
-    /// that launched it drove. Its own output goes nowhere — what each run did is in the execution log
-    /// (`AMB-D-361`).
-    #[command(hide = true)]
-    PluginRunner {
-        /// the plugin whose queue to work
-        plugin: String,
-        /// the lease the launching drive took on this runner's behalf
-        owner: String,
-        /// the base directory of the store to work (app-data, or `AMENBO_HOME`)
-        store: String,
-    },
-
     /// The entry point a **notification sender** is launched through: it posts one drive's worth of
     /// messages and exits (`AMB-D-885`, `AMB-D-352`). Hidden because Amenbo launches it — never a hand.
     ///
     /// The messages arrive on stdin, already worded, because a burst is a paragraph of text and a command
     /// line is a place with a length limit and every process list on the machine reading it. The store is
-    /// an argument for the reason a plugin runner's is: it posts through the connections of the store the
-    /// drive that launched it drove.
+    /// an argument rather than resolved: it posts through the connections of the store the drive that
+    /// launched it drove, not whichever one its own working directory would answer with.
     #[command(hide = true)]
     NotifySender {
         /// the base directory of the store whose connections to post through (app-data, or `AMENBO_HOME`)
@@ -860,13 +843,13 @@ pub enum TickCmd {
     Status,
 
     /// The face the scheduler itself calls, once an hour (`AMB-D-706`). Hidden because a scheduler calls
-    /// it — never a hand. It is not a daemon: it starts, judges what the calendar day owes, works what the
-    /// plugin queues still hold, and exits, so nothing is running between two ticks.
+    /// it — never a hand. It is not a daemon: it starts, judges what the calendar day owes, carries out
+    /// whatever the outbox still holds, and exits, so nothing is running between two ticks.
     ///
     /// Being woken is not being due: the timer carries no meaning, so an hour that is owed nothing is the
     /// ordinary case, and what is owed is counted in calendar days rather than in wake-ups (`AMB-D-708`).
-    /// A round with nothing owed is still not a wasted one — it works the queues, which is where a
-    /// delivery a killed runner left standing gets picked up.
+    /// A round with nothing owed is still not a wasted one — it carries the outbox out, which is where a
+    /// walk a killed run left standing gets picked up.
     ///
     /// It resolves no folder and takes no facet: a scheduler runs it from wherever it happens to stand,
     /// and what it works is this device's one store. On a device holding no store there is nothing to do,
@@ -1233,7 +1216,7 @@ pub enum TaskCmd {
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
         /// the bound folder this task is to be worked in — one of the project's own linked folders,
-        /// named by its path or just its folder name (`--at amenbo-plugin-mail`). Only what you name
+        /// named by its path or just its folder name (`--at amenbo-worker`). Only what you name
         /// here lands: the folder the create was typed in is never taken as the default. Having one
         /// refuses nothing — no reservation and no worktree is stopped for it
         #[arg(long, value_name = "FOLDER")]
@@ -1286,7 +1269,7 @@ pub enum TaskCmd {
         #[arg(long)]
         clear_priority: bool,
         /// the bound folder this task is to be worked in — one of the project's own linked folders,
-        /// named by its path or just its folder name (`--at amenbo-plugin-mail`)
+        /// named by its path or just its folder name (`--at amenbo-worker`)
         #[arg(long, value_name = "FOLDER")]
         at: Option<String>,
         /// forget the folder this task named (it goes back to naming none)

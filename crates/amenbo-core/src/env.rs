@@ -15,14 +15,12 @@
 
 use std::ffi::OsString;
 
-/// The name of [`home`], for the surfaces that **set** it rather than read it — a plugin is handed the
-/// store this way ([`crate::plugin_callback`]), and a name that is written in two places is a name that can
-/// drift.
+/// The name of [`home`], for the surfaces that **set** it rather than read it — a test isolates the user
+/// layer this way, and a name that is written in two places is a name that can drift.
 pub const HOME_VAR: &str = "AMENBO_HOME";
 
 /// `AMENBO_HOME` — the explicit root that isolates the whole user layer (secrets, config, store)
-/// into one place, for tests and dogfooding. It is also how a launched plugin is told which store to call
-/// back into ([`crate::plugin_callback`]).
+/// into one place, for tests and dogfooding.
 pub fn home() -> Option<OsString> {
     var_os(HOME_VAR)
 }
@@ -40,29 +38,15 @@ pub fn home_dir() -> Option<std::path::PathBuf> {
     directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf())
 }
 
-/// The name of [`plugin_reach`], for the runner that sets it on a plugin's process
-/// ([`crate::plugin_callback`]).
-pub const PLUGIN_REACH_VAR: &str = "AMENBO_PLUGIN_REACH";
-
-/// `AMENBO_PLUGIN_REACH` — how far the plugin Amenbo just launched may read (`AMB-D-406`): `all`, or a
-/// project's `AMB-P-<n>` ref. Set by Amenbo on a plugin's process and read back when that plugin calls
-/// `amenbo` again; unset everywhere else, where the facet and the binding decide the reach as usual.
-pub fn plugin_reach() -> Option<String> {
-    var(PLUGIN_REACH_VAR)
-}
-
-/// The name of [`path`], for the one surface that **writes** it rather than reads it: a plugin is started
-/// with Amenbo's own directory in front of this list ([`crate::plugin_exec`]).
+/// The name of [`path`], for the surfaces that name it rather than read it.
 pub const PATH_VAR: &str = "PATH";
 
-/// `PATH` — the OS's own list of directories a bare command name is looked up in. Amenbo reads it for
-/// three purposes. One is to hand a plugin that same list with its own directory in front, so the `amenbo`
-/// a plugin is told to call (`AMB-D-406`) is there to be found even when the process was started by a
-/// scheduler rather than by a shell (`AMB-D-716`). Another is to ask the same question of ourselves: a
-/// theme preview on Linux is the one build nothing installs a CLI for, so whether it has a command to
-/// name is whether the member put one here ([`crate::config::Paths::command_to_run`]). The third is to do
-/// the lookup ourselves rather than leave it to the spawn, which on macOS is the difference between running
-/// git and asking the user to install a compiler ([`crate::sys::git`]).
+/// `PATH` — the OS's own list of directories a bare command name is looked up in. Amenbo reads it for two
+/// purposes. One is to ask whether it has a command of its own to name: a theme preview on Linux is the one
+/// build nothing installs a CLI for, so the answer is whether the member put one here
+/// ([`crate::config::Paths::command_to_run`]). The other is to do the lookup ourselves rather than leave it
+/// to the spawn, which on macOS is the difference between running git and asking the user to install a
+/// compiler ([`crate::sys::git`]).
 pub fn path() -> Option<OsString> {
     var_os(PATH_VAR)
 }
@@ -189,20 +173,6 @@ pub fn update_check_disabled() -> bool {
 /// self-update installs whatever that address answers.
 pub fn update_json_url() -> Option<String> {
     var("AMENBO_UPDATE_JSON_URL")
-}
-
-/// `AMENBO_PLUGIN_CATALOG_URL` — override the plugin catalog Amenbo fetches
-/// ([`crate::plugin_catalog::OFFICIAL_CATALOG_URL`]), so development and manual testing can point at a
-/// staging catalog without touching the published one.
-pub fn plugin_catalog_url() -> Option<String> {
-    var("AMENBO_PLUGIN_CATALOG_URL")
-}
-
-/// `AMENBO_GITHUB_API_URL` — override the GitHub API base a plugin's detail reads its stars, README
-/// and download count from ([`crate::plugin_github::GITHUB_API_URL`]), so development and manual
-/// testing can answer those requests locally instead of spending the real API's rate limit.
-pub fn github_api_url() -> Option<String> {
-    var("AMENBO_GITHUB_API_URL")
 }
 
 /// `AMENBO_ALLOW_UNSTAMPED_MIGRATE` — the escape hatch out of the release-stamp gate

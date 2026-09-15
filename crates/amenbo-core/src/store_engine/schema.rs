@@ -58,8 +58,8 @@
 //! | what the row is | example | `ON DELETE` |
 //! |---|---|---|
 //! | a concept someone can point at | a comment, a dependency edge, a decision↔task link, a commit anchor, a classification value | `RESTRICT` (+ the delete op takes the children first) |
-//! | Amenbo's own settings for a project | `plugin_config`, `plugin_secret`, `plugin_enable`, `secret`, `hook_optout`, `harness_consent` | `CASCADE` |
-//! | the same settings, written at the **device** layer (`AMB-D-601`) | a `plugin_config` / `plugin_secret` / `plugin_enable` / `secret` row whose `project_id` is NULL | the cascade never reaches them — no project holds them |
+//! | Amenbo's own settings for a project | `secret`, `hook_optout`, `harness_consent` | `CASCADE` |
+//! | the same settings, written at the **device** layer (`AMB-D-601`) | a `secret` row whose `project_id` is NULL | the cascade never reaches them — no project holds them |
 //! | optional entity reference (keep the child, drop the reference) | none in the registry today | `SET NULL` |
 //!
 //! So `RESTRICT` is what holds the ops to the rule: leave a child behind and the parent's `DELETE` stops
@@ -780,70 +780,16 @@ datasets! {
         order_key: col(ORDER_KEY),
     }
 
-    // A plugin's **text (non-secret)** config value at one layer (`AMB-D-434` / `AMB-D-601` / `AMB-D-356`).
-    // One value per layer and no tier under it: the author's `scope` declaration picks the single layer the
-    // whole plugin lives at, so there is nothing left for a machine default to be the default *of*. A record
-    // table, carried by `export`/`backup` — text config is ordinary content. A `secret` field never reaches
-    // here; it lives in `plugin_secret` below. `plugin` is the plugin's manifest name (a string; plugins
-    // live on disk, not in the store, so there is no FK for it) and `field_key` the config field's key
-    // (spelled out because `key` is a SQLite keyword).
-    //
-    // **`project_id` is the layer**: a project's id for a `scope: project` plugin, and NULL for the device
-    // row a `scope: machine` one writes. The `(project_id, plugin, field_key)` triple is unique
-    // (`plugin_config_triple` below) — and because SQLite counts NULLs in an index as distinct, the device
-    // row's uniqueness is a partial index of its own (`plugin_config_device`). CASCADE: a project's value is
-    // *about* the project, so deleting the project retires it; the device row belongs to no project, so no
-    // cascade reaches it.
-    plugin_config {
-        project_id: fk_opt("project", "CASCADE"),
-        plugin: col(REQ),
-        field_key: col(REQ),
-        value: col(REQ),
-    }
-
-    // A plugin's **secret** config value, at one layer (`AMB-D-434` / `AMB-D-601`). Same address as
-    // `plugin_config` above — `(project_id, plugin, field_key)`, unique as `plugin_secret_triple`, with the
-    // device row's own partial index (`plugin_secret_device`) — and the same shape;
-    // what makes it a table of its own is where its rows may travel. `backup`/`restore` carry it (a
-    // snapshot of the whole file), because that is the road back to one's own machine and dropping it
-    // would mean typing every credential in again after a restore; an `export` must leave it, that being
-    // a one-way door out to another tool no plaintext credential may take.
-    //
-    // **A whole table, so the exclusion cannot rot.** Keeping the secrets beside the text values and
-    // filtering "the rows whose field is secret" would put the judgement on every path that ever reads
-    // config — and the next path added would be written by someone who did not know to ask. A table left
-    // out of `export`'s walk is left out whether or not anyone remembers it exists.
-    plugin_secret {
-        project_id: fk_opt("project", "CASCADE"),
-        plugin: col(REQ),
-        field_key: col(REQ),
-        value: col(REQ),
-    }
-
-    // Where a plugin is **enabled** (`AMB-D-434` / `AMB-D-601`). A set, not a two-answer
-    // override: a plugin has one switch and it sits at the layer its author declared, with no tier under it
-    // to inherit or veto — a row means "on here" and no row means off. (That is `hook_optout`'s shape after
-    // all; the `enabled` column the two-answer version carried is gone with the tier it existed for.) A
-    // record table, so it is carried by `export`/`backup`: a restore that dropped it would silently switch
-    // a project's plugins off, and one that keeps it brings them back on where they were.
-    //
-    // `plugin` is the manifest name (plugins live on disk, not in the store, so there is no FK for it);
-    // `project_id` is the layer — a project's id, or NULL for the one row a `scope: machine` plugin holds
-    // for the whole device. The `(project_id, plugin)` pair is unique (`plugin_enable_pair` below), and the
-    // device row's uniqueness is the partial `plugin_enable_device`. CASCADE: a project's row is *about*
-    // the project; the device row is about no project, so no cascade reaches it.
-    plugin_enable {
-        project_id: fk_opt("project", "CASCADE"),
-        plugin: col(REQ),
-    }
-
     // **A secret one of Amenbo's own features holds**, at one layer (`AMB-D-884`): the connection a
     // notification target sends through (`AMB-D-885`), the keys the Viewer's server is reached and sealed
     // with (`AMB-D-886`). Before this there was nowhere in the body for one to live — `config.json` says
-    // of itself that it holds no secrets, and the three features that needed one were plugins, keeping
-    // theirs in `plugin_secret`. That table goes with the mechanism; this one takes over what it was for.
+    // of itself that it holds no secrets, and the three features that needed one were plugins then, keeping
+    // theirs in a table of the mechanism's. That table went with it; this one took over what it was for.
     //
-    // **A whole table, so the exclusion cannot rot** — `plugin_secret`'s reason, and the same one here.
+    // **A whole table, so the exclusion cannot rot.** Keeping the secrets beside the ordinary values and
+    // filtering "the rows whose field is secret" would put the judgement on every path that ever reads a
+    // setting — and the next path added would be written by someone who did not know to ask. A table left
+    // out of `export`'s walk is left out whether or not anyone remembers it exists.
     // Keeping a credential beside the ordinary settings and filtering "the rows that are secret" would put
     // the judgement on every path that ever reads a setting, and the next path would be written by someone
     // who did not know to ask. This table is named in `crate::export::WITHHELD_ON_THE_WAY_OUT`, so no road
@@ -854,7 +800,7 @@ datasets! {
     //
     // The address is `(project_id, area, owner_id, field_key)`, unique as `secret_address` with the device
     // row's own partial index (`secret_address_device`). **`project_id` is the layer** — a project's id, or
-    // NULL for the device row — exactly as `plugin_secret`'s is. **`area` is the feature** whose secret it
+    // NULL for the device row. **`area` is the feature** whose secret it
     // is, closed to the features that hold one. **`owner_id` is the row inside that area** that holds it (a
     // notification target's id), or NULL where the area itself does — the Viewer keeps one set of keys per
     // device with no row under them. No `REFERENCES` can hold `owner_id`: which table it names is `area`'s
@@ -913,8 +859,8 @@ datasets! {
     // answers what carries it — the one place `AMB-D-434`'s ban on the same setting in two tiers does not
     // bite, there being no second copy of it anywhere.
     //
-    // One row per project (`UNIQUE (project_id)`), and CASCADE for the reason `plugin_config`'s is: this
-    // is Amenbo's own setting *about* the project, with nothing to tell when the project it is about goes.
+    // One row per project (`UNIQUE (project_id)`), and CASCADE because this is Amenbo's own setting *about*
+    // the project, with nothing to tell when the project it is about goes.
     project_notify {
         project_id: fk("project", "CASCADE"),
         enabled: bool_col,
@@ -942,7 +888,7 @@ datasets! {
     //
     // `store.changed` is the fourteenth and is not admitted: it says only that *something* moved, which is
     // a signal for a mirror to re-read on and nothing a person can be told. The `CHECK` is a second
-    // spelling of a catalog that lives in `plugin_payload`, kept honest by a test in this module rather
+    // spelling of a catalog that lives in `crate::lifecycle`, kept honest by a test in this module rather
     // than by everyone remembering — it is here because a column saying which values it admits is what
     // stops a subscription to a name nothing will ever fire.
     //
@@ -1070,25 +1016,27 @@ plain_tables! {
         version: bigint,
     }
 
-    /// The **plugin observation outbox**: one row per semantic lifecycle event a committed operation
-    /// fired (`task.created`, `task.status_changed`, `comment.added`, …). It is a *sibling* of
-    /// `change_feed`, not a layer on it (`AMB-D-367`): the feed carries DB-row *instructions* for the
-    /// GUI's cache and cannot say which of the six an `update` split into, nor who drove it — the outbox
-    /// carries the **semantic event** for a plugin instead, with the two things the feed structurally
-    /// lacks (`actor`, and the `new_state` an `update` disambiguates). The ops write point *composes* the
-    /// event from what it alone knows (the operation kind, the actor, the new state) and `WriteTx` just
-    /// appends the row it is handed — the store interprets none of these strings. Written **inside the
-    /// operation's own transaction** (`WriteTx::emit_event`), so a committed change always
-    /// has its event row; unlike the feed, it is *not* drained from `update_hook`, so the two write paths
-    /// stay separate. `id` is the reader's cursor — monotonic and gap-free (AUTOINCREMENT), the same
-    /// "everything after N" contract the feed offers, but each consumer (the dispatcher) keeps its **own**
-    /// cursor. Retention is a separate policy from the feed's window-trim: an event must survive until it
-    /// has been fanned out onto the queue of every plugin that observes it (`plugin_queue` below,
-    /// `AMB-D-399`), so nothing here is trimmed on the "consumed or not" basis the feed uses.
+    /// The **observation outbox**: one row per semantic lifecycle event a committed operation fired
+    /// (`task.created`, `task.status_changed`, `comment.added`, …). It is a *sibling* of `change_feed`,
+    /// not a layer on it (`AMB-D-367`): the feed carries DB-row *instructions* for the GUI's cache and
+    /// cannot say which of the six an `update` split into, nor who drove it — the outbox carries the
+    /// **semantic event** instead, with the two things the feed structurally lacks (`actor`, and the
+    /// `new_state` an `update` disambiguates). The ops write point *composes* the event from what it alone
+    /// knows (the operation kind, the actor, the new state) and `WriteTx` just appends the row it is handed
+    /// — the store interprets none of these strings. Written **inside the operation's own transaction**
+    /// (`WriteTx::emit_event`), so a committed change always has its event row; unlike the feed, it is
+    /// *not* drained from `update_hook`, so the two write paths stay separate. `id` is the reader's cursor
+    /// — monotonic and gap-free (AUTOINCREMENT), the same "everything after N" contract the feed offers.
+    /// Retention is a separate policy from the feed's window-trim: an event must survive until the drive
+    /// has walked it ([`crate::outbox_drive`], `AMB-D-901`), so nothing here is trimmed on the "consumed or
+    /// not" basis the feed uses.
+    ///
+    /// The table is spelled `plugin_outbox`, from when the only reader was the plugin dispatcher. The name
+    /// is stored data, so it stays as written until something else makes a migration worth it.
     ///
     /// `project` is the one thing here the event did not carry on its own: the project the record was in
-    /// **at the moment the event was appended** (`AMB-D-405`), which is what the fan-out routes a
-    /// project-scoped plugin's subscription on. It is stamped rather than looked up later because the
+    /// **at the moment the event was appended** (`AMB-D-405`), which is what a project's reporting is
+    /// routed on. It is stamped rather than looked up later because the
     /// record is not always still there to ask — a deletion's row is gone by the time anyone delivers —
     /// and because a task that moves between the append and the delivery would otherwise route the older
     /// event to its new home. `NULL` means "in no project, or from before this column existed". No foreign
@@ -1097,8 +1045,8 @@ plain_tables! {
     ///
     /// `record` is the other thing the event cannot be asked for later: the **vanished record's own
     /// shape**, as JSON, on the events whose record is gone by the time anyone reads them (`AMB-D-407`).
-    /// A live record is read back by name — a plugin calls Amenbo (`AMB-D-406`) — so only what cannot be
-    /// read is carried, and it is written at the append for the same reason `project` is: this is the last
+    /// A live record is read back by name, so only what cannot be read is carried, and it is written at
+    /// the append for the same reason `project` is: this is the last
     /// instant the row exists. The store does not interpret it, here or anywhere: what a subscriber needs
     /// out of a deleted record is the subscriber's to decide. `NULL` on every other event, and on a
     /// deletion from before this column existed.
@@ -1118,65 +1066,6 @@ plain_tables! {
         project: bigint_opt,
         record: text_opt,
         parent: bigint_opt,
-    }
-
-    /// One plugin's **work queue**: the events fanned out to it and not yet run (`AMB-D-399`). Delivery is
-    /// two-layered, and this is the second layer — where the outbox is *what happened*, a queue is *what is
-    /// still to do*, per plugin. The fan-out reads the outbox once, copies each event onto the queue of
-    /// every plugin subscribed to it, and deletes the outbox rows it copied, all in one transaction: the
-    /// outbox is then reclaimed independently of how fast any plugin runs, so one stalled plugin backs up
-    /// only its own queue.
-    ///
-    /// The columns are the outbox's wire fields (opaque here too — the store classifies nothing), the
-    /// project the event was stamped with, and the two the split needs: `plugin` says whose queue the row is
-    /// on, and `face` records the face the fan-out resolved the subscription on (`AMB-D-383`), so the runner
-    /// can rebuild that plugin's invocation for this row whichever face gets to it. `id` is the queue's own
-    /// order — a plugin's rows are run oldest first, and a row is deleted once it has been run. Being a
-    /// per-row table rather than a cursor is what leaves room to record *this one failed*, which a position
-    /// number has nowhere to say.
-    ///
-    /// `project` is copied off the outbox row as it stands (`AMB-D-405`), for the same reason the outbox
-    /// carries it: the runner resolves the subscription a second time, and a project-scoped plugin's gate
-    /// is only answerable with the project the event happened in. Re-reading it off the record at that
-    /// point is what this decision removed — by the time a queue is drained the record may have moved, or
-    /// be gone. `NULL` means "in no project, or unknown", and a project-scoped subscription fires nothing
-    /// for it.
-    ///
-    /// `record` and `parent` ride across the same way (`AMB-D-407`): both were captured at the append, and
-    /// the runner builds the payload from this row alone. Copying them is what lets it — there is nothing
-    /// left to read either off.
-    plugin_queue {
-        id: integer("PRIMARY KEY AUTOINCREMENT"),
-        plugin: text,
-        face: text,
-        event: text,
-        record_id: bigint,
-        actor: text,
-        at: text,
-        new_state: text_opt,
-        project: bigint_opt,
-        record: text_opt,
-        parent: bigint_opt,
-    }
-
-    /// Who is **running** a plugin's queue right now — at most one row per plugin, and the whole of the
-    /// "one runner per plugin" rule (`AMB-D-399`). A drive that has just fanned out claims the row before
-    /// it starts a runner: the row is there, so nobody starts a second one, and a runner leaves only by
-    /// deleting it — in the same transaction that found its queue empty. Both sides pass through one
-    /// transaction, so the order is always one or the other: a fan-out that lands first leaves the row
-    /// standing and the running runner picks its event up; a runner that leaves first frees the row and
-    /// the fan-out starts a new one.
-    ///
-    /// `expires_at` is what keeps the rule from becoming a deadlock. A runner killed with the machine, or
-    /// with the process it rode in on, never deletes its row; without a horizon that plugin would be
-    /// "already running" forever and never run again. A runner pushes its horizon out while it works, and
-    /// a row past it is void — whoever finds it takes the queue over. `owner` names the runner the row is
-    /// for, so the predecessor of such a takeover deletes nothing on its way out: the row it left is no
-    /// longer the row that is there.
-    plugin_runner {
-        plugin: text("PRIMARY KEY"),
-        owner: text,
-        expires_at: text,
     }
 
     /// The **word index's normalised copy** — one row per indexed text face (`AMB-D-450`). It is
@@ -1476,36 +1365,12 @@ CREATE INDEX IF NOT EXISTS decision_dimension_value_by_decision ON decision_dime
 CREATE UNIQUE INDEX IF NOT EXISTS task_commit_task_sha ON task_commit(task_id, sha);
 CREATE INDEX IF NOT EXISTS task_commit_by_sha  ON task_commit(sha);
 CREATE INDEX IF NOT EXISTS task_commit_by_task ON task_commit(task_id);
--- One plugin config value per (project, plugin, field): the triple is the natural key, so the write
--- boundary upserts a value by finding this row rather than appending a second. The unique index *is* that
--- constraint (the column decls carry no UNIQUE), and its leading columns also serve the reads that seek a
--- project's values — by `project_id`, or by `(project_id, plugin)` for one plugin's whole config.
-CREATE UNIQUE INDEX IF NOT EXISTS plugin_config_triple ON plugin_config(project_id, plugin, field_key);
--- The secret half, keyed the same way and for the same reason (`AMB-D-434`).
-CREATE UNIQUE INDEX IF NOT EXISTS plugin_secret_triple ON plugin_secret(project_id, plugin, field_key);
--- One enable override per (project, plugin): the pair is the natural key, so the trust boundary upserts the
--- gate by finding this row rather than appending a second answer. The unique index *is* that constraint,
--- and its leading column also serves a read that seeks one project's overrides.
-CREATE UNIQUE INDEX IF NOT EXISTS plugin_enable_pair ON plugin_enable(project_id, plugin);
--- The **device layer**'s half of those three constraints (`AMB-D-601`). A `scope: machine` plugin writes its
--- rows with `project_id` NULL, and SQLite counts every NULL in an index as distinct from every other — so
--- the three indexes above, whose leading column is that key, would let a second device row in beside the
--- first and leave the upsert appending. A partial index over the rest of the address, taken only where the
--- key is NULL, is the same constraint restated where the general one cannot reach; being partial, it says
--- nothing about the project rows, whose uniqueness stays with the indexes above.
---
--- They live here rather than in the step that made the column nullable because the genesis batch must apply
--- to the oldest store this build opens, and it does: a partial index over `project_id IS NULL` is a legal
--- index on a `NOT NULL` column too — one that simply holds no rows until the step lands.
-CREATE UNIQUE INDEX IF NOT EXISTS plugin_config_device ON plugin_config(plugin, field_key) WHERE project_id IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS plugin_secret_device ON plugin_secret(plugin, field_key) WHERE project_id IS NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS plugin_enable_device ON plugin_enable(plugin) WHERE project_id IS NULL;
 -- One secret per (layer, area, owner, field): the address is the natural key, so the write boundary
 -- upserts a credential by finding this row rather than appending a second. `owner_id` is nullable — the
 -- Viewer's keys hang off no row — and SQLite counts NULLs in an index as distinct, which would let a
 -- second copy of the same device-wide secret in beside the first; `COALESCE(owner_id, 0)` is what closes
--- that, `0` being a value no row's id ever is. The device layer needs the same restatement `plugin_secret`
--- does, and for the same reason: its `project_id` is NULL, so the general index says nothing about it.
+-- that, `0` being a value no row's id ever is. The device layer needs a restatement of its own for the same
+-- reason: its `project_id` is NULL, so the general index says nothing about it.
 CREATE UNIQUE INDEX IF NOT EXISTS secret_address ON secret(project_id, area, COALESCE(owner_id, 0), field_key);
 CREATE UNIQUE INDEX IF NOT EXISTS secret_address_device ON secret(area, COALESCE(owner_id, 0), field_key) WHERE project_id IS NULL;
 -- Which projects a notification target carries (`AMB-D-885`), sought from the target. The table's own
@@ -1513,10 +1378,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS secret_address_device ON secret(area, COALESCE
 -- the project, so the count a delete asks for ("two projects use this") would scan every row in the
 -- table. The delete is where that count is read, and it is read before anything goes.
 CREATE INDEX IF NOT EXISTS project_notify_target_by_target ON project_notify_target(target_id);
--- A plugin's queue, read the only way it is ever read: that plugin's own rows, oldest first. The pair is
--- the whole query (`plugin` seeks, `id` orders), so the runner reads its head without scanning the rows
--- queued for every other plugin, and the fan-out's "which plugins have work" seek stays on the index too.
-CREATE INDEX IF NOT EXISTS plugin_queue_by_plugin ON plugin_queue(plugin, id);
 -- The read layer's own two seeks over the task table: `status` narrows a mailbox query, and
 -- `project_id` — placement is folded onto the task — scopes every list to one project.
 CREATE INDEX IF NOT EXISTS task_by_status    ON task(status);
@@ -1735,7 +1596,7 @@ mod tests {
 
     /// The events a project may report are the catalog's own, and the column says so in a second
     /// spelling (`AMB-D-885`). The two are held to each other here rather than by everyone remembering:
-    /// a name added to `plugin_payload` and not to the `CHECK` would be a subscription the store
+    /// a name added to `crate::lifecycle` and not to the `CHECK` would be a subscription the store
     /// refuses, and one dropped from the catalog would be a row nothing can ever fire.
     ///
     /// `store.changed` is the fourteenth and is deliberately absent: it says only that *something*

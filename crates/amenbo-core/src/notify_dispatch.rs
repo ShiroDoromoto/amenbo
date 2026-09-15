@@ -595,10 +595,8 @@ mod tests {
         // moment `task.created` reaches anybody.
         store.finish_task_creation(task.id, ActorKind::Ai).unwrap();
 
-        let installed = crate::plugin_installed::installed(&store.paths).unwrap();
-        let subs = crate::plugin_subscribe::EnabledSubscribers::new(&installed, &store);
-        let flushed = store.flush_delivery(Face::Cli, &subs).unwrap();
-        assert!(!flushed.delivered.seen.is_empty(), "the drive walked nothing");
+        let walked = store.flush_delivery(Face::Cli).unwrap();
+        assert!(!walked.seen.is_empty(), "the drive walked nothing");
 
         // The target holds no webhook, so the post is refused — and a refusal is the trace that says the
         // message was built, addressed and handed over.

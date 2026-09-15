@@ -5551,7 +5551,7 @@ pub fn task_commits(conn: &Connection, task_id: i64) -> Result<Vec<crate::model:
 }
 
 /// A nullable key as a predicate: an id seeks the row naming it, and `None` seeks the rows that name
-/// nobody. It answers the layer half of a plugin row's address (`AMB-D-601`) — a project's id, or the
+/// nobody. It answers the layer half of a secret's address (`AMB-D-601`) — a project's id, or the
 /// **device** row, whose key is NULL — and the owner half of a [`secret_row_id`]'s, where NULL says the
 /// area itself holds the secret rather than any row inside it.
 ///
@@ -5564,105 +5564,9 @@ fn at_layer<N: Nullability>(key: Col<Int, N>, project_id: Option<i64>) -> Pred {
     }
 }
 
-/// The live `plugin_config` row id for `(project_id, plugin, field_key)`, or `None` — what makes
-/// the config write boundary an upsert (find-then-update) and a clear a lookup. `project_id` is the layer
-/// ([`at_layer`]); the `plugin_config_triple` UNIQUE index guarantees at most one project row, and
-/// `plugin_config_device` at most one device row.
-pub fn plugin_config_row_id(
-    conn: &Connection,
-    project_id: Option<i64>,
-    plugin: &str,
-    field_key: &str,
-) -> Result<Option<i64>> {
-    const C: col::plugin_config::Cols = col::plugin_config::ALL;
-    first_id(
-        conn,
-        C.id,
-        &at_layer(C.project_id, project_id)
-            .and(Pred::eq(C.plugin, plugin))
-            .and(Pred::eq(C.field_key, field_key)),
-    )
-}
-
-/// Every live `plugin_config` row belonging to one plugin, **across every layer** — what an
-/// `uninstall` erases in one pass (`AMB-D-357`). The store is a single device-wide database, so a plugin's
-/// settings are one predicate away rather than a walk over projects; keyed on the plugin alone, it takes
-/// the device row with the project ones, which is what leaves nothing behind.
-pub fn plugin_config_row_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
-    const C: col::plugin_config::Cols = col::plugin_config::ALL;
-    select_ids(conn, C.id, Some(&Pred::eq(C.plugin, plugin)))
-}
-
-/// The `plugin_config` row with this id.
-pub fn plugin_config_row_by_id(
-    conn: &Connection,
-    id: i64,
-) -> Result<Option<crate::model::PluginConfigValue>> {
-    super::hydrate::row_by_id(conn, "plugin_config", id, super::hydrate::plugin_config_row)
-}
-
-/// One plugin text field's value at this layer, or `None` when it is unset (`AMB-D-434` / `AMB-D-601`).
-pub fn plugin_config_value(
-    conn: &Connection,
-    project_id: Option<i64>,
-    plugin: &str,
-    field_key: &str,
-) -> Result<Option<String>> {
-    match plugin_config_row_id(conn, project_id, plugin, field_key)? {
-        Some(id) => Ok(plugin_config_row_by_id(conn, id)?.map(|r| r.value)),
-        None => Ok(None),
-    }
-}
-
-/// The `plugin_secret` twins of the three above — same address, same upsert-and-clear shape; the table is
-/// separate so `export` can leave it out wholesale (`AMB-D-434`).
-pub fn plugin_secret_row_id(
-    conn: &Connection,
-    project_id: Option<i64>,
-    plugin: &str,
-    field_key: &str,
-) -> Result<Option<i64>> {
-    const C: col::plugin_secret::Cols = col::plugin_secret::ALL;
-    first_id(
-        conn,
-        C.id,
-        &at_layer(C.project_id, project_id)
-            .and(Pred::eq(C.plugin, plugin))
-            .and(Pred::eq(C.field_key, field_key)),
-    )
-}
-
-/// Every live `plugin_secret` row belonging to one plugin, across every layer — what an `uninstall`
-/// purges (`AMB-D-357`: a secret is the one thing that must never survive a removal).
-pub fn plugin_secret_row_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
-    const C: col::plugin_secret::Cols = col::plugin_secret::ALL;
-    select_ids(conn, C.id, Some(&Pred::eq(C.plugin, plugin)))
-}
-
-/// The `plugin_secret` row with this id.
-pub fn plugin_secret_row_by_id(
-    conn: &Connection,
-    id: i64,
-) -> Result<Option<crate::model::PluginSecret>> {
-    super::hydrate::row_by_id(conn, "plugin_secret", id, super::hydrate::plugin_secret_row)
-}
-
-/// One plugin secret field's value at this layer, or `None` when it is unset (`AMB-D-434` / `AMB-D-601`).
-pub fn plugin_secret_value(
-    conn: &Connection,
-    project_id: Option<i64>,
-    plugin: &str,
-    field_key: &str,
-) -> Result<Option<String>> {
-    match plugin_secret_row_id(conn, project_id, plugin, field_key)? {
-        Some(id) => Ok(plugin_secret_row_by_id(conn, id)?.map(|r| r.value)),
-        None => Ok(None),
-    }
-}
-
 /// The live `secret` row id for `(project_id, area, owner_id, field_key)`, or `None` — what makes a
-/// secret write an upsert (find-then-update) and a clear a lookup, exactly as the plugin tables' twins
-/// are. Two of the four are nullable and both go through [`at_layer`]: `project_id` is the layer, and
+/// secret write an upsert (find-then-update) and a clear a lookup. Two of the four are nullable and both
+/// go through [`at_layer`]: `project_id` is the layer, and
 /// `owner_id` is the row inside the area, absent where the area itself holds the secret. The
 /// `secret_address` UNIQUE index guarantees at most one project row, `secret_address_device` at most one
 /// device row.
@@ -5845,6 +5749,44 @@ pub fn projects_using_notify_target(conn: &Connection, target_id: i64) -> Result
     Ok(ids)
 }
 
+/// **Is there anywhere on this device for `event` to go?** (`AMB-D-885`) — a project that reports it, is
+/// switched on, and has at least one target selected.
+///
+/// What the tick's banner asks before it offers to start warning about days (`AMB-D-718`): with nowhere to
+/// carry the warning, switching the timer on changes nothing the person would see. A device question, so
+/// no reach — a project-shaped answer would offer the timer to one board and not the next.
+///
+/// The three conditions are read in the order they narrow: the projects that report `event` at all are
+/// usually none, and each one after that is a lookup on a unique key.
+pub fn any_project_reports(conn: &Connection, event: &str) -> Result<bool> {
+    for project_id in projects_reporting(conn, event)? {
+        let Some(notify) = project_notify(conn, project_id)? else { continue };
+        if !notify.enabled {
+            continue;
+        }
+        if !project_notify_targets(conn, project_id)?.is_empty() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Which projects report one event, ascending — a project ticks an event at most once
+/// (`UNIQUE (project_id, event)`), so the rows are already the answer.
+fn projects_reporting(conn: &Connection, event: &str) -> Result<Vec<i64>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT project_id FROM project_notify_event WHERE event = ?1 ORDER BY project_id",
+        )
+        .map_err(StoreEngineError::from)?;
+    let ids = stmt
+        .query_map([event], |r| r.get::<_, i64>(0))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(ids)
+}
+
 /// The live `project_notify_event` row id for `(project_id, event)`, or `None` — what makes ticking an
 /// event idempotent and unticking it a lookup. `UNIQUE (project_id, event)` guarantees at most one.
 pub fn project_notify_event_id(
@@ -5872,48 +5814,6 @@ pub fn project_notify_events(
         .collect::<rusqlite::Result<Vec<_>>>()
         .map_err(StoreEngineError::from)?;
     Ok(rows)
-}
-
-/// The live `plugin_enable` row id for `(project_id, plugin)`, or `None` — the lookup behind both writes,
-/// since enabling is "ensure the row" and disabling is "delete it" (`AMB-D-434`). `project_id` is the layer
-/// ([`at_layer`]); `plugin_enable_pair` guarantees at most one project row and `plugin_enable_device` at
-/// most one device row.
-pub fn plugin_enable_row_id(
-    conn: &Connection,
-    project_id: Option<i64>,
-    plugin: &str,
-) -> Result<Option<i64>> {
-    const C: col::plugin_enable::Cols = col::plugin_enable::ALL;
-    first_id(
-        conn,
-        C.id,
-        &at_layer(C.project_id, project_id).and(Pred::eq(C.plugin, plugin)),
-    )
-}
-
-/// Every live `plugin_enable` row belonging to one plugin, **across every layer** — what an
-/// `uninstall` erases in one pass (`AMB-D-357`), the gate twin of [`plugin_config_row_ids`].
-pub fn plugin_enable_row_ids(conn: &Connection, plugin: &str) -> Result<Vec<i64>> {
-    const C: col::plugin_enable::Cols = col::plugin_enable::ALL;
-    select_ids(conn, C.id, Some(&Pred::eq(C.plugin, plugin)))
-}
-
-/// The `plugin_enable` row with this id.
-pub fn plugin_enable_row_by_id(
-    conn: &Connection,
-    id: i64,
-) -> Result<Option<crate::model::PluginEnabledProject>> {
-    super::hydrate::row_by_id(conn, "plugin_enable", id, super::hydrate::plugin_enable_row)
-}
-
-/// Whether this layer holds the gate open for one plugin — the row's presence, and nothing else
-/// (`AMB-D-434` / `AMB-D-601`).
-pub fn plugin_enabled_in_project(
-    conn: &Connection,
-    project_id: Option<i64>,
-    plugin: &str,
-) -> Result<bool> {
-    Ok(plugin_enable_row_id(conn, project_id, plugin)?.is_some())
 }
 
 /// Both directions of one decision's edges, as the read surfaces render them. Forward (`supersedes` /

@@ -379,54 +379,6 @@ pub struct TaskCommit {
     pub updated_at: Timestamp,
 }
 
-/// A **plugin's text (non-secret) config value at one layer** (`AMB-D-434` / `AMB-D-601` / `AMB-D-356`).
-/// One row per `(layer, plugin, field)`, and that row is the whole answer: the author's `scope` declaration
-/// picks the single layer the plugin lives at, so there is no tier under this for the value to fall back to.
-/// A `secret` field is never one of these — it is a
-/// [`PluginSecret`], the table an `export` must leave behind. `plugin` is the plugin's manifest name (plugins
-/// live on disk, not in the store, so there is no id for it) and `field_key` the config field's key.
-/// Unlike `hook_optout` this is a real record, carried by `export`/`backup`.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct PluginConfigValue {
-    pub id: i64,
-    /// The project this value belongs to, or `None` for the device row a `scope: machine` plugin holds
-    /// (`AMB-D-601`).
-    pub project_id: Option<i64>,
-    /// The plugin's manifest name.
-    pub plugin: String,
-    /// The config field's key (spelled out because `key` is a SQLite keyword).
-    pub field_key: String,
-    /// The value.
-    pub value: String,
-    pub created_at: Timestamp,
-    pub updated_at: Timestamp,
-}
-
-/// A **plugin's secret config value at one layer** (`AMB-D-434` / `AMB-D-601`): the same shape and address as
-/// [`PluginConfigValue`], in a table of its own because its rows may travel to fewer places. A backup
-/// carries it — the road back to one's own machine, where dropping the secrets would mean typing every
-/// credential in again — and an export must not, that being the one-way door out to another tool. The
-/// separation is a whole table rather than a flag on a row so that the exclusion holds for a path nobody
-/// remembered to teach.
-///
-/// The value is never handed back to a face; it is read at the moment a plugin runs and injected as an
-/// environment variable ([`crate::plugin_inject`]).
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct PluginSecret {
-    pub id: i64,
-    /// The project this secret belongs to, or `None` for the device row (`AMB-D-601`).
-    pub project_id: Option<i64>,
-    /// The plugin's manifest name.
-    pub plugin: String,
-    /// The config field's key (spelled out because `key` is a SQLite keyword).
-    pub field_key: String,
-    /// The secret value, in plaintext — at-rest secrecy is the OS's full-disk encryption, the same
-    /// delegation the truth source itself makes.
-    pub value: String,
-    pub created_at: Timestamp,
-    pub updated_at: Timestamp,
-}
-
 /// Which of Amenbo's own features a [`Secret`] belongs to (`AMB-D-884`). Closed, because the features
 /// that hold a credential are the body's own and are added one deliberate step at a time — a new one
 /// widens this and the column's `CHECK` together.
@@ -460,9 +412,9 @@ impl SecretArea {
 
 /// **A secret one of Amenbo's own features holds, at one layer** (`AMB-D-884`). The body had no place for
 /// a credential until this: `config.json` holds none by its own account, and the features that needed one
-/// were plugins, keeping theirs in [`PluginSecret`] — the table that goes with the mechanism.
+/// were plugins then, keeping theirs in a table of the mechanism's, which went with it.
 ///
-/// A table of its own rather than a flag on a settings row, for [`PluginSecret`]'s reason: an exclusion
+/// A table of its own rather than a flag on a settings row: an exclusion
 /// stated once, about a whole table, holds for the path nobody remembered to teach. It is named in
 /// [`crate::export::WITHHELD_ON_THE_WAY_OUT`], so no road out of the store carries it; a backup does,
 /// copying the file whole, because that road leads back to the same person's own machine.
@@ -633,27 +585,6 @@ pub struct ProjectNotifyEvent {
     /// column's `CHECK` states which of them this column admits, and `ops::notify` holds the two to each
     /// other.
     pub event: String,
-    pub created_at: Timestamp,
-    pub updated_at: Timestamp,
-}
-
-/// A **plugin's enable gate at one layer** (`AMB-D-434` / `AMB-D-601`). One row per `(layer, plugin)`: this
-/// project — or this device — has the plugin **on**. The row is the whole answer: there is no other tier to
-/// inherit from or veto, so absence is simply off, and turning it off deletes the row rather than storing a
-/// `false`.
-///
-/// The row is also the whole of it: turning a plugin on is itself the permission to run its code
-/// (`AMB-D-434`), so nothing sits beside this to be carried separately. Like [`PluginConfigValue`] it
-/// is a real record, carried by `export`/`backup` — a restore that dropped it would silently switch a
-/// project's plugins off, and one that keeps it brings the plugin back on where it was.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct PluginEnabledProject {
-    pub id: i64,
-    /// The project the plugin is enabled in, or `None` for the device gate a `scope: machine` plugin opens
-    /// once for the whole machine (`AMB-D-601`).
-    pub project_id: Option<i64>,
-    /// The plugin's manifest name.
-    pub plugin: String,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

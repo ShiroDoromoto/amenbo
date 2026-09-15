@@ -48,7 +48,7 @@ pub(crate) fn open_store_read() -> Result<Store, CmdError> {
 ///
 /// This is also the GUI's dispatch seam (`AMB-D-367`): every mutating command comes through here, so the
 /// observation dispatcher is driven here — once, after the mutation committed, on the store that is still
-/// open ([`crate::plugin_dispatch`]). It drains from the store's own cursor, shared with the CLI
+/// open ([`crate::delivery`]). It drains from the store's own cursor, shared with the CLI
 /// (`AMB-D-380`), so there is nothing to start first. A command that errored rolled its mutation back and
 /// has nothing to dispatch.
 fn with_store_mut<T>(f: impl FnOnce(&mut Store) -> Result<T, CmdError>) -> Result<T, CmdError> {
@@ -56,7 +56,7 @@ fn with_store_mut<T>(f: impl FnOnce(&mut Store) -> Result<T, CmdError>) -> Resul
     let mut store = open_store()?;
     let out = f(&mut store);
     if out.is_ok() {
-        crate::plugin_dispatch::drive(&store);
+        crate::delivery::drive(&store);
     }
     drop(store);
     out

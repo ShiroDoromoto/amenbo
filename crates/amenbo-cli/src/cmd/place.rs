@@ -39,28 +39,11 @@ pub(crate) fn location_header(store: &Store) -> Option<String> {
 /// project is live. A legacy pointer is read compatibly by `resolve_upward`, which rewrites it into the
 /// current form on the spot.
 ///
-/// **A plugin's context is the window it was launched with, not this folder** (`AMB-D-406`). That decision
-/// says the `.amenbo` walk is not to be used on the plugin face at all, for the reason git hands a hook
-/// `GIT_DIR`: a plugin's working directory is whatever its launcher happened to be in, and there is no
-/// promise of a binding there. A press on the settings form launches it from the app, whose directory is
-/// `/` — so a value the plugin writes back with `plugin config set` would have nowhere to land, while the
-/// same plugin run from a bound terminal would write. The window is the gate read back (`AMB-D-601`), which
-/// is exactly the project such a write belongs to, and no argument the plugin passes can widen it.
 pub(crate) fn bound_project(store: &Store) -> Option<i64> {
     // An explicit override (`--project`) wins. It was validated as live against this store when it was set,
-    // so return it as is. It is never a plugin's: naming a project is human vocabulary, and the plugin face
-    // turns it away before this is reached.
+    // so return it as is.
     if let Some(pid) = PROJECT_OVERRIDE.get() {
         return Some(*pid);
-    }
-    // The window, ahead of the binding. `Closed::Window` is what tells a plugin's reach from an AI's — the
-    // AI's is *derived from* the binding, so for it the two answer alike and the walk below is the answer.
-    // A device-wide plugin's window is `All`, which names no project and needs none: its layer is the
-    // device's, and falling through leaves it the `None` it already had.
-    if let amenbo_core::reach::Reach::Project { id, closed_by: amenbo_core::reach::Closed::Window } =
-        store.reach()
-    {
-        return Some(id);
     }
     binding_project(store)
 }
@@ -126,7 +109,7 @@ pub(crate) fn project_required(store: &Store) -> CliError {
 ///
 /// Three spellings are accepted, in order, because all three are what a person has in hand: the path as the
 /// registry recorded it, the path as this machine canonicalises what was typed (so `.` and a relative path
-/// work), and the folder's own name (`--at amenbo-plugin-mail`, which is how the folders of one project
+/// work), and the folder's own name (`--at amenbo-worker`, which is how the folders of one project
 /// usually differ). A name that lands on several is refused with them listed rather than one being picked;
 /// a name that lands on none is refused with the project's folders listed, since that is the answer.
 pub(crate) fn resolve_bound_folder(store: &Store, project_id: i64, token: &str) -> Result<i64, CliError> {

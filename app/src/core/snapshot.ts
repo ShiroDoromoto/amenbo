@@ -160,8 +160,8 @@ export function notifyDataChanged(): void {
 const outsideStoreListeners = new Set<() => void>();
 
 /**
- * Subscribes to the moments worth re-asking state that lives **outside** the store — a plugin catalog, an
- * upstream release — and therefore has no store signature to compare. It fires on a focus return that found
+ * Subscribes to the moments worth re-asking state that lives **outside** the store — an upstream release,
+ * say — and therefore has no store signature to compare. It fires on a focus return that found
  * the store unmoved, which is exactly the hole: every other reconcile ends in `invalidateAllQueries`, so a
  * query for such state is already refetched there and firing again would only ask twice. The returned
  * function unsubscribes.
@@ -222,8 +222,8 @@ async function readSignature(): Promise<StoreSignatureDto | null> {
  *   datasets into scopes and refetch just the queries touching them. A feed that **cannot** say — expired,
  *   a dataset that does not fold, too much piled up — falls back to the full re-read of
  *   `reconcile("gap")`: an invalidation signal is not truth (see `drainChanges`).
- * - **an empty page** … a commit the feed collects no row for: the plugin dispatcher draining its outbox
- *   onto the queues, a `store_meta` scalar, the feed's own truncation. Read nothing, and announce
+ * - **an empty page** … a commit the feed collects no row for: the drive reclaiming the outbox it walked,
+ *   a `store_meta` scalar, the feed's own truncation. Read nothing, and announce
  *   nothing — nothing landed on the screen.
  *
  * Inbox membership only ever moves on the task side, so the generation is bumped only when `tasks` is
@@ -336,7 +336,7 @@ async function focusCatchUp(): Promise<void> {
     // the store, and this is the one moment we get to ask it: the user just came back to the app. Someone who only
     // reads never moves the signature, and would otherwise never be told about an update again after launch.
     await refreshVersionStatus();
-    notifyOutsideStore(); // and the same for everything else that lives outside the store (plugin updates).
+    notifyOutsideStore(); // and the same for everything else that lives outside the store.
     return;
   }
   await loadSnapshot(); // this also moves lastSignature to the current value.

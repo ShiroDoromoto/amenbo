@@ -357,7 +357,7 @@ fn the_open_reach_reads_every_window_at_once() {
     }
 }
 
-/// **The secrets are named on no page**, a plugin's (`AMB-D-434`) and Amenbo's own (`AMB-D-884`) alike.
+/// **A secret is named on no page** (`AMB-D-884`).
 /// The feed names a record without carrying it, but naming is enough here: how many secrets there are, and
 /// when each one was written, is an answer the export and the snapshot already refuse, and it must not be
 /// readable off the ledger instead.
@@ -371,20 +371,19 @@ fn the_secrets_are_named_on_no_page_and_the_cursor_moves_past_them() {
     let project = store.project_add(new_project("PJ")).unwrap().id;
     let cursor = caught_up(&store, project);
 
-    store.set_plugin_secret(Some(project), "slack", "token", Some("s3cret")).unwrap();
     store
         .set_secret(Some(project), SecretArea::Notify, Some(1), "webhook_url", Some("https://s3cret"))
         .unwrap();
 
     let (rows, moved_on) = drained(&store, project, cursor);
-    assert_eq!(rows, Vec::new(), "neither secret is named on any page: {rows:?}");
+    assert_eq!(rows, Vec::new(), "the secret is named on no page: {rows:?}");
     assert!(moved_on > cursor, "and the page moved past them instead of offering them again");
 
     // The device's own reach — the human's, the GUI's — is held to the same line: what is withheld is a
     // dataset, not one reach's view of one.
     match store.sync_changes(cursor, 10_000).unwrap() {
         SyncChanges::Changes { rows, .. } => assert!(
-            !rows.iter().any(|r| r.dataset == "plugin_secret" || r.dataset == "secret"),
+            !rows.iter().any(|r| r.dataset == "secret"),
             "the open reach sees them too: {rows:?}",
         ),
         SyncChanges::Gap => panic!("a fresh store has trimmed nothing"),

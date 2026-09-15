@@ -11,8 +11,7 @@
 //! cursor of its own would mean the reclaim could only advance to the older of the two, and the outbox would
 //! then be held open by whichever reader ran least often. So the walk is made once and what it saw is
 //! carried out on [`Walked::seen`], for the caller to hand on. Today that is a notification
-//! ([`crate::notify_dispatch`]) and, while the mechanism lasts, a plugin's queue
-//! ([`crate::plugin_dispatch`]); neither is named here.
+//! ([`crate::notify_dispatch`]); nothing here names it.
 //!
 //! **One cursor, because an event must reach a reader exactly once across both faces** (`AMB-D-380`). A
 //! session cursor held in the GUI's memory left the events it delivered still standing in the outbox, so the
@@ -67,9 +66,8 @@ pub const CURSOR_FACE_META: &str = "plugin_dispatch_cursor_face";
 /// **Which face is driving** (`AMB-D-383`) — the short-lived CLI a person or their AI runs, or the
 /// long-lived GUI.
 ///
-/// It is stamped beside the cursor it advanced ([`CURSOR_FACE_META`]), and a plugin's subscription declares
-/// the faces it fires on ([`EventSubscription::faces`](crate::plugin_manifest::EventSubscription::faces))
-/// out of the same vocabulary — one type, so the two cannot drift.
+/// It is stamped beside the cursor it advanced ([`CURSOR_FACE_META`]), and handed to whatever observes a
+/// row as the walk passes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Face {

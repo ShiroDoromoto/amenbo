@@ -1316,7 +1316,8 @@ back a window would have set.
 
 `made-in` reads what the record says about it, and each road brings its own key. `shows` is the
 screen's — the name on the row, and the name the pane goes by **now**, since a pane still open is
-found among the panes under whatever it is called today. `pane` is the terminal's: what a pane is
+found among the panes under whatever it is called today; where the pane is gone there is no name to
+find, and the row draws the one the record kept. `pane` is the terminal's: what a pane is
 called is kept on the pane's own row, which the window writes and a terminal never does, so the line
 prints the id alone and the id is minted by the run — so what is asked there is identity, the record
 naming the pane the create was typed in. `present: false` is the other half on either face.

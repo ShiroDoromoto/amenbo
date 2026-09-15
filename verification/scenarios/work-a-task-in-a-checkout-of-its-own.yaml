@@ -34,13 +34,13 @@ steps_cli:
 
   # A checkout already standing is not the caller's to enter, and asking again says so rather than
   # handing over a second way into the same files.
-  - { type: action, domain: repo, op: worktree-start, with: { target: seed }, refused: worktree_exists }
+  - { type: action, domain: repo, op: worktree-start, with: { target: seed, refused: worktree_exists } }
   - { type: assert, domain: repo, op: worktree, with: { target: seed, present: true } }
 
   # Work nobody recorded, and a fold that will not take it away. Both halves have to hold: the
   # refusal, and the checkout still being there afterwards.
   - { type: action, domain: repo, op: worktree-write-file, with: { target: seed, path: half-done.txt, content: what the session was in the middle of } }
-  - { type: action, domain: repo, op: worktree-finish, with: { target: seed }, refused: worktree_dirty }
+  - { type: action, domain: repo, op: worktree-finish, with: { target: seed, refused: worktree_dirty } }
   - { type: assert, domain: repo, op: worktree, with: { target: seed, present: true } }
 
   # Discarding it is a thing a person says outright, and then the checkout and its branch both go.
@@ -48,4 +48,4 @@ steps_cli:
   - { type: assert, domain: repo, op: worktree, with: { target: seed, present: false } }
 
   # And the fold has nothing left to take, which it says rather than succeeding over nothing.
-  - { type: action, domain: repo, op: worktree-finish, with: { target: seed }, refused: worktree_missing }
+  - { type: action, domain: repo, op: worktree-finish, with: { target: seed, refused: worktree_missing } }

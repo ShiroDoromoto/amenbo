@@ -310,6 +310,8 @@ export const ru: Translation = {
     "attach.removeConfirm": "Убрать вложение «{name}»?", "attach.notLocal": "Пока нет на этом устройстве (загрузка появится позже)",
     "attach.unsupported": "Для этого типа нет предпросмотра", "attach.link": "Ссылка",
     "attach.failed": "Не удалось прикрепить",
+    "madeIn.section": "Создано в", "madeIn.unnamed": "Панель без имени",
+    "madeIn.go": "Вернуться в эту панель",
     "commit.section": "Коммиты", "commit.add": "Записать SHA", "commit.none": "Коммиты не записаны",
     "commit.placeholder": "SHA коммита (полный — 40 или 64 шестнадцатеричных знака)",
     "commit.record": "Записать", "commit.copy": "Скопировать SHA", "commit.copied": "Скопировано",
@@ -572,6 +574,7 @@ export const ru: Translation = {
     "face.ended": "Программа в этом терминале завершилась.",
 
     "face.endedGeminiUnset": "Для Gemini CLI не задан способ аутентификации. Указанный путь принадлежит только этой панели и исчезнет вместе с ней — задать его нужно в вашем собственном ~/.gemini/settings.json.",
+    "face.noWayBack": "Этот разговор больше не открыть.",
     "face.projects": "Проекты",
     "face.railFolders": "Папки",
     "face.tabsCompact": "Скрывать названия",

@@ -1007,10 +1007,16 @@ pub fn pty_open(
     // provider is opened on it; one that has none is opened on a handle issued here and written
     // down, so the pane has a way back the next time the app comes up (`AMB-D-869`).
     let face = app.state::<crate::frames::TalkFace>();
+    // And the way back a record put on this frame, for a pane opened again from a task or a decision
+    // that was made in it (`AMB-D-897`). It is taken before this run's own answer is asked for, and
+    // is asked for without a provider, because the row it came off names none
+    // (`crate::frames::TalkFace::taken_from_a_record`).
+    let from_a_record = frame.as_deref().and_then(|frame| face.taken_from_a_record(frame));
     let back = frame
         .as_deref()
         .zip(agent.as_deref())
-        .and_then(|(frame, agent)| face.comes_back_on(frame, agent));
+        .and_then(|(frame, agent)| face.comes_back_on(frame, agent))
+        .or_else(|| from_a_record.clone());
     let launch = agent.as_deref().and_then(amenbo_core::wake::started_as);
     let issued = match back {
         Some(_) => None,
@@ -1039,12 +1045,21 @@ pub fn pty_open(
     if let (Some(frame), Some(issued)) = (frame.as_deref(), issued.as_deref()) {
         face.resumed_from(frame, issued.to_string());
     }
+    // A handle off a record goes down on the frame's own row too, so the place keeps its way back the
+    // way every other pane does — and so that a program ending in moments has something to take back
+    // (`crate::frames::TalkFace::gave_up` does nothing where nothing was written down).
+    if let (Some(frame), Some(handle)) = (frame.as_deref(), from_a_record.as_deref()) {
+        face.resumed_from(frame, handle.to_string());
+    }
     // And the model that went on the line goes down on the same row, which is what the next run reads
     // back. A pane opened at a plain prompt, or on a line the reader registered, clears it: what was
     // written there names a model this place is no longer on.
     if let Some(frame) = frame.as_deref() {
         face.opened_on(frame, started.as_ref().and_then(|s| s.model.clone()));
     }
+    // Whether this pane was opened on a way back a record held — read while the value is still about
+    // this opening, and carried into the ending below.
+    let opened_again = from_a_record.is_some();
     // The frame to take the way back off again, should the program end in moments. Only where what
     // is written down is a handle the line carries: Gemini's row keeps the place the pane runs in
     // instead, and a place is not a claim that a conversation was ever had there (`AMB-D-869`,
@@ -1179,10 +1194,15 @@ pub fn pty_open(
         // A program that ended by itself within moments of starting never got as far as a session,
         // so the handle written down for it is taken back before it can refuse the next run too
         // (`crate::frames::TalkFace::gave_up`).
-        if let Some(frame) = on_the_line.filter(|_| itself && opened.elapsed() < BELIEVED_AFTER) {
+        let gave_up = on_the_line.filter(|_| itself && opened.elapsed() < BELIEVED_AFTER);
+        // And where the handle it gave up was the one a record held, the pane says so rather than
+        // ending in silence: the person pressed to go back into that conversation, and what they are
+        // owed is that it is no longer there (`AMB-D-897`, `crate::dto::PtyClosedDto`).
+        let no_way_back = opened_again && gave_up.is_some();
+        if let Some(frame) = gave_up {
             app.state::<crate::frames::TalkFace>().gave_up(&frame);
         }
-        let ending = PtyClosedDto { session: id.clone(), code };
+        let ending = PtyClosedDto { session: id.clone(), code, no_way_back };
         let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, ending);
     });
 

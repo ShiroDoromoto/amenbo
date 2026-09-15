@@ -13,7 +13,7 @@ use crate::cmd::attach::attach_add;
 use crate::cmd::comment::{comment_line, comment_not_found, comment_section, resolve_live_decision_comment};
 use crate::cmd::labels::{decision_comment_label, decision_label, task_comment_label, task_label};
 use crate::cmd::outbox::emit_decision_event;
-use crate::cmd::place::{made_in, project_or_bound, resolve_dim_pairs};
+use crate::cmd::place::{made_in, made_in_line, project_or_bound, resolve_dim_pairs};
 use crate::cmd::premise::{attach_revisit, note_revisit, standing_on, warn_if_premise_added_to_reserved, warn_if_unsettled_under_reserved};
 use crate::cmd::task::resolve_task;
 use crate::output::{confirm, count_header, human, print_json, warn_body, write_envelope, CliError, Flags};
@@ -128,6 +128,12 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 }
                 if detail.updated_at != detail.created_at && Some(detail.updated_at) != detail.decided_at {
                     human(flags, format!("last changed: {}", detail.updated_at.to_rfc3339_z()));
+                }
+                // Which session recorded it (`AMB-D-897`) — the question this was raised for: a
+                // decision nobody remembers making. Folded away where there is none, the way the two
+                // lines above are, and carried in `--json` either way.
+                if let Some(made_in) = &detail.made_in {
+                    human(flags, format!("made in: {}", made_in_line(made_in)));
                 }
                 // Each edge kind is a set — one decision may supersede or amend several others — so every
                 // edge gets its own line.

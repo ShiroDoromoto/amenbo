@@ -42,13 +42,13 @@
 //! servers reaching the pane; what it gives up is the pane's own writes coming back. macOS and Linux
 //! keep the link, which survives the replacing and gives up neither (`AMB-D-878`).
 //!
-//! **What is made here is tidied here.** A home outlives the run because the pane does, so it is
-//! taken away when the pane is ([`crate::pane_home::forget`]) and what an ended run left behind is
-//! cleared by the next one ([`crate::pane_home::sweep`]) — the same shape `crate::pty::sweep` clears the drop boxes with. Both doors
-//! answer for every root, including the rows whose way back is down: a home an earlier build made is
-//! swept whether or not a pane would be given one today.
+//! **What is made here outlives the pane it was made for.** A home is where the conversation is:
+//! these two come back by the place they ran in and not by an id, so a home taken away is a
+//! conversation there is no way back into. A pane that closes leaves its home standing, and what is
+//! let go of is the watch on it ([`crate::pane_home::forget`]). **Nothing here bounds the pile yet**:
+//! what is to bound it is the total size the homes come to, and not whether a pane is still open
+//! (`AMB-D-898`).
 
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 /// One provider's per-pane homes — where they are made, what is shared into them, and the variable
@@ -303,45 +303,17 @@ fn vars(kind: &Kind, home: PathBuf, theirs: Option<&Path>) -> Vec<(&'static str,
     vars
 }
 
-/// Take one pane's home away, once the pane is gone (`crate::frames`).
+/// Let go of what this run holds for one pane's home, once the pane is gone (`crate::frames`).
 ///
-/// **It answers only for directories it made.** What is handed in is a pane's resume handle, and the
-/// handles of the other five providers are session ids rather than paths — one of those names
-/// nothing under this root and is let go without a filesystem call.
+/// **The home itself stays** (`AMB-D-898`). It is where the conversation is, and a pane being closed
+/// is not a reason to take a conversation away; what goes with the pane is the watch that was
+/// carrying back what it settled ([`crate::pane_settled`]).
+///
+/// **It answers only for homes it made.** What is handed in is a pane's resume handle, and the
+/// handles of the other five providers are session ids rather than paths — the watch is kept under
+/// the home it is on, so one of those is let go of without anything being done to it.
 pub fn forget(handle: &Path) {
-    for kind in KINDS {
-        let Some(root) = homes_root(kind) else { continue };
-        forget_in(&root, handle);
-    }
-}
-
-/// Clear the homes of panes that are no longer in the arrangement. Call it once, off the launch path.
-///
-/// A pane that is closed while the app is up takes its home with it ([`forget`]); a run that ends
-/// without that happening — a quit with panes open, a crash — leaves the directory behind, and the
-/// row that named it goes at the same time. So the reckoning is done from the other end: the rows the
-/// store kept are the homes there is still a way back into, and everything else under the root is a
-/// pane nothing can return to.
-///
-/// **Rows and not age settle it.** Only this build writes under this root — a dev channel keeps its
-/// app-data elsewhere, and only one Amenbo of a channel runs at a time (`crate::single_instance`) —
-/// so there is no other run's home here to be wrong about.
-pub fn sweep() {
-    let Ok(store) = crate::commands::open_store_read() else { return };
-    let kept = match store.saved_layout() {
-        Ok(layout) => layout.map(|kept| kept.panes.iter().map(|pane| pane.id.clone()).collect()),
-        // Nothing is taken away on a store that would not answer: the rows are the whole of what says
-        // which homes are still somebody's, and sweeping without them would empty the roots.
-        Err(e) => {
-            log::warn!("pane homes are not swept: {e}");
-            return;
-        }
-    };
-    let kept = kept.unwrap_or_default();
-    for kind in KINDS {
-        let Some(root) = homes_root(kind) else { continue };
-        sweep_in(&root, &kept);
-    }
+    crate::pane_settled::forget(handle);
 }
 
 /// Where this build's per-pane homes live for one provider, or nothing on a machine whose app-data
@@ -480,31 +452,6 @@ fn link(from: &Path, at: &Path) -> std::io::Result<()> {
             std::fs::File::create(from)?;
         }
         std::fs::hard_link(from, at)
-    }
-}
-
-/// [`forget`] against a named root, so what it will and will not take away can be asked of it.
-fn forget_in(root: &Path, handle: &Path) {
-    if handle.parent() != Some(root) {
-        return;
-    }
-    // Before the directory goes, so the watch on it is not left waiting on a home that is not there.
-    crate::pane_settled::forget(handle);
-    if let Err(e) = std::fs::remove_dir_all(handle) {
-        log::warn!("the pane home at {} stayed: {e}", handle.display());
-    }
-}
-
-/// [`sweep`] against a named root and a named set of frames, so it can be asked what it clears.
-fn sweep_in(root: &Path, kept: &BTreeSet<String>) {
-    let Ok(entries) = std::fs::read_dir(root) else { return };
-    for entry in entries.filter_map(Result::ok) {
-        let path = entry.path();
-        let named = path.file_name().map(|name| name.to_string_lossy().into_owned());
-        if named.is_some_and(|frame| kept.contains(&frame)) {
-            continue;
-        }
-        let _ = std::fs::remove_dir_all(&path);
     }
 }
 
@@ -907,75 +854,31 @@ mod tests {
         shares(&home.join(".gemini/settings.json"), &theirs.join("settings.json"));
     }
 
-    /// A home goes when its pane does, and the reader's own directory is not followed on the way out
-    /// — what is removed is the entries, never what they are a second name for.
+    /// A pane that is gone leaves its home where it is, conversation and all (`AMB-D-898`). These two
+    /// come back by the place they ran in, so a home taken away when the pane closed would be the
+    /// conversation taken away with it — which is what every other provider here does not do.
     ///
-    /// **Both rows, because the shared names that are directories are only on one of them.** On
-    /// Windows those are junctions, and a removal that walked into one would empty the reader's own
-    /// skills and prompts rather than the pane's way to them.
+    /// **Both rows**, because both are given homes and neither is the reader's to lose.
     #[test]
-    fn a_pane_that_is_gone_takes_its_home_and_nothing_else() {
+    fn a_pane_that_is_gone_leaves_its_home_standing() {
         for kind in KINDS {
             let theirs = theirs(kind);
             let root = amenbo_scratch::scratch("pane-homes-gone").join(kind.agent);
             let home = root.join("7");
             opened(kind, &home, Some(&theirs)).unwrap();
+            let talk = home.join(kind.inside).join("what-was-said");
+            std::fs::write(&talk, "a conversation").unwrap();
 
-            forget_in(&root, &home);
+            forget(&home);
 
-            assert!(!home.exists(), "{}", kind.agent);
-            for name in kind.shared {
-                let at = theirs.join(name);
-                assert!(at.exists(), "{}: the reader's own {name} is untouched", kind.agent);
-                if at.is_dir() {
-                    assert!(at.join("one").exists(), "{}: and so is what is in it", kind.agent);
-                }
-            }
+            assert!(home.is_dir(), "{}", kind.agent);
+            assert_eq!(
+                std::fs::read_to_string(&talk).unwrap(),
+                "a conversation",
+                "{}: the conversation is still there",
+                kind.agent
+            );
         }
-    }
-
-    /// A handle that names nothing under the root is let go of rather than acted on — which is every
-    /// one of the providers whose handle is a session id.
-    #[test]
-    fn a_handle_that_is_not_a_home_is_left_alone() {
-        let root = amenbo_scratch::scratch("pane-homes-elsewhere-root");
-        let elsewhere = amenbo_scratch::scratch("pane-homes-elsewhere");
-        std::fs::write(elsewhere.join("keep"), "not ours").unwrap();
-
-        forget_in(&root, Path::new("0f9c-a session id"));
-        forget_in(&root, &elsewhere);
-
-        assert!(elsewhere.join("keep").exists());
-    }
-
-    /// The sweep keeps a home for every pane the store still has a row for, and clears the rest — the
-    /// panes a run that ended badly never got to close.
-    #[test]
-    fn the_sweep_keeps_the_panes_that_came_back() {
-        let kind = kind(GEMINI);
-        let root = amenbo_scratch::scratch("pane-homes-swept");
-        for frame in ["1", "2", "3"] {
-            opened(kind, &root.join(frame), None).unwrap();
-        }
-
-        sweep_in(&root, &BTreeSet::from(["1".to_string(), "3".to_string()]));
-
-        assert!(root.join("1").is_dir());
-        assert!(!root.join("2").exists());
-        assert!(root.join("3").is_dir());
-    }
-
-    /// An arrangement with no panes in it leaves no homes: every one of them is a pane there is no
-    /// row for.
-    #[test]
-    fn the_sweep_of_an_empty_arrangement_clears_the_root() {
-        let root = amenbo_scratch::scratch("pane-homes-empty");
-        opened(kind(GEMINI), &root.join("1"), None).unwrap();
-
-        sweep_in(&root, &BTreeSet::new());
-
-        assert!(!root.join("1").exists());
-        assert!(root.is_dir(), "the root itself stands");
     }
 
     /// A pane is given a home while the catalog says it comes back by the place it runs in, and not

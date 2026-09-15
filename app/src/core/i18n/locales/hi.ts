@@ -305,6 +305,8 @@ export const hi: Translation = {
     "attach.removeConfirm": "संलग्नक “{name}” हटाएँ?", "attach.notLocal": "अभी इस डिवाइस पर नहीं है (लाना बाद में आएगा)",
     "attach.unsupported": "इस प्रकार का पूर्वावलोकन नहीं दिखाया जा सकता", "attach.link": "लिंक",
     "attach.failed": "संलग्न करना विफल",
+    "madeIn.section": "जहाँ बना", "madeIn.unnamed": "बिना नाम वाला पैन",
+    "madeIn.go": "इस पैन पर लौटें",
     "commit.section": "कमिट", "commit.add": "SHA दर्ज करें", "commit.none": "कोई कमिट दर्ज नहीं",
     "commit.placeholder": "कमिट SHA (पूरा — 40 या 64 हेक्स अंक)",
     "commit.record": "दर्ज करें", "commit.copy": "SHA कॉपी करें", "commit.copied": "कॉपी हो गया",
@@ -557,6 +559,7 @@ export const hi: Translation = {
     "face.ended": "इस टर्मिनल का प्रोग्राम समाप्त हो गया।",
 
     "face.endedGeminiUnset": "Gemini CLI के लिए कोई प्रमाणीकरण विधि सेट नहीं है। जो पथ दिखाया गया है वह केवल इसी पैन का है और इसके साथ हट जाता है — सेट करनी है आपकी अपनी ~/.gemini/settings.json में।",
+    "face.noWayBack": "यह बातचीत अब नहीं खोली जा सकती।",
     "face.projects": "परियोजनाएँ",
     "face.railFolders": "फ़ोल्डर",
     "face.tabsCompact": "नाम छिपाएँ",

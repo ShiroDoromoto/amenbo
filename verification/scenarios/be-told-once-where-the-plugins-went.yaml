@@ -1,0 +1,116 @@
+# Somebody who installed mail, slack, viewer or worktree opens the app after the upgrade and finds the
+# whole Plugins screen gone. What they are owed is the sentence saying it is part of Amenbo now, and
+# this is the road that sentence is walked on.
+#
+# ── Why the world is given rather than earned ────────────────────────────────────────────────────
+# The account the band stands on is written by the upgrade itself — the migration that took the four
+# into the body leaves one row saying what it carried (`crates/amenbo-core/src/handover.rs`). No
+# command writes one, and a road that meant to earn it would have to be two builds long: the build
+# before this one, with the plugins installed, and then this one opening on the store it left. So the
+# premise writes the row the way the migration writes it (`store carried-in`), and the road opens
+# where a person who upgraded opens.
+#
+# The device given here is the one with the most to say: three of the four came in, notification
+# settings came with them, and the Viewer is among them — so every line the band holds is drawn, and
+# a build that dropped one has somewhere to be caught.
+#
+# ── What the reading is, and what it is not ──────────────────────────────────────────────────────
+# The band's own sentences are the interface's own, and which language this machine is in is not a
+# road's to know. The plugin names are not: `slack, viewer, worktree` read the same everywhere,
+# because they are the plugins' own names, so that is the one thing the line quotes. The rest is left
+# to an eye, which is the harness's ordinary arrangement.
+#
+# ── Why the road does not end at the press ───────────────────────────────────────────────────────
+# Putting the band away is what records the turn, and a build that took it off the screen without
+# recording it would pass a road that stopped there — the reader would be left believing they had
+# been told something the store does not know they were. So the app is ended and opened again on the
+# same store, and the band does not come back. That is the whole of "once".
+#
+# ── The two roads are the same goal and not the same shape ───────────────────────────────────────
+# The terminal is owed the same sentence and takes its own turn, but it says it on the way past —
+# beside whatever command was typed — with nothing to press and no band to stand. So the screen road
+# is four moves (read it, put it away, end the app, read again) and the terminal road is two: a
+# command typed is both the saying and the turn being taken, and what the second reading proves is
+# that the turn is gone.
+id: be-told-once-where-the-plugins-went
+title: The app says once where the plugins went, and putting the band away is what records it
+description: >
+  The goal is one sentence, put once, to somebody who installed a plugin and found it gone. A device
+  the handover carried three plugins and their notification settings into opens the app, and the band
+  saying the plugins are part of Amenbo now is standing across it with nothing pressed to bring it up,
+  naming what this device had. Putting it away takes it off the screen — and the app ended and opened
+  again on the same store comes up without it, which is the record the press was for. A terminal on
+  the same device is told the same thing beside the answer to whatever is typed next, and is not told
+  it again by the command after that.
+
+given:
+  # The upgrade this reader came through. Three of the four, so the band draws the Viewer's line and
+  # worktree's beside the plugin list; two connections on this device and three projects reporting
+  # through them, so the line about the notification settings is drawn rather than held back.
+  - type: action
+    domain: store
+    op: carried-in
+    with:
+      plugins: slack, viewer, worktree
+      targets: 2
+      projects: 3
+      viewer: true
+
+steps_cli:
+  # The next thing typed. The sentence rides on the answer to it rather than on a screen of its own,
+  # and the names are this device's — the same three the band would draw.
+  - type: assert
+    domain: store
+    op: advice
+    with:
+      present: true
+      shows: slack, viewer, worktree
+
+  # And the one after it is not told again. There was no press here: the turn was taken by the typing
+  # above, which is the whole of "once" on this side. The reading names the same sentence rather than
+  # asking for silence, since a terminal has other things it may say on the way past and none of them
+  # is this one.
+  - type: assert
+    domain: store
+    op: advice
+    with:
+      present: false
+      shows: slack, viewer, worktree
+
+steps_gui:
+  # The arrival, read before a finger has touched anything: coming up unasked is the whole of what the
+  # band is for, and the names on it are this device's own rather than a fixed sentence.
+  - type: assert
+    domain: store
+    op: handover
+    with:
+      present: true
+      names: slack, viewer, worktree
+
+  # The one control it carries. Nothing is being asked, so this is an acknowledgement and not an
+  # answer — and it is the press the record rides on.
+  - type: action
+    domain: store
+    op: handover-away
+
+  # Off the screen. A band that stayed up would be saying a second time what it has just been told it
+  # has said.
+  - type: assert
+    domain: store
+    op: handover
+    with:
+      present: false
+
+  # The app out and another in, on the same store. This is the gap the record has to survive: what the
+  # press wrote is read here and nowhere else, since everything the run itself held went with the app.
+  - type: action
+    domain: store
+    op: run-again
+
+  # And it does not come back. Said once is said — the window has taken its turn, and the account the
+  # migration left says so.
+  - type: assert
+    domain: store
+    op: handover
+    with:
+      present: false

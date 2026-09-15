@@ -14,8 +14,9 @@
 //! declaration to disagree with the steps.
 //!
 //! Two layers of checking, both surfaced as clear failures:
-//!   * [`load_str`] / [`load_file`] — the YAML must parse into the typed model
-//!     (`deny_unknown_fields` catches misspelled keys).
+//!   * [`load_str`] / [`load_file`] — the YAML must parse into the typed model. A key nothing takes
+//!     is named rather than dropped, on the scenario by `deny_unknown_fields` and on a step by
+//!     [`RawStep`], which gathers the leftovers the attribute cannot reach.
 //!   * [`Scenario::validate`] — the semantic pass, run over each driver's steps on its own:
 //!     known ops only, required args present, each arg of the type its op takes, and every
 //!     `target:` resolving to an earlier `as:` binding in the same list.
@@ -90,8 +91,12 @@ impl Driver {
 
 /// One step. `type` selects the variant; every step names the [`Domain`] object it
 /// touches and the `op` performed on it.
+///
+/// A key the step does not take is refused rather than dropped, by way of [`RawStep`] — serde has no
+/// `deny_unknown_fields` for the variants of an internally tagged enum, so the leftover keys are
+/// gathered there and named.
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", try_from = "RawStep")]
 pub enum Step {
     /// A domain operation that changes state — or, with `refused:` among its args, one the
     /// scenario says Amenbo will turn away.
@@ -126,6 +131,77 @@ pub enum Step {
         #[serde(default)]
         window: Option<String>,
     },
+}
+
+/// A step as it is written, before the loader has looked at whether every key on it is one a step
+/// takes. The named fields are [`Step`]'s own; `rest` is everything else on the mapping, which is
+/// what [`Step`]'s conversion refuses on.
+///
+/// It exists because the alternative silently loses work: a `refused:` written one level out — beside
+/// `with` instead of inside it — was read as no refusal at all, so the step ran as an ordinary one
+/// and the road went green on a guard it never reached.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum RawStep {
+    Action {
+        domain: Domain,
+        op: String,
+        #[serde(default)]
+        with: Args,
+        #[serde(default)]
+        window: Option<String>,
+        #[serde(default, rename = "as")]
+        bind: Option<String>,
+        #[serde(flatten)]
+        rest: Args,
+    },
+    Assert {
+        domain: Domain,
+        op: String,
+        #[serde(default)]
+        with: Args,
+        #[serde(default)]
+        window: Option<String>,
+        #[serde(flatten)]
+        rest: Args,
+    },
+}
+
+impl TryFrom<RawStep> for Step {
+    type Error = String;
+
+    fn try_from(raw: RawStep) -> Result<Self, Self::Error> {
+        match raw {
+            RawStep::Action { domain, op, with, window, bind, rest } => {
+                refuse_stray_keys(&rest, "an action")?;
+                Ok(Step::Action { domain, op, with, window, bind })
+            }
+            RawStep::Assert { domain, op, with, window, rest } => {
+                refuse_stray_keys(&rest, "an assert")?;
+                Ok(Step::Assert { domain, op, with, window })
+            }
+        }
+    }
+}
+
+/// Refuse the keys a step was written with that a step does not take. `type` is not among them: the
+/// tag is taken out before the remainder is gathered.
+///
+/// The op's own arguments are the common mistake, and they get their own sentence — one level out is
+/// exactly where a hand reaches for `refused:` — because "unknown key" alone leaves the writer
+/// looking for a typo in a word that is spelled correctly.
+fn refuse_stray_keys(rest: &Args, what: &str) -> Result<(), String> {
+    let stray: Vec<&str> = rest.keys().map(String::as_str).collect();
+    if stray.is_empty() {
+        return Ok(());
+    }
+    let named = stray.iter().map(|k| format!("`{k}`")).collect::<Vec<_>>().join(", ");
+    let hint = if stray.contains(&"refused") {
+        " — `refused` is an argument of the op, so it goes under `with:`"
+    } else {
+        " — an op's arguments go under `with:`"
+    };
+    Err(format!("{what} step does not take {named}{hint}"))
 }
 
 impl Step {
@@ -694,6 +770,16 @@ const REGISTRY: &[OpSpec] = &[
     // `launches` is written to the tally as it stands, and `days` spreads the records already in the
     // store back over that many separate days (the store has to hold at least that many).
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "worn-in", required: &["launches", "days"], refs: &[], strings: &[], binds: false },
+    // A device the plugins were taken into on the way to this build. What the migration
+    // leaves behind is one account of what it carried, and every road about the sentence a person is
+    // owed opens on that account already lying there — nothing this build does writes one, since the
+    // step that would is the upgrade itself, and an upgrade is not a move any road has.
+    //
+    // It is the reach `worn-in` makes: a row Amenbo writes itself, written by the driver because the
+    // only thing that would otherwise write it is a day in the past. `plugins` names which of the four
+    // this device had, comma-separated in the order the migration takes them; `targets` and `projects`
+    // are how much of the notification settings came across, and `viewer` whether the Viewer did.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "carried-in", required: &["plugins"], refs: &[], strings: &["plugins"], binds: false },
     // A machine nobody has raised anything on. The driver raises a project as it boots — the store
     // has to have somewhere to file what a premise stands up — so a road that opens on the screen a
     // first-time reader meets could not be given a world at all: the moment it declared one, there
@@ -713,6 +799,15 @@ const REGISTRY: &[OpSpec] = &[
     // registers this machine's login with the OS, which is the one piece of state no throwaway store
     // can hold and no run can hand back — that half is walked on real machines instead.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "nudge-answer", required: &["nudge", "answer"], refs: &[], strings: &["nudge", "answer"], binds: false },
+    // The band saying where the plugins went, put away. It takes no answer — nothing is being asked —
+    // so the press is the whole of the op, and what makes it worth a step of its own is that the
+    // putting away is what records the turn: the window is marked told by this press and by nothing
+    // else, and a band dismissed over a store that refused the write stays up with the reason on it
+    // (`app/src/components/HandoverBanner.tsx`).
+    //
+    // A screen road alone. The terminal says the same sentence, but it says it on the way past —
+    // beside whatever command was typed — and takes its own turn with no press to make.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "handover-away", required: &[], refs: &[], strings: &[], binds: false },
     // The app ended and opened again on the same store. It is not a move on a screen at all: it is a
     // run of Amenbo going out and another coming up, which is the one gap a road cannot otherwise
     // reach and the only place several promises are kept. What a person set and comes back to is
@@ -1145,6 +1240,31 @@ const REGISTRY: &[OpSpec] = &[
     // and it is what the reading is matched against: the id is the name the build declares the nudge
     // under, it never reaches a screen, and a line naming only that could not be judged from a shot.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "nudge", required: &["nudge", "present", "shows"], refs: &[], strings: &["nudge", "shows"], binds: false },
+    // Whether the band saying where the plugins went is standing across the app. A screen road alone,
+    // for the reason the nudge's is. There is only one such band, so `present` alone picks it out and
+    // no id is named.
+    //
+    // `names` is the plugin list the band should be drawing, and it is the one thing on it a road may
+    // read: those are the plugins' own names, the same in every language, where the sentences around
+    // them are the interface's own and belong to whatever language the machine is set to. Left out,
+    // the reading is that the band is there at all.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "handover", required: &["present"], refs: &[], strings: &["names"], binds: false },
+    // What a command said **beside its answer** — the advisory a terminal puts on stderr on the way
+    // past, which is where the same sentence about the plugins is said to a person who types rather
+    // than presses. `shows` is the text it must carry and `present` says which way it is read.
+    //
+    // **A terminal road alone**, and the one reading whose act and reading are the same move: a
+    // screen stands the sentence up and waits, so a road there reads a window that is already
+    // holding it, while a terminal says it on the way through a command and is done. So this reading
+    // types one — and the turn the build takes is taken by that typing, which is what lets the road
+    // ask a second time and be told nothing.
+    //
+    // The words are quoted here, where a screen road would not quote the interface's own: the
+    // terminal's advisories are the build's English and are not translated, so there is no language
+    // for a road to be wrong about. `shows` is named either way rather than optional — a terminal
+    // has other advisories it may put on the way past, so a road asking whether *anything* was said
+    // would be asking about those too.
+    OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "advice", required: &["present", "shows"], refs: &[], strings: &["shows"], binds: false },
     // What the app's own menu bar carries — a heading, or a word inside one of the menus under it.
     // `shows` is that word and `present` says which way it is read, the same pair every reading takes.
     //
@@ -3258,6 +3378,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // it stands up is the passage of time itself — launches tallied across days written on — which a
     // road can only be given, never earn.
     (Domain::Store, "worn-in"),
+    // And a device the plugins were taken into on the way here. It is out of reach for the same
+    // reason one step further back: what writes the account is the upgrade from the build before
+    // this one, so a road could only earn it by being two builds long.
+    (Domain::Store, "carried-in"),
     // And a device nothing has been raised on at all, which is the world every road about the screen
     // a first-time reader meets opens on. It is here for the state it leaves rather than for the act,
     // the way `folder unbind` is: what the driver does to have somewhere to file a premise is itself
@@ -4324,6 +4448,42 @@ steps_cli:
     with: { target: held, status: in_progress, refused: already_reserved }
 "#;
         load_str(yaml).unwrap().validate().expect("valid");
+    }
+
+    /// The mistake this guards is not a typo: `refused` is spelled correctly, one level out from
+    /// where the driver reads it. Dropped, the step ran as an ordinary one and the road passed a
+    /// guard it never reached.
+    #[test]
+    fn a_refusal_written_outside_with_is_a_parse_error() {
+        let yaml = r#"
+id: x
+title: y
+steps_cli:
+  - type: action
+    domain: task
+    op: create
+    with: { title: T }
+    refused: already_reserved
+"#;
+        let e = load_str(yaml).unwrap_err().to_string();
+        assert!(e.contains("`refused`"), "the key is named: {e}");
+        assert!(e.contains("`with:`"), "and so is where it belongs: {e}");
+    }
+
+    #[test]
+    fn a_stray_key_on_an_assert_is_a_parse_error() {
+        let yaml = r#"
+id: x
+title: y
+steps_cli:
+  - type: assert
+    domain: task
+    op: found
+    with: { title: T }
+    as: held
+"#;
+        let e = load_str(yaml).unwrap_err().to_string();
+        assert!(e.contains("`as`"), "an assert produces nothing to bind: {e}");
     }
 
     /// The code is the whole of it: a refusal on some other ground is a different guard, so the

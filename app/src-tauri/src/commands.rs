@@ -1980,6 +1980,74 @@ pub fn task_commits(task_id: i64) -> Result<Vec<TaskCommitDto>, CmdError> {
     Ok(found.unwrap_or_default())
 }
 
+/// The session a task was made in, or nothing for one nobody made in a pane (`AMB-D-897`).
+///
+/// The handle the pane is resumed from is left behind here. It is read on this side, by the door the
+/// press goes through ([`task_pane_opens_again`]), so a way back into somebody's conversation is
+/// never something a webview holds — the same division the pane's own handle is kept under
+/// (`crate::frames::TalkFace`).
+#[tauri::command]
+pub fn task_made_in(task_id: i64) -> Result<Option<MadeInDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("task_made_in");
+    find_in_store(|store| {
+        Ok(store
+            .task_made_in(task_id)?
+            .map(|row| MadeInDto { pane: row.pane, pane_name: row.pane_name }))
+    })
+}
+
+/// The decision's side of [`task_made_in`].
+#[tauri::command]
+pub fn decision_made_in(decision_id: i64) -> Result<Option<MadeInDto>, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("decision_made_in");
+    find_in_store(|store| {
+        Ok(store
+            .decision_made_in(decision_id)?
+            .map(|row| MadeInDto { pane: row.pane, pane_name: row.pane_name }))
+    })
+}
+
+/// Put the way back into the pane this task was made in on that pane's own frame, for a face about
+/// to open it again (`AMB-D-897`, `crate::frames::TalkFace::opens_again`).
+///
+/// **It is asked by naming the record, not by handing over the handle.** The screen knows which pane
+/// a task was made in and whether that pane is still open; what it does not have, and is never given,
+/// is the way back into it. So the press says which record it is about and this reads the row itself.
+///
+/// Nothing is opened here. The pane is the window's to make, under the id the row names, and this
+/// only leaves the handle where the opening will find it (`crate::pty::pty_open`).
+///
+/// A task nothing was recorded for, and a row with no way back on it, are both nothing to put down —
+/// and neither is a failure: the pane opens as a pane, with no conversation to come back into.
+#[tauri::command]
+pub fn task_pane_opens_again(
+    face: tauri::State<'_, crate::frames::TalkFace>,
+    task_id: i64,
+) -> Result<(), CmdError> {
+    let row = find_in_store(|store| Ok(store.task_made_in(task_id)?))?;
+    if let Some(row) = row {
+        if let Some(handle) = row.pane_resume {
+            face.opens_again(&row.pane, handle);
+        }
+    }
+    Ok(())
+}
+
+/// The decision's side of [`task_pane_opens_again`].
+#[tauri::command]
+pub fn decision_pane_opens_again(
+    face: tauri::State<'_, crate::frames::TalkFace>,
+    decision_id: i64,
+) -> Result<(), CmdError> {
+    let row = find_in_store(|store| Ok(store.decision_made_in(decision_id)?))?;
+    if let Some(row) = row {
+        if let Some(handle) = row.pane_resume {
+            face.opens_again(&row.pane, handle);
+        }
+    }
+    Ok(())
+}
+
 /// Record a commit SHA on a task. Same shape as the CLI's `task commit add`: the SHA is validated
 /// and normalised at the ops door (full-length lower-case hex only; case folded), and a SHA already
 /// on the task is a no-op. Invalidates the task so any open detail view refetches.

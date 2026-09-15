@@ -314,11 +314,6 @@ pub fn run() {
       // What an earlier run left in the temporary directory when it ended without closing its terminals.
       // Off the launch path: it is a scan of a directory, and nothing here waits on it.
       std::thread::spawn(pty::sweep);
-      // And the per-pane homes of panes that are no longer in the arrangement — what a run that
-      // ended with terminals open could not take away itself (`crate::pane_home`). Off the launch
-      // path for the same reason: it reads the store and then a directory, and nothing here waits on
-      // it.
-      std::thread::spawn(pane_home::sweep);
       // And the directory a removed feature left in app-data. Amenbo wrote a row there for every status
       // move made inside a pane, to say which pane was holding which task; nothing writes or reads it
       // any more, so what is left is bytes with nothing in the tree to explain them. Removed once, on
@@ -528,6 +523,10 @@ pub fn run() {
       commands::task_commits,
       commands::task_commit_add,
       commands::task_commit_remove,
+      commands::task_made_in,
+      commands::decision_made_in,
+      commands::task_pane_opens_again,
+      commands::decision_pane_opens_again,
       commands::reveal_folder,
       commands::open_terminal,
       commands::project_bound_folders,

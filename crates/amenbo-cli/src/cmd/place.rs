@@ -6,6 +6,7 @@ use amenbo_core::config::Paths;
 use amenbo_core::env;
 use amenbo_core::model::ClassifiedSide;
 use amenbo_core::ops::MadeIn;
+use amenbo_core::view::MadeInView;
 
 use crate::PROJECT_OVERRIDE;
 use crate::cli::*;
@@ -279,6 +280,23 @@ fn pane_name(store: &Store, pane: &str) -> Option<String> {
     Some(row.name?.name)
 }
 
+/// One line naming the session a record was made in, for the pages that print one (`AMB-D-897`).
+///
+/// **The name leads and the id follows it in brackets**: the name is what a reader recognises the
+/// session by, and the id is what takes them back to it. A pane nobody named, or one the arrangement
+/// no longer holds a row for, has only the id — so the id is what is always there, and the name is
+/// what is added where there is one.
+///
+/// The handle the session is resumed from is left to `--json`. It is the provider's own word for the
+/// conversation and means nothing to a person reading a terminal; what it is for is opening the
+/// session again, which is a thing a face does and not a thing a line says.
+pub(crate) fn made_in_line(made_in: &MadeInView) -> String {
+    match &made_in.pane_name {
+        Some(name) => format!("{name} ({})", made_in.pane),
+        None => made_in.pane.clone(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -351,5 +369,21 @@ mod tests {
             None,
             "a machine that has kept no arrangement",
         );
+    }
+
+    /// The line names the session by what a reader recognises it by, and carries the id that takes
+    /// them back to it. With no name there is still the id — the line never comes out empty.
+    #[test]
+    fn the_line_leads_with_the_name_and_keeps_the_id_either_way() {
+        let line = made_in_line(&MadeInView {
+            pane: "pane-a".into(),
+            pane_name: Some("移行を書いている窓".into()),
+            pane_resume: Some("0f9c".into()),
+        });
+        assert_eq!(line, "移行を書いている窓 (pane-a)");
+
+        let unnamed =
+            made_in_line(&MadeInView { pane: "pane-a".into(), pane_name: None, pane_resume: None });
+        assert_eq!(unnamed, "pane-a", "a pane nobody named is still named by its id");
     }
 }

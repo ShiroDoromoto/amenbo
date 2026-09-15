@@ -304,6 +304,8 @@ export const ko: Translation = {
     "attach.removeConfirm": "첨부 “{name}”을(를) 제거할까요?", "attach.notLocal": "아직 이 기기에 없습니다(가져오기는 나중에 지원합니다)",
     "attach.unsupported": "이 형식은 미리보기를 지원하지 않습니다", "attach.link": "링크",
     "attach.failed": "첨부에 실패했습니다",
+    "madeIn.section": "만든 페인", "madeIn.unnamed": "이름 없는 페인",
+    "madeIn.go": "이 페인으로 돌아가기",
     "commit.section": "커밋", "commit.add": "SHA 기록", "commit.none": "기록된 커밋이 없습니다",
     "commit.placeholder": "커밋 SHA(전체 — 16진수 40자리 또는 64자리)",
     "commit.record": "기록", "commit.copy": "SHA 복사", "commit.copied": "복사했습니다",
@@ -555,6 +557,7 @@ export const ko: Translation = {
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
 
     "face.endedGeminiUnset": "Gemini CLI에 인증 방법이 설정되어 있지 않습니다. 표시된 경로는 이 창만의 것이라 함께 사라지므로, 설정할 파일은 본인의 ~/.gemini/settings.json입니다.",
+    "face.noWayBack": "이 대화는 더 이상 열 수 없습니다.",
     "face.projects": "프로젝트",
     "face.railFolders": "폴더",
     "face.tabsCompact": "이름 숨기기",

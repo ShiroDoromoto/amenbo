@@ -305,6 +305,8 @@ export const tr: Translation = {
     "attach.removeConfirm": "“{name}” eki kaldırılsın mı?", "attach.notLocal": "Henüz bu cihazda tutulmuyor (getirme sonra gelecek)",
     "attach.unsupported": "Bu tür için önizleme yok", "attach.link": "Bağlantı",
     "attach.failed": "Ekleme başarısız",
+    "madeIn.section": "Şurada oluşturuldu", "madeIn.unnamed": "Adsız bir bölme",
+    "madeIn.go": "Bu bölmeye dön",
     "commit.section": "Commit'ler", "commit.add": "SHA kaydet", "commit.none": "Kayıtlı commit yok",
     "commit.placeholder": "Commit SHA (tam — 40 ya da 64 onaltılık basamak)",
     "commit.record": "Kaydet", "commit.copy": "SHA'yı kopyala", "commit.copied": "Kopyalandı",
@@ -557,6 +559,7 @@ export const tr: Translation = {
     "face.ended": "Bu terminaldeki program sona erdi.",
 
     "face.endedGeminiUnset": "Gemini CLI için bir kimlik doğrulama yöntemi ayarlanmamış. Belirtilen yol yalnızca bu bölmeye aittir ve onunla birlikte silinir — ayarlamanız gereken kendi ~/.gemini/settings.json dosyanızdır.",
+    "face.noWayBack": "Bu konuşma artık açılamıyor.",
     "face.projects": "Projeler",
     "face.railFolders": "Klasörler",
     "face.tabsCompact": "Adları gizle",

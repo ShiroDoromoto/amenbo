@@ -14,6 +14,7 @@ use crate::cmd::comment::comment_section;
 use crate::cmd::decision::decision_ref_name;
 use crate::cmd::guard::guard_ai_task_delete;
 use crate::cmd::labels::{decision_label, task_label};
+use crate::cmd::place::made_in_line;
 use crate::cmd::outbox::{emit_event, emit_unblocks, newly_ready_or_warn};
 use crate::cmd::place::{made_in, project_or_bound, resolve_bound_folder, resolve_dim_pairs};
 use crate::cmd::premise::{attach_premise_change, premise_change, premise_change_lines, premise_change_when, warn_if_premise_added_to_reserved, warn_premise_change};
@@ -211,6 +212,14 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                         format!("created: {created} / updated: {updated} (any write)")
                     },
                 );
+                // Which session filed it (`AMB-D-897`). It folds away when there is none, the way
+                // `folder` does: a task filed at a plain terminal is held back by nothing, and every
+                // task written before the row existed has none either — so the line would otherwise
+                // stand empty on most of the backlog for good. `--json` carries the key regardless,
+                // and the handle the session is resumed from with it.
+                if let Some(made_in) = &detail.made_in {
+                    human(flags, format!("made in: {}", made_in_line(made_in)));
+                }
                 // Always mark whether the task is placed; never omit the line when empty. Being unplaced
                 // is a meaningful state — a task belonging to no project — so say `(none)` out loud.
                 match &detail.placement {

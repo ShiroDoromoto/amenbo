@@ -78,8 +78,14 @@ export type PaneEvents = {
    *
    *  `code` is what it exited with, and null where it was ended rather than ended by itself. It is
    *  carried because a few endings are ones Amenbo had a hand in and the screen cannot say so
-   *  ({@link whyItStopped}). */
-  closed(session: string, code: number | null): void;
+   *  ({@link whyItStopped}).
+   *
+   *  `noWayBack` is the one of those the number cannot tell: this pane was opened again on the way
+   *  back a record held, and that way back led nowhere (`AMB-D-897`). Every provider refuses a handle
+   *  it did not issue in its own words and with its own number, so what says it is the host, which
+   *  knows what the pane was opened on (`crate::dto::PtyClosedDto`). It is left out where the caller
+   *  has nothing to say about it, which reads as what it is: an ending that claims nothing. */
+  closed(session: string, code: number | null, noWayBack?: boolean): void;
   /** This frame has settled where it works, before anything is running there — the person chose a
    *  folder (`./agent`). It is said of the choice and not of the terminal because the two can be a
    *  long way apart, and a page that waited for a started terminal would ask its other slots again. */
@@ -666,7 +672,10 @@ export async function pasteIntoTerminal(session: string, text: string): Promise<
  * so recognising one is not parsing anybody's output. A number that moves in a later version costs
  * the word and nothing else: the pane still says the program ended, which is what it said before.
  */
-export function whyItStopped(agent: string | null, code: number | null): string | null {
+export function whyItStopped(agent: string | null, code: number | null, noWayBack = false): string | null {
+  // The conversation comes first: it is what the person pressed for, and it is the answer whichever
+  // provider refused the handle and whatever number it left behind (`AMB-D-897`).
+  if (noWayBack) return "face.noWayBack";
   if (agent === "gemini-cli" && code === 41) return "face.endedGeminiUnset";
   return null;
 }
@@ -1104,7 +1113,7 @@ export async function mountTerminal(
     }
   });
   const unlistenClosed = await listen<PtyClosedDto>(CLOSED_EVENT, ({ payload }) => {
-    if (payload.session === session) on.closed(payload.session, payload.code ?? null);
+    if (payload.session === session) on.closed(payload.session, payload.code ?? null, payload.noWayBack);
   });
   // **All this event does is put the pane in the way of sending it**: from here on the person's next
   // Enter carries the sentence out behind their own line (`sendsTheSentence`). Nothing is drawn for it

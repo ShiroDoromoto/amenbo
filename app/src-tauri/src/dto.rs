@@ -917,9 +917,19 @@ pub struct OpenInDto {
     /// The project the pane will belong to, named by the screen the press was made on.
     #[ts(type = "number")]
     pub(crate) project: i64,
-    /// The folder to work in. The face checks it against that project's bindings before a pane is
-    /// made, and opens nothing where the pair does not hold (`app/src/shell/TerminalFace.tsx`).
-    pub(crate) dir: String,
+    /// The folder to work in, or nothing where the ask names a pane and the record it came from
+    /// holds no folder. The face checks it against that project's bindings before a pane is made,
+    /// and opens nothing where the pair does not hold (`app/src/shell/TerminalFace.tsx`); an ask
+    /// with no folder is answered on the face instead, by the question a pane is always made
+    /// through (`app/src/shell/FolderChoice.tsx`).
+    #[ts(optional)]
+    pub(crate) dir: Option<String>,
+    /// The pane the ask is about, where it is about one: the place a task or a decision was made in
+    /// (`AMB-D-897`). The face goes to it where it is open, and opens it again under this same id
+    /// where it is not — the id is what a provider's own home is named after, so a place opened
+    /// again under a new one would be a different place (`crate::pane_home`).
+    #[ts(optional)]
+    pub(crate) pane: Option<String>,
 }
 
 /// One permanent comment on a decision record, for the GUI. Task comments ride in the per-task
@@ -964,6 +974,27 @@ pub struct AttachmentDto {
     pub(crate) present: bool,
     #[ts(type = "\"human\" | \"ai\" | null")]
     pub(crate) created_by_kind: Option<String>,
+}
+
+/// The session a task or a decision was made in, for the row its detail pane draws (`AMB-D-897`).
+///
+/// **The way back is not in it.** The row holds three values, and the third is the handle the pane's
+/// provider is resumed from — which is the one thing a webview has no business carrying. What the
+/// screen needs is what to draw and what to press; going back in is asked for by naming the record,
+/// and the handle is read and used where it already lives
+/// (`crate::commands::task_pane_opens_again`, `crate::pty`).
+///
+/// **`paneName` is what the pane was called when the record was made**, which is not always what it
+/// is called now. A pane still open in this run has a live name, and the screen prefers it
+/// (`crate::frames::frame_names`) — this is what is left when there is no live one to prefer.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct MadeInDto {
+    /// The id of the pane it was made in (`crate::frames`).
+    pub(crate) pane: String,
+    /// What that pane was called at the time, or nothing for a pane nobody had named.
+    pub(crate) pane_name: Option<String>,
 }
 
 /// One git commit SHA recorded on a task. Amenbo keeps the SHA as an opaque string — it
@@ -1721,6 +1752,15 @@ pub struct PtyClosedDto {
     /// What it exited with, where it exited on its own.
     #[ts(optional)]
     pub(crate) code: Option<i32>,
+    /// Whether this pane was opened again on a way back a record had written down, and the way back
+    /// led nowhere (`AMB-D-897`).
+    ///
+    /// The taking back of such a handle is not new — a program that ends within moments of starting
+    /// never got as far as a session, so what was written down for it is cleared either way
+    /// (`crate::frames::TalkFace::gave_up`). What is new is saying so: a person who pressed to go
+    /// back into a conversation is owed the sentence that it is no longer there, where a pane that
+    /// merely issued itself a handle has nothing to report.
+    pub(crate) no_way_back: bool,
 }
 
 

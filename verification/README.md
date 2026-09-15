@@ -1363,6 +1363,14 @@ a moment before the run. `store worn-in` is how much Amenbo has been used on thi
 could only have done over days; `tick deferred` is a day having passed — or not — since the band was
 put off, which no run can wait out, the band being judged once at launch.
 
+`store carried-in` is on it for a reason of its own: what it stands up is **the build before this
+one**. The handover that took mail, slack, viewer and worktree into the body leaves an account of what
+it carried, and every surface reads that account to know it owes a person the sentence saying where
+their plugins went. Nothing under test writes one — the step that would is the upgrade itself — so a
+road that meant to earn it would have to be two builds long, with the plugins installed on the first.
+The premise writes the account the way the migration writes it, and the road opens where a person who
+upgraded opens.
+
 `store nothing-raised` is on it for a third reason again: what it stands up is an **absence**. The
 driver raises a project as it boots, because a store has to have somewhere to file what a premise
 stands up — so the moment a road declares a world at all, there is a project on the screen it was
@@ -1476,6 +1484,10 @@ them. The step is then judged like an assert: refused with that code passes, **g
 fails** — that is the regression it exists to catch — and being refused for some *other* reason
 fails too, since a different guard is not the one the line is about. A refused operation produces
 nothing, so it takes no `as:`.
+
+It goes **under `with:`**, beside the op's other arguments, and a hand that puts it one level out —
+on the step itself — is told so when the file is read. Dropped instead, the line would run as an
+ordinary step and the road would go green on a guard it never reached.
 
 A screen has no exit status to compare, so on a `steps_gui` road the word changes the **instruction**: it
 tells the operator that being turned away is the step going right rather than their own hand going wrong,

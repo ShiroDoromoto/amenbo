@@ -305,6 +305,8 @@ export const nl: Translation = {
     "attach.removeConfirm": "Bijlage “{name}” verwijderen?", "attach.notLocal": "Nog niet op dit apparaat opgeslagen (ophalen komt later)",
     "attach.unsupported": "Voor dit type is geen voorbeeld beschikbaar", "attach.link": "Link",
     "attach.failed": "Bijvoegen mislukt",
+    "madeIn.section": "Gemaakt in", "madeIn.unnamed": "Een naamloos deelvenster",
+    "madeIn.go": "Terug naar dit deelvenster",
     "commit.section": "Commits", "commit.add": "SHA vastleggen", "commit.none": "Geen commits vastgelegd",
     "commit.placeholder": "Commit-SHA (volledig — 40 of 64 hexadecimale tekens)",
     "commit.record": "Vastleggen", "commit.copy": "SHA kopiëren", "commit.copied": "Gekopieerd",
@@ -557,6 +559,7 @@ export const nl: Translation = {
     "face.ended": "Het programma in deze terminal is gestopt.",
 
     "face.endedGeminiUnset": "Voor Gemini CLI is geen authenticatiemethode ingesteld. Het genoemde pad hoort alleen bij dit deelvenster en verdwijnt ermee — in te stellen in uw eigen ~/.gemini/settings.json.",
+    "face.noWayBack": "Dit gesprek kan niet meer worden geopend.",
     "face.projects": "Projecten",
     "face.railFolders": "Mappen",
     "face.tabsCompact": "Namen verbergen",

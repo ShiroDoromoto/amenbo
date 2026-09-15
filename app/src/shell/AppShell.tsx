@@ -190,7 +190,7 @@ export function AppShell() {
    * whose project it is, handed on to the window that has the face. Raising without it would put the
    * reader in front of the terminal with nothing opened, which is not what they pressed.
    */
-  const goToTalkWindow = useCallback((instead: () => void, openIn?: { project: number; dir: string }) => {
+  const goToTalkWindow = useCallback((instead: () => void, openIn?: { project: number; dir?: string; pane?: string }) => {
     void invoke<boolean>("talk_raise", { openIn: openIn ?? null })
       .then((there) => { if (!there) instead(); })
       .catch(instead);
@@ -258,7 +258,7 @@ export function AppShell() {
   // The folder the ledger has asked the terminal to work in, whose project it is, and a count of the
   // asking: the face is a component, so what it is handed is where to work rather than a call to make
   // (`./TerminalFace`).
-  const [openIn, setOpenIn] = useState<{ project: number; dir: string; nth: number } | null>(null);
+  const [openIn, setOpenIn] = useState<{ project: number; dir?: string; pane?: string; nth: number } | null>(null);
   /**
    * "Start in the terminal" — the one move the first loop offers (`../components/FirstLoop`).
    *
@@ -285,6 +285,32 @@ export function AppShell() {
       // And where that window turns out not to exist, the folder is not dropped along with the
       // belief: the reader asked to work in it, and this window can now host the face that does.
       goToTalkWindow(() => { foldBackToTerminal(null); here(); }, { project, dir });
+      return;
+    }
+    here();
+  }, [shape, goToTalkWindow, foldBackToTerminal]);
+
+  /**
+   * Go to the pane a task or a decision was made in (`AMB-D-897`, `../components/MadeIn`).
+   *
+   * It travels the road "start in the terminal" travels, and for the same reason: the press is made
+   * on the ledger and the face that answers it may be in the other window. What is different is what
+   * it names — a pane rather than a folder — and the face does with it what only it can: go to that
+   * place where it is on the screen, and open it again under the same id where it is not
+   * (`./TerminalFace`).
+   *
+   * **The way back into the conversation is not carried here.** It is already on that frame by the
+   * time this runs — put there by the press, host-side, off the record itself
+   * (`crate::commands::task_pane_opens_again`).
+   */
+  const goToPane = useCallback((project: number, pane: string) => {
+    const here = () => {
+      setOpenIn((asked) => ({ project, pane, nth: (asked?.nth ?? 0) + 1 }));
+      setTerminalAsked(true);
+      setFace("terminal");
+    };
+    if (shape === "two") {
+      goToTalkWindow(() => { foldBackToTerminal(null); here(); }, { project, pane });
       return;
     }
     here();
@@ -701,6 +727,7 @@ export function AppShell() {
                   onDeleted={closeRight}
                   onDirtyChange={setRightDirty}
                   onSelectDecision={selectDecision}
+                  onGoToPane={goToPane}
                   focusCommentAt={replyFocus?.taskId === selectedTaskId ? replyFocus.nonce : undefined}
                   editCommentAt={editFocus?.taskId === selectedTaskId
                     ? { commentId: editFocus.commentId, nonce: editFocus.nonce }
@@ -711,6 +738,7 @@ export function AppShell() {
                   decisionId={selectedDecisionId}
                   onOpenTask={selectTask}
                   onOpenDecision={selectDecision}
+                  onGoToPane={goToPane}
                   focusCommentAt={decisionReplyFocus?.decisionId === selectedDecisionId
                     ? decisionReplyFocus.nonce
                     : undefined}

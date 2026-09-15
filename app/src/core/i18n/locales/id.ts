@@ -307,6 +307,8 @@ export const id: Translation = {
     "attach.removeConfirm": "Hapus lampiran “{name}”?", "attach.notLocal": "Belum tersimpan di perangkat ini (pengambilannya menyusul)",
     "attach.unsupported": "Pratinjau untuk jenis ini tidak didukung", "attach.link": "Tautan",
     "attach.failed": "Pelampiran gagal",
+    "madeIn.section": "Dibuat di", "madeIn.unnamed": "Panel tanpa nama",
+    "madeIn.go": "Kembali ke panel ini",
     "commit.section": "Commit", "commit.add": "Catat SHA", "commit.none": "Belum ada commit yang dicatat",
     "commit.placeholder": "SHA commit (lengkap — 40 atau 64 digit heksadesimal)",
     "commit.record": "Catat", "commit.copy": "Salin SHA", "commit.copied": "Tersalin",
@@ -559,6 +561,7 @@ export const id: Translation = {
     "face.ended": "Program di terminal ini telah berhenti.",
 
     "face.endedGeminiUnset": "Gemini CLI belum memiliki metode autentikasi. Jalur yang disebutkan hanya milik panel ini dan ikut terhapus — yang perlu diatur adalah ~/.gemini/settings.json milik Anda sendiri.",
+    "face.noWayBack": "Percakapan ini tidak bisa dibuka lagi.",
     "face.projects": "Proyek",
     "face.railFolders": "Folder",
     "face.tabsCompact": "Sembunyikan nama",

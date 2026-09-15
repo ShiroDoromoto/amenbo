@@ -1959,6 +1959,9 @@ pub fn decision_detail(
         decided_at: row.decided_at.as_deref().and_then(Timestamp::parse_rfc3339),
         decided_by,
         linked_tasks,
+        made_in: read::decision_made_in(conn, decision_id)
+            .map_err(crate::error::engine_on(conn))?
+            .map(Into::into),
         created_at: Timestamp::parse_rfc3339(&row.created_at).unwrap_or_default(),
         updated_at: Timestamp::parse_rfc3339(&row.updated_at).unwrap_or_default(),
     })
@@ -2058,6 +2061,12 @@ pub fn task_detail(
         ready,
         blocks,
         num_comments: row.num_comments,
+        // One indexed read of its own, off the UNIQUE index that says there is at most one such row.
+        // It is not on the detail row: no road out of the store carries the table, so it stays out of
+        // the join that everything reading a task walks (`AMB-D-897`).
+        made_in: read::task_made_in(conn, task_id)
+            .map_err(crate::error::engine_on(conn))?
+            .map(Into::into),
         created_at: Timestamp::parse_rfc3339(&row.created_at).unwrap_or_default(),
         updated_at: Timestamp::parse_rfc3339(&row.updated_at).unwrap_or_default(),
     })

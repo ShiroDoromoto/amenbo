@@ -307,6 +307,8 @@ export const th: Translation = {
     "attach.removeConfirm": "เอาไฟล์แนบ “{name}” ออกไหม", "attach.notLocal": "ยังไม่ได้เก็บไว้ในเครื่องนี้ (การดึงมาจะตามมาทีหลัง)",
     "attach.unsupported": "ยังแสดงตัวอย่างชนิดนี้ไม่ได้", "attach.link": "ลิงก์",
     "attach.failed": "แนบไฟล์ไม่สำเร็จ",
+    "madeIn.section": "สร้างใน", "madeIn.unnamed": "บานหน้าต่างที่ยังไม่ได้ตั้งชื่อ",
+    "madeIn.go": "กลับไปที่บานหน้าต่างนี้",
     "commit.section": "คอมมิต", "commit.add": "บันทึก SHA", "commit.none": "ยังไม่ได้บันทึกคอมมิต",
     "commit.placeholder": "SHA ของคอมมิต (เต็ม — 40 หรือ 64 หลักฐานสิบหก)",
     "commit.record": "บันทึก", "commit.copy": "คัดลอก SHA", "commit.copied": "คัดลอกแล้ว",
@@ -559,6 +561,7 @@ export const th: Translation = {
     "face.ended": "โปรแกรมในเทอร์มินัลนี้จบการทำงานแล้ว",
 
     "face.endedGeminiUnset": "Gemini CLI ยังไม่ได้ตั้งค่าวิธียืนยันตัวตน เส้นทางที่แสดงเป็นของแผงนี้เท่านั้นและจะถูกลบไปพร้อมกัน — ไฟล์ที่ต้องตั้งค่าคือ ~/.gemini/settings.json ของคุณเอง",
+    "face.noWayBack": "เปิดบทสนทนานี้อีกไม่ได้แล้ว",
     "face.projects": "โปรเจกต์",
     "face.railFolders": "โฟลเดอร์",
     "face.tabsCompact": "ซ่อนชื่อ",

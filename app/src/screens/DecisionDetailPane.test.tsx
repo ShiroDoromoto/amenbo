@@ -36,6 +36,9 @@ vi.mock("../core/reads", () => ({
   useDecision: (id: number) => hoisted.decisions.get(id),
   useDecisionComments: () => hoisted.comments,
   useDecisionPage: () => hoisted.page,
+  // Nothing in these was made in a pane, so the row the detail pane draws off it never appears
+  // (`../components/MadeIn`).
+  useDecisionMadeIn: () => null,
 }));
 vi.mock("../core/dialog", () => ({
   confirmDialog: (message: string) => {

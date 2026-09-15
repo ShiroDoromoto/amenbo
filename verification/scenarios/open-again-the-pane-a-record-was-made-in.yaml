@@ -42,9 +42,9 @@
 # ── What this road stops short of ───────────────────────────────────────────────────────────────
 # The third landing is a way back the provider no longer honours: the pane opens, the program ends
 # moments later, and the face says the conversation cannot be opened again. A record only carries a
-# way back when it was made in a pane that had one, and a way back belongs to an agent — while what a
-# road can type a create into is a plain shell, which has none. So that landing needs a pane a road
-# can both run a command in and resume, and there is no such pane to stand up today.
+# way back where it was made in a pane that had one, and a plain shell has none — so that landing is
+# walked on a machine stood up with agents that carry out what is typed at them, which is
+# `be-told-the-conversation-a-record-was-made-in-is-gone` and not this road.
 id: open-again-the-pane-a-record-was-made-in
 title: A record whose pane is gone names it by the name it kept, and the press puts that same pane back
 description: >
@@ -171,10 +171,15 @@ steps_gui:
       target: reglaze
 
   # What the press left is not counted here. A frame put back has never been opened, so what stands
-  # on the page is a box with a way in on it — and telling that from the empty frame beside it is a
-  # judgement rather than a reading. The page is asked for one pane, so there is no frame beside it
-  # to be told from: the box the shell below is opened in is the only one on the page, and a press
-  # that opened nothing is caught at the end of the road rather than here.
+  # on the page is a box with one control on it — and telling that from the empty frame beside it is
+  # a judgement rather than a reading. The page is asked for one pane, so there is no frame beside it
+  # to be told from, and a press that put nothing there is caught at the end of the road instead.
+  - type: action
+    domain: terminal
+    op: open-again
+
+  # And down to a plain shell, which is what this machine was last opened with in any case: what the
+  # road says in the pane below has to be said to something that will not answer it.
   - type: action
     domain: terminal
     op: open-shell

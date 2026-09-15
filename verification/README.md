@@ -996,7 +996,10 @@ because the line says nothing about it: what that choice puts there is nothing, 
 at the line learns what will not be sent and nothing about what the agent will do with it.
 `open-start` is the press itself, and it is the one way of opening a pane that chooses nothing on the
 way: `open-shell` and `open-registered` carry their own answer, and what this one opens on is
-whatever the two rows were set to.
+whatever the two rows were set to. `open-again` is the other press that chooses nothing, and it is
+not on the empty frame at all: a frame the row naming a record's session put back stands there with
+one control on it and no rows above, the record holding the pane and the way back into it and neither
+the folder nor the provider.
 
 **The row has three shapes, and which one is drawn is decided by how long the agent's answer was** —
 so a road says which it is walking, in `pick-model`'s `how`. `write` is a box to type a name in, which
@@ -1322,7 +1325,10 @@ called is kept on the pane's own row, which the window writes and a terminal nev
 prints the id alone and the id is minted by the run — so what is asked there is identity, the record
 naming the pane the create was typed in. `present: false` is the other half on either face.
 `press-made-in` is the press, screen-only, and where it landed is read by the step after it
-(`terminal worked-in`): a press cannot say of itself which pane it went to.
+(`terminal worked-in`): a press cannot say of itself which pane it went to. Where the pane it names is
+gone, the press puts it back instead, and the reading after it is `terminal open-again` and what comes
+up there — `terminal ended`'s `why: no-way-back` being the pane's own account of a way back the
+provider would not honour.
 
 `task create-in-pane` is the same create on the task side, and is there for the second thing a pane
 writes: the band under it, which counts what the session in it has filed. `terminal made` reads that
@@ -1455,6 +1461,21 @@ names are the harness's own and numbered two digits wide, so a road narrowing th
 one of them. The shapes are written down here rather than asked for, which is the same bargain the
 catalog of commands is written under: what drift costs is an agent that reads as having no models, and
 the step that meant to press one is what says so.
+
+**`then` is what one does once it has printed what it was started with.** `ends` is the default and
+the pane every road before it read — the output standing and nothing running. `reads` stays at the
+pane and prints back every line it is given, which a road that moves a running pane needs: there is no
+control on a frame whose program has gone. `runs` carries the line out as well, and what it buys is an
+agent's pane a road can type a command into — the only other pane a road can say anything in is a
+plain shell, and a shell is the one pane with no way back into it, so a record made at one names no
+session anybody could return to.
+
+**`comes-back` is whether one honours a way back it is handed**, and it is true unless a road says
+otherwise. A stand-in issues no sessions, so every handle it ever sees is one it did not make: going
+on regardless is what the roads that open the app again and find their panes resumed read, and
+`false` is the stand-in that says so and leaves at once. That second one is the only way a road
+reaches the pane's own account of a conversation that is not there any more — the answer a real
+provider gives to a session id it never issued, said out loud.
 
 **`on` is which of those models the stand-ins say they are standing on**, written as a position in
 the row rather than as a name. Only two of the six providers have anywhere in their own answer to put

@@ -175,9 +175,9 @@ func vmPutBundle(ip, id, bundle string) error {
 }
 
 // vmSeedAppData gives the instance in the guest a store to open on, cloned from the shared dev store
-// on the host — the same setup (plugins, catalog, projects) the host route seeds an instance from
-// (provisionTaskDevGUI), carried across because the guest has no shared dev app of its own and never
-// will: it is a clone thrown away at the end of a session.
+// on the host — the same setup (projects, notification targets, classifications) the host route
+// seeds an instance from (provisionTaskDevGUI), carried across because the guest has no shared dev
+// app of its own and never will: it is a clone thrown away at the end of a session.
 //
 // Every arm reports and returns, the way the host's seeding does: an instance that opens empty is a
 // poorer screen to verify, never a reason to fail the placing that asked. A store already in the
@@ -576,7 +576,7 @@ func vmTaskCLI(id string, noBuild bool, argv []string) (int, error) {
 // seeds a store for keeps moving, and a stale copy in there would write what the old code wrote.
 func vmSendCLI(ip, id, worktree string, noBuild bool) (string, error) {
 	if _, err := os.Stat(worktree); err != nil {
-		return "", fmt.Errorf("no worktree for task %s (%s missing) — cut one with the `worktree` plugin first", id, worktree)
+		return "", fmt.Errorf("no worktree for task %s (%s missing) — cut one with `amenbo worktree start` first", id, worktree)
 	}
 	if !noBuild {
 		if _, err := runEnv(worktree, buildEnv(), "cargo", "build", "-q", "-p", "amenbo-cli"); err != nil {

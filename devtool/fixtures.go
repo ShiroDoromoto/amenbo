@@ -2,11 +2,10 @@ package main
 
 // Fixtures: a fake outside world for GUI verification.
 //
-// Three things amenbo reads over the network — the plugin catalog, GitHub's API for one opened
-// plugin, and the published latest.json — each already have an env var that points them somewhere
-// else. What was missing is the other half: a host that answers those URLs, and a way to start the
-// dev GUI pointing at it. Doing that by hand is a fake server plus three exports plus a launch, and
-// it was rebuilt from scratch every time the fake world had to change.
+// What amenbo reads over the network — the published latest.json — already has an env var that
+// points it somewhere else. What was missing is the other half: a host that answers that URL, and a
+// way to start the dev GUI pointing at it. Doing that by hand is a fake server plus an export plus a
+// launch, and it was rebuilt from scratch every time the fake world had to change.
 //
 // Two properties are the whole point, and they are why this is not "some JSON in a directory":
 //
@@ -23,7 +22,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -41,41 +39,28 @@ import (
 	"time"
 )
 
-// Where the real world lives — the sources `fixtures refresh` copies from. They are the same
-// constants the Rust side falls back to when the env var is unset (plugin_catalog.rs,
-// plugin_github.rs, update_check.rs); a copy taken from anywhere else is not a copy of production.
-const (
-	realCatalogURL   = "https://shirodoromoto.github.io/amenbo-plugins/catalog.json"
-	realGitHubAPIURL = "https://api.github.com"
-	realLatestJSON   = "https://github.com/ShiroDoromoto/amenbo/releases/latest/download/latest.json"
-)
+// realLatestJSON is where the real world lives — the source `fixtures refresh` copies from. It is the
+// same constant the Rust side falls back to when the env var is unset (update_check.rs); a copy taken
+// from anywhere else is not a copy of production.
+const realLatestJSON = "https://github.com/ShiroDoromoto/amenbo/releases/latest/download/latest.json"
 
 // fixturesSubdir is where the fixture tree lives, under the repo so a capture is reviewable as a diff:
 //
-//	devtool/fixtures/catalog.json                        the catalog envelope
-//	devtool/fixtures/update/latest.json                  the update check's answer
-//	devtool/fixtures/github/repos/<owner>__<name>.json     /repos/{repo}
-//	devtool/fixtures/github/releases/<owner>__<name>.json  /repos/{repo}/releases/latest
-//	devtool/fixtures/github/readme/<owner>__<name>.md      /repos/{repo}/readme
+//	devtool/fixtures/update/latest.json  the update check's answer
 const fixturesSubdir = "devtool/fixtures"
 
-// hangFor is how long a request in `timeout` mode is held before it is let go. Longer than any client timeout
-// in the tree (the catalog's 10s is the longest), so what the app sees is a request that never
-// answers rather than a slow one that does. A field, not a constant, so a test can prove the mode
-// without waiting out a real one.
+// hangFor is how long a request in `timeout` mode is held before it is let go. Longer than any client
+// timeout in the tree, so what the app sees is a request that never answers rather than a slow one
+// that does. A field, not a constant, so a test can prove the mode without waiting out a real one.
 const hangFor = 30 * time.Second
 
 // face is one face of the outside world, which is the unit a failure is injected at: one env var,
 // one client, one screen that goes wrong.
 type face string
 
-const (
-	faceCatalog face = "catalog"
-	faceGitHub  face = "github"
-	faceUpdate  face = "update"
-)
+const faceUpdate face = "update"
 
-var faces = []face{faceCatalog, faceGitHub, faceUpdate}
+var faces = []face{faceUpdate}
 
 // failure is how a face is made to fail. The zero value answers normally.
 type failure struct {
@@ -107,32 +92,13 @@ func fixturesCmd(args []string) {
 
 func fixturesRefresh(args []string) {
 	fs := flag.NewFlagSet("fixtures refresh", flag.ExitOnError)
-	catalogSrc := fs.String("catalog", realCatalogURL,
-		"where to take the catalog from — a URL, a generated copy's path, or a catalog repo checkout to aggregate")
-	amenboBin := fs.String("amenbo", "",
-		"the amenbo build to validate manifests with when aggregating a checkout (default: this one)")
-	var repos repeated
-	fs.Var(&repos, "repo", "an extra owner/name to capture, beyond the ones the catalog names (repeatable)")
 	fs.Parse(args)
 
 	dir := mustFixturesDir()
-	// A checkout of the catalog repository is aggregated rather than copied: while the published
-	// catalog lists nothing there is no copy to take, and the manifests are the material either way.
-	catalog, details, err := readCatalog(*catalogSrc, *amenboBin)
-	if err != nil {
-		logf("devtool: %v", err)
-		os.Exit(1)
-	}
-	if err := writeFixture(filepath.Join(dir, "catalog.json"), catalog); err != nil {
-		logf("devtool: %v", err)
-		os.Exit(1)
-	}
-	logf("→ catalog.json (%d bytes, from %s)", len(catalog), *catalogSrc)
-
 	latest, err := readSource(realLatestJSON)
 	if err != nil {
-		// Not fatal: the update banner is one of three faces, and a release that has not published
-		// this asset yet is a real state of the world, not a broken capture.
+		// Not fatal: a release that has not published this asset yet is a real state of the world,
+		// not a broken capture.
 		logf("! update/latest.json not captured: %v", err)
 	} else if err := writeFixture(filepath.Join(dir, "update", "latest.json"), latest); err != nil {
 		logf("devtool: %v", err)
@@ -140,164 +106,9 @@ func fixturesRefresh(args []string) {
 	} else {
 		logf("→ update/latest.json (%d bytes)", len(latest))
 	}
-
-	// The catalog is served in two documents, so a capture of the list alone is a fake world where
-	// nothing can be installed: each entry's detail is taken from beside the list it was named in, or
-	// comes out of the aggregation that just built the list.
-	entries := catalogEntries(catalog)
-	for _, entry := range entries {
-		if body, built := details[entry.Name]; built {
-			writeDetail(dir, entry.Name, body, "built")
-			continue
-		}
-		refreshDetail(dir, *catalogSrc, entry.Name)
-	}
-
-	// The repositories the catalog itself names, so the capture follows the catalog rather than a
-	// list kept by hand beside it.
-	repoList := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.Repo != "" {
-			repoList = append(repoList, entry.Repo)
-		}
-	}
-	for _, repo := range dedupe(append(repoList, repos...)) {
-		refreshRepo(dir, repo)
-	}
 	logf("→ fixtures in %s", dir)
 }
 
-// readCatalog answers with the catalog list and, when it built them, the detail documents that go with
-// it. A directory is a checkout of the catalog repository and is aggregated from its manifests
-// (`fixtures_catalog.go`); anything else is a URL or a generated copy, and is taken as it is.
-func readCatalog(src, amenboBin string) ([]byte, map[string][]byte, error) {
-	if info, err := os.Stat(src); err == nil && info.IsDir() {
-		bin, err := validatorBinary(amenboBin)
-		if err != nil {
-			return nil, nil, err
-		}
-		logf("→ aggregating %s with %s", src, bin)
-		return aggregateCatalog(src, bin)
-	}
-	catalog, err := readSource(src)
-	return catalog, nil, err
-}
-
-// validatorBinary is the amenbo build that splits a manifest into the two published documents. The
-// released CLI does not carry the plugin commands yet, so the default is this checkout's own build
-// rather than whatever `amenbo` is on the PATH — the same principle as the dev GUI's, and the pick is
-// named in the log so it is never a guess.
-func validatorBinary(chosen string) (string, error) {
-	if chosen != "" {
-		return chosen, nil
-	}
-	root := mustTreeRoot()
-	candidates := []string{
-		filepath.Join(root, "target", "debug", "amenbo"),
-		filepath.Join(root, "target", "dev", "release", "amenbo"),
-		filepath.Join(root, "target", "release", "amenbo"),
-	}
-	if runtime.GOOS == "windows" {
-		for i, c := range candidates {
-			candidates[i] = c + ".exe"
-		}
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c, nil
-		}
-	}
-	return "", fmt.Errorf("no amenbo build to validate with (%s) — build one with 'make dev-build', or pass --amenbo",
-		strings.Join(candidates, ", "))
-}
-
-// writeDetail puts one built detail document where a detail is fetched from — the same place a
-// captured one lands, so what serves them cannot tell the two apart.
-func writeDetail(dir, name string, body []byte, how string) {
-	path := filepath.Join(dir, "plugins", name+".json")
-	if err := writeFixture(path, body); err != nil {
-		logf("devtool: %v", err)
-		os.Exit(1)
-	}
-	logf("→ %s (%d bytes, %s)", strings.TrimPrefix(path, dir+string(filepath.Separator)), len(body), how)
-}
-
-// refreshDetail captures one plugin's detail document — what an install reads, and what a detail
-// view opens. Best-effort like a repository's answers: a catalog that lists an entry whose detail is
-// not published yet is a real state of the world, and the absent file makes the fake say so too.
-func refreshDetail(dir, catalogSrc, name string) {
-	src := detailSource(catalogSrc, name)
-	body, err := readSource(src)
-	if err != nil {
-		logf("! %s: %v", src, err)
-		return
-	}
-	writeDetail(dir, name, body, "captured")
-}
-
-// detailSource is where one plugin's detail sits beside the list it was named in: the same base,
-// under `plugins/`. Derived rather than configured, because the two documents are published together
-// — a checkout of the catalog repository holds both, and so does the published site.
-func detailSource(catalogSrc, name string) string {
-	rel := "plugins/" + name + ".json"
-	if strings.HasPrefix(catalogSrc, "http://") || strings.HasPrefix(catalogSrc, "https://") {
-		if cut := strings.LastIndex(catalogSrc, "/"); cut >= 0 {
-			return catalogSrc[:cut+1] + rel
-		}
-		return rel
-	}
-	return filepath.Join(filepath.Dir(catalogSrc), "plugins", name+".json")
-}
-
-// refreshRepo captures the three answers a plugin's detail reads for one repository. Each is
-// best-effort on its own, exactly as the app treats them: a repository with no release or no README
-// is a repository with no release or no README, and the absent file makes the fake say so too.
-func refreshRepo(dir, repo string) {
-	flat := strings.ReplaceAll(repo, "/", "__")
-	for _, want := range []struct {
-		url  string
-		path string
-	}{
-		{realGitHubAPIURL + "/repos/" + repo, filepath.Join(dir, "github", "repos", flat+".json")},
-		{realGitHubAPIURL + "/repos/" + repo + "/releases/latest", filepath.Join(dir, "github", "releases", flat+".json")},
-		{realGitHubAPIURL + "/repos/" + repo + "/readme", filepath.Join(dir, "github", "readme", flat+".md")},
-	} {
-		body, err := readSource(want.url)
-		if err != nil {
-			logf("! %s: %v", want.url, err)
-			continue
-		}
-		if err := writeFixture(want.path, body); err != nil {
-			logf("devtool: %v", err)
-			os.Exit(1)
-		}
-		logf("→ %s (%d bytes)", strings.TrimPrefix(want.path, dir+string(filepath.Separator)), len(body))
-	}
-}
-
-// catalogEntry is the little of a list entry a capture needs: the name its detail document is
-// fetched by, and the repository its figures are read from.
-type catalogEntry struct {
-	Name string `json:"name"`
-	Repo string `json:"repo"`
-}
-
-// catalogEntries picks the entries out of a catalog envelope. It reads the JSON loosely on purpose:
-// the envelope is the producer's to grow, and a capture that refuses to run because a field it does
-// not use appeared would be a capture nobody takes.
-func catalogEntries(catalog []byte) []catalogEntry {
-	var envelope struct {
-		Plugins []catalogEntry `json:"plugins"`
-	}
-	if err := json.Unmarshal(catalog, &envelope); err != nil {
-		logf("! could not read the catalog's entries (%v) — capturing nothing from it", err)
-		return nil
-	}
-	return envelope.Plugins
-}
-
-// readSource reads a URL or a local path, so a catalog can be taken from a checkout of the catalog
-// repository (where its CI generated it) as readily as from the published copy.
 func readSource(src string) ([]byte, error) {
 	if !strings.HasPrefix(src, "http://") && !strings.HasPrefix(src, "https://") {
 		return os.ReadFile(src)
@@ -306,13 +117,7 @@ func readSource(src string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The README endpoint answers with a JSON envelope unless the raw media type is asked for, and
-	// what the app reads is the Markdown itself (plugin_github.rs).
-	if strings.HasSuffix(src, "/readme") {
-		req.Header.Set("Accept", "application/vnd.github.raw")
-	} else {
-		req.Header.Set("Accept", "application/vnd.github+json")
-	}
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "amenbo-devtool")
 	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
 	if err != nil {
@@ -342,7 +147,7 @@ func fixturesGUI(args []string) {
 	fresh := fs.Bool("fresh", false,
 		"run against a throwaway store, so every cache starts cold and the fake world is actually asked")
 	var fails repeated
-	fs.Var(&fails, "fail", "make a face fail: <catalog|github|update|all>=<status|timeout> (repeatable)")
+	fs.Var(&fails, "fail", "make a face fail: <update|all>=<status|timeout> (repeatable)")
 	fs.Parse(args)
 	// Once, here: everything downstream reads this as the executable — the launch, the CLI beside it,
 	// and the app-data the bundle three levels up names.
@@ -354,8 +159,8 @@ func fixturesGUI(args []string) {
 		os.Exit(2)
 	}
 	dir := mustFixturesDir()
-	if _, err := os.Stat(filepath.Join(dir, "catalog.json")); err != nil {
-		logf("! no catalog fixture in %s — run 'devtool fixtures refresh' first", dir)
+	if _, err := os.Stat(filepath.Join(dir, "update", "latest.json")); err != nil {
+		logf("! no update fixture in %s — run 'devtool fixtures refresh' first", dir)
 	}
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
@@ -373,10 +178,10 @@ func fixturesGUI(args []string) {
 	defer server.Close()
 
 	env := fixtureEnv(base)
-	// A catalog fetch is answered from disk for an hour, and a repository's figures for six — so against the dev store's caches the fake world is usually never asked, and a
-	// failure injected into it never bites. A throwaway AMENBO_HOME is the whole user layer, caches
-	// included, so every run starts cold. The cost is that the store is empty too: this is for
-	// looking at the market, the detail and the update banner, not at tasks.
+	// The update check is answered from disk for a while, so against the dev store's caches the fake
+	// world is often never asked, and a failure injected into it never bites. A throwaway AMENBO_HOME
+	// is the whole user layer, caches included, so every run starts cold. The cost is that the store
+	// is empty too: this is for looking at the update banner, not at tasks.
 	if *fresh {
 		home, err := os.MkdirTemp("", "amenbo-fixtures-")
 		if err != nil {
@@ -391,18 +196,6 @@ func fixturesGUI(args []string) {
 	}
 	for f, r := range rules {
 		logf("  ! %s answers %s", f, r)
-	}
-
-	// The second catalog reaches the app through the store, not through an env var: a registered
-	// catalog **is** a record in the store, so the fake world can only offer one by registering it in
-	// the store the GUI will open.
-	registered := base + "/" + registeredCatalogPath
-	if cli, cliEnv, err := devCLI(*app, env); err != nil {
-		logf("  ! %s is not registered (%v)", registeredCatalogName, err)
-		logf("    register it by hand: amenbo plugin catalog add %s --name %q --yes", registered, registeredCatalogName)
-	} else {
-		registerFakeCatalog(cli, cliEnv, registered)
-		defer dropFakeCatalogs(cli, cliEnv, "")
 	}
 
 	if *noLaunch {
@@ -428,22 +221,18 @@ func fixturesGUI(args []string) {
 	}
 }
 
-// fixtureEnv is the three overrides that point amenbo at the fake world, in the form a shell would
-// take them. The names are the app's own (crates/amenbo-core/src/env.rs) — nothing here is a
+// fixtureEnv is the override that points amenbo at the fake world, in the form a shell would take
+// it. The name is the app's own (crates/amenbo-core/src/env.rs) — nothing here is a
 // development-only branch in the product.
 func fixtureEnv(base string) []string {
-	return []string{
-		"AMENBO_PLUGIN_CATALOG_URL=" + base + "/catalog.json",
-		"AMENBO_GITHUB_API_URL=" + base + "/github",
-		"AMENBO_UPDATE_JSON_URL=" + base + "/update/latest.json",
-	}
+	return []string{"AMENBO_UPDATE_JSON_URL=" + base + "/update/latest.json"}
 }
 
-// fixtureHandler answers the three faces out of the fixture tree, or fails the way it was told to.
+// fixtureHandler answers the update face out of the fixture tree, or fails the way it was told to.
 //
-// A path with no fixture behind it is a 404, which is the truthful answer: a repository with no
-// release is exactly what GitHub 404s, so the absence of a file and the absence of a release read
-// the same to the app.
+// A path with no fixture behind it is a 404, which is the truthful answer: a release that has
+// published no manifest is exactly what the real address 404s, so the absence of a file and the
+// absence of a release read the same to the app.
 func fixtureHandler(dir string, rules map[face]failure, hold time.Duration) http.Handler {
 	mux := http.NewServeMux()
 
@@ -479,50 +268,7 @@ func fixtureHandler(dir string, rules map[face]failure, hold time.Duration) http
 		}
 	}
 
-	// serveBytes is serve for a document the fake world holds in memory rather than on disk, which is
-	// what an invented one is: there is no file for it to be missing.
-	serveBytes := func(f face, body []byte, contentType string) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			if failed(f, w, r) {
-				return
-			}
-			logf("  ← %s → %d bytes", r.URL.Path, len(body))
-			w.Header().Set("Content-Type", contentType)
-			w.Write(body)
-		}
-	}
-	// The catalog the fake world invents rather than captures, and the key it publishes beside it
-	// (`fixtures_registered.go`). It answers under the catalog face, so `--fail catalog=…` takes both
-	// shelves down at once — which is what "the catalog is unreachable" means to the app.
-	for path, body := range registeredCatalogDocs() {
-		contentType := "application/json"
-		if strings.HasSuffix(path, ".pub") {
-			contentType = "text/plain; charset=utf-8"
-		}
-		mux.HandleFunc("GET /"+path, serveBytes(faceCatalog, body, contentType))
-	}
-
-	mux.HandleFunc("GET /catalog.json", serve(faceCatalog, filepath.Join(dir, "catalog.json"), "application/json"))
-	// The second document of the catalog: what an install reads for the one plugin it is installing.
-	// The wildcard is the whole file name, which is all a mux pattern may match, and `filepath.Base`
-	// keeps a path that tries to climb out of the fixtures directory from naming a file above it.
-	mux.HandleFunc("GET /plugins/{file}", func(w http.ResponseWriter, r *http.Request) {
-		file := filepath.Base(r.PathValue("file"))
-		serve(faceCatalog, filepath.Join(dir, "plugins", file), "application/json")(w, r)
-	})
 	mux.HandleFunc("GET /update/latest.json", serve(faceUpdate, filepath.Join(dir, "update", "latest.json"), "application/json"))
-
-	// The three GitHub reads one opened plugin makes. `{owner}/{name}` is the catalog's `repo`, and
-	// it is flattened to one file name the same way the app's own cache does.
-	github := func(kind, ext, contentType string) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			flat := r.PathValue("owner") + "__" + r.PathValue("name")
-			serve(faceGitHub, filepath.Join(dir, "github", kind, flat+ext), contentType)(w, r)
-		}
-	}
-	mux.HandleFunc("GET /github/repos/{owner}/{name}", github("repos", ".json", "application/json"))
-	mux.HandleFunc("GET /github/repos/{owner}/{name}/releases/latest", github("releases", ".json", "application/json"))
-	mux.HandleFunc("GET /github/repos/{owner}/{name}/readme", github("readme", ".md", "text/plain; charset=utf-8"))
 
 	return mux
 }
@@ -553,7 +299,7 @@ func parseFailures(specs []string) (map[face]failure, error) {
 		if name == "all" {
 			targets = faces
 		} else if !validFace(face(name)) {
-			return nil, fmt.Errorf("--fail: unknown face %q (catalog, github, update, all)", name)
+			return nil, fmt.Errorf("--fail: unknown face %q (update, all)", name)
 		}
 		rule, err := parseFailMode(mode)
 		if err != nil {
@@ -691,16 +437,4 @@ func (r *repeated) String() string { return strings.Join(*r, ",") }
 func (r *repeated) Set(v string) error {
 	*r = append(*r, v)
 	return nil
-}
-
-func dedupe(in []string) []string {
-	seen := map[string]bool{}
-	out := in[:0]
-	for _, v := range in {
-		if !seen[v] {
-			seen[v] = true
-			out = append(out, v)
-		}
-	}
-	return out
 }

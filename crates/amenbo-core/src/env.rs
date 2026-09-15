@@ -112,6 +112,23 @@ pub fn session_dir() -> Option<OsString> {
     var_os(crate::session::DIR_VAR)
 }
 
+/// `AMENBO_PANE` — the id of the talk window's **pane** this process was started inside
+/// ([`crate::session::PANE_VAR`]). Set by the window beside [`session`], and inherited the same way,
+/// which is how an `amenbo` several processes deep can say which pane it was run from.
+///
+/// [`session`] is the terminal and this is the place it is drawn in; the difference, and why a row
+/// about a pane is held against this one, is on `PANE_VAR`.
+pub fn pane() -> Option<String> {
+    var(crate::session::PANE_VAR)
+}
+
+/// `AMENBO_PANE_RESUME` — the way back into the conversation that pane is carrying on
+/// ([`crate::session::PANE_RESUME_VAR`]). `None` where the window had none to give, which is a pane
+/// there is nothing to come back to yet rather than a pane that is not one.
+pub fn pane_resume() -> Option<String> {
+    var(crate::session::PANE_RESUME_VAR)
+}
+
 /// `AMENBO_HW_ID` — override the machine UUID, to pose as a different machine during development.
 pub fn hw_id() -> Option<OsString> {
     var_os("AMENBO_HW_ID")

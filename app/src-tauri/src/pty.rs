@@ -83,6 +83,19 @@ const SESSION_ENV: &str = amenbo_core::session::SESSION_VAR;
 /// spoken while the person's screen never changed.
 const DIR_ENV: &str = amenbo_core::session::DIR_VAR;
 
+/// The variable naming the **pane** a terminal is drawn in, set beside [`SESSION_ENV`] on every
+/// terminal opened in one. Core's name, for the reason [`SESSION_ENV`] gives.
+///
+/// The two are not the same answer: [`SESSION_ENV`] is this terminal and goes with it, and a pane
+/// outlives every terminal opened there. What is written down against a pane — its name, its way
+/// back, and the row saying which pane a task was made from — is held against this one
+/// (`AMB-D-897`).
+const PANE_ENV: &str = amenbo_core::session::PANE_VAR;
+
+/// The variable carrying the way back into the conversation this pane is on, set beside
+/// [`PANE_ENV`] where there is one. Core's name, for the reason [`SESSION_ENV`] gives.
+const PANE_RESUME_ENV: &str = amenbo_core::session::PANE_RESUME_VAR;
+
 /// The event each statement an agent makes about its session arrives on. The payload is a
 /// `SessionSaidDto`, and like the output it goes to the talk window alone.
 const SAID_EVENT: &str = "session://said";
@@ -1047,6 +1060,10 @@ pub fn pty_open(
     let run = started.as_ref().map(|s| s.line.as_str());
     let mut cmd = launch::command(folder.clone(), run);
     cmd.env(SESSION_ENV, &session);
+    // The way back this pane is being opened on, which is also what goes into the terminal below: the
+    // handle it came back holding, or the one issued for the session about to start. A place-resumed
+    // provider overwrites it with the home it runs in, just below.
+    let mut way_back = back.clone().or_else(|| issued.clone());
     // A row that is resumed by a directory rather than by a name is pointed at one of its own, and
     // the path goes down on that frame's row (`AMB-D-869`, `AMB-D-875`, `crate::pane_home`). More
     // than one variable can come back: a file the provider replaces is named where the reader keeps
@@ -1059,8 +1076,25 @@ pub fn pty_open(
             for (var, path) in &vars {
                 cmd.env(var, path);
             }
-            face.resumed_from(frame, home.to_string_lossy().into_owned());
+            let home = home.to_string_lossy().into_owned();
+            face.resumed_from(frame, home.clone());
+            way_back = Some(home);
         }
+    }
+    // Which pane this terminal is drawn in, and how to get back into what it is talking to — the two
+    // an `amenbo` run somewhere under here needs to say which session made a task (`AMB-D-897`).
+    // They go in beside the session's own name and travel the same way: an agent is a grandchild at
+    // best, and what it inherits is the only thing it can answer from.
+    //
+    // **Both are left out rather than set empty where there is nothing to say.** A terminal that is
+    // not a pane of the face has no pane to name, and a pane whose provider settles its own session
+    // afterwards has no way back to give until `read_back` has one — neither is an empty value, and
+    // a variable set to one would read as an answer.
+    if let Some(frame) = frame.as_deref() {
+        cmd.env(PANE_ENV, frame);
+    }
+    if let Some(way_back) = way_back.as_deref() {
+        cmd.env(PANE_RESUME_ENV, way_back);
     }
     // The drop box is made here rather than left for the first statement to make, so that a pane which
     // cannot be spoken to is one the surface layer refuses in from the start: with no directory named,
@@ -2134,6 +2168,10 @@ mod tests {
     /// Two levels deep is what is asserted, because that is where inheritance would break if the
     /// terminal were started with a cleared environment — the shell would still have what was set
     /// on it directly, and only its own children would come up empty.
+    ///
+    /// **The pane travels the same road and is a second name, not the same one** (`AMB-D-897`). A
+    /// row saying which session made a task is held against the pane, which outlives the terminals
+    /// opened in it, so both have to arrive and they have to arrive apart.
     #[cfg(unix)]
     #[test]
     fn the_session_name_reaches_a_grandchild() {
@@ -2150,8 +2188,9 @@ mod tests {
         // No newline in the output: the line discipline turns one into a carriage return and a line
         // feed, and the brackets are what makes the assertion exact rather than a substring of some
         // longer word the shell might print.
-        cmd.args(["-c", r#"/bin/sh -c 'printf "[%s]" "$AMENBO_SESSION"'"#]);
+        cmd.args(["-c", r#"/bin/sh -c 'printf "[%s][%s]" "$AMENBO_SESSION" "$AMENBO_PANE"'"#]);
         cmd.env(SESSION_ENV, "a-session");
+        cmd.env(PANE_ENV, "a-pane");
 
         let mut child = pair.slave.spawn_command(cmd).expect("start the shell");
         drop(pair.slave);
@@ -2160,8 +2199,8 @@ mod tests {
         let _ = child.wait();
 
         assert!(
-            out.contains("[a-session]"),
-            "the grandchild did not inherit the session name: {out:?}"
+            out.contains("[a-session][a-pane]"),
+            "the grandchild did not inherit the session name and the pane it is drawn in: {out:?}"
         );
     }
 

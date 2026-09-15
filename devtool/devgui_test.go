@@ -246,13 +246,13 @@ func TestScanTaskDevGUIsSeparatesLiveFromOrphan(t *testing.T) {
 
 func TestCopyTreeCarriesTheContentsAndSkipsWhatIsNotAFile(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "src")
-	if err := os.MkdirAll(filepath.Join(src, "plugins", "hello"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(src, "blobs", "ab"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(src, "store.sqlite"), []byte("store"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(src, "plugins", "hello", "manifest.json"), []byte("{}"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(src, "blobs", "ab", "cdef"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// A symlink is the one entry a store should never carry into a clone: following it would
@@ -266,7 +266,7 @@ func TestCopyTreeCarriesTheContentsAndSkipsWhatIsNotAFile(t *testing.T) {
 		t.Fatalf("copyTree: %v", err)
 	}
 
-	body, err := os.ReadFile(filepath.Join(dst, "plugins", "hello", "manifest.json"))
+	body, err := os.ReadFile(filepath.Join(dst, "blobs", "ab", "cdef"))
 	if err != nil || string(body) != "{}" {
 		t.Fatalf("nested file = %q, %v", body, err)
 	}

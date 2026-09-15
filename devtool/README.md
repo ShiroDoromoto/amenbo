@@ -32,17 +32,16 @@ installed copy has not got — after the minutes it spent building.
 ## Model
 
 The checkout a task is written in is a git worktree **outside the repo**, in a
-sibling dir, cut by Amenbo's official `worktree` plugin:
+sibling dir, cut by `amenbo worktree start`:
 
 ```
 <repo>/../<repo-name>-worktrees/<id>/    git worktree checkout on task/<id>
 ```
 
-devtool reads that layout and cuts none of it. Three tools, three jobs, and none
-of them reaching into another's: **Amenbo** holds the backlog, the **`worktree`
-plugin** holds git, and **devtool** holds the one piece of isolation neither can
-give — a GUI bundle, which is installed machine-wide and so cannot live in a
-checkout at all.
+devtool reads that layout and cuts none of it. Two tools, two jobs, and neither
+reaching into the other's: **Amenbo** holds the backlog and the checkout, and
+**devtool** holds the one piece of isolation it cannot give — a GUI bundle, which
+is installed machine-wide and so cannot live in a checkout at all.
 
 Outside-the-repo is what makes the checkout a **pure development environment**.
 Two concerns are kept physically apart:
@@ -62,7 +61,8 @@ cleanly (no `.amenbo` ancestor to hijack the mktemp store).
 A GUI bundle is installed machine-wide, so a worktree cannot contain it. The
 task gets its own throwaway instead — its own bundle identifier, product name
 and app-data — and the shared `amenbo (dev)` app stays where it is, as the
-permanent place a grown setup (plugins, catalog, projects) lives.
+permanent place a grown setup (projects, notification targets, classifications)
+lives.
 
 | | shared dev app | the task's instance |
 |---|---|---|
@@ -229,9 +229,9 @@ command exists, and without it you are asking for the route that has one already
   carrying files from an older build looks exactly like an implementation that
   does not work.
 - **The store is this machine's shared dev store, sent across** — the same setup
-  (plugins, catalog, projects) a host instance is seeded from. The guest has no
-  shared dev app of its own and never will: it is a clone thrown away at the end
-  of a session. A store already in there is left alone, and everything past that
+  (projects, notification targets, classifications) a host instance is seeded
+  from. The guest has no shared dev app of its own and never will: it is a clone
+  thrown away at the end of a session. A store already in there is left alone, and everything past that
   reports and carries on — an instance that opens empty is a poorer screen, not
   a reason to fail the placing that asked.
 - **The instance gets a folder of its own, bound to a project in its store** —
@@ -272,7 +272,7 @@ Opening it is one line — `devtool vm exec -- open -a '/Applications/amenbo (de
 
 Runs an Amenbo command against **the store the task's own dev GUI reads**, so a
 screen can be given something to show. A dev GUI shows what is in its store: a
-rejected task, a card with a due date, a plugin in some state all have to be
+rejected task, a card with a due date, an axis with values on it all have to be
 *put there* before the screen that renders them can be looked at.
 
 ```sh
@@ -450,56 +450,23 @@ live is a checkout, and the checkouts are on this machine.
 Asked inside the guest, git has nothing to answer with — and a sweep that cannot
 tell live from orphan refuses rather than guess, so it would simply never run.
 
-### `devtool fixtures refresh [--catalog <url|path|repo dir>] [--amenbo <bin>] [--repo owner/name]`
+### `devtool fixtures refresh`
 
-Captures the outside world into `devtool/fixtures/`, from the real sources:
+Captures the outside world into `devtool/fixtures/`, from the real source:
 
 ```
-devtool/fixtures/catalog.json                          the plugin catalog's list
-devtool/fixtures/plugins/<name>.json                   one plugin's detail — what an install reads
-devtool/fixtures/update/latest.json                    the update check's answer
-devtool/fixtures/github/repos/<owner>__<name>.json     /repos/{repo}
-devtool/fixtures/github/releases/<owner>__<name>.json  /repos/{repo}/releases/latest
-devtool/fixtures/github/readme/<owner>__<name>.md      /repos/{repo}/readme
+devtool/fixtures/update/latest.json  the update check's answer
 ```
 
-**They are copies, never written by hand.** A hand-written fixture drifts from
-what the producer actually sends, and the mismatch shows up as a green check over
-a broken screen — an aggregation that quietly stopped copying a field is the kind
-of thing only a real capture catches. The plugins whose details are taken and the
-repositories fetched are the ones the catalog itself names, so no list is kept
-beside it to go stale; `--repo` adds one the catalog does not name yet.
-
-`--catalog` takes the envelope from somewhere else — a URL, or the path of a copy
-some other run generated. The details are taken from beside it, the same way they
-are published.
-
-**Point it at a checkout of the catalog repository and the catalog is built from
-the manifests**, which is the answer while the published catalog lists nothing:
-there is no copy to take, and the reviewed manifests are the material either way.
-
-```sh
-devtool fixtures refresh --catalog ../amenbo-plugins
-```
-
-It runs the same aggregation the catalog's CI runs, in the one way a developer
-can: the split into a list entry and an install detail is `plugin validate --json`'s,
-so nothing here holds a second copy of Amenbo's schema, and what is added is what
-only an aggregation knows — the digest of the detail as written, when the manifest
-first landed (git), and the curation list's recommendation. Validation needs a
-build that carries the plugin commands, so it uses **this checkout's** (`--amenbo`
-picks another); the released CLI on the PATH does not have them yet.
-
-What it cannot do it does not fake: signing each distributable takes a key only the
-catalog's CI holds, so the details carry the manifest's own `url` / `checksum` and
-no signature. The fake catalog is one whose plugins can be browsed and opened, and
-do not install — which is what the market, the detail view and the update banner
-are looked at with. An install is exercised against the real thing.
+**It is a copy, never written by hand.** A hand-written fixture drifts from what
+the producer actually sends, and the mismatch shows up as a green check over a
+broken screen — a manifest that quietly stopped carrying a field is the kind of
+thing only a real capture catches.
 
 ### `devtool fixtures gui [--fail <face>=<mode>] [--fresh] [--port n] [--app path] [--no-launch]`
 
-Serves those fixtures on a local host and starts the dev GUI pointed at it,
-through the three overrides the app already reads (`crates/amenbo-core/src/env.rs`)
+Serves that fixture on a local host and starts the dev GUI pointed at it, through
+the override the app already reads (`crates/amenbo-core/src/env.rs`)
 — there is no development-only branch in the product. The GUI it starts is this
 checkout's own instance when it has one, and the shared dev app otherwise;
 either way the launch line names the binary, and `--app` picks one by hand — the
@@ -508,97 +475,24 @@ the executable is what the launch takes and the bundle is what a person has:
 
 | face | env var | what it answers |
 |---|---|---|
-| `catalog` | `AMENBO_PLUGIN_CATALOG_URL` | the market list, catalog registration |
-| `github` | `AMENBO_GITHUB_API_URL` | one opened plugin's stars, downloads, README |
 | `update` | `AMENBO_UPDATE_JSON_URL` | the update banner |
 
-**`--fail` is the half the real world cannot be asked for.** `--fail github=429`
+**`--fail` is the half the real world cannot be asked for.** `--fail update=429`
 is a rate limit on demand, `--fail all=timeout` is a request that never comes
 back, and any status works (`404`, `500`). These are the branches that never get
-exercised against the real API, because the way to reach them there is to spend
-the quota or unplug the network.
-
-**The fake world serves two catalogs, and the second one is registered for you.**
-The official one is the capture; beside it sits an invented third-party catalog
-(`In-house catalog`, two plugins, with a `catalog-key.pub` of its own), which
-`fixtures gui` registers in the store the GUI is about to open and unregisters on
-the way out. It has to be registered rather than pointed at by an env var,
-because a registered catalog *is* a record in the store — and without one the
-screens that only a second shelf produces cannot appear at all: a market row
-badged with the catalog it came from, that catalog as a choice in the provenance
-filter, the fingerprint shown before a key is pinned. The line it prints says how
-many plugins joined the merged view and which key was pinned. Nothing on it is
-signed, so it stops at browsing; an install is exercised against the real thing.
-
-**Both of its entries claim `official: true`, and neither is entitled to it.** The
-badge is the official index's to grant, and the merge clears the claim on
-everything a registered catalog serves — so the rows come up badged with the
-shelf's name. The claim is there to make that clearing visible: with the flag
-off, the badge would read the same whether the merge folded or did nothing, and
-nothing in the CLI reads an entry's own claim back. It is what the first reading
-of `verification/scenarios/plugin-from-a-catalog.yaml` is looked at for.
-
-**Each of them declares an event and a setting**, in its own detail document —
-the second document a catalog is served as, fetched when a row is opened. The
-panel above it is drawn from the entry the list already had, and the enable line
-under it is a phrase of the interface, so those declarations are the only thing
-on an opened plugin that says which catalog's document was fetched. That is what
-the reading after it, on that same road, is looked at for.
+exercised against the real address, because the way to reach them there is to
+spend the quota or unplug the network.
 
 **`--fresh` runs against a throwaway store** (`AMENBO_HOME`), so every cache
-starts cold. Without it a catalog fetch is answered from disk for an hour and a
-repository's figures for six, so the fake world is usually never asked and an
-injected failure never bites. The cost is that the store is empty too: `--fresh`
-is for looking at the market, the detail and the update banner, not at tasks.
-Every request is logged, so "it did not ask" is distinguishable from "it asked
-and the fixture was missing".
+starts cold. Without it the update check is answered from disk for a while, so the
+fake world is often never asked and an injected failure never bites. The cost is
+that the store is empty too: `--fresh` is for looking at the update banner, not at
+tasks. Every request is logged, so "it did not ask" is distinguishable from "it
+asked and the fixture was missing".
 
 It replaces no test that talks to the real world: a fake answers what it was told
 to answer, so it can only confirm what we already believe. The `#[ignore]`d tests
 against the real API stay.
-
-### `devtool plugin round --manifest <path.json> [--program <path>] [--set k=v] [--events <list>] [--keep]`
-
-One plugin, one lap, in a store that is thrown away afterwards:
-
-```sh
-# what a plugin's own subscriptions receive, without writing a plugin to look
-devtool plugin round --manifest ../amenbo-plugin-slack/dev/manifest.json \
-  --set webhook_url=http://127.0.0.1:9/hook
-
-# the build itself, on the events it cares about, with the store left to poke at
-devtool plugin round --manifest dev/manifest.json --program ./slack \
-  --events comment,deleted --keep
-```
-
-It raises a throwaway base (`AMENBO_HOME`, removed unless `--keep`), lays the
-plugin down **by hand** the way a plugin repo's own `make install` does — a
-directory under `plugins/` holding `manifest.json` and the executable under the
-plugin's own name — fills in what the manifest declares, opens the gate, fires
-the events an AI's writes fire, empties the queues, and then shows what the
-plugin was handed and how each run ended (`amenbo plugin log`).
-
-**The manifest is the JSON form**, the file a plugin repo already keeps for its
-own hand-install. A `.yaml` one is refused rather than converted: what an install
-lays down is JSON, and a converter here would be a second reading of a contract
-Amenbo owns.
-
-**Without `--program` it installs devtool's stand-in** — a script that records
-each document it is handed and answers nothing — so "what does a subscriber
-actually receive" is answerable without writing a throwaway plugin for it. The
-subscription is still the manifest's, so what comes out is what *that* plugin
-would have been sent.
-
-**A required setting nobody named is filled** (from the field's own default or
-candidates, since a field with candidates refuses anything else), because the
-gate refuses to open while one is empty. An optional one is left empty: that is a
-state the plugin is meant to run in.
-
-**Nothing is asserted.** The receiving side — a webhook to stand in for, a
-checkout to look at afterwards — is the plugin author's, who is the only one who
-knows what "it worked" means. The queues are emptied with `amenbo plugin flush`,
-asked again while any queue is still held by a runner a write started, and a
-window that closes with something still waiting is reported as that.
 
 ### `devtool vm up | rm | status`
 

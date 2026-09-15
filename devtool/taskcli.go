@@ -11,7 +11,7 @@ import (
 // `devtool devgui cli <id> -- …` — an amenbo CLI pointed at the store one task's dev GUI reads.
 //
 // A task's dev GUI opens the setup it was seeded with, and nothing else: whatever a screen needs in
-// order to show anything (a rejected task, a card with a due date, a plugin in a given state) has to
+// order to show anything (a rejected task, a card with a due date, an axis with values on it) has to
 // be *in* that store before the screen can be looked at. Until this existed there was no way to put
 // it there. The app-data name is fixed at build time (`AMENBO_APP_NAME`), so no CLI on the machine
 // is pointed at `amenbo-dev-<id>`, and building one with that name set costs two minutes for a
@@ -104,7 +104,7 @@ func taskCLI(id string, noBuild bool, argv []string) (int, error) {
 		return 0, err
 	}
 	if _, err := os.Stat(worktree); err != nil {
-		return 0, fmt.Errorf("no worktree for task %s (%s missing) — cut one with the `worktree` plugin first", id, worktree)
+		return 0, fmt.Errorf("no worktree for task %s (%s missing) — cut one with `amenbo worktree start` first", id, worktree)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

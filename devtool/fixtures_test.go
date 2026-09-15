@@ -39,65 +39,43 @@ func get(t *testing.T, h http.Handler, path string) (int, string) {
 	return rec.Code, string(body)
 }
 
-// TestFixtureHandlerServesTheThreeFaces pins the routes to the app's own URLs, which is what makes the
-// fake world a stand-in rather than a mock: the same client asks at the same paths and reads the same
+// TestFixtureHandlerServesTheUpdateFace pins the route to the app's own URL, which is what makes the
+// fake world a stand-in rather than a mock: the same client asks at the same path and reads the same
 // bytes.
-func TestFixtureHandlerServesTheThreeFaces(t *testing.T) {
-	dir := writeTree(t, map[string]string{
-		"catalog.json":              `{"catalog_v":1,"plugins":[]}`,
-		"update/latest.json":        `{"version":"9.9.9"}`,
-		"github/repos/o__n.json":    `{"stargazers_count":512}`,
-		"github/releases/o__n.json": `{"assets":[]}`,
-		"github/readme/o__n.md":     "# a plugin",
-	})
+func TestFixtureHandlerServesTheUpdateFace(t *testing.T) {
+	dir := writeTree(t, map[string]string{"update/latest.json": `{"version":"9.9.9"}`})
 	h := fixtureHandler(dir, nil, time.Millisecond)
 
-	for _, want := range []struct{ path, body string }{
-		{"/catalog.json", `{"catalog_v":1,"plugins":[]}`},
-		{"/update/latest.json", `{"version":"9.9.9"}`},
-		{"/github/repos/o/n", `{"stargazers_count":512}`},
-		{"/github/repos/o/n/releases/latest", `{"assets":[]}`},
-		{"/github/repos/o/n/readme", "# a plugin"},
-	} {
-		code, body := get(t, h, want.path)
-		if code != http.StatusOK || body != want.body {
-			t.Errorf("%s = %d %q, want 200 %q", want.path, code, body, want.body)
-		}
+	code, body := get(t, h, "/update/latest.json")
+	if code != http.StatusOK || body != `{"version":"9.9.9"}` {
+		t.Errorf("/update/latest.json = %d %q, want 200 with the captured manifest", code, body)
 	}
 }
 
-// TestFixtureHandlerAnswers404ForWhatWasNotCaptured pins absence: a repository with no release is what
-// GitHub 404s, and a fixture that is not there says the same thing, so the absent file needs no
-// separate way of expressing it.
+// TestFixtureHandlerAnswers404ForWhatWasNotCaptured pins absence: a release with no manifest is what
+// the real address 404s, and a fixture that is not there says the same thing, so the absent file needs
+// no separate way of expressing it.
 func TestFixtureHandlerAnswers404ForWhatWasNotCaptured(t *testing.T) {
-	h := fixtureHandler(writeTree(t, map[string]string{"github/repos/o__n.json": "{}"}), nil, time.Millisecond)
+	h := fixtureHandler(writeTree(t, nil), nil, time.Millisecond)
 
-	if code, _ := get(t, h, "/github/repos/o/n/releases/latest"); code != http.StatusNotFound {
-		t.Errorf("a repository with no captured release = %d, want 404", code)
+	if code, _ := get(t, h, "/update/latest.json"); code != http.StatusNotFound {
+		t.Errorf("a capture that was never taken = %d, want 404", code)
 	}
 }
 
-// TestFixtureHandlerFailsOnPurpose covers the half the real API cannot be asked for. A rate limit is
-// the case in point: the branch that handles it is unreachable against api.github.com, because the way
-// to reach it there is to spend the quota.
+// TestFixtureHandlerFailsOnPurpose covers the half the real address cannot be asked for. A rate limit
+// is the case in point: the branch that handles it is unreachable against the real host, because the
+// way to reach it there is to spend the quota.
 func TestFixtureHandlerFailsOnPurpose(t *testing.T) {
-	dir := writeTree(t, map[string]string{
-		"catalog.json":           `{"catalog_v":1}`,
-		"github/repos/o__n.json": `{"stargazers_count":1}`,
-	})
-	rules, err := parseFailures([]string{"github=429"})
+	dir := writeTree(t, map[string]string{"update/latest.json": `{"version":"9.9.9"}`})
+	rules, err := parseFailures([]string{"update=429"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	h := fixtureHandler(dir, rules, time.Millisecond)
 
-	if code, _ := get(t, h, "/github/repos/o/n"); code != http.StatusTooManyRequests {
-		t.Errorf("github face = %d, want 429", code)
-	}
-	// One face fails; the others are untouched, which is what makes "the market works but the
-	// figures do not" a state you can put on screen.
-	if code, _ := get(t, h, "/catalog.json"); code != http.StatusOK {
-		t.Errorf("catalog face = %d, want 200 (only github was told to fail)", code)
+	if code, _ := get(t, h, "/update/latest.json"); code != http.StatusTooManyRequests {
+		t.Errorf("update face = %d, want 429", code)
 	}
 }
 
@@ -105,14 +83,14 @@ func TestFixtureHandlerFailsOnPurpose(t *testing.T) {
 // that hangs is a different failure from one that comes back wrong, and the client's own timeout is
 // what ends it.
 func TestFixtureHandlerHangsWithoutAnswering(t *testing.T) {
-	rules, err := parseFailures([]string{"catalog=timeout"})
+	rules, err := parseFailures([]string{"update=timeout"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := fixtureHandler(writeTree(t, map[string]string{"catalog.json": "{}"}), rules, 30*time.Millisecond)
+	h := fixtureHandler(writeTree(t, map[string]string{"update/latest.json": "{}"}), rules, 30*time.Millisecond)
 
 	start := time.Now()
-	code, body := get(t, h, "/catalog.json")
+	code, body := get(t, h, "/update/latest.json")
 	if time.Since(start) < 30*time.Millisecond {
 		t.Error("the request came back before the hold elapsed")
 	}
@@ -137,67 +115,22 @@ func TestParseFailures(t *testing.T) {
 		}
 	}
 
-	for _, bad := range []string{"github", "nowhere=500", "github=teapot", "github=42"} {
+	for _, bad := range []string{"update", "nowhere=500", "update=teapot", "update=42"} {
 		if _, err := parseFailures([]string{bad}); err == nil {
 			t.Errorf("--fail %q was accepted", bad)
 		}
 	}
 }
 
-// TestFixtureEnvNamesWhatTheAppReads pins the whole interface to the app: three names it already
-// reads, pointed at the fake host.
+// TestFixtureEnvNamesWhatTheAppReads pins the whole interface to the app: one name it already reads,
+// pointed at the fake host.
 func TestFixtureEnvNamesWhatTheAppReads(t *testing.T) {
 	env := fixtureEnv("http://127.0.0.1:1234")
-	want := []string{
-		"AMENBO_PLUGIN_CATALOG_URL=http://127.0.0.1:1234/catalog.json",
-		"AMENBO_GITHUB_API_URL=http://127.0.0.1:1234/github",
-		"AMENBO_UPDATE_JSON_URL=http://127.0.0.1:1234/update/latest.json",
-	}
+	want := []string{"AMENBO_UPDATE_JSON_URL=http://127.0.0.1:1234/update/latest.json"}
 	for i, w := range want {
 		if env[i] != w {
 			t.Errorf("env[%d] = %q, want %q", i, env[i], w)
 		}
-	}
-}
-
-// TestCatalogEntries pins that the capture follows the catalog: whatever it names — the plugins
-// whose detail documents are taken, and the repositories fetched — is what is captured, so a list
-// kept by hand beside it cannot go stale.
-func TestCatalogEntries(t *testing.T) {
-	entries := catalogEntries([]byte(`{"catalog_v":1,"plugins":[
-		{"name":"a","repo":"owner/a"},
-		{"name":"b"},
-		{"name":"c","repo":"owner/c","unknown_field":true}]}`))
-	if len(entries) != 3 {
-		t.Fatalf("catalogEntries = %v, want three entries", entries)
-	}
-	if entries[0].Name != "a" || entries[0].Repo != "owner/a" {
-		t.Errorf("entries[0] = %v, want {a owner/a}", entries[0])
-	}
-	if entries[1].Name != "b" || entries[1].Repo != "" {
-		t.Errorf("entries[1] = %v, want {b } — an entry with no repository is still a plugin", entries[1])
-	}
-	if entries[2].Name != "c" || entries[2].Repo != "owner/c" {
-		t.Errorf("entries[2] = %v, want {c owner/c}", entries[2])
-	}
-
-	// An envelope this build cannot read costs the capture, not the run: the catalog is the
-	// producer's to grow, and a capture that refuses to run is a capture nobody takes.
-	if entries := catalogEntries([]byte("not json")); entries != nil {
-		t.Errorf("catalogEntries(garbage) = %v, want nil", entries)
-	}
-}
-
-// TestDetailSource pins where the second document is taken from: beside the list it was named in,
-// whether that list is the published one or a checkout of the catalog repository.
-func TestDetailSource(t *testing.T) {
-	if got := detailSource("https://example.invalid/amenbo-plugins/catalog.json", "worktree"); got !=
-		"https://example.invalid/amenbo-plugins/plugins/worktree.json" {
-		t.Errorf("detailSource(url) = %q", got)
-	}
-	if got := detailSource("/checkout/site/catalog.json", "worktree"); got !=
-		"/checkout/site/plugins/worktree.json" {
-		t.Errorf("detailSource(path) = %q", got)
 	}
 }
 

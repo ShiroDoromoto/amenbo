@@ -5,7 +5,7 @@
 // give on demand.
 //
 // The checkout a task is written in is a git worktree outside the repo, cut by
-// amenbo's official `worktree` plugin:
+// `amenbo worktree start`:
 //
 //	<repo>/../<repo-name>-worktrees/<id>/   git worktree checkout on task/<id>
 //
@@ -25,7 +25,8 @@
 // store. devtool seeds, drives and reclaims that instance (devgui.go); the
 // Makefile builds it, so only the tasks that look at a GUI pay for one.
 //
-// The backlog is amenbo's and git is the plugin's: devtool speaks to neither.
+// The backlog is amenbo's and the checkout is `amenbo worktree`'s: devtool
+// speaks to neither.
 // Beyond the instance's app-data it provisions no amenbo store — isolation comes
 // from the worktree living outside the repo plus `make verify`'s mktemp store.
 package main
@@ -49,8 +50,6 @@ func main() {
 		devGUICmd(args[1:])
 	case "fixtures":
 		fixturesCmd(args[1:])
-	case "plugin":
-		pluginCmd(args[1:])
 	case "vm":
 		vmCmd(args[1:])
 	case "help", "-h", "--help":
@@ -73,9 +72,8 @@ Usage:
   devtool devgui shot      [<id>] [--no-front] [--vm]
   devtool devgui rm        <id> [--vm]
   devtool devgui sweep     [--yes] [--vm]
-  devtool fixtures refresh [--catalog <url|path>] [--repo owner/name]
+  devtool fixtures refresh
   devtool fixtures gui     [--fail <face>=<status|timeout>] [--port n] [--app path] [--no-launch]
-  devtool plugin round     --manifest <path.json> [--program path] [--set k=v] [--events list] [--keep]
   devtool vm up | rm | status
   devtool vm exec          [--front <guest pid>] [--window <title>] [--shell] -- <command…>
   devtool vm push          <local…> <remote>
@@ -156,21 +154,12 @@ devgui sweep list every per-task dev GUI on this machine and say which ones no
              at all. What --vm changes is only which machine is asked -- the
              names, the paths and the pid lookup are the guest's copies of the
              same ones.
-fixtures     a fake outside world for GUI verification. 'refresh' captures the
-             catalog, GitHub's answers and latest.json from the real world (they
-             are copies, never written by hand); 'gui' serves them and starts the
-             dev GUI pointed at them. --fail makes a face answer 429/500/404, or
-             never answer at all — the responses the real API will not produce on
-             demand, and so the branches nothing else reaches.
-plugin round run one plugin through one lap of a store that is thrown away
-             afterwards: raise it, install the build by hand the way a plugin
-             repo's own 'make install' does, fill in what its manifest declares,
-             open its gate, fire the events an AI's writes fire, empty the queues
-             and then show what the plugin was handed and how each run ended.
-             Nothing is asserted — the receiving side (a webhook to stand in for,
-             a checkout to look at) is the plugin author's. Without --program it
-             installs devtool's stand-in, which records the documents it is
-             handed, so a payload can be read without writing a plugin for it.
+fixtures     a fake outside world for GUI verification. 'refresh' captures
+             latest.json from the real world (it is a copy, never written by
+             hand); 'gui' serves it and starts the dev GUI pointed at it. --fail
+             makes the face answer 429/500/404, or never answer at all — the
+             responses the real address will not produce on demand, and so the
+             branches nothing else reaches.
 vm           the throwaway macOS VM the GUI is verified in. Driving a screen
              takes the keyboard and mouse of whatever Mac it runs on, so the
              screen is moved into a guest of the same arch and OS generation and
@@ -436,8 +425,8 @@ func canonicalID(id string) (string, error) {
 
 // paths resolves the main repo root and the per-task worktree dir for id. The worktree lives
 // OUTSIDE the repo, in a sibling `<repo-name>-worktrees/` dir, so it has no repo `.amenbo` in its
-// ancestry (see the package doc). The layout is the official `worktree` plugin's, read back here
-// rather than cut: an instance belongs to a checkout, and finding one means naming where it sits.
+// ancestry (see the package doc). The layout is `amenbo worktree start`'s, read back here rather
+// than cut: an instance belongs to a checkout, and finding one means naming where it sits.
 func paths(id string) (root, worktree string, err error) {
 	cwd, err := os.Getwd()
 	if err != nil {

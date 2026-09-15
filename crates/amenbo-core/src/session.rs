@@ -47,6 +47,25 @@ pub const SESSION_VAR: &str = "AMENBO_SESSION";
 /// [`SESSION_VAR`] by the window, on every terminal it opens.
 pub const DIR_VAR: &str = "AMENBO_SESSION_DIR";
 
+/// The variable a **pane's** id is carried in, into the terminal and everything started inside it.
+/// Set by the window that opened the terminal (`app/src-tauri/src/pty.rs`) and by nothing else.
+///
+/// **It is not [`SESSION_VAR`], and the two must not be read for each other.** That one names this
+/// terminal, which is a process and ends with it; this names the place the terminal is drawn in,
+/// which outlives every terminal opened there ([`crate::frames::SavedPane::id`]). A row saying which
+/// pane made it has to be held against the second — held against the first it would name a session
+/// nobody can get back to by the time anybody reads it (`AMB-D-897`).
+pub const PANE_VAR: &str = "AMENBO_PANE";
+
+/// The variable the way back into that pane's conversation is carried in — the handle its provider
+/// is resumed from ([`crate::frames::SavedPane::resume`]).
+///
+/// Set beside [`PANE_VAR`], by the same window, and **left unset where there is none to give**: a
+/// pane at a plain prompt is carrying on no conversation, and one whose provider names its own
+/// session only after it has started is read back afterwards rather than known at the open
+/// (`AMB-D-869`). What is not known yet is not a value, so nothing is set to say so.
+pub const PANE_RESUME_VAR: &str = "AMENBO_PANE_RESUME";
+
 /// The shape of a statement file. Bumped when a reader would have to be changed to keep understanding
 /// one — the window and this module ship together, but a window left running across an update does not.
 pub const SCHEMA: u32 = 1;

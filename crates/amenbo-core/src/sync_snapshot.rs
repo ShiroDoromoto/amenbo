@@ -487,6 +487,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             })
             .unwrap();
         let c = s.add_task_comment(t.id, ActorKind::Ai, &format!("on {title}")).unwrap();
@@ -891,6 +892,7 @@ mod tests {
                     title: format!("{name}: the older one"),
                     body: "why".into(),
                     project_id: project,
+                    made_in: None,
                 })
                 .unwrap()
                 .id;
@@ -899,6 +901,7 @@ mod tests {
                     title: format!("{name}: the newer one"),
                     body: "why, again".into(),
                     project_id: project,
+                    made_in: None,
                 })
                 .unwrap()
                 .id;

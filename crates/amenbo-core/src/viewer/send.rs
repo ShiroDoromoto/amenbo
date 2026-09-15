@@ -918,6 +918,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             })
             .unwrap();
         project
@@ -1340,6 +1341,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             })
             .unwrap();
         let moved = carry(&store).unwrap();
@@ -1382,6 +1384,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             })
             .unwrap();
         assert!(carry(&store).is_err());

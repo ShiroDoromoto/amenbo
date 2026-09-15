@@ -43,6 +43,7 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             let dimension_values = resolve_dim_pairs(store, project_id, &dim, ClassifiedSide::Decision)?;
             let d = store.add_decision_with_dimensions(ops::decision::NewDecision {
                 title, body, project_id,
+                made_in: None,
             }, &dimension_values).map_err(CliError::from)?;
             // The proposal is a moment, and the column cannot hold it: `status` says a decision is
             // proposed and `status_changed_at` is overwritten by the verdict (`AMB-T-3639`).
@@ -414,7 +415,7 @@ fn promote_task_comment(store: &mut Store, cid: i64, title: String, project: Opt
     // that does not classify decisions at all — is an error with no decision left behind to go and
     // classify by hand. The demand for a required axis is the store's own door, one call further in.
     let value_ids = resolve_dim_pairs(store, project_id, dim, ClassifiedSide::Decision)?;
-    let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id }, &value_ids).map_err(CliError::from)?;
+    let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id, made_in: None }, &value_ids).map_err(CliError::from)?;
     store.link_decision(d.id, task_id).map_err(CliError::from)?;
     Ok(d.id)
 }
@@ -434,7 +435,7 @@ fn promote_decision_comment(store: &mut Store, cid: i64, title: String, project:
     };
     // Resolved before the create, for the reason written on the task-comment side above.
     let value_ids = resolve_dim_pairs(store, project_id, dim, ClassifiedSide::Decision)?;
-    let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id }, &value_ids).map_err(CliError::from)?;
+    let d = store.add_decision_with_dimensions(ops::decision::NewDecision { title, body, project_id, made_in: None }, &value_ids).map_err(CliError::from)?;
     Ok(d.id)
 }
 

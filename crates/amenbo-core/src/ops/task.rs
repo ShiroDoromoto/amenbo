@@ -16,7 +16,7 @@ use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
     ActorKind, AttachmentTarget, DecisionStatus, Priority, Subtype, Task, TaskStatus,
 };
-use crate::ops::{emit_create, emit_update, place, Noun, Position};
+use crate::ops::{emit_create, emit_update, place, MadeIn, Noun, Position};
 use crate::store_engine::{read, record, WriteTx};
 use crate::view::ReserveBlocker;
 use crate::time::Timestamp;
@@ -76,6 +76,10 @@ pub struct NewTask {
     /// unset, the task names no folder — the place is stated or it is absent, never taken from where the
     /// create was typed.
     pub at_binding_id: Option<i64>,
+    /// The session this was filed from ([`MadeIn`], `AMB-D-897`), or `None` for a task filed outside the
+    /// talk window. Stated by the caller for the same reason `at_binding_id` is — the create reads
+    /// nothing of where it was typed.
+    pub made_in: Option<MadeIn>,
 }
 
 /// Create a task. **There are two read-then-writes here** — the conversational sequence number
@@ -132,6 +136,23 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
         updated_at: now,
     };
     emit_create(tx, record::task(&task))?;
+    // The session it was filed from, in the same transaction as the task itself (`AMB-D-897`): the row
+    // exists to answer "which session made this", and one written afterwards would be missing from
+    // exactly the tasks whose creating process did not get that far.
+    if let Some(made_in) = input.made_in {
+        emit_create(
+            tx,
+            record::task_made_in(&crate::model::TaskMadeIn {
+                id: read::next_id(tx.conn(), "task_made_in")?,
+                task_id: task.id,
+                pane: made_in.pane,
+                pane_name: made_in.pane_name,
+                pane_resume: made_in.pane_resume,
+                created_at: now,
+                updated_at: now,
+            }),
+        )?;
+    }
     Ok(task)
 }
 
@@ -572,6 +593,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             },
         )
         .expect("add task")
@@ -615,6 +637,7 @@ mod tests {
                     notes: String::new(),
                     created_by_kind: None,
                     at_binding_id: None,
+                    made_in: None,
                 },
             )
             .unwrap();
@@ -796,6 +819,7 @@ mod tests {
                 title: title.to_string(),
                 body: String::new(),
                 project_id,
+                made_in: None,
             },
         )
         .unwrap()
@@ -1272,6 +1296,7 @@ mod tests {
                         notes: String::new(),
                         created_by_kind: None,
                         at_binding_id: None,
+                        made_in: None,
                     },
                 )
                 .unwrap()
@@ -1337,6 +1362,7 @@ mod tests {
                         notes: String::new(),
                         created_by_kind: None,
                         at_binding_id: None,
+                        made_in: None,
                     },
                 )
                 .unwrap()
@@ -1401,6 +1427,7 @@ mod tests {
                 title: "前提".to_string(),
                 body: String::new(),
                 project_id,
+                made_in: None,
             },
         )
         .unwrap();
@@ -1467,31 +1494,62 @@ mod tests {
         });
     }
 
+    /// File a task in the pane `pane`, and hand back its id.
+    fn filed_in_pane(tx: &WriteTx<'_>, title: &str, pane: &str) -> i64 {
+        add(
+            tx,
+            NewTask {
+                title: title.to_string(),
+                project_id: None,
+                due_on: None,
+                start_on: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: None,
+                at_binding_id: None,
+                made_in: Some(MadeIn {
+                    pane: pane.to_string(),
+                    pane_name: Some("移行を書いている窓".into()),
+                    pane_resume: Some("0f9c".into()),
+                }),
+            },
+        )
+        .unwrap()
+        .id
+    }
+
+    /// The create writes the session it was filed from, and writes it whole (`AMB-D-897`).
+    #[test]
+    fn add_records_the_session_it_was_made_in() {
+        with_tx(|tx| {
+            let tid = filed_in_pane(tx, "ペインのついたタスク", "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114");
+
+            let made_in = read::task_made_in(tx.conn(), tid).unwrap().expect("the pane's row");
+            assert_eq!(made_in.task_id, tid);
+            assert_eq!(made_in.pane, "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114");
+            assert_eq!(made_in.pane_name.as_deref(), Some("移行を書いている窓"));
+            assert_eq!(made_in.pane_resume.as_deref(), Some("0f9c"));
+        });
+    }
+
+    /// A task filed outside the talk window leaves no row — there is no pane to name, and a row
+    /// carrying nothing would read as a session that cannot be found.
+    #[test]
+    fn add_outside_a_pane_writes_no_row() {
+        with_tx(|tx| {
+            let tid = mk_task(tx, "窓の外で立てたタスク");
+            assert!(read::task_made_in(tx.conn(), tid).unwrap().is_none());
+        });
+    }
+
     /// The session a task was made in goes with the task (`AMB-D-897`). The reference is `RESTRICT`,
     /// so a row left behind would not orphan anything — it would stop the delete, which is worse: the
     /// task could not be removed at all.
-    ///
-    /// The row is put here by hand because nothing writes one yet — that is the next task's, and the
-    /// sweep is this table's, so it arrives with it rather than after it.
     #[test]
     fn delete_takes_the_pane_the_task_was_made_in_with_it() {
         with_tx(|tx| {
-            let tid = mk_task(tx, "消えるタスク");
-            let survivor = mk_task(tx, "残るタスク");
-            for (id, pane) in [(tid, "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114"), (survivor, "1f0b6d92-8c47-4a10-b3e5-5d9a7c204e6b")] {
-                crate::ops::emit_create(
-                    tx,
-                    crate::store_engine::record::task_made_in(&crate::model::TaskMadeIn {
-                        id: read::next_id(tx.conn(), "task_made_in").unwrap(),
-                        task_id: id,
-                        pane: pane.to_string(),
-                        pane_name: Some("the migration".into()),
-                        pane_resume: None,
-                        ..Default::default()
-                    }),
-                )
-                .unwrap();
-            }
+            let tid = filed_in_pane(tx, "消えるタスク", "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114");
+            let survivor = filed_in_pane(tx, "残るタスク", "1f0b6d92-8c47-4a10-b3e5-5d9a7c204e6b");
 
             delete(tx, tid).unwrap();
 

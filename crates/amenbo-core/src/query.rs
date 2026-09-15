@@ -3277,6 +3277,7 @@ mod filter_tests {
                 title: "どのレーンで焼くか".to_string(),
                 body: String::new(),
                 project_id: p,
+                made_in: None,
             },
         )
         .unwrap()
@@ -3407,6 +3408,7 @@ mod filter_tests {
                 priority: None,
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             },
         )
         .expect("add task")
@@ -3489,6 +3491,7 @@ mod filter_tests {
                 priority: Some(crate::model::Priority::High),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             },
         )
         .expect("add task")
@@ -3507,6 +3510,7 @@ mod filter_tests {
                 title: "索引をどう引くか".to_string(),
                 body: String::new(),
                 project_id: pj,
+                made_in: None,
             },
         )
         .expect("add decision");
@@ -3677,6 +3681,7 @@ mod filter_tests {
                 title: title.to_string(),
                 body: String::new(),
                 project_id,
+                made_in: None,
             },
         )
         .expect("add decision")

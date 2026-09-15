@@ -44,6 +44,7 @@ fn fresh_store_reads_as_content_empty_then_not_after_a_task() {
                 notes: String::new(),
                 created_by_kind: None,
                 at_binding_id: None,
+                made_in: None,
             })
             .unwrap();
     }

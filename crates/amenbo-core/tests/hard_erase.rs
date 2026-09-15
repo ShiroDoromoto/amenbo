@@ -54,6 +54,7 @@ fn build() -> (Store, i64, i64, i64) {
         notes: String::new(),
         created_by_kind: Some(ActorKind::Ai),
         at_binding_id: None,
+        made_in: None,
     })
     .unwrap()
     .id;
@@ -71,6 +72,7 @@ fn build() -> (Store, i64, i64, i64) {
             title: "a real decision".to_string(),
             body: format!("Sound conclusion.\n\nAside: {SECRET_SECTION} should not be here.\n\nMore rationale."),
             project_id: project,
+            made_in: None,
         })
         .unwrap()
         .id;

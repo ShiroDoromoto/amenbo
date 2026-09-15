@@ -589,6 +589,7 @@ mod tests {
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Ai),
                 at_binding_id: None,
+                made_in: None,
             })
             .unwrap();
         // A task is born when its creation ends, not when the row appears (`AMB-D-557`) — that is the

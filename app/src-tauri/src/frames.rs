@@ -325,7 +325,6 @@ pub fn talk_layout(face: tauri::State<'_, TalkFace>) -> Result<Option<TalkLayout
             count: opening.map_or(0, |split| split.count),
             orient: Some(opening.unwrap_or_default().orient.into()),
             splits: kept.splits.iter().map(|(project, split)| (*project, (*split).into())).collect(),
-            next_id: kept.next_id,
             project: kept.project,
             // The places, with nothing running in any of them: a session died with the run that
             // started it, and what the window draws is the offer to carry on (`AMB-D-869`).
@@ -410,7 +409,6 @@ fn keep(face: &TalkFace, layout: &TalkLayoutDto) -> Result<(), CmdError> {
         project: layout.project,
         splits: splits_of(layout),
         panes: panes_of(face, layout),
-        next_id: layout.next_id,
     };
     if face.kept.lock().expect("kept layout lock").as_ref() == Some(&keeping) {
         return Ok(());
@@ -535,7 +533,6 @@ mod tests {
             count: 2,
             orient: None,
             splits: std::collections::BTreeMap::new(),
-            next_id: 3,
             project: Some(1),
             frames,
             split_out: Some("1".to_string()),
@@ -678,7 +675,6 @@ mod tests {
                 model: Some("opus".to_string()),
                 compose_open: None,
             }],
-            next_id: 2,
         });
 
         assert_eq!(face.comes_back_on("1", "claude-code").as_deref(), Some("0f9c"));
@@ -712,7 +708,6 @@ mod tests {
                 model: Some("gemini-2.5-pro".to_string()),
                 compose_open: None,
             }],
-            next_id: 2,
         });
 
         assert_eq!(face.model_on("1", "gemini-cli").as_deref(), Some("gemini-2.5-pro"));
@@ -765,7 +760,6 @@ mod tests {
                 model: None,
                 compose_open: None,
             }],
-            next_id: 2,
         };
 
         seed(&face, &kept);

@@ -3,7 +3,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { acrossIn, movedWithin, pageShape, type Frame, type Layout } from "../talk/layout";
 import { frameLabel, type FrameNames } from "../talk/frames";
 import { draggedFar, elementUnder, type Point } from "../core/pointerDrag";
-import { faceOf, type Plate as Row } from "../talk/nameplate";
+import { faceOf, type Face, type Plate as Row } from "../talk/nameplate";
 import { hueOf } from "../talk/moving";
 import { sideOfBox } from "./rowDrag";
 import { t, tf } from "../core/i18n";
@@ -44,21 +44,20 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
 }) {
   const [order, setOrder] = useState<readonly Frame[]>(panes);
   /**
-   * The row of one pane, as it stood when this opened.
+   * What one pane's card says: its name, and which face its lamp was on when this opened.
    *
    * **A pane that is drawn is read; one that is not has its lamp out.** Only the page on the screen
    * has panes mounted on it, so the one thing a row measures — whether output is arriving — is known
    * for those and for no others. It is left unsaid rather than filled in: a lamp out is a lamp out
    * (`AMB-D-858`).
+   *
+   * The hue the lamp is drawn in is not taken from the row: it belongs to the slot the card is in,
+   * and the cards here are being dragged between slots (`../talk/moving`).
    */
-  function rowOf(frame: Frame): Row {
-    const read = rows.get(frame.id);
-    const drawn = read?.() ?? null;
-    if (drawn !== null) return drawn;
-    return {
-      name: frameLabel(names, frame.id, frame.folder),
-      dot: { frame: frame.id, face: faceOf(false) },
-    };
+  function rowOf(frame: Frame): { name: string | null; face: Face } {
+    const drawn = rows.get(frame.id)?.() ?? null;
+    if (drawn !== null) return { name: drawn.name, face: drawn.dot.face };
+    return { name: frameLabel(names, frame.id, frame.folder), face: faceOf(false) };
   }
   // Read once, as the modal opens. What is drawn in here is a proposal about an arrangement, not a
   // second screen for watching the panes on: a card that moved under the hand carrying it would be
@@ -179,7 +178,7 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
                 className={`termface__page-grid termface__page-grid--${
                   pageShape(layout.count, layout.orient)} paneorder__grid`}
               >
-                {slots.map((frame) => {
+                {slots.map((frame, slot) => {
                   const row = plates.get(frame.id);
                   const name = row?.name ?? t("face.orderNoName");
                   const was = from.get(frame.id);
@@ -197,8 +196,8 @@ export function PaneOrder({ layout, panes, names, rows, onClose, onOrder }: {
                         <span
                           className="plate__dot"
                           aria-hidden="true"
-                          data-face={row?.dot.face ?? "out"}
-                          style={{ "--dot-hue": String(hueOf(frame.id)) } as CSSProperties}
+                          data-face={row?.face ?? "out"}
+                          style={{ "--dot-hue": String(hueOf(slot)) } as CSSProperties}
                         />
                         <span className="paneorder__name" title={name}>{name}</span>
                       </div>

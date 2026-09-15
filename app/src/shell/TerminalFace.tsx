@@ -6,6 +6,7 @@ import { TerminalPane } from "./TerminalPane";
 import { FolderRail } from "./FolderRail";
 import { PaneOrder } from "./PaneOrder";
 import type { Plate as Row } from "../talk/nameplate";
+import { hueOf } from "../talk/moving";
 import { ProjectTabs } from "./ProjectTabs";
 import {
   frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
@@ -1225,10 +1226,13 @@ export function TerminalFace({
             ? null
             : (
               <>
-                {slots.map((frame) => (
+                {slots.map((frame, slot) => (
                   <TerminalPane
                     key={frame.id}
                     frame={frame.id}
+                    // The lamp above the pane is told apart by where the pane sits, not by which
+                    // pane it is (`../talk/moving`).
+                    hue={hueOf(slot)}
                     project={frame.project}
                     names={names}
                     start={{

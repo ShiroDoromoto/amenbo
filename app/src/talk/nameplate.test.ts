@@ -4,7 +4,7 @@ import { faceOf, mountNameplate, type Dot } from "./nameplate";
 
 /** The lamp in front of the name, at rest. These cases are about the name on the row; what the lamp
  *  does has its own (`./plateMoving.test`). */
-const STILL: Dot = { frame: "1", face: "out" };
+const STILL: Dot = { hue: 199, face: "out" };
 
 describe("the row on the page", () => {
   it("is one line, and redraws in place", () => {

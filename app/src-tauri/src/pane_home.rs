@@ -229,6 +229,24 @@ fn kind_of(agent: Option<&str>) -> Option<&'static Kind> {
         .map(|_| kind)
 }
 
+/// Whether this is a frame id as the window draws them — eight, four, four, four and twelve hex
+/// digits, in lower case (`AMB-D-897`).
+///
+/// **It is asked as a shape and not as an identity.** What it keeps out is a name with a path in it,
+/// which is the one thing a frame id must not be able to do here; whether the id names a pane this
+/// run has is the arrangement's answer, not a directory's. The three ids an older build counted are
+/// gone by the time this is asked — the chain drew each of them afresh and moved its home with it
+/// (`amenbo_core::store_engine::migrate`).
+fn is_drawn_id(frame: &str) -> bool {
+    const GROUPS: [usize; 5] = [8, 4, 4, 4, 12];
+    let lower_hex = |part: &str| {
+        part.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    };
+    let mut parts = frame.split('-');
+    GROUPS.iter().all(|len| parts.next().is_some_and(|part| part.len() == *len && lower_hex(part)))
+        && parts.next().is_none()
+}
+
 /// The home the AI in this frame runs in, made and linked the first time it is asked for, with the
 /// variables the pane is started with: the one it is told its home by, and one for each file it is
 /// pointed at where the reader keeps it ([`Kind::points`]). Nothing at all for a pane running
@@ -236,15 +254,15 @@ fn kind_of(agent: Option<&str>) -> Option<&'static Kind> {
 ///
 /// **Keyed by the frame rather than by the session**, because what comes back is the place: a pane
 /// resumed in the next run is the same frame with a new process in it, and the home it is pointed at
-/// has to be the one its conversation is in. Frame ids are counted up and never reused
+/// has to be the one its conversation is in. A frame id is drawn once and never handed out again
 /// (`app/src/talk/layout.ts`), so one home is one pane for as long as both exist.
 ///
-/// A frame id that is not a plain number is refused rather than made a directory for: it arrives from
+/// A frame id that is not one of those is refused rather than made a directory for: it arrives from
 /// the window, and what a name would do here is write outside the directory this module answers for.
 pub fn for_pane(frame: &str, agent: Option<&str>) -> Option<(Vec<(&'static str, PathBuf)>, PathBuf)> {
     let kind = kind_of(agent)?;
-    if frame.is_empty() || !frame.bytes().all(|byte| byte.is_ascii_digit()) {
-        log::warn!("no {} home for frame {frame:?}: a frame is a number", kind.agent);
+    if !is_drawn_id(frame) {
+        log::warn!("no {} home for frame {frame:?}: a frame is a UUID", kind.agent);
         return None;
     }
     let home = homes_root(kind)?.join(frame);
@@ -976,15 +994,33 @@ mod tests {
     /// and have no use for a directory, and a pane at a plain prompt has nothing to resume at all.
     #[test]
     fn nothing_but_a_row_that_comes_back_by_a_place_is_given_a_home() {
-        assert!(for_pane("1", None).is_none());
-        assert!(for_pane("1", Some("claude-code")).is_none());
+        let frame = "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114";
+        assert!(for_pane(frame, None).is_none());
+        assert!(for_pane(frame, Some("claude-code")).is_none());
     }
 
-    /// A frame id is a number counted up by the window. Anything else is refused rather than made a
-    /// directory for — a name with a path in it would write outside the root this module answers for.
+    /// A frame id is one the window drew. Anything else is refused rather than made a directory for
+    /// — a name with a path in it would write outside the root this module answers for, and the
+    /// numbers an older build counted are gone by the time anything asks here.
     #[test]
-    fn a_frame_that_is_not_a_number_is_refused() {
-        assert!(for_pane("../elsewhere", Some(GEMINI)).is_none());
-        assert!(for_pane("", Some(GEMINI)).is_none());
+    fn a_frame_that_is_not_a_drawn_id_is_refused() {
+        for frame in [
+            "../elsewhere",
+            "",
+            "1",
+            // A drawn id with a path hung off it, and one a separator is hiding inside.
+            "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114/../elsewhere",
+            "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b11/4",
+            // The right shape in the wrong alphabet: a case-folding filesystem would let two ids
+            // that differ only in case name one directory.
+            "7B3F0C1E-2D4A-4C88-9A51-6E0D2F83B114",
+            // And the shape itself, missed in each direction.
+            "7b3f0c1e2d4a4c889a516e0d2f83b114",
+            "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114-0000",
+        ] {
+            assert!(!is_drawn_id(frame), "{frame:?}");
+            assert!(for_pane(frame, Some(GEMINI)).is_none(), "{frame:?}");
+        }
+        assert!(is_drawn_id("7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114"));
     }
 }

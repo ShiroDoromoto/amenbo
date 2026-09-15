@@ -24,7 +24,7 @@ const dot = () => host.querySelector<HTMLElement>(".plate__dot")!.dataset.face;
 beforeEach(() => {
   vi.useFakeTimers();
   host = document.createElement("div");
-  plate = mountPlate(host);
+  plate = mountPlate(host, "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114", 199);
   plate.opened(null);
 });
 

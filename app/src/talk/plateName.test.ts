@@ -19,6 +19,9 @@ const { mountPlate } = await import("./plate");
 let host: HTMLElement;
 let plate: ReturnType<typeof mountPlate>;
 
+/** The place this pane is in — drawn once by the window that opened it (`./layout`). */
+const FRAME = "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114";
+
 /** The row is put up again once the ledger has answered what the pane is holding, which is a
  *  question out over the boundary — so what it says is read after that has come back. */
 const settled = () => new Promise((done) => setTimeout(done, 0));
@@ -28,7 +31,7 @@ const heading = () => host.querySelector<HTMLElement>(".plate:not([hidden]) .pla
 
 beforeEach(() => {
   host = document.createElement("div");
-  plate = mountPlate(host);
+  plate = mountPlate(host, FRAME, 199);
 });
 
 afterEach(() => plate.stop());
@@ -47,11 +50,11 @@ describe("what the row above a pane is headed with", () => {
   it("gives way to a name the moment there is one, and does not come back over it", async () => {
     plate.opened("/work/amenbo");
     await settled();
-    plate.named(new Map([["1", "the migration"]]));
+    plate.named(new Map([[FRAME, "the migration"]]));
     expect(heading()).toBe("the migration");
     // A naming that was refused answers with the name that stood (`./frames`), so the row never has
     // to work out which of two names is the frame's.
-    plate.named(new Map([["1", "the migration"]]));
+    plate.named(new Map([[FRAME, "the migration"]]));
     expect(heading()).toBe("the migration");
   });
 

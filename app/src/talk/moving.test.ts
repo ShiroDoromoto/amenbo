@@ -19,15 +19,16 @@ describe("what counts as moving", () => {
 
 describe("the hue is which pane, not what is happening in it", () => {
   it("gives every pane of a full screen a colour of its own", () => {
-    const screenful = ["1", "2", "3", "4"].map(hueOf);
+    const screenful = [0, 1, 2, 3].map(hueOf);
     expect(new Set(screenful).size).toBe(4);
   });
 
-  it("keeps a frame's colour whatever is running in it — it belongs to the place", () => {
-    expect(hueOf("3")).toBe(hueOf("3"));
+  it("keeps a slot's colour whatever is running in it — it belongs to the place", () => {
+    expect(hueOf(2)).toBe(hueOf(2));
   });
 
-  it("answers for a frame id that is not a number rather than drawing nothing", () => {
-    expect(Number.isFinite(hueOf("not a number"))).toBe(true);
+  it("goes round for a page deeper than there are hues, rather than drawing nothing", () => {
+    expect(hueOf(4)).toBe(hueOf(0));
+    expect(Number.isFinite(hueOf(-1))).toBe(true);
   });
 });

@@ -71,6 +71,7 @@ async function pane(names: Map<string, string> = new Map()): Promise<void> {
   await act(async () => {
     root.render(createElement(TerminalPane, {
       frame: "1",
+      hue: 199,
       project: 3,
       names,
       start: { cwd: "/work/here" },
@@ -131,6 +132,7 @@ describe("naming a pane", () => {
     await act(async () => {
       root.render(createElement(TerminalPane, {
         frame: "1",
+        hue: 199,
         project: 3,
         names: new Map(),
         start: { cwd: "/work/here" },

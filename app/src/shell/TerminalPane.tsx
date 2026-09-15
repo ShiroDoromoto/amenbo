@@ -79,12 +79,15 @@ async function handOver(session: string, paths: string[]) {
  * running on the way out — a session whose place has gone is one nobody can reach.
  */
 export function TerminalPane({
-  frame, project, names, start, autoStart, focused, landed = false, offered = false, written,
+  frame, hue, project, names, start, autoStart, focused, landed = false, offered = false, written,
   inserted = [], composeOpen,
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onRow, onWrite, onFold,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
+  /** The hue the lamp above this pane is drawn in. It follows the slot rather than the frame, so it
+   *  comes from the page that laid this one out (`../talk/moving`). */
+  hue: number;
   /** Which project this place belongs to — whose answer the agent it opens with is kept against
    *  (`../talk/agent`). */
   project: number;
@@ -417,7 +420,7 @@ export function TerminalPane({
     setEnded(false);
     // The line above the pane: what this pane is called, and the lamp that says whether anything is
     // coming out of it (`../talk/plate.ts`).
-    const plate = mountPlate(label, frame);
+    const plate = mountPlate(label, frame, hue);
     plateRef.current = plate;
     // The row is readable from outside for as long as this pane is drawn, and no longer: a pane on
     // another page is not being measured at all, so a reading kept past this point would be the last

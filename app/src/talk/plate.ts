@@ -9,7 +9,7 @@
 // in this pane declared and what this pane measured — both of which the webview already has, and
 // neither of which the world can rewrite behind it.
 
-import { frameLabel, frameNames, ONLY_FRAME, type FrameNames } from "./frames";
+import { frameLabel, frameNames, type FrameNames } from "./frames";
 import { faceOf, mountNameplate, type Plate as Row } from "./nameplate";
 import { movingAt, STILL_AFTER_MS } from "./moving";
 
@@ -44,10 +44,11 @@ export type Plate = {
  * Put a label above a pane and keep it there.
  *
  * `frame` is which of the arrangement's places this pane is in (`./layout`), because the name on the
- * row belongs to the place rather than to the session (`./frames`). A lone pane that has never been
- * told which place it is takes the first of them.
+ * row belongs to the place rather than to the session (`./frames`). `hue` is what the lamp in front
+ * of the name is drawn in — the slot's answer rather than the frame's, so it comes in from whoever
+ * laid the page out (`./moving`).
  */
-export function mountPlate(host: HTMLElement, frame: string = ONLY_FRAME): Plate {
+export function mountPlate(host: HTMLElement, frame: string, hue: number): Plate {
   const draw = mountNameplate(host);
 
   let names: FrameNames = new Map();
@@ -97,7 +98,7 @@ export function mountPlate(host: HTMLElement, frame: string = ONLY_FRAME): Plate
    */
   function row(): Row | null {
     if (!(ran || names.has(frame))) return null;
-    return { name: frameLabel(names, frame, folder), dot: { frame, face: faceOf(moving) } };
+    return { name: frameLabel(names, frame, folder), dot: { hue, face: faceOf(moving) } };
   }
 
   function redraw(): void {

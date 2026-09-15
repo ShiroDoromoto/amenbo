@@ -34,10 +34,6 @@ import { renameInTerminal } from "./terminal";
 /** Who is naming a frame. Ranked in the store, lowest first. */
 export type NamedBy = "session" | "person";
 
-/** The first of the arrangement's places (`./layout`) — where a lone pane sits when nobody has said
- *  which of them it is drawing. */
-export const ONLY_FRAME = "1";
-
 /** Frame → what it is called. */
 export type FrameNames = ReadonlyMap<string, string>;
 

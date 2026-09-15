@@ -538,7 +538,11 @@ pub fn issue(launch: &Launch) -> Option<String> {
 }
 
 /// Sixteen bytes of the operating system's randomness, spelled as a version 4 UUID.
-fn uuid_v4() -> String {
+///
+/// Reached from beside the catalog as well: a pane's id is the same shape, drawn from the same
+/// source, and the step that stopped counting them draws its replacements here
+/// (`crate::store_engine::migrate`, `AMB-D-897`).
+pub(crate) fn uuid_v4() -> String {
     let mut bytes = [0u8; 16];
     getrandom::fill(&mut bytes).expect("failed to draw OS randomness");
     // The two fields a version 4 UUID is read by: the version in the high nibble of byte 6, and the

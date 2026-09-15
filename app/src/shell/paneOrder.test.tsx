@@ -7,7 +7,7 @@
 // same trade `./rowDrag.test` makes, and it is what lets a case put a card exactly where it needs it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_LAYOUT, openedFrame, openedIn, panesOf, setCount, type Count, type Frame, type Layout } from "../talk/layout";
 import type { Plate as Row } from "../talk/nameplate";
 import { PaneOrder } from "./PaneOrder";
@@ -21,12 +21,23 @@ function faceOf(n: number, count: Count = 2): Layout {
   return layout;
 }
 
+/**
+ * The drawing, seeded back to the count it replaced.
+ *
+ * A pane's id is drawn rather than counted (`../talk/layout`), so nothing here could name a pane by
+ * the order it was opened in — which is how every case below names one. Seeding it is what lets them
+ * go on saying "2" and meaning the second pane opened.
+ */
+let drawn = 0;
+
 let host: HTMLDivElement;
 let root: Root;
 let taken: Frame[][];
 let closed: number;
 
 beforeEach(() => {
+  drawn = 0;
+  vi.stubGlobal("crypto", { randomUUID: () => String(++drawn) });
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -37,6 +48,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
 
 function draw(
@@ -197,7 +209,7 @@ describe("what a card says about its pane", () => {
     // The name and the lamp's face are the pane's own answers (`../talk/plate`), so a card and the
     // row above that pane can never come to disagree.
     draw(faceOf(2, 2), new Map(), new Map([
-      reads("1", { name: "builder", dot: { frame: "1", face: "lit" } }),
+      reads("1", { name: "builder", dot: { hue: 199, face: "lit" } }),
     ]));
     expect(cardOf("1").querySelector(".paneorder__name")!.textContent).toBe("builder");
     expect(cardOf("1").querySelector(".plate__dot")!.getAttribute("data-face")).toBe("lit");

@@ -1306,15 +1306,22 @@ the screen composes it press by press and reads what is left.
 
 A record's own page carries one more row than the store's fields account for: the session it was made
 in. Three entries answer for it, all on the decision side. `decision create-in-pane` records the
-decision at a shell **inside a pane**, naming which pane the way every pane step does — by the words a
-road typed into it — and it is a separate op from `decision create` because that is the whole of what
-it proves: the row is written only where the create ran with the pane's own variables around it, so a
-decision made on the board leaves none. Unlike `terminal run` it does not clear the pane
-first, the road's own words there being how the steps after it say which pane they mean. `made-in`
-reads the name on that row — the name the pane goes by **now**, since a pane still open is found among
-the panes under whatever it is called today — and `present: false` is the other half, walked on a
-record made anywhere else. `press-made-in` is the press, and where it landed is read by the step after
-it (`terminal worked-in`): a press cannot say of itself which pane it went to.
+decision **inside a pane**, and it is a separate op from `decision create` because that is the whole
+of what it proves: the row is written only where the create ran with the pane's own variables around
+it, so a decision made anywhere else leaves none. Its `shows` names which pane, and the two roads read
+that differently — on the screen it is the words a road typed into the pane, and the step does not
+clear it, those words being how the steps after it say which pane they mean; at a terminal there is no
+pane on a screen, so the words are a handle the driver stands one up under, minting the id and the way
+back a window would have set.
+
+`made-in` reads what the record says about it, and each road brings its own key. `shows` is the
+screen's — the name on the row, and the name the pane goes by **now**, since a pane still open is
+found among the panes under whatever it is called today. `pane` is the terminal's: what a pane is
+called is kept on the pane's own row, which the window writes and a terminal never does, so the line
+prints the id alone and the id is minted by the run — so what is asked there is identity, the record
+naming the pane the create was typed in. `present: false` is the other half on either face.
+`press-made-in` is the press, screen-only, and where it landed is read by the step after it
+(`terminal worked-in`): a press cannot say of itself which pane it went to.
 
 ### `given:` — the world a road starts from
 

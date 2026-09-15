@@ -5550,6 +5550,51 @@ pub fn task_commits(conn: &Connection, task_id: i64) -> Result<Vec<crate::model:
     Ok(rows)
 }
 
+/// The session a task was made in, or `None` for a task nobody made in a pane (`AMB-D-897`). Seeks the
+/// task's own row through the UNIQUE `task_made_in_by_task` index, which is what says there is at most
+/// one to find.
+pub fn task_made_in(conn: &Connection, task_id: i64) -> Result<Option<crate::model::TaskMadeIn>> {
+    first_row(conn, "task_made_in", "task_id", task_id, super::hydrate::task_made_in_row)
+}
+
+/// The id of that row, for the delete that has to take it before the task goes (`ops::task::delete`).
+pub fn task_made_in_id(conn: &Connection, task_id: i64) -> Result<Option<i64>> {
+    const C: col::task_made_in::Cols = col::task_made_in::ALL;
+    first_id(conn, C.id, &Pred::eq(C.task_id, task_id))
+}
+
+/// The decision's side of [`task_made_in`].
+pub fn decision_made_in(
+    conn: &Connection,
+    decision_id: i64,
+) -> Result<Option<crate::model::DecisionMadeIn>> {
+    first_row(conn, "decision_made_in", "decision_id", decision_id, super::hydrate::decision_made_in_row)
+}
+
+/// The decision's side of [`task_made_in_id`].
+pub fn decision_made_in_id(conn: &Connection, decision_id: i64) -> Result<Option<i64>> {
+    const C: col::decision_made_in::Cols = col::decision_made_in::ALL;
+    first_id(conn, C.id, &Pred::eq(C.decision_id, decision_id))
+}
+
+/// The one row of `table` whose `key` column is `owner`, mapped whole — a `SELECT *` for the reason
+/// [`super::hydrate::rows`] uses one: the mapping reads each column by name, so the list is not
+/// enumerated a second time here.
+fn first_row<T>(
+    conn: &Connection,
+    table: &str,
+    key: &str,
+    owner: i64,
+    map: fn(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
+) -> Result<Option<T>> {
+    let mut stmt = conn
+        .prepare(&format!("SELECT * FROM {table} WHERE {key} = ?1 LIMIT 1"))
+        .map_err(StoreEngineError::from)?;
+    let mut rows = stmt.query_map([owner], map).map_err(StoreEngineError::from)?;
+    let found = rows.next().transpose().map_err(StoreEngineError::from)?;
+    Ok(found)
+}
+
 /// A nullable key as a predicate: an id seeks the row naming it, and `None` seeks the rows that name
 /// nobody. It answers the layer half of a secret's address (`AMB-D-601`) — a project's id, or the
 /// **device** row, whose key is NULL — and the owner half of a [`secret_row_id`]'s, where NULL says the

@@ -682,6 +682,40 @@ datasets! {
         created_by_kind: actor_kind,
     }
 
+    // The session a task was made in (`AMB-D-897`) — one row a task, or none for a task made outside
+    // the talk window. What is kept is the pane rather than the terminal: a pane outlives every
+    // terminal opened in it, so it is the thing a reader can still be taken back to
+    // (`amenbo_core::session::PANE_VAR`).
+    //
+    // **Three values, because no one of them answers on its own.** `pane` finds the pane while it is
+    // open. `pane_resume` opens the conversation again where the pane has been closed — a session id
+    // for most providers, the path of a home of its own for the two that come back by a place
+    // (`crate::frames::SavedPane::resume`). `pane_name` is what is left when neither can be reached:
+    // the original complaint was "which session made this decision", and a name answers that even
+    // when nothing can be opened. The two after the first are nullable because a pane may carry
+    // neither — one nobody has named, at a plain prompt, has only its id.
+    //
+    // **A table rather than columns on `task`**, which is what lets the road out leave it: nothing
+    // here means anything on another device, and `WITHHELD_ON_THE_WAY_OUT` works per table
+    // (`crate::export`). `RESTRICT` and not `CASCADE`, like the commit anchor beside it: this row
+    // stands for something a screen points at, so the delete op takes it in code a reviewer can read.
+    task_made_in {
+        task_id: fk("task", "RESTRICT"),
+        pane: col(REQ),
+        pane_name: col(OPT),
+        pane_resume: col(OPT),
+    }
+
+    // The decision's side of the same record. A table of its own rather than a `target_type` arm, for
+    // the reason `decision_comment` is one beside `task_comment`: a task and a decision are different
+    // entities, and keeping them apart is what lets each end hold a real FK.
+    decision_made_in {
+        decision_id: fk("decision", "RESTRICT"),
+        pane: col(REQ),
+        pane_name: col(OPT),
+        pane_resume: col(OPT),
+    }
+
     // The unified dimension model: three datasets that put every classification axis on one mechanism.
     // Every axis is a plain user-editable one — there are no built-in fixed axes (no `kind`), no locked
     // values, no stable keys (no `builtin_key`). There are still no tags: `cardinality` is the axis's own
@@ -1362,6 +1396,12 @@ CREATE INDEX IF NOT EXISTS decision_dimension_value_by_decision ON decision_dime
 CREATE UNIQUE INDEX IF NOT EXISTS task_commit_task_sha ON task_commit(task_id, sha);
 CREATE INDEX IF NOT EXISTS task_commit_by_sha  ON task_commit(sha);
 CREATE INDEX IF NOT EXISTS task_commit_by_task ON task_commit(task_id);
+-- The session a task or a decision was made in (`AMB-D-897`). One row an owner, so the owner's key is
+-- the natural one and the index is UNIQUE — a second row would be a second answer to a question with
+-- one. It doubles as the FK index every child table keeps: the detail screen seeks its owner's row
+-- rather than scanning the table.
+CREATE UNIQUE INDEX IF NOT EXISTS task_made_in_by_task ON task_made_in(task_id);
+CREATE UNIQUE INDEX IF NOT EXISTS decision_made_in_by_decision ON decision_made_in(decision_id);
 -- One secret per (layer, area, owner, field): the address is the natural key, so the write boundary
 -- upserts a credential by finding this row rather than appending a second. `owner_id` is nullable — the
 -- Viewer's keys hang off no row — and SQLite counts NULLs in an index as distinct, which would let a

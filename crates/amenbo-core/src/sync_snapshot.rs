@@ -441,6 +441,21 @@ mod tests {
         );
     }
 
+    /// The session a task or a decision was made in stays on this device (`AMB-D-897`). A pane id and
+    /// the handle a provider is resumed from mean something on one machine and nothing on any other —
+    /// carried out, they would be rows a reader could see and never open.
+    #[test]
+    fn a_snapshot_carries_no_pane() {
+        for name in ["task_made_in", "decision_made_in"] {
+            assert!(export::WITHHELD_ON_THE_WAY_OUT.contains(&name), "{name}");
+            assert!(!export::datasets_carried_out().iter().any(|d| d.name == name), "{name}");
+            assert!(
+                DATASETS.iter().any(|d| d.name == name),
+                "{name}: the dataset still exists — it is the road out that leaves it, not the schema",
+            );
+        }
+    }
+
     fn scratch(tag: &str) -> std::path::PathBuf {
         amenbo_scratch::scratch(&format!("sync-snapshot-{tag}"))
     }

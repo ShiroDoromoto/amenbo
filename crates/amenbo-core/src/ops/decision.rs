@@ -573,6 +573,9 @@ pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     for assignment_id in read::decision_assignment_ids_of_decision(tx.conn(), id)? {
         tx.delete_record("decision_dimension_value", assignment_id)?;
     }
+    if let Some(made_in_id) = read::decision_made_in_id(tx.conn(), id)? {
+        tx.delete_record("decision_made_in", made_in_id)?;
+    }
     orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::Decision, id)?);
     tx.delete_record("decision", id)?;
     Ok(orphaned)
@@ -1968,6 +1971,40 @@ mod tests {
         );
         // It drops out of the reverse query as well.
         assert!(decisions_for_task(tx, t).is_empty());
+    }
+
+    /// The session a decision was made in goes with the decision (`AMB-D-897`) — the task side's twin
+    /// (`ops::task`), and `RESTRICT` for the same reason: a row left behind stops the delete.
+    ///
+    /// Put here by hand because nothing writes one yet; the sweep arrives with the table rather than
+    /// after it.
+    #[test]
+    fn delete_takes_the_pane_it_was_made_in_with_it() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let d = new_decision(tx, pid, "ペインのついた決定");
+        crate::ops::emit_create(
+            tx,
+            crate::store_engine::record::decision_made_in(&crate::model::DecisionMadeIn {
+                id: read::next_id(tx.conn(), "decision_made_in").unwrap(),
+                decision_id: d.id,
+                pane: "7b3f0c1e-2d4a-4c88-9a51-6e0d2f83b114".to_string(),
+                pane_name: Some("the migration".into()),
+                pane_resume: Some("0f9c".into()),
+                ..Default::default()
+            }),
+        )
+        .unwrap();
+        assert!(read::decision_made_in(tx.conn(), d.id).unwrap().is_some());
+
+        delete(tx, d.id).unwrap();
+
+        assert!(read::decision(tx.conn(), d.id).unwrap().is_none());
+        assert!(
+            read::decision_made_in(tx.conn(), d.id).unwrap().is_none(),
+            "the pane goes with the decision",
+        );
     }
 
     /// A decision's classifications go with it (`AMB-D-781`). The assignment references the decision

@@ -379,6 +379,58 @@ pub struct TaskCommit {
     pub updated_at: Timestamp,
 }
 
+/// The session a task was made in (`AMB-D-897`) — one row a task, and none for a task made outside the
+/// talk window.
+///
+/// **It names the pane, not the terminal.** A terminal is a process and ends with it; the pane it was
+/// drawn in outlives every terminal opened there, so the pane is the thing a reader can still be taken
+/// back to ([`crate::session::PANE_VAR`]).
+///
+/// The three are read in turn, and each answers where the one before it cannot: the pane while it is
+/// open, the handle where it has been closed but the conversation is still there, and the name where
+/// neither can be reached — which is the question this was raised for ("which session made this?"),
+/// answerable even when nothing can be opened.
+///
+/// **No road out carries it** ([`crate::export::WITHHELD_ON_THE_WAY_OUT`]): a pane is this machine's,
+/// and on another device there is nothing here to open.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TaskMadeIn {
+    pub id: i64,
+    /// The task this was made in the course of.
+    pub task_id: i64,
+    /// The id of the pane it was made in ([`crate::frames::SavedPane::id`]).
+    pub pane: String,
+    /// What that pane was called at the time, or `None` for a pane nobody had named.
+    #[serde(default)]
+    pub pane_name: Option<String>,
+    /// The handle that pane's provider is resumed from ([`crate::frames::SavedPane::resume`]), or
+    /// `None` for a pane there was no way back into.
+    #[serde(default)]
+    pub pane_resume: Option<String>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// The decision's side of [`TaskMadeIn`] — same three values, its own table, for the reason
+/// [`DecisionComment`] is a table of its own beside [`TaskComment`].
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DecisionMadeIn {
+    pub id: i64,
+    /// The decision this was made in the course of.
+    pub decision_id: i64,
+    /// The id of the pane it was made in ([`crate::frames::SavedPane::id`]).
+    pub pane: String,
+    /// What that pane was called at the time, or `None` for a pane nobody had named.
+    #[serde(default)]
+    pub pane_name: Option<String>,
+    /// The handle that pane's provider is resumed from, or `None` for a pane there was no way back
+    /// into.
+    #[serde(default)]
+    pub pane_resume: Option<String>,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
 /// Which of Amenbo's own features a [`Secret`] belongs to (`AMB-D-884`). Closed, because the features
 /// that hold a credential are the body's own and are added one deliberate step at a time — a new one
 /// widens this and the column's `CHECK` together.

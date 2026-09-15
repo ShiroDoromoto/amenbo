@@ -22,11 +22,11 @@ use rusqlite::types::Value;
 
 use crate::model::{
     ActorKind, Attachment, Database, Decision, DecisionComment, DecisionDimensionValue,
-    DecisionEdge, DecisionTaskLink,
+    DecisionEdge, DecisionMadeIn, DecisionTaskLink,
     Dimension, DimensionValue, NotifyTarget,
     Project, ProjectNotify, ProjectNotifyEvent, ProjectNotifyTarget, Secret,
     Task,
-    TaskComment, TaskCommit, TaskDependency, TaskDimensionValue,
+    TaskComment, TaskCommit, TaskDependency, TaskDimensionValue, TaskMadeIn,
 };
 use crate::time::Timestamp;
 
@@ -189,6 +189,40 @@ pub fn task_commit(c: &TaskCommit) -> Record {
             ],
             &c.created_at,
             &c.updated_at,
+        ),
+    )
+}
+
+pub fn task_made_in(m: &TaskMadeIn) -> Record {
+    Record::new(
+        "task_made_in",
+        m.id,
+        with_audit(
+            vec![
+                ("task_id", kv(m.task_id)),
+                ("pane", tv(&m.pane)),
+                ("pane_name", ov(&m.pane_name)),
+                ("pane_resume", ov(&m.pane_resume)),
+            ],
+            &m.created_at,
+            &m.updated_at,
+        ),
+    )
+}
+
+pub fn decision_made_in(m: &DecisionMadeIn) -> Record {
+    Record::new(
+        "decision_made_in",
+        m.id,
+        with_audit(
+            vec![
+                ("decision_id", kv(m.decision_id)),
+                ("pane", tv(&m.pane)),
+                ("pane_name", ov(&m.pane_name)),
+                ("pane_resume", ov(&m.pane_resume)),
+            ],
+            &m.created_at,
+            &m.updated_at,
         ),
     )
 }

@@ -1961,6 +1961,9 @@ impl Instructor {
             // only that it came up: what is *in* it is the next step's, and that is the whole point
             // of parting them — the press is Amenbo acting on what it drew, and the reading is a
             // program saying what it was started with.
+            (Domain::Terminal, "open-next") =>
+                "On the pane whose program has stopped, find the row the frame draws under it — the list of what a pane can be started with, already set to what was running there, with the press beside it — and press that, leaving the list exactly as it came up. A terminal comes up in that same pane, on what the list was showing."
+                    .to_string(),
             (Domain::Terminal, "open-again") =>
                 "On the terminal face, find the frame standing with nothing running in it — the box the press put back, which carries one control in the middle of it and no row of things to open with above — and press that control. Choose nothing: there is nothing to choose, the frame having been given the pane and the way back into it and neither the folder nor the provider. A terminal comes up there, in the folder the project is bound to and on whatever this machine last opened a pane with."
                     .to_string(),

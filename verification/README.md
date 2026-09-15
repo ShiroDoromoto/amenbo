@@ -999,7 +999,9 @@ way: `open-shell` and `open-registered` carry their own answer, and what this on
 whatever the two rows were set to. `open-again` is the other press that chooses nothing, and it is
 not on the empty frame at all: a frame the row naming a record's session put back stands there with
 one control on it and no rows above, the record holding the pane and the way back into it and neither
-the folder nor the provider.
+the folder nor the provider. `open-next` is the third of them, on the row a frame draws once the
+program in it has gone — the list of what to start, already holding what was running there, and the
+press beside it.
 
 **The row has three shapes, and which one is drawn is decided by how long the agent's answer was** —
 so a road says which it is walking, in `pick-model`'s `how`. `write` is a box to type a name in, which

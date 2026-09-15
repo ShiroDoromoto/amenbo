@@ -2045,6 +2045,18 @@ const REGISTRY: &[OpSpec] = &[
     // is bound to and what this machine last opened a pane with. A road that wanted to say either
     // would be saying it of a frame that was never asked.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-again", required: &[], refs: &[], strings: &[], binds: false },
+    // Pressing what opens the next pane, on the row a frame draws once the program in it has gone.
+    //
+    // **It is a third place and neither of the other two.** The empty frame's press is `open-start`,
+    // a frame the row naming a record's session put back is `open-again`, and this is the row under a
+    // pane that has ended — a list of what can be started, set to what was running there, and a press
+    // beside it (`app/src/talk/agent.ts`).
+    //
+    // **It takes nothing, and chooses nothing.** What the next pane starts as is what the row came up
+    // holding, which is the provider the one before it was on: a road walks this to say that the pane
+    // is the reader's to go on working in, and a road that named something else would be walking the
+    // list rather than the press.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-next", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-models", required: &[], refs: &[], strings: &["shows"], binds: false },
     // What the row says a press would do, read before anything is pressed. `command` is the
     // provider's own — `/model` on five of the six — and `keeps` is the file this machine writes the
